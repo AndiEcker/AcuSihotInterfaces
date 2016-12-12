@@ -1,0 +1,27 @@
+create or replace view LOBBY.ACU_CD_UNFILTERED
+  AS
+select -963 as CDL_CODE
+     , V_ACU_CD_DATA.*
+  from V_ACU_CD_DATA
+/*
+  ae:03-10-16 first beta.
+*/
+/
+
+
+create or replace public synonym V_ACU_CD_UNFILTERED for LOBBY.ACU_CD_UNFILTERED;
+
+grant select on LOBBY.ACU_CD_UNFILTERED to SALES_00_MASTER;
+grant select on LOBBY.ACU_CD_UNFILTERED to SALES_05_SYSADMIN;
+grant select on LOBBY.ACU_CD_UNFILTERED to SALES_06_DEVELOPER;
+grant select on LOBBY.ACU_CD_UNFILTERED to SALES_10_SUPERVISOR;
+grant select on LOBBY.ACU_CD_UNFILTERED to SALES_60_RESERVATIONS;
+
+grant select on LOBBY.ACU_CD_UNFILTERED to XL_00_MASTER;
+grant select on LOBBY.ACU_CD_UNFILTERED to XL_05_SYSADMIN;
+grant select on LOBBY.ACU_CD_UNFILTERED to XL_06_DEVELOPER;
+grant select on LOBBY.ACU_CD_UNFILTERED to XL_10_SUPERVISOR;
+grant select on LOBBY.ACU_CD_UNFILTERED to XL_60_RESERVATIONS;
+
+grant select on LOBBY.ACU_CD_UNFILTERED to REPORTER;
+
