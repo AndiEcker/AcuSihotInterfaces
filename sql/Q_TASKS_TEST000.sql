@@ -299,3 +299,72 @@ update t_cd set cd_fnam1 = trim('.' from trim(cd_fnam1))
     or trim('.' from trim(cd_snam1)) is null
     or trim('.' from trim(cd_fnam2)) is null
     or trim('.' from trim(cd_snam2)) is null
+
+--- check roll out of Sihot sync system
+
+select * from v_acu_res_unfiltered where sihot_gdsno in ('652856', '991385', 'TC21300009')
+
+select * from v_acu_cd_data where cd_code2 is not null and cd_snam2 is NULL
+
+select * from v_acu_res_log where nvl(rul_sihot_hotel, -1) < 0
+
+select * from T_AP, T_RUL where AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')
+
+select * from T_RUL l left outer join t_ru on RUL_PRIMARY = RU_CODE
+                                     -- ignoring reservation requests (and changes) with stays before 2012
+                                     --and RU_FROM_DATE > DATE'2012-01-01'
+ where 1=1 --rul_primary = ru_code
+   and not exists (select AP_SIHOT_CAT from T_AP where AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) -- and AP_SIHOT_CAT is not NULL)
+   and RUL_DATE >= DATE'2012-01-01'
+   and (RU_FROM_DATE is NULL or RU_FROM_DATE < DATE'2012-01-01')
+   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   --and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE >= DATE'2012-01-01') 
+   and RUL_SIHOT_ROOM is not NULL;
+
+--delete from t_ru where ru_code = 250314
+--delete from t_rul where rul_code = 4946856
+
+select * from T_RUL l
+ where (select AP_SIHOT_CAT from T_AP where AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) is NULL
+   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   -- Date speed-up on log/arrival dates - to support RU delete (outer join to T_RU) check RU arr date with not exists
+   and RUL_DATE >= DATE'2012-01-01'
+   and not exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE < DATE'2012-01-01') 
+   and RUL_SIHOT_ROOM is not NULL;
+
+
+select (select LU_CHAR from T_LU, T_RU
+                                   where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
+                                     and LU_ID = RU_ATGENERIC
+                                     and RU_CODE = RUL_PRIMARY) as CAT
+      , (select RU_ATGENERIC || '@' || RU_RESORT from t_ru where ru_code = rul_primary) as RU_VALS
+      , l.*
+  from T_RUL l
+ where not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   -- Date speed-up on log/arrival dates - to support RU delete (outer join to T_RU) check RU arr date with not exists
+   and RUL_DATE >= DATE'2012-01-01'
+   and not exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY 
+                                           and ( RU_FROM_DATE < DATE'2012-01-01')
+   --                                           or RU_ATGENERIC not in ('HOTEL', 'STUDIO', '1 BED', '2 BED', '3 BED', '4 BED')
+     --                                         or RU_RESORT not in ('ANY', 'BHC', 'PBC', 'BHH', 'HMC')
+                                               )
+   and RUL_SIHOT_ROOM is NULL
+   and not exists (select NULL from T_RAF where RAF_RUREF = RUL_PRIMARY)
+   and RUL_SIHOT_CAT = 'R___'
+
+
+
+select (select f_stragg(LU_CHAR) from T_LU, T_RU, T_RAF
+                                   where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
+                                     and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and RU_CODE = RAF_RUREF
+                                     and RU_CODE = RUL_PRIMARY
+                                   --order by LU_CLASS desc
+      ) as CAT, T_RUL.*
+  from T_RUL
+ where (select count(*) from T_LU, T_RU, T_RAF
+                                   where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
+                                     and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and RU_CODE = RAF_RUREF
+                                     and RU_CODE = RUL_PRIMARY) > 1

@@ -23,22 +23,35 @@ class OraDB:
     def __init__(self, usr=DEF_USER, pwd='', dsn=DEF_DSN, debug_level=DEBUG_LEVEL_DISABLED):
         self.usr = usr
         self.pwd = pwd
-        self.dsn = dsn
+        if dsn.count(':') == 1 and dsn.count('/@') == 1:   # old style format == host:port/@SID
+            host, rest = dsn.split(':')
+            port, service_id = rest.split('/@')
+            self.dsn = cx_Oracle.makedsn(host=host, port=port, sid=service_id)
+        elif dsn.count(':') == 1 and dsn.count('/') == 1:  # old style format == host:port/service_name
+            host, rest = dsn.split(':')
+            port, service_name = rest.split('/')
+            self.dsn = cx_Oracle.makedsn(host=host, port=port, service_name=service_name)
+        else:
+            self.dsn = dsn                                  # TNS name like SP.DEV
         self.debug_level = debug_level
         self.conn = None
         self.curs = None
 
     def connect(self):
         try:
-            self.conn = cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
+            # old style: self.conn = cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
+            self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn)
             # self.conn.outputtypehandler = output_type_handler
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint('OraDB: connected to Oracle database {} via client version {} with n-/encoding {}/{}'
+                uprint("OraDB: connected to Oracle database {} via client version {} with n-/encoding {}/{}"
                        .format(self.dsn, cx_Oracle.clientversion(), self.conn.nencoding, self.conn.encoding))
         except Exception as ex:
-            return 'oraDB-connect ' + self.usr + '/' + self.pwd + '@' + self.dsn + ' error: ' + str(ex)
+            return "oraDB-connect " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
         else:
-            self.curs = self.conn.cursor()
+            try:
+                self.curs = self.conn.cursor()
+            except Exception as ex:
+                return "oraDB-connect cursors " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint('OraDB: Oracle database cursor created')
         return ''
@@ -56,9 +69,9 @@ class OraDB:
         try:
             self.curs.execute(sq, **bind_vars)
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint('oraDB.select() cursor.description:', self.curs.description)
+                uprint("oraDB.select() cursor.description:", self.curs.description)
         except Exception as ex:
-            return 'oraDB select-execute error: ' + str(ex) + (' sql=' + sq if sq else '')
+            return "oraDB select-execute error: " + str(ex) + (" sql=" + sq if sq else "")
         return ''
 
     def fetch_all(self):
@@ -121,6 +134,15 @@ class OraDB:
             self.conn.rollback()
         except Exception as ex:
             return 'oraDB rollback error: ' + str(ex)
+        return ''
+
+    def call_proc(self, proc_name, proc_args, ret_dict=None):
+        try:
+            ret = self.curs.callproc(proc_name, proc_args)
+            if ret_dict:
+                ret_dict['return'] = ret
+        except Exception as ex:
+            return "oraDB call_proc error: " + str(ex)
         return ''
 
     def close(self, commit=True):

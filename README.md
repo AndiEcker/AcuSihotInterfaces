@@ -1,10 +1,10 @@
-# Client/Guest and Sihot.PMS Interface To Acumen
+# Interfaces between Sihot.PMS and Acumen
 
->Tools and XML Interfaces used for to migrate and synchronize clients and reservations between Sihot.PMS and Acumen.
+>Tools and processes for to migrate and synchronize system configuration, room status, clients and reservations between Sihot.PMS and Acumen.
 
 ## Available Commands
 
-This project is including the following command line tools:
+This interface suite project is including the following command line tools:
 
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
@@ -259,7 +259,11 @@ The current mapping is setting a general owner flag for to group all timeshare/r
 
 The Sihot.PMS Package code can be specified as the value of the key-value attribute `SIHOT_PACK` within the `LU_CHAR` column of each meal plan/board. All Acumen meal plans are stored within the lookup classes `BOARDS` (for all bookings) and `MKT_BOARDS` (only for marketing bookings).
 
+### Thomas Cook Allotment mappings
 
+For to create tour operator bookings via the WEB interface you need to specify the internal number of the allotment contract. This internal allotment contract number is nowhere visible in the GUI of Sihot.PMS and has to be determined by Michael after the creation of the allotment in Sihot.
+
+Each hotel and tour operator has a individual internal allotment contract number. So for our two tour operators Thomas Cook Northern/Scandinavia and U.K. for the two initial hotels (1 and 4) we need to configure four numbers, which are currently specified within the database view `V_ACU_RES_DATA` in the expression of column `SIHOT_ALLOTMENT_NO`. 
 
 
 ## System Synchronization

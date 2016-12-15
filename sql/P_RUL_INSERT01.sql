@@ -35,6 +35,15 @@ IS
     select ML_RHREF, ML_REQARRIVAL_DATE, ML_REQDEPART_DATE, RU_CODE from T_MS, T_ML, T_RU where MS_MLREF = ML_CODE and ML_CODE = RU_MLREF and MS_PRCREF = pnCode;
   rMkt cMkt%rowtype;
   
+  cursor cRU is
+    select RU_ATGENERIC, RU_RESORT from T_RU where RU_CODE = lnRU_Code;
+  
+  cursor cRUL is
+    select max(RUL_CODE) from V_ACU_RES_LOG where RUL_PRIMARY = lnRU_Code and length(pcChanges) + length(RUL_CHANGES) <= CHANGES_LEN;
+  
+  cursor cLog is
+    select RUL_SIHOT_ROOM from V_ACU_RES_LOG where RUL_PRIMARY = lnRU_Code;
+    
 BEGIN
   lcAction := pcAction;
   -- determine caller and if either lcApRef or lcAtGeneric/lcResort need to be fetched
@@ -49,8 +58,9 @@ BEGIN
   elsif lcCaller = 'A' then   -- called from T_ARO triggers
     lnRU_Code := F_ARO_RU_CODE(pnRHRef, pdFrom, pdTo);
     if pcAction = 'DELETE' then   -- .. with DELETE action or cancellation (ARO_STATUS => 120): wipe RUL_SIHOT_ROOM column
-      select RU_ATGENERIC, RU_RESORT into lcAtGeneric, lcResort from T_RU
-       where RU_CODE = lnRU_Code;
+      open  cRU;
+      fetch cRU into lcAtGeneric, lcResort;
+      close cRU;
       lcAction := 'UPDATE';
     else                          -- .. for all other actions: populate RUL_SIHOT_ROOM with lcApRef and RUL_SIHOT_CAT/_HOTEL with ARO overloads
       lcApRef := pcApRef;
@@ -62,8 +72,9 @@ BEGIN
     lnRU_Code := rMkt.RU_CODE;
     lcApRef := F_RU_ARO_APT(rMkt.ML_RHREF, rMkt.ML_REQARRIVAL_DATE, rMkt.ML_REQDEPART_DATE);
     if lcApRef is NULL then
-      select RU_ATGENERIC, RU_RESORT into lcAtGeneric, lcResort from T_RU
-       where RU_CODE = lnRU_Code;
+      open  cRU;
+      fetch cRU into lcAtGeneric, lcResort;
+      close cRU;
     end if;
   end if;
 
@@ -72,7 +83,10 @@ BEGIN
     lcSihotCat := F_SIHOT_CAT(lcApRef);
     lnSihotHotel := F_SIHOT_HOTEL(lcApRef);
   else
-    select RUL_SIHOT_ROOM into lcRulApRef from V_ACU_RES_LOG where RUL_PRIMARY = lnRU_Code;
+    --select RUL_SIHOT_ROOM into lcRulApRef from V_ACU_RES_LOG where RUL_PRIMARY = lnRU_Code;
+    open  cLog;
+    fetch cLog into lcRulApRef;
+    close cLog;
     if lcResort = 'ANY' and lcRulApRef is not NULL then
       lcResort := F_RESORT(lcRulApRef);
     end if;
@@ -103,7 +117,9 @@ BEGIN
   -- insert log entry or on T_ARO trigger call try first to update SIHOT columns of unsynced RUL record either with ARO/PRC overloads or current RU values
   if lcCaller != 'R' then
     -- for better receycling use V_ACU_RES_LOG not _UNSYNCED: select RUL_CODE into lnRUL_Code from V_ACU_RES_UNSYNCED where RU_CODE = lnRU_Code;
-    select max(RUL_CODE) into lnRUL_Code from V_ACU_RES_LOG where RUL_PRIMARY = lnRU_Code and length(pcChanges) + length(RUL_CHANGES) <= CHANGES_LEN;
+    open  cRUL;
+    fetch cRUL into lnRUL_Code;
+    close cRUL;
   end if;
   if lnRUL_Code is not NULL then
     update T_RUL set RUL_USER = USER,

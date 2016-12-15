@@ -16,9 +16,8 @@ select V_ACU_RES_LOG.*
    and RUL_SIHOT_RATE is not NULL
    --and ( RO_SIHOT_RATE is not NULL  -- only active market sources/resOcc types will be migrated/synced
    --   or ( RUL_ACTION = 'DELETE' and exists (select NULL from resoccs where RO_CODE = substr(RUL_CHANGES, instr(RUL_CHANGES, 'RU_ROREF (') + 10, 2) ) ) )
-   -- ignoring reservation requests (and changes) with arrivals before 2016
-   -- excluding already synced changes
-   and DEP_DATE > DATE'2012-01-01'
+   -- ignoring reservation requests (and changes) with stays before 2012
+   and (RU_CODE is NULL or DEP_DATE > DATE'2012-01-01')
 /*
   ae:30-09-16 first beta of unsynced reservation changes for to be synced to SiHOT (split out of V_ACU_RES_UNSYNCED).
   ae:05-10-16 V01: extracted from V_ACU_RES_DATA (now renamed to V_ACU_RES_UNFILTERED).

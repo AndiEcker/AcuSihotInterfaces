@@ -7,6 +7,8 @@
 --- VERSION 05: moved update of default values to the end of the script and changed STIC default to more detectable values.
 --- VERSION 06: after room category and project structure refacturing and revising initiated by me, Gary and supported by the help of KP.
 --- VERSION 07: changed to map to new TK/tk contracts - created by Fabián (see email from 9-12-2016).
+--- VERSION 08: performance tuning of the UPDATE statement for to populate the new T_RUL columns.
+--- VERSION 09: more performance tuning and added new procedure P_SIHOT_ALLOC.
  
  
 -- max linesize - limitted by TOAD to 2000 (32767 is maximum for sqlPlus)
@@ -19,8 +21,8 @@ SET SERVEROUTPUT ON
 -- trim trailing blanks from line end
 SET TRIMSPOOL ON
 
-spool DBA_SIHOT_RES_SYNC07.log
-exec P_PROC_SET('DBA_SIHOT_RES_SYNC', '2016_V07', 'test');
+spool DBA_SIHOT_RES_SYNC09.log
+exec P_PROC_SET('DBA_SIHOT_RES_SYNC', '2016_V09', 'test');
 
 
 
@@ -480,6 +482,7 @@ prompt add new views for the data and logs of T_CD (T_LOG), T_RU, T_ARO and T_RH
 prompt new procedure for RUL insert/update and for to populate the new RUL_SIHOT columns
 
 @@P_RUL_INSERT01.sql;
+@@P_SIHOT_ALLOC00.sql;
 
 
 prompt extend RU/ARO triggers for to populate the new RUL_SIHOT* columns (executed after creation of new functions and views because they are needed) 
@@ -1119,21 +1122,104 @@ prompt init new RUL columns - (RARO RARO RARO) without the and 1=1 it shows a mi
 
 prompt .. first set only hotel room no (for to calculate later CAT/HOTEL based on the room), RATE and OBJID - needed 7:39 on SP.DEV
  
-update T_RUL set RUL_SIHOT_ROOM = F_RU_ARO_APT((select RU_RHREF from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE + RU_DAYS from T_RU where RU_CODE = RUL_PRIMARY))
+update T_RUL l
+             set RUL_SIHOT_ROOM = F_RU_ARO_APT((select RU_RHREF from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE + RU_DAYS from T_RU where RU_CODE = RUL_PRIMARY))
                , RUL_SIHOT_OBJID = (select RU_SIHOT_OBJID from T_RU where RU_CODE = RUL_PRIMARY)
                , RUL_SIHOT_RATE = (select RO_SIHOT_RATE from T_RU, T_RO where RU_ROREF = RO_CODE and RU_CODE = RUL_PRIMARY)
  where RUL_DATE >= DATE'2012-01-01'   -- SPEED-UP: exclude reservatio log entries before 2012
    and exists (select LU_NUMBER from T_LU where LU_CLASS = 'SIHOT_HOTELS' and LU_ID = (select RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY))
    and (select RU_ATGENERIC from T_RU where RU_CODE = RUL_PRIMARY) is not NULL
+   -- opti (only update the newest ones / used by V_ACU_RES_LOG - need exact same filter/where expression)
+   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)  -- excluding past log entries
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01') 
    and 1=1;
 
 commit;
 
-prompt .. then set CAT, HOTEL and PACK - runs 21:41 minutes on SP.DEV/TEST 
+prompt .. then set HOTEL = 400k rows in 1min20 on SP.TEST
  
-update T_RUL set RUL_SIHOT_CAT = F_SIHOT_CAT(nvl(RUL_SIHOT_ROOM, 'RU' || RUL_PRIMARY)),  -- nvl needed for deleted RUs and for 20 cancelled RUs from 2014 with 'Sterling Suites' in RU_ATGENERIC - see line 138 in Q_SIHOT_SETUP2.sql
-                 RUL_SIHOT_HOTEL = F_SIHOT_HOTEL(nvl(RUL_SIHOT_ROOM, (select RU_ATGENERIC || '@' || RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY))),
-                 RUL_SIHOT_PACK = case when F_SIHOT_PACK((select PRC_BOARDREF1 from T_RU, T_MS, T_PRC where RU_MLREF = MS_MLREF and MS_PRCREF = PRC_CODE and RU_CODE = RUL_PRIMARY), 'MKT_') != 'RO' 
+update T_RUL l
+             set RUL_SIHOT_HOTEL = F_SIHOT_HOTEL(nvl(RUL_SIHOT_ROOM, (select RU_ATGENERIC || '@' || RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY)))
+ where RUL_DATE >= DATE'2012-01-01'
+   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   and not exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS < DATE'2012-01-01') 
+   and 1=1;
+
+commit;
+
+
+prompt .. then set CAT 
+
+----- using F_SIHOT_CAT() slowed down this update to several days - for to speedup update will be done divided into several smaller chunks/cases
+--update T_RUL l
+--             set RUL_SIHOT_CAT = F_SIHOT_CAT(nvl(RUL_SIHOT_ROOM, 'RU' || RUL_PRIMARY))  -- nvl needed for deleted RUs and for 20 cancelled RUs from 2014 with 'Sterling Suites' in RU_ATGENERIC - see line 138 in Q_SIHOT_SETUP2.sql
+-- where RUL_DATE >= DATE'2012-01-01'
+--   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+--   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+--   and 1=1;
+
+-- first all the ones with ARO/room associated and set to room's category = 250k rows in 32 sec on SP.TEST
+update T_RUL l
+             set RUL_SIHOT_CAT = (select AP_SIHOT_CAT from T_AP where AP_CODE = RUL_SIHOT_ROOM)
+ where not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   -- Date speed-up on log/arrival dates - to support RU delete (outer join to T_RU) check RU arr date with not exists
+   and RUL_DATE >= DATE'2012-01-01'
+   and not exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS < DATE'2012-01-01') 
+   and RUL_SIHOT_ROOM is not NULL
+   and exists (select NULL from T_AP where AP_CODE = RUL_SIHOT_ROOM);
+
+commit;
+
+-- then the ones without requested apt features = 45k rows in 8 sec on SP.TEST
+update T_RUL l
+             set RUL_SIHOT_CAT = (select LU_CHAR from T_LU, T_RU
+                                   where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
+                                     and LU_ID = RU_ATGENERIC
+                                     and RU_CODE = RUL_PRIMARY)
+ where not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   -- Date speed-up on log/arrival dates - to support RU delete (outer join to T_RU) check RU arr date with not exists
+   and RUL_DATE >= DATE'2012-01-01'
+   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY 
+                                           and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01'
+                                           and RU_ATGENERIC in ('HOTEL', 'STUDIO', '1 BED', '2 BED', '3 BED') --, '4 BED')
+                                           and RU_RESORT in ('ANY', 'BHC', 'PBC') --, 'BHH', 'HMC')
+              )
+   and RUL_SIHOT_ROOM is NULL
+   and not exists (select NULL from T_RAF where RAF_RUREF = RUL_PRIMARY);
+
+commit;
+
+-- then finally the ones with requested apt features and category overload == 1k rows in 5 sec
+update T_RUL l
+             set RUL_SIHOT_CAT = (select max(LU_CHAR) from T_LU, T_RU, T_RAF
+                                   where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
+                                     and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and RU_CODE = RAF_RUREF
+                                     and RU_CODE = RUL_PRIMARY)
+ where RUL_DATE >= DATE'2012-01-01'
+   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY 
+                                           and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01'
+                                           and RU_ATGENERIC in ('HOTEL', 'STUDIO', '1 BED', '2 BED', '3 BED') --, '4 BED')
+                                           and RU_RESORT in ('ANY', 'BHC', 'PBC') --, 'BHH', 'HMC')
+              )
+   and RUL_SIHOT_ROOM is NULL
+   and exists (select NULL from T_LU, T_RU, T_RAF
+                                   where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
+                                     and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and RU_CODE = RAF_RUREF
+                                     and RU_CODE = RUL_PRIMARY);
+
+commit;
+
+
+prompt .. then finally set PACK (14 min on SP.TEST)
+ 
+update T_RUL l
+             set RUL_SIHOT_PACK = case when F_SIHOT_PACK((select PRC_BOARDREF1 from T_RU, T_MS, T_PRC where RU_MLREF = MS_MLREF and MS_PRCREF = PRC_CODE and RU_CODE = RUL_PRIMARY), 'MKT_') != 'RO' 
                                        then F_SIHOT_PACK((select PRC_BOARDREF1 from T_RU, T_MS, T_PRC where RU_MLREF = MS_MLREF and MS_PRCREF = PRC_CODE and RU_CODE = RUL_PRIMARY), 'MKT_')
                                        --else F_SIHOT_PACK(nvl((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) from T_RU where RU_CODE = RUL_PRIMARY),
                                        --                      (select RU_BOARDREF from T_RU where RU_CODE = RUL_PRIMARY)))
@@ -1141,12 +1227,19 @@ update T_RUL set RUL_SIHOT_CAT = F_SIHOT_CAT(nvl(RUL_SIHOT_ROOM, 'RU' || RUL_PRI
                                        then F_SIHOT_PACK((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) from T_RU where RU_CODE = RUL_PRIMARY))
                                        else F_SIHOT_PACK((select RU_BOARDREF from T_RU where RU_CODE = RUL_PRIMARY)) 
                                        end
- where RUL_DATE >= DATE'2012-01-01'   -- SPEED-UP: exclude reservatio log entries before 2012
-   and exists (select LU_NUMBER from T_LU where LU_CLASS = 'SIHOT_HOTELS' and LU_ID = (select RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY))
-   and (select RU_ATGENERIC from T_RU where RU_CODE = RUL_PRIMARY) is not NULL
+ where RUL_DATE >= DATE'2012-01-01'
+   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01') 
    and 1=1;
 
 commit;
+
+
+-- check log on uninitialized cats and hots
+--select * from v_acu_res_log where rul_sihot_cat = 'R___' and exists (select NULL from T_RU where RU_CODE = rul_primary) and trunc(rul_date) != '6-OCT-2016'
+--
+select * from v_acu_res_filtered where instr(rul_sihot_cat, '_') > 0 or rul_sihot_hotel <= 0;
 
 
 

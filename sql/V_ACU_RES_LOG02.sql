@@ -9,7 +9,9 @@ select RUL_CODE, RUL_PRIMARY, RUL_ACTION, RUL_DATE
  where nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin') -- remove Acumen LOBBY actions
    -- NOW REMOVED FROM T_RUL BY DBA_SIHOT_RES_SYNC: and RUL_USER <> 'SALES'        -- removing 8939 entries with AUTOBOOKING user renamings (possibly old support tasks)
    -- NOW EXCLUDED BY INNER JOIN TO T_RH: and (RUL_ACTION <> 'INSERT' or instr(RUL_CHANGES, 'RU_RHREF') > 0) -- exclude pending Marketing requests
-   and RUL_CODE = (select max(c.RUL_CODE) from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY)  -- excluding past log entries
+   -- 5 times quicker with NOT EXISTS then with:
+   --and RUL_CODE = (select max(c.RUL_CODE) from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY)  -- excluding past log entries
+   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)  -- excluding past log entries
    and RUL_DATE >= DATE'2012-01-01'   -- SPEED-UP: exclude reservatio log entries before 2012
  -- already ordered by V_ACU_RES_UNSYNCED: order by RUL_CODE
 /*

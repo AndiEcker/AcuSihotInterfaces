@@ -114,17 +114,21 @@ def alloc_trigger(oc, guest_id, room_number):
                    debug_level=cae.get_option('debugLevel'))
     err_msg = ora_db.connect()
     rows_affected = 0
-    if not err_msg and oc in ('CO', 'RM'):
-        err_msg = ora_db.update('T_ARO', {'ARO_TIMEOUT': now, 'ARO_STATUS': 320 if transfer else 390, },
-                                "ARO_STATUS = 300 and ARO_APREF = '" + room_number + "'"
-                                " and DATE'" + now.strftime('%Y-%m-%d') + "'"
-                                " between ARO_EXP_ARRIVE and ARO_EXP_DEPART")
-        rows_affected += ora_db.curs.rowcount
-    if not err_msg and oc in ('CI', 'RM'):
-        err_msg = ora_db.update('T_ARO', {'ARO_TIMEIN': now, 'ARO_STATUS': 330 if transfer else 300, },
-                                "ARO_STATUS = 200 and ARO_APREF = '" + room_number + "'"
-                                " and DATE'" + now.strftime('%Y-%m-%d') + "'"
-                                " between ARO_EXP_ARRIVE and ARO_EXP_DEPART")
+    if False:
+        if not err_msg and oc in ('CO', 'RM'):
+            err_msg = ora_db.update('T_ARO', {'ARO_TIMEOUT': now, 'ARO_STATUS': 320 if transfer else 390, },
+                                    "ARO_STATUS = 300 and ARO_APREF = '" + room_number + "'"
+                                    " and DATE'" + now.strftime('%Y-%m-%d') + "'"
+                                    " between ARO_EXP_ARRIVE and ARO_EXP_DEPART")
+            rows_affected += ora_db.curs.rowcount
+        if not err_msg and oc in ('CI', 'RM'):
+            err_msg = ora_db.update('T_ARO', {'ARO_TIMEIN': now, 'ARO_STATUS': 330 if transfer else 300, },
+                                    "ARO_STATUS = 200 and ARO_APREF = '" + room_number + "'"
+                                    " and DATE'" + now.strftime('%Y-%m-%d') + "'"
+                                    " between ARO_EXP_ARRIVE and ARO_EXP_DEPART")
+            rows_affected += ora_db.curs.rowcount
+    else:
+        ora_db.call_proc('P_SIHOT_ALLOC', (oc, room_number))
         rows_affected += ora_db.curs.rowcount
     if err_msg:
         ora_db.rollback()

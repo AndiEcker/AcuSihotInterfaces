@@ -536,3 +536,17 @@ select * from t_ru where ru_code = 1013229
 
 -- implement direct import  of TK/RCI reservations (SihotRessImport.py)
 select * from  T_LU where lu_id = 'IMP_FROM' -- lu_class = 'TK_ADMIN'
+
+
+-- test sihot setup
+
+select * from t_ap where ap_sihot_cat is not null and f_resort(ap_code) in ('BHC', 'PBC-')
+
+update t_ap set ap_sihot_cat = '_' || ap_sihot_Cat where exists (select NULL from t_at where at_code = ap_atref and at_rsref in ('BHC', '-PBC'))
+
+select * from t_ap where ap_sihot_cat like '_%' and length(ap_sihot_cat) > 4
+
+select * from t_rul, t_ru
+ where 1=1
+    --and (select RU_ATGENERIC from T_RU where RU_CODE = RUL_PRIMARY) is not NULL
+   and RU_CODE = RUL_PRIMARY and RU_ATGENERIC is NULL

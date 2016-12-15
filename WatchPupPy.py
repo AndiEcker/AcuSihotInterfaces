@@ -39,7 +39,7 @@ if not cae.get_option('cmdLine'):
     cae.shutdown()
 command_line_args = cae.get_option('cmdLine').split(' ')
 uprint('Command line:', cae.get_option('cmdLine'))
-check_acumen = cae.get_option('acuUser') and cae.get_option('acuPassword')
+check_acumen = cae.get_option('acuUser') and cae.get_option('acuDSN')
 if check_acumen:
     uprint('Checked Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 check_sihot_web = cae.get_option('serverIP') and cae.get_option('serverPort')
@@ -143,7 +143,8 @@ while True:
         tc_ag_mc = rows[0][1]                                   # == 'TCAG'
         ora_db.close()
         if tc_sc_obj_id != '27' or tc_sc_mc != 'TCRENT' or tc_ag_obj_id != '20' or tc_ag_mc != 'TCAG':
-            err_msg = 'Thomas Cook Acumen configuration errors: expected {}/{}/{}/{} but got {}/{}/{}/{}.'\
+            err_msg = "Acumen environment check found Thomas Cook configuration errors/discrepancies:" \
+                      " expected {}/{}/{}/{} but got {}/{}/{}/{}."\
                 .format('27', 'TCRENT', '20', 'TCAG', tc_sc_obj_id, tc_sc_mc, tc_ag_obj_id, tc_ag_mc)
             continue
     else:
@@ -156,18 +157,18 @@ while True:
         gi = GuestInfo(cae)
         tc_sc_obj_id2 = gi.get_objid_by_matchcode(tc_sc_mc)
         if tc_sc_obj_id != tc_sc_obj_id2:
-            err_msg = 'Thomas Cook Northern matchcode discrepancy: expected {} but got {}.'\
+            err_msg = 'Sihot kernel check found Thomas Cook Northern matchcode discrepancy: expected {} but got {}.'\
                 .format(tc_sc_obj_id, tc_sc_obj_id2)
             continue
         tc_ag_obj_id2 = gi.get_objid_by_matchcode(tc_ag_mc)
         if tc_ag_obj_id != tc_ag_obj_id2:
-            err_msg = 'Thomas Cook AG/U.K. matchcode discrepancy: expected {} but got {}.'\
+            err_msg = 'Sihot kernel check found Thomas Cook AG/U.K. matchcode discrepancy: expected {} but got {}.'\
                 .format(tc_ag_obj_id, tc_ag_obj_id2)
             continue
 
     if check_sihot_web:
         pm = PostMessage(cae)
-        err_msg = pm.post_message("WatchPupPy web interface check for command {}".format(command_line_args[0]))
+        err_msg = pm.post_message("Sihot web interface WatchPupPy check for command {}".format(command_line_args[0]))
         if err_msg:
             continue
 
