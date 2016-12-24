@@ -1328,6 +1328,9 @@ class ResToSihot(SihotXmlBuilder):
         self.use_kernel_for_new_clients = use_kernel_for_new_clients
         self.map_client = map_client
 
+        self._warning_frags = self.ca.get_config('warningFragments')    # list of text fragments to identify as warning
+        self._warning_msgs = ""
+
     def _fetch_from_acu(self, view, where_group_order, history_only, future_only):
         if history_only:
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE < trunc(sysdate)"
@@ -1365,7 +1368,7 @@ class ResToSihot(SihotXmlBuilder):
     def _send_res_to_sihot(self, crow, action, commit):
         self._prepare_res_xml(crow, action)
 
-        err_msg = self.send_to_server()
+        err_msg, warn_msg = self._handle_error(crow, self.send_to_server())
         if self.acu_connected:
             if not err_msg and self.response:
                 err_msg = self._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response)
@@ -1373,7 +1376,7 @@ class ResToSihot(SihotXmlBuilder):
                                                     action,
                                                     'ERR' + (self.response.server_error() if self.response else '')
                                                     if err_msg else 'SYNCED',
-                                                    err_msg,
+                                                    warn_msg,
                                                     crow['RUL_CODE'],
                                                     commit=commit)
         return err_msg
@@ -1466,3 +1469,33 @@ class ResToSihot(SihotXmlBuilder):
                         crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.response.objid
 
         return err_msg
+
+    def res_id_label(self):
+        return 'GDS/VOUCHER/CD' + ('/RU/RUL' if self.ca.get_option('debugLevel') else '')
+
+    def res_id_values(self, crow):
+        return str(crow['SIHOT_GDSNO']) + '/' + str(crow['RH_EXT_BOOK_REF']) + '/' + \
+                str(crow['CD_CODE']) + \
+                ('/' + str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']) if self.ca.get_option('debugLevel')
+                 else '')
+
+    def res_id_desc(self, crow, error_msg, error_sep='\n\n '):
+        return 'RESERVATION ' + crow['ARR_DATE'].strftime('%d-%m') + '..' + crow['DEP_DATE'].strftime('%d-%m-%y') + \
+                ' in ' + (crow['SIHOT_ROOM_NO'] + '=' if crow['SIHOT_ROOM_NO'] else '') + \
+                crow['RUL_SIHOT_CAT'] + \
+                (':' + crow['SH_PRICE_CAT']
+                 if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
+                 else '') + \
+                ' ' + self.res_id_label() + ': ' + self.res_id_values(crow) + \
+               error_sep + 'ERROR: ' + error_msg
+
+    def _handle_error(self, crow, err_msg):
+        warn_msg = ''
+        if [frag for frag in self._warning_frags if frag in err_msg]:
+            warn_msg = self.res_id_desc(crow, err_msg, error_sep='   ')
+            self._warning_msgs += '\n' + warn_msg
+            err_msg = ""
+        return err_msg, warn_msg
+
+    def get_warnings(self):
+        return self._warning_msgs + '\n\nEnd_Of_Message'

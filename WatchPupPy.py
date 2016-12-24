@@ -39,6 +39,7 @@ if not cae.get_option('cmdLine'):
     cae.shutdown()
 command_line_args = cae.get_option('cmdLine').split(' ')
 uprint('Command line:', cae.get_option('cmdLine'))
+uprint("Command interval/checks:", cae.get_option('cmdInterval'), cae.get_option('envChecks'))
 check_acumen = cae.get_option('acuUser') and cae.get_option('acuDSN')
 if check_acumen:
     uprint('Checked Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))

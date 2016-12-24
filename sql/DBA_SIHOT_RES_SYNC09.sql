@@ -452,7 +452,7 @@ prompt new functions for to handle SIHOT id translation and ARO/PRC overloads
 @@F_ARO_RU_CODE00.sql;
 @@F_RU_ARO_APT00.sql;
 @@F_RU_ARO_BOARD00.sql;
-@@F_SIHOT_CAT01.sql;
+@@F_SIHOT_CAT02.sql;
 @@F_SIHOT_GUEST_TYPE00.sql;
 @@F_SIHOT_HOTEL00.sql;
 @@F_SIHOT_NON_MUTAT_PACK00.sql;
@@ -1239,7 +1239,7 @@ commit;
 -- check log on uninitialized cats and hots
 --select * from v_acu_res_log where rul_sihot_cat = 'R___' and exists (select NULL from T_RU where RU_CODE = rul_primary) and trunc(rul_date) != '6-OCT-2016'
 --
-select * from v_acu_res_filtered where instr(rul_sihot_cat, '_') > 0 or rul_sihot_hotel <= 0;
+select * from v_acu_res_filtered where (instr(rul_sihot_cat, '_') > 0 or rul_sihot_hotel <= 0);
 
 
 

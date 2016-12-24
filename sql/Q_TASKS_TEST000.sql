@@ -368,3 +368,8 @@ select (select f_stragg(LU_CHAR) from T_LU, T_RU, T_RAF
                                    where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
                                      and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and RU_CODE = RAF_RUREF
                                      and RU_CODE = RUL_PRIMARY) > 1
+
+
+select * from v_acu_res_filtered
+
+select * from t_srsl

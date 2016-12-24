@@ -6,7 +6,7 @@ select V_ACU_RES_LOG.*
      , V_ACU_RES_DATA.*
   from V_ACU_RES_LOG
        left outer join V_ACU_RES_DATA on RUL_PRIMARY = RU_CODE
- where ( ARR_DATE >= trunc(sysdate) or RUL_SIHOT_ROOM is not NULL )                             -- only migrate past reservations if room was assigned
+ where ( RU_CODE is NULL or ARR_DATE >= trunc(sysdate) or RUL_SIHOT_ROOM is not NULL )                             -- only migrate past reservations if room was assigned
    and ( (RUL_ACTION <> 'DELETE' and nvl(RU_STATUS, 0) <> 120) or RUL_SIHOT_OBJID is not NULL)  -- sync only res deletions/cancelations when res got already migrated/synced into SIHOT
    -- filtering hotels - since having RUL_SIHOT_HOTEL the RUL_CHANGES hotel filter is no longer needed
    --and ( exists (select NULL from resorts where RS_CODE = nvl(RU_RESORT, '_'))
@@ -18,6 +18,8 @@ select V_ACU_RES_LOG.*
    --   or ( RUL_ACTION = 'DELETE' and exists (select NULL from resoccs where RO_CODE = substr(RUL_CHANGES, instr(RUL_CHANGES, 'RU_ROREF (') + 10, 2) ) ) )
    -- ignoring reservation requests (and changes) with stays before 2012
    and (RU_CODE is NULL or DEP_DATE > DATE'2012-01-01')
+   -- exclude also bookings data are excluded via ACU_RES_DATA filter (e.g. A000xxx clients)
+   and (RU_CODE is not NULL or not exists (select NULL from T_RU x where x.RU_CODE = RUL_PRIMARY))
 /*
   ae:30-09-16 first beta of unsynced reservation changes for to be synced to SiHOT (split out of V_ACU_RES_UNSYNCED).
   ae:05-10-16 V01: extracted from V_ACU_RES_DATA (now renamed to V_ACU_RES_UNFILTERED).

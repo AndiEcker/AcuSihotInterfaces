@@ -69,7 +69,7 @@ class ConsoleApp:
                         choices=(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE))
         self.add_option('logFile', 'Copy stdout and stderr into log file', log_file_def, 'L')
 
-    def add_option(self, name, desc, value, short_opt=None, evaluate=False, choices=None):
+    def add_option(self, name, desc, value, short_opt=None, eval_opt=False, choices=None):
         """ defining and adding an new option for this console app as INI/cfg var and as command line argument.
 
             The name and desc arguments are strings that are specifying the name and short description of the option
@@ -88,28 +88,52 @@ class ConsoleApp:
             True for the evaluate parameter or you enclose the string expression with triple high commas.
         """
         self._args_parsed = False
-        iv = self.get_cfg_value(name,  # app cfg
-                                self.get_cfg_value(name,  # env app sec
-                                                   self.get_cfg_value(name, value, use_env=True),  # env main sec
-                                                   use_env=True,
-                                                   section=self._app_name))
-        if isinstance(iv, str) \
-                and (iv.startswith("'''") and iv.endswith("'''") or iv.startswith('"""') and iv.endswith('"""')):
-            evaluate = True
-            iv = iv[3:-3]
+        # determine config value for to use as default for command line arg
+        cfg_val, evaluate = self.get_config(name, default_value=value, check_eval_only=True)
         if not short_opt:
             short_opt = name[0]
-        self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=iv, type=type(iv),
+        self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=cfg_val, type=type(cfg_val),
                                       choices=choices, metavar=name)
-        self._options[name] = dict(desc=desc, val=value, evaluate=evaluate)
+        self._options[name] = dict(desc=desc, val=value, evaluate=evaluate or eval_opt)
 
-    def get_cfg_value(self, name, default_value=None, use_env=False, section=None):
+    def _get_cfg(self, name, section=None, default_value=None, use_env=False):
         c = self._cfg_parser_env if use_env else self._cfg_parser_app
         f = (c.getboolean if isinstance(default_value, bool)
              else (c.getfloat if isinstance(default_value, float)
                    else (c.getint if isinstance(default_value, int)
                          else c.get)))
         return f(section if section else self._main_section, name, fallback=default_value)
+
+    def get_config(self, name, section=None, default_value=None, check_eval_only=False):
+        ret = self._get_cfg(name,                                                          # app cfg
+                            section=section,
+                            default_value=self._get_cfg(name,                              # env app sec
+                                                        section=self._app_name,
+                                                        default_value=self._get_cfg(name,  # env main sec
+                                                                                    section=section,
+                                                                                    default_value=default_value,
+                                                                                    use_env=True),
+                                                        use_env=True))
+        evaluate = False
+        if isinstance(ret, str):
+            if ret.startswith("'''") and ret.endswith("'''") or ret.startswith('"""') and ret.endswith('"""'):
+                evaluate = True
+                ret = ret[3:-3]
+            elif ret.startswith("[[") and ret.endswith("]]") or ret.startswith("{{") and ret.endswith("}}"):
+                evaluate = True
+                ret = ret[1:-1]
+        elif isinstance(ret, dict) or isinstance(ret, list):
+            evaluate = True
+
+        if check_eval_only:
+            ret = (ret, evaluate)
+        elif evaluate and isinstance(ret, str):
+            try:
+                ret = eval(ret)
+            except Exception as ex:
+                uprint("ConsoleApp.get_config() exception '{}' on evaluating the option {}"
+                       + " with value '{}'".format(ex, name, ret))
+        return ret
 
     def _parse_args(self):
         # this method should only get called once and only after all the options have been added with self.add_option().
@@ -123,8 +147,8 @@ class ConsoleApp:
                 try:
                     val = eval(val)
                 except Exception as ex:
-                    uprint("ConsoleApp._parse_args() exception '" + str(ex) + "' on evaluating the option " + str(k)
-                           + " with value: '" + str(val) + "'")
+                    uprint("ConsoleApp._parse_args() exception '{}' on evaluating the option {}"
+                           + " with value: '{}'".format(ex, k, val))
             self._options[k]['val'] = (bool(val) if isinstance(self._options[k]['val'], bool)
                                        else (float(val) if isinstance(self._options[k]['val'], float)
                                              else (int(val) if isinstance(self._options[k]['val'], int)

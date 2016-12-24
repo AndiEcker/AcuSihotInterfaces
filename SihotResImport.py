@@ -9,7 +9,7 @@ from console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
 from notification import Notification
 from db import DEF_USER, DEF_DSN
 from acu_sihot_config import Data
-from sxmlif import ClientToSihot, ResToSihot, \
+from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
@@ -24,6 +24,7 @@ cae.add_option('rciPath', "Import path and file mask for RCI CSV-tci_files", 'C:
 cae.add_option('smtpServerUri', "SMTP error notification server URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
 cae.add_option('smtpTo', "SMTP Receiver/To addresses", '', 'r')
+cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", '[[]]', 'v')
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
@@ -61,6 +62,9 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
                                 used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIp'),
                                 debug_level=cae.get_option('debugLevel'))
     uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
+    if cae.get_option('warningsMailToAddr'):
+        uprint('Warnings SMTP receiver address:', cae.get_option('warningsMailToAddr'))
+
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 uprint('Server IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
 uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
@@ -268,10 +272,9 @@ def rci_line_to_res_row(curr_line, rows):
     row['RH_EXT_BOOK_REF'] = curr_cols[RCI_BOOK_REF]
     row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCI_ARR_DATE][:10], '%Y-%m-%d')
     row['DEP_DATE'] = row['ARR_DATE'] + datetime.timedelta(7)
-    room_size = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
     row['RUL_SIHOT_ROOM'] = curr_cols[RCI_APT_NO]
-    comment = room_size + ' (' + row['RUL_SIHOT_ROOM'] + ')'
-
+    # room_size = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
+    # comment = room_size + ' (' + row['RUL_SIHOT_ROOM'] + ')'
     rows.append(row)
     return ''
 
@@ -392,6 +395,11 @@ if not error_log or not cae.get_option('breakOnError'):
             error_log += 'Error in sending reservation {} to Sihot {}\n'.format(cols, error_msg)
             if cae.get_option('breakOnError'):
                 break
+
+    warnings = acumen_req.get_warnings()
+    if notification and warnings:
+        mail_to = cae.get_option('warningsMailToAddr')
+        notification.send_notification(warnings, subject='SihotResImport warnings notification', mail_to=mail_to)
 
     progress.finished(error_msg=error_msg)
 

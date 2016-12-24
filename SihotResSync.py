@@ -37,10 +37,12 @@ cae.add_option('clientsFirst', "Migrate first the clients then the reservations 
 cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b')
 
 cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
-cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "SMTP Receiver/To addresses (and fallback if smtpToEval returns None/empty-list)", '', 'r')
+cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
+cae.add_option('smtpTo', "SMTP receiver/to addresses (and fallback if smtpToEval returns None/empty-list)", '', 'r')
 cae.add_option('smtpToEval', "error and data specific eval expression resulting in list of notification receivers", '',
                'a')
+
+cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", [], 'v')
 
 
 debug_level = cae.get_option('debugLevel')
@@ -65,6 +67,8 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
     if cae.get_option('smtpToEval'):
         mail_to_expr = cae.get_option('smtpToEval')
         uprint('SMTP To Evaluation Expression:', mail_to_expr)
+    if cae.get_option('warningsMailToAddr'):
+        uprint('Warnings SMTP receiver address:', cae.get_option('warningsMailToAddr'))
 
 lastUnfinishedRunTime = cae.get_option('lastRt')
 if lastUnfinishedRunTime.startswith('@'):
@@ -85,12 +89,13 @@ def send_notification(what, sid, mail_body):
         try:
             mail_to_addr_list = eval(mail_to_expr)      # crow[] for to check data and error_msg for to check error
         except Exception as ex:
-            uprint("SihotResSync.send_notification() exception '" + str(ex) +
-                   "' on evaluating of '" + str(mail_to_expr) + "'")
+            uprint(" **** SihotResSync.send_notification() exception '" + str(ex) +
+                   "' on evaluating of '" + str(mail_to_expr) + "' with error_msg='" + error_msg + "' and crow='" +
+                   str(crow) + "'.")
     send_err = notification.send_notification(mail_body, subject='SihotResSync notification ' + what + ' ' + sid,
                                               mail_to=mail_to_addr_list)
     if send_err:
-        uprint(" #### SihotResSync " + what + " send notification error: {}. Unsent ID='{}' error message: {}."
+        uprint(" **** SihotResSync " + what + " send notification error: {}. Unsent ID='{}' error message: {}."
                .format(send_err, sid, error_msg))
 
 
@@ -134,24 +139,13 @@ if not error_msg:
                         start_msg=" ###  Prepare sending of {total_count} reservations to Sihot",
                         nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no rows")
     if not error_msg:
-        lid = 'GDS/VOUCHER/CD' + ('/RU/RUL' if debug_level else '')
         for crow in acumen_req.rows:
             error_msg = acumen_req.send_row_to_sihot(crow)
-            rid = str(crow['SIHOT_GDSNO']) + '/' + str(crow['RH_EXT_BOOK_REF']) + '/' + \
-                str(crow['CD_CODE']) + \
-                ('/' + str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']) if debug_level else '')
+            rid = acumen_req.res_id_values(crow)
             progress.next(processed_id=rid, error_msg=error_msg)
             if error_msg:
                 acumen_req.ora_db.rollback()
-                send_notification('Acumen Reservation', rid,
-                                  'RESERVATION ' + \
-                                  crow['ARR_DATE'].strftime('%d-%m') + '..' + crow['DEP_DATE'].strftime('%d-%m-%y') + \
-                                  ' in ' + (crow['SIHOT_ROOM_NO'] + '=' if crow['SIHOT_ROOM_NO'] else '') + \
-                                  crow['RUL_SIHOT_CAT'] + \
-                                  (':' + crow['SH_PRICE_CAT']
-                                   if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT'] else '') + \
-                                   ' ' + lid + ': ' + rid + ' ' + \
-                                   '\n\nERROR: ' + error_msg)
+                send_notification('Acumen Reservation', rid, acumen_req.res_id_desc(crow, error_msg))
             else:
                 error_msg = acumen_req.ora_db.commit()
             if error_msg:
@@ -159,6 +153,11 @@ if not error_msg:
                     continue
                 elif cae.get_option('breakOnError'):
                     break
+
+        warnings = acumen_req.get_warnings()
+        if notification and warnings:
+            mail_to = cae.get_option('warningsMailToAddr')
+            notification.send_notification(warnings, subject='SihotResSync warnings notification', mail_to=mail_to)
 
     progress.finished(error_msg=error_msg)
 

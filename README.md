@@ -30,13 +30,16 @@ Most of the available commands are using the same command line options. The foll
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
-| cmdLine | command [line] to execute | - | x | WatchPupPy |
-| cmdInterval | command interval in seconds | 3600 | s | WatchPupPy |
+| cmdLine | Command [line] to execute | - | x | WatchPupPy |
+| cmdInterval | Command interval in seconds | 3600 | s | WatchPupPy |
+| debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose) | 0 | D | (all) |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
+| help | Show help on all the available command line argument options | - | h | (all) |
 | lastRt | Timestamp of last command run | - | o | SihotResImport, SihotResSync |
+| logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
-| matchcode | guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
+| matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | y | SihotResImport |
 | resHistory | Migrate also the clients reservation history (0=No, 1=Yes) | 1 | r | SihotMigration |
 | serverIP | IP address of the interface server | localhost | i | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
@@ -49,12 +52,15 @@ Most of the available commands are using the same command line options. The foll
 | timeout | Timeout in seconds for TCP/IP connections | 39.6 | t | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
+| warningsMailToAddr | Warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SihotResImport, SihotResSync |
 | xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+
+Currently all the 26 ascii lower case letters are used for the command line argument short options (apart from `| l |` which is throwing the exception `argparse.ArgumentError: conflicting option string: -l`).
 
 
 ## System Configurations And Mappings
 
-Most of the configuration settings and mapping tables are stored within the Lookup Tables (`T_LU`) of the Oracle database of the Acumen server. Others are stored in newly added columns within other Acumen configuration tables.
+Most of the configuration keys/options and mapping tables are stored within the Lookup Tables (`T_LU`) of the Oracle database of the Acumen server. Others are stored in newly added columns within other Acumen configuration tables. Some are hard coded within the Acumen Oracle views (e.g. V_ACU_RES_DATA). Default values for the command line arguments can be specified within different Configuration files (with the file extensions INI or CFG).
 
 ### Hotel IDs
 
@@ -266,6 +272,18 @@ For to create tour operator bookings via the WEB interface you need to specify t
 Each hotel and tour operator has a individual internal allotment contract number. So for our two tour operators Thomas Cook Northern/Scandinavia and U.K. for the two initial hotels (1 and 4) we need to configure four numbers, which are currently specified within the database view `V_ACU_RES_DATA` in the expression of column `SIHOT_ALLOTMENT_NO`. 
 
 
+### Configuration files
+
+The default values of each command line argument can be set within one of the configurations files. If the values are not specified in the app configuration file then the option default/fallback values will be searched within the base config file: first in the app name section then in the default main section. More information on the several supported configuration files and values you find in the module/package console_app.
+
+The following configuration values are not available as command line argument options (can only be specified within a configuration file):
+            
+| Section Name | Key/Option Name | Description |
+| --- | --- | --- |
+| Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr` or `smtpTo`).
+
+
+
 ## System Synchronization
 
 Every client that got created first on the Acumen system and then get migrated as guest record onto the Sihot system will by synchronized by the Sihot guest object id. This id will be stored for each pax a our Acumen couple client record in the two new columns `CD_SIHOT_OBJID` and `CD_SIHOT_OBJID2`.
@@ -277,7 +295,7 @@ Reservations created first within the Acumen system and then synchronized to Sih
 
 The following 6 new columns got added to the Acumen Requested Unit Log table (`T_RUL`) for to store also any other booking changes of a synchronized reservation that are happening in a associated table like e.g. room change in the related Apartment Reservation (`T_ARO`) or board/meal plan change in the Marketing Prospect (`T_PRC`):
 
-| column name | column content |
+| Column Name | Column Content |
 | --- | --- |
 | RUL_SIHOT_CAT | Unit/Price category in Sihot.PMS - overloaded if associated ARO exists |
 | RUL_SIHOT_HOTEL | Hotel Id in Sihot.PMS - overloaded if associated ARO exists |
@@ -293,7 +311,7 @@ These columns got added later on mainly because of performance enhancements by c
 
 The synchronization process is fully logged within the new `T_SRSL` table providing the following columns:
 
-| column name | column content |
+| Column Name | Column Content |
 | --- | --- |
 | SRSL_TABLE | Acumen Table ID (RU/ARO/CD) |
 | SRSL_PRIMARY | Acumen Table Primary Key (`RU_CODE`/Requested Unit, `ARO_CODE`/Apartment Reservation or `CD_CODE`/Client Details) |
