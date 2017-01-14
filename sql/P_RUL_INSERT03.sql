@@ -10,7 +10,8 @@ create or replace procedure LOBBY.RUL_INSERT
                              pcAtGeneric      IN T_RU.RU_ATGENERIC%type := NULL,
                              pcResort         IN T_RU.RU_RESORT%type := NULL,
                              pnObjId          IN T_RUL.RUL_SIHOT_OBJID%type := NULL,
-                             pcRate           IN T_RUL.RUL_SIHOT_RATE%type := NULL
+                             pcRate           IN T_RUL.RUL_SIHOT_RATE%type := NULL,
+                             pnAFT_Code       IN T_RAF.RAF_AFTREF%type := NULL
                             ) 
 IS
   CHANGES_LEN   constant integer := 2000;
@@ -30,6 +31,7 @@ IS
   lnPos         integer;
   lcCaller      varchar2(1 byte);
   lcAction      T_RUL.RUL_ACTION%type;
+  lcAFT_Suffix  varchar2(12 byte);
   
   cursor cMkt is
     select ML_RHREF, ML_REQARRIVAL_DATE, ML_REQDEPART_DATE, RU_CODE from T_MS, T_ML, T_RU where MS_MLREF = ML_CODE and ML_CODE = RU_MLREF and MS_PRCREF = pnCode;
@@ -90,27 +92,30 @@ BEGIN
     if lcResort = 'ANY' and lcRulApRef is not NULL then
       lcResort := F_RESORT(lcRulApRef);
     end if;
-    lcSihotCat := F_SIHOT_CAT(lcAtGeneric || '@' || lcResort || F_SIHOT_PAID_RAF(lnRU_Code, lcResort, lcAtGeneric));
+    if pnAFT_Code is NULL then
+      lcAFT_Suffix := F_SIHOT_PAID_RAF(lnRU_Code, lcResort, lcAtGeneric);
+    else
+      lcAFT_Suffix := '_' || to_char(pnAFT_Code);
+    end if;
+    lcSihotCat := F_SIHOT_CAT(lcAtGeneric || '@' || lcResort || lcAFT_Suffix);
     lnSihotHotel := F_SIHOT_HOTEL('@' || lcResort);
   end if;
   
-  -- translate board ref inti SIHOT package value
-  if lcCaller != 'A' and lcApRef is not NULL then   -- called from RU/RH/PRC and apartment exists - check for ARO board overload
-    if lcCaller = 'R' then
-      lcBoardRef := F_RU_ARO_BOARD(pnRHRef, pdFrom, pdTo);
+  -- translate board ref into SIHOT package value - last trigger is always overwriting
+  lcBoardRef := pcBoardRef;
+  if nvl(lcBoardRef, 'N') = 'N' then   -- called from RU/RH/PRC and apartment exists - check for ARO board overload
+    if lcCaller = 'M' then
+      lcBoardRef := F_RU_ARO_BOARD(rMkt.ML_RHREF, rMkt.ML_REQARRIVAL_DATE, rMkt.ML_REQDEPART_DATE, lcCaller);
     else
-      lcBoardRef := F_RU_ARO_BOARD(rMkt.ML_RHREF, rMkt.ML_REQARRIVAL_DATE, rMkt.ML_REQDEPART_DATE);
+      lcBoardRef := F_RU_ARO_BOARD(pnRHRef, pdFrom, pdTo, lcCaller);
     end if;
-  end if;
-  if nvl(lcBoardRef, 'N') = 'N' then
-    lcBoardRef := pcBoardRef;
   end if;
   lnPos := instr(lcBoardRef, '_'); 
   if lnPos >= 2 then  -- >=2 for to not confuse with BOARDREF='_'
     lcPackPrefix := substr(lcBoardRef, 1, lnPos);
     lcBoardRef := substr(lcBoardRef, lnPos + 1);
   elsif lcCaller = 'M' then
-    lcPackPrefix := 'MKT_';
+    lcPackPrefix := 'MKT_';   -- actually not needed because PRC_UPDATE is always adding this prefix
   end if;
   lcSihotPack := F_SIHOT_PACK(lcBoardRef, lcPackPrefix);
   
@@ -136,7 +141,7 @@ BEGIN
                      RUL_SIHOT_OBJID = case when pnObjId is not NULL then pnObjId else RUL_SIHOT_OBJID end,
                      RUL_SIHOT_RATE = case when pcRate is not NULL then pcRate else RUL_SIHOT_RATE end
      where RUL_CODE = lnRUL_Code;
-  else
+  elsif lnRU_Code is not NULL then
     insert into T_RUL (RUL_CODE, RUL_USER, RUL_ACTION, RUL_DATE, RUL_PRIMARY, 
                        RUL_CHANGES, RUL_MAINPROC, RUL_SUBPROC, RUL_SPACTION, 
                        RUL_SIHOT_CAT, RUL_SIHOT_HOTEL, RUL_SIHOT_PACK, 
@@ -145,11 +150,26 @@ BEGIN
              substr(pcChanges, 2, CHANGES_LEN), k.ExecutingMainProc, k.ExecutingSubProc, k.ExecutingAction,
              lcSihotCat, lnSihotHotel, lcSihotPack, 
              lcApRef, pnObjId, pcRate);
+  else
+    P_SENDMAIL('Sales.System@silverpoint.com', 'Andreas.Ecker@signallia.com', 'Insert NULL into RUL_PRIMARY',
+               'Caller=' || lcCaller || ' Usr=' || USER || ' Act=' || lcAction || case when pcAction <> lcAction then '(' || pcAction || ')' end || ' Date=' || sysdate 
+               || ' Changes=[' || substr(pcChanges, 2) || '] ProcStack=[' || trim(k.ExecutingMainProc) || '/' || trim(k.ExecutingSubProc) || '/' || trim(k.ExecutingAction) || '] Code=' || pnCode
+               || ' Cat=' || lcSihotCat || ' AftSuff=' || lcAFT_Suffix || ' Hot=' || lnSihotHotel
+               || ' Pack=' || lcSihotPack || case when lcPackPrefix is not NULL then ':' || lcPackPrefix end || ' Board=' || lcBoardRef 
+               || ' Apt=' || lcApRef || case when pcApRef <> nvl(lcApRef, '_') then '(' || pcApRef || ')' end || case when lcRulApRef <> nvl(lcApRef, '_') then '(Rul:' || lcRulApRef || ')' end 
+               || ' RS=' || lcResort || case when pcResort <> lcResort then '(' || pcResort || ')' end
+               || ' Gen=' || lcAtGeneric || case when pcAtGeneric <> lcAtGeneric then '(' || pcAtGeneric || ')' end 
+               || ' Rh=' || pnRHRef || case when rMkt.ML_RHREF <> pnRHRef then '(' || rMkt.ML_RHREF || ')' end
+               || ' Arr=' || pdFrom || case when rMkt.ML_REQARRIVAL_DATE <> pdFrom then '(' || rMkt.ML_REQARRIVAL_DATE || ')' end
+               || ' Dep=' || pdTo || case when rMkt.ML_REQDEPART_DATE <> pdTo then '(' || rMkt.ML_REQDEPART_DATE || ')' end 
+               || ' ObjId=' || pnObjId || ' Rate=' || pcRate || ' Aft=' || pnAFT_Code);
   end if;
 END
 /*
   ae:06-08-16 first beta - for SIHOT sync/migration project.
   ae:28-11-16 V01: refactored call to F_SIHOT_CAT for to support one paid requested apartment feature.
+  ae:27-12-16 V02: added lcCaller parameter to call of F_RU_ARO_BOARD to prevent mutating PRC cursor.
+  ae:11-01-17 V03: prevent INSERT into RUL if RUL_PRIMARY value is NULL and added temporary notification for further checkings. 
 */;
 /
 

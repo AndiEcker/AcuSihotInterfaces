@@ -274,7 +274,7 @@ Each hotel and tour operator has a individual internal allotment contract number
 
 ### Configuration files
 
-The default values of each command line argument can be set within one of the configurations files. If the values are not specified in the app configuration file then the option default/fallback values will be searched within the base config file: first in the app name section then in the default main section. More information on the several supported configuration files and values you find in the module/package console_app.
+The default values of each command line argument can be set within one of the configurations files. If the values are not specified in the app configuration file then the option default/fallback values will be searched within the base config file: first in the app name section then in the default main section. More information on the several supported configuration files and values you find in the module/package `console_app`.
 
 The following configuration values are not available as command line argument options (can only be specified within a configuration file):
             
@@ -321,3 +321,7 @@ The synchronization process is fully logged within the new `T_SRSL` table provid
 | SRSL_LOGREF | Audit Trail Log Id (for debugging only) - Primary Key of either RUL/Requested Unit Log, AROL/Apartment Reservation Log or LOG/Client Details Log |
 | SRSL_MESSAGE | Final or Error Message/Response of Sihot.PMS (taken from the MSG response xml element) |
 
+
+# Monitor Application
+
+AcuSihotMonitor is a kivy application that runs on Windows, Linux, Mac OS X, Android and iOS and allows to check the correct functionality of the Acumen and Sihot servers and interfaces.

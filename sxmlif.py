@@ -1487,7 +1487,7 @@ class ResToSihot(SihotXmlBuilder):
                  if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
                  else '') + \
                 ' ' + self.res_id_label() + ': ' + self.res_id_values(crow) + \
-               error_sep + 'ERROR: ' + error_msg
+               (error_sep + 'ERROR: ' + error_msg if error_msg else '')
 
     def _handle_error(self, crow, err_msg):
         warn_msg = ''
@@ -1498,4 +1498,4 @@ class ResToSihot(SihotXmlBuilder):
         return err_msg, warn_msg
 
     def get_warnings(self):
-        return self._warning_msgs + '\n\nEnd_Of_Message'
+        return self._warning_msgs + '\n\nEnd_Of_Message\n'

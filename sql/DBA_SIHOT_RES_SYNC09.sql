@@ -451,15 +451,14 @@ prompt new functions for to handle SIHOT id translation and ARO/PRC overloads
 
 @@F_ARO_RU_CODE00.sql;
 @@F_RU_ARO_APT00.sql;
-@@F_RU_ARO_BOARD00.sql;
+@@F_RU_ARO_BOARD01.sql;
 @@F_SIHOT_CAT02.sql;
 @@F_SIHOT_GUEST_TYPE00.sql;
 @@F_SIHOT_HOTEL00.sql;
 @@F_SIHOT_NON_MUTAT_PACK00.sql;
-@@F_SIHOT_PACK00.sql;
+@@F_SIHOT_PACK01.sql;
 @@F_SIHOT_PAID_RAF00.sql;
 @@F_SIHOT_SALUTATION00.sql;
-@@F_RU_ARO_BOARD00.sql;
 
 
 
@@ -481,7 +480,7 @@ prompt add new views for the data and logs of T_CD (T_LOG), T_RU, T_ARO and T_RH
 
 prompt new procedure for RUL insert/update and for to populate the new RUL_SIHOT columns
 
-@@P_RUL_INSERT01.sql;
+@@P_RUL_INSERT02.sql;
 @@P_SIHOT_ALLOC00.sql;
 
 
@@ -1132,7 +1131,9 @@ update T_RUL l
    -- opti (only update the newest ones / used by V_ACU_RES_LOG - need exact same filter/where expression)
    and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)  -- excluding past log entries
    and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
-   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01') 
+   -- exclude invalid clients, cancellations in the past and also pending MKT records (RU_RHREF is not NULL) and prevent to include/flag invalid ones with non-empty RUL_SIHOT_RATE
+   and exists (select NULL from T_RU, V_ACU_CD_DATA where RU_CODE = RUL_PRIMARY and RU_CDREF = CD_CODE 
+                                                      and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01' and (RU_STATUS <> 120 or RU_FROM_DATE + RU_DAYS > trunc(sysdate)) and RU_RHREF is not NULL) 
    and 1=1;
 
 commit;
@@ -1144,7 +1145,8 @@ update T_RUL l
  where RUL_DATE >= DATE'2012-01-01'
    and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
    and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
-   and not exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS < DATE'2012-01-01') 
+   and not exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS < DATE'2012-01-01')
+   and RUL_SIHOT_RATE is not NULL 
    and 1=1;
 
 commit;
@@ -1169,6 +1171,7 @@ update T_RUL l
    and RUL_DATE >= DATE'2012-01-01'
    and not exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS < DATE'2012-01-01') 
    and RUL_SIHOT_ROOM is not NULL
+   and RUL_SIHOT_RATE is not NULL 
    and exists (select NULL from T_AP where AP_CODE = RUL_SIHOT_ROOM);
 
 commit;
@@ -1189,6 +1192,7 @@ update T_RUL l
                                            and RU_RESORT in ('ANY', 'BHC', 'PBC') --, 'BHH', 'HMC')
               )
    and RUL_SIHOT_ROOM is NULL
+   and RUL_SIHOT_RATE is not NULL 
    and not exists (select NULL from T_RAF where RAF_RUREF = RUL_PRIMARY);
 
 commit;
@@ -1208,6 +1212,7 @@ update T_RUL l
                                            and RU_RESORT in ('ANY', 'BHC', 'PBC') --, 'BHH', 'HMC')
               )
    and RUL_SIHOT_ROOM is NULL
+   and RUL_SIHOT_RATE is not NULL 
    and exists (select NULL from T_LU, T_RU, T_RAF
                                    where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
                                      and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and RU_CODE = RAF_RUREF
@@ -1216,21 +1221,32 @@ update T_RUL l
 commit;
 
 
-prompt .. then finally set PACK (14 min on SP.TEST)
+prompt .. then finally set PACK (7 min on SP.TEST2, )
  
+--update T_RUL l
+--             set RUL_SIHOT_PACK = case when F_SIHOT_PACK((select PRC_BOARDREF1 from T_RU, T_MS, T_PRC where RU_MLREF = MS_MLREF and MS_PRCREF = PRC_CODE and RU_CODE = RUL_PRIMARY), 'MKT_') != 'RO' 
+--                                       then F_SIHOT_PACK((select PRC_BOARDREF1 from T_RU, T_MS, T_PRC where RU_MLREF = MS_MLREF and MS_PRCREF = PRC_CODE and RU_CODE = RUL_PRIMARY), 'MKT_')
+--                                       --else F_SIHOT_PACK(nvl((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) from T_RU where RU_CODE = RUL_PRIMARY),
+--                                       --                      (select RU_BOARDREF from T_RU where RU_CODE = RUL_PRIMARY)))
+--                                       when (select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS, 'R') from T_RU where RU_CODE = RUL_PRIMARY) != 'RO'
+--                                       then F_SIHOT_PACK((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS, 'R') from T_RU where RU_CODE = RUL_PRIMARY))
+--                                       else F_SIHOT_PACK((select RU_BOARDREF from T_RU where RU_CODE = RUL_PRIMARY)) 
+--                                       end
+-- where RUL_DATE >= DATE'2012-01-01'
+--   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
+--   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+--   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01') 
+--   and 1=1;
+
 update T_RUL l
-             set RUL_SIHOT_PACK = case when F_SIHOT_PACK((select PRC_BOARDREF1 from T_RU, T_MS, T_PRC where RU_MLREF = MS_MLREF and MS_PRCREF = PRC_CODE and RU_CODE = RUL_PRIMARY), 'MKT_') != 'RO' 
-                                       then F_SIHOT_PACK((select PRC_BOARDREF1 from T_RU, T_MS, T_PRC where RU_MLREF = MS_MLREF and MS_PRCREF = PRC_CODE and RU_CODE = RUL_PRIMARY), 'MKT_')
-                                       --else F_SIHOT_PACK(nvl((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) from T_RU where RU_CODE = RUL_PRIMARY),
-                                       --                      (select RU_BOARDREF from T_RU where RU_CODE = RUL_PRIMARY)))
-                                       when (select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) from T_RU where RU_CODE = RUL_PRIMARY) != 'RO'
-                                       then F_SIHOT_PACK((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) from T_RU where RU_CODE = RUL_PRIMARY))
-                                       else F_SIHOT_PACK((select RU_BOARDREF from T_RU where RU_CODE = RUL_PRIMARY)) 
-                                       end
+             set RUL_SIHOT_PACK = F_SIHOT_PACK((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS, 'R') from T_RU where RU_CODE = RUL_PRIMARY))
+--select F_SIHOT_PACK((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS, 'R') from T_RU where RU_CODE = RUL_PRIMARY)), l.* from t_rul l
  where RUL_DATE >= DATE'2012-01-01'
    and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)
    and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
-   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01') 
+   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_FROM_DATE + RU_DAYS >= DATE'2012-01-01')
+   --and RUL_SIHOT_PACK <> F_SIHOT_PACK((select F_RU_ARO_BOARD(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS, 'R') from T_RU where RU_CODE = RUL_PRIMARY))
+   and RUL_SIHOT_RATE is not NULL 
    and 1=1;
 
 commit;

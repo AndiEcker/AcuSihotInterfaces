@@ -1,0 +1,82 @@
+
+<BoardMenu@ActionButton>:
+    on_press: app.go_to_board(self.text)
+
+<CheckMenu@ActionButton>:
+    on_press: app.run_check(self.text)
+
+<CheckItem@BoxLayout>:
+    orientation: 'vertical'
+    size_hint_y: None
+    height: 120
+    # custom properties - see also BOARDS data structure in AcuSihotMonitor.py
+    background_color: (.75, .36, 0, 1)
+    name: ''
+    check_result: ''
+    last_check: ''
+    canvas:
+        Color:
+            rgba: self.background_color
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    BoxLayout:
+        Label:
+            text: root.name
+        Label:
+            text: root.check_result
+    Label:
+        text: root.last_check
+
+
+<MainWindow>:   # @FloatLayout>:
+    ActionBar:
+        id: menu_bar
+        pos_hint: {'top': 1}
+        background_color: (0, .36, .36, 1)
+        ActionView:
+            background_color: (0, .36, .36, 1)
+            use_separator: True
+            ActionPrevious:
+                title: 'Main'
+                with_previous: True
+            ActionOverflow:
+            ActionGroup:
+                id: board_group
+                text: 'Boards'
+                ActionButton:
+            ActionGroup:
+                id: check_group
+                dropdown_width: 180
+                text: 'Checks'
+            ActionGroup:
+                text: 'Lists'
+                dropdown_width: 180
+                ActionButton:
+                    text: 'Sync Log'
+                    on_press: app.go_to_board('SyncLog')
+                ActionButton:
+                    text: 'Error Log'
+                    on_press: app.go_to_board('ErrLog')
+                ActionButton:
+                    text: 'Unsynced Res.'
+                    on_press: app.go_to_board('UnsyncedRes')
+                ActionButton:
+                    text: 'Unsynced Clients'
+                    on_press: app.go_to_board('UnsyncedClient')
+    ScrollView:
+        pos: 0, 0
+        size_hint: None, None
+        size: root.width, root.height - menu_bar.height
+        canvas.before:
+            Color:
+                rgba: (0, .36, .36, 1)
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        GridLayout:
+            id: check_items
+            cols: 1
+            size_hint_y: None
+            pos: self.parent.x, self.parent.y
+            height: self.minimum_height

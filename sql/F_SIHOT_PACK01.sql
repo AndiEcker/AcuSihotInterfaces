@@ -2,12 +2,21 @@ create or replace function LOBBY.SIHOT_PACK(pcBoardRef IN T_LU.LU_ID%type, pcLuC
   RETURN T_RUL.RUL_SIHOT_PACK%type
 IS  
   lcPack   T_RUL.RUL_SIHOT_PACK%type := NULL;   -- varchar2(3 Byte);
+  lcBoard  T_LU.LU_ID%type;
+  lcPrefix T_LU.LU_CLASS%type;
   
   cursor cLuBoard is
-    select * from T_LU where LU_CLASS = pcLuClassPrefix || 'BOARDS' and LU_ID = pcBoardRef;
+    select * from T_LU where LU_CLASS = lcPrefix || 'BOARDS' and LU_ID = lcBoard;
   rLuBoard cLuBoard%rowtype;
 
 BEGIN
+  if substr(pcBoardRef, 1, 4) = 'MKT_' then
+    lcPrefix := substr(pcBoardRef, 1, 4);
+    lcBoard := substr(pcBoardRef, 5);
+  else
+    lcPrefix := pcLuClassPrefix;
+    lcBoard := pcBoardRef;
+  end if;
   open  cLuBoard;
   fetch cLuBoard into rLuBoard;
   if cLuBoard%found then
@@ -19,6 +28,7 @@ BEGIN
 END
 /*
   ae:27-08-16 V00: first beta - added for SIHOT sync/migration project.
+  ae:27-12-16 V01: allow alternatively to pass board with 'MKT_' prefix.
 */;
 /
 
