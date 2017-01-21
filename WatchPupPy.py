@@ -144,8 +144,8 @@ while True:
         tc_ag_mc = rows[0][1]                                   # == 'TCAG'
         ora_db.close()
         if tc_sc_obj_id != '27' or tc_sc_mc != 'TCRENT' or tc_ag_obj_id != '20' or tc_ag_mc != 'TCAG':
-            err_msg = "Acumen environment check found Thomas Cook configuration errors/discrepancies:" \
-                      " expected {}/{}/{}/{} but got {}/{}/{}/{}."\
+            err_msg = ("Acumen environment check found Thomas Cook configuration errors/discrepancies:"
+                       " expected {}/{}/{}/{} but got {}/{}/{}/{}.")\
                 .format('27', 'TCRENT', '20', 'TCAG', tc_sc_obj_id, tc_sc_mc, tc_ag_obj_id, tc_ag_mc)
             continue
     else:

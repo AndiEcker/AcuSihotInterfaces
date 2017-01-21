@@ -95,8 +95,8 @@ def send_notification(what, sid, mail_body):
     send_err = notification.send_notification(mail_body, subject='SihotResSync notification ' + what + ' ' + sid,
                                               mail_to=mail_to_addr_list)
     if send_err:
-        uprint(" **** SihotResSync " + what + " send notification error: {}. Unsent ID='{}' error message: {}."
-               .format(send_err, sid, error_msg))
+        uprint(" **** SihotResSync " + what
+               + " send notification error: {}. Unsent ID='{}' error message: {}.".format(send_err, sid, error_msg))
 
 
 if cae.get_option('clientsFirst'):

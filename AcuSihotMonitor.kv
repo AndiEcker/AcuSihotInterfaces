@@ -3,30 +3,25 @@
     on_press: app.go_to_board(self.text)
 
 <CheckMenu@ActionButton>:
-    on_press: app.run_check(self.text)
+    on_press: app.do_checks(self.text)
 
-<CheckItem@BoxLayout>:
+<CheckItem>:
     orientation: 'vertical'
     size_hint_y: None
     height: 120
-    # custom properties - see also BOARDS data structure in AcuSihotMonitor.py
-    background_color: (.75, .36, 0, 1)
-    name: ''
-    check_result: ''
-    last_check: ''
     canvas:
         Color:
-            rgba: self.background_color
+            rgba: root.data_dict['background_color']
         Rectangle:
             pos: self.pos
             size: self.size
     BoxLayout:
         Label:
-            text: root.name
+            text: root.data_dict['name']
         Label:
-            text: root.check_result
+            text: root.data_dict['last_check'] if 'last_check' in root.data_dict else ''
     Label:
-        text: root.last_check
+        text: root.data_dict['check_result'] if 'check_result' in root.data_dict else ''
 
 
 <MainWindow>:   # @FloatLayout>:
@@ -38,13 +33,13 @@
             background_color: (0, .36, .36, 1)
             use_separator: True
             ActionPrevious:
+                id: action_previous
                 title: 'Main'
-                with_previous: True
+                with_previous: False
             ActionOverflow:
             ActionGroup:
                 id: board_group
                 text: 'Boards'
-                ActionButton:
             ActionGroup:
                 id: check_group
                 dropdown_width: 180

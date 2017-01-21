@@ -27,6 +27,26 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
               sep=sep, end=end, file=file, flush=flush)
 
 
+def prepare_eval_str(val):
+    """ check val if needs to be evaluated and return non-empty-and-stripped-eval-string if yes else '' """
+
+    if isinstance(val, bytes):
+        val = val.decode()  # convert bytes to string
+
+    ret = ''
+    if isinstance(val, str):
+        if val.startswith("'''") and val.endswith("'''") or val.startswith('"""') and val.endswith('"""'):
+            ret = val[3:-3]
+        elif val.startswith("[[") and val.endswith("]]") or val.startswith("{{") and val.endswith("}}") \
+                or val.startswith("((") and val.endswith("))"):
+            ret = val[1:-1]
+        elif val.startswith("[") and val.endswith("]") or val.startswith("{") and val.endswith("}") \
+                or val.startswith("(") and val.endswith(")"):
+            ret = val
+
+    return ret
+
+
 class _DuplicateSysOut:
     def __init__(self, log_file, sys_out=ori_std_out):
         self.log_file = log_file
@@ -96,45 +116,6 @@ class ConsoleApp:
                                       choices=choices, metavar=name)
         self._options[name] = dict(desc=desc, val=value, evaluate=evaluate or eval_opt)
 
-    def _get_cfg(self, name, section=None, default_value=None, use_env=False):
-        c = self._cfg_parser_env if use_env else self._cfg_parser_app
-        f = (c.getboolean if isinstance(default_value, bool)
-             else (c.getfloat if isinstance(default_value, float)
-                   else (c.getint if isinstance(default_value, int)
-                         else c.get)))
-        return f(section if section else self._main_section, name, fallback=default_value)
-
-    def get_config(self, name, section=None, default_value=None, check_eval_only=False):
-        ret = self._get_cfg(name,                                                          # app cfg
-                            section=section,
-                            default_value=self._get_cfg(name,                              # env app sec
-                                                        section=self._app_name,
-                                                        default_value=self._get_cfg(name,  # env main sec
-                                                                                    section=section,
-                                                                                    default_value=default_value,
-                                                                                    use_env=True),
-                                                        use_env=True))
-        evaluate = False
-        if isinstance(ret, str):
-            if ret.startswith("'''") and ret.endswith("'''") or ret.startswith('"""') and ret.endswith('"""'):
-                evaluate = True
-                ret = ret[3:-3]
-            elif ret.startswith("[[") and ret.endswith("]]") or ret.startswith("{{") and ret.endswith("}}"):
-                evaluate = True
-                ret = ret[1:-1]
-        elif isinstance(ret, dict) or isinstance(ret, list):
-            evaluate = True
-
-        if check_eval_only:
-            ret = (ret, evaluate)
-        elif evaluate and isinstance(ret, str):
-            try:
-                ret = eval(ret)
-            except Exception as ex:
-                uprint("ConsoleApp.get_config() exception '{}' on evaluating the option {}"
-                       + " with value '{}'".format(ex, name, ret))
-        return ret
-
     def _parse_args(self):
         # this method should only get called once and only after all the options have been added with self.add_option().
         # self.add_option() sets the determined config file value as the default value and then following call of
@@ -144,11 +125,13 @@ class ConsoleApp:
         for k in self._options.keys():
             val = getattr(args, k)
             if self._options[k]['evaluate']:
-                try:
-                    val = eval(val)
-                except Exception as ex:
-                    uprint("ConsoleApp._parse_args() exception '{}' on evaluating the option {}"
-                           + " with value: '{}'".format(ex, k, val))
+                eval_str = prepare_eval_str(val)
+                if eval_str:
+                    try:
+                        val = eval(eval_str)
+                    except Exception as ex:
+                        uprint("ConsoleApp._parse_args() exception '{}' on evaluating the option {} with value: '{}'"
+                               .format(ex, k, eval_str))
             self._options[k]['val'] = (bool(val) if isinstance(self._options[k]['val'], bool)
                                        else (float(val) if isinstance(self._options[k]['val'], float)
                                              else (int(val) if isinstance(self._options[k]['val'], int)
@@ -190,22 +173,62 @@ class ConsoleApp:
         return self._options[name]['val'] if name in self._options else value
 
     def set_option(self, name, val, cfg_fnam=None):
-        err_msg = ''
+        self._options[name]['val'] = str(val)
+        return self.set_config(name, val, cfg_fnam)
+
+    def _get_cfg(self, name, section=None, default_value=None, use_env=False):
+        c = self._cfg_parser_env if use_env else self._cfg_parser_app
+        f = (c.getboolean if isinstance(default_value, bool)
+             else (c.getfloat if isinstance(default_value, float)
+                   else (c.getint if isinstance(default_value, int)
+                         else c.get)))
+        return f(section if section else self._main_section, name, fallback=default_value)
+
+    def get_config(self, name, section=None, default_value=None, check_eval_only=False):
+        ret = self._get_cfg(name,                                                          # app cfg
+                            section=section,
+                            default_value=self._get_cfg(name,                              # env app sec
+                                                        section=self._app_name,
+                                                        default_value=self._get_cfg(name,  # env main sec
+                                                                                    section=section,
+                                                                                    default_value=default_value,
+                                                                                    use_env=True),
+                                                        use_env=True))
+        eval_str = prepare_eval_str(ret)
+        if check_eval_only:
+            ret = (ret, bool(eval_str) or isinstance(ret, list) or isinstance(ret, dict) or isinstance(ret, tuple))
+
+        elif eval_str:
+            try:
+                ret = eval(eval_str)
+            except Exception as ex:
+                uprint("ConsoleApp.get_config() exception '{}' on evaluating the option {} with value '{}'"
+                       .format(ex, name, eval_str))
+        return ret
+
+    def set_config(self, name, val, cfg_fnam=None, section=None):
         if not cfg_fnam:
             cfg_fnam = self._cfg_fnam
-        self._options[name]['val'] = str(val)
+        if not section:
+            section = self._main_section
+
+        err_msg = ''
         if os.path.isfile(cfg_fnam):
             try:
                 cfg_parser = ConfigParser()
                 cfg_parser.read(cfg_fnam)
-                cfg_parser.set(self._main_section, name, str(val))
+                if isinstance(val, dict) or isinstance(val, list) or isinstance(val, tuple):
+                    str_val = "'''" + repr(val) + "'''"
+                else:
+                    str_val = str(val)
+                cfg_parser.set(section, name, str_val)
                 with open(cfg_fnam, 'w') as configfile:
                     cfg_parser.write(configfile)
             except Exception as ex:
                 err_msg = "****  ConsoleApp.set_option(" + str(name) + ", " + str(val) + ") exception: " + str(ex)
         else:
             err_msg = "****  INI file " + str(cfg_fnam) + " not found. Please set the INI/cfg variable " + \
-                      self._main_section + "/" + str(name) + " manually to the value " + str(val)
+                      section + "/" + str(name) + " manually to the value " + str(val)
         return err_msg
 
     def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_ENABLED):
