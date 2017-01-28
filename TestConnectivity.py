@@ -8,7 +8,7 @@ cae = ConsoleApp(__version__, "Test connectivity to SMTP and Acumen/Oracle serve
 
 cae.add_option('smtpServerUri', "SMTP server URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "SMTP Receiver/To addresses", '', 'r')
+cae.add_option('smtpTo', "SMTP Receiver/To addresses", [], 'r')
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
@@ -20,7 +20,7 @@ uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 
 notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
                             mail_from=cae.get_option('smtpFrom'),
-                            mail_to=cae.get_option('smtpTo').split(','),
+                            mail_to=cae.get_option('smtpTo'),
                             used_system='TestConnectivity',
                             debug_level=2)
 

@@ -32,7 +32,7 @@ cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 
 
 cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "SMTP Receiver/To addresses", '', 'r')
+cae.add_option('smtpTo', "SMTP Receiver/To addresses", [], 'r')
 
 if not cae.get_option('cmdLine'):
     uprint('Empty command line - Nothing to do.')
@@ -43,6 +43,7 @@ uprint("Command interval/checks:", cae.get_option('cmdInterval'), cae.get_option
 check_acumen = cae.get_option('acuUser') and cae.get_option('acuDSN')
 if check_acumen:
     uprint('Checked Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
+last_rt_prefix = cae.get_option('acuDSN')[-4:]
 check_sihot_web = cae.get_option('serverIP') and cae.get_option('serverPort')
 check_sihot_kernel = cae.get_option('serverIP') and cae.get_option('serverKernelPort')
 if check_sihot_web or check_sihot_kernel:
@@ -56,7 +57,7 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
     mail_body = 'Executing: ' + cae.get_option('cmdLine')
     notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
                                 mail_from=cae.get_option('smtpFrom'),
-                                mail_to=cae.get_option('smtpTo').split(','),
+                                mail_to=cae.get_option('smtpTo'),
                                 used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
                                 mail_body_footer=mail_body,
                                 debug_level=cae.get_option('debugLevel'))
@@ -68,10 +69,15 @@ def reset_last_run_time():
     if os.path.isfile(cmd_cfg_file_name):
         cmd_cfg_parser = ConfigParser()
         cmd_cfg_parser.read(cmd_cfg_file_name)
-        v = cmd_cfg_parser.get(MAIN_SECTION_DEF, 'lastRt')
-        if v[0] == '@':
-            cmd_cfg_parser.set(MAIN_SECTION_DEF, 'lastRt_kill_' + datetime.now().strftime('%y%m%d_%H%M%S'), v)
-            cmd_cfg_parser.set(MAIN_SECTION_DEF, 'lastRt', '-9')
+        last_start = cmd_cfg_parser.get(MAIN_SECTION_DEF, last_rt_prefix + 'lastRt')
+        if last_start[0] == '@':
+            cmd_cfg_parser.set(MAIN_SECTION_DEF,
+                               last_rt_prefix + 'lastRt_kill_' + datetime.now().strftime('%y%m%d_%H%M%S'), last_start)
+            cmd_cfg_parser.set(MAIN_SECTION_DEF,
+                               last_rt_prefix + 'lastRt', '-9')
+    else:
+        last_start = cmd_cfg_file_name + " not found"
+    uprint('WatchPupPy run time reset:', last_start)
 
 
 command_interval = cae.get_option('cmdInterval')
@@ -193,6 +199,8 @@ while True:
         process = subprocess.check_call(command_line_args, timeout=timeout)  # , shell=True)
     except subprocess.CalledProcessError as cpe:
         err_msg = str(run_starts) + '. run returned non-zero exit code:' + str(cpe.returncode)
+        if cpe.returncode == 4:
+            reset_last_run_time()
         last_run = time.monotonic()     # reset last run time
         continue
     except subprocess.TimeoutExpired as toe:

@@ -35,7 +35,6 @@ Most of the available commands are using the same command line options. The foll
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose) | 0 | D | (all) |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | help | Show help on all the available command line argument options | - | h | (all) |
-| lastRt | Timestamp of last command run | - | o | SihotResImport, SihotResSync |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |

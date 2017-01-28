@@ -31,7 +31,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 
     cae.add_option('smtpServerUri', "SMTP notification server URI [user[:pw]@]host[:port]", '', 'c')
     cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-    cae.add_option('smtpTo', "SMTP Receiver/To addresses", '', 'r')
+    cae.add_option('smtpTo', "SMTP Receiver/To addresses", [], 'r')
 
     uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
     uprint('Server IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
@@ -40,7 +40,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
     if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
         notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
                                     mail_from=cae.get_option('smtpFrom'),
-                                    mail_to=cae.get_option('smtpTo').split(','),
+                                    mail_to=cae.get_option('smtpTo'),
                                     used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
                                     debug_level=cae.get_option('debugLevel'))
         uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))

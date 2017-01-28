@@ -31,14 +31,13 @@ cae.add_option('mapClient', "Guest/Client mapping of xml to db items", MAP_CLIEN
 cae.add_option('useKernelForRes', "Used interface for reservations (0=web, 1=kernel)", USE_KERNEL_FOR_RES_DEF, 'z')
 cae.add_option('mapRes', "Reservation mapping of xml to db items", MAP_RES_DEF, 'n')
 
-cae.add_option('lastRt', "Timestamp of last command run", 'o')
 cae.add_option('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
                0, 'q', choices=(0, 1, 2))
 cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b')
 
 cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-cae.add_option('smtpTo', "SMTP receiver/to addresses (and fallback if smtpToEval returns None/empty-list)", '', 'r')
+cae.add_option('smtpTo', "SMTP receiver/to addresses (and fallback if smtpToEval returns None/empty-list)", [], 'r')
 cae.add_option('smtpToEval', "error and data specific eval expression resulting in list of notification receivers", '',
                'a')
 
@@ -52,7 +51,8 @@ uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option
 uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
 uprint('Use Kernel for clients:', 'Yes' if cae.get_option('useKernelForClient') else 'No (WEB)')
 uprint('Use Kernel for reservations:', 'Yes' if cae.get_option('useKernelForRes') else 'No (WEB)')
-uprint('Last unfinished run (-1=all finished):  ', cae.get_option('lastRt'))
+last_rt_prefix = cae.get_option('acuDSN')[-4:]
+uprint('Last unfinished run (-1=all finished):  ', cae.get_config(last_rt_prefix + 'lastRt'))
 uprint('Migrate Clients First/Separate:',
        ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
 uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
@@ -60,7 +60,7 @@ notification = mail_to_expr = None
 if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
     notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
                                 mail_from=cae.get_option('smtpFrom'),
-                                mail_to=cae.get_option('smtpTo').split(','),
+                                mail_to=cae.get_option('smtpTo'),
                                 used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
                                 debug_level=debug_level)
     uprint('SMTP Uri/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
@@ -70,11 +70,11 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
     if cae.get_option('warningsMailToAddr'):
         uprint('Warnings SMTP receiver address:', cae.get_option('warningsMailToAddr'))
 
-lastUnfinishedRunTime = cae.get_option('lastRt')
+lastUnfinishedRunTime = cae.get_config(last_rt_prefix + 'lastRt')
 if lastUnfinishedRunTime.startswith('@'):
     uprint("****  Synchronization process is still running from last batch, started at ", lastUnfinishedRunTime[1:])
     cae.shutdown(4)
-error_msg = cae.set_option('lastRt', '@' + str(datetime.now()))
+error_msg = cae.set_config(last_rt_prefix + 'lastRt', '@' + str(datetime.now()))
 if error_msg:
     uprint(error_msg)
 
@@ -162,6 +162,6 @@ if not error_msg:
     progress.finished(error_msg=error_msg)
 
 # release dup exec lock
-set_opt_err = cae.set_option('lastRt', str(-1))
+set_opt_err = cae.set_config(last_rt_prefix + 'lastRt', str(-1))
 
 cae.shutdown(13 if set_opt_err else (12 if error_msg else 0))

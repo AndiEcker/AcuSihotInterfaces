@@ -277,9 +277,13 @@ MAP_WEB_RES = \
         {'elemName': 'FLAGS', 'colVal': 'IGNORE-OVERBOOKING'},  # ;NO-FALLBACK-TO-ERRONEOUS'},
         {'elemName': 'RT', 'colName': 'SH_RES_TYPE',
          'colValFromAcu': "case when RUL_ACTION = 'DELETE' then 'S' else SIHOT_RES_TYPE end"},
-        {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT'},   # mandatory but could be empty (to get PMS fallback-default)
-        # {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',
+        # {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT'},  # mandatory but could be empty (to get PMS fallback-default)
         #  'colValFromAcu': "'2TIC'"},   # mandatory but could be empty (to get PMS fallback-default)
+        # RUL_SIHOT_CAT results in error 1011 for tk->TC/TK bookings with room move and room with higher/different room
+        # .. cat, therefore use price category as room category for Thomas Cook Bookings.
+        {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',
+         'colValFromAcu': "case when SIHOT_MKT_SEG in ('TC', 'TK')"
+                          " then F_SIHOT_CAT('RU' || RU_CODE) else RUL_SIHOT_CAT end"},
         {'elemName': 'PCAT', 'colName': 'SH_PRICE_CAT',
          'colValFromAcu': "F_SIHOT_CAT('RU' || RU_CODE)"},
         # {'elemName': 'PCAT', 'colName': 'SIHOT_CAT',
@@ -291,7 +295,7 @@ MAP_WEB_RES = \
         {'elemName': 'SALES-DATE', 'colName': 'RH_EXT_BOOK_DATE',
          'elemHideIf': "not c['RH_EXT_BOOK_DATE']"},
         # {'elemName': 'RATE-SEGMENT', 'colName': 'RUL_SIHOT_RATE',
-        #  'elemHideIf': "c['SIHOT_MKT_SEG'] not in ('TK', 'tk')"},    # only TK/TC have defined rate segment in SIHOT
+        #  'elemHideIf': "c['SIHOT_MKT_SEG'] not in ('TK', 'TC')"},    # only TK/tk have defined rate segment in SIHOT
         {'elemName': 'RATE/'},  # package/arrangement has also to be specified in PERSON:
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK'},
         {'elemName': 'ISDEFAULT', 'colVal': 'Y'},
@@ -1498,4 +1502,4 @@ class ResToSihot(SihotXmlBuilder):
         return err_msg, warn_msg
 
     def get_warnings(self):
-        return self._warning_msgs + '\n\nEnd_Of_Message\n'
+        return self._warning_msgs + '\n\nEnd_Of_Message\n' if self._warning_msgs else ''

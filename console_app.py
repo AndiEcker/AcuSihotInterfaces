@@ -62,12 +62,11 @@ class _DuplicateSysOut:
 
 class ConsoleApp:
     def __init__(self, ver, desc, main_section=MAIN_SECTION_DEF, debug_level_def=DEBUG_LEVEL_DISABLED, log_file_def=''):
-        main_fnam = sys.argv[0]
-        uprint(os.path.basename(main_fnam), " V", ver)
+        app_path = sys.argv[0]
+        app_fnam = os.path.basename(app_path)
+        self._app_name = os.path.splitext(app_fnam)[0]
+        uprint(self._app_name, " V", ver)
         uprint("####  Initialization......  ####")
-
-        self._app_name = os.path.splitext(main_fnam)[0]
-        self._cfg_fnam = self._app_name + '.ini'
 
         self._options = dict()
         """ self._options contains predefined and user-defined options.
@@ -78,11 +77,21 @@ class ConsoleApp:
         self._args_parsed = False
         self._log_file = None
 
+        # determine main config file (also for to store configs): 1st in cwd, then in app path
+        cfg_fnam_cwd = os.path.join(os.getcwd(), self._app_name + '.ini')
+        cfg_fnam_app = os.path.splitext(app_path)[0] + '.ini'
+        if os.path.isfile(cfg_fnam_cwd):
+            self._cfg_fnam = cfg_fnam_cwd
+        else:
+            self._cfg_fnam = cfg_fnam_app
+
         self._main_section = main_section
+        self._cfg_parser_cwd = ConfigParser()
+        self._cfg_parser_cwd.read(cfg_fnam_cwd)
+        self._cfg_parser_app = ConfigParser()
+        self._cfg_parser_app.read(cfg_fnam_app)
         self._cfg_parser_env = ConfigParser()
         self._cfg_parser_env.read('.console_app_env.cfg')
-        self._cfg_parser_app = ConfigParser()
-        self._cfg_parser_app.read(self._cfg_fnam)
         self._arg_parser = ArgumentParser(description=desc)
 
         self.add_option('debugLevel', 'Display additional debugging info on console output', debug_level_def, 'D',
@@ -138,7 +147,7 @@ class ConsoleApp:
                                                    else val)))
 
         log_file = self._options['logFile']['val']
-        if log_file:            # enable logging
+        if log_file:  # enable logging
             global app_std_out, app_std_err
             try:
                 if self._log_file:
@@ -176,8 +185,8 @@ class ConsoleApp:
         self._options[name]['val'] = str(val)
         return self.set_config(name, val, cfg_fnam)
 
-    def _get_cfg(self, name, section=None, default_value=None, use_env=False):
-        c = self._cfg_parser_env if use_env else self._cfg_parser_app
+    def _get_cfg(self, name, section=None, default_value=None, cfg_parser=None):
+        c = cfg_parser if cfg_parser else self._cfg_parser_app
         f = (c.getboolean if isinstance(default_value, bool)
              else (c.getfloat if isinstance(default_value, float)
                    else (c.getint if isinstance(default_value, int)
@@ -185,15 +194,19 @@ class ConsoleApp:
         return f(section if section else self._main_section, name, fallback=default_value)
 
     def get_config(self, name, section=None, default_value=None, check_eval_only=False):
-        ret = self._get_cfg(name,                                                          # app cfg
-                            section=section,
-                            default_value=self._get_cfg(name,                              # env app sec
-                                                        section=self._app_name,
-                                                        default_value=self._get_cfg(name,  # env main sec
-                                                                                    section=section,
-                                                                                    default_value=default_value,
-                                                                                    use_env=True),
-                                                        use_env=True))
+        f = self._get_cfg
+        ret = f(name,                                                   # cwd cfg
+                section=section,
+                default_value=f(name,                                   # app cfg
+                                section=section,
+                                default_value=f(name,                   # env app sec
+                                                section=self._app_name,
+                                                default_value=f(name,   # env main sec
+                                                                section=section,
+                                                                default_value=default_value,
+                                                                cfg_parser=self._cfg_parser_env),
+                                                cfg_parser=self._cfg_parser_env)),
+                cfg_parser=self._cfg_parser_cwd)
         eval_str = prepare_eval_str(ret)
         if check_eval_only:
             ret = (ret, bool(eval_str) or isinstance(ret, list) or isinstance(ret, dict) or isinstance(ret, tuple))
@@ -245,9 +258,9 @@ class ConsoleApp:
 
 
 class Progress:
-    def __init__(self, debug_level,                         # default next message built only if >= DEBUG_LEVEL_VERBOSE
-                 start_counter=0, total_count=0,            # pass either start_counter or total_counter (never both)
-                 start_msg='', next_msg='', end_msg='',     # message templates/masks for start, processing and end
+    def __init__(self, debug_level,  # default next message built only if >= DEBUG_LEVEL_VERBOSE
+                 start_counter=0, total_count=0,  # pass either start_counter or total_counter (never both)
+                 start_msg='', next_msg='', end_msg='',  # message templates/masks for start, processing and end
                  err_msg='', nothing_to_do_msg=''):
         if not next_msg and debug_level >= DEBUG_LEVEL_VERBOSE:
             next_msg = ' ###  Processing ID {processed_id}: ' + \
@@ -262,17 +275,17 @@ class Progress:
         self._err_msg = err_msg
 
         self._err_counter = 0
-        self._run_counter = start_counter + 1                       # def=decrementing run_counter
+        self._run_counter = start_counter + 1  # def=decrementing run_counter
         self._total_count = start_counter
         self._delta = -1
-        if total_count > 0:                                         # incrementing run_counter
+        if total_count > 0:  # incrementing run_counter
             self._run_counter = 0
             self._total_count = total_count
             self._delta = 1
         elif start_counter <= 0:
             if nothing_to_do_msg:
                 uprint(nothing_to_do_msg)
-            return                                                  # RETURN -- empty set - nothing to process
+            return  # RETURN -- empty set - nothing to process
 
         if start_msg:
             uprint(start_msg.format(run_counter=self._run_counter + self._delta, total_count=self._total_count))
