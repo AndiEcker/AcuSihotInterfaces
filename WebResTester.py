@@ -18,11 +18,12 @@ cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system"
 
 
 # select reservation by gdsNo (priority) or client ref/matchcode and if both is empty then send file WebResTester.req
-cae.add_option('gdsNo', 'Send reservations of the reservation identified with this GDSNO/RU_CODE', '')  # 467190')
+cae.add_option('gdsNo', 'Send reservations of the reservation identified with this GDSNO/RU_CODE', '1035402')  # 467190')
 cae.add_option('client', 'Send reservations of the client identified with this matchcode', '')  # Z008475')  # N617081')
 # E362344')  # C605765')
 
 
+uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
        cae.get_option('serverKernelPort'))
 uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))

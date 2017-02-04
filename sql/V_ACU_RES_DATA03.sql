@@ -20,7 +20,8 @@ select RU_CODE
      , CD_SIHOT_OBJID, CD_SIHOT_OBJID2
      , CD_RCI_REF
      ---- calculated columns
-     , case when RU_ROREF in ('TK', 'tk') then 'TC' || RH_EXT_BOOK_REF else to_char(RU_CODE) end as SIHOT_GDSNO 
+     --, to_char(RU_CODE) as SIHOT_GDSNO -- we have to use RH_EXT_BOOK_REF for Thomas Cook bookings for to be in sync with SihotResImport (this one is not having a RU code) 
+     , case when RU_ROREF in ('TK', 'tk') then 'TC' || RH_EXT_BOOK_REF else to_char(RU_CODE) end as SIHOT_GDSNO
      , case when RO_SIHOT_AGENCY_OBJID is not NULL then RO_SIHOT_AGENCY_OBJID
             when RU_CDREF <> RH_OWREF then (select CD_SIHOT_OBJID from T_CD where CD_CODE = RH_OWREF) end as OC_SIHOT_OBJID
      , case when RO_SIHOT_AGENCY_MC is not NULL then RO_SIHOT_AGENCY_MC 

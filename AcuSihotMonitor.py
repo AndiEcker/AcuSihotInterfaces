@@ -12,7 +12,7 @@ from kivy.clock import Clock
 from console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from db import OraDB, DEF_USER, DEF_DSN
 from acu_sihot_config import Data
-from sxmlif import PostMessage, ConfigDict, CatRooms, SXML_DEF_ENCODING
+from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, SXML_DEF_ENCODING
 
 __version__ = '0.1'
 
@@ -43,11 +43,20 @@ uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('x
 def run_check(check_name):
     try:
         if check_name == 'Number of categorized apartments':
-            result = ora_get_num_apt()
+            result = acu_get_num_apt()
         elif check_name == 'Number of unsynced guests':
-            result = ora_get_num_cd_unsynced()
+            result = acu_get_num_cd_unsynced()
         elif check_name == 'Number of unsynced reservations':
-            result = ora_get_num_res_unsynced()
+            result = acu_get_num_res_unsynced()
+
+        elif check_name == 'Time Sync':
+            result = ass_test_time_sync()
+        elif check_name == 'Link Alive':
+            result = ass_test_link_alive()
+
+        elif check_name == 'Notification':
+            result = sih_test_notification()
+
         elif check_name == 'Agency Match Codes':
             result = cfg_agency_match_codes()
         elif check_name == 'Agency Object Ids':
@@ -59,39 +68,63 @@ def run_check(check_name):
     return result
 
 
-def ora_get_num_apt():
-    ora_db = connect_db()
-    ora_db.select('T_AP', ['count(*)'], "exists (select LU_NUMBER from T_LU where LU_CLASS = 'SIHOT_HOTELS'"
+def acu_get_num_apt():
+    acu_db = connect_db()
+    acu_db.select('T_AP', ['count(*)'], "exists (select LU_NUMBER from T_LU where LU_CLASS = 'SIHOT_HOTELS'"
                                         " and LU_ID = (select AT_RSREF from T_AT where AT_CODE = AP_ATREF)"
                                         " and LU_ACTIVE = 1)")
-    ret = str(ora_db.fetch_all()[0][0])
-    ora_db.select('T_AP', ['count(*)'], "AP_SIHOT_CAT is not NULL")
-    ret += " (" + str(ora_db.fetch_all()[0][0]) + ")"
-    ora_db.close()
+    ret = str(acu_db.fetch_all()[0][0])
+    acu_db.select('T_AP', ['count(*)'], "AP_SIHOT_CAT is not NULL")
+    ret += " (" + str(acu_db.fetch_all()[0][0]) + ")"
+    acu_db.close()
     return ret
 
 
-def ora_get_num_cd_unsynced():
-    ora_db = connect_db()
-    ora_db.select('V_ACU_CD_UNSYNCED', ['count(*)'])
-    rows = ora_db.fetch_all()
-    ora_db.close()
+def acu_get_num_cd_unsynced():
+    acu_db = connect_db()
+    acu_db.select('V_ACU_CD_UNSYNCED', ['count(*)'])
+    rows = acu_db.fetch_all()
+    acu_db.close()
     return str(rows[0][0])
 
 
-def ora_get_num_res_unsynced():
-    ora_db = connect_db()
-    ora_db.select('V_ACU_RES_UNSYNCED', ['count(*)'])
-    rows = ora_db.fetch_all()
-    ora_db.close()
+def acu_get_num_res_unsynced():
+    acu_db = connect_db()
+    acu_db.select('V_ACU_RES_UNSYNCED', ['count(*)'])
+    rows = acu_db.fetch_all()
+    acu_db.close()
     return str(rows[0][0])
+
+
+def ass_test_time_sync():
+    global cae
+    old_val = cae._options['serverPort']['val']
+    cae._options['serverPort']['val'] = '11000'
+    ass = AcuServer(cae)
+    ret = ass.time_sync()
+    cae._options['serverPort']['val'] = old_val
+    return ret
+
+
+def ass_test_link_alive():
+    global cae
+    old_val = cae._options['serverPort']['val']
+    cae._options['serverPort']['val'] = '11000'
+    ass = AcuServer(cae)
+    ret = ass.link_alive()
+    cae._options['serverPort']['val'] = old_val
+    return ret
+
+
+def sih_test_notification():
+    return ''
 
 
 def cfg_agency_match_codes():
     config_data = Data(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'))
-    ora_db = connect_db()
-    agencies = config_data.load_view(ora_db, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_MC is not NULL")
-    ora_db.close()
+    acu_db = connect_db()
+    agencies = config_data.load_view(acu_db, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_MC is not NULL")
+    acu_db.close()
     ret = ""
     for agency in agencies:
         ret += ", " + agency[0] + "=" + config_data.get_ro_agency_matchcode(agency[0])
@@ -100,9 +133,9 @@ def cfg_agency_match_codes():
 
 def cfg_agency_obj_ids():
     config_data = Data(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'))
-    ora_db = connect_db()
-    agencies = config_data.load_view(ora_db, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_OBJID is not NULL")
-    ora_db.close()
+    acu_db = connect_db()
+    agencies = config_data.load_view(acu_db, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_OBJID is not NULL")
+    acu_db.close()
     ret = ""
     for agency in agencies:
         ret += ", " + agency[0] + "=" + str(config_data.get_ro_agency_objid(agency[0]))
@@ -114,10 +147,10 @@ def cfg_agency_obj_ids():
 
 def connect_db():
     """ open Oracle database connection """
-    ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'),
+    acu_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'),
                    cae.get_option('acuDSN'), debug_level=cae.get_option('debugLevel'))
-    ora_db.connect()
-    return ora_db
+    acu_db.connect()
+    return acu_db
 
 
 """ UI """

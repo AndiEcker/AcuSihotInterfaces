@@ -69,6 +69,8 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
         uprint('SMTP To Evaluation Expression:', mail_to_expr)
     if cae.get_option('warningsMailToAddr'):
         uprint('Warnings SMTP receiver address:', cae.get_option('warningsMailToAddr'))
+if cae.get_config('warningFragments'):
+    uprint('Warning Fragments:', cae.get_config('warningFragments'))
 
 lastUnfinishedRunTime = cae.get_config(last_rt_prefix + 'lastRt')
 if lastUnfinishedRunTime.startswith('@'):
@@ -114,10 +116,8 @@ if cae.get_option('clientsFirst'):
             cid = crow['CD_CODE'] + '/' + str(crow['CDL_CODE'])
             progress.next(processed_id=cid, error_msg=error_msg)
             if error_msg:
-                acumen_cd.ora_db.rollback()
                 send_notification('Acumen Client', cid, error_msg)
-            else:
-                error_msg = acumen_cd.ora_db.commit()
+            error_msg += acumen_cd.ora_db.commit()
             if error_msg:
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     continue            # currently not used/returned-by-send_client_to_sihot()
@@ -139,15 +139,20 @@ if not error_msg:
                         start_msg=" ###  Prepare sending of {total_count} reservations to Sihot",
                         nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no rows")
     if not error_msg:
+        # pre-run without room allocation - for to allow room swaps in the same batch
+        room_rows = [dict(r) for r in acumen_req.rows if r['SIHOT_ROOM_NO']]
+        for crow in room_rows:
+            crow['SIHOT_ROOM_NO'] = ''
+            acumen_req.send_row_to_sihot(crow)
+            acumen_req.ora_db.rollback()
+        # now do the full run with room allocations
         for crow in acumen_req.rows:
             error_msg = acumen_req.send_row_to_sihot(crow)
             rid = acumen_req.res_id_values(crow)
             progress.next(processed_id=rid, error_msg=error_msg)
             if error_msg:
-                acumen_req.ora_db.rollback()
                 send_notification('Acumen Reservation', rid, acumen_req.res_id_desc(crow, error_msg))
-            else:
-                error_msg = acumen_req.ora_db.commit()
+            error_msg += acumen_req.ora_db.commit()
             if error_msg:
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     continue
