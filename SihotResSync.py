@@ -102,7 +102,7 @@ def send_notification(what, sid, mail_body):
 
 
 if cae.get_option('clientsFirst'):
-    uprint("####  Sync CD Changes....  ####")
+    uprint("####  Sync CD Changes.....  ####")
 
     acumen_cd = ClientToSihot(cae, use_kernel_interface=cae.get_option('useKernelForClient'),
                               map_client=cae.get_option('mapClient'))
@@ -128,7 +128,7 @@ if cae.get_option('clientsFirst'):
 
 
 if not error_msg:
-    uprint("####  Sync Req/ARU Changes ####")
+    uprint("####  Sync Req/ARU Changes  ####")
 
     acumen_req = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
                             map_res=cae.get_option('mapRes'),

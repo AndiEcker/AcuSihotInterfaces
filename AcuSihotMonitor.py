@@ -1,10 +1,11 @@
 import datetime
 from functools import partial
+from traceback import format_stack
 
 from kivy.app import App
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.actionbar import ActionButton
+# from kivy.uix.actionbar import ActionButton
 from kivy.lang.builder import Factory
 from kivy.properties import DictProperty
 from kivy.clock import Clock
@@ -12,13 +13,12 @@ from kivy.clock import Clock
 from console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from db import OraDB, DEF_USER, DEF_DSN
 from acu_sihot_config import Data
-from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, SXML_DEF_ENCODING
+from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, SXML_DEF_ENCODING
 
 __version__ = '0.1'
 
 ROOT_BOARD_NAME = 'All'
 BACK_BOARD_NAME = 'BACK'
-
 
 cae = ConsoleApp(__version__, "Monitor the Acumen and Sihot interfaces and servers")
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
@@ -35,7 +35,6 @@ uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
        cae.get_option('serverKernelPort'))
 uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
-
 
 """ TESTS """
 
@@ -54,6 +53,8 @@ def run_check(check_name):
         elif check_name == 'Link Alive':
             result = ass_test_link_alive()
 
+        elif check_name == 'Missing Reservations':
+            result = sih_missing_reservations()
         elif check_name == 'Notification':
             result = sih_test_notification()
 
@@ -61,11 +62,12 @@ def run_check(check_name):
             result = cfg_agency_match_codes()
         elif check_name == 'Agency Object Ids':
             result = cfg_agency_obj_ids()
+
         else:
-            result = "Invalid Check Run '{}'".format(check_name)
+            result = "Unknown Check Name '{}'".format(check_name)
     except Exception as ex:
-        result = "run_check() exception: " + str(ex)
-    return result
+        result = "run_check() exception: " + str(ex) + "\n" + '\n'.join(format_stack())
+    return str(result)
 
 
 def acu_get_num_apt():
@@ -96,24 +98,55 @@ def acu_get_num_res_unsynced():
     return str(rows[0][0])
 
 
-def ass_test_time_sync():
+def _ass_test_method(method):
     global cae
-    old_val = cae._options['serverPort']['val']
-    cae._options['serverPort']['val'] = '11000'
-    ass = AcuServer(cae)
-    ret = ass.time_sync()
-    cae._options['serverPort']['val'] = old_val
+    old_val = cae.get_option('serverPort')
+    cae.set_option('serverPort', 11000, save_to_config=False)
+    ret = method()
+    cae.set_option('serverPort', old_val, save_to_config=False)
     return ret
+
+
+def ass_test_time_sync():
+    return _ass_test_method(AcuServer(cae).time_sync)
 
 
 def ass_test_link_alive():
-    global cae
-    old_val = cae._options['serverPort']['val']
-    cae._options['serverPort']['val'] = '11000'
-    ass = AcuServer(cae)
-    ret = ass.link_alive()
-    cae._options['serverPort']['val'] = old_val
-    return ret
+    return _ass_test_method(AcuServer(cae).link_alive)
+
+
+def sih_missing_reservations():
+    today = datetime.datetime.today()
+    future_day = today + datetime.timedelta(days=1)  # 9)
+    req = ResToSihot(cae)
+    err_msg = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + future_day.strftime('%Y-%m-%d') + "'"
+                                           " and DEP_DATE > DATE'" + today.strftime('%Y-%m-%d') + "'")
+    if not err_msg:
+        for crow in req.rows:
+            if not crow['SIHOT_GDSNO']:
+                continue    # skip deleted RUs
+            rs = ResSearch(cae)
+            rd = rs.search(gdsno=crow['SIHOT_GDSNO'])
+            row_err = ''
+            if isinstance(rd, list):
+                # compare reservation for errors/discrepancies
+                if len(rd) != 1:
+                    row_err += '/Res. count!=1 ' + str(len(rd))
+                if rd[0]['GDSNO']['elemVal'] != crow['SIHOT_GDSNO']:
+                    row_err += '/GDS no mismatch ' + rd[0]['GDSNO']['elemVal']
+                if rd[0]['ARR']['elemVal'] != crow['ARR_DATE'].strftime('%Y-%m-%d'):
+                    row_err += '/Arrival date mismatch ' + rd[0]['ARR']['elemVal'] + \
+                               ' a=' + crow['ARR_DATE'].strftime('%Y-%m-%d')
+                if rd[0]['DEP']['elemVal'] != crow['DEP_DATE'].strftime('%Y-%m-%d'):
+                    row_err += '/Depart. date mismatch ' + rd[0]['DEP']['elemVal'] + \
+                               ' a=' + crow['DEP_DATE'].strftime('%Y-%m-%d')
+                if rd[0]['RN']['elemVal'] != crow['SIHOT_ROOM_NO']:
+                    row_err += '/Room no mismatch ' + rd[0]['RN']['elemVal'] + ' a=' + str(crow['SIHOT_ROOM_NO'])
+            else:
+                row_err += '/Sihot search error ' + str(rd)
+            if row_err:
+                err_msg += '\n' + crow['SIHOT_GDSNO'] + ':' + row_err[1:]
+    return err_msg
 
 
 def sih_test_notification():
@@ -174,18 +207,18 @@ class AcuSihotMonitorApp(App):
         self.cat_rooms = CatRooms(cae)
 
         self.check_list = cae.get_config('checks')
-        cae.dprint("AcuSihotMonitorApp() check_list", self.check_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        cae.dprint("AcuSihotMonitorApp.__init__() check_list", self.check_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         # self.boards = {k:v for ci in self.checks}
         self.board_history = []
 
     def build(self):
-        print('App.build()')
+        cae.dprint('AcuSihotMonitorApp.build()', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self.root = MainWindow()
         self.go_to_board(ROOT_BOARD_NAME)
         return self.root
 
     def on_start(self):
-        print('App.on_start()')
+        cae.dprint('AcuSihotMonitorApp.on_start()', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def board_items(self, board_name):
         return [ci for ci in self.check_list
@@ -215,18 +248,19 @@ class AcuSihotMonitorApp(App):
             self.board_history.pop()
             board_name = self.board_history[-1]
 
-        print('Go To Board', board_name, 'Stack=', self.board_history)
+        cae.dprint('AcuSihotMonitorApp.go_to_board()', board_name, 'Stack=', self.board_history,
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         mw = self.root
 
         bg = mw.ids.board_group
         bg.clear_widgets()
-        bg.list_action_item = []        # missing in ActionGroup.clear_widgets() ?!?!?
+        bg.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
         bg._list_overflow_items = []
 
         cg = mw.ids.check_group
         cg.clear_widgets()
-        cg.list_action_item = []        # missing in ActionGroup.clear_widgets() ?!?!?
+        cg.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
         cg._list_overflow_items = []
 
         cis = mw.ids.check_items
@@ -256,6 +290,7 @@ class AcuSihotMonitorApp(App):
         cg.show_group()
 
     def do_checks(self, check_name):
+        cae.dprint('AcuSihotMonitorApp.do_checks():', check_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         title_obj = self.root.ids.action_previous
         curr_board = title_obj.title
         title_obj.title += " (running check " + check_name + " - please wait)"
@@ -263,18 +298,20 @@ class AcuSihotMonitorApp(App):
         Clock.schedule_once(cb)
 
     def run_checks(self, check_name, curr_board, *args, run_at=None):
-        print('Run Check', check_name)
+        cae.dprint('AcuSihotMonitorApp.run_checks():', check_name, curr_board, args, run_at,
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        root_check = False
         if not run_at:
             run_at = datetime.datetime.now().strftime('%d-%m-%y %H:%M:%S')
+            root_check = True
         result = ''
 
         check_items = self.board_items(check_name)
         if check_items:
             # recursively run all tests/checks of this board and all the sub-boards
             for check_item in check_items:
-                result += ' / ' + self.run_checks(check_item['name'], curr_board)
+                result += ' / ' + self.run_checks(check_item['name'], curr_board, run_at=run_at)
             result = result[3:]
-            self.root.ids.action_previous = curr_board
         else:
             Clock.tick()
             result = run_check(check_name)
@@ -282,16 +319,15 @@ class AcuSihotMonitorApp(App):
 
         self.update_check_result(check_name, result, run_at)
 
-        return result
+        if root_check:
+            self.root.ids.action_previous.title = curr_board
 
-    def run_check_cb(self, *args):
-        self.curr_result = run_check(self.curr_check_name)
-        self.root.ids.action_previous.title = self.curr_board_name
-        self.update_check_result(self.curr_check_name, self.curr_result, self.curr_run_at)
+        return str(result)
 
     def update_check_result(self, check_name, result, run_at):
         check_index = [i for i in range(len(self.check_list)) if self.check_list[i]['name'] == check_name][0]
-        cae.dprint("update_check_result() dict={}".format(self.check_list[check_index]),
+        cae.dprint("AcuSihotMonitorApp.update_check_result(): dict={} result={}"
+                   .format(self.check_list[check_index], result),
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self.check_list[check_index]['check_result'] = result
         self.check_list[check_index]['last_check'] = run_at

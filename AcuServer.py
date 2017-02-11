@@ -104,7 +104,7 @@ def oc_client_to_acu(req):
     return xml_response
 
 
-def alloc_trigger(oc, guest_id, room_number, old_room_number):
+def alloc_trigger(oc, guest_id, room_number, old_room_number, sihot_xml):
     room_number = room_number.lstrip('0')       # remove leading zero from 3-digit PBC Sihot room number
     if old_room_number:
         old_room_number = old_room_number.lstrip('0')
@@ -112,24 +112,30 @@ def alloc_trigger(oc, guest_id, room_number, old_room_number):
     ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
                    debug_level=cae.get_option('debugLevel'))
     err_msg = ora_db.connect()
+    extra_info = ''
     if not err_msg:
-        rows_affected = 0
-        err_msg = ora_db.call_proc('P_SIHOT_ALLOC', (oc, room_number, old_room_number))
-        rows_affected += ora_db.curs.rowcount
+        ref_var = ora_db.prepare_ref_param(sihot_xml)
+        err_msg = ora_db.call_proc('P_SIHOT_ALLOC', (ref_var, oc, room_number, old_room_number))
         if err_msg:
             ora_db.rollback()
-    else:
-        rows_affected = -1
+        else:
+            if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
+                extra_info = ' REQ:' + sihot_xml
+            changes = ora_db.get_value(ref_var)
+            if changes:
+                extra_info += ' CHG:' + changes
+
     ora_db.insert('T_SRSL', {'SRSL_TABLE': 'ARO',
                              'SRSL_PRIMARY': (old_room_number + '-' if old_room_number else '') + room_number,
                              'SRSL_ACTION': oc,
                              'SRSL_STATUS': 'ERR' if err_msg else 'SYNCED',
-                             'SRSL_MESSAGE': err_msg if err_msg else str(rows_affected) + ' rows updated',
+                             'SRSL_MESSAGE': err_msg + extra_info if err_msg else extra_info[1:],
                              'SRSL_LOGREF': guest_id if guest_id else '-1',
                              },
-                  commit=True)
+                  commit=True)              # COMMIT
 
     ora_db.close()      # commit and close
+
     return err_msg
 
 
@@ -152,7 +158,7 @@ def create_ack_response(req, ret_code, msg='', status=''):
 def oc_room_change(req):
     notify("####  Room change type {} for guest {} in room {}".format(req.oc, req.gid, req.rn),
            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-    error_msg = alloc_trigger(req.oc, req.gid, req.rn, req.orn)
+    error_msg = alloc_trigger(req.oc, req.gid, req.rn, req.orn, req.get_xml())
     if error_msg:
         notify("****  oc_room_change() alloc_trigger error=" + error_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
 
@@ -219,6 +225,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             try:
                 req = SUPPORTED_OCS[oc]['reqClass'](cae)
                 req.parse_xml(xml_request)
+                cae.dprint('Before call of ', SUPPORTED_OCS[oc]['ocProcessor'])
                 xml_response = SUPPORTED_OCS[oc]['ocProcessor'](req)
             except Exception as ex:
                 msg = "SihotRequestXmlHandler.handle_xml() exception: '" + str(ex) + "'\n" + str(format_stack())

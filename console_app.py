@@ -1,5 +1,6 @@
 import sys
 import os
+import datetime
 
 from configparser import ConfigParser
 from argparse import ArgumentParser
@@ -65,7 +66,7 @@ class ConsoleApp:
         app_path = sys.argv[0]
         app_fnam = os.path.basename(app_path)
         self._app_name = os.path.splitext(app_fnam)[0]
-        uprint(self._app_name, " V", ver)
+        uprint(self._app_name, " V", ver, "  Startup", datetime.datetime.now())
         uprint("####  Initialization......  ####")
 
         self._options = dict()
@@ -158,8 +159,17 @@ class ConsoleApp:
             except Exception as ex:
                 uprint("****  ConsoleApp._parse_args(): enable logging exception=", ex)
 
+        # finished argument parsing - now print chosen option values to the console
         if self._options['debugLevel']['val']:
             uprint('Debug Level (' + str(DEBUG_LEVEL_VERBOSE) + '=verbose):', self._options['debugLevel']['val'])
+            # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
+            uprint("System Environment: argv[0]=", sys.argv[0],
+                   "executable=", sys.executable,
+                   "cwd=", os.getcwd(),
+                   "frozen=", getattr(sys, 'frozen', False),
+                   "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*') if getattr(sys, 'frozen', False)
+                   else os.path.dirname(os.path.abspath(__file__)),
+                   "main-cfg=", self._cfg_fnam)
         if log_file:
             uprint('Log file: ' + log_file)
 
@@ -181,9 +191,9 @@ class ConsoleApp:
             self._parse_args()
         return self._options[name]['val'] if name in self._options else value
 
-    def set_option(self, name, val, cfg_fnam=None):
-        self._options[name]['val'] = str(val)
-        return self.set_config(name, val, cfg_fnam)
+    def set_option(self, name, val, cfg_fnam=None, save_to_config=True):
+        self._options[name]['val'] = val
+        return self.set_config(name, val, cfg_fnam) if save_to_config else ''
 
     def _get_cfg(self, name, section=None, default_value=None, cfg_parser=None):
         c = cfg_parser if cfg_parser else self._cfg_parser_app
@@ -195,13 +205,13 @@ class ConsoleApp:
 
     def get_config(self, name, section=None, default_value=None, check_eval_only=False):
         f = self._get_cfg
-        ret = f(name,                                                   # cwd cfg
+        ret = f(name,  # cwd cfg
                 section=section,
-                default_value=f(name,                                   # app cfg
+                default_value=f(name,  # app cfg
                                 section=section,
-                                default_value=f(name,                   # env app sec
+                                default_value=f(name,  # env app sec
                                                 section=self._app_name,
-                                                default_value=f(name,   # env main sec
+                                                default_value=f(name,  # env main sec
                                                                 section=section,
                                                                 default_value=default_value,
                                                                 cfg_parser=self._cfg_parser_env),

@@ -16,8 +16,9 @@
             pos: self.pos
             size: self.size
     BoxLayout:
-        Label:
+        Button:
             text: root.data_dict['name']
+            on_press: app.do_checks(self.text)
         Label:
             text: root.data_dict['last_check'] if 'last_check' in root.data_dict else ''
     Label:

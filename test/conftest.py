@@ -121,9 +121,9 @@ class ConsoleApp:
         uprint('ConsoleAppMock.get_option', name)
         return self._options[name] if name in self._options else value
 
-    def set_option(self, name, val):
-        uprint('ConsoleAppMock.set_option', name, val)
-        self._options[name]['val'] = str(val)
+    def set_option(self, name, val, cfg_fnam=None, save_to_config=True):
+        uprint('ConsoleAppMock.set_option', name, val, cfg_fnam, save_to_config)
+        self._options[name]['val'] = val
         return ''
 
     def dprint(self, *objects, sep=' ', end='\n', file=sys.stdout, minimum_debug_level=1):  # 1==DEBUG_LEVEL_ENABLED

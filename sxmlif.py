@@ -2,20 +2,19 @@
 
 import datetime
 from copy import deepcopy
+from textwrap import wrap
 
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser
 
 from console_app import uprint, DEBUG_LEVEL_VERBOSE
 from tcp import TcpClient
-from db import OraDB
-
+from db import OraDB, MAX_STRING_LENGTH
 
 # data actions
 ACTION_DELETE = 'DELETE'
 ACTION_INSERT = 'INSERT'
 ACTION_UPDATE = 'UPDATE'
-
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
 # .. so we use ISO-8859-15 instead ?!?!? (see
@@ -40,7 +39,6 @@ SXML_DEF_ENCODING = 'cp1252'
 
 # SIHOT GUEST TYPE for owners (affiliated company)
 SIHOT_AFF_COMPANY = 6
-
 
 # special error message prefixes
 ERR_MESSAGE_PREFIX_CONTINUE = 'CONTINUE:'
@@ -107,7 +105,6 @@ MAP_WEB_CLIENT = \
         # {'elemName': 'COMMENT', 'colName' : 'CD_'}
     )
 
-
 # used as KERNEL interface element/column-mapping template by ClientToSihot instance
 MAP_KERNEL_CLIENT = \
     (
@@ -115,7 +112,7 @@ MAP_KERNEL_CLIENT = \
         {'elemName': '_P2_OBJID', 'colName': 'CD_SIHOT_OBJID2', 'elemHideInActions': ACTION_INSERT},
         {'elemName': 'MATCHCODE', 'colName': 'CD_CODE'},
         {'elemName': '_P2_MATCHCODE', 'colName': 'CD_CODE2'},
-        {'elemName': 'T-SALUTATION', 'colName': 'SIHOT_SALUTATION1'},    # also exists T-ADDRESS/T-PERSONAL-SALUTATION
+        {'elemName': 'T-SALUTATION', 'colName': 'SIHOT_SALUTATION1'},  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
         {'elemName': '_P2_T-SALUTATION', 'colName': 'SIHOT_SALUTATION2'},
         {'elemName': 'T-TITLE', 'colName': 'SIHOT_TITLE1'},
         {'elemName': '_P2_T-TITLE', 'colName': 'SIHOT_TITLE2'},
@@ -245,7 +242,6 @@ MAP_KERNEL_CLIENT = \
         # {'elemName': '_PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
     )
 
-
 # Reservation interface mappings
 # .. first the mapping for the WEB interface
 """ taken from SIHOT.WEB IF doc page 58:
@@ -271,7 +267,10 @@ MAP_WEB_RES = \
         {'elemName': 'MATCHCODE', 'colName': 'SH_MC',
          'colValFromAcu': "nvl(OC_CODE, CD_CODE)"},
         {'elemName': 'GDSNO', 'colName': 'SIHOT_GDSNO',
-         'colValFromAcu': "nvl(SIHOT_GDSNO, to_char(RUL_PRIMARY))"},  # RUL_PRIMARY needed for to delete/cancel res
+         'colValFromAcu': "nvl(SIHOT_GDSNO, case when RUL_SIHOT_RATE in ('TC', 'TK') then"
+                          " (select 'TC' || RH_EXT_BOOK_REF from T_RH where"
+                          " RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
+                          " else to_char(RUL_PRIMARY) end)"},  # RUL_PRIMARY needed for to delete/cancel res
         {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF'},
         {'elemName': 'EXT-KEY', 'colName': 'SIHOT_LINK_GROUP',
          'elemHideIf': "'SIHOT_LINK_GROUP' not in c"},
@@ -346,8 +345,15 @@ MAP_WEB_RES = \
         {'elemName': '/RESCHANNELLIST',
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
                        " or c['RO_RES_GROUP'][:5] not in ('Owner', 'Promo')"},
-        {'elemName': 'ARR', 'colName': 'ARR_DATE', 'elemHideInActions': ACTION_DELETE},
-        {'elemName': 'DEP', 'colName': 'DEP_DATE', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'ARR', 'colName': 'ARR_DATE',
+         'colValFromAcu': "nvl(ARR_DATE,"
+                          " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
+                          " 'DD-MM-YY'))"},
+        {'elemName': 'DEP', 'colName': 'DEP_DATE',
+         'colValFromAcu': "nvl(DEP_DATE,"
+                          " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
+                          " 'DD-MM-YY') +"
+                          " to_number(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_DAYS')))"},
         {'elemName': 'NOROOMS', 'colVal': 1},
         {'elemName': 'NOPAX', 'colName': 'RU_ADULTS', 'elemHideInActions': ACTION_DELETE},
         {'elemName': 'NOCHILDS', 'colName': 'RU_CHILDREN', 'elemHideInActions': ACTION_DELETE},
@@ -379,7 +385,7 @@ MAP_WEB_RES = \
         {'elemName': 'NO', 'colName': 'RU_CHILDREN'},
         {'elemName': '/PERS-TYPE'},
         {'elemName': '/PERS-TYPE-LIST'},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,        # First person/adult of reservation
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # First person/adult of reservation
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
         {'elemName': 'NAME', 'colName': 'SH_ADULT1_NAME', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0 or not c['SH_ADULT1_NAME']"},
@@ -403,7 +409,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 0 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Second adult of client
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Second adult of client
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
         # NAME element needed for clients with only one person but reservation with 2nd pax (RU_ADULTS >= 2):
         # {'elemName': 'NAME', 'colName': 'SH_ADULT2_NAME', 'colVal': '',
@@ -430,7 +436,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 1 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Adult 3
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 3
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
         {'elemName': 'NAME', 'colName': 'SH_ADULT3_NAME', 'colVal': 'Adult 3', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
@@ -450,7 +456,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 2 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Adult 4
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 4
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
         {'elemName': 'NAME', 'colName': 'SH_ADULT4_NAME', 'colVal': 'Adult 4', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
@@ -470,7 +476,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 3 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Adult 5
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 5
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
         {'elemName': 'NAME', 'colName': 'SH_ADULT5_NAME', 'colVal': 'Adult 5', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
@@ -490,7 +496,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 4 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Adult 6
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 6
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
         {'elemName': 'NAME', 'colName': 'SH_ADULT6_NAME', 'colVal': 'Adult 6', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
@@ -510,7 +516,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 5 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Children 1
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 1
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
         {'elemName': 'NAME', 'colName': 'SH_CHILD1_NAME', 'colVal': 'Child 1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
@@ -531,7 +537,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Children 2
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 2
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
         {'elemName': 'NAME', 'colName': 'SH_CHILD2_NAME', 'colVal': 'Child 2', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
@@ -552,7 +558,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Children 3
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 3
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
         {'elemName': 'NAME', 'colName': 'SH_CHILD3_NAME', 'colVal': 'Child 3', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
@@ -573,7 +579,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,     # Children 4
+        {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 4
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
         {'elemName': 'NAME', 'colName': 'SH_CHILD4_NAME', 'colVal': 'Child 4', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
@@ -605,10 +611,11 @@ MAP_WEB_RES = \
         {'elemName': '_OC_CODE', 'colName': 'OC_CODE'},
         {'elemName': '_OC_OBJID', 'colName': 'OC_SIHOT_OBJID'},
         {'elemName': '_RES_GROUP', 'colName': 'RO_RES_GROUP'},  # needed for elemHideIf
+        {'elemName': '_RES_OCC', 'colName': 'RUL_SIHOT_RATE'},  # needed for res_id_values
+        {'elemName': '_CHANGES', 'colName': 'RUL_CHANGES'},  # needed for error notifications
         {'elemName': '/RESERVATION'},
         {'elemName': '/ARESLIST'},
     )
-
 
 # .. then the mapping for the KERNEL interface
 MAP_KERNEL_RES = \
@@ -622,7 +629,7 @@ MAP_KERNEL_RES = \
         {'elemName': 'NR-ROOMS', 'colName': 'SH_NOROOMS', 'colVal': '1'},
         {'elemName': 'T-CATEGORY', 'colName': 'RUL_SIHOT_CAT'},  # mandatory, could be empty to get PMS fallback-default
         {'elemName': 'T-RATE', 'colName': 'RUL_SIHOT_RATE', 'colVal': 'OW'},
-        {'elemName': 'ID', 'colName': 'RUL_SIHOT_HOTEL'},        # or use [RES-]HOTEL/IDLIST
+        {'elemName': 'ID', 'colName': 'RUL_SIHOT_HOTEL'},  # or use [RES-]HOTEL/IDLIST
         {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO'},
         {'elemName': 'D-FROM', 'colName': 'ARR_DATE'},
         {'elemName': 'D-TO', 'colName': 'DEP_DATE'},
@@ -639,7 +646,6 @@ MAP_KERNEL_RES = \
         {'elemName': '_CDREF', 'colName': 'CD_CODE'},
     )
 
-
 # default values for used interfaces (see email from Sascha Scheer from 28 Jul 2016 13:48 with answers from JBerger):
 # .. use kernel for clients and web for reservations
 USE_KERNEL_FOR_CLIENTS_DEF = True
@@ -649,9 +655,10 @@ USE_KERNEL_FOR_RES_DEF = False
 MAP_RES_DEF = MAP_WEB_RES
 
 
-class SihotXmlParser:       # XMLParser interface
+class SihotXmlParser:  # XMLParser interface
     def __init__(self, ca):
         super(SihotXmlParser, self).__init__()
+        self._xml = ''
         self._base_tags = ['ERROR-LEVEL', 'ERROR-TEXT', 'ID', 'MSG', 'OC', 'ORG', 'RC', 'TN', 'VER']
         self._curr_tag = ''
         self._curr_attr = ''
@@ -665,70 +672,44 @@ class SihotXmlParser:       # XMLParser interface
         self.ver = ''
         self.error_level = '0'  # used by kernel interface instead of RC/MSG
         self.error_text = ''
-        self.ca = ca            # only needed for logging with dprint()
-        self._parser = None     # reset to XMLParser(target=self) in self.parse_xml() and close in self.close()
+        self.ca = ca  # only needed for logging with dprint()
+        self._parser = None  # reset to XMLParser(target=self) in self.parse_xml() and close in self.close()
 
     def parse_xml(self, xml):
         self.ca.dprint('SihotXmlParser.parse_xml():', xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self._xml = xml
         self._parser = XMLParser(target=self)
         self._parser.feed(xml)
 
+    def get_xml(self):
+        return self._xml
+
     # xml parsing interface
 
-    def start(self, tag, attrib):       # called for each opening tag
+    def start(self, tag, attrib):  # called for each opening tag
         self._curr_tag = tag
-        self._curr_attr = None          # used as flag for a currently parsed base tag (for self.data())
+        self._curr_attr = None  # used as flag for a currently parsed base tag (for self.data())
         if tag in self._base_tags:
             self._curr_attr = tag.lower().replace('-', '_')
             setattr(self, self._curr_attr, '')
             return None
         return tag
 
-    def end(self, tag):                 # called for each closing tag
+    def end(self, tag):  # called for each closing tag
         self._curr_tag = ''
         self._curr_attr = ''
         return tag
 
-    def data(self, data):               # called on each chunk (separated by XMLParser on spaces, special chars, ...)
+    def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
         if self._curr_attr and data.strip():
             self.ca.dprint('SihotXmlParser.data(): ', self._curr_tag, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             setattr(self, self._curr_attr, getattr(self, self._curr_attr) + data)
             return None
         return data
 
-    def close(self):                    # called when all data has been parsed.
+    def close(self):  # called when all data has been parsed.
         self._parser.close()
         return self  # ._max_depth
-
-
-class Request(SihotXmlParser):  # request from SIHOT to AcuServer
-    def get_operation_code(self):
-        return self.oc
-
-
-class Response(SihotXmlParser):     # response xml parser for kernel or web interfaces
-    def __init__(self, ca):
-        super(Response, self).__init__(ca)
-        # guest/client interface response elements
-        self._base_tags.append('MATCHCODE')
-        self.matchcode = None       # added for to remove pycharm warning
-        self._base_tags.append('GUEST-NR')  # used only by GuestInfo
-        self.guest_nr = None
-        # reservation interface response elements
-        self._base_tags += ('OBJID', 'GDSNO')    # , 'RESERVATION ACCOUNT-ID')
-        self.objid = None
-        self.gdsno = None
-
-    def start(self, tag, attrib):       # called for each opening tag
-        if super(Response, self).start(tag, attrib) is None:
-            return None  # processed by base class
-        # collect extra info on error response (RC != '0') within the MSG tag field
-        if tag[:4] in ('MSG-', "INDE", "VALU"):
-            self._curr_attr = 'msg'
-            # Q&D: by simply using tag[4:] for to remove MSG- prefix, INDEX will be shown as X= and VALUE as E=
-            setattr(self, self._curr_attr, getattr(self, self._curr_attr, '') + " " + tag[4:] + "=")
-            return None
-        return tag
 
     def server_error(self):
         if self.rc != '0':
@@ -745,18 +726,48 @@ class Response(SihotXmlParser):     # response xml parser for kernel or web inte
         return ''
 
 
+class Request(SihotXmlParser):  # request from SIHOT to AcuServer
+    def get_operation_code(self):
+        return self.oc
+
+
+class Response(SihotXmlParser):  # response xml parser for kernel or web interfaces
+    def __init__(self, ca):
+        super(Response, self).__init__(ca)
+        # guest/client interface response elements
+        self._base_tags.append('MATCHCODE')
+        self.matchcode = None  # added for to remove pycharm warning
+        self._base_tags.append('GUEST-NR')  # used only by GuestInfo
+        self.guest_nr = None
+        # reservation interface response elements
+        self._base_tags += ('OBJID', 'GDSNO')  # , 'RESERVATION ACCOUNT-ID')
+        self.objid = None
+        self.gdsno = None
+
+    def start(self, tag, attrib):  # called for each opening tag
+        if super(Response, self).start(tag, attrib) is None:
+            return None  # processed by base class
+        # collect extra info on error response (RC != '0') within the MSG tag field
+        if tag[:4] in ('MSG-', "INDE", "VALU"):
+            self._curr_attr = 'msg'
+            # Q&D: by simply using tag[4:] for to remove MSG- prefix, INDEX will be shown as X= and VALUE as E=
+            setattr(self, self._curr_attr, getattr(self, self._curr_attr, '') + " " + tag[4:] + "=")
+            return None
+        return tag
+
+
 class ConfigDictResponse(Response):
     def __init__(self, ca):
         super(ConfigDictResponse, self).__init__(ca)
         # guest/client interface response elements
-        self._base_tags += ('KEY', 'VALUE')     # VALUE for key value (remove from additional error info - see 'VALU')
-        self.value = None       # added for to remove pycharm warning
+        self._base_tags += ('KEY', 'VALUE')  # VALUE for key value (remove from additional error info - see 'VALU')
+        self.value = None  # added for to remove pycharm warning
         self.key = None
-        self.key_values = {}    # for to store the dict with all key values
+        self.key_values = {}  # for to store the dict with all key values
 
     def end(self, tag):
         if super(ConfigDictResponse, self).end(tag) is None:
-            return None         # tag used/processed by base class
+            return None  # tag used/processed by base class
         elif tag == 'SIHOT-CFG':
             self.key_values[self.key] = self.value
         return tag
@@ -767,13 +778,13 @@ class CatRoomResponse(Response):
         super(CatRoomResponse, self).__init__(ca)
         # guest/client interface response elements
         self._base_tags += ('NAME', 'RN')
-        self.name = None        # added for to remove pycharm warning
+        self.name = None  # added for to remove pycharm warning
         self.rn = None
-        self.cat_rooms = {}     # for to store the dict with all key values
+        self.cat_rooms = {}  # for to store the dict with all key values
 
     def end(self, tag):
         if super(CatRoomResponse, self).end(tag) is None:
-            return None         # tag used/processed by base class
+            return None  # tag used/processed by base class
         elif tag == 'NAME':
             self.cat_rooms[self.name] = []
         elif tag == 'RN':
@@ -808,7 +819,7 @@ class RoomChange(SihotXmlParser):
         super(RoomChange, self).__init__(ca)
         # add base tags for room number, old room number and guest objid
         self._base_tags.append('RN')
-        self.rn = None       # added for to remove pycharm warning
+        self.rn = None  # added for to remove pycharm warning
         self._base_tags.append('ORN')
         self.orn = None
         self._base_tags.append('GID')
@@ -830,7 +841,7 @@ class ColMapXmlParser(SihotXmlParser):
         if self._curr_tag in self.elem_col_map:
             if 'elemListVal' in self.elem_col_map[self._curr_tag]:
                 self.elem_col_map[self._curr_tag]['elemListVal'].append('')
-            elif 'elemVal' in self.elem_col_map[self._curr_tag]:    # 2nd time same tag then create list
+            elif 'elemVal' in self.elem_col_map[self._curr_tag]:  # 2nd time same tag then create list
                 self.elem_col_map[self._curr_tag]['elemListVal'] = list((self.elem_col_map[self._curr_tag]['elemVal'],))
             self.elem_col_map[self._curr_tag]['elemVal'] = ''
             return None
@@ -851,7 +862,7 @@ class ColMapXmlParser(SihotXmlParser):
 class GuestFromSihot(ColMapXmlParser):
     def __init__(self, ca, col_map=MAP_CLIENT_DEF):
         super(GuestFromSihot, self).__init__(ca, col_map)
-        self.acu_col_values = None      # dict() - initialized in self.end() with acu column names:values
+        self.acu_col_values = None  # dict() - initialized in self.end() with acu column names:values
 
     # XMLParser interface
 
@@ -909,7 +920,7 @@ class SihotXmlBuilder:
         #                       for c in col_map if 'colName' in c and 'colVal' not in c]
         # alternative version preventing duplicate column names
         self.fix_col_values = {}
-        self.acu_col_names = []     # acu_col_names and acu_col_expres need to be in sync
+        self.acu_col_names = []  # acu_col_names and acu_col_expres need to be in sync
         self.acu_col_expres = []
         for c in col_map:
             if 'colName' in c:
@@ -933,8 +944,8 @@ class SihotXmlBuilder:
             if err_msg:
                 uprint('SihotXmlBuilder.__init__() db connect error:', err_msg)
             else:
-                self.acu_connected = connect_to_acu     # ==True
-        self._rows = []      # used by inheriting class for to store the rows to send to SiHOT.PMS
+                self.acu_connected = connect_to_acu  # ==True
+        self._rows = []  # used by inheriting class for to store the rows to send to SiHOT.PMS
         self._current_row_i = 0
 
         self._xml = ''
@@ -1000,7 +1011,7 @@ class SihotXmlBuilder:
         for tag, col, hide_expr, val in self.sihot_elem_col:
             if hide_expr:
                 l = dict()
-                l['a'] = action      # provide short names for evaluation
+                l['a'] = action  # provide short names for evaluation
                 l['c'] = col_values
                 l['datetime'] = datetime
                 try:
@@ -1041,7 +1052,7 @@ class SihotXmlBuilder:
 
     @staticmethod
     def new_tag(tag, val='', opening=True, closing=True):
-        return ('<' + tag + '>' if opening else '')\
+        return ('<' + tag + '>' if opening else '') \
                + (val if val else '') \
                + ('</' + tag + '>' if closing else '')
 
@@ -1071,8 +1082,8 @@ class SihotXmlBuilder:
                                    'SRSL_PRIMARY': str(primary)[:12],
                                    'SRSL_ACTION': action[:15],
                                    'SRSL_STATUS': status[:12],
-                                   'SRSL_MESSAGE': message[:1998],
-                                   'SRSL_LOGREF': logref,   # NUMBER(10)
+                                   'SRSL_MESSAGE': message[:MAX_STRING_LENGTH - 1],
+                                   'SRSL_LOGREF': logref,  # NUMBER(10)
                                    },
                                   commit=commit)
 
@@ -1084,7 +1095,6 @@ class SihotXmlBuilder:
 
 
 class PostMessage(SihotXmlBuilder):
-
     def post_message(self, msg, level=3, system='AcuSihot.Interface'):
         self.beg_xml(operation_code='SYSMESSAGE')
         self.add_tag('MSG', msg)
@@ -1102,7 +1112,6 @@ class PostMessage(SihotXmlBuilder):
 
 
 class AcuServer(SihotXmlBuilder):
-
     def time_sync(self):
         self.beg_xml(operation_code='TS')
         self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
@@ -1119,7 +1128,7 @@ class AcuServer(SihotXmlBuilder):
     def link_alive(self, level='0'):
         self.beg_xml(operation_code='TS')
         self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
-        self.add_tag('STATUS', level)   # 0==request, 1==link OK
+        self.add_tag('STATUS', level)  # 0==request, 1==link OK
         self.end_xml()
 
         err_msg = self.send_to_server()
@@ -1132,11 +1141,10 @@ class AcuServer(SihotXmlBuilder):
 
 
 class ConfigDict(SihotXmlBuilder):
-
     def get_key_values(self, config_type, hotel_id='1', language='EN'):
         self.beg_xml(operation_code='GCF')
         self.add_tag('CFTYPE', config_type)
-        self.add_tag('HN', hotel_id)        # mandatory
+        self.add_tag('HN', hotel_id)  # mandatory
         self.add_tag('LN', language)
         self.end_xml()
 
@@ -1146,15 +1154,14 @@ class ConfigDict(SihotXmlBuilder):
 
 
 class CatRooms(SihotXmlBuilder):
-
     def get_cat_rooms(self, hotel_id='1', from_date=datetime.datetime.now(), to_date=datetime.datetime.now(),
                       scope=None):
         self.beg_xml(operation_code='ALLROOMS')
         self.add_tag('ID', hotel_id)  # mandatory
-        self.add_tag('FROM', datetime.datetime.strftime(from_date, '%Y-%m-%d'))     # mandatory
+        self.add_tag('FROM', datetime.datetime.strftime(from_date, '%Y-%m-%d'))  # mandatory
         self.add_tag('TO', datetime.datetime.strftime(to_date, '%Y-%m-%d'))
         if scope:
-            self.add_tag('SCOPE', scope)    # pass 'DESC' for to get room description
+            self.add_tag('SCOPE', scope)  # pass 'DESC' for to get room description
         self.end_xml()
 
         err_msg = self.send_to_server(response_parser=CatRoomResponse(self.ca))
@@ -1256,7 +1263,7 @@ class ClientToSihot(SihotXmlBuilder):
         self._prepare_guest_link_xml(pk1, pk2, delete)
         return self.send_to_server()
 
-    def _send_person_to_sihot(self, c_row, first_person=""):    # pass CD_CODE of first person for to send 2nd person
+    def _send_person_to_sihot(self, c_row, first_person=""):  # pass CD_CODE of first person for to send 2nd person
         action = self._prepare_guest_xml(c_row, col_name_suffix='2' if first_person else '')
         err_msg = self.send_to_server()
         if 'guest exists already' in err_msg and action == ACTION_INSERT:  # and not self.use_kernel_interface:
@@ -1272,7 +1279,7 @@ class ClientToSihot(SihotXmlBuilder):
         if not c_row:
             c_row = self.cols
         err_msg, action_p1 = self._send_person_to_sihot(c_row)
-        couple_linkage = ''     # flag for logging if second person got linked (+P2) or unlinked (-P2)
+        couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
         action_p2 = ''
         if not err_msg and c_row['CD_CODE2']:  # check for second contact person
             crow2 = deepcopy(c_row)
@@ -1316,7 +1323,6 @@ class ClientToSihot(SihotXmlBuilder):
 
 
 class ResSearch(SihotXmlBuilder):
-
     def search(self, hotel_id=None, from_date=datetime.datetime.now(), to_date=datetime.datetime.now(),
                matchcode=None, name=None, gdsno=None, flags='', scope=None):
         self.beg_xml(operation_code='RES-SEARCH')
@@ -1324,7 +1330,7 @@ class ResSearch(SihotXmlBuilder):
             self.add_tag('ID', hotel_id)
         else:
             flags += ';' + 'ALL-HOTELS'
-        self.add_tag('FROM', datetime.datetime.strftime(from_date, '%Y-%m-%d'))     # mandatory?
+        self.add_tag('FROM', datetime.datetime.strftime(from_date, '%Y-%m-%d'))  # mandatory?
         self.add_tag('TO', datetime.datetime.strftime(to_date, '%Y-%m-%d'))
         if matchcode:
             self.add_tag('MATCHCODE', matchcode)
@@ -1335,7 +1341,7 @@ class ResSearch(SihotXmlBuilder):
         if flags:
             self.add_tag('FLAGS', flags if flags[0] != ';' else flags[1:])
         if scope:
-            self.add_tag('SCOPE', scope)    # e.g. EXPORTEXTENDEDCOMMENT;FORCECALCDAYPRICE;CALCSUMDAYPRICE
+            self.add_tag('SCOPE', scope)  # e.g. EXPORTEXTENDEDCOMMENT;FORCECALCDAYPRICE;CALCSUMDAYPRICE
         self.end_xml()
 
         err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
@@ -1351,7 +1357,7 @@ class ResSearch(SihotXmlBuilder):
             4  == The given search data is not valid
             5  == An (internal) error occurred when searching for reservations.
         """
-        return self.response.cat_rooms if not err_msg else err_msg
+        return self.response.res_list if not err_msg else err_msg
 
 
 class ResToSihot(SihotXmlBuilder):
@@ -1364,7 +1370,7 @@ class ResToSihot(SihotXmlBuilder):
         self.use_kernel_for_new_clients = use_kernel_for_new_clients
         self.map_client = map_client
 
-        self._warning_frags = self.ca.get_config('warningFragments')    # list of text fragments to identify as warning
+        self._warning_frags = self.ca.get_config('warningFragments')  # list of text fragments to identify as warning
         self._warning_msgs = ""
 
     def _fetch_from_acu(self, view, where_group_order, history_only, future_only):
@@ -1417,43 +1423,13 @@ class ResToSihot(SihotXmlBuilder):
                                                     commit=commit)
         return err_msg
 
-    def send_row_to_sihot(self, crow=None, commit=False):
-        if not crow:
-            crow = self.cols
-        action = crow['RUL_ACTION']
-
-        err_msg = self._ensure_clients_exist(crow)
-
-        if not err_msg:
-            err_msg = self._send_res_to_sihot(crow, action, commit)
-            if self.acu_connected and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']) \
-                    and 'Could not find a key identifier' in err_msg:  # WEB interface
-                self.ca.dprint("ResToSihot.send_row_to_sihot() ignoring CD_SIHOT_OBJID(" +
-                               str(crow['CD_SIHOT_OBJID']) + "/" + str(crow['CD_SIHOT_OBJID2']) + ") error: " + err_msg)
-                crow['CD_SIHOT_OBJID'] = None   # use MATCHCODE instead
-                crow['CD_SIHOT_OBJID2'] = None
-                err_msg = self._send_res_to_sihot(crow, action, commit)
-
-        if err_msg:
-            self.ca.dprint("ResToSihot.send_row_to_sihot() error: " + err_msg)
-        else:
-            self.ca.dprint("ResToSihot.send_row_to_sihot() GDSNO={} RESPONDED OBJID={}|MATCHCODE={}"
-                           .format(crow['SIHOT_GDSNO'], self.response.objid, self.response.matchcode),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-
-        return err_msg
-
-    def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False, commit_last_row=True):
-        ret_msg = ''
-        for row in self.rows:
-            err_msg = self.send_row_to_sihot(row, commit=commit_per_row)
-            if err_msg:
-                if break_on_error:
-                    return err_msg          # BREAK/RETURN first error message
-                ret_msg += '\n' + err_msg
-        if commit_last_row:
-            ret_msg += self.ora_db.commit()
-        return ret_msg
+    def _handle_error(self, crow, err_msg):
+        warn_msg = ''
+        if [frag for frag in self._warning_frags if frag in err_msg]:
+            warn_msg = self.res_id_desc(crow, err_msg, error_sep='   ')
+            self._warning_msgs += '\n\n' + warn_msg
+            err_msg = ""
+        return err_msg, warn_msg
 
     def _ensure_clients_exist(self, crow):
         err_msg = ''
@@ -1506,32 +1482,67 @@ class ResToSihot(SihotXmlBuilder):
 
         return err_msg
 
+    def send_row_to_sihot(self, crow=None, commit=False):
+        if not crow:
+            crow = self.cols
+        action = crow['RUL_ACTION']
+
+        err_msg = self._ensure_clients_exist(crow)
+
+        if not err_msg:
+            err_msg = self._send_res_to_sihot(crow, action, commit)
+            if self.acu_connected and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']) \
+                    and 'Could not find a key identifier' in err_msg:  # WEB interface
+                self.ca.dprint("ResToSihot.send_row_to_sihot() ignoring CD_SIHOT_OBJID(" +
+                               str(crow['CD_SIHOT_OBJID']) + "/" + str(crow['CD_SIHOT_OBJID2']) + ") error: " + err_msg)
+                crow['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead
+                crow['CD_SIHOT_OBJID2'] = None
+                err_msg = self._send_res_to_sihot(crow, action, commit)
+
+        if err_msg:
+            self.ca.dprint("ResToSihot.send_row_to_sihot() error: " + err_msg)
+        else:
+            self.ca.dprint("ResToSihot.send_row_to_sihot() GDSNO={} RESPONDED OBJID={}|MATCHCODE={}"
+                           .format(crow['SIHOT_GDSNO'], self.response.objid, self.response.matchcode),
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+
+        return err_msg
+
+    def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False, commit_last_row=True):
+        ret_msg = ''
+        for row in self.rows:
+            err_msg = self.send_row_to_sihot(row, commit=commit_per_row)
+            if err_msg:
+                if break_on_error:
+                    return err_msg  # BREAK/RETURN first error message
+                ret_msg += '\n' + err_msg
+        if commit_last_row:
+            ret_msg += self.ora_db.commit()
+        return ret_msg
+
     def res_id_label(self):
-        return 'GDS/VOUCHER/CD' + ('/RU/RUL' if self.ca.get_option('debugLevel') else '')
+        return 'GDS/VOUCHER/CD/RO' + ('/RU/RUL' if self.ca.get_option('debugLevel') else '')
 
     def res_id_values(self, crow):
-        return str(crow['SIHOT_GDSNO']) + '/' + str(crow['RH_EXT_BOOK_REF']) + '/' + \
-                str(crow['CD_CODE']) + \
-                ('/' + str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']) if self.ca.get_option('debugLevel')
-                 else '')
+        return str((crow['SIHOT_GDSNO'] if crow['SIHOT_GDSNO'] else crow['RUL_PRIMARY'])) + \
+               '/' + str(crow['RH_EXT_BOOK_REF']) + \
+               '/' + str(crow['CD_CODE']) + '/' + str(crow['RUL_SIHOT_RATE']) + \
+               ('/' + str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']) if self.ca.get_option('debugLevel')
+                else '')
 
     def res_id_desc(self, crow, error_msg, error_sep='\n\n '):
-        return 'RESERVATION ' + crow['ARR_DATE'].strftime('%d-%m') + '..' + crow['DEP_DATE'].strftime('%d-%m-%y') + \
-                ' in ' + (crow['SIHOT_ROOM_NO'] + '=' if crow['SIHOT_ROOM_NO'] else '') + \
-                crow['RUL_SIHOT_CAT'] + \
-                (':' + crow['SH_PRICE_CAT']
-                 if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
-                 else '') + \
-                ' ' + self.res_id_label() + ': ' + self.res_id_values(crow) + \
-               (error_sep + 'ERROR: ' + error_msg if error_msg else '')
-
-    def _handle_error(self, crow, err_msg):
-        warn_msg = ''
-        if [frag for frag in self._warning_frags if frag in err_msg]:
-            warn_msg = self.res_id_desc(crow, err_msg, error_sep='   ')
-            self._warning_msgs += '\n' + warn_msg
-            err_msg = ""
-        return err_msg, warn_msg
+        return 'RESERVATION: ' + \
+               (crow['ARR_DATE'].strftime('%d-%m') if crow['ARR_DATE'] else 'unknown') + '..' + \
+               (crow['DEP_DATE'].strftime('%d-%m-%y') if crow['DEP_DATE'] else 'unknown') + \
+               ' in ' + (crow['SIHOT_ROOM_NO'] + '=' if crow['SIHOT_ROOM_NO'] else '') + \
+               crow['RUL_SIHOT_CAT'] + \
+               ('!' + crow['SH_PRICE_CAT']
+                if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
+                else '') + \
+               ' ' + self.res_id_label() + '==' + self.res_id_values(crow) + \
+               (error_sep + 'ERROR: ' + '\n'.join(wrap(error_msg, subsequent_indent=' ' * 8)) if error_msg else '') + \
+               (error_sep + 'TRAIL: ' + '\n'.join(wrap(crow['RUL_CHANGES'], subsequent_indent=' ' * 8))
+                if 'RUL_CHANGES' in crow and crow['RUL_CHANGES'] else '')
 
     def get_warnings(self):
         return self._warning_msgs + '\n\nEnd_Of_Message\n' if self._warning_msgs else ''

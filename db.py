@@ -1,10 +1,13 @@
 import os
+import datetime
+
 import cx_Oracle
 from console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 
 DEF_USER = 'SIHOT_INTERFACE'
 DEF_DSN = 'SP.TEST'
 
+MAX_STRING_LENGTH = 2000
 
 # used for to fix the following unicode encoding error:
 # .. 'charmap' codec can't decode byte 0x90 in position 2: character maps to <undefined>
@@ -135,6 +138,30 @@ class OraDB:
         except Exception as ex:
             return 'oraDB rollback error: ' + str(ex)
         return ''
+
+    def prepare_ref_param(self, value=None):
+        if isinstance(value, datetime.datetime):
+            ora_type = cx_Oracle.DATETIME
+        elif isinstance(value, int) or isinstance(value, float):
+            ora_type = cx_Oracle.NUMBER
+        else:
+            ora_type = cx_Oracle.STRING
+            value = str(value)[:MAX_STRING_LENGTH - 1]
+        ref_var = self.curs.var(ora_type)
+        if value is not None:
+            self.set_value(ref_var, value)
+        return ref_var
+
+    @staticmethod
+    def get_value(var):
+        return var.getvalue()
+
+    @staticmethod
+    def set_value(var, value):
+        var.setvalue(0, value)
+
+    def get_row_count(self):
+        return self.curs.rowcount
 
     def call_proc(self, proc_name, proc_args, ret_dict=None):
         try:
