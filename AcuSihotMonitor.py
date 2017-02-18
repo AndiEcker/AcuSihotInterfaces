@@ -1,6 +1,6 @@
 import datetime
 from functools import partial
-from traceback import format_stack
+from traceback import print_exc
 
 from kivy.app import App
 from kivy.uix.floatlayout import FloatLayout
@@ -39,21 +39,22 @@ uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('x
 """ TESTS """
 
 
-def run_check(check_name):
+def run_check(check_name, data_dict):
     try:
-        if check_name == 'Number of categorized apartments':
-            result = acu_get_num_apt()
-        elif check_name == 'Number of unsynced guests':
-            result = acu_get_num_cd_unsynced()
-        elif check_name == 'Number of unsynced reservations':
-            result = acu_get_num_res_unsynced()
+        if 'from_join' in data_dict:
+            acu_db = connect_db()
+            result = acu_db.select(from_join=data_dict['from_join'], cols=data_dict['cols'],
+                                   where_group_order=data_dict.get('where_group_order'))
+            if not result:
+                result = acu_db.fetch_all()
+            acu_db.close()
 
         elif check_name == 'Time Sync':
             result = ass_test_time_sync()
         elif check_name == 'Link Alive':
             result = ass_test_link_alive()
 
-        elif check_name == 'Missing Reservations':
+        elif check_name == 'Reservation Discrepancies':
             result = sih_missing_reservations()
         elif check_name == 'Notification':
             result = sih_test_notification()
@@ -66,36 +67,10 @@ def run_check(check_name):
         else:
             result = "Unknown Check Name '{}'".format(check_name)
     except Exception as ex:
-        result = "run_check() exception: " + str(ex) + "\n" + '\n'.join(format_stack())
-    return str(result)
+        print_exc()
+        result = "run_check() exception: " + str(ex)
 
-
-def acu_get_num_apt():
-    acu_db = connect_db()
-    acu_db.select('T_AP', ['count(*)'], "exists (select LU_NUMBER from T_LU where LU_CLASS = 'SIHOT_HOTELS'"
-                                        " and LU_ID = (select AT_RSREF from T_AT where AT_CODE = AP_ATREF)"
-                                        " and LU_ACTIVE = 1)")
-    ret = str(acu_db.fetch_all()[0][0])
-    acu_db.select('T_AP', ['count(*)'], "AP_SIHOT_CAT is not NULL")
-    ret += " (" + str(acu_db.fetch_all()[0][0]) + ")"
-    acu_db.close()
-    return ret
-
-
-def acu_get_num_cd_unsynced():
-    acu_db = connect_db()
-    acu_db.select('V_ACU_CD_UNSYNCED', ['count(*)'])
-    rows = acu_db.fetch_all()
-    acu_db.close()
-    return str(rows[0][0])
-
-
-def acu_get_num_res_unsynced():
-    acu_db = connect_db()
-    acu_db.select('V_ACU_RES_UNSYNCED', ['count(*)'])
-    rows = acu_db.fetch_all()
-    acu_db.close()
-    return str(rows[0][0])
+    return result
 
 
 def _ass_test_method(method):
@@ -119,34 +94,38 @@ def sih_missing_reservations():
     today = datetime.datetime.today()
     future_day = today + datetime.timedelta(days=1)  # 9)
     req = ResToSihot(cae)
-    err_msg = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + future_day.strftime('%Y-%m-%d') + "'"
-                                           " and DEP_DATE > DATE'" + today.strftime('%Y-%m-%d') + "'")
-    if not err_msg:
+    result = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + future_day.strftime('%Y-%m-%d') + "'"
+                                          " and DEP_DATE > DATE'" + today.strftime('%Y-%m-%d') + "'")
+    if not result:      # no error message then process fetched rows
+        result = []
         for crow in req.rows:
-            if not crow['SIHOT_GDSNO']:
-                continue    # skip deleted RUs
-            rs = ResSearch(cae)
-            rd = rs.search(gdsno=crow['SIHOT_GDSNO'])
-            row_err = ''
-            if isinstance(rd, list):
-                # compare reservation for errors/discrepancies
-                if len(rd) != 1:
-                    row_err += '/Res. count!=1 ' + str(len(rd))
-                if rd[0]['GDSNO']['elemVal'] != crow['SIHOT_GDSNO']:
-                    row_err += '/GDS no mismatch ' + rd[0]['GDSNO']['elemVal']
-                if rd[0]['ARR']['elemVal'] != crow['ARR_DATE'].strftime('%Y-%m-%d'):
-                    row_err += '/Arrival date mismatch ' + rd[0]['ARR']['elemVal'] + \
-                               ' a=' + crow['ARR_DATE'].strftime('%Y-%m-%d')
-                if rd[0]['DEP']['elemVal'] != crow['DEP_DATE'].strftime('%Y-%m-%d'):
-                    row_err += '/Depart. date mismatch ' + rd[0]['DEP']['elemVal'] + \
-                               ' a=' + crow['DEP_DATE'].strftime('%Y-%m-%d')
-                if rd[0]['RN']['elemVal'] != crow['SIHOT_ROOM_NO']:
-                    row_err += '/Room no mismatch ' + rd[0]['RN']['elemVal'] + ' a=' + str(crow['SIHOT_ROOM_NO'])
+            if crow['SIHOT_GDSNO']:
+                rs = ResSearch(cae)
+                rd = rs.search(gdsno=crow['SIHOT_GDSNO'])
+                row_err = ''
+                if isinstance(rd, list):
+                    # compare reservation for errors/discrepancies
+                    if len(rd) != 1:
+                        row_err += '/Res. count!=1 ' + str(len(rd))
+                    if rd[0]['GDSNO']['elemVal'] != crow['SIHOT_GDSNO']:
+                        row_err += '/GDS no mismatch ' + rd[0]['GDSNO']['elemVal']
+                    if rd[0]['ARR']['elemVal'] != crow['ARR_DATE'].strftime('%Y-%m-%d'):
+                        row_err += '/Arrival date mismatch ' + rd[0]['ARR']['elemVal'] + \
+                                   ' a=' + crow['ARR_DATE'].strftime('%Y-%m-%d')
+                    if rd[0]['DEP']['elemVal'] != crow['DEP_DATE'].strftime('%Y-%m-%d'):
+                        row_err += '/Depart. date mismatch ' + rd[0]['DEP']['elemVal'] + \
+                                   ' a=' + crow['DEP_DATE'].strftime('%Y-%m-%d')
+                    if (rd[0]['RN']['elemVal'] or crow['SIHOT_ROOM_NO']) \
+                            and rd[0]['RN']['elemVal'] != crow['SIHOT_ROOM_NO']:  # prevent None != '' false positive
+                        row_err += '/Room no mismatch ' + rd[0]['RN']['elemVal'] + ' a=' + str(crow['SIHOT_ROOM_NO'])
+                else:
+                    row_err += '/Sihot search error ' + str(rd)
+                if row_err:
+                    result.append((crow['SIHOT_GDSNO'], row_err[1:]))
             else:
-                row_err += '/Sihot search error ' + str(rd)
-            if row_err:
-                err_msg += '\n' + crow['SIHOT_GDSNO'] + ':' + row_err[1:]
-    return err_msg
+                result.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
+
+    return result if result else 'No discrepancies found for date range {}..{}.'.format(today, future_day)
 
 
 def sih_test_notification():
@@ -226,11 +205,17 @@ class AcuSihotMonitorApp(App):
                 or ('parent_board' in ci and ci['parent_board'] == board_name)
                 ]
 
-    def board_check_indexes(self, board_name):
+    def board_item_indexes(self, board_name):
         return [i for i in range(len(self.check_list))
                 if (board_name == ROOT_BOARD_NAME and 'parent_board' not in self.check_list[i])
                 or ('parent_board' in self.check_list[i] and self.check_list[i]['parent_board'] == board_name)
                 ]
+
+    def check_index(self, check_name):
+        return [i for i in range(len(self.check_list)) if self.check_list[i]['name'] == check_name][0]
+
+    def is_parent_item(self, check_name):
+        return [cid for cid in self.check_list if 'parent_board' in cid and cid['parent_board'] == check_name]
 
     def get_background_color(self, board_name):
         """ determines the background_color from the current board or a parent board """
@@ -263,31 +248,59 @@ class AcuSihotMonitorApp(App):
         cg.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
         cg._list_overflow_items = []
 
-        cis = mw.ids.check_items
-        cis.clear_widgets()
+        lg = mw.ids.list_group
+        lg.clear_widgets()
+        lg.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
+        lg._list_overflow_items = []
 
-        for check_index in self.board_check_indexes(board_name):
-            check_item = self.check_list[check_index]
-            if [cid for cid in self.check_list if 'parent_board' in cid and cid['parent_board'] == check_item['name']]:
-                bm = Factory.BoardMenu(text=check_item['name'])
-                bg.add_widget(bm)
+        ig = mw.ids.item_grid
+        ig.clear_widgets()
 
-            cm = Factory.CheckMenu(text=check_item['name'])
-            cg.add_widget(cm)
+        child_indexes = self.board_item_indexes(board_name)
+        if child_indexes:
+            for check_index in child_indexes:
+                check_item = self.check_list[check_index]
+                if 'background_color' not in check_item:
+                    check_item['background_color'] = self.get_background_color(board_name)
 
-            if 'background_color' not in check_item:
-                check_item['background_color'] = self.get_background_color(board_name)
-            ci = Factory.CheckItem(data_dict=check_item)
-            self.check_list[check_index] = ci.data_dict  # put shallow copy of dict from DictProperty back to check_list
-            cis.add_widget(ci)
+                if self.is_parent_item(check_item['name']):
+                    bm = Factory.BoardMenu(text=check_item['name'])
+                    bg.add_widget(bm)
+                else:
+                    lm = Factory.ListMenu(text=check_item['name'])
+                    lg.add_widget(lm)
+
+                ci = Factory.CheckItem(data_dict=check_item)
+                # because kivy is still missing a ReferenceDictProperty we have to put the shallow copy of the
+                # .. check_item data dict (passed to the CheckItem constructor) from DictProperty back to check_list
+                self.check_list[check_index] = ci.data_dict
+                ig.add_widget(ci)
+
+                cm = Factory.CheckMenu(text=check_item['name'])
+                cg.add_widget(cm)
+
+        else:
+            result = self.check_list[self.check_index(board_name)].get('check_result')
+            if isinstance(result, list):
+                for rd in result:
+                    li = Factory.BoxLayout(size_hint_y=None, height=39)
+                    for cd in rd:
+                        cl = Factory.Label(text=str(cd))
+                        li.add_widget(cl)
+                    ig.add_widget(li)
+            elif isinstance(result, str):
+                li = Factory.BoxLayout(size_hint_y=None, height=69)
+                cl = Factory.Label(text=result)
+                li.add_widget(cl)
+                ig.add_widget(li)
 
         if board_name != ROOT_BOARD_NAME:
             bg.add_widget(Factory.BoardMenu(text=BACK_BOARD_NAME))
-        cg.add_widget(Factory.CheckMenu(text=ROOT_BOARD_NAME))
 
         mw.ids.action_previous.title = board_name
         bg.show_group()
         cg.show_group()
+        lg.show_group()
 
     def do_checks(self, check_name):
         cae.dprint('AcuSihotMonitorApp.do_checks():', check_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -314,7 +327,7 @@ class AcuSihotMonitorApp(App):
             result = result[3:]
         else:
             Clock.tick()
-            result = run_check(check_name)
+            result = run_check(check_name, self.check_list[self.check_index(check_name)])
             Clock.tick()
 
         self.update_check_result(check_name, result, run_at)
@@ -325,7 +338,7 @@ class AcuSihotMonitorApp(App):
         return str(result)
 
     def update_check_result(self, check_name, result, run_at):
-        check_index = [i for i in range(len(self.check_list)) if self.check_list[i]['name'] == check_name][0]
+        check_index = self.check_index(check_name)
         cae.dprint("AcuSihotMonitorApp.update_check_result(): dict={} result={}"
                    .format(self.check_list[check_index], result),
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)

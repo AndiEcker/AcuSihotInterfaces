@@ -1,11 +1,11 @@
 # SiHOT xml interface
-
 import datetime
+import re
 from copy import deepcopy
 from textwrap import wrap
 
 # import xml.etree.ElementTree as Et
-from xml.etree.ElementTree import XMLParser
+from xml.etree.ElementTree import XMLParser, ParseError
 
 from console_app import uprint, DEBUG_LEVEL_VERBOSE
 from tcp import TcpClient
@@ -44,13 +44,30 @@ SIHOT_AFF_COMPANY = 6
 ERR_MESSAGE_PREFIX_CONTINUE = 'CONTINUE:'
 
 
-#  helper methods - needed for the maps ###################################
+#  HELPER METHODS  ###################################
+
+def _strip_error_message(error_msg):
+    pos1 = error_msg.find('error:')
+    if pos1 != -1:
+        pos1 += 5  # put to position - 1 (for to allow -1 as valid pos if nothing got found)
+    else:
+        pos1 = error_msg.find('::')
+    pos1 += 1
+
+    pos2 = error_msg.find('.', pos1)
+    pos3 = error_msg.find('!', pos1)
+    if max(pos2, pos3) == -1:
+        pos2 = error_msg.find('', pos1)
+
+    return error_msg[pos1: max(pos2, pos3)]
 
 
-# valToAcuConverter
 def convert2date(xml_string):
+    """ needed for the maps in the valToAcuConverter dict item """
     return datetime.datetime.strptime(xml_string, '%Y-%m-%d')
 
+
+#  ELEMENT-COLUMN-MAPS  #################################
 
 MAP_GUEST_INFO = \
     (
@@ -346,14 +363,14 @@ MAP_WEB_RES = \
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
                        " or c['RO_RES_GROUP'][:5] not in ('Owner', 'Promo')"},
         {'elemName': 'ARR', 'colName': 'ARR_DATE',
-         'colValFromAcu': "nvl(ARR_DATE,"
+         'colValFromAcu': "case when ARR_DATE is not NULL then ARR_DATE else"
                           " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
-                          " 'DD-MM-YY'))"},
+                          " 'DD-MM-YY') end"},
         {'elemName': 'DEP', 'colName': 'DEP_DATE',
-         'colValFromAcu': "nvl(DEP_DATE,"
+         'colValFromAcu': "case when DEP_DATE is not NULL then DEP_DATE else"
                           " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
-                          " 'DD-MM-YY') +"
-                          " to_number(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_DAYS')))"},
+                          " 'DD-MM-YY') + "
+                          "to_number(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_DAYS')) end"},
         {'elemName': 'NOROOMS', 'colVal': 1},
         {'elemName': 'NOPAX', 'colName': 'RU_ADULTS', 'elemHideInActions': ACTION_DELETE},
         {'elemName': 'NOCHILDS', 'colName': 'RU_CHILDREN', 'elemHideInActions': ACTION_DELETE},
@@ -656,6 +673,9 @@ MAP_RES_DEF = MAP_WEB_RES
 
 
 class SihotXmlParser:  # XMLParser interface
+
+    reg_expr = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);")  # needed for clean and re-parse on char code error
+
     def __init__(self, ca):
         super(SihotXmlParser, self).__init__()
         self._xml = ''
@@ -678,8 +698,19 @@ class SihotXmlParser:  # XMLParser interface
     def parse_xml(self, xml):
         self.ca.dprint('SihotXmlParser.parse_xml():', xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self._xml = xml
-        self._parser = XMLParser(target=self)
-        self._parser.feed(xml)
+        try:
+            self._parser = XMLParser(target=self)
+            self._parser.feed(xml)
+        except ParseError as pex:
+            # invalid char encodings cannot be fixed with encoding="cp1252/utf-8/.."
+            uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
+                   "- retrying with cleaned-up XML data.")
+            xml_cleaned = self.reg_expr.sub('', xml)
+            self.ca.dprint('SihotXmlParser.parse_xml() cleaned-up xml=', xml_cleaned,
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self._parser = XMLParser(target=self)
+            self._parser.feed(xml_cleaned)
+            self._xml = xml_cleaned
 
     def get_xml(self):
         return self._xml
@@ -1426,7 +1457,7 @@ class ResToSihot(SihotXmlBuilder):
     def _handle_error(self, crow, err_msg):
         warn_msg = ''
         if [frag for frag in self._warning_frags if frag in err_msg]:
-            warn_msg = self.res_id_desc(crow, err_msg, error_sep='   ')
+            warn_msg = self.res_id_desc(crow, err_msg, separator='\n')
             self._warning_msgs += '\n\n' + warn_msg
             err_msg = ""
         return err_msg, warn_msg
@@ -1530,8 +1561,9 @@ class ResToSihot(SihotXmlBuilder):
                ('/' + str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']) if self.ca.get_option('debugLevel')
                 else '')
 
-    def res_id_desc(self, crow, error_msg, error_sep='\n\n '):
-        return 'RESERVATION: ' + \
+    def res_id_desc(self, crow, error_msg, separator='\n\n'):
+        indent = 8
+        return crow['RUL_ACTION'] + ' RESERVATION: ' + \
                (crow['ARR_DATE'].strftime('%d-%m') if crow['ARR_DATE'] else 'unknown') + '..' + \
                (crow['DEP_DATE'].strftime('%d-%m-%y') if crow['DEP_DATE'] else 'unknown') + \
                ' in ' + (crow['SIHOT_ROOM_NO'] + '=' if crow['SIHOT_ROOM_NO'] else '') + \
@@ -1539,10 +1571,15 @@ class ResToSihot(SihotXmlBuilder):
                ('!' + crow['SH_PRICE_CAT']
                 if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
                 else '') + \
-               ' ' + self.res_id_label() + '==' + self.res_id_values(crow) + \
-               (error_sep + 'ERROR: ' + '\n'.join(wrap(error_msg, subsequent_indent=' ' * 8)) if error_msg else '') + \
-               (error_sep + 'TRAIL: ' + '\n'.join(wrap(crow['RUL_CHANGES'], subsequent_indent=' ' * 8))
+               ' at hotel ' + crow['SIHOT_HOTEL_C'] + \
+               separator + ' ' * indent + self.res_id_label() + '==' + self.res_id_values(crow) + \
+               (separator + '\n'.join(wrap('ERROR: ' + _strip_error_message(error_msg), subsequent_indent=' ' * indent))
+                if error_msg else '') + \
+               (separator + '\n'.join(wrap('TRAIL: ' + crow['RUL_CHANGES'], subsequent_indent=' ' * indent))
                 if 'RUL_CHANGES' in crow and crow['RUL_CHANGES'] else '')
 
     def get_warnings(self):
-        return self._warning_msgs + '\n\nEnd_Of_Message\n' if self._warning_msgs else ''
+        return self._warning_msgs + "\n\nEnd_Of_Message\n" if self._warning_msgs else ""
+
+    def wipe_warnings(self):
+        self._warning_msgs = ""

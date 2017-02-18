@@ -28,7 +28,7 @@ cae.add_option('rciPath', "Import path and file mask for RCI CSV-tci_files", 'C:
 
 cae.add_option('smtpServerUri', "SMTP error notification server URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "SMTP Receiver/To addresses", [], 'r')
+cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", [], 'r')
 cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", [], 'v')
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')

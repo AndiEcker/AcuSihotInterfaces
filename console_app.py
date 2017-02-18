@@ -11,6 +11,8 @@ DEBUG_LEVEL_VERBOSE = 2
 
 MAIN_SECTION_DEF = 'Settings'
 
+DATE_ISO_FULL = '%Y-%m-%d %H:%M:%S.%f'
+
 ori_std_out = sys.stdout
 ori_std_err = sys.stderr
 app_std_out = ori_std_out
@@ -95,9 +97,9 @@ class ConsoleApp:
         self._cfg_parser_env.read('.console_app_env.cfg')
         self._arg_parser = ArgumentParser(description=desc)
 
-        self.add_option('debugLevel', 'Display additional debugging info on console output', debug_level_def, 'D',
+        self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
                         choices=(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE))
-        self.add_option('logFile', 'Copy stdout and stderr into log file', log_file_def, 'L')
+        self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
 
     def add_option(self, name, desc, value, short_opt=None, eval_opt=False, choices=None):
         """ defining and adding an new option for this console app as INI/cfg var and as command line argument.
@@ -161,11 +163,12 @@ class ConsoleApp:
 
         # finished argument parsing - now print chosen option values to the console
         if self._options['debugLevel']['val']:
-            uprint('Debug Level (' + str(DEBUG_LEVEL_VERBOSE) + '=verbose):', self._options['debugLevel']['val'])
+            uprint("Debug Level (" + str(DEBUG_LEVEL_VERBOSE) + "=verbose):", self._options['debugLevel']['val'])
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             uprint("System Environment: argv[0]=", sys.argv[0],
                    "executable=", sys.executable,
                    "cwd=", os.getcwd(),
+                   "__file__=", __file__,
                    "frozen=", getattr(sys, 'frozen', False),
                    "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*') if getattr(sys, 'frozen', False)
                    else os.path.dirname(os.path.abspath(__file__)),
@@ -270,18 +273,16 @@ class ConsoleApp:
 class Progress:
     def __init__(self, debug_level,  # default next message built only if >= DEBUG_LEVEL_VERBOSE
                  start_counter=0, total_count=0,  # pass either start_counter or total_counter (never both)
-                 start_msg='', next_msg='', end_msg='',  # message templates/masks for start, processing and end
-                 err_msg='', nothing_to_do_msg=''):
+                 start_msg="", next_msg="",       # message templates/masks for start, processing and end
+                 end_msg=" ###  Finished processing of {total_count} having {err_counter} failures:{err_msg}",
+                 err_msg=" ###  {err_counter} failures on processing item {run_counter} of {total_count}:{err_msg}",
+                 nothing_to_do_msg=''):
         if not next_msg and debug_level >= DEBUG_LEVEL_VERBOSE:
-            next_msg = ' ###  Processing ID {processed_id}: ' + \
-                       ('left' if start_counter > 0 and total_count == 0 else 'item') + \
-                       ' {run_counter} of {total_count}. {err_counter} errors={err_msg}'
+            next_msg = " ###  Processing '{processed_id}': " + \
+                       ("left" if start_counter > 0 and total_count == 0 else "item") + \
+                       " {run_counter} of {total_count}. {err_counter} errors={err_msg}"
         self._next_msg = next_msg
-        if not end_msg and not err_msg and debug_level >= DEBUG_LEVEL_ENABLED:
-            end_msg = ' ###  Finished processing of {total_count} having {err_counter} failures:{err_msg}'
         self._end_msg = end_msg
-        if not err_msg and debug_level >= DEBUG_LEVEL_VERBOSE:
-            err_msg = ' ###  {err_counter} failures on processing item {run_counter} of {total_count}:{err_msg}'
         self._err_msg = err_msg
 
         self._err_counter = 0
@@ -324,5 +325,8 @@ class Progress:
         if error_msg and self._err_msg:
             uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
                                         err_counter=self._err_counter, err_msg=error_msg))
-        uprint(self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                    err_counter=self._err_counter, err_msg=error_msg))
+        uprint(self.get_end_message(error_msg=error_msg))
+
+    def get_end_message(self, error_msg=''):
+        return self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
+                                    err_counter=self._err_counter, err_msg=error_msg)

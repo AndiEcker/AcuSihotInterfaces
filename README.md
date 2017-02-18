@@ -46,12 +46,12 @@ Most of the available commands are using the same command line options. The foll
 | serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpTo | SMTP Receiver/To addresses | - | r | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
 | timeout | Timeout in seconds for TCP/IP connections | 39.6 | t | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| warningsMailToAddr | Warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SihotResImport, SihotResSync |
+| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SihotResImport, SihotResSync |
 | xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options (apart from `| l |` which is throwing the exception `argparse.ArgumentError: conflicting option string: -l`).

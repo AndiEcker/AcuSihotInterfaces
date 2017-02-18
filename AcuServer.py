@@ -30,7 +30,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 
     cae.add_option('smtpServerUri', "SMTP notification server URI [user[:pw]@]host[:port]", '', 'c')
     cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-    cae.add_option('smtpTo', "SMTP Receiver/To addresses", [], 'r')
+    cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", [], 'r')
 
     uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
     uprint('Server IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
@@ -48,7 +48,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
     if cae.get_option('debugLevel') >= minimum_debug_level:
         if notification:
-            notification.send_notification(msg_text=msg, subject='AcuServer notification')
+            notification.send_notification(msg_body=msg, subject='AcuServer notification')
         else:
             uprint(msg)
 
@@ -197,7 +197,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         # hide timeout or dropped connection error if not verbose debug level
         if TIMEOUT_ERR_MSG not in self.error_message or cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
             if notification:
-                notification.send_notification(msg_text=self.error_message, subject="AcuServer handler notification")
+                notification.send_notification(msg_body=self.error_message, subject="AcuServer handler notification")
             else:
                 uprint("**** " + self.error_message)
 

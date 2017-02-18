@@ -5,7 +5,10 @@
 <CheckMenu@ActionButton>:
     on_press: app.do_checks(self.text)
 
-<CheckItem>:
+<ListMenu@ActionButton>:
+    on_press: app.go_to_board(self.text)
+
+<CheckItem>:    # BoxLayout
     orientation: 'vertical'
     size_hint_y: None
     height: 120
@@ -21,9 +24,10 @@
             on_press: app.do_checks(self.text)
         Label:
             text: root.data_dict['last_check'] if 'last_check' in root.data_dict else ''
-    Label:
-        text: root.data_dict['check_result'] if 'check_result' in root.data_dict else ''
-
+    Button:
+        text: (root.data_dict['check_result'] if isinstance(root.data_dict['check_result'], str) else str(len(root.data_dict['check_result']))) if 'check_result' in root.data_dict else '(no check run)'
+        text_size: self.size
+        on_press: app.go_to_board(root.data_dict['name'])
 
 <MainWindow>:   # @FloatLayout>:
     ActionBar:
@@ -40,26 +44,16 @@
             ActionOverflow:
             ActionGroup:
                 id: board_group
+                dropdown_width: 270
                 text: 'Boards'
             ActionGroup:
                 id: check_group
-                dropdown_width: 180
+                dropdown_width: 270
                 text: 'Checks'
             ActionGroup:
+                id: list_group
+                dropdown_width: 270
                 text: 'Lists'
-                dropdown_width: 180
-                ActionButton:
-                    text: 'Sync Log'
-                    on_press: app.go_to_board('SyncLog')
-                ActionButton:
-                    text: 'Error Log'
-                    on_press: app.go_to_board('ErrLog')
-                ActionButton:
-                    text: 'Unsynced Res.'
-                    on_press: app.go_to_board('UnsyncedRes')
-                ActionButton:
-                    text: 'Unsynced Clients'
-                    on_press: app.go_to_board('UnsyncedClient')
     ScrollView:
         pos: 0, 0
         size_hint: None, None
@@ -71,7 +65,7 @@
                 pos: self.pos
                 size: self.size
         GridLayout:
-            id: check_items
+            id: item_grid
             cols: 1
             size_hint_y: None
             pos: self.parent.x, self.parent.y

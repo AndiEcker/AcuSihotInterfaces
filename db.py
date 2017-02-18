@@ -56,17 +56,17 @@ class OraDB:
             except Exception as ex:
                 return "oraDB-connect cursors " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint('OraDB: Oracle database cursor created')
+            uprint("OraDB: Oracle database cursor created.")
         return ''
 
-    def select(self, table_names, cols=None, where_group_order='', bind_vars=None):
+    def select(self, from_join, cols=None, where_group_order='', bind_vars=None):
         if not cols:
             cols = list('*')
         if not where_group_order:
             where_group_order = '1=1'
         if not bind_vars:
             bind_vars = dict()
-        sq = "select {} from {} where {}".format(','.join(cols), table_names, where_group_order)
+        sq = "select {} from {} where {}".format(','.join(cols), from_join, where_group_order)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint('oraDB-' + sq)
         try:
@@ -81,9 +81,9 @@ class OraDB:
         try:
             rows = self.curs.fetchall()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint('oraDB fetch_all(), 1st of', len(rows), ' rows: ', rows[:1])
+                uprint("oraDB fetch_all(), 1st of", len(rows), "rows:", rows[:1])
         except Exception as ex:
-            uprint('oraDB fetch_all() exception: ' + str(ex))
+            uprint("oraDB fetch_all() exception: " + str(ex))
             rows = None
         return rows if rows else []
 
@@ -91,52 +91,52 @@ class OraDB:
         try:
             val = self.curs.fetchone()[col_idx]
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint('oraDB fetch_value() value: ', val)
+                uprint("oraDB fetch_value() value: ", val)
         except Exception as ex:
-            uprint('oraDB fetch_value() exception: ' + str(ex))
+            uprint("oraDB fetch_value() exception: " + str(ex))
             val = None
         return val
 
     def insert(self, table_name, col_values, commit=False):
-        sq = 'insert into ' + table_name + ' (' + ', '.join(col_values.keys()) \
-             + ') values (:' + ', :'.join(col_values.keys()) + ')'
+        sq = "insert into " + table_name + " (" + ", ".join(col_values.keys()) \
+             + ") values (:" + ", :".join(col_values.keys()) + ")"
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint('oraDB.insert() query: ', sq)
+            uprint("oraDB.insert() query:", sq)
         try:
             self.curs.execute(sq, **col_values)
             if commit:
                 self.conn.commit()
         except Exception as ex:
-            return 'oraDB insert-execute error: ' + str(ex)
+            return "oraDB insert-execute error: " + str(ex)
         return ''
 
     def update(self, table_name, col_values, where='', commit=False):
         if not where:
-            where = '1=1'
-        sq = 'update ' + table_name + ' set ' + ', '.join([c + ' = :' + c for c in col_values.keys()]) \
-             + ' where ' + where
+            where = "1=1"
+        sq = "update " + table_name + " set " + ", ".join([c + " = :" + c for c in col_values.keys()]) \
+             + " where " + where
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint('oraDB.update() query: ', sq)
+            uprint("oraDB.update() query:", sq)
         try:
             self.curs.execute(sq, **col_values)
             if commit:
                 self.conn.commit()
         except Exception as ex:
-            return 'oraDB update-execute error: ' + str(ex)
+            return "oraDB update-execute error: " + str(ex)
         return ''
 
     def commit(self):
         try:
             self.conn.commit()
         except Exception as ex:
-            return 'oraDB commit error: ' + str(ex)
+            return "oraDB commit error: " + str(ex)
         return ''
 
     def rollback(self):
         try:
             self.conn.rollback()
         except Exception as ex:
-            return 'oraDB rollback error: ' + str(ex)
+            return "oraDB rollback error: " + str(ex)
         return ''
 
     def prepare_ref_param(self, value=None):
@@ -180,11 +180,11 @@ class OraDB:
         try:
             if self.curs:
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint('oraDB closing cursor')
+                    uprint("oraDB closing cursor")
                 self.curs.close()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint('oraDB closing connection')
+                uprint("oraDB closing connection")
             self.conn.close()
         except Exception as ex:
-            err_msg += 'oraDB close error: ' + str(ex)
+            err_msg += "oraDB close error: " + str(ex)
         return err_msg

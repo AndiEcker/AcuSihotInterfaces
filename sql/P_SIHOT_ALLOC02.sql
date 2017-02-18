@@ -1,23 +1,34 @@
 create or replace procedure LOBBY.SIHOT_ALLOC
-                            (pcAction         IN varchar,                       -- CI=Check-in, CO=Check-out, RM=Room move/Transfer
-                             pcApt            IN T_AP.AP_CODE%type              -- Acumen apartment number (for 3-digit PBC apartments without leading zero/0)
+                            (pcExtraInfo      IN OUT varchar2,                  -- IN: sihot xml request, OUT: ARO changes
+                             pcAction         IN varchar2,                      -- CI=Check-in, CO=Check-out, RM=Room move/Transfer
+                             pcApt            IN T_AP.AP_CODE%type,             -- new Acumen apartment number (for 3-digit PBC apartments without leading zero/0)
+                             pcOldApt         IN T_AP.AP_CODE%type := NULL      -- old Acumen apartment number
                             ) 
 IS
-
+  lcCheckOutInfo    varchar2(2000) := '';
+  lcCheckInInfo     varchar2(2000) := '';
 BEGIN
+  
   if pcAction in ('CO', 'RM') then
+    select f_stragg(to_char(ARO_CODE) || ':' || ARO_APREF || '=' || to_char(ARO_STATUS) || '@' || to_char(ARO_EXP_ARRIVE, 'DD-MM-YY')) into lcCheckOutInfo from T_ARO
+     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - 2 and ARO_EXP_DEPART;
     update T_ARO set ARO_TIMEOUT = sysdate,
                      ARO_STATUS = case when pcAction = 'RM' then 320 else 390 end
-     where ARO_STATUS = 300 and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_DEPART;
+     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - 2 and ARO_EXP_DEPART;
   end if;        
   if pcAction in ('CI', 'RM') then
+    select f_stragg(to_char(ARO_CODE) || ':' || ARO_APREF || '=' || to_char(ARO_STATUS) || '@' || to_char(ARO_EXP_ARRIVE, 'DD-MM-YY')) into lcCheckInInfo from T_ARO
+     where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + 2;
     update T_ARO set ARO_TIMEIN = sysdate,
                      ARO_STATUS = case when pcAction = 'RM' then 330 else 300 end
-     where ARO_STATUS = 200 and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_DEPART;
+     where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + 2;
   end if;
+  pcExtraInfo := case when lcCheckOutInfo is not NULL then 'CO' || lcCheckOutInfo end || case when lcCheckInInfo is not NULL then 'CI' || lcCheckInInfo end;
 END
 /*
   ae:14-12-16 first beta - for SIHOT sync/migration project.
+  ae:03-02-17 changed the valid check-in/-out date range from exp_arrive..depart to arrive..arrive+2 for checkin and depart-2..depart for checkouts - QD HOTFIX.
+  ae:08-02-17 V02: added IN OUT parameter.
 */;
 /
 

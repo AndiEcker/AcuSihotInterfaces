@@ -8,7 +8,7 @@ class Notification:
     def __init__(self, smtp_server_uri, mail_from, mail_to, local_mail_host='', used_system='', mail_body_footer='',
                  debug_level=DEBUG_LEVEL_DISABLED):
         if debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint('new Notification({}, {}, {}, {}, {}).'
+            uprint(' ###  New Notification({}, {}, {}, {}, {}).'
                    .format(smtp_server_uri, mail_from, mail_to, local_mail_host, used_system))
         # split smtp server URI into host, user, pw and port
         if '@' in smtp_server_uri:    # [user[:password]@]mail_server_host[:mail_server_port]
@@ -39,23 +39,37 @@ class Notification:
         self._mail_body_footer = mail_body_footer
         self.debug_level = debug_level
 
-    def send_notification(self, msg_text, subject=None, mail_to=None):
+    def send_notification(self, msg_body, subject=None, mail_to=None, data_dict=None):
+        if self._mail_body_footer:
+            msg_body += '\n' + self._mail_body_footer
         if not subject:
             subject = 'Notification'
         if self._used_system:
             subject += ' [' + self._used_system + ']'
-        if self._mail_body_footer:
-            msg_text += '\n' + self._mail_body_footer
+        if not mail_to:
+            mail_to = self._mail_to
+        if isinstance(mail_to, str):
+            mail_to_expr = mail_to
+            try:
+                mail_to = eval(mail_to_expr)  # data_dict for to check data, subject/msg_body for to mail content
+            except Exception as ex:
+                uprint(" **** Notification.send_notification() exception '" + str(ex) +
+                       "' on evaluating of expression '" + str(mail_to_expr) +
+                       "' with subject='" + subject + "' and data_dict='" + str(data_dict) + "'.")
+        if not isinstance(mail_to, list):
+            uprint(" **** Notification.send_notification(): invalid email-to address list or expression '" +
+                   str(mail_to) + "' - using ITDevmen fallback!")
+            mail_to = ['ITDevmen@acumen.es']
 
         # log error message and try to send it per email
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint('send_notification(): "{}" with subject "{}".'.format(msg_text, subject))
+            uprint(' #### Notification.send_notification(): "{}" with subject "{}".'.format(msg_body, subject))
         err_msg = ''
         try:
-            message = MIMEText(msg_text)
+            message = MIMEText(msg_body)
             message['Subject'] = subject
             message['From'] = self._mail_from
-            message['To'] = ', '.join(mail_to if mail_to else self._mail_to)
+            message['To'] = ', '.join(mail_to)
             # Oracle P_SENDMAIL() is using smtp server as local host
             # SMTP_SSL always throws "SSL:UNKNOWN_PROTOCOL" error: with (SMTP_SSL if self._mail_port == 587 else SMTP)\
             with SMTP(self._mail_host, self._mail_port, local_hostname=self._local_mail_host) as s:
@@ -72,6 +86,6 @@ class Notification:
             err_msg = 'mail send exception: {}'.format(mex)
 
         if err_msg and self.debug_level >= DEBUG_LEVEL_ENABLED:
-            uprint('send_notification() error: {}.'.format(err_msg))
+            uprint(' **** Notification.send_notification() error: {}.'.format(err_msg))
 
         return err_msg
