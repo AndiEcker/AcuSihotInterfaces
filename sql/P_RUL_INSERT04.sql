@@ -1,5 +1,6 @@
 create or replace procedure LOBBY.RUL_INSERT
-                            (pcAction         IN T_RUL.RUL_ACTION%type,
+                            (pcCaller         IN varchar2,
+                             pcAction         IN T_RUL.RUL_ACTION%type,
                              pcChanges        IN T_RUL.RUL_CHANGES%type,        -- with leading chr(13) seperator
                              pcBoardRef       IN T_LU.LU_ID%type,
                              pnCode           IN T_RU.RU_CODE%type := NULL,     -- RU_CODE if called from RU trigger or PRC_CODE if called from PRC trigger
@@ -29,7 +30,6 @@ IS
   lcSihotPack   varchar2(3 byte);
   lcPackPrefix  varchar2(12 byte) := '';
   lnPos         integer;
-  lcCaller      varchar2(1 byte);
   lcAction      T_RUL.RUL_ACTION%type;
   lcAFT_Suffix  varchar2(12 byte);
   
@@ -49,16 +49,15 @@ IS
 BEGIN
   lcAction := pcAction;
   -- determine caller and if either lcApRef or lcAtGeneric/lcResort need to be fetched
-  select case when pcApRef is not NULL then 'A' when pcAtGeneric is not NULL then 'R' else 'M' end into lcCaller from dual;
-  if lcCaller = 'R' then         -- called from T_RU or R_RH-update triggers
+  if pcCaller = 'R' then         -- called from T_RU or R_RH-update triggers
     lnRU_Code := pnCode;
-    lcApRef := F_RU_ARO_APT(pnRHRef, pdFrom, pdTo);
+    lcApRef := F_RH_ARO_APT(pnRHRef, pdFrom, pdTo);
     if lcApRef is NULL then
       lcAtGeneric := pcAtGeneric;
       lcResort := pcResort;
     end if;
-  elsif lcCaller = 'A' then   -- called from T_ARO triggers
-    lnRU_Code := F_ARO_RU_CODE(pnRHRef, pdFrom, pdTo);
+  elsif pcCaller = 'A' then   -- called from T_ARO triggers
+    lnRU_Code := pnCode;    -- F_ARO_RU_CODE(pnRHRef, pdFrom, pdTo) incorrect for multiple RUs per ARO (now determined correctly by P_RH_RUL_INSERT() and passed into pnCode)
     if pcAction = 'DELETE' then   -- .. with DELETE action or cancellation (ARO_STATUS => 120): wipe RUL_SIHOT_ROOM column
       open  cRU;
       fetch cRU into lcAtGeneric, lcResort;
@@ -72,11 +71,12 @@ BEGIN
     fetch cMkt into rMkt;
     close cMkt;
     lnRU_Code := rMkt.RU_CODE;
-    lcApRef := F_RU_ARO_APT(rMkt.ML_RHREF, rMkt.ML_REQARRIVAL_DATE, rMkt.ML_REQDEPART_DATE);
-    if lcApRef is NULL then
+    if pcApRef is NULL then
       open  cRU;
       fetch cRU into lcAtGeneric, lcResort;
       close cRU;
+    else
+      lcApRef := pcApRef;
     end if;
   end if;
 
@@ -104,23 +104,23 @@ BEGIN
   -- translate board ref into SIHOT package value - last trigger is always overwriting
   lcBoardRef := pcBoardRef;
   if nvl(lcBoardRef, 'N') = 'N' then   -- called from RU/RH/PRC and apartment exists - check for ARO board overload
-    if lcCaller = 'M' then
-      lcBoardRef := F_RU_ARO_BOARD(rMkt.ML_RHREF, rMkt.ML_REQARRIVAL_DATE, rMkt.ML_REQDEPART_DATE, lcCaller);
+    if pcCaller = 'M' then
+      lcBoardRef := F_RU_ARO_BOARD(rMkt.ML_RHREF, rMkt.ML_REQARRIVAL_DATE, rMkt.ML_REQDEPART_DATE, pcCaller);
     else
-      lcBoardRef := F_RU_ARO_BOARD(pnRHRef, pdFrom, pdTo, lcCaller);
+      lcBoardRef := F_RU_ARO_BOARD(pnRHRef, pdFrom, pdTo, pcCaller);
     end if;
   end if;
   lnPos := instr(lcBoardRef, '_'); 
   if lnPos >= 2 then  -- >=2 for to not confuse with BOARDREF='_'
     lcPackPrefix := substr(lcBoardRef, 1, lnPos);
     lcBoardRef := substr(lcBoardRef, lnPos + 1);
-  elsif lcCaller = 'M' then
+  elsif pcCaller = 'M' then
     lcPackPrefix := 'MKT_';   -- actually not needed because PRC_UPDATE is always adding this prefix
   end if;
   lcSihotPack := F_SIHOT_PACK(lcBoardRef, lcPackPrefix);
   
   -- insert log entry or on T_ARO trigger call try first to update SIHOT columns of unsynced RUL record either with ARO/PRC overloads or current RU values
-  if lcCaller != 'R' then
+  if pcCaller != 'R' then
     -- for better receycling use V_ACU_RES_LOG not _UNSYNCED: select RUL_CODE into lnRUL_Code from V_ACU_RES_UNSYNCED where RU_CODE = lnRU_Code;
     open  cRUL;
     fetch cRUL into lnRUL_Code;
@@ -131,9 +131,9 @@ BEGIN
                      RUL_ACTION = lcAction,
                      RUL_DATE = sysdate,     -- reset ARL_DATE value for to be synchronized  
                      RUL_CHANGES = substr(pcChanges || chr(13) || RUL_CHANGES, 2, CHANGES_LEN),
-                     RUL_MAINPROC = substr(k.ExecutingMainProc || lcCaller || RUL_MAINPROC, 1, PROC_LEN), 
-                     RUL_SUBPROC = substr(k.ExecutingSubProc || lcCaller || RUL_SUBPROC, 1, PROC_LEN), 
-                     RUL_SPACTION = substr(k.ExecutingAction || lcCaller || RUL_SPACTION, 1, PROC_LEN), 
+                     RUL_MAINPROC = substr(k.ExecutingMainProc || pcCaller || RUL_MAINPROC, 1, PROC_LEN), 
+                     RUL_SUBPROC = substr(k.ExecutingSubProc || pcCaller || RUL_SUBPROC, 1, PROC_LEN), 
+                     RUL_SPACTION = substr(k.ExecutingAction || pcCaller || RUL_SPACTION, 1, PROC_LEN), 
                      RUL_SIHOT_CAT = lcSihotCat, 
                      RUL_SIHOT_HOTEL = lnSihotHotel, 
                      RUL_SIHOT_PACK = lcSihotPack,
@@ -152,7 +152,7 @@ BEGIN
              lcApRef, pnObjId, pcRate);
   else
     P_SENDMAIL('Sales.System@silverpoint.com', 'Andreas.Ecker@signallia.com', 'Insert NULL into RUL_PRIMARY',
-               'Caller=' || lcCaller || ' Usr=' || USER || ' Act=' || lcAction || case when pcAction <> lcAction then '(' || pcAction || ')' end || ' Date=' || sysdate 
+               'Caller=' || pcCaller || ' Usr=' || USER || ' Act=' || lcAction || case when pcAction <> lcAction then '(' || pcAction || ')' end || ' Date=' || sysdate 
                || ' Changes=[' || substr(pcChanges, 2) || '] ProcStack=[' || trim(k.ExecutingMainProc) || '/' || trim(k.ExecutingSubProc) || '/' || trim(k.ExecutingAction) || '] Code=' || pnCode
                || ' Cat=' || lcSihotCat || ' AftSuff=' || lcAFT_Suffix || ' Hot=' || lnSihotHotel
                || ' Pack=' || lcSihotPack || case when lcPackPrefix is not NULL then ':' || lcPackPrefix end || ' Board=' || lcBoardRef 
@@ -170,6 +170,7 @@ END
   ae:28-11-16 V01: refactored call to F_SIHOT_CAT for to support one paid requested apartment feature.
   ae:27-12-16 V02: added lcCaller parameter to call of F_RU_ARO_BOARD to prevent mutating PRC cursor.
   ae:11-01-17 V03: prevent INSERT into RUL if RUL_PRIMARY value is NULL and added temporary notification for further checkings. 
+  ae:21-02-17 V04: changed to detect T_ARO call by pnCode is NULL (instead of pcApRef is not NULL) because now P_RH_RUL_INSERT() is passing always the current associated apartment and added pcCaller parameter (replacing lcCaller). 
 */;
 /
 

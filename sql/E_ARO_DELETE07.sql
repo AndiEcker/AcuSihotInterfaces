@@ -1,5 +1,5 @@
 create or replace trigger LOBBY.ARO_DELETE
-  BEFORE DELETE
+  AFTER DELETE
 ON LOBBY.APT_RES_OCC REFERENCING OLD AS OLD NEW AS NEW
 for each row
 DECLARE
@@ -100,15 +100,16 @@ BEGIN
   if lcChanges is not null then
     insert into T_AROL --LOBBY.APT_RES_OCC_LOG
       values(APT_RES_OCC_LOG_SEQ.nextval, USER, 'DELETE', SYSDATE, :OLD.ARO_CODE, substr(lcChanges, 2, 1999), k.ExecutingMainProc, k.ExecutingSubProc, k.ExecutingAction);
-    P_RUL_INSERT('DELETE', lcChanges, :OLD.ARO_BOARDREF, NULL, :OLD.ARO_APREF, :OLD.ARO_RHREF, :OLD.ARO_EXP_ARRIVE, :OLD.ARO_EXP_DEPART);
+    P_RH_RUL_INSERT('A', 'DELETE', lcChanges, :OLD.ARO_BOARDREF, NULL, :OLD.ARO_APREF, :OLD.ARO_RHREF, :OLD.ARO_EXP_ARRIVE, :OLD.ARO_EXP_DEPART);
   end if;
 END
 /*
-    jm:23-05-10 removed redundant aro_flight cols logging
-    ae:09-09-12 added ARO_BOARDREF.
-    ae:18-09-13 added ARO_BABIES.
-    ae:06-03-15 V05: added ARO_BOARD_ADULTS and ARO_BOARD_CHILDREN.
-    ae:06-08-16 V06: added population of the new RUL_SIHOT* columns.
+  jm:23-05-10 removed redundant aro_flight cols logging
+  ae:09-09-12 added ARO_BOARDREF.
+  ae:18-09-13 added ARO_BABIES.
+  ae:06-03-15 V05: added ARO_BOARD_ADULTS and ARO_BOARD_CHILDREN.
+  ae:06-08-16 V06: added population of the new RUL_SIHOT* columns.
+  ae:21-02-17 V07: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and changed trigger type from BEFORE DELETE to AFTER DELETE and added pcCaller parameter to call of P_RUL_INSERT(). 
 */
 ;
 /

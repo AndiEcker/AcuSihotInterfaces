@@ -4,7 +4,9 @@ from db import OraDB
 class Data:
     def __init__(self, acu_user, acu_password, acu_dsn):
         db = OraDB(usr=acu_user, pwd=acu_password, dsn=acu_dsn)
-        db.connect()
+        self.error_message = db.connect()
+        if self.error_message:
+            print(self.error_message)
 
         any_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_ANY'")
         bhc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHC'")
@@ -13,7 +15,9 @@ class Data:
 
         self.ap_cats = self.load_view(db, 'T_AP', ['AP_CODE', 'AP_SIHOT_CAT'], "F_RESORT(AP_CODE) in ('BHC', 'PBC')")
 
-        self.ro_agencies = self.load_view(db, 'T_RO', ['RO_CODE', 'RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
+        self.ro_agencies = self.load_view(db, 'T_RO',
+                                          ['RO_CODE', 'RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC', 'RO_SIHOT_RATE',
+                                           'RO_RES_GROUP'],
                                           "RO_SIHOT_AGENCY_OBJID is not NULL")
 
         db.close()
@@ -30,6 +34,13 @@ class Data:
 
     def get_ro_agency_matchcode(self, ro_code):
         return next((cols[2] for cols in self.ro_agencies if cols[0] == ro_code), None)
+
+    def get_ro_sihot_mkt_seg(self, ro_code):
+        sihot_mkt_seg = next((cols[3] for cols in self.ro_agencies if cols[0] == ro_code), None)
+        return sihot_mkt_seg if sihot_mkt_seg else ro_code
+
+    def get_ro_res_group(self, ro_code):
+        return next((cols[4] for cols in self.ro_agencies if cols[0] == ro_code), None)
 
     def get_size_cat(self, rs_code, ap_size, ap_feats=None, allow_any=True):
         found = None
@@ -61,4 +72,3 @@ class Data:
 
     def get_room_cat(self, room_no):
         return next((cols[1] for cols in self.ap_cats if cols[0] == room_no), None)
-

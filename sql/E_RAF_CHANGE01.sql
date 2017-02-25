@@ -32,9 +32,11 @@ BEGIN
   open  cRO;
   fetch cRO into lcRate;
   close cRO;
-  P_RUL_INSERT('UPDATE', 'RAF_' || lcAction || ' (' || lnAftRef || ')', rRU.RU_BOARDREF, lnPrimary, NULL, rRU.RU_RHREF, rRU.RU_FROM_DATE, rRU.RU_FROM_DATE + rRU.RU_DAYS, rRU.RU_ATGENERIC, rRU.RU_RESORT, rRU.RU_SIHOT_OBJID, lcRate, lnAftRef);
+  P_RUL_INSERT('R', 'UPDATE', 'RAF_' || lcAction || ' (' || lnAftRef || ')', rRU.RU_BOARDREF, lnPrimary, NULL, rRU.RU_RHREF, rRU.RU_FROM_DATE, rRU.RU_FROM_DATE + rRU.RU_DAYS, rRU.RU_ATGENERIC, rRU.RU_RESORT, 
+               rRU.RU_SIHOT_OBJID, lcRate, lnAftRef);
 END;
 /*
-  ae:28-11-2016 first beta version.
+  ae:28-11-16 first beta version.
+  ae:21-02-17 V01: added pcCaller parameter to call of P_RUL_INSERT().
 */
 /

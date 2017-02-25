@@ -172,12 +172,16 @@ BEGIN
 
   if lcChanges is not null then
     insert into T_AROL --LOBBY.APT_RES_OCC_LOG
-      values(APT_RES_OCC_LOG_SEQ.nextval, USER, 'UPDATE', SYSDATE, :NEW.ARO_CODE, substr(lcChanges,2,1999), k.ExecutingMainProc, k.ExecutingSubProc, k.ExecutingAction);
+      values(APT_RES_OCC_LOG_SEQ.nextval, USER, 'UPDATE', SYSDATE, :NEW.ARO_CODE, substr(lcChanges, 2, 1999), k.ExecutingMainProc, k.ExecutingSubProc, k.ExecutingAction);
     -- don't sync check-ins, transfers nor check-outs (mostly done within Sihot and changed in T_ARO by AcuServer - see AcuServer.py/alloc_trigger())
-    if instr(lcChanges, 'ARO_STATUS (300 >> 320)') = 0 and instr(lcChanges, 'ARO_STATUS (300 >> 390)') = 0 and instr(lcChanges, 'ARO_STATUS (200 >> 330)') = 0 and instr(lcChanges, 'ARO_STATUS (200 >> 300)') = 0 then
-      -- changed ARO_RHREF from :NEW to :OLD because on executing this trigger the RU is still on the old header (especially on P_RESL_APT_LINK() actions)
-      P_RUL_INSERT(case when :NEW.ARO_STATUS = 120 and :OLD.ARO_STATUS <> 120 then 'DELETE' else 'UPDATE' end, lcChanges, :NEW.ARO_BOARDREF, NULL, :NEW.ARO_APREF, 
-                   case when k.ExecutingMainProc = '$LinkResAdd' then :OLD.ARO_RHREF else :NEW.ARO_RHREF end, :NEW.ARO_EXP_ARRIVE, :NEW.ARO_EXP_DEPART);
+    if not (:OLD.ARO_STATUS >= 300 or :NEW.ARO_STATUS >= 300) then
+      -- deallocate apt on request linking (P_RESL_APT_LINK()), shrinked date range or room deallocation
+      if :OLD.ARO_RHREF <> :NEW.ARO_RHREF 
+      or :OLD.ARO_EXP_ARRIVE < :NEW.ARO_EXP_ARRIVE or :OLD.ARO_EXP_DEPART > :NEW.ARO_EXP_DEPART
+      or :NEW.ARO_STATUS = 120 and :OLD.ARO_STATUS <> 120 then
+        P_RH_RUL_INSERT('A', 'DELETE', lcChanges, :OLD.ARO_BOARDREF, NULL, :OLD.ARO_APREF, :OLD.ARO_RHREF, :OLD.ARO_EXP_ARRIVE, :OLD.ARO_EXP_DEPART);
+      end if;
+      P_RH_RUL_INSERT('A', 'UPDATE', lcChanges, :NEW.ARO_BOARDREF, NULL, :NEW.ARO_APREF, :NEW.ARO_RHREF, :NEW.ARO_EXP_ARRIVE, :NEW.ARO_EXP_DEPART);
     end if;
   end if;
 END
@@ -189,6 +193,7 @@ END
   ae:12-06-14 added log entries for T_LOG.
   ae:06-03-15 added ARO_BOARD_ADULTS and ARO_BOARD_CHILDREN.
   ae:19-07-16 V08: added notification on change of resOcc type from flybuy to keys.
-  ae:06-08-15 V09: added population of the new RUL_SIHOT* columns and unsync-block on apt. check-in. 
+  ae:06-08-15 V09: added population of the new RUL_SIHOT* columns and unsync-block on apt. check-in.
+  ae:21-02-17 V10: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and added pcCaller parameter to call of P_RUL_INSERT().
 */;
 /

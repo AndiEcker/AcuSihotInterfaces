@@ -5,29 +5,44 @@
     padding: [24, 18]
     cols_minimum: {1: 240}
     Label:
-        size_hint_y: .12
+        size_hint_y: .09
         text: "User"
-    TextInput:
+    CapitalInput:
         id: user_name
-        size_hint_y: .12
+        size_hint_y: .09
+        write_tab: False
+        multiline: False
         text: app.user_name
     Label:
-        size_hint_y: .12
+        size_hint_y: .09
         text: "Password"
     TextInput:
         id: user_password
-        size_hint_y: .12
-        test: app.user_password
-        focus: True
+        size_hint_y: .09
+        write_tab: False
+        multiline: False
+        password: True
+        focus: app.user_name
+        text: app.user_password
     Label:
-        text: "Progress (" + str(app.file_count) + " files)"
-    ProgressBar:
+        size_hint_y: .69
+        text: str(app.file_count) + " file(s) found: " + app.file_names
+        text_size: self.size
+        halign: 'justify'
+        valign: 'top'
+    ScrollView:
+        size_hint_y: .9
+        Label:
+            id: error_log
+            text_size: self.parent.width, None
+            size: self.texture_size
     Button:
+        id: import_button
         size_hint_y: .27
-        text: 'Cancel'
-        on_press: app.exit_app()
-    Button:
-        size_hint_y: .27
-        text: 'Import'
+        text: "Import " + str(app.file_count) + " file(s)"
         on_press: app.run_import()
-        disabled: app.file_count == 0 or user_password.text == ''
+        disabled: app.file_count == 0 or user_name.text == '' or user_password.text == ''
+    Button:
+        size_hint_y: .27
+        text: "Exit"
+        on_press: app.exit_app()

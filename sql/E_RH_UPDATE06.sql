@@ -12,12 +12,6 @@ DECLARE
      where RU_RHREF = :NEW.RH_CODE and RU_FROM_DATE = :OLD.RH_FROM_DATE and RU_STATUS <> 120
        and d.CUA_CODE = RU_UAREF and d.CUA_TRANS_GROUP = c.CUA_TRANS_GROUP;
   
-  cursor cRU is
-    select RU_CODE, RU_RHREF, RU_FROM_DATE, RU_DAYS, RU_BOARDREF, RU_ATGENERIC, RU_RESORT, RU_SIHOT_OBJID
-         , RO_SIHOT_RATE
-      from T_RU, T_RO
-     where RU_ROREF = RO_CODE and RU_RHREF = :NEW.RH_CODE;
-   
 BEGIN
   open  cCUA_CR;
   fetch cCUA_CR into lcWKCode;
@@ -117,26 +111,25 @@ BEGIN
      or :NEW.RH_EXT_BOOK_DATE <> :OLD.RH_EXT_BOOK_DATE then
     P_INSERT_LOG_ENTRY('UPDATE', 'RESERVATION_HEADER', 'RH_EXT_BOOK_DATE', :NEW.RH_CODE, :OLD.RH_EXT_BOOK_DATE, :NEW.RH_EXT_BOOK_DATE, lcWKCode);
     lcChanges := lcChanges || chr(13) || 'RH_EXT_BOOK_DATE (' || to_char(:OLD.RH_EXT_BOOK_DATE, 'DD MON YYYY  HH24:MI:SS') || ' >> ' || to_char(:NEW.RH_EXT_BOOK_DATE, 'DD MON YYYY  HH24:MI:SS') || ')';
-    lcRUChanges := lcChanges || chr(13) || 'RH_EXT_BOOK_DATE (' || to_char(:OLD.RH_EXT_BOOK_DATE, 'DD MON YYYY  HH24:MI:SS') || ' >> ' || to_char(:NEW.RH_EXT_BOOK_DATE, 'DD MON YYYY  HH24:MI:SS') || ')';
+    lcRUChanges := lcRUChanges || chr(13) || 'RH_EXT_BOOK_DATE (' || to_char(:OLD.RH_EXT_BOOK_DATE, 'DD MON YYYY  HH24:MI:SS') || ' >> ' || to_char(:NEW.RH_EXT_BOOK_DATE, 'DD MON YYYY  HH24:MI:SS') || ')';
   end if;
-  if lcChanges is not NULL then
+  if lcChanges is not NULL then   -- if lcChanges is not NULL then lcRUChanges is also not NULL
     lcChanges := substr(lcChanges, 2, 1999);
     insert into T_RHL -- LOBBY.RESERVATION_HEADER_LOG
       values (RESERVATION_HEADER_LOG_SEQ.nextval, USER, 'UPDATE', SYSDATE, :OLD.RH_CODE, lcChanges, k.ExecutingMainProc, k.ExecutingSubProc, k.ExecutingAction);
     if lcRUChanges is not NULL then
       -- P_RUL_INSERT() does this for us: lcRUChanges := substr(lcRUChanges, 2, 1999);
-      for rRU in cRU loop
-        P_RUL_INSERT('UPDATE', lcRUChanges, rRU.RU_BOARDREF, rRU.RU_CODE, NULL, rRU.RU_RHREF, rRU.RU_FROM_DATE, rRU.RU_FROM_DATE + rRU.RU_DAYS, rRU.RU_ATGENERIC, rRU.RU_RESORT, rRU.RU_SIHOT_OBJID, rRU.RO_SIHOT_RATE);
-      end loop;
+      P_RH_RUL_INSERT('R', 'UPDATE', lcRUChanges, NULL, NULL, NULL, :NEW.RH_CODE, :NEW.RH_FROM_DATE, :NEW.RH_TO_DATE);
     end if;
   end if;
 END;
 /*
-   ae:06-11-12  added RH_GROUP_ID column.
-   ae:12-02-13  added RH_EXT_BOOK_REF (replacing unused RH_RTREF).
-   ae:04-09-13  removed unused RH_NOADULTS/RH_NOCHILD columns.
-   ae:12-06-14  added log entries for T_LOG.
-   ae:07-10-16  V05: added call to P_RUL_INSERT() for sihot sync project.
+  ae:06-11-12 added RH_GROUP_ID column.
+  ae:12-02-13 added RH_EXT_BOOK_REF (replacing unused RH_RTREF).
+  ae:04-09-13 removed unused RH_NOADULTS/RH_NOCHILD columns.
+  ae:12-06-14 added log entries for T_LOG.
+  ae:07-10-16 V05: added call to P_RUL_INSERT() for sihot sync project.
+  ae:21-02-17 V06: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and fixed bug with changed RH_EXT_BOOK_DATE (using lcChanges instead of lcRUChanges) and added pcCaller parameter to call of P_RUL_INSERT(). 
 */
 /
 

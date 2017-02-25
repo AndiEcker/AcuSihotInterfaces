@@ -103,15 +103,16 @@ BEGIN
                case when k.ExecutingMainProc is not NULL then k.ExecutingMainProc when k.ProcedureStack is not NULL then substr(k.ProcedureStack, 1, 50)  else sys_context('USERENV', 'host') end,
                case when k.ExecutingSubProc is not NULL then k.ExecutingSubProc   when k.ProcedureStack is not NULL then substr(k.ProcedureStack, 51, 50) else sys_context('USERENV', 'os_user') end,
                case when k.ExecutingAction is not NULL then k.ExecutingAction     when k.ProcedureStack is not NULL then substr(k.ProcedureStack, 101,50) else sys_context('USERENV', 'sessionid') end);
-    P_RUL_INSERT('UPDATE', lcChanges, :NEW.ARO_BOARDREF, NULL, :NEW.ARO_APREF, :NEW.ARO_RHREF, :NEW.ARO_EXP_ARRIVE, :NEW.ARO_EXP_DEPART);
+    P_RH_RUL_INSERT('A', 'UPDATE', lcChanges, :NEW.ARO_BOARDREF, NULL, :NEW.ARO_APREF, :NEW.ARO_RHREF, :NEW.ARO_EXP_ARRIVE, :NEW.ARO_EXP_DEPART);
   end if;
 END
 /*
-    jm:23-05-10 removed redundant aro_flight cols logging
-    ae:09-09-12 added ARO_BOARDREF.
-    ae:18-09-13 added ARO_BABIES.
-    ae:06-03-15 V04: added ARO_BOARD_ADULTS and ARO_BOARD_CHILDREN.
-    ae:06-08-15 V05: added population of the new RUL_SIHOT* columns.
+  jm:23-05-10 removed redundant aro_flight cols logging
+  ae:09-09-12 added ARO_BOARDREF.
+  ae:18-09-13 added ARO_BABIES.
+  ae:06-03-15 V04: added ARO_BOARD_ADULTS and ARO_BOARD_CHILDREN.
+  ae:06-08-15 V05: added population of the new RUL_SIHOT* columns.
+  ae:21-02-17 V06: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and added pcCaller parameter to call of P_RUL_INSERT(). 
 */
 ;
 /

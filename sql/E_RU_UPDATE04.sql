@@ -169,7 +169,7 @@ BEGIN
     open  cRO;
     fetch cRO into lcRate;
     close cRO;
-    P_RUL_INSERT('UPDATE', lcChanges, :NEW.RU_BOARDREF, :NEW.RU_CODE, NULL, :NEW.RU_RHREF, :NEW.RU_FROM_DATE, :NEW.RU_FROM_DATE + :NEW.RU_DAYS, :NEW.RU_ATGENERIC, :NEW.RU_RESORT, :NEW.RU_SIHOT_OBJID, lcRate);
+    P_RUL_INSERT('R', 'UPDATE', lcChanges, :NEW.RU_BOARDREF, :NEW.RU_CODE, NULL, :NEW.RU_RHREF, :NEW.RU_FROM_DATE, :NEW.RU_FROM_DATE + :NEW.RU_DAYS, :NEW.RU_ATGENERIC, :NEW.RU_RESORT, :NEW.RU_SIHOT_OBJID, lcRate);
   end if;
 
 END
@@ -181,6 +181,7 @@ END
   ae:09-09-12 added RU_BOARDREF.
   ae:12-06-14 V01: refactored and extended logging into T_LOG by using P_INSERT_LOG_ENTRY instead of insert into T_LOG.
   ae:05-08-16 V02: added population of the new RUL_SIHOT* columns and added log for new RU_SIHOT_OBJID column.
-  ae:02-10-16 V03: added RU_FLIGHT_AIRPORT column.
+  ae:02-10-16 V03: added RU_FLIGHT_AIRPORT column and.
+  ae:21-02-17 V04: added pcCaller parameter to call of P_RUL_INSERT().
 */;
 /

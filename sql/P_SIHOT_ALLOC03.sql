@@ -19,7 +19,8 @@ BEGIN
   if pcAction in ('CI', 'RM') then
     select f_stragg(to_char(ARO_CODE) || ':' || ARO_APREF || '=' || to_char(ARO_STATUS) || '@' || to_char(ARO_EXP_ARRIVE, 'DD-MM-YY')) into lcCheckInInfo from T_ARO
      where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + 2;
-    update T_ARO set ARO_TIMEIN = sysdate,
+    update T_ARO set ARO_TIMEIN = sysdate, 
+                     ARO_RECD_KEY = sysdate + 1 / (24 * 60),
                      ARO_STATUS = case when pcAction = 'RM' then 330 else 300 end
      where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + 2;
   end if;
@@ -29,6 +30,7 @@ END
   ae:14-12-16 first beta - for SIHOT sync/migration project.
   ae:03-02-17 changed the valid check-in/-out date range from exp_arrive..depart to arrive..arrive+2 for checkin and depart-2..depart for checkouts - QD HOTFIX.
   ae:08-02-17 V02: added IN OUT parameter.
+  ae:21-02-17 V03: added population of ARO_RECD_KEY for to not show blue dots in Acumen Lobby window (for Marian). 
 */;
 /
 

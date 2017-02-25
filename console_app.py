@@ -38,13 +38,12 @@ def prepare_eval_str(val):
 
     ret = ''
     if isinstance(val, str):
-        if val.startswith("'''") and val.endswith("'''") or val.startswith('"""') and val.endswith('"""'):
+        if (val.startswith("'''") and val.endswith("'''"))\
+                or (val.startswith('"""') and val.endswith('"""')):
             ret = val[3:-3]
-        elif val.startswith("[[") and val.endswith("]]") or val.startswith("{{") and val.endswith("}}") \
-                or val.startswith("((") and val.endswith("))"):
-            ret = val[1:-1]
-        elif val.startswith("[") and val.endswith("]") or val.startswith("{") and val.endswith("}") \
-                or val.startswith("(") and val.endswith(")"):
+        elif (val.startswith("[") and val.endswith("]"))\
+                or (val.startswith("{") and val.endswith("}")) \
+                or (val.startswith("(") and val.endswith(")")):
             ret = val
 
     return ret
@@ -56,8 +55,9 @@ class _DuplicateSysOut:
         self.sys_out = sys_out
 
     def write(self, message):
+        if self.log_file:
+            self.log_file.write(message)
         self.sys_out.write(message)
-        self.log_file.write(message)
 
     def __getattr__(self, attr):
         return getattr(self.sys_out, attr)
@@ -81,11 +81,19 @@ class ConsoleApp:
         self._log_file = None
 
         # determine main config file (also for to store configs): 1st in cwd, then in app path
-        cfg_fnam_cwd = os.path.join(os.getcwd(), self._app_name + '.ini')
-        cfg_fnam_app = os.path.splitext(app_path)[0] + '.ini'
-        if os.path.isfile(cfg_fnam_cwd):
+        cfg_fnam_cwd = os.path.join(os.getcwd(), self._app_name)
+        cfg_fnam_app = os.path.splitext(app_path)[0]
+        if os.path.isfile(cfg_fnam_cwd + '.cfg'):
+            cfg_fnam_cwd += '.cfg'
             self._cfg_fnam = cfg_fnam_cwd
+        elif os.path.isfile(cfg_fnam_cwd + '.ini'):
+            cfg_fnam_cwd += '.ini'
+            self._cfg_fnam = cfg_fnam_cwd
+        elif os.path.isfile(cfg_fnam_app + '.cfg'):
+            cfg_fnam_app += '.cfg'
+            self._cfg_fnam = cfg_fnam_app
         else:
+            cfg_fnam_app += '.ini'
             self._cfg_fnam = cfg_fnam_app
 
         self._main_section = main_section
@@ -221,7 +229,7 @@ class ConsoleApp:
                                                 cfg_parser=self._cfg_parser_env)),
                 cfg_parser=self._cfg_parser_cwd)
         eval_str = prepare_eval_str(ret)
-        if check_eval_only:
+        if check_eval_only:     # check if caller requested to return tuple of value and eval
             ret = (ret, bool(eval_str) or isinstance(ret, list) or isinstance(ret, dict) or isinstance(ret, tuple))
 
         elif eval_str:
@@ -266,6 +274,10 @@ class ConsoleApp:
             uprint("****  Non-zero exit code:", exit_code)
         uprint('####  Shutdown............  ####')
         if self._log_file:
+            app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
+            app_std_out.log_file = None
+            sys.stdout = ori_std_out        # set back for to prevent stack overflow/recursion error with kivy logger:
+            sys.stderr = ori_std_err        # .. "Fatal Python error: Cannot recover from stack overflow"
             self._log_file.close()
         sys.exit(exit_code)
 

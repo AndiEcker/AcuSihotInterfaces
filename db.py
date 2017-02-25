@@ -41,6 +41,7 @@ class OraDB:
         self.curs = None
 
     def connect(self):
+        err_msg = ''
         try:
             # old style: self.conn = cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
             self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn)
@@ -49,15 +50,15 @@ class OraDB:
                 uprint("OraDB: connected to Oracle database {} via client version {} with n-/encoding {}/{}"
                        .format(self.dsn, cx_Oracle.clientversion(), self.conn.nencoding, self.conn.encoding))
         except Exception as ex:
-            return "oraDB-connect " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
+            err_msg = "oraDB-connect " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
         else:
             try:
                 self.curs = self.conn.cursor()
             except Exception as ex:
-                return "oraDB-connect cursors " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
+                err_msg = "oraDB-connect cursors " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("OraDB: Oracle database cursor created.")
-        return ''
+            uprint(err_msg if err_msg else "OraDB: Oracle database cursor created.")
+        return err_msg
 
     def select(self, from_join, cols=None, where_group_order='', bind_vars=None):
         if not cols:

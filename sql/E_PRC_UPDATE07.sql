@@ -1,14 +1,14 @@
-create or replace trigger SALES.PRC_UPDATE
-  AFTER UPDATE
---OF PRC_TMREF, PRC_STATUS, PRC_HTEL1, PRC_WTEL1, PRC_MTEL1, PRC_FNAM1, PRC_FNAM2, PRC_SNAM1, PRC_SNAM2, PRC_EMAIL
-ON T_PRC -- SALES.PROSPECTS
-REFERENCING NEW AS NEW OLD AS OLD
-FOR EACH ROW
-DECLARE
+create or replace trigger SALES.PRC_UPDATE AFTER UPDATE ON T_PRC REFERENCING NEW AS NEW OLD AS OLD FOR EACH ROW
+DECLARE  -- ORACLE showing wrong line number - even if you put this line at the end of the last one
   lcAction  T_LOG.LOG_ACTION%type := 'UPDATE';
   pcTable   T_LOG.LOG_TABLE%type := 'PROSPECTS';
   pcColumn  T_LOG.LOG_COLUMN%type;
   pcPrimary T_LOG.LOG_PRIMARY%type := :NEW.PRC_CODE;
+  
+  cursor cML is
+    select ML_RHREF, ML_REQARRIVAL_DATE, ML_REQDEPART_DATE from T_ML, T_MS where ML_CODE = MS_MLREF and MS_PRCREF = :NEW.PRC_CODE;
+  rML cML%rowtype;
+    
 BEGIN
   if    ( :NEW.PRC_TMREF is NULL and :OLD.PRC_TMREF is not NULL )
      or ( :NEW.PRC_TMREF is not NULL and :OLD.PRC_TMREF is NULL )
@@ -105,7 +105,13 @@ BEGIN
      or :NEW.PRC_BOARDREF1 <> :OLD.PRC_BOARDREF1 then
     pcColumn := 'PRC_BOARDREF1';
     P_INSERT_LOG_ENTRY (lcAction, pcTable, pcColumn, pcPrimary, :OLD.PRC_BOARDREF1, :NEW.PRC_BOARDREF1, '');
-    P_RUL_INSERT('UPDATE', chr(13) || 'PRC_BOARDREF1 (' || :OLD.PRC_BOARDREF1 || ' >> ' || :NEW.PRC_BOARDREF1 || ')', 'MKT_' || :NEW.PRC_BOARDREF1, :NEW.PRC_CODE);
+    open  cML;
+    fetch cML into rML;
+    close cML;
+    if rML.ML_RHREF is not NULL then
+      P_RH_RUL_INSERT('M', 'UPDATE', chr(13) || 'PRC_BOARDREF1 (' || :OLD.PRC_BOARDREF1 || ' >> ' || :NEW.PRC_BOARDREF1 || ')', 'MKT_' || :NEW.PRC_BOARDREF1, :NEW.PRC_CODE, NULL, 
+                      rML.ML_RHREF, rML.ML_REQARRIVAL_DATE, rML.ML_REQDEPART_DATE);
+    end if;
   end if;
   if    ( :NEW.PRC_MEAL_BEGIN1 is NULL and :OLD.PRC_MEAL_BEGIN1 is not NULL )
      or ( :NEW.PRC_MEAL_BEGIN1 is not NULL and :OLD.PRC_MEAL_BEGIN1 is NULL )
@@ -148,5 +154,6 @@ END;
               AND removed OF <columns> clause from trigger declaration for to fix non-logged PRC_LOCKED_COLS.
   ae:  04-08-2013 added log entries for PRC_FLYBUY column (see TrackIt WO #91675).
   ae:  09-12-2014 added log entries for new mkt. meal plan (PRC_BOARDREF1/2 and PRC_MEAL_BEGIN1/2/_END1/2).
+  ae:  21-02-2017 V07: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and added pcCaller parameter to call of P_RUL_INSERT(). 
 */
 /

@@ -95,7 +95,7 @@ BEGIN
     open  cRO;
     fetch cRO into lcRate;
     close cRO;
-    P_RUL_INSERT('DELETE', lcChanges, :OLD.RU_BOARDREF, :OLD.RU_CODE, NULL, :OLD.RU_RHREF, :OLD.RU_FROM_DATE, :OLD.RU_FROM_DATE + :OLD.RU_DAYS, :OLD.RU_ATGENERIC, :OLD.RU_RESORT, :OLD.RU_SIHOT_OBJID, lcRate);
+    P_RUL_INSERT('R', 'DELETE', lcChanges, :OLD.RU_BOARDREF, :OLD.RU_CODE, NULL, :OLD.RU_RHREF, :OLD.RU_FROM_DATE, :OLD.RU_FROM_DATE + :OLD.RU_DAYS, :OLD.RU_ATGENERIC, :OLD.RU_RESORT, :OLD.RU_SIHOT_OBJID, lcRate);
   end if;
 END
 /*
@@ -103,6 +103,7 @@ END
   ae:10-01-07 removed RU_AROREF/RU_APREF/RU_FIXED/RU_ATFIXED/RU_RSFIXED, added RU_EXT_APT.
   ae:09-09-12 V01: added RU_BOARDREF.
   ae:05-08-16 V02: added population of the new RUL_SIHOT* columns.
+  ae:21-02-17 V03: added pcCaller parameter to call of P_RUL_INSERT().
 */;
 /
 
