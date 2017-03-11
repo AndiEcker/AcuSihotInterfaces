@@ -100,6 +100,7 @@ BEGIN
   if lcChanges is not null then
     insert into T_AROL --LOBBY.APT_RES_OCC_LOG
       values(APT_RES_OCC_LOG_SEQ.nextval, USER, 'DELETE', SYSDATE, :OLD.ARO_CODE, substr(lcChanges, 2, 1999), k.ExecutingMainProc, k.ExecutingSubProc, k.ExecutingAction);
+    -- need to pass DELETE action (instead of UPDATE) for to allow proper handling/detection of hotel move (HOTMOVE action)
     P_RH_RUL_INSERT('A', 'DELETE', lcChanges, :OLD.ARO_BOARDREF, NULL, :OLD.ARO_APREF, :OLD.ARO_RHREF, :OLD.ARO_EXP_ARRIVE, :OLD.ARO_EXP_DEPART);
   end if;
 END
@@ -109,7 +110,8 @@ END
   ae:18-09-13 added ARO_BABIES.
   ae:06-03-15 V05: added ARO_BOARD_ADULTS and ARO_BOARD_CHILDREN.
   ae:06-08-16 V06: added population of the new RUL_SIHOT* columns.
-  ae:21-02-17 V07: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and changed trigger type from BEFORE DELETE to AFTER DELETE and added pcCaller parameter to call of P_RUL_INSERT(). 
+  ae:21-02-17 V07: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and changed trigger type from BEFORE DELETE to AFTER DELETE and added pcCaller parameter to call of P_RUL_INSERT().
+  ae:10-03-17 V08: initially changed parameter value of pcAction in call of P_RH_RUL_INSERT() from 'DELETE' into 'UPDATE' but then reverted and finally only added comment why we need to keep the DELETE action. 
 */
 ;
 /

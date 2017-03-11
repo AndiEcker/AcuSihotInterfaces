@@ -15,23 +15,29 @@ create or replace procedure LOBBY.RUL_INSERT
                              pnAFT_Code       IN T_RAF.RAF_AFTREF%type := NULL
                             ) 
 IS
-  CHANGES_LEN   constant integer := 2000;
-  PROC_LEN      constant integer := 50;
+  CHANGES_LEN         constant integer := 2000;
+  PROC_LEN            constant integer := 50;
   
-  lcSihotCat    T_RUL.RUL_SIHOT_CAT%type;
-  lnSihotHotel  T_RUL.RUL_SIHOT_HOTEL%type;
-  lcApRef       T_ARO.ARO_APREF%type;
-  lcRulApRef    T_RUL.RUL_SIHOT_ROOM%type;
-  lcAtGeneric   T_RU.RU_ATGENERIC%type;
-  lcResort      T_RU.RU_RESORT%type;
-  lnRU_Code     T_RU.RU_CODE%type;
-  lnRUL_Code    T_RUL.RUL_CODE%type;
-  lcBoardRef    T_LU.LU_ID%type;
-  lcSihotPack   varchar2(3 byte);
-  lcPackPrefix  varchar2(12 byte) := '';
-  lnPos         integer;
-  lcAction      T_RUL.RUL_ACTION%type;
-  lcAFT_Suffix  varchar2(12 byte);
+  lcSihotCat          T_RUL.RUL_SIHOT_CAT%type;
+  lcRulSihotCat       T_RUL.RUL_SIHOT_CAT%type;
+  lcRulSihotLastCat   T_RUL.RUL_SIHOT_LAST_CAT%type;
+  lnSihotHotel        T_RUL.RUL_SIHOT_HOTEL%type;
+  lnRulSihotHotel     T_RUL.RUL_SIHOT_HOTEL%type;
+  lnRulSihotLastHotel T_RUL.RUL_SIHOT_LAST_HOTEL%type;
+  lcApRef             T_ARO.ARO_APREF%type;
+  lcRulApRef          T_RUL.RUL_SIHOT_ROOM%type;
+  lcAtGeneric         T_RU.RU_ATGENERIC%type;
+  lcResort            T_RU.RU_RESORT%type;
+  lnRU_Code           T_RU.RU_CODE%type;
+  lnRUL_Code          T_RUL.RUL_CODE%type;
+  lcBoardRef          T_LU.LU_ID%type;
+  lcSihotPack         varchar2(3 byte);
+  lcPackPrefix        varchar2(12 byte) := '';
+  lnPos               integer;
+  lcAction            T_RUL.RUL_ACTION%type;
+  lcRulAction         T_RUL.RUL_ACTION%type;
+  lnChgLen            integer;
+  lcAFT_Suffix        varchar2(12 byte);
   
   cursor cMkt is
     select ML_RHREF, ML_REQARRIVAL_DATE, ML_REQDEPART_DATE, RU_CODE from T_MS, T_ML, T_RU where MS_MLREF = ML_CODE and ML_CODE = RU_MLREF and MS_PRCREF = pnCode;
@@ -40,11 +46,12 @@ IS
   cursor cRU is
     select RU_ATGENERIC, RU_RESORT from T_RU where RU_CODE = lnRU_Code;
   
-  cursor cRUL is
-    select max(RUL_CODE) from V_ACU_RES_LOG where RUL_PRIMARY = lnRU_Code and length(pcChanges) + length(RUL_CHANGES) <= CHANGES_LEN;
-  
   cursor cLog is
     select RUL_SIHOT_ROOM from V_ACU_RES_LOG where RUL_PRIMARY = lnRU_Code;
+  
+  cursor cRUL is
+    select RUL_CODE, RUL_ACTION, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, length(RUL_CHANGES)
+      from V_ACU_RES_LOG where RUL_PRIMARY = lnRU_Code;
     
 BEGIN
   lcAction := pcAction;
@@ -119,14 +126,21 @@ BEGIN
   end if;
   lcSihotPack := F_SIHOT_PACK(lcBoardRef, lcPackPrefix);
   
-  -- insert log entry or on T_ARO trigger call try first to update SIHOT columns of unsynced RUL record either with ARO/PRC overloads or current RU values
-  if pcCaller != 'R' then
-    -- for better receycling use V_ACU_RES_LOG not _UNSYNCED: select RUL_CODE into lnRUL_Code from V_ACU_RES_UNSYNCED where RU_CODE = lnRU_Code;
-    open  cRUL;
-    fetch cRUL into lnRUL_Code;
-    close cRUL;
+  -- translate lcApRef into Sihot format
+  if lnSihotHotel = 4 and length(lcApRef) = 3 then
+    lcApRef := '0' || lcApRef;
   end if;
-  if lnRUL_Code is not NULL then
+  
+  -- determine current/last log entry for to update/insert log entry (especially on T_ARO trigger call update SIHOT columns of unsynced RUL record either with ARO/PRC overloads or current RU values)
+  -- for better receycling use V_ACU_RES_LOG instead of V_ACU_RES_UNSYNCED in cRUL
+  open  cRUL;
+  fetch cRUL into lnRUL_Code, lcRulAction, lcRulSihotCat, lcRulSihotLastCat, lnRulSihotHotel, lnRulSihotLastHotel, lnChgLen;
+  close cRUL;
+  if lnRUL_Code is not NULL and (lcRulAction = lcAction or (lcRulAction <> 'DELETE' and lcAction <> 'DELETE')) 
+      and lcSihotCat = lcRulSihotCat and lcSihotCat = lcRulSihotLastCat
+      and lnSihotHotel = lnRulSihotHotel and lnSihotHotel = lnRulSihotLastHotel
+      and lnChgLen + length(pcChanges) <= CHANGES_LEN then  
+      -- was before V05: .. and pcCaller != 'R' - actually around the cRUL cursor fetch (now add/put also T_RU changes into same log entry)
     update T_RUL set RUL_USER = USER,
                      RUL_ACTION = lcAction,
                      RUL_DATE = sysdate,     -- reset ARL_DATE value for to be synchronized  
@@ -145,17 +159,22 @@ BEGIN
     insert into T_RUL (RUL_CODE, RUL_USER, RUL_ACTION, RUL_DATE, RUL_PRIMARY, 
                        RUL_CHANGES, RUL_MAINPROC, RUL_SUBPROC, RUL_SPACTION, 
                        RUL_SIHOT_CAT, RUL_SIHOT_HOTEL, RUL_SIHOT_PACK, 
-                       RUL_SIHOT_ROOM, RUL_SIHOT_OBJID, RUL_SIHOT_RATE)
+                       RUL_SIHOT_ROOM, RUL_SIHOT_OBJID, RUL_SIHOT_RATE,
+                       RUL_SIHOT_LAST_CAT, RUL_SIHOT_LAST_HOTEL)
       values(S_REQUESTED_UNIT_LOG_SEQ.nextval, USER, lcAction, SYSDATE, lnRU_Code, 
              substr(pcChanges, 2, CHANGES_LEN), k.ExecutingMainProc, k.ExecutingSubProc, k.ExecutingAction,
              lcSihotCat, lnSihotHotel, lcSihotPack, 
-             lcApRef, pnObjId, pcRate);
+             lcApRef, pnObjId, pcRate, 
+             case when lcRulSihotCat is not NULL and instr(lcRulSihotCat, '_') = 0 then lcRulSihotCat else lcSihotCat end,  -- RUL_SIHOT_CAT could still be 'R___'
+             case when lnRulSihotHotel is not NULL and lnRulSihotHotel > 0 then lnRulSihotHotel else lnSihotHotel end);     -- RUL_SIHOT_HOTEL could still be -2
   else
-    P_SENDMAIL('Sales.System@silverpoint.com', 'Andreas.Ecker@signallia.com', 'Insert NULL into RUL_PRIMARY',
-               'Caller=' || pcCaller || ' Usr=' || USER || ' Act=' || lcAction || case when pcAction <> lcAction then '(' || pcAction || ')' end || ' Date=' || sysdate 
+    P_SENDMAIL('Sales.System@silverpoint.com', 'ITDevmen@acumen.es', 'Insert NULL into RUL_PRIMARY',
+               'Caller=' || pcCaller || ' Usr=' || USER || ' Date=' || sysdate
+               || ' Act=' || lcAction || case when pcAction <> lcAction or lcRulAction <> lcAction then '(' || pcAction || case when lcRulAction <> lcAction then '/' || lcRulAction end || ')' end 
                || ' Changes=[' || substr(pcChanges, 2) || '] ProcStack=[' || trim(k.ExecutingMainProc) || '/' || trim(k.ExecutingSubProc) || '/' || trim(k.ExecutingAction) || '] Code=' || pnCode
-               || ' Cat=' || lcSihotCat || ' AftSuff=' || lcAFT_Suffix || ' Hot=' || lnSihotHotel
-               || ' Pack=' || lcSihotPack || case when lcPackPrefix is not NULL then ':' || lcPackPrefix end || ' Board=' || lcBoardRef 
+               || ' AftSuff=' || lcAFT_Suffix || ' Pack=' || lcSihotPack || case when lcPackPrefix is not NULL then ':' || lcPackPrefix end || ' Board=' || lcBoardRef 
+               || ' Cat=' || lcSihotCat || ' RCat=' || lcRulSihotCat || ' LCat=' || lcRulSihotLastCat 
+               || ' Hot=' || lnSihotHotel || ' RHot=' || lnRulSihotHotel || ' LHot=' || lnRulSihotLastHotel
                || ' Apt=' || lcApRef || case when pcApRef <> nvl(lcApRef, '_') then '(' || pcApRef || ')' end || case when lcRulApRef <> nvl(lcApRef, '_') then '(Rul:' || lcRulApRef || ')' end 
                || ' RS=' || lcResort || case when pcResort <> lcResort then '(' || pcResort || ')' end
                || ' Gen=' || lcAtGeneric || case when pcAtGeneric <> lcAtGeneric then '(' || pcAtGeneric || ')' end 
@@ -171,6 +190,7 @@ END
   ae:27-12-16 V02: added lcCaller parameter to call of F_RU_ARO_BOARD to prevent mutating PRC cursor.
   ae:11-01-17 V03: prevent INSERT into RUL if RUL_PRIMARY value is NULL and added temporary notification for further checkings. 
   ae:21-02-17 V04: changed to detect T_ARO call by pnCode is NULL (instead of pcApRef is not NULL) because now P_RH_RUL_INSERT() is passing always the current associated apartment and added pcCaller parameter (replacing lcCaller). 
+  ae:10-03-17 V05: added population of new RUL_SIHOT_LAST_HOTEL/RUL_SIHOT_LAST_CAT columns, merging now also RU changes into same log entry. 
 */;
 /
 

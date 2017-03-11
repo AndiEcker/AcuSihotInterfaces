@@ -292,16 +292,18 @@ Reservations created first within the Acumen system and then synchronized to Sih
 
 ### Requested Unit Log
 
-The following 6 new columns got added to the Acumen Requested Unit Log table (`T_RUL`) for to store also any other booking changes of a synchronized reservation that are happening in a associated table like e.g. room change in the related Apartment Reservation (`T_ARO`) or board/meal plan change in the Marketing Prospect (`T_PRC`):
+The following 8 new columns got added to the Acumen Requested Unit Log table (`T_RUL`) for to store also any other booking changes of a synchronized reservation that are happening in a associated table like e.g. room change in the related Apartment Reservation (`T_ARO`) or board/meal plan change in the Marketing Prospect (`T_PRC`):
 
 | Column Name | Column Content |
 | --- | --- |
 | RUL_SIHOT_CAT | Unit/Price category in Sihot.PMS - overloaded if associated ARO exists |
 | RUL_SIHOT_HOTEL | Hotel Id in Sihot.PMS - overloaded if associated ARO exists |
-| RUL_SIHOT_ROOM | Booked apartment (`AP_CODE`) if associated ARO record exits else NULL |
+| RUL_SIHOT_ROOM | Booked apartment (`AP_CODE` value as Sihot room number - with leading zero for 3-digit PBC room numbers) if associated ARO record exits else NULL |
 | RUL_SIHOT_OBJID | `RU_SIHOT_OBJID` value (for to detect if deleted RU got passed into Sihot.PMS) |
 | RUL_SIHOT_PACK | Booked package/arrangement - overloaded if associated ARO/PRC exists |
 | RUL_SIHOT_RATE | Market segment price rate - used for filtering (also if RU record is deleted) |
+| RUL_SIHOT_LAST_CAT | Previous Unit/Price category - needed for cancellation |
+| RUL_SIHOT_LAST_HOTEL | Previous Hotel Id - needed for cancellation and hotel moves |
 
 These columns got added later on mainly because of performance enhancements by condensing/focusing all these other changes within the latest not synchronized requested unit log entry/record and also for to keep references of deleted `T_RU` records for to be propagated onto Sihot.PMS.
 

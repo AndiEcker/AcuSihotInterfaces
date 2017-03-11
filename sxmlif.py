@@ -271,13 +271,12 @@ MAP_KERNEL_CLIENT = \
 """
 MAP_WEB_RES = \
     (
-        {'elemName': 'ID', 'colName': 'SIHOT_HOTEL_C'},
-        # 'colValFromAcu': "to_char(RUL_SIHOT_HOTEL)"},  # or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
-        # {'elemName': 'ID', 'colName': 'RUL_SIHOT_HOTEL',
-        #  'colVal': '1'},
+        {'elemName': 'ID', 'colName': 'RUL_SIHOT_HOTEL'},  # or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
         {'elemName': 'ARESLIST/'},
         {'elemName': 'RESERVATION/'},
         # MATCHCODE, NAME, COMPANY and GUEST-ID are mutually exclusive
+        # MATCHCODE/GUEST-ID needed for DELETE action for to prevent Sihot error:
+        # .. "Could not find a key identifier for the client (name, matchcode, ...)"
         {'elemName': 'GUEST-ID', 'colName': 'SH_OBJID',
          'elemHideIf': "not c['OC_SIHOT_OBJID'] and ('CD_SIHOT_OBJID' not in c or not c['CD_SIHOT_OBJID'])",
          'colValFromAcu': "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))"},
@@ -288,8 +287,8 @@ MAP_WEB_RES = \
                           " (select 'TC' || RH_EXT_BOOK_REF from T_RH where"
                           " RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
                           " else to_char(RUL_PRIMARY) end)"},  # RUL_PRIMARY needed for to delete/cancel res
-        {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF'},
-        {'elemName': 'EXT-KEY', 'colName': 'SIHOT_LINK_GROUP',
+        {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'EXT-KEY', 'colName': 'SIHOT_LINK_GROUP', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'SIHOT_LINK_GROUP' not in c"},
         {'elemName': 'FLAGS', 'colVal': 'IGNORE-OVERBOOKING'},  # ;NO-FALLBACK-TO-ERRONEOUS'},
         {'elemName': 'RT', 'colName': 'SH_RES_TYPE',
@@ -298,36 +297,36 @@ MAP_WEB_RES = \
         #  'colValFromAcu': "'2TIC'"},   # mandatory but could be empty (to get PMS fallback-default)
         # RUL_SIHOT_CAT results in error 1011 for tk->TC/TK bookings with room move and room with higher/different room
         # .. cat, therefore use price category as room category for Thomas Cook Bookings.
-        {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',
-         'colValFromAcu': "case when SIHOT_MKT_SEG in ('TC', 'TK')"
+        {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',     # needed for DELETE action
+         'colValFromAcu': "case when RUL_SIHOT_RATE in ('TC', 'TK')"
                           " then F_SIHOT_CAT('RU' || RU_CODE) else RUL_SIHOT_CAT end"},
-        {'elemName': 'PCAT', 'colName': 'SH_PRICE_CAT',
+        {'elemName': 'PCAT', 'colName': 'SH_PRICE_CAT', 'elemHideInActions': ACTION_DELETE,
          'colValFromAcu': "F_SIHOT_CAT('RU' || RU_CODE)"},
         # {'elemName': 'PCAT', 'colName': 'SIHOT_CAT',
         #  'colValFromAcu': "'1TIC'"},
-        {'elemName': 'ALLOTMENT-NO', 'colName': 'SIHOT_ALLOTMENT_NO',
+        {'elemName': 'ALLOTMENT-NO', 'colName': 'SIHOT_ALLOTMENT_NO', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c"},
-        {'elemName': 'PAYMENT-INST', 'colName': 'SIHOT_PAYMENT_INST',
+        {'elemName': 'PAYMENT-INST', 'colName': 'SIHOT_PAYMENT_INST', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'SIHOT_PAYMENT_INST' not in c"},
-        {'elemName': 'SALES-DATE', 'colName': 'RH_EXT_BOOK_DATE',
+        {'elemName': 'SALES-DATE', 'colName': 'RH_EXT_BOOK_DATE', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "not c['RH_EXT_BOOK_DATE']"},
         # {'elemName': 'RATE-SEGMENT', 'colName': 'RUL_SIHOT_RATE',
-        #  'elemHideIf': "c['SIHOT_MKT_SEG'] not in ('TK', 'TC')"},    # only TK/tk have defined rate segment in SIHOT
+        #  'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('TK', 'TC')"},    # only TK/tk have defined rate segment in SIHOT
         {'elemName': 'RATE/'},  # package/arrangement has also to be specified in PERSON:
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK'},
         {'elemName': 'ISDEFAULT', 'colVal': 'Y'},
         {'elemName': '/RATE'},
         {'elemName': 'RATE/', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['SIHOT_MKT_SEG'] not in ('ER')"},
+         'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('ER')"},
         {'elemName': 'R', 'colVal': 'GSC', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['SIHOT_MKT_SEG'] not in ('ER')"},
+         'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('ER')"},
         {'elemName': 'ISDEFAULT', 'colVal': 'N', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['SIHOT_MKT_SEG'] not in ('ER')"},
+         'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('ER')"},
         {'elemName': '/RATE', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['SIHOT_MKT_SEG'] not in ('ER')"},
+         'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('ER')"},
         # The following fallback rate results in error Package TO not valid for hotel 1
         # {'elemName': 'RATE/'},
-        # {'elemName': 'R', 'colName': 'RO_SIHOT_RATE', 'colValFromAcu': "nvl(RO_SIHOT_RATE, SIHOT_MKT_SEG)"},
+        # {'elemName': 'R', 'colName': 'RO_SIHOT_RATE', 'colValFromAcu': "nvl(RO_SIHOT_RATE, RUL_SIHOT_RATE)"},
         # {'elemName': 'ISDEFAULT', 'colVal': 'N'},
         # {'elemName': '/RATE'},
         {'elemName': 'RESCHANNELLIST/',
@@ -371,12 +370,12 @@ MAP_WEB_RES = \
                           " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
                           " 'DD-MM-YY') + "
                           "to_number(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_DAYS')) end"},
-        {'elemName': 'NOROOMS', 'colVal': 1},
-        {'elemName': 'NOPAX', 'colName': 'RU_ADULTS', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'NOROOMS', 'colName': 'SH_ROOMS', 'colVal': 1},    # needed for DELETE action
+        {'elemName': 'NOPAX', 'colName': 'RU_ADULTS'},                  # needed for DELETE action
         {'elemName': 'NOCHILDS', 'colName': 'RU_CHILDREN', 'elemHideInActions': ACTION_DELETE},
         {'elemName': 'TEC-COMMENT', 'colName': 'SIHOT_TEC_NOTE', 'elemHideInActions': ACTION_DELETE},
         {'elemName': 'COMMENT', 'colName': 'SIHOT_NOTE', 'elemHideInActions': ACTION_DELETE},
-        {'elemName': 'MARKETCODE-NO', 'colName': 'SIHOT_MKT_SEG', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'MARKETCODE-NO', 'colName': 'RUL_SIHOT_RATE', 'elemHideInActions': ACTION_DELETE},
         # {'elemName': 'MEDIA'},
         {'elemName': 'SOURCE', 'colName': 'RU_SOURCE', 'elemHideInActions': ACTION_DELETE},
         {'elemName': 'NN', 'colName': 'RO_SIHOT_SP_GROUP', 'elemHideInActions': ACTION_DELETE,
@@ -416,7 +415,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 0 or 'CD_CODE' not in c or c['CD_SIHOT_OBJID']"},
         {'elemName': 'GUEST-ID', 'colName': 'CD_SIHOT_OBJID', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0 or 'CD_SIHOT_OBJID' not in c or not c['CD_SIHOT_OBJID']"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ1', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ1', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
@@ -424,8 +423,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Second adult of client
@@ -443,7 +442,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 1 or 'CD_CODE2' not in c or c['CD_SIHOT_OBJID2']"},
         {'elemName': 'GUEST-ID', 'colName': 'CD_SIHOT_OBJID2', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 1 or 'CD_SIHOT_OBJID2' not in c or not c['CD_SIHOT_OBJID2']"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ2', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ2', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
@@ -451,8 +450,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 1 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 3
@@ -463,7 +462,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 2 or 'SH_ADULT3_NAME2' not in c or not c['SH_ADULT3_NAME2']"},
         {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ3', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ3', 'colVal': '2', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
@@ -471,8 +470,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 2 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 4
@@ -483,7 +482,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 3 or 'SH_ADULT4_NAME2' not in c or not c['SH_ADULT4_NAME2']"},
         {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ4', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ4', 'colVal': '3', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
@@ -491,8 +490,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 3 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 5
@@ -503,7 +502,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 4 or 'SH_ADULT5_NAME2' not in c or not c['SH_ADULT5_NAME2']"},
         {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ5', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ5', 'colVal': '4', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
@@ -511,8 +510,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 4 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 6
@@ -523,7 +522,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 5 or 'SH_ADULT6_NAME2' not in c or not c['SH_ADULT6_NAME2']"},
         {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ6', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ6', 'colVal': '5', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
@@ -531,8 +530,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 5 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 1
@@ -543,7 +542,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'SH_CHILD1_NAME2' not in c or not c['SH_CHILD1_NAME2']"},
         {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ11', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ11', 'colVal': '10', 'elemHideInActions': ACTION_DELETE,
          # 'colValFromAcu': "to_char(RU_ADULTS + 0)",  # commented out for optimization - RUNNING SEQ not needed
@@ -552,8 +551,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 2
@@ -564,7 +563,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'SH_CHILD2_NAME2' not in c or not c['SH_CHILD2_NAME2']"},
         {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ12', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ12', 'colVal': '11', 'elemHideInActions': ACTION_DELETE,
          # 'colValFromAcu': "to_char(RU_ADULTS + 1)",
@@ -573,8 +572,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 3
@@ -585,7 +584,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'SH_CHILD3_NAME2' not in c or not c['SH_CHILD3_NAME2']"},
         {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ13', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ13', 'colVal': '12', 'elemHideInActions': ACTION_DELETE,
          # 'colValFromAcu': "to_char(RU_ADULTS + 2)",
@@ -594,8 +593,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 4
@@ -606,7 +605,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'SH_CHILD4_NAME2' not in c or not c['SH_CHILD4_NAME2']"},
         {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'ROOM-SEQ', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ14', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
         {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ14', 'colVal': '13', 'elemHideInActions': ACTION_DELETE,
          # 'colValFromAcu': "to_char(RU_ADULTS + 3)",
@@ -615,8 +614,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'SIHOT_ROOM_NO' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
         {'elemName': '_ACTION', 'colName': 'RUL_ACTION'},
@@ -632,6 +631,8 @@ MAP_WEB_RES = \
         {'elemName': '_RES_GROUP', 'colName': 'RO_RES_GROUP'},  # needed for elemHideIf
         {'elemName': '_RES_OCC', 'colName': 'RUL_SIHOT_RATE'},  # needed for res_id_values
         {'elemName': '_CHANGES', 'colName': 'RUL_CHANGES'},  # needed for error notifications
+        {'elemName': '_LAST_HOTEL', 'colName': 'RUL_SIHOT_LAST_HOTEL'},     # needed for HOTMOVE
+        {'elemName': '_LAST_CAT', 'colName': 'RUL_SIHOT_LAST_CAT'},         # needed for HOTMOVE
         {'elemName': '/RESERVATION'},
         {'elemName': '/ARESLIST'},
     )
@@ -649,13 +650,13 @@ MAP_KERNEL_RES = \
         {'elemName': 'T-CATEGORY', 'colName': 'RUL_SIHOT_CAT'},  # mandatory, could be empty to get PMS fallback-default
         {'elemName': 'T-RATE', 'colName': 'RUL_SIHOT_RATE', 'colVal': 'OW'},
         {'elemName': 'ID', 'colName': 'RUL_SIHOT_HOTEL'},  # or use [RES-]HOTEL/IDLIST
-        {'elemName': 'RN', 'colName': 'SIHOT_ROOM_NO'},
+        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM'},
         {'elemName': 'D-FROM', 'colName': 'ARR_DATE'},
         {'elemName': 'D-TO', 'colName': 'DEP_DATE'},
         {'elemName': 'NR-PERSONS', 'colName': 'SH_PAX',
          'colValFromAcu': "RU_ADULTS + RU_CHILDREN"},
         {'elemName': 'NOTE', 'colName': 'SIHOT_TEC_NOTE'},
-        {'elemName': 'T-MARKET-SEGMENT', 'colName': 'SIHOT_MKT_SEG'},
+        {'elemName': 'T-MARKET-SEGMENT', 'colName': 'RUL_SIHOT_RATE'},
         {'elemName': 'GDS-NR', 'colName': 'SH_GDSNO',  # EXT-REFERENCE or VOUCHERNUMBER are not mandatory
          'colValFromAcu': "'RU__' || RUL_PRIMARY"},
         {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF'},
@@ -1569,12 +1570,11 @@ class ResToSihot(SihotXmlBuilder):
         return crow['RUL_ACTION'] + ' RESERVATION: ' + \
                (crow['ARR_DATE'].strftime('%d-%m') if crow['ARR_DATE'] else 'unknown') + '..' + \
                (crow['DEP_DATE'].strftime('%d-%m-%y') if crow['DEP_DATE'] else 'unknown') + \
-               ' in ' + (crow['SIHOT_ROOM_NO'] + '=' if crow['SIHOT_ROOM_NO'] else '') + \
-               crow['RUL_SIHOT_CAT'] + \
+               ' in ' + (crow['RUL_SIHOT_ROOM'] + '=' if crow['RUL_SIHOT_ROOM'] else '') + crow['RUL_SIHOT_CAT'] + \
                ('!' + crow['SH_PRICE_CAT']
                 if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
                 else '') + \
-               ' at hotel ' + crow['SIHOT_HOTEL_C'] + \
+               ' at hotel ' + str(crow['RUL_SIHOT_HOTEL']) + \
                separator + ' ' * indent + self.res_id_label() + '==' + self.res_id_values(crow) + \
                (separator + '\n'.join(wrap('ERROR: ' + _strip_error_message(error_msg), subsequent_indent=' ' * indent))
                 if error_msg else '') + \

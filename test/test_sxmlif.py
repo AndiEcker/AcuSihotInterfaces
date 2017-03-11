@@ -616,7 +616,7 @@ class TestResFromAcuToSihot:
             rows = acu_res.rows
             assert len(rows) == 1
             for row in rows:
-                assert row['SIHOT_HOTEL_C'] in ('1', '4')
+                assert row['RUL_SIHOT_HOTEL'] in (1, 4)
                 error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
                 assert not error_msg
 
@@ -655,7 +655,7 @@ class TestResFromAcuToSihot:
             rows = acu_res.rows
             assert len(rows) == 2
             for row in rows:
-                assert row['SIHOT_HOTEL_C'] in ('1', '4')
+                assert row['RUL_SIHOT_HOTEL'] in (1, 4)
                 error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
                 assert not error_msg
 

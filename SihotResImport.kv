@@ -5,6 +5,18 @@
     padding: [24, 18]
     cols_minimum: {1: 240}
     Label:
+        size_hint_y: .69
+        text: str(app.file_count) + " file(s) found: " + app.file_names
+        text_size: self.size
+        halign: 'justify'
+        valign: 'top'
+    ScrollView:
+        size_hint_y: .9
+        Label:
+            id: error_log
+            text_size: self.parent.width, None
+            size: self.texture_size
+    Label:
         size_hint_y: .09
         text: "User"
     CapitalInput:
@@ -24,18 +36,6 @@
         password: True
         focus: app.user_name
         text: app.user_password
-    Label:
-        size_hint_y: .69
-        text: str(app.file_count) + " file(s) found: " + app.file_names
-        text_size: self.size
-        halign: 'justify'
-        valign: 'top'
-    ScrollView:
-        size_hint_y: .9
-        Label:
-            id: error_log
-            text_size: self.parent.width, None
-            size: self.texture_size
     Button:
         id: import_button
         size_hint_y: .27

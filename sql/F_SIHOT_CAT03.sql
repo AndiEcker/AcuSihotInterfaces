@@ -16,8 +16,8 @@ IS
      where RU_CODE = lnRUCode;
 
   cursor cRL is
-    select case when RU_RESORT = 'ANY' and RUL_SIHOT_ROOM is not NULL then F_RESORT(RUL_SIHOT_ROOM) else RU_RESORT end, RU_ATGENERIC, 
-           F_SIHOT_PAID_RAF(RU_CODE, case when RU_RESORT = 'ANY' and RUL_SIHOT_ROOM is not NULL then F_RESORT(RUL_SIHOT_ROOM) else RU_RESORT end, RU_ATGENERIC)
+    select case when RU_RESORT = 'ANY' and RUL_SIHOT_ROOM is not NULL then F_RESORT(ltrim(RUL_SIHOT_ROOM, '0')) else RU_RESORT end, RU_ATGENERIC, 
+           F_SIHOT_PAID_RAF(RU_CODE, case when RU_RESORT = 'ANY' and RUL_SIHOT_ROOM is not NULL then F_RESORT(ltrim(RUL_SIHOT_ROOM, '0')) else RU_RESORT end, RU_ATGENERIC)
       from T_RU, V_ACU_RES_LOG
      where RU_CODE = RUL_PRIMARY(+)
        and RU_CODE = lnRUCode;
@@ -89,7 +89,8 @@ END
 /*
   ae:10-09-16 V00: first beta - added for SIHOT sync/migration project.
   ae:28-11-16 V01: added optional apartment feature check and allowing to pass RU code alternatively.
-  ae:16-12-16 V02: removed T_RUL overload check from RU<RU_CODE> call (but kept as alternative R_<RU_CODE> call - currently unused). 
+  ae:16-12-16 V02: removed T_RUL overload check from RU<RU_CODE> call (but kept as alternative R_<RU_CODE> call - currently unused).
+  ae:11-03-17 V03: added ltrim(,'0') around RUL_SIHOT_ROOM after refactoring (now RUL_SIHOT_ROOM holding the Sihot room number - with leading zero for 3-digit PBC rooms).
 */;
 /
 

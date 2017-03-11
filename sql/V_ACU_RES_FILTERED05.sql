@@ -1,17 +1,15 @@
 create or replace view LOBBY.ACU_RES_FILTERED  -- filtered reservation migration/sync log and data (if RU got not deleted)
   AS
 with resorts as (select LU_ID as RS_CODE, LU_NUMBER as HOTEL_ID from T_LU where LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1)
--- USING select *  from V_ACU_RES_DATA instead of outer joining here slows down the query from 
+-- USING select *  from V_ACU_RES_DATA instead of outer joining here slows down the query extremely
 select V_ACU_RES_LOG.*
      , V_ACU_RES_DATA.*
   from V_ACU_RES_LOG
        left outer join V_ACU_RES_DATA on RUL_PRIMARY = RU_CODE
  where ( RU_CODE is NULL or ARR_DATE >= trunc(sysdate) or RUL_SIHOT_ROOM is not NULL )                             -- only migrate past reservations if room was assigned
    and ( (RUL_ACTION <> 'DELETE' and nvl(RU_STATUS, 0) <> 120) or RUL_SIHOT_OBJID is not NULL)  -- sync only res deletions/cancelations when res got already migrated/synced into SIHOT
-   -- filtering hotels - since having RUL_SIHOT_HOTEL the RUL_CHANGES hotel filter is no longer needed
-   --and ( exists (select NULL from resorts where RS_CODE = nvl(RU_RESORT, '_'))
-   --   or ( RUL_ACTION = 'DELETE' and exists (select NULL from resorts where RS_CODE = substr(RUL_CHANGES, instr(RUL_CHANGES, 'RU_RESORT (') + 11, 3) ) ) )
-   and exists (select NULL from resorts where HOTEL_ID = RUL_SIHOT_HOTEL)
+   -- filtering hotels
+   and exists (select NULL from resorts where HOTEL_ID in (RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL))
    -- filtering resOcc types (SIHOT market segments) - since added RUL_SIHOT_RATE the RUL_CHANGES filter is no longer needed
    and RUL_SIHOT_RATE is not NULL
    --and ( RO_SIHOT_RATE is not NULL  -- only active market sources/resOcc types will be migrated/synced
@@ -27,6 +25,8 @@ select V_ACU_RES_LOG.*
   ae:05-10-16 V01: extracted from V_ACU_RES_DATA (now renamed to V_ACU_RES_UNFILTERED).
   ae:25-01-17 V02: added filter for to prevent empty external booking ref for TK bookings.
   ae:02-02-17 V03: fixed bug to not include deleted RU records (by adding RU_CODE is NULL to the newly added TK booking filter).
+  ae:08-03-17 V04: added all V_ACU_RES_LOG columns for to tweak RUL_ACTION in case of moving from/to a non-Sihot resort - NEVER ROLLED OUT.
+  ae:10-03-17 V05: added SIHOT_LAST_HOTEL_C column. 
 */
 /
 

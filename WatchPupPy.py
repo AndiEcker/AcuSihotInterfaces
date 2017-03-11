@@ -1,3 +1,7 @@
+"""
+    0.4     changed command call from check_call() to check_output() for to determine and pass StdOut/StdErr  AND
+            added outer try exception fallback into main loop (for to catch strange/unsuspected errors)
+"""
 import os
 import time
 import datetime
@@ -9,7 +13,7 @@ from db import OraDB, DEF_USER, DEF_DSN
 from notification import Notification
 from sxmlif import PostMessage, GuestInfo, SXML_DEF_ENCODING
 
-__version__ = '0.3'
+__version__ = '0.4'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 
@@ -133,138 +137,145 @@ progress = Progress(cae.get_option('debugLevel'), total_count=1,
 err_msg = ''
 run_starts = run_ends = err_count = 0
 while True:
-    # check for errors/warnings to be send to support
-    run_msg = "Preparing {}. run (after {} runs with {} errors)".format(run_starts, run_ends, err_count)
-    progress.next(processed_id=run_msg, error_msg=err_msg)
-    if err_msg:
-        err_count += 1
-        if notification:
-            send_err = notification.send_notification(err_msg, subject='WatchPupPy notification')
-            if send_err:
-                uprint(' #### WatchPupPy send notification error: {}. Unsent error message: {}.'
-                       .format(send_err, err_msg))
-        else:
-            uprint(' **** ' + err_msg)
-        if break_on_error or err_msg.startswith(BREAK_PREFIX):
-            break
-        err_msg = ''
-        time.sleep(command_interval / 30)  # wait 120 seconds after each error, for command_interval of 1 hour
+    try:        # outer exception fallback - only for strange/unsuspected errors
+        # check for errors/warnings to be send to support
+        run_msg = "Preparing {}. run (after {} runs with {} errors)".format(run_starts, run_ends, err_count)
+        progress.next(processed_id=run_msg, error_msg=err_msg)
+        if err_msg:
+            err_count += 1
+            if notification:
+                send_err = notification.send_notification(err_msg, subject='WatchPupPy notification')
+                if send_err:
+                    uprint(' #### WatchPupPy send notification error: {}. Unsent error message: {}.'
+                           .format(send_err, err_msg))
+            else:
+                uprint(' **** ' + err_msg)
+            if break_on_error or err_msg.startswith(BREAK_PREFIX):
+                break
+            err_msg = ''
+            time.sleep(command_interval / 30)  # wait 120 seconds after each error, for command_interval of 1 hour
 
-    # wait for next check_interval, only directly after startup checks on first run
-    if get_timer_corrected() < last_check + check_interval:
-        cae.dprint("  ###  Waiting for next check in {} seconds (timer={}, last={}, interval={})".format(
-            last_check + check_interval - get_timer_corrected(), get_timer_corrected(), last_check, check_interval),
+        # wait for next check_interval, only directly after startup checks on first run
+        if get_timer_corrected() < last_check + check_interval:
+            cae.dprint("  ###  Waiting for next check in {} seconds (timer={}, last={}, interval={})".format(
+                last_check + check_interval - get_timer_corrected(), get_timer_corrected(), last_check, check_interval),
+                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        try:
+            while get_timer_corrected() < last_check + check_interval:
+                time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
+        except KeyboardInterrupt:
+            err_msg = BREAK_PREFIX + " while waiting for next check in " \
+                      + str(last_check + check_interval - get_timer_corrected()) + " seconds"
+            continue  # first notify, then break in next loop because auf BREAK_PREFIX
+        cae.dprint("  ###  Running checks (timer={}, last={}, interval={})".format(
+            get_timer_corrected(), last_check, check_interval),
             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-    try:
-        while get_timer_corrected() < last_check + check_interval:
-            time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
-    except KeyboardInterrupt:
-        err_msg = BREAK_PREFIX + " while waiting for next check in " \
-                  + str(last_check + check_interval - get_timer_corrected()) + " seconds"
-        continue  # first notify, then break in next loop because auf BREAK_PREFIX
-    cae.dprint("  ###  Running checks (timer={}, last={}, interval={})".format(
-        get_timer_corrected(), last_check, check_interval),
-        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-    # check environment and connections: Acu/Oracle, Sihot servers and interfaces
-    if check_acumen:
-        ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
-                       debug_level=cae.get_option('debugLevel'))
-        err_msg = ora_db.connect()
-        if err_msg:
-            err_msg = "Acumen environment check connection error: " + err_msg
-            continue
-        err_msg = ora_db.select('dual', ['sysdate'])
-        if err_msg:
+        # check environment and connections: Acu/Oracle, Sihot servers and interfaces
+        if check_acumen:
+            ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
+                           debug_level=cae.get_option('debugLevel'))
+            err_msg = ora_db.connect()
+            if err_msg:
+                err_msg = "Acumen environment check connection error: " + err_msg
+                continue
+            err_msg = ora_db.select('dual', ['sysdate'])
+            if err_msg:
+                ora_db.close()
+                err_msg = "Acumen environment check selection error: " + err_msg
+                continue
+            err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
+            rows = ora_db.fetch_all()
+            tc_sc_obj_id = str(rows[0][0])  # == '27'
+            tc_sc_mc = rows[0][1]  # == 'TCRENT'
+            err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
+            rows = ora_db.fetch_all()
+            tc_ag_obj_id = str(rows[0][0])  # == '20'
+            tc_ag_mc = rows[0][1]  # == 'TCAG'
             ora_db.close()
-            err_msg = "Acumen environment check selection error: " + err_msg
-            continue
-        err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
-        rows = ora_db.fetch_all()
-        tc_sc_obj_id = str(rows[0][0])  # == '27'
-        tc_sc_mc = rows[0][1]  # == 'TCRENT'
-        err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
-        rows = ora_db.fetch_all()
-        tc_ag_obj_id = str(rows[0][0])  # == '20'
-        tc_ag_mc = rows[0][1]  # == 'TCAG'
-        ora_db.close()
-        if tc_sc_obj_id != '27' or tc_sc_mc != 'TCRENT' or tc_ag_obj_id != '20' or tc_ag_mc != 'TCAG':
-            err_msg = ("Acumen environment check found Thomas Cook configuration errors/discrepancies:"
-                       " expected {}/{}/{}/{} but got {}/{}/{}/{}.") \
-                .format('27', 'TCRENT', '20', 'TCAG', tc_sc_obj_id, tc_sc_mc, tc_ag_obj_id, tc_ag_mc)
-            continue
-    else:
-        tc_sc_obj_id = '27'
-        tc_sc_mc = 'TCRENT'
-        tc_ag_obj_id = '20'
-        tc_ag_mc = 'TCAG'
+            if tc_sc_obj_id != '27' or tc_sc_mc != 'TCRENT' or tc_ag_obj_id != '20' or tc_ag_mc != 'TCAG':
+                err_msg = ("Acumen environment check found Thomas Cook configuration errors/discrepancies:"
+                           " expected {}/{}/{}/{} but got {}/{}/{}/{}.") \
+                    .format('27', 'TCRENT', '20', 'TCAG', tc_sc_obj_id, tc_sc_mc, tc_ag_obj_id, tc_ag_mc)
+                continue
+        else:
+            tc_sc_obj_id = '27'
+            tc_sc_mc = 'TCRENT'
+            tc_ag_obj_id = '20'
+            tc_ag_mc = 'TCAG'
 
-    if check_sihot_kernel:
-        gi = GuestInfo(cae)
-        tc_sc_obj_id2 = gi.get_objid_by_matchcode(tc_sc_mc)
-        if tc_sc_obj_id != tc_sc_obj_id2:
-            err_msg = 'Sihot kernel check found Thomas Cook Northern matchcode discrepancy: expected {} but got {}.' \
-                .format(tc_sc_obj_id, tc_sc_obj_id2)
-            continue
-        tc_ag_obj_id2 = gi.get_objid_by_matchcode(tc_ag_mc)
-        if tc_ag_obj_id != tc_ag_obj_id2:
-            err_msg = 'Sihot kernel check found Thomas Cook AG/U.K. matchcode discrepancy: expected {} but got {}.' \
-                .format(tc_ag_obj_id, tc_ag_obj_id2)
-            continue
+        if check_sihot_kernel:
+            gi = GuestInfo(cae)
+            tc_sc_obj_id2 = gi.get_objid_by_matchcode(tc_sc_mc)
+            if tc_sc_obj_id != tc_sc_obj_id2:
+                err_msg = 'Sihot kernel check found Thomas Cook Northern matchcode discrepancy: expected={} got={}.' \
+                    .format(tc_sc_obj_id, tc_sc_obj_id2)
+                continue
+            tc_ag_obj_id2 = gi.get_objid_by_matchcode(tc_ag_mc)
+            if tc_ag_obj_id != tc_ag_obj_id2:
+                err_msg = 'Sihot kernel check found Thomas Cook AG/U.K. matchcode discrepancy: expected={} got={}.' \
+                    .format(tc_ag_obj_id, tc_ag_obj_id2)
+                continue
 
-    if check_sihot_web:
-        pm = PostMessage(cae)
-        err_msg = pm.post_message("Sihot web interface WatchPupPy check for command {}".format(command_line_args[0]))
-        if err_msg:
-            continue
+        if check_sihot_web:
+            pm = PostMessage(cae)
+            err_msg = pm.post_message("WatchPupPy Sihot WEB check for command {}".format(command_line_args[0]))
+            if err_msg:
+                continue
 
-    last_check = get_timer_corrected()
+        last_check = get_timer_corrected()
 
-    if last_check + check_interval < last_run + command_interval:
-        cae.dprint("  ###  Timer={}, next check in {}s (last={}, interval={}), next run in {}s (last={}, interval={})"
-                   .format(get_timer_corrected(),
-                           last_check + check_interval - get_timer_corrected(), last_check, check_interval,
-                           last_run + command_interval - get_timer_corrected(), last_run, command_interval),
-                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        continue  # wait for next check
+        if last_check + check_interval < last_run + command_interval:
+            cae.dprint("  ###  Timer={}, next check in {}s (last={} interval={}), next run in {}s (last={} interval={})"
+                       .format(get_timer_corrected(),
+                               last_check + check_interval - get_timer_corrected(), last_check, check_interval,
+                               last_run + command_interval - get_timer_corrected(), last_run, command_interval),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            continue  # wait for next check
 
-    # wait for next command_interval, only directly after startup checks on first run
-    if get_timer_corrected() < last_run + command_interval:
-        cae.dprint("  ###  Waiting for next run in {} seconds (timer={}, last={}, interval={})".format(
-            last_run + command_interval - get_timer_corrected(), get_timer_corrected(), last_run, command_interval),
+        # wait for next command_interval, only directly after startup checks on first run
+        if get_timer_corrected() < last_run + command_interval:
+            cae.dprint("  ###  Waiting for next run in {} seconds (timer={}, last={}, interval={})".format(
+                last_run + command_interval - get_timer_corrected(), get_timer_corrected(), last_run, command_interval),
+                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        try:
+            while get_timer_corrected() < last_run + command_interval:
+                time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
+        except KeyboardInterrupt:
+            err_msg = BREAK_PREFIX + ' while waiting for next command schedule in ' \
+                      + str(last_run + command_interval - get_timer_corrected()) + ' seconds'
+            continue  # first notify, then break in next loop because auf BREAK_PREFIX
+        cae.dprint("  ###  Run command (timer={}, last={}, interval={})".format(
+            get_timer_corrected(), last_run, command_interval),
             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-    try:
-        while get_timer_corrected() < last_run + command_interval:
-            time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
-    except KeyboardInterrupt:
-        err_msg = BREAK_PREFIX + ' while waiting for next command schedule in ' \
-                  + str(last_run + command_interval - get_timer_corrected()) + ' seconds'
-        continue  # first notify, then break in next loop because auf BREAK_PREFIX
-    cae.dprint("  ###  Run command (timer={}, last={}, interval={})".format(
-        get_timer_corrected(), last_run, command_interval),
-        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-    # then run the command
-    run_starts += 1
-    try:
-        process = subprocess.check_call(command_line_args, timeout=timeout)  # , shell=True)
-    except subprocess.CalledProcessError as cpe:
-        err_msg = str(run_starts) + '. run returned non-zero exit code:' + str(cpe.returncode)
-        if cpe.returncode == 4:
-            reset_last_run_time(command_interval)
-            continue  # command not really started, so try directly again - don't reset last_run variable
-    except subprocess.TimeoutExpired as toe:
-        err_msg = str(run_starts) + '. run timed out - current timer=' + str(get_timer_corrected()) \
-                  + ', last_run=' + str(last_run)
-        reset_last_run_time(command_interval, force=True)
-        continue  # try directly again - don't reset last_run variable
-    except KeyboardInterrupt:
-        err_msg = BREAK_PREFIX + ' while running ' + str(run_starts) + '. scheduled command ' + str(command_line_args)
+        # then run the command
+        run_starts += 1
+        try:
+            # for to get output changed from: process = subprocess.check_call(command_line_args, timeout=timeout)
+            # .. to:
+            output = subprocess.check_output(command_line_args, stderr=subprocess.STDOUT, timeout=timeout)  # shell=True
+        except subprocess.CalledProcessError as cpe:
+            err_msg = str(run_starts) + '. run returned non-zero exit code:' + str(cpe.returncode)
+            if cpe.returncode == 4:
+                reset_last_run_time(command_interval)
+                continue  # command not really started, so try directly again - don't reset last_run variable
+            err_msg += '\n' + str(cpe.output)
+        except subprocess.TimeoutExpired as toe:
+            err_msg = str(run_starts) + '. run timed out - current timer=' + str(get_timer_corrected()) \
+                      + ', last_run=' + str(last_run) \
+                      + ', output=' + str(toe.output)
+            reset_last_run_time(command_interval, force=True)
+            continue  # try directly again - don't reset last_run variable
+        except KeyboardInterrupt:
+            err_msg = BREAK_PREFIX + ' while running ' + str(run_starts) + '. command ' + str(command_line_args)
+        except Exception as ex:
+            err_msg = str(run_starts) + '. run raised unspecified exception: ' + str(ex)
+
+        last_run = get_timer_corrected()
+        run_ends += 1
     except Exception as ex:
-        err_msg = str(run_starts) + '. run raised unspecified exception: ' + str(ex)
-
-    last_run = get_timer_corrected()
-    run_ends += 1
+        err_msg += '\n\n' + 'WatchPupPy loop exception: ' + str(ex)
 
 progress.finished(error_msg=err_msg)
 uprint(' #### WatchPupPy exit - successfully run', run_ends, 'of', run_starts, 'times the command', command_line_args)

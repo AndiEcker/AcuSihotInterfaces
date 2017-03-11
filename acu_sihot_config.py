@@ -8,6 +8,8 @@ class Data:
         if self.error_message:
             print(self.error_message)
 
+        self.hotel_ids = self.load_view(db, 'T_LU', ['LU_NUMBER'], "LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
+
         any_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_ANY'")
         bhc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHC'")
         pbc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_PBC'")
@@ -72,3 +74,6 @@ class Data:
 
     def get_room_cat(self, room_no):
         return next((cols[1] for cols in self.ap_cats if cols[0] == room_no), None)
+
+    def get_hotel_ids(self):
+        return [cols[0] for cols in self.hotel_ids]

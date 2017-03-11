@@ -7,11 +7,7 @@ create or replace procedure LOBBY.RH_RUL_INSERT
                              pcApRef          IN T_ARO.ARO_APREF%type := NULL,  -- only passed from T_ARO triggers (ARO overload)
                              pnRHRef          IN T_RU.RU_RHREF%type := NULL,
                              pdFrom           IN date := NULL,
-                             pdTo             IN date := NULL,
-                             pcAtGeneric      IN T_RU.RU_ATGENERIC%type := NULL,
-                             pcResort         IN T_RU.RU_RESORT%type := NULL,
-                             pnObjId          IN T_RUL.RUL_SIHOT_OBJID%type := NULL,
-                             pcRate           IN T_RUL.RUL_SIHOT_RATE%type := NULL
+                             pdTo             IN date := NULL
                             ) 
 IS
   cursor cRU is
@@ -40,6 +36,7 @@ BEGIN
 END
 /*
   ae:19-02-17 V00: first beta for to call P_RUL_INSERT() for each RU chunk (<= 7 days) associated to an ARO/PRC/RH with > 7 days.
+  ae:11-03-17 V01: removed unused parameters pcAtGeneric, pcResort, pnObjId and pcRate.
 */;
 /
 

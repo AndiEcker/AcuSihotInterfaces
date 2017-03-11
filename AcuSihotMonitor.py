@@ -1,3 +1,6 @@
+"""
+    0.1     first beta
+"""
 import datetime
 from functools import partial
 from traceback import print_exc
@@ -115,9 +118,9 @@ def sih_missing_reservations():
                     if rd[0]['DEP']['elemVal'] != crow['DEP_DATE'].strftime('%Y-%m-%d'):
                         row_err += '/Depart. date mismatch ' + rd[0]['DEP']['elemVal'] + \
                                    ' a=' + crow['DEP_DATE'].strftime('%Y-%m-%d')
-                    if (rd[0]['RN']['elemVal'] or crow['SIHOT_ROOM_NO']) \
-                            and rd[0]['RN']['elemVal'] != crow['SIHOT_ROOM_NO']:  # prevent None != '' false positive
-                        row_err += '/Room no mismatch ' + rd[0]['RN']['elemVal'] + ' a=' + str(crow['SIHOT_ROOM_NO'])
+                    if (rd[0]['RN']['elemVal'] or crow['RUL_SIHOT_ROOM']) \
+                            and rd[0]['RN']['elemVal'] != crow['RUL_SIHOT_ROOM']:  # prevent None != '' false positive
+                        row_err += '/Room no mismatch ' + rd[0]['RN']['elemVal'] + ' a=' + crow['RUL_SIHOT_ROOM']
                 else:
                     row_err += '/Sihot search error ' + str(rd)
                 if row_err:

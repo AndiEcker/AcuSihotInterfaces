@@ -1,5 +1,8 @@
 """
     0.1     first beta.
+    0.2     also put correct sub-index onto external booking ref (GDSNO) for first and the other bookings if booking has
+            several rooms for the same date range.
+    0.3     changed sub-index into extra entries on the Sihot Rooming List
 """
 import sys
 import os
@@ -17,7 +20,7 @@ from sxmlif import ResToSihot, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
 
-__version__ = '0.1'
+__version__ = '0.3'
 
 RUN_MODE_CONSOLE = 'c'
 RUN_MODE_UI = 'u'
@@ -88,13 +91,13 @@ sub_res_id = 0      # for Booking.com group reservations
    # file collection, logging and progress helpers
    # #########################################################
 '''
-error_log = ''
+error_log = []
 
 
-def log_error(err):
+def log_error(err, ctx, line=0):
     global error_log
     uprint(err)
-    error_log += '\n' + err
+    error_log.append(dict(message=err, context=ctx, line=line))
 
 lf = cae.get_option('logFile')
 log_file_prefix = os.path.splitext(os.path.basename(lf))[0]
@@ -130,7 +133,7 @@ def run_import(acu_user, acu_password):
     # #########################################################
     conf_data = Data(acu_user=acu_user, acu_password=acu_password, acu_dsn=cae.get_option('acuDSN'))
     if conf_data.error_message:
-        log_error(conf_data.error_message)
+        log_error(conf_data.error_message, '@UserLogOn')
         return
 
     ''' **************************************************************************************
@@ -202,6 +205,8 @@ def run_import(acu_user, acu_password):
 
     def tci_line_to_res_row(curr_line, last_line, rows):
         """ TC import file has per line one pax """
+        global sub_res_id
+
         curr_cols = curr_line.split(';')
 
         # no header for to check but each last_line should start with either CNL, BOK or RBO
@@ -236,10 +241,15 @@ def run_import(acu_user, acu_password):
                 if datetime.timedelta(int(curr_cols[TCI_STAY_DAYS])) != row['DEP_DATE'] - row['ARR_DATE']:
                     comments.append('(LengthOfStay differs!)')
             elif last_cols[TCI_BOOK_IDX] > '1' or last_cols[TCI_BOOK_REF] == curr_cols[TCI_BOOK_REF]:
-                # separate room - mostly with same TC booking reference
-                rows[-1]['SIHOT_NOTE'] += '+' + curr_cols[TCI_BOOK_REF] + '-' + curr_cols[TCI_BOOK_IDX]
-                rows[-1]['SIHOT_TEC_NOTE'] += '|CR|+' + curr_cols[TCI_BOOK_REF] + '-' + curr_cols[TCI_BOOK_IDX]
-                comments.append(curr_cols[TCI_BOOK_REF] + '-' + curr_cols[TCI_BOOK_IDX])
+                # separate room - mostly with same TC booking reference - increment sub_res_id (0==1st room)
+                row = rows[-1]
+                sub_res_id += 1
+                rows[-1]['SIHOT_GDSNO'] += '-' + str(sub_res_id - 1)
+                rows[-1]['SIHOT_NOTE'] += '+' + curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id - 1)
+                rows[-1]['SIHOT_TEC_NOTE'] += '|CR|+' + curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id - 1)
+                comments.append(curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id))
+            else:
+                sub_res_id = 0
 
         if row:  # add next pax - extending previous row
             for txt in comments:
@@ -249,9 +259,9 @@ def run_import(acu_user, acu_password):
             row['RU_ADULTS' if is_adult else 'RU_CHILDREN'] += 1
         else:
             rows.append(row)
-            row['SIHOT_GDSNO'] = TCI_GDSNO_PREFIX + curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]  # GDSNO
+            row['SIHOT_GDSNO'] = TCI_GDSNO_PREFIX + curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
             row['SH_RES_TYPE'] = 'S' if curr_cols[TCI_BOOK_TYPE] == 'CNL' else '1'
-            row['SIHOT_HOTEL_C'] = '1' if curr_cols[TCI_RESORT] == 'BEVE' else '4'  # 1=BHC, 4=PBC
+            row['RUL_SIHOT_HOTEL'] = 1 if curr_cols[TCI_RESORT] == 'BEVE' else 4  # 1=BHC, 4=PBC
             row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.get_ro_agency_objid('TK')
             row['SH_MC'] = row['OC_CODE'] = conf_data.get_ro_agency_matchcode('TK')
             row['RH_EXT_BOOK_REF'] = curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
@@ -284,13 +294,15 @@ def run_import(acu_user, acu_password):
             row['RUL_ACTION'] = ACTION_DELETE if curr_cols[TCI_BOOK_TYPE] == 'CNL' \
                 else (ACTION_UPDATE if curr_cols[TCI_BOOK_TYPE] == 'RBO' else ACTION_INSERT)
 
-        # add pax name and person sequence number
+        # add pax name, person sequence number and room sequence number (sub_res_id)
         name_col = 'SH_' + ('ADULT' if is_adult else 'CHILD') \
                    + str(row['RU_ADULTS' if is_adult else 'RU_CHILDREN']) + '_NAME'
         row[name_col] = curr_cols[TCI_SURNAME]
         row[name_col + '2'] = curr_cols[TCI_FORENAME]
         pers_seq = row['RU_ADULTS'] if is_adult else 10 + row['RU_CHILDREN']
         row['SH_PERS_SEQ' + str(pers_seq)] = pers_seq - 1
+        row['SH_ROOM_SEQ' + str(pers_seq)] = sub_res_id
+        row['SH_ROOMS'] = sub_res_id + 1
 
         row['RUL_CHANGES'] = curr_line      # needed for error notification
 
@@ -446,7 +458,7 @@ def run_import(acu_user, acu_password):
             rows.append(row)
             row['SIHOT_GDSNO'] = BKC_GDSNO_PREFIX + ext_key
             row['SH_RES_TYPE'] = 'S' if curr_cols[BKC_CANCEL_DATE] else '1'
-            row['SIHOT_HOTEL_C'] = str(resort)  # 1=BHC, 4=PBC
+            row['RUL_SIHOT_HOTEL'] = resort  # 1=BHC, 4=PBC
             row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.get_ro_agency_objid('BK')
             row['SH_MC'] = row['OC_CODE'] = conf_data.get_ro_agency_matchcode('BK')
             row['RH_EXT_BOOK_REF'] = curr_cols[BKC_BOOK_REF]
@@ -523,7 +535,8 @@ def run_import(acu_user, acu_password):
         row['RH_EXT_BOOK_REF'] = curr_cols[RCI_BOOK_REF]
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCI_ARR_DATE][:10], '%Y-%m-%d')
         row['DEP_DATE'] = row['ARR_DATE'] + datetime.timedelta(7)
-        row['RUL_SIHOT_ROOM'] = curr_cols[RCI_APT_NO]
+        row['RUL_SIHOT_ROOM'] = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCI_APT_NO]) == 3 else '') \
+                                + curr_cols[RCI_APT_NO]
         # room_size = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
         # comment = room_size + ' (' + row['RUL_SIHOT_ROOM'] + ')'
         rows.append(row)
@@ -576,7 +589,7 @@ def run_import(acu_user, acu_password):
                 except Exception as ex:
                     error_msg = 'TCI Line parse exception: {}'.format(ex)
                 if error_msg:
-                    log_error('Error in line {} of TCI file {}: {}'.format(idx + 1, fn, error_msg))
+                    log_error(error_msg, fn, idx + 1)
                     if cae.get_option('breakOnError'):
                         break
                 last_ln = ln
@@ -590,8 +603,7 @@ def run_import(acu_user, acu_password):
         for fn in bkc_files:
             hotel_id = bkc_check_filename(fn)
             if not hotel_id:
-                log_error('Hotel ID prefix followed by underscore character is missing in file name {} - skipping.'
-                          .format(fn))
+                log_error('Hotel ID prefix followed by underscore character is missing - skipping.', fn)
                 continue
 
             with open(fn, 'r', encoding='utf-8-sig') as fp:     # encoding is removing the utf8 BOM 'ï»¿'
@@ -611,7 +623,7 @@ def run_import(acu_user, acu_password):
                 except Exception as ex:
                     error_msg = 'Booking.com line parse exception: {}'.format(ex)
                 if error_msg:
-                    log_error("Error in line {} of Booking.com file {}: {}".format(idx + 1, fn, error_msg))
+                    log_error(error_msg, fn, idx + 1)
                     if cae.get_option('breakOnError'):
                         break
 
@@ -628,7 +640,7 @@ def run_import(acu_user, acu_password):
                 except Exception as ex:
                     error_msg = 'Booking.com line parse exception: {}'.format(ex)
                 if error_msg:
-                    log_error("Error in line {} of Booking.com file {}: {}".format(idx + 1, fn, error_msg))
+                    log_error(error_msg, fn, idx + 1)
                     if cae.get_option('breakOnError'):
                         break
 
@@ -665,8 +677,7 @@ def run_import(acu_user, acu_password):
                     except Exception as ex:
                         error_msg = 'line parse exception: {}'.format(ex)
                 if error_msg:
-                    log_error('Error in line {} of RCI{} file {}: {}'.format(idx + 1, 'P' if points_import else '',
-                                                                             fn, error_msg))
+                    log_error('RCI{} - '.format('P' if points_import else '') + error_msg, fn, idx + 1)
                     if cae.get_option('breakOnError'):
                         break
 
@@ -695,7 +706,7 @@ def run_import(acu_user, acu_password):
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     error_msg = ''
                     continue
-                log_error('Error in sending reservation {} to Sihot {}'.format(crow, error_msg))
+                log_error(error_msg, '@SendRes')
                 if cae.get_option('breakOnError'):
                     break
 
@@ -710,31 +721,36 @@ def run_import(acu_user, acu_password):
     # logging and clean up
     # #########################################################
 
-    if error_log:
-        with open(os.path.join(log_file_path, log_file_prefix, '_errors.log'), 'a') as fh:
-            fh.write(error_log)
-    else:
-        uprint('####  Move Import Files..  ####')
-        for sfn in tci_files + bkc_files + rci_files:
-            dn = os.path.dirname(sfn)
-            folder = os.path.basename(os.path.normpath(dn))
-            filename = os.path.basename(sfn)
-            # first copy imported file to tci/bkc/rci logging sub-folder (on the server)
-            shutil.copy2(sfn, os.path.join(log_file_path, folder, log_file_prefix + '_' + filename))
-            # .. then move the imported file to the processed sub-folder (on the users machine)
-            ddn = os.path.join(dn, 'processed')
-            if not os.path.isdir(ddn):
-                os.mkdir(ddn)
-            dfn = os.path.join(ddn, log_file_prefix + '_' + filename)
-            os.rename(sfn, dfn)
-            cae.dprint("   #  ", sfn, 'to', dfn, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+    uprint('####  Move Import Files..  ####')
+    for sfn in tci_files + bkc_files + rci_files:
+        if [_ for _ in error_log if _['context'] == sfn]:
+            continue        # don't move file if there were errors
+        dn = os.path.dirname(sfn)
+        folder = os.path.basename(os.path.normpath(dn))
+        filename = os.path.basename(sfn)
+        # first copy imported file to tci/bkc/rci logging sub-folder (on the server)
+        shutil.copy2(sfn, os.path.join(log_file_path, folder, log_file_prefix + '_' + filename))
+        # .. then move the imported file to the processed sub-folder (on the users machine)
+        ddn = os.path.join(dn, 'processed')
+        if not os.path.isdir(ddn):
+            os.mkdir(ddn)
+        dfn = os.path.join(ddn, log_file_prefix + '_' + filename)
+        os.rename(sfn, dfn)
+        cae.dprint("   #  ", sfn, 'to', dfn, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     if error_log:
+        error_text = '\n\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in error_log)
         if notification:
-            notification.send_notification(error_log, subject="SihotResImport error notification")
-        uprint('Error Log:', error_log)
+            notification_err = notification.send_notification(error_text, subject="SihotResImport error notification")
+            if notification_err:
+                uprint('Notification send error:', notification_err)
+                error_text += '\n\n\nNotification send error: ' + notification_err
+        uprint('Error Log:', error_text)
+        with open(os.path.join(log_file_path, log_file_prefix + '_errors.log'), 'a') as fh:
+            fh.write(error_text)
+
         if run_mode == RUN_MODE_UI:
-            return  # don't quit app for to show errors on screen to user
+            return error_text   # don't quit app for to show errors on screen to user
 
     quit_app(error_log)
 
@@ -768,6 +784,7 @@ if run_mode == RUN_MODE_UI:
         def build(self):
             cae.dprint('App.build()')
             self.display_files()
+            self.title = 'Sihot Reservation Import  V' + __version__
             self.root = Factory.MainWindow()
             return self.root
 
@@ -795,8 +812,8 @@ if run_mode == RUN_MODE_UI:
             usr = self.root.ids.user_name.text
             cae.set_config('acuUser', usr.upper())
             self.root.ids.import_button.disabled = True
-            run_import(usr, self.root.ids.user_password.text)
-            self.root.ids.error_log.text = error_log
+            error_text = run_import(usr, self.root.ids.user_password.text)
+            self.root.ids.error_log.text += '\n\n\n' + '-' * 69 + str(error_text)
             self.user_password = ''     # wipe pw, normally run_import() exits the app, only executed on login error
             self.display_files()
             self.root.ids.import_button.disabled = False
