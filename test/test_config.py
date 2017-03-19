@@ -181,4 +181,3 @@ class TestRoomCat:
 
         assert config_data.get_size_cat('PBC', '2 BED') == '2BSP'
         assert config_data.get_size_cat('PBC', '2 BED', [757]) == '2BSH'
-

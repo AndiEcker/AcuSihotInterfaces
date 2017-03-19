@@ -1,4 +1,4 @@
-from console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from sxmlif import GuestInfo
 
 __version__ = '0.1'

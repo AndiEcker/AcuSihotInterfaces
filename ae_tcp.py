@@ -5,7 +5,7 @@ import socketserver
 
 from abc import ABCMeta, abstractmethod
 
-from console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 
 # import time         # needed only for testing
 

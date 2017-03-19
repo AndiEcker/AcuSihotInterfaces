@@ -11,18 +11,18 @@ BEGIN
   
   if pcAction in ('CO', 'RM') then
     select f_stragg(to_char(ARO_CODE) || ':' || ARO_APREF || '=' || to_char(ARO_STATUS) || '@' || to_char(ARO_EXP_ARRIVE, 'DD-MM-YY')) into lcCheckOutInfo from T_ARO
-     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - 2 and ARO_EXP_DEPART;
+     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - 4 and ARO_EXP_DEPART;
     update T_ARO set ARO_TIMEOUT = sysdate,
                      ARO_STATUS = case when pcAction = 'RM' then 320 else 390 end
-     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - 2 and ARO_EXP_DEPART;
+     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - 4 and ARO_EXP_DEPART;
   end if;        
   if pcAction in ('CI', 'RM') then
     select f_stragg(to_char(ARO_CODE) || ':' || ARO_APREF || '=' || to_char(ARO_STATUS) || '@' || to_char(ARO_EXP_ARRIVE, 'DD-MM-YY')) into lcCheckInInfo from T_ARO
-     where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + 2;
+     where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + 4;
     update T_ARO set ARO_TIMEIN = sysdate, 
                      ARO_RECD_KEY = sysdate + 1 / (24 * 60),
                      ARO_STATUS = case when pcAction = 'RM' then 330 else 300 end
-     where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + 2;
+     where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + 4;
   end if;
   pcExtraInfo := case when lcCheckOutInfo is not NULL then 'CO' || lcCheckOutInfo end || case when lcCheckInInfo is not NULL then 'CI' || lcCheckInInfo end;
 END
@@ -31,6 +31,7 @@ END
   ae:03-02-17 changed the valid check-in/-out date range from exp_arrive..depart to arrive..arrive+2 for checkin and depart-2..depart for checkouts - QD HOTFIX.
   ae:08-02-17 V02: added IN OUT parameter.
   ae:21-02-17 V03: added population of ARO_RECD_KEY for to not show blue dots in Acumen Lobby window (for Marian). 
+  ae:15-03-17 V04: extended valid date range offset from 2 to 4 days - see WO #42288 from Esther.
 */;
 /
 

@@ -1,7 +1,7 @@
 from smtplib import SMTP  # , SMTP_SSL
 from email.mime.text import MIMEText
 
-from console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 
 
 class Notification:
@@ -79,7 +79,7 @@ class Notification:
                 # using s.starttls() is throwing error "STARTTLS extension not supported by server."
                 # s.starttls()
                 s.login(self._user_name, self._user_password)
-                unreached_recipients = s.send_message(message, self._mail_from, self._mail_to)
+                unreached_recipients = s.send_message(message, self._mail_from, mail_to)
                 if unreached_recipients:
                     err_msg = 'Unreached Recipients: ' + str(unreached_recipients)
         except Exception as mex:

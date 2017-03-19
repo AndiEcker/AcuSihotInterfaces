@@ -7,9 +7,9 @@ from textwrap import wrap
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from console_app import uprint, DEBUG_LEVEL_VERBOSE
-from tcp import TcpClient
-from db import OraDB, MAX_STRING_LENGTH
+from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
+from ae_tcp import TcpClient
+from ae_db import OraDB, MAX_STRING_LENGTH
 
 # data actions
 ACTION_DELETE = 'DELETE'
@@ -297,7 +297,7 @@ MAP_WEB_RES = \
         #  'colValFromAcu': "'2TIC'"},   # mandatory but could be empty (to get PMS fallback-default)
         # RUL_SIHOT_CAT results in error 1011 for tk->TC/TK bookings with room move and room with higher/different room
         # .. cat, therefore use price category as room category for Thomas Cook Bookings.
-        {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',     # needed for DELETE action
+        {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',  # needed for DELETE action
          'colValFromAcu': "case when RUL_SIHOT_RATE in ('TC', 'TK')"
                           " then F_SIHOT_CAT('RU' || RU_CODE) else RUL_SIHOT_CAT end"},
         {'elemName': 'PCAT', 'colName': 'SH_PRICE_CAT', 'elemHideInActions': ACTION_DELETE,
@@ -370,8 +370,8 @@ MAP_WEB_RES = \
                           " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
                           " 'DD-MM-YY') + "
                           "to_number(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_DAYS')) end"},
-        {'elemName': 'NOROOMS', 'colName': 'SH_ROOMS', 'colVal': 1},    # needed for DELETE action
-        {'elemName': 'NOPAX', 'colName': 'RU_ADULTS'},                  # needed for DELETE action
+        {'elemName': 'NOROOMS', 'colName': 'SH_ROOMS', 'colVal': 1},  # needed for DELETE action
+        {'elemName': 'NOPAX', 'colName': 'RU_ADULTS'},  # needed for DELETE action
         {'elemName': 'NOCHILDS', 'colName': 'RU_CHILDREN', 'elemHideInActions': ACTION_DELETE},
         {'elemName': 'TEC-COMMENT', 'colName': 'SIHOT_TEC_NOTE', 'elemHideInActions': ACTION_DELETE},
         {'elemName': 'COMMENT', 'colName': 'SIHOT_NOTE', 'elemHideInActions': ACTION_DELETE},
@@ -631,8 +631,8 @@ MAP_WEB_RES = \
         {'elemName': '_RES_GROUP', 'colName': 'RO_RES_GROUP'},  # needed for elemHideIf
         {'elemName': '_RES_OCC', 'colName': 'RUL_SIHOT_RATE'},  # needed for res_id_values
         {'elemName': '_CHANGES', 'colName': 'RUL_CHANGES'},  # needed for error notifications
-        {'elemName': '_LAST_HOTEL', 'colName': 'RUL_SIHOT_LAST_HOTEL'},     # needed for HOTMOVE
-        {'elemName': '_LAST_CAT', 'colName': 'RUL_SIHOT_LAST_CAT'},         # needed for HOTMOVE
+        {'elemName': '_LAST_HOTEL', 'colName': 'RUL_SIHOT_LAST_HOTEL'},  # needed for HOTMOVE
+        {'elemName': '_LAST_CAT', 'colName': 'RUL_SIHOT_LAST_CAT'},  # needed for HOTMOVE
         {'elemName': '/RESERVATION'},
         {'elemName': '/ARESLIST'},
     )

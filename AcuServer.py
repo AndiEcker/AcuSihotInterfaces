@@ -4,10 +4,10 @@
 """
 from traceback import format_stack
 
-from console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
-from notification import Notification
-from db import OraDB, DEF_USER, DEF_DSN
-from tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
+from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae_notification import Notification
+from ae_db import OraDB, DEF_USER, DEF_DSN
+from ae_tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder, SXML_DEF_ENCODING
 
 __version__ = '0.2'

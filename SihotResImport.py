@@ -11,9 +11,9 @@ import glob
 import datetime
 import csv
 
-from console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from notification import Notification
-from db import DEF_USER, DEF_DSN
+from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
+from ae_notification import Notification
+from ae_db import DEF_USER, DEF_DSN
 from acu_sihot_config import Data
 from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
@@ -85,7 +85,7 @@ uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
 
 # check if Acumen domain/user/pw is fully specified and show kivy UI for to enter them if not
 run_mode = RUN_MODE_CONSOLE if cae.get_config('acuPassword') else RUN_MODE_UI
-sub_res_id = 0      # for Booking.com group reservations
+sub_res_id = 0  # for Booking.com group reservations
 
 '''# #########################################################
    # file collection, logging and progress helpers
@@ -98,6 +98,7 @@ def log_error(err, ctx, line=0):
     global error_log
     uprint(err)
     error_log.append(dict(message=err, context=ctx, line=line))
+
 
 lf = cae.get_option('logFile')
 log_file_prefix = os.path.splitext(os.path.basename(lf))[0]
@@ -203,7 +204,7 @@ def run_import(acu_user, acu_password):
 
         return room_cat, half_board, comments
 
-    def tci_line_to_res_row(curr_line, last_line, rows):
+    def tci_line_to_res_row(curr_line, last_line, file_name, line_num, rows):
         """ TC import file has per line one pax """
         global sub_res_id
 
@@ -232,7 +233,7 @@ def run_import(acu_user, acu_password):
                     and int(last_cols[TCI_PAX_IDX]) + 1 == int(curr_cols[TCI_PAX_IDX]):
                 # additional pax
                 row = rows[-1]
-            elif last_cols[TCI_BOOK_EXT] == 'H' and curr_cols[TCI_BOOK_EXT] == 'E'\
+            elif last_cols[TCI_BOOK_EXT] == 'H' and curr_cols[TCI_BOOK_EXT] == 'E' \
                     and last_cols[TCI_BOOK_REF] == curr_cols[TCI_LINK_REF] \
                     and last_cols[TCI_LINK_REF] == curr_cols[TCI_BOOK_REF]:
                 # additional pax (maybe with different LengthOfStay)
@@ -304,7 +305,9 @@ def run_import(acu_user, acu_password):
         row['SH_ROOM_SEQ' + str(pers_seq)] = sub_res_id
         row['SH_ROOMS'] = sub_res_id + 1
 
-        row['RUL_CHANGES'] = curr_line      # needed for error notification
+        row['RUL_CHANGES'] = curr_line  # needed for error notification
+        row['_FILE_NAME'] = file_name
+        row['_LINE_NUM'] = line_num
 
         return ''
 
@@ -328,8 +331,9 @@ def run_import(acu_user, acu_password):
     BKC_ADULTS = 9
     BKC_CHILDREN = 10
     # BKC_BABIES = 11
+    BKC_LINE_NUM = 12  # for to store original line number (because file content get re-ordered)
 
-    BKC_COL_COUNT = 12
+    BKC_COL_COUNT = 13
 
     def bkc_normalize_line(line):
         if line[-1] == ';':
@@ -369,7 +373,7 @@ def run_import(acu_user, acu_password):
                 comments.append('bkc_room_cat_pax_board() warning: room size missing (using Studio)')
             room_size = 'STUDIO'
         ap_feats = []
-        if room_info.find('SUPERIOR') >= 0:     # 748==AFT_CODE of "Refurbished" apt. feature
+        if room_info.find('SUPERIOR') >= 0:  # 748==AFT_CODE of "Refurbished" apt. feature
             ap_feats.append(748)
             comments.insert(0, '#Sterling')
         room_cat = conf_data.get_size_cat('BHC' if resort == 1 else 'PBC', room_size, ap_feats)
@@ -399,7 +403,7 @@ def run_import(acu_user, acu_password):
 
         return room_cat, adults, children, board, comments
 
-    def bkc_line_to_res_row(curr_cols, resort, rows):
+    def bkc_line_to_res_row(curr_cols, resort, file_name, line_num, rows):
         """ Booking.com can have various lines per booking - identified with external booking ref/BKC_BOOK_REF """
         global sub_res_id
 
@@ -407,7 +411,7 @@ def run_import(acu_user, acu_password):
         if len(curr_cols) != BKC_COL_COUNT:
             return 'bkc_line_to_res_row(): invalid column count, {} differ'.format(BKC_COL_COUNT - len(curr_cols))
         elif len(curr_cols[BKC_BOOK_DATE].split('-')[0]) != 4:
-            return "bkc_line_to_res_row(): invalid booking date format '{}' instead of YYYY-MM-DD"\
+            return "bkc_line_to_res_row(): invalid booking date format '{}' instead of YYYY-MM-DD" \
                 .format(curr_cols[BKC_BOOK_DATE])
         elif curr_cols[BKC_CHANNEL] != 'Booking.com':
             return 'bkc_line_to_res_row(): invalid channel {} instead of Booking.com'.format(curr_cols[BKC_CHANNEL])
@@ -419,7 +423,7 @@ def run_import(acu_user, acu_password):
         ext_key = curr_cols[BKC_BOOK_REF]
         row = {}
         if rows:  # check if current line is an extension of the booking from last line (only not in first line)
-            if BKC_GDSNO_PREFIX + ext_key in rows[-1]['SIHOT_GDSNO']:   # 'in' instead of '==' for to detect group res
+            if BKC_GDSNO_PREFIX + ext_key in rows[-1]['SIHOT_GDSNO']:  # 'in' instead of '==' for to detect group res
                 # check if date range extension or additional room - assuming additional room
                 last_arr = rows[-1]['ARR_DATE']
                 last_dep = rows[-1]['DEP_DATE']
@@ -446,7 +450,7 @@ def run_import(acu_user, acu_password):
                     ext_key += '-' + str(sub_res_id + 1)
                     comments.append(ext_key)
 
-            elif sub_res_id:    # reset sub-res-no if last line was group or a merged booking
+            elif sub_res_id:  # reset sub-res-no if last line was group or a merged booking
                 sub_res_id = 0
 
         if row:  # add extra comments to extended previous row - removing duplicates
@@ -492,7 +496,9 @@ def run_import(acu_user, acu_password):
                     row[name_col + '2'] = fore_name
                 row['SH_PERS_SEQ' + str(i + 1)] = i
 
-        row['RUL_CHANGES'] = ','.join(curr_cols)      # needed for error notification
+        row['RUL_CHANGES'] = ','.join(curr_cols)  # needed for error notification
+        row['_FILE_NAME'] = file_name
+        row['_LINE_NUM'] = line_num
 
         return ''
 
@@ -517,7 +523,7 @@ def run_import(acu_user, acu_password):
     # RCI_ROOM_SIZE = 25
     RCI_COL_COUNT = 35
 
-    def rci_line_to_res_row(curr_line, rows):
+    def rci_line_to_res_row(curr_line, file_name, line_num, rows):
         curr_cols = curr_line.split('\t')
         if curr_line[-1] != '\n':
             return 'rci_line_to_res_row(): incomplete line (missing end of line)'
@@ -539,13 +545,16 @@ def run_import(acu_user, acu_password):
                                 + curr_cols[RCI_APT_NO]
         # room_size = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
         # comment = room_size + ' (' + row['RUL_SIHOT_ROOM'] + ')'
+
+        row['_FILE_NAME'] = file_name
+        row['_LINE_NUM'] = line_num
         rows.append(row)
         return ''
 
     RCIP_RESORT = 0
     RCIP_COL_COUNT = 99
 
-    def rcip_line_to_res_row(curr_line, rows):
+    def rcip_line_to_res_row(curr_line, file_name, line_num, rows):
         curr_cols = curr_line.split('\t')
 
         if curr_line[-1] != '\n':
@@ -554,6 +563,11 @@ def run_import(acu_user, acu_password):
             return 'rcip_line_to_res_row(): incomplete line, missing {} columns'.format(RCIP_COL_COUNT - len(curr_cols))
         elif curr_cols[RCIP_RESORT] not in ('1442', '2398', '2429', '0803'):
             return 'rcip_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCIP_RESORT])
+
+        row = dict()
+
+        row['_FILE_NAME'] = file_name
+        row['_LINE_NUM'] = line_num
 
         rows.append({})
 
@@ -585,7 +599,7 @@ def run_import(acu_user, acu_password):
             for idx, ln in enumerate(lines):
                 cae.dprint(ln)
                 try:
-                    error_msg = tci_line_to_res_row(ln, last_ln, res_rows)
+                    error_msg = tci_line_to_res_row(ln, last_ln, fn, idx + 1, res_rows)
                 except Exception as ex:
                     error_msg = 'TCI Line parse exception: {}'.format(ex)
                 if error_msg:
@@ -606,7 +620,7 @@ def run_import(acu_user, acu_password):
                 log_error('Hotel ID prefix followed by underscore character is missing - skipping.', fn)
                 continue
 
-            with open(fn, 'r', encoding='utf-8-sig') as fp:     # encoding is removing the utf8 BOM 'ï»¿'
+            with open(fn, 'r', encoding='utf-8-sig') as fp:  # encoding is removing the utf8 BOM 'ï»¿'
                 lines = fp.readlines()
             # check/remove header and parse all other lines normalized into column list
             header = ''
@@ -615,6 +629,7 @@ def run_import(acu_user, acu_password):
                 try:
                     ln = bkc_normalize_line(ln)
                     cs = [c for c in csv.reader([ln])][0]
+                    cs.append(str(idx + 1))  # store original line number in BKC_LINE_NUM (because lines get re-ordered)
                     if not header:
                         header = ln
                         error_msg = bkc_check_header(cs, ln)
@@ -636,7 +651,7 @@ def run_import(acu_user, acu_password):
             for idx, ln in enumerate(imp_rows):
                 cae.dprint(ln)
                 try:
-                    error_msg = bkc_line_to_res_row(ln, hotel_id, res_rows)
+                    error_msg = bkc_line_to_res_row(ln, hotel_id, fn, int(ln[BKC_LINE_NUM]), res_rows)
                 except Exception as ex:
                     error_msg = 'Booking.com line parse exception: {}'.format(ex)
                 if error_msg:
@@ -671,9 +686,9 @@ def run_import(acu_user, acu_password):
                     cae.dprint(ln)
                     try:
                         if points_import:
-                            error_msg = rcip_line_to_res_row(ln, res_rows)
+                            error_msg = rcip_line_to_res_row(ln, fn, idx + 1, res_rows)
                         else:
-                            error_msg = rci_line_to_res_row(ln, res_rows)
+                            error_msg = rci_line_to_res_row(ln, fn, idx + 1, res_rows)
                     except Exception as ex:
                         error_msg = 'line parse exception: {}'.format(ex)
                 if error_msg:
@@ -706,7 +721,7 @@ def run_import(acu_user, acu_password):
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     error_msg = ''
                     continue
-                log_error(error_msg, '@SendRes')
+                log_error(error_msg, '@SendRes:' + crow['_FILE_NAME'], crow['_LINE_NUM'])
                 if cae.get_option('breakOnError'):
                     break
 
@@ -723,8 +738,8 @@ def run_import(acu_user, acu_password):
 
     uprint('####  Move Import Files..  ####')
     for sfn in tci_files + bkc_files + rci_files:
-        if [_ for _ in error_log if _['context'] == sfn]:
-            continue        # don't move file if there were errors
+        if [_ for _ in error_log if sfn in _['context']]:
+            continue  # don't move file if there were errors
         dn = os.path.dirname(sfn)
         folder = os.path.basename(os.path.normpath(dn))
         filename = os.path.basename(sfn)
@@ -750,7 +765,7 @@ def run_import(acu_user, acu_password):
             fh.write(error_text)
 
         if run_mode == RUN_MODE_UI:
-            return error_text   # don't quit app for to show errors on screen to user
+            return error_text  # don't quit app for to show errors on screen to user
 
     quit_app(error_log)
 
@@ -765,15 +780,17 @@ def quit_app(err_log=None):
 
 
 if run_mode == RUN_MODE_UI:
-    sys.argv = [sys.argv[0]]    # remove command line options for to prevent errors in kivy args_parse
+    sys.argv = [sys.argv[0]]  # remove command line options for to prevent errors in kivy args_parse
     from kivy.app import App
     from kivy.lang.builder import Factory
     from kivy.properties import NumericProperty, StringProperty
     from kivy.uix.textinput import TextInput
 
+
     class CapitalInput(TextInput):
         def insert_text(self, substring, from_undo=False):
             return super(CapitalInput, self).insert_text(substring.upper(), from_undo=from_undo)
+
 
     class SihotResImportApp(App):
         file_count = NumericProperty(0)
@@ -791,6 +808,7 @@ if run_mode == RUN_MODE_UI:
         def display_files(self):
             collect_files()  # collect files for showing them in the user interface
             self.file_count = len(imp_files)
+            self.file_names = ''
             for fn in imp_files:
                 fn = os.path.splitext(os.path.basename(fn))[0]
                 self.file_names += '\n' + fn
@@ -814,7 +832,7 @@ if run_mode == RUN_MODE_UI:
             self.root.ids.import_button.disabled = True
             error_text = run_import(usr, self.root.ids.user_password.text)
             self.root.ids.error_log.text += '\n\n\n' + '-' * 69 + str(error_text)
-            self.user_password = ''     # wipe pw, normally run_import() exits the app, only executed on login error
+            self.user_password = ''  # wipe pw, normally run_import() exits the app, only executed on login error
             self.display_files()
             self.root.ids.import_button.disabled = False
 

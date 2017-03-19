@@ -1,5 +1,5 @@
-from console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from db import DEF_USER, DEF_DSN
+from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
+from ae_db import DEF_USER, DEF_DSN
 from sxmlif import SihotXmlBuilder, ResToSihot, SXML_DEF_ENCODING
 
 __version__ = '0.1'
@@ -18,7 +18,7 @@ cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system"
 
 
 # select reservation by gdsNo (priority) or client ref/matchcode and if both is empty then send file WebResTester.req
-cae.add_option('gdsNo', 'Send reservations of the reservation identified with this GDSNO/RU_CODE', '1059153')  # 467190')
+cae.add_option('gdsNo', 'Send reservations of the reservation identified with this GDSNO/RU_CODE', '1059153')
 cae.add_option('client', 'Send reservations of the client identified with this matchcode', '')  # Z008475')  # N617081')
 # E362344')  # C605765')
 

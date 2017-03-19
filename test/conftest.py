@@ -3,7 +3,7 @@ import sys
 import pytest
 
 from configparser import ConfigParser
-from db import OraDB
+from ae_db import OraDB
 from acu_sihot_config import Data
 from sxmlif import PostMessage, ConfigDict, CatRooms, GuestInfo, ClientToSihot, ResToSihot
 

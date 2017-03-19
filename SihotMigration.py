@@ -4,8 +4,8 @@
     0.3     added error counter to Progress
 """
 
-from console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from db import DEF_USER, DEF_DSN
+from ae_console_app import ConsoleApp, Progress, uprint
+from ae_db import DEF_USER, DEF_DSN
 from sxmlif import ClientToSihot, ResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
 
 __version__ = '0.3'

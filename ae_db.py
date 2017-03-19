@@ -2,7 +2,7 @@ import os
 import datetime
 
 import cx_Oracle
-from console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 
 DEF_USER = 'SIHOT_INTERFACE'
 DEF_DSN = 'SP.TEST'
@@ -77,6 +77,17 @@ class OraDB:
         except Exception as ex:
             return "oraDB select-execute error: " + str(ex) + (" sql=" + sq if sq else "")
         return ''
+
+    def cursor_description(self):
+        return self.curs.description if self.curs else None
+
+    def selected_column_names(self):
+        curs_desc = self.cursor_description()
+        col_names = []
+        if curs_desc:
+            for col_desc in curs_desc:
+                col_names.append(col_desc[0])
+        return col_names
 
     def fetch_all(self):
         try:

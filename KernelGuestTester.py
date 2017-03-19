@@ -1,5 +1,5 @@
-from console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from db import DEF_USER, DEF_DSN
+from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
+from ae_db import DEF_USER, DEF_DSN
 from sxmlif import SihotXmlBuilder, ClientToSihot, SXML_DEF_ENCODING
 
 __version__ = '0.1'

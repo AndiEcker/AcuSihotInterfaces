@@ -8,6 +8,9 @@
 <ListMenu@ActionButton>:
     on_press: app.go_to_board(self.text)
 
+<ListItem@Label>:
+    text_size: min(self.width, self.texture_size[0] if self.texture_size[0] else self.width) + 9, min(self.height, self.texture_size[1] if self.texture_size[1] else self.height)
+
 <CheckItem>:    # BoxLayout
     orientation: 'vertical'
     size_hint_y: None
@@ -21,13 +24,13 @@
     BoxLayout:
         Button:
             text: root.data_dict['name']
-            on_press: app.do_checks(self.text)
+            on_press: app.go_to_board(self.text)
         Label:
             text: root.data_dict['last_check'] if 'last_check' in root.data_dict else ''
     Button:
-        text: (root.data_dict['check_result'] if isinstance(root.data_dict['check_result'], str) else str(len(root.data_dict['check_result']))) if 'check_result' in root.data_dict else '(no check run)'
+        text: app.result_text(root.data_dict)
         text_size: self.size
-        on_press: app.go_to_board(root.data_dict['name'])
+        on_press: app.do_checks(root.data_dict['name'])
 
 <MainWindow>:   # @FloatLayout>:
     ActionBar:
@@ -35,11 +38,12 @@
         pos_hint: {'top': 1}
         background_color: (0, .36, .36, 1)
         ActionView:
+            id: action_view
             background_color: (0, .36, .36, 1)
             use_separator: True
             ActionPrevious:
                 id: action_previous
-                title: 'Main'
+                title: ''
                 with_previous: False
             ActionOverflow:
             ActionGroup:
@@ -54,10 +58,22 @@
                 id: list_group
                 dropdown_width: 270
                 text: 'Lists'
+    BoxLayout:
+        id: list_header
+        pos: 0, root.height - menu_bar.height - self.height
+        size_hint: None, None
+        size: root.width, app.list_header_height
+        canvas.before:
+            Color:
+                # rgba: app.get_background_color(action_previous.title) if action_previous.title else (0, .36, .36, 1)
+                rgba: app.get_background_color(action_previous.title)
+            Rectangle:
+                pos: self.pos
+                size: self.size
     ScrollView:
         pos: 0, 0
         size_hint: None, None
-        size: root.width, root.height - menu_bar.height
+        size: root.width, root.height - menu_bar.height - app.list_header_height
         canvas.before:
             Color:
                 rgba: (0, .36, .36, 1)
@@ -65,7 +81,7 @@
                 pos: self.pos
                 size: self.size
         GridLayout:
-            id: item_grid
+            id: list_grid
             cols: 1
             size_hint_y: None
             pos: self.parent.x, self.parent.y

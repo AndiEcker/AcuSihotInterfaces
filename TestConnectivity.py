@@ -1,6 +1,6 @@
-from console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
-from db import OraDB, DEF_USER, DEF_DSN
-from notification import Notification
+from ae_console_app import ConsoleApp, uprint
+from ae_db import OraDB, DEF_USER, DEF_DSN
+from ae_notification import Notification
 
 __version__ = '0.1'
 

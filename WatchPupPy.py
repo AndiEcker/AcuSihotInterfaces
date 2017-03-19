@@ -1,6 +1,7 @@
 """
     0.4     changed command call from check_call() to check_output() for to determine and pass StdOut/StdErr  AND
             added outer try exception fallback into main loop (for to catch strange/unsuspected errors)
+    0.5     added new option sendOutput for to allow caller to use either check_call() or check_output().
 """
 import os
 import time
@@ -8,12 +9,12 @@ import datetime
 import subprocess
 from configparser import ConfigParser
 
-from console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_ISO_FULL, DEBUG_LEVEL_VERBOSE
-from db import OraDB, DEF_USER, DEF_DSN
-from notification import Notification
+from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_ISO_FULL, DEBUG_LEVEL_VERBOSE
+from ae_db import OraDB, DEF_USER, DEF_DSN
+from ae_notification import Notification
 from sxmlif import PostMessage, GuestInfo, SXML_DEF_ENCODING
 
-__version__ = '0.4'
+__version__ = '0.5'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 
@@ -38,6 +39,10 @@ cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
 cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", [], 'r')
 
+cae.add_option('sendOutput', "Include command output in the notification email (0=No, 1=Yes if notification is enabled)"
+               , 0, 'O')
+
+
 if not cae.get_option('cmdLine'):
     uprint('Empty command line - Nothing to do.')
     cae.shutdown()
@@ -57,6 +62,7 @@ if check_sihot_web or check_sihot_kernel:
 break_on_error = cae.get_option('breakOnError')
 uprint('Break on error:', 'Yes' if break_on_error else 'No')
 notification = None
+send_output = 0
 if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
     mail_body = 'Executing: ' + cae.get_option('cmdLine')
     notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
@@ -66,6 +72,8 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
                                 mail_body_footer=mail_body,
                                 debug_level=cae.get_option('debugLevel'))
     uprint('SMTP Uri/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
+    if cae.get_option('sendOutput'):
+        send_output = 1
 
 
 command_interval = cae.get_option('cmdInterval')  # in seconds
@@ -252,15 +260,18 @@ while True:
         # then run the command
         run_starts += 1
         try:
-            # for to get output changed from: process = subprocess.check_call(command_line_args, timeout=timeout)
-            # .. to:
-            output = subprocess.check_output(command_line_args, stderr=subprocess.STDOUT, timeout=timeout)  # shell=True
+            if send_output:
+                subprocess.check_output(command_line_args, timeout=timeout, stderr=subprocess.STDOUT,
+                                        universal_newlines=True)  # shell=True
+            else:
+                subprocess.check_call(command_line_args, timeout=timeout)
         except subprocess.CalledProcessError as cpe:
             err_msg = str(run_starts) + '. run returned non-zero exit code:' + str(cpe.returncode)
             if cpe.returncode == 4:
                 reset_last_run_time(command_interval)
                 continue  # command not really started, so try directly again - don't reset last_run variable
-            err_msg += '\n' + str(cpe.output)
+            if getattr(cpe, 'output'):      # only available when running command with check_output()/send_output
+                err_msg += '\noutput=' + str(cpe.output)
         except subprocess.TimeoutExpired as toe:
             err_msg = str(run_starts) + '. run timed out - current timer=' + str(get_timer_corrected()) \
                       + ', last_run=' + str(last_run) \

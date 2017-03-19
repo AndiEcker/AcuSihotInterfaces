@@ -6,9 +6,9 @@
 """
 import datetime
 
-from console_app import ConsoleApp, Progress, uprint, DATE_ISO_FULL, DEBUG_LEVEL_VERBOSE
-from notification import Notification
-from db import DEF_USER, DEF_DSN
+from ae_console_app import ConsoleApp, Progress, uprint, DATE_ISO_FULL, DEBUG_LEVEL_VERBOSE
+from ae_notification import Notification
+from ae_db import DEF_USER, DEF_DSN
 from acu_sihot_config import Data
 from sxmlif import ClientToSihot, ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
@@ -149,7 +149,8 @@ if not error_msg:
                 crow['RUL_SIHOT_ROOM'] = ''
                 error_msg = acumen_req.send_row_to_sihot(crow)
                 if error_msg and notification:
-                    error_msg = acumen_req.res_id_values(crow) + '\n\n' + error_msg + '\n\n' + acumen_req.get_warnings()
+                    error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
+                                + '\n\nWARNINGS=' + acumen_req.get_warnings()
                     notification.send_notification(error_msg, subject='SihotResSync admin room-swap debug notification',
                                                    mail_to=['ITDevmen@acumen.es'])
                 acumen_req.ora_db.rollback()  # send but directly roll back changes in RU_SIHOT_OBJID and T_SRSL
@@ -169,10 +170,11 @@ if not error_msg:
                 crow['SH_RES_TYPE'] = 'S'
                 error_msg = acumen_req.send_row_to_sihot(crow)
                 if error_msg and notification:
-                    error_msg = acumen_req.res_id_values(crow) + '\n\n' + error_msg + '\n\n' + acumen_req.get_warnings()
+                    error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
+                                + '\n\nWARNINGS=' + acumen_req.get_warnings()
                     notification.send_notification(error_msg, subject='SihotResSync admin HOTMOVE debug notification',
                                                    mail_to=['ITDevmen@acumen.es'])
-                if new_hotel not in hotel_ids and not error_msg:
+                if new_hotel not in hotel_ids:
                     acumen_req.ora_db.commit()    # commit because this res get skipped in the full run loop underneath
                 else:
                     acumen_req.ora_db.rollback()  # send but directly roll back changes in RU_SIHOT_OBJID and T_SRSL
