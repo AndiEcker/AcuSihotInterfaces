@@ -121,7 +121,9 @@ class TestGuestFromSihot:
         xml_parser = GuestFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.elem_col_map['MATCHCODE']['elemVal'] == 'test2'
+        assert xml_parser.acu_col_values['CD_CODE'] == 'test2'
         assert xml_parser.elem_col_map['CITY']['elemVal'] == 'city'
+        assert xml_parser.acu_col_values['CD_CITY'] == 'city'
 
         # cae.dprint("--COUNTRY-colValToAcu/acu_col_values: ",
         # xml_guest.elem_col_map['COUNTRY']['colValToAcu'],
@@ -150,7 +152,6 @@ class TestResFromSihot:
         <ISDEFAULT>Y</ISDEFAULT>
         <R>UF1</R>
         <PRICE>99</PRICE>
-        108
         </RATE>
         <PERSON>
         <SEX>0</SEX>
@@ -222,7 +223,7 @@ class TestResFromSihot:
         <PCAT>EZ</PCAT>
         <CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID>
         <COMMENT/>
-        <GDSNO>1234567890ABC<GDSNO/>
+        <GDSNO>1234567890ABC</GDSNO>
         <EXT-REFERENCE/>
         <EXT-KEY/>
         <LAST-MOD>2009-02-23</LAST-MOD>
@@ -270,7 +271,7 @@ class TestResFromSihot:
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.oc == 'RES-SEARCH'
-        assert xml_parser.tn == '1'
+        assert xml_parser.tn == '0'
         assert xml_parser.id == '1'
         assert xml_parser.rc == '0'
         assert xml_parser.msg == ''
@@ -281,9 +282,9 @@ class TestResFromSihot:
     def test_col_map(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.elem_col_map['MATCHCODE']['elemVal'] == 'test2'
-        assert xml_parser.elem_col_map['CITY']['elemVal'] == 'city'
-        assert xml_parser.elem_col_map['GDSNO']['elemVal'] == '1234567890ABC'
+        assert xml_parser.res_list[0]['MATCHCODE']['elemVal'] == 'test2'
+        assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['', 'GUBSE', 'test2']
+        assert xml_parser.res_list[0]['GDSNO']['elemVal'] == '1234567890ABC'
 
 
 class TestSihotXmlBuilder:
@@ -529,7 +530,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             assert acu_res.row_count == 0
 
-    def test_excluded_rental_ota_res_occ(self, acu_res):
+    def _old_test_excluded_rental_ota_res_occ(self, acu_res):
         # 1 RR request in PBC arriving 13-10-16
         error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="CD_CODE = 'E610488'")
         assert not error_msg
@@ -588,7 +589,7 @@ class TestResFromAcuToSihot:
             error_msg = acu_res.send_rows_to_sihot(break_on_error=True, commit_per_row=True)
             assert not error_msg
 
-    def test_15_requests_by_cd(self, acu_res):
+    def _old_test_15_requests_by_cd(self, acu_res):
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'Z136231'")
         assert not error_msg
         if not error_msg:
@@ -596,7 +597,7 @@ class TestResFromAcuToSihot:
             error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
-    def test_res_with_euro_char_fetched_by_cd(self, acu_res):
+    def _old_test_res_with_euro_char_fetched_by_cd(self, acu_res):
         # 20 PBC reservations and one with Euro-sign (in reservation comment of transfer on 10-10-2014)
         # .. and some with wrong/different arrival client id - e.g. E436263 is 1st RU within 3-4 wk requests/RH
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'E374408'")
@@ -609,7 +610,7 @@ class TestResFromAcuToSihot:
             assert not error_msg
 
     # FB examples with board: F468913, F614205, V576425, I615916
-    def test_fb_with_board1(self, acu_res):
+    def _old_test_fb_with_board1(self, acu_res):
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'F468913'")
         assert not error_msg
         if not error_msg:
@@ -620,7 +621,7 @@ class TestResFromAcuToSihot:
                 error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
                 assert not error_msg
 
-    def test_fb_with_board2(self, acu_res):
+    def _old_test_fb_with_board2(self, acu_res):
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'F614205'")
         assert not error_msg
         if not error_msg:
@@ -629,7 +630,7 @@ class TestResFromAcuToSihot:
             error_msg = acu_res.send_rows_to_sihot()
             assert not error_msg
 
-    def test_fb_with_board3(self, acu_res):
+    def _old_test_fb_with_board3(self, acu_res):
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'V576425'")
         assert not error_msg
         if not error_msg:
@@ -686,7 +687,7 @@ class TestResFromAcuToSihot:
             error_msg = acu_res.send_rows_to_sihot()
             assert not error_msg
 
-    def test_any_resort1(self, acu_res):
+    def _old_test_any_resort1(self, acu_res):
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'C612158'")
         assert not error_msg
         if not error_msg:
@@ -695,7 +696,7 @@ class TestResFromAcuToSihot:
             error_msg = acu_res.send_rows_to_sihot()
             assert not error_msg
 
-    def test_any_resort2(self, acu_res):
+    def _old_test_any_resort2(self, acu_res):
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'E543935'")
         assert not error_msg
         if not error_msg:
@@ -704,7 +705,7 @@ class TestResFromAcuToSihot:
             error_msg = acu_res.send_rows_to_sihot()
             assert not error_msg
 
-    def test_tc_booking_created_via_sync_and_then_deleted_via_res_import(self, acu_res):
+    def _old_test_tc_booking_created_via_sync_and_then_deleted_via_res_import(self, acu_res):
         # RUL_CODE == 4785629
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="RUL_PRIMARY = 1023128")
         assert not error_msg

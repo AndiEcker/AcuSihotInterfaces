@@ -9,7 +9,10 @@
     on_press: app.go_to_board(self.text)
 
 <ListItem@Label>:
-    text_size: min(self.width, self.texture_size[0] if self.texture_size[0] else self.width) + 9, min(self.height, self.texture_size[1] if self.texture_size[1] else self.height)
+    # width+9 sometimes needed for to show text in one line
+    #text_size: min(self.width, self.texture_size[0] if self.texture_size[0] else self.width) + 9, min(self.height, self.texture_size[1] if self.texture_size[1] else self.height)
+    #text_size: self.size[0], None
+    text_size: self.size
 
 <CheckItem>:    # BoxLayout
     orientation: 'vertical'

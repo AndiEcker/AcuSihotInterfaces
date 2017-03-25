@@ -43,6 +43,9 @@ SIHOT_AFF_COMPANY = 6
 # special error message prefixes
 ERR_MESSAGE_PREFIX_CONTINUE = 'CONTINUE:'
 
+# elemName prefix for column mappings that are parsed (*Parsed classes) but are not included into XML (*Builder classes)
+PARSE_ONLY_TAG_PREFIX = '_'
+
 
 #  HELPER METHODS  ###################################
 
@@ -82,23 +85,23 @@ MAP_GUEST_INFO = \
 MAP_WEB_CLIENT = \
     (
         {'elemName': 'MATCHCODE', 'colName': 'CD_CODE'},
-        {'elemName': '_P2_MATCHCODE', 'colName': 'CD_CODE2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_MATCHCODE', 'colName': 'CD_CODE2'},
         {'elemName': 'PWD', 'colName': 'CD_PASSWORD'},
         {'elemName': 'ADDRESS', 'colName': 'SIHOT_SALUTATION1'},
-        {'elemName': '_P2_ADDRESS', 'colName': 'SIHOT_SALUTATION2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_ADDRESS', 'colName': 'SIHOT_SALUTATION2'},
         {'elemName': 'TITLE', 'colName': 'SIHOT_TITLE1'},
-        {'elemName': '_P2_TITLE', 'colName': 'SIHOT_TITLE2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_TITLE', 'colName': 'SIHOT_TITLE2'},
         {'elemName': 'GUESTTYPE', 'colName': 'SIHOT_GUESTTYPE1'},
-        {'elemName': '_P2_GUESTTYPE', 'colName': 'SIHOT_GUESTTYPE2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_GUESTTYPE', 'colName': 'SIHOT_GUESTTYPE2'},
         {'elemName': 'PERS-TYPE', 'colName': 'SH_PTYPE',
          'colValFromAcu': "'1A'"},
         {'elemName': 'NAME', 'colName': 'CD_SNAM1'},
-        {'elemName': '_P2_NAME', 'colName': 'CD_SNAM2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_NAME', 'colName': 'CD_SNAM2'},
         {'elemName': 'NAME2', 'colName': 'CD_FNAM1'},
-        {'elemName': '_P2_NAME2', 'colName': 'CD_FNAM2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_NAME2', 'colName': 'CD_FNAM2'},
         {'elemName': 'DOB', 'colName': 'CD_DOB1',
          'valToAcuConverter': convert2date},
-        {'elemName': '_P2_DOB', 'colName': 'CD_DOB2',
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_DOB', 'colName': 'CD_DOB2',
          'valToAcuConverter': convert2date},
         {'elemName': 'STREET', 'colName': 'CD_ADD11'},
         {'elemName': 'POBOX', 'colName': 'CD_ADD12',
@@ -115,10 +118,10 @@ MAP_WEB_CLIENT = \
         {'elemName': 'EMAIL2', 'colName': 'CD_SIGNUP_EMAIL'},
         {'elemName': 'MOBIL1', 'colName': 'CD_MOBILE1'},
         {'elemName': 'MOBIL2', 'colName': 'CD_LAST_SMS_TEL'},
-        {'elemName': '_CDLREF', 'colName': 'CDL_CODE'},
-        # {'elemName': '_STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
-        # {'elemName': '_PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
-        {'elemName': '_OBJID', 'colName': 'CD_SIHOT_OBJID'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CDLREF', 'colName': 'CDL_CODE'},
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'OBJID', 'colName': 'CD_SIHOT_OBJID'},
         # {'elemName': 'COMMENT', 'colName' : 'CD_'}
     )
 
@@ -126,19 +129,20 @@ MAP_WEB_CLIENT = \
 MAP_KERNEL_CLIENT = \
     (
         {'elemName': 'OBJID', 'colName': 'CD_SIHOT_OBJID', 'elemHideInActions': ACTION_INSERT},
-        {'elemName': '_P2_OBJID', 'colName': 'CD_SIHOT_OBJID2', 'elemHideInActions': ACTION_INSERT},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_OBJID', 'colName': 'CD_SIHOT_OBJID2',
+         'elemHideInActions': ACTION_INSERT},
         {'elemName': 'MATCHCODE', 'colName': 'CD_CODE'},
-        {'elemName': '_P2_MATCHCODE', 'colName': 'CD_CODE2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_MATCHCODE', 'colName': 'CD_CODE2'},
         {'elemName': 'T-SALUTATION', 'colName': 'SIHOT_SALUTATION1'},  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
-        {'elemName': '_P2_T-SALUTATION', 'colName': 'SIHOT_SALUTATION2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-SALUTATION', 'colName': 'SIHOT_SALUTATION2'},
         {'elemName': 'T-TITLE', 'colName': 'SIHOT_TITLE1'},
-        {'elemName': '_P2_T-TITLE', 'colName': 'SIHOT_TITLE2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-TITLE', 'colName': 'SIHOT_TITLE2'},
         {'elemName': 'T-GUEST', 'colName': 'SIHOT_GUESTTYPE1'},
-        {'elemName': '_P2_T-GUEST', 'colName': 'SIHOT_GUESTTYPE2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-GUEST', 'colName': 'SIHOT_GUESTTYPE2'},
         {'elemName': 'NAME-1', 'colName': 'CD_SNAM1'},
-        {'elemName': '_P2_NAME-1', 'colName': 'CD_SNAM2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_NAME-1', 'colName': 'CD_SNAM2'},
         {'elemName': 'NAME-2', 'colName': 'CD_FNAM1'},
-        {'elemName': '_P2_NAME-2', 'colName': 'CD_FNAM2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_NAME-2', 'colName': 'CD_FNAM2'},
         {'elemName': 'STREET', 'colName': 'CD_ADD11'},
         {'elemName': 'PO-BOX', 'colName': 'CD_ADD12',
          'colValFromAcu': "nvl(CD_ADD12, CD_ADD13)"},
@@ -163,10 +167,10 @@ MAP_KERNEL_CLIENT = \
          'colValFromAcu': "'1A'"},
         {'elemName': 'D-BIRTHDAY', 'colName': 'CD_DOB1',
          'valToAcuConverter': convert2date},
-        {'elemName': '_P2_D-BIRTHDAY', 'colName': 'CD_DOB2',
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_D-BIRTHDAY', 'colName': 'CD_DOB2',
          'valToAcuConverter': convert2date},
         {'elemName': 'T-PROFESSION', 'colName': 'CD_INDUSTRY1'},
-        {'elemName': '_P2_T-PROFESSION', 'colName': 'CD_INDUSTRY2'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-PROFESSION', 'colName': 'CD_INDUSTRY2'},
         {'elemName': 'INTERNET-PASSWORD', 'colName': 'CD_PASSWORD'},
         {'elemName': 'MATCH-ADM', 'colName': 'CD_RCI_REF'},
         {'elemName': 'MATCH-SM', 'colName': 'SIHOT_SF_ID'},
@@ -253,10 +257,10 @@ MAP_KERNEL_CLIENT = \
          'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
         {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
         {'elemName': '/L-EXTIDS'},
-        {'elemName': '_EXT_REFS', 'colName': 'EXT_REFS'},  # needed for elemHideIf expressions only
-        {'elemName': '_CDLREF', 'colName': 'CDL_CODE'},
-        # {'elemName': '_STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
-        # {'elemName': '_PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'EXT_REFS', 'colName': 'EXT_REFS'},  # only for elemHideIf expressions
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CDLREF', 'colName': 'CDL_CODE'},
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
     )
 
 # Reservation interface mappings
@@ -618,21 +622,26 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': '_ACTION', 'colName': 'RUL_ACTION'},
-        {'elemName': '_STATUS', 'colName': 'RU_STATUS'},
-        {'elemName': '_RULREF', 'colName': 'RUL_CODE'},
-        {'elemName': '_RUL_PRIMARY', 'colName': 'RUL_PRIMARY'},
-        # {'elemName': '_RU_OBJID', 'colName': 'RU_SIHOT_OBJID'},
-        {'elemName': '_RU_OBJID', 'colName': 'RUL_SIHOT_OBJID'},
-        {'elemName': '_RU_FLIGHT_PICKUP', 'colName': 'RU_FLIGHT_PICKUP'},
-        # {'elemName': '_RO_AGENCY_OBJID', 'colName': 'RO_SIHOT_AGENCY_OBJID'},
-        {'elemName': '_OC_CODE', 'colName': 'OC_CODE'},
-        {'elemName': '_OC_OBJID', 'colName': 'OC_SIHOT_OBJID'},
-        {'elemName': '_RES_GROUP', 'colName': 'RO_RES_GROUP'},  # needed for elemHideIf
-        {'elemName': '_RES_OCC', 'colName': 'RUL_SIHOT_RATE'},  # needed for res_id_values
-        {'elemName': '_CHANGES', 'colName': 'RUL_CHANGES'},  # needed for error notifications
-        {'elemName': '_LAST_HOTEL', 'colName': 'RUL_SIHOT_LAST_HOTEL'},  # needed for HOTMOVE
-        {'elemName': '_LAST_CAT', 'colName': 'RUL_SIHOT_LAST_CAT'},  # needed for HOTMOVE
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'ACTION', 'colName': 'RUL_ACTION'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'RU_STATUS'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RULREF', 'colName': 'RUL_CODE'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RUL_PRIMARY', 'colName': 'RUL_PRIMARY'},
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'RU_OBJID', 'colName': 'RU_SIHOT_OBJID'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RU_OBJID', 'colName': 'RUL_SIHOT_OBJID'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RU_FLIGHT_PICKUP', 'colName': 'RU_FLIGHT_PICKUP'},
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'RO_AGENCY_OBJID', 'colName': 'RO_SIHOT_AGENCY_OBJID'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'OC_CODE', 'colName': 'OC_CODE'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'OC_OBJID', 'colName': 'OC_SIHOT_OBJID'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES_GROUP', 'colName': 'RO_RES_GROUP'},  # needed for elemHideIf
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES_OCC', 'colName': 'RUL_SIHOT_RATE'},  # needed for res_id_values
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CHANGES', 'colName': 'RUL_CHANGES'},  # needed for error notifications
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'LAST_HOTEL', 'colName': 'RUL_SIHOT_LAST_HOTEL'},  # needed for HOTMOVE
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'LAST_CAT', 'colName': 'RUL_SIHOT_LAST_CAT'},  # needed for HOTMOVE
+        # column mappings needed only for parsing XML responses (using PARSE_ONLY_TAG_PREFIX)
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES-HOTEL'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES-NR'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'SUB-NR'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'OBJID'},
         {'elemName': '/RESERVATION'},
         {'elemName': '/ARESLIST'},
     )
@@ -660,10 +669,10 @@ MAP_KERNEL_RES = \
         {'elemName': 'GDS-NR', 'colName': 'SH_GDSNO',  # EXT-REFERENCE or VOUCHERNUMBER are not mandatory
          'colValFromAcu': "'RU__' || RUL_PRIMARY"},
         {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF'},
-        {'elemName': '_ACTION', 'colName': 'RUL_ACTION'},
-        {'elemName': '_STATUS', 'colName': 'RU_STATUS', 'colValFromAcu': "nvl(RU_STATUS, 120)"},
-        {'elemName': '_RULREF', 'colName': 'RUL_CODE'},
-        {'elemName': '_CDREF', 'colName': 'CD_CODE'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'ACTION', 'colName': 'RUL_ACTION'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'RU_STATUS', 'colValFromAcu': "nvl(RU_STATUS, 120)"},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RULREF', 'colName': 'RUL_CODE'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CDREF', 'colName': 'CD_CODE'},
     )
 
 # default values for used interfaces (see email from Sascha Scheer from 28 Jul 2016 13:48 with answers from JBerger):
@@ -863,31 +872,39 @@ class RoomChange(SihotXmlParser):
 class ColMapXmlParser(SihotXmlParser):
     def __init__(self, ca, col_map):
         # create mapping dict for all valid elements (excluding all starting with an underscore including _P2 elements)
-        self.elem_col_map = {c['elemName']: c for c in deepcopy(col_map)
-                             if not c['elemName'].startswith('_') and 'colName' in c}
+        self.elem_col_map = {c['elemName']: c for c in deepcopy(col_map)}
+        # if not c['elemName'].startswith(PARSE_ONLY_TAG_PREFIX) and 'colName' in c}
         super(ColMapXmlParser, self).__init__(ca)
 
     # XMLParser interface
 
     def start(self, tag, attrib):
-        if super(ColMapXmlParser, self).start(tag, attrib) is None:
-            return None  # processed by base class
-        if self._curr_tag in self.elem_col_map:
-            if 'elemListVal' in self.elem_col_map[self._curr_tag]:
-                self.elem_col_map[self._curr_tag]['elemListVal'].append('')
-            elif 'elemVal' in self.elem_col_map[self._curr_tag]:  # 2nd time same tag then create list
-                self.elem_col_map[self._curr_tag]['elemListVal'] = list((self.elem_col_map[self._curr_tag]['elemVal'],))
-            self.elem_col_map[self._curr_tag]['elemVal'] = ''
+        # if super(ColMapXmlParser, self).start(tag, attrib) is None:
+        #    return None  # processed by base class
+        super(ColMapXmlParser, self).start(tag, attrib)
+        if tag not in self.elem_col_map and PARSE_ONLY_TAG_PREFIX + tag in self.elem_col_map:
+            tag = PARSE_ONLY_TAG_PREFIX + tag
+        if tag in self.elem_col_map:
+            if 'elemListVal' in self.elem_col_map[tag]:
+                self.elem_col_map[tag]['elemListVal'].append('')
+            elif 'elemVal' in self.elem_col_map[tag]:  # 2nd time same tag then create list
+                li = list([self.elem_col_map[tag]['elemVal'], ''])
+                self.elem_col_map[tag]['elemListVal'] = li
+            self.elem_col_map[tag]['elemVal'] = ''
             return None
         return tag
 
     def data(self, data):
-        if super(ColMapXmlParser, self).data(data) is None:
-            return None  # already processed by base class
-        if self._curr_tag in self.elem_col_map:
-            self.elem_col_map[self._curr_tag]['elemVal'] += data
-            if 'elemListVal' in self.elem_col_map[self._curr_tag]:
-                l = self.elem_col_map[self._curr_tag]['elemListVal']
+        # if super(ColMapXmlParser, self).data(data) is None:
+        #    return None  # already processed by base class
+        super(ColMapXmlParser, self).data(data)
+        tag = self._curr_tag
+        if tag not in self.elem_col_map and PARSE_ONLY_TAG_PREFIX + tag in self.elem_col_map:
+            tag = PARSE_ONLY_TAG_PREFIX + tag
+        if tag in self.elem_col_map:
+            self.elem_col_map[tag]['elemVal'] += data
+            if 'elemListVal' in self.elem_col_map[tag]:
+                l = self.elem_col_map[tag]['elemListVal']
                 l[-1] += data
             return None
         return data
@@ -919,7 +936,7 @@ class GuestFromSihot(ColMapXmlParser):
 class ResFromSihot(ColMapXmlParser):
     def __init__(self, ca, col_map=MAP_RES_DEF):
         super(ResFromSihot, self).__init__(ca, col_map)
-        self.blank_elem_col_map = self.elem_col_map
+        self.blank_elem_col_map = deepcopy(self.elem_col_map)
         self.res_list = list()
 
     # XMLParser interface
@@ -927,10 +944,17 @@ class ResFromSihot(ColMapXmlParser):
     def end(self, tag):
         super(ResFromSihot, self).end(tag)
         if tag == 'RESERVATION':  # using tag because self._curr_tag got reset by super method of end()
-            self.ca.dprint('ResFromSihot.end(): reservation {} parsed'.format(self.elem_col_map['GDSNO']['elemVal']),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            self.res_list.append(self.elem_col_map)
-            self.elem_col_map = self.blank_elem_col_map
+            if self.ca.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
+                msg = []
+                for k in self.elem_col_map:
+                    if 'elemListVal' in self.elem_col_map[k]:
+                        msg.append(self.elem_col_map[k]['elemName'] + '=' + str(self.elem_col_map[k]['elemListVal']))
+                    elif 'elemVal' in self.elem_col_map[k]:
+                        msg.append(self.elem_col_map[k]['elemName'] + '=' + self.elem_col_map[k]['elemVal'])
+                self.ca.dprint('ResFromSihot.end() reservation parsed:{}'.format(','.join(msg)))
+            self.res_list.append(deepcopy(self.elem_col_map))
+            # reset elemVal and elemListVal for next reservation record in the same response
+            self.elem_col_map = deepcopy(self.blank_elem_col_map)
 
 
 class SihotXmlBuilder:
@@ -946,7 +970,7 @@ class SihotXmlBuilder:
                                 ((' or a in "' + c['elemHideInActions'] + '"' if 'elemHideInActions' in c else '')
                                  + (' or ' + c['elemHideIf'] if 'elemHideIf' in c else ''))[4:],
                                 c['colVal'] if 'colVal' in c else None)
-                               for c in col_map if not c['elemName'].startswith('_')]
+                               for c in col_map if not c['elemName'].startswith(PARSE_ONLY_TAG_PREFIX)]
         # self.fix_col_values = {c['colName']: c['colVal'] for c in col_map if 'colName' in c and 'colVal' in c}
         # acu_col_names and acu_col_expres need to be in sync
         # self.acu_col_names = [c['colName'] for c in col_map if 'colName' in c and 'colVal' not in c]
@@ -1319,7 +1343,7 @@ class ClientToSihot(SihotXmlBuilder):
         if not err_msg and c_row['CD_CODE2']:  # check for second contact person
             crow2 = deepcopy(c_row)
             for col_name in c_row.keys():
-                elem_name = '_P2_' + self.col_elem[col_name]
+                elem_name = PARSE_ONLY_TAG_PREFIX + 'P2_' + self.col_elem[col_name]
                 if elem_name in self.elem_col:
                     crow2[col_name] = c_row[self.elem_col[elem_name]]
             err_msg, action_p2 = self._send_person_to_sihot(crow2, c_row['CD_CODE'])
@@ -1466,23 +1490,28 @@ class ResToSihot(SihotXmlBuilder):
             err_msg = ""
         return err_msg, warn_msg
 
-    def _ensure_clients_exist(self, crow):
+    def _ensure_clients_exist_and_updated(self, crow):
         err_msg = ''
-        if 'CD_CODE' in crow and crow['CD_CODE'] and not crow['CD_SIHOT_OBJID']:
+        if 'CD_CODE' in crow and crow['CD_CODE']:
+            client_synced = bool(crow['CD_SIHOT_OBJID'])
             acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
                                        map_client=self.map_client, connect_to_acu=self.acu_connected)
             if self.acu_connected:
-                err_msg = acu_client.fetch_from_acu_by_cd(crow['CD_CODE'])
-            if not err_msg:
-                if not acu_client.row_count:
-                    err_msg = 'ResToSihot._ensure_clients_exist(): client not found: ' + crow['CD_CODE']
+                if client_synced:
+                    err_msg = acu_client.fetch_from_acu_by_acu(crow['CD_CODE'])
                 else:
+                    err_msg = acu_client.fetch_from_acu_by_cd(crow['CD_CODE'])
+            if not err_msg:
+                if acu_client.row_count:
                     err_msg = acu_client.send_client_to_sihot()
+                elif not client_synced:
+                    err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): client not found: ' + crow['CD_CODE']
                 if not err_msg:
                     if self.acu_connected:
                         err_msg = acu_client.fetch_from_acu_by_cd(crow['CD_CODE'])  # re-fetch OBJIDs
                         if not err_msg and not acu_client.row_count:
-                            err_msg = 'ResToSihot._ensure_clients_exist(): IntErr/client invalid: ' + crow['CD_CODE']
+                            err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): IntErr/client invalid: ' \
+                                      + crow['CD_CODE']
                         if not err_msg:
                             # transfer just created guest OBJIDs from guest to reservation record
                             crow['CD_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
@@ -1493,21 +1522,26 @@ class ResToSihot(SihotXmlBuilder):
                         # get client/occupant objid directly from acu_client.response
                         crow['CD_SIHOT_OBJID'] = acu_client.response.objid
 
-        if not err_msg and 'OC_CODE' in crow and crow['OC_CODE'] and not crow['OC_SIHOT_OBJID']:
+        if not err_msg and 'OC_CODE' in crow and crow['OC_CODE']:
+            client_synced = bool(crow['OC_SIHOT_OBJID'])
             acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
                                        map_client=self.map_client, connect_to_acu=self.acu_connected)
             if self.acu_connected:
-                err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
-            if not err_msg:
-                if not acu_client.row_count:
-                    err_msg = 'ResToSihot._ensure_clients_exist(): orderer not found: ' + crow['OC_CODE']
+                if client_synced:
+                    err_msg = acu_client.fetch_from_acu_by_acu(crow['OC_CODE'])
                 else:
+                    err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
+            if not err_msg:
+                if acu_client.row_count:
                     err_msg = acu_client.send_client_to_sihot()
+                elif not client_synced:
+                    err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): orderer not found: ' + crow['OC_CODE']
                 if not err_msg:
                     if self.acu_connected:
                         err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
                         if not err_msg and not acu_client.row_count:
-                            err_msg = 'ResToSihot._ensure_clients_exist(): IntErr/orderer: ' + crow['OC_CODE']
+                            err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): IntErr/orderer: ' \
+                                      + crow['OC_CODE']
                         if not err_msg:
                             # transfer just created guest OBJIDs from guest to reservation record
                             crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
@@ -1522,7 +1556,7 @@ class ResToSihot(SihotXmlBuilder):
             crow = self.cols
         action = crow['RUL_ACTION']
 
-        err_msg = self._ensure_clients_exist(crow)
+        err_msg = self._ensure_clients_exist_and_updated(crow)
 
         if not err_msg:
             err_msg = self._send_res_to_sihot(crow, action, commit)
@@ -1567,19 +1601,18 @@ class ResToSihot(SihotXmlBuilder):
 
     def res_id_desc(self, crow, error_msg, separator='\n\n'):
         indent = 8
-        return crow['RUL_ACTION'] + ' RESERVATION: ' + \
-               (crow['ARR_DATE'].strftime('%d-%m') if crow['ARR_DATE'] else 'unknown') + '..' + \
-               (crow['DEP_DATE'].strftime('%d-%m-%y') if crow['DEP_DATE'] else 'unknown') + \
-               ' in ' + (crow['RUL_SIHOT_ROOM'] + '=' if crow['RUL_SIHOT_ROOM'] else '') + crow['RUL_SIHOT_CAT'] + \
-               ('!' + crow['SH_PRICE_CAT']
-                if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
-                else '') + \
-               ' at hotel ' + str(crow['RUL_SIHOT_HOTEL']) + \
-               separator + ' ' * indent + self.res_id_label() + '==' + self.res_id_values(crow) + \
-               (separator + '\n'.join(wrap('ERROR: ' + _strip_error_message(error_msg), subsequent_indent=' ' * indent))
-                if error_msg else '') + \
-               (separator + '\n'.join(wrap('TRAIL: ' + crow['RUL_CHANGES'], subsequent_indent=' ' * indent))
-                if 'RUL_CHANGES' in crow and crow['RUL_CHANGES'] else '')
+        return crow['RUL_ACTION'] + ' RESERVATION: ' \
+            + (crow['ARR_DATE'].strftime('%d-%m') if crow['ARR_DATE'] else 'unknown') + '..' \
+            + (crow['DEP_DATE'].strftime('%d-%m-%y') if crow['DEP_DATE'] else 'unknown') \
+            + ' in ' + (crow['RUL_SIHOT_ROOM'] + '=' if crow['RUL_SIHOT_ROOM'] else '') + crow['RUL_SIHOT_CAT'] \
+            + ('!' + crow['SH_PRICE_CAT'] if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
+               else '') \
+            + ' at hotel ' + str(crow['RUL_SIHOT_HOTEL']) \
+            + separator + ' ' * indent + self.res_id_label() + '==' + self.res_id_values(crow) \
+            + (separator + '\n'.join(wrap('ERROR: ' + _strip_error_message(error_msg), subsequent_indent=' ' * indent))
+               if error_msg else '') \
+            + (separator + '\n'.join(wrap('TRAIL: ' + crow['RUL_CHANGES'], subsequent_indent=' ' * indent))
+               if 'RUL_CHANGES' in crow and crow['RUL_CHANGES'] else '')
 
     def get_warnings(self):
         return self._warning_msgs + "\n\nEnd_Of_Message\n" if self._warning_msgs else ""

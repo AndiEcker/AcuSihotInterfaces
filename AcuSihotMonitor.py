@@ -21,12 +21,14 @@ from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_calendar import DateChangeScreen
 from ae_db import OraDB, DEF_USER, DEF_DSN
 from acu_sihot_config import Data
-from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, SXML_DEF_ENCODING
+from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, \
+    SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
 
 __version__ = '0.1'
 
 ROOT_BOARD_NAME = 'All'
 BACK_BOARD_NAME = 'BACK'
+REFRESH_BOARD_PREFIX = 'REFRESH '
 
 LIST_ITEM_HEIGHT = 39
 MAX_LIST_ITEMS = 369
@@ -36,6 +38,7 @@ DATE_DISPLAY_FORMAT = '%d/%m/%Y'
 FILTER_CRITERIA_SUFFIX = '_criteria'
 FILTER_CRITERIA_SEP = '::'
 
+COLUMN_ATTRIBUTE_SEP = '__'
 
 cae = ConsoleApp(__version__, "Monitor the Acumen and Sihot interfaces and servers")
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
@@ -76,8 +79,10 @@ def run_check(check_name, data_dict):
         elif check_name == 'Link Alive':
             results = (ass_test_link_alive(),)
 
-        elif check_name == 'Reservation Discrepancies':
+        elif check_name == 'Sihot Reservation Discrepancies':
             results = sih_reservation_discrepancies(data_dict)
+        elif check_name == 'Sihot Reservation Search':
+            results = sih_reservation_search(data_dict)
         elif check_name == 'Notification':
             results = (sih_test_notification(),)
 
@@ -116,10 +121,10 @@ def sih_reservation_discrepancies(data_dict):
     beg_day = data_dict['first_arrival_criteria']   # datetime.datetime.today()
     end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))   # days=1)  # 9)
     req = ResToSihot(cae)
-    result = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
-                                          " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'")
-    if not result:  # no error message then process fetched rows
-        result = []
+    results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
+                                           " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'")
+    if not results:  # no error message then process fetched rows
+        results = []
         for crow in req.rows:
             if crow['SIHOT_GDSNO']:
                 rs = ResSearch(cae)
@@ -147,12 +152,61 @@ def sih_reservation_discrepancies(data_dict):
                 else:
                     row_err += '/Sihot search error ' + rs.response.error_text
                 if row_err:
-                    result.append((crow['SIHOT_GDSNO'], row_err[1:]))
+                    results.append((crow['SIHOT_GDSNO'], row_err[1:]))
             else:
-                result.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
-        result = (result, ('GDS_NO__18', 'Discrepancy__72L'))
+                results.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
+        results = (results, ('GDS_NO__18', 'Discrepancy__72L'))
 
-    return result if result else ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
+    return results if results else ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
+
+
+def sih_reservation_search(data_dict):
+    list_marker_prefix = '*'
+    result_columns = [PARSE_ONLY_TAG_PREFIX + 'RES-HOTEL__03', 'GDSNO__09',
+                      PARSE_ONLY_TAG_PREFIX + 'RES-NR__06',
+                      PARSE_ONLY_TAG_PREFIX + 'SUB-NR__03',
+                      list_marker_prefix + 'MATCHCODE__15', list_marker_prefix + 'NAME__21',
+                      'ARR__09', 'DEP__09', 'RN__06', PARSE_ONLY_TAG_PREFIX + 'OBJID__06']
+    rs = ResSearch(cae)
+    # available filters: hotel_id, from_date, to_date, matchcode, name, gdsno, flags, scope
+    filters = {k[:-len(FILTER_CRITERIA_SUFFIX)]: v for k, v in data_dict.items() if k.endswith(FILTER_CRITERIA_SUFFIX)}
+    rd = rs.search(**filters)
+    results = list()
+    if rd and isinstance(rd, list):
+        for row in rd:
+            # col_values = [(str(row[col[len(list_marker_prefix):]]['elemListVal'])
+            #                if col[:len(list_marker_prefix)] == list_marker_prefix
+            #                   and 'elemListVal' in row[col[len(list_marker_prefix):]]
+            #                else row[col]['elemVal'])
+            #               if col in row or col[len(list_marker_prefix):] in row else '(undef.)'
+            #               for col in result_columns]
+            col_values = []
+            for c in result_columns:
+                is_list = c.startswith(list_marker_prefix)
+                if is_list:
+                    c = c[len(list_marker_prefix):]
+                if COLUMN_ATTRIBUTE_SEP in c:
+                    c = c.split(COLUMN_ATTRIBUTE_SEP)[0]
+                if c not in row:
+                    col_val = '(undef.)'
+                elif is_list and 'elemListVal' in row[c]:
+                    col_val = str(row[c]['elemListVal'])
+                elif 'elemVal' in row[c]:
+                    col_val = row[c]['elemVal']
+                else:
+                    col_val = '(missing)'
+                col_values.append(col_val)
+            results.append(col_values)
+        column_names = []
+        for c in result_columns:
+            if c.startswith(list_marker_prefix):
+                c = c[len(list_marker_prefix):]
+            if c.startswith(PARSE_ONLY_TAG_PREFIX):
+                c = c[len(PARSE_ONLY_TAG_PREFIX):]
+            column_names.append(c)
+        results = (results, tuple(column_names))
+
+    return results
 
 
 def sih_test_notification():
@@ -208,9 +262,7 @@ class FilterActionButton(ActionButton):
     criteria_type = ObjectProperty()
 
     def on_press(self, **kwargs):
-        value = self.text
-        if FILTER_CRITERIA_SEP in value:
-            value = value.split(FILTER_CRITERIA_SEP)[1]
+        value = self.text.split(FILTER_CRITERIA_SEP)[0]
 
         app = App.get_running_app()
         if self.criteria_type is datetime.date:
@@ -295,8 +347,8 @@ class AcuSihotMonitorApp(App):
             board_name = ROOT_BOARD_NAME
         self.display_board(board_name)
 
-    def display_board(self, board_name):
-        cae.dprint('AcuSihotMonitorApp.display_board()', board_name, 'Stack=', self.board_history,
+    def display_board(self, board_name, *_):
+        cae.dprint('AcuSihotMonitorApp.display_board()', board_name, _, 'Stack=', self.board_history,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         mw = self.root
@@ -374,11 +426,16 @@ class AcuSihotMonitorApp(App):
                         lig.add_widget(lii)
                         break
 
-            elif isinstance(result, str):
+            else:
+                if not isinstance(result, str):
+                    result = self.result_text(board_dict)
                 lii = BoxLayout(size_hint_y=None, height=69)
                 cil = Label(text=result)
                 lii.add_widget(cil)
                 lig.add_widget(lii)
+
+            cm = Factory.CheckMenu(text=REFRESH_BOARD_PREFIX + board_name)
+            cg.add_widget(cm)
 
             # add filters to ActionView
             for k in board_dict:
@@ -388,8 +445,9 @@ class AcuSihotMonitorApp(App):
                     filter_type = type(filter_value)
                     if filter_type is datetime.date:
                         filter_value = filter_value.strftime(DATE_DISPLAY_FORMAT)
+                    filter_value += FILTER_CRITERIA_SEP
                     if self.landscape:
-                        filter_value = filter_name + FILTER_CRITERIA_SEP + filter_value
+                        filter_value += filter_name
                     fw = FilterActionButton(text=filter_value, criteria_name=filter_name, criteria_type=filter_type)
                     self.filter_widgets.append(fw)
                     mw.ids.action_view.add_widget(fw)
@@ -447,9 +505,14 @@ class AcuSihotMonitorApp(App):
         cae.dprint('AcuSihotMonitorApp.do_checks():', check_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         title_obj = self.root.ids.action_previous
         curr_board = title_obj.title
+        if check_name.startswith(REFRESH_BOARD_PREFIX):
+            check_name = check_name[len(REFRESH_BOARD_PREFIX):]
         title_obj.title += " (running check " + check_name + " - please wait)"
         cb = partial(self.run_checks, check_name, curr_board)
         Clock.schedule_once(cb)
+        if check_name == curr_board:
+            cb = partial(self.display_board, check_name)
+            Clock.schedule_once(cb)
 
     def run_checks(self, check_name, curr_board, *args, run_at=None):
         cae.dprint('AcuSihotMonitorApp.run_checks():', check_name, curr_board, args, run_at,
@@ -496,7 +559,7 @@ class AcuSihotMonitorApp(App):
         column_attributes = list()
         for cn in column_names:
             attributes = dict()
-            l = cn.split('__')
+            l = cn.split(COLUMN_ATTRIBUTE_SEP)
             attributes['column_name'] = l[0]
             if len(l) > 1:
                 attributes['size_hint_x'] = int(l[1][:2]) / 100
@@ -516,6 +579,7 @@ class AcuSihotMonitorApp(App):
 
     @staticmethod
     def result_text(data_dict):
+        """ used for check button text within kv and self.display_board() for to show check result """
         if 'check_result' in data_dict:
             if isinstance(data_dict['check_result'], str):
                 txt = data_dict['check_result']
@@ -527,9 +591,9 @@ class AcuSihotMonitorApp(App):
             if k.endswith(FILTER_CRITERIA_SUFFIX):
                 dd = data_dict[k]
                 if isinstance(dd, datetime.date):
-                    txt = dd.strftime(DATE_DISPLAY_FORMAT) + '=' + txt
-                else:
-                    txt = dd + '=' + txt
+                    txt = dd.strftime(DATE_DISPLAY_FORMAT) + FILTER_CRITERIA_SEP + txt
+                elif dd:
+                    txt = dd + FILTER_CRITERIA_SEP + txt
         return txt
 
 

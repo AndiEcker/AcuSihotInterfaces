@@ -30,9 +30,10 @@ class TestSystem:
 
         for cat, rooms in cat_room_dict.items():
             for r in rooms:
-                found = [r for a, c in rows if r == a and c == cat]
-                if not found:
-                    err += "\nroom {} / {} not configured/found in Acumen".format(r, cat)
+                if r[0] != 'V' or cat != 'VR':  # exclude Sihot virtual rooms (which doesn't exist in Acumen)
+                    found = [r for a, c in rows if r == a and c == cat]
+                    if not found:
+                        err += "\nroom {} with category {} not configured/found in Acumen".format(r, cat)
         assert not err
 
     def test_cat_rooms_pbc(self, cat_rooms, db_connected):
@@ -55,11 +56,12 @@ class TestSystem:
 
         for cat, rooms in cat_room_dict.items():
             for r in rooms:
-                if r[0] == '0':
-                    r = r[1:]
-                found = [r for a, c in rows if r == a and c == cat]
-                if not found:
-                    err += "\nroom {} / {} not configured/found in Acumen".format(r, cat)
+                if r[0] != 'V' or cat != 'VR':  # exclude Sihot virtual rooms (which doesn't exist in Acumen)
+                    if r[0] == '0':
+                        r = r[1:]
+                    found = [r for a, c in rows if r == a and c == cat]
+                    if not found:
+                        err += "\nroom {} / {} not configured/found in Acumen".format(r, cat)
         assert not err
 
 

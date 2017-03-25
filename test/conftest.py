@@ -115,7 +115,12 @@ class ConsoleApp:
                              timeout=39.6, xmlEncoding='utf8',
                              acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
                              acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
-                             debugLevel=2)  # 2==DEBUG_LEVEL_VERBOSE
+                             debugLevel=2,  # 2==DEBUG_LEVEL_VERBOSE
+                             warningFragments='')
+
+    def get_config(self, name, value=None):
+        uprint('ConsoleAppMock.get_config', name)
+        return self._options[name] if name in self._options else value
 
     def get_option(self, name, value=None):
         uprint('ConsoleAppMock.get_option', name)

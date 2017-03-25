@@ -2,7 +2,9 @@
     0.1     first beta.
     0.2     also put correct sub-index onto external booking ref (GDSNO) for first and the other bookings if booking has
             several rooms for the same date range.
-    0.3     changed sub-index into extra entries on the Sihot Rooming List
+    0.3     changed sub-index into extra entries on the Sihot Rooming List.
+    0.4     changed console and UPX pyinstaller flags from True to False.
+    0.5     removed Booking.com imports and added RCI booking imports.
 """
 import sys
 import os
@@ -20,7 +22,7 @@ from sxmlif import ResToSihot, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
 
-__version__ = '0.3'
+__version__ = '0.5'
 
 RUN_MODE_CONSOLE = 'c'
 RUN_MODE_UI = 'u'
@@ -28,8 +30,8 @@ RUN_MODE_UI = 'u'
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  debug_level_def=DEBUG_LEVEL_VERBOSE)
 cae.add_option('tciPath', "Import path and file mask for Thomas Cook R*.TXT-tci_files", 'C:/TC_Import/R*.txt', 'j')
-cae.add_option('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
-# cae.add_option('rciPath', "Import path and file mask for RCI CSV-tci_files", 'C:/RC_Import/*.csv', 'y')
+# cae.add_option('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
+cae.add_option('rciPath', "Import path and file mask for RCI CSV-tci_files", 'C:/RC_Import/*.csv', 'y')
 
 cae.add_option('smtpServerUri', "SMTP error notification server URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
@@ -63,7 +65,7 @@ err_msg = cae.set_config(last_rt_prefix + 'lastRt', '@' + str(datetime.datetime.
 if err_msg:
     uprint(err_msg)
 
-uprint('Import path/file-mask for Thomas Cook/Booking.com:', cae.get_option('tciPath'), cae.get_option('bkcPath'))
+uprint('Import path/file-mask for Thomas Cook/RCI:', cae.get_option('tciPath'), cae.get_option('rciPath'))
 notification = None
 if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
     notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
@@ -85,7 +87,7 @@ uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
 
 # check if Acumen domain/user/pw is fully specified and show kivy UI for to enter them if not
 run_mode = RUN_MODE_CONSOLE if cae.get_config('acuPassword') else RUN_MODE_UI
-sub_res_id = 0  # for Booking.com group reservations
+sub_res_id = 0  # for group reservations
 
 '''# #########################################################
    # file collection, logging and progress helpers
@@ -113,7 +115,8 @@ imp_files = []
 def collect_files():
     global tci_files, bkc_files, rci_files, imp_files
     tci_files = glob.glob(cae.get_option('tciPath')) if cae.get_option('tciPath') else []
-    bkc_files = glob.glob(cae.get_option('bkcPath')) if cae.get_option('bkcPath') else []
+    # bkc_files = glob.glob(cae.get_option('bkcPath')) if cae.get_option('bkcPath') else []
+    bkc_files = []
     rci_files = glob.glob(cae.get_option('rciPath')) if cae.get_option('rciPath') else []
     imp_files = tci_files + bkc_files + rci_files
 
@@ -542,7 +545,7 @@ def run_import(acu_user, acu_password):
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCI_ARR_DATE][:10], '%Y-%m-%d')
         row['DEP_DATE'] = row['ARR_DATE'] + datetime.timedelta(7)
         row['RUL_SIHOT_ROOM'] = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCI_APT_NO]) == 3 else '') \
-                                + curr_cols[RCI_APT_NO]
+            + curr_cols[RCI_APT_NO]
         # room_size = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
         # comment = room_size + ' (' + row['RUL_SIHOT_ROOM'] + ')'
 
@@ -610,7 +613,7 @@ def run_import(acu_user, acu_password):
             if error_log and cae.get_option('breakOnError'):
                 break
 
-    if cae.get_option('bkcPath') and (not error_log or not cae.get_option('breakOnError')):
+    if False and cae.get_option('bkcPath') and (not error_log or not cae.get_option('breakOnError')):
         uprint('####  Load Booking.com...  ####')
         bkc_files.sort(key=lambda f: os.path.basename(f))
         cae.dprint(bkc_files)
@@ -738,20 +741,22 @@ def run_import(acu_user, acu_password):
 
     uprint('####  Move Import Files..  ####')
     for sfn in tci_files + bkc_files + rci_files:
-        if [_ for _ in error_log if sfn in _['context']]:
-            continue  # don't move file if there were errors
         dn = os.path.dirname(sfn)
         folder = os.path.basename(os.path.normpath(dn))
         filename = os.path.basename(sfn)
         # first copy imported file to tci/bkc/rci logging sub-folder (on the server)
-        shutil.copy2(sfn, os.path.join(log_file_path, folder, log_file_prefix + '_' + filename))
+        dfn = os.path.join(log_file_path, folder, log_file_prefix + '_' + filename)
+        shutil.copy2(sfn, dfn)
+        cae.dprint("   #  ", sfn, 'copied to', dfn, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        if [_ for _ in error_log if sfn in _['context']]:
+            continue  # don't move file if there were errors
         # .. then move the imported file to the processed sub-folder (on the users machine)
         ddn = os.path.join(dn, 'processed')
         if not os.path.isdir(ddn):
             os.mkdir(ddn)
         dfn = os.path.join(ddn, log_file_prefix + '_' + filename)
         os.rename(sfn, dfn)
-        cae.dprint("   #  ", sfn, 'to', dfn, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        cae.dprint("   #  ", sfn, 'moved to', dfn, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     if error_log:
         error_text = '\n\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in error_log)
