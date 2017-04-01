@@ -5,6 +5,7 @@
     0.3     changed sub-index into extra entries on the Sihot Rooming List.
     0.4     changed console and UPX pyinstaller flags from True to False.
     0.5     removed Booking.com imports and added RCI booking imports.
+    0.6     31-03-17: removed hyphen and sub-booking-id from GDSNO and dup-exec/-startup lock (lastRt).
 """
 import sys
 import os
@@ -22,7 +23,7 @@ from sxmlif import ResToSihot, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
 
-__version__ = '0.5'
+__version__ = '0.6'
 
 RUN_MODE_CONSOLE = 'c'
 RUN_MODE_UI = 'u'
@@ -56,15 +57,6 @@ cae.add_option('mapRes', "Reservation mapping of xml to db items", MAP_RES_DEF, 
 
 cae.add_option('breakOnError', "Abort importation if an error occurs (0=No, 1=Yes)", 0, 'b')
 
-last_rt_prefix = cae.get_option('acuDSN')[-4:]
-lastRt = cae.get_config(last_rt_prefix + 'lastRt')
-if lastRt.startswith('@'):
-    uprint("****  Reservation import process is still running from last batch, started at ", lastRt[1:])
-    cae.shutdown(4)
-err_msg = cae.set_config(last_rt_prefix + 'lastRt', '@' + str(datetime.datetime.now()))
-if err_msg:
-    uprint(err_msg)
-
 uprint('Import path/file-mask for Thomas Cook/RCI:', cae.get_option('tciPath'), cae.get_option('rciPath'))
 notification = None
 if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
@@ -82,7 +74,6 @@ uprint('Server IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort
 uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
 uprint('Use Kernel for clients:', 'Yes' if cae.get_option('useKernelForClient') else 'No (WEB)')
 uprint('Use Kernel for reservations:', 'Yes' if cae.get_option('useKernelForRes') else 'No (WEB)')
-uprint('Current run startup time:', cae.get_config(last_rt_prefix + 'lastRt'))
 uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
 
 # check if Acumen domain/user/pw is fully specified and show kivy UI for to enter them if not
@@ -232,7 +223,7 @@ def run_import(acu_user, acu_password):
         row = {}
         if last_line:  # check if current line is an extension of the booking from last line (only not in first line)
             last_cols = last_line.split(';')
-            if last_cols[TCI_BOOK_IDX] == curr_cols[TCI_BOOK_IDX] \
+            if int(last_cols[TCI_BOOK_IDX]) + 1 == int(curr_cols[TCI_BOOK_IDX]) \
                     and int(last_cols[TCI_PAX_IDX]) + 1 == int(curr_cols[TCI_PAX_IDX]):
                 # additional pax
                 row = rows[-1]
@@ -244,13 +235,14 @@ def run_import(acu_user, acu_password):
                 comments.append(curr_cols[TCI_LINK_REF] + '-' + curr_cols[TCI_BOOK_EXT])
                 if datetime.timedelta(int(curr_cols[TCI_STAY_DAYS])) != row['DEP_DATE'] - row['ARR_DATE']:
                     comments.append('(LengthOfStay differs!)')
-            elif last_cols[TCI_BOOK_IDX] > '1' or last_cols[TCI_BOOK_REF] == curr_cols[TCI_BOOK_REF]:
+            elif last_cols[TCI_BOOK_REF] == curr_cols[TCI_BOOK_REF]:
                 # separate room - mostly with same TC booking reference - increment sub_res_id (0==1st room)
                 row = rows[-1]
+                txt = curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id)
+                if txt not in row['SIHOT_NOTE']:
+                    row['SIHOT_NOTE'] += '+' + txt
+                    row['SIHOT_TEC_NOTE'] += '|CR|+' + txt
                 sub_res_id += 1
-                rows[-1]['SIHOT_GDSNO'] += '-' + str(sub_res_id - 1)
-                rows[-1]['SIHOT_NOTE'] += '+' + curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id - 1)
-                rows[-1]['SIHOT_TEC_NOTE'] += '|CR|+' + curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id - 1)
                 comments.append(curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id))
             else:
                 sub_res_id = 0
@@ -776,11 +768,6 @@ def run_import(acu_user, acu_password):
 
 
 def quit_app(err_log=None):
-    # release dup exec lock
-    set_opt_err = cae.set_config(last_rt_prefix + 'lastRt', str(-1))
-    if set_opt_err:
-        uprint('SihotResImport.quit_app() error:', set_opt_err)
-
     cae.shutdown(13 if set_opt_err else (12 if err_log else 0))
 
 

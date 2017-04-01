@@ -39,8 +39,8 @@ cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
 cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", [], 'r')
 
-cae.add_option('sendOutput', "Include command output in the notification email (0=No, 1=Yes if notification is enabled)"
-               , 0, 'O')
+cae.add_option('sendOutput',
+               "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
 
 
 if not cae.get_option('cmdLine'):

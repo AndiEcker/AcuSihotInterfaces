@@ -8,6 +8,12 @@
 <ListMenu@ActionButton>:
     on_press: app.go_to_board(self.text)
 
+<FilterActionButton>:
+    on_press: app.change_filter(self.text, self.criteria_name, self.criteria_type)
+
+<FilterSelectionButton>:
+    on_press: app.filter_selected(self.text, self.criteria_name, self.criteria_type)
+
 <ListItem@Label>:
     # width+9 sometimes needed for to show text in one line
     #text_size: min(self.width, self.texture_size[0] if self.texture_size[0] else self.width) + 9, min(self.height, self.texture_size[1] if self.texture_size[1] else self.height)
@@ -40,7 +46,7 @@
         id: menu_bar
         pos_hint: {'top': 1}
         background_color: (0, .36, .36, 1)
-        ActionView:
+        FixedActionView:
             id: action_view
             background_color: (0, .36, .36, 1)
             use_separator: True
@@ -49,15 +55,15 @@
                 title: ''
                 with_previous: False
             ActionOverflow:
-            ActionGroup:
+            FixedActionGroup:
                 id: board_group
                 dropdown_width: 270
                 text: 'Boards'
-            ActionGroup:
+            FixedActionGroup:
                 id: check_group
                 dropdown_width: 270
                 text: 'Checks'
-            ActionGroup:
+            FixedActionGroup:
                 id: list_group
                 dropdown_width: 270
                 text: 'Lists'

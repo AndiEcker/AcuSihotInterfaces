@@ -68,6 +68,7 @@ class ConsoleApp:
         app_path = sys.argv[0]
         app_fnam = os.path.basename(app_path)
         self._app_name = os.path.splitext(app_fnam)[0]
+        self._app_version = ver
         uprint(self._app_name, " V", ver, "  Startup", datetime.datetime.now())
         uprint("####  Initialization......  ####")
 
@@ -168,6 +169,9 @@ class ConsoleApp:
                 app_std_err = sys.stderr = _DuplicateSysOut(self._log_file, sys_out=ori_std_err)
             except Exception as ex:
                 uprint("****  ConsoleApp._parse_args(): enable logging exception=", ex)
+
+        uprint(self._app_name, " V", self._app_version, "  Args  parsed", datetime.datetime.now())
+        uprint("####  Startup finished....  ####")
 
         # finished argument parsing - now print chosen option values to the console
         if self._options['debugLevel']['val']:

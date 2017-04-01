@@ -1097,6 +1097,8 @@ class SihotXmlBuilder:
                        timeout=self.ca.get_option('timeout'),
                        encoding=self.ca.get_option('xmlEncoding'),
                        debug_level=self.ca.get_option('debugLevel'))
+        self.ca.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}".format(response_parser, self.xml),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser if response_parser else Response(self.ca)
@@ -1106,7 +1108,7 @@ class SihotXmlBuilder:
                           self.response.server_error() + " error: " + self.response.server_err_msg()
 
         if err_msg:
-            self.ca.dprint('SihotXmlBuilder.send_to_server() error: ', err_msg, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            uprint("SihotXmlBuilder.send_to_server() error: ", err_msg)
         return err_msg
 
     @staticmethod
@@ -1213,12 +1215,12 @@ class ConfigDict(SihotXmlBuilder):
 
 
 class CatRooms(SihotXmlBuilder):
-    def get_cat_rooms(self, hotel_id='1', from_date=datetime.datetime.now(), to_date=datetime.datetime.now(),
+    def get_cat_rooms(self, hotel_id='1', from_date=datetime.date.today(), to_date=datetime.date.today(),
                       scope=None):
         self.beg_xml(operation_code='ALLROOMS')
         self.add_tag('ID', hotel_id)  # mandatory
-        self.add_tag('FROM', datetime.datetime.strftime(from_date, '%Y-%m-%d'))  # mandatory
-        self.add_tag('TO', datetime.datetime.strftime(to_date, '%Y-%m-%d'))
+        self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))  # mandatory
+        self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
         if scope:
             self.add_tag('SCOPE', scope)  # pass 'DESC' for to get room description
         self.end_xml()
@@ -1382,15 +1384,15 @@ class ClientToSihot(SihotXmlBuilder):
 
 
 class ResSearch(SihotXmlBuilder):
-    def search(self, hotel_id=None, from_date=datetime.datetime.now(), to_date=datetime.datetime.now(),
+    def search(self, hotel_id=None, from_date=datetime.date.today(), to_date=datetime.date.today(),
                matchcode=None, name=None, gdsno=None, flags='', scope=None):
         self.beg_xml(operation_code='RES-SEARCH')
         if hotel_id:
             self.add_tag('ID', hotel_id)
         else:
             flags += ';' + 'ALL-HOTELS'
-        self.add_tag('FROM', datetime.datetime.strftime(from_date, '%Y-%m-%d'))  # mandatory?
-        self.add_tag('TO', datetime.datetime.strftime(to_date, '%Y-%m-%d'))
+        self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))  # mandatory?
+        self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
         if matchcode:
             self.add_tag('MATCHCODE', matchcode)
         if name:

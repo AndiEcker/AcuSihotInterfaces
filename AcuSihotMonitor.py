@@ -8,10 +8,9 @@ from traceback import print_exc
 from kivy.app import App
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
-# from kivy.uix.actionbar import ActionButton
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
-from kivy.uix.actionbar import ActionButton
+from kivy.uix.actionbar import ActionButton, ActionGroup, ActionView
 from kivy.uix.popup import Popup
 from kivy.lang.builder import Factory
 from kivy.properties import BooleanProperty, NumericProperty, StringProperty, DictProperty, ObjectProperty
@@ -36,6 +35,7 @@ MAX_LIST_ITEMS = 369
 DATE_DISPLAY_FORMAT = '%d/%m/%Y'
 
 FILTER_CRITERIA_SUFFIX = '_criteria'
+FILTER_SELECTION_SUFFIX = '_selection'
 FILTER_CRITERIA_SEP = '::'
 
 COLUMN_ATTRIBUTE_SEP = '__'
@@ -61,7 +61,7 @@ uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('x
 
 def run_check(check_name, data_dict):
     try:
-        if 'from_join' in data_dict:
+        if 'from_join' in data_dict:  # direct query/fetch against/from Acumen
             bind_vars = {_[:-len(FILTER_CRITERIA_SUFFIX)]: data_dict[_] for _ in data_dict
                          if _.endswith(FILTER_CRITERIA_SUFFIX)}
             acu_db = connect_db()
@@ -118,8 +118,8 @@ def ass_test_link_alive():
 
 
 def sih_reservation_discrepancies(data_dict):
-    beg_day = data_dict['first_arrival_criteria']   # datetime.datetime.today()
-    end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))   # days=1)  # 9)
+    beg_day = data_dict['first_arrival_criteria']  # datetime.datetime.today()
+    end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))  # days=1)  # 9)
     req = ResToSihot(cae)
     results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
                                            " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'")
@@ -257,18 +257,44 @@ class CheckItem(BoxLayout):
     data_dict = DictProperty()
 
 
+class FixedActionGroup(ActionGroup):
+    def fixed_clear_widgets(self):      # cannot override ActionGroup.clear_widgets() because show_group() is using it
+        super(FixedActionGroup, self).clear_widgets()
+        self.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
+        self._list_overflow_items = []
+
+    def remove_widget(self, widget):
+        super(FixedActionGroup, self).remove_widget(widget)
+        if widget in self.list_action_item:
+            self.list_action_item.remove(widget)
+        if widget in self._list_overflow_items:
+            self._list_overflow_items.remove(widget)
+
+
+class FixedActionView(ActionView):
+    def remove_widget(self, widget):
+        try:
+            super(FixedActionView, self).remove_widget(widget)
+        except ValueError as ex:
+            # ignoring exception within ActionView.remove_widget() trying to remove children of
+            # .. ActionOverflow from ActionView._list_action_items
+            pass
+        if widget in self._list_action_group:
+            self._list_action_group.remove(widget)
+
+
 class FilterActionButton(ActionButton):
     criteria_name = StringProperty()
     criteria_type = ObjectProperty()
 
-    def on_press(self, **kwargs):
-        value = self.text.split(FILTER_CRITERIA_SEP)[0]
 
-        app = App.get_running_app()
-        if self.criteria_type is datetime.date:
-            app.change_date_filter(self.criteria_name, value)
-        else:
-            app.change_char_filter(self.criteria_name, value)
+class FilterSelectionGroup(FixedActionGroup):
+    pass
+
+
+class FilterSelectionButton(ActionButton):
+    criteria_name = StringProperty()
+    criteria_type = ObjectProperty()
 
 
 class AcuSihotMonitorApp(App):
@@ -283,15 +309,14 @@ class AcuSihotMonitorApp(App):
         self.post_message = PostMessage(cae)
         self.cat_rooms = CatRooms(cae)
 
-        self.check_list = cae.get_config('checks')
+        self.check_list = cae.get_config('checks', default_value=cae.get_config('checks_template'))
         cae.dprint("AcuSihotMonitorApp.__init__() check_list", self.check_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         # self.boards = {k:v for ci in self.checks}
         self.board_history = []
 
         self.filter_widgets = []
-        self.date_change_popup = None
-        self.char_change_popup = None
-        self.changing_criteria = ''
+        self.filter_change_popup = None
+        self.filter_change_criteria = ''
 
     def build(self):
         cae.dprint('AcuSihotMonitorApp.build()', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -352,28 +377,23 @@ class AcuSihotMonitorApp(App):
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         mw = self.root
+        av = mw.ids.action_view
 
         bg = mw.ids.board_group
-        bg.clear_widgets()
-        bg.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
-        bg._list_overflow_items = []
+        bg.fixed_clear_widgets()
 
         cg = mw.ids.check_group
-        cg.clear_widgets()
-        cg.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
-        cg._list_overflow_items = []
+        cg.fixed_clear_widgets()
 
         lg = mw.ids.list_group
-        lg.clear_widgets()
-        lg.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
-        lg._list_overflow_items = []
+        lg.fixed_clear_widgets()
 
         lig = mw.ids.list_grid
         lig.clear_widgets()
 
         if self.filter_widgets:
             for w in self.filter_widgets:
-                mw.ids.action_view.remove_widget(w)
+                av.remove_widget(w)
             self.filter_widgets = []
 
         lih = mw.ids.list_header
@@ -437,69 +457,103 @@ class AcuSihotMonitorApp(App):
             cm = Factory.CheckMenu(text=REFRESH_BOARD_PREFIX + board_name)
             cg.add_widget(cm)
 
-            # add filters to ActionView
-            for k in board_dict:
-                if k.endswith(FILTER_CRITERIA_SUFFIX):
-                    filter_name = k[:-len(FILTER_CRITERIA_SUFFIX)]
-                    filter_value = board_dict[k]
-                    filter_type = type(filter_value)
-                    if filter_type is datetime.date:
-                        filter_value = filter_value.strftime(DATE_DISPLAY_FORMAT)
-                    filter_value += FILTER_CRITERIA_SEP
-                    if self.landscape:
-                        filter_value += filter_name
-                    fw = FilterActionButton(text=filter_value, criteria_name=filter_name, criteria_type=filter_type)
-                    self.filter_widgets.append(fw)
-                    mw.ids.action_view.add_widget(fw)
+            self._add_filters_to_actionview(av, board_dict)
 
         if board_name != ROOT_BOARD_NAME:
             bg.add_widget(Factory.BoardMenu(text=BACK_BOARD_NAME))
 
         mw.ids.action_previous.title = board_name
-        # action view has no show_group(): mw.ids.action_view.show_group()
-        bg.show_group()
-        cg.show_group()
-        lg.show_group()
 
-    def _filter_changed(self, new_value):
-        # will be done by display_board() anyway: self.filter_widgets.text = new_date.strftime(DATE_DISPLAY_FORMAT)
-        curr_check = self.root.ids.action_previous.title
-        check_dict = self.check_list[self.check_index(curr_check)]
-        check_dict[self.changing_criteria + FILTER_CRITERIA_SUFFIX] = new_value
-        results = run_check(curr_check, check_dict)
-        self.update_check_result(curr_check, results, datetime.datetime.now().strftime('%d-%m-%y %H:%M:%S'))
-        self.display_board(curr_check)
+        if False:
+            if bg.list_action_item:
+                bg.show_group()
+            if cg.list_action_item:
+                cg.show_group()
+            if lg.list_action_item:
+                lg.show_group()
+        else:
+            # mw.ids.action_view.on_width(mw.ids.action_view.width)
+            av.do_layout()
 
-    def change_date_filter(self, changing_criteria, curr_date, *_):
-        cae.dprint('AcuSihotMonitorApp.change_date_filter():', curr_date, changing_criteria, _,
+    def _add_filters_to_actionview(self, action_view, board_dict):
+        for k in board_dict:
+            if k.endswith(FILTER_CRITERIA_SUFFIX):
+                filter_name = k[:-len(FILTER_CRITERIA_SUFFIX)]
+                filter_value = board_dict[k]
+                filter_type = type(filter_value)
+                if filter_type is datetime.date:
+                    filter_value = filter_value.strftime(DATE_DISPLAY_FORMAT)
+                filter_value += FILTER_CRITERIA_SEP
+                if self.landscape:
+                    filter_value += filter_name
+                if filter_name + FILTER_SELECTION_SUFFIX in board_dict:
+                    filter_selection = board_dict[filter_name + FILTER_SELECTION_SUFFIX]
+                    if isinstance(filter_selection, dict) and 'from_join' in filter_selection:
+                        acu_db = connect_db()
+                        err_msg = acu_db.select(from_join=filter_selection['from_join'],
+                                                cols=filter_selection['cols'],
+                                                where_group_order=filter_selection.get('where_group_order'),
+                                                bind_vars=filter_selection.get('bind_vars', {}))
+                        if err_msg:
+                            cae.dprint('AcuSihotMonitor._add_filters_to_actionview() select error:', err_msg)
+                            continue
+                        results = [r[0] for r in acu_db.fetch_all()]
+                        acu_db.close()
+                    else:
+                        results = filter_selection      # hard coded list of selection values
+                    fw = FilterSelectionGroup(text=filter_value, mode='spinner')
+                    for r in results:
+                        ab = FilterSelectionButton(text=r, criteria_name=filter_name, criteria_type=filter_type)
+                        fw.add_widget(ab)
+                else:
+                    fw = FilterActionButton(text=filter_value, criteria_name=filter_name, criteria_type=filter_type)
+                action_view.add_widget(fw)
+                self.filter_widgets.append(fw)
+                # if filter_name + FILTER_SELECTION_SUFFIX in board_dict:
+                #    fw.show_group()
+
+    def change_filter(self, old_value, criteria_name, criteria_type, *_):
+        cae.dprint('AcuSihotMonitorApp.change_filter():', old_value, criteria_name, criteria_type, _,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        pu = Popup(title='Change Date',
-                   content=DateChangeScreen(selected_date=datetime.datetime.strptime(curr_date, DATE_DISPLAY_FORMAT)),
-                   size_hint=(.9, .9))
+        old_value = old_value.split(FILTER_CRITERIA_SEP)[0]
+        if criteria_type is datetime.date:
+            dc = DateChangeScreen(selected_date=datetime.datetime.strptime(old_value, DATE_DISPLAY_FORMAT).date())
+            pu = Popup(title='Change Date', content=dc, size_hint=(.9, .9))
+        else:
+            ti = TextInput(text=old_value)
+            pu = Popup(title='Change Filter', content=ti, size_hint=(.6, .3), on_dismiss=self.char_changed)
         pu.open()
-        self.date_change_popup = pu
-        self.changing_criteria = changing_criteria
+        self.filter_change_popup = pu
+        self.filter_change_criteria = criteria_name
 
     def date_changed(self, new_date, *_):
         cae.dprint('AcuSihotMonitorApp.date_changed():', new_date, _, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        if self.date_change_popup:
-            self.date_change_popup.dismiss()
-            self.date_change_popup = None
-        self._filter_changed(new_date)
-
-    def change_char_filter(self, changing_criteria, curr_char, *_):
-        cae.dprint('AcuSihotMonitorApp.change_char_filter():', changing_criteria, curr_char, _,
-                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        ti = TextInput(text=curr_char)
-        pu = Popup(title='Change Filter', content=ti, size_hint=(.6, .3), on_dismiss=self.char_changed)
-        pu.open()
-        self.char_change_popup = pu
-        self.changing_criteria = changing_criteria
+        if self.filter_change_popup:
+            self.filter_change_popup.dismiss()
+            self.filter_change_popup = None
+        self.filter_changed(new_date)
 
     def char_changed(self, *_):
-        cae.dprint('AcuSihotMonitorApp.char_changed():', self.char_change_popup.content.text, _,
+        cae.dprint('AcuSihotMonitorApp.char_changed():', self.filter_change_popup.content.text, _,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        self._filter_changed(self.char_change_popup.content.text)
+        self.filter_changed(self.filter_change_popup.content.text)
+
+    def filter_selected(self, new_value, criteria_name, criteria_type, *_):
+        cae.dprint('AcuSihotMonitorApp.filter_selected():', new_value, criteria_name, criteria_type, _,
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.filter_change_criteria = criteria_name
+        if criteria_type is datetime.date:
+            new_value = new_value.strftime(DATE_DISPLAY_FORMAT)
+        self.filter_changed(new_value)
+
+    def filter_changed(self, new_value):
+        # will be done by display_board() anyway: self.filter_widgets.text = new_date.strftime(DATE_DISPLAY_FORMAT)
+        curr_check = self.root.ids.action_previous.title
+        check_dict = self.check_list[self.check_index(curr_check)]
+        check_dict[self.filter_change_criteria + FILTER_CRITERIA_SUFFIX] = new_value
+        results = run_check(curr_check, check_dict)
+        self.update_check_result(curr_check, results, datetime.datetime.now().strftime('%d-%m-%y %H:%M:%S'))
+        self.display_board(curr_check)
 
     def do_checks(self, check_name):
         cae.dprint('AcuSihotMonitorApp.do_checks():', check_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)

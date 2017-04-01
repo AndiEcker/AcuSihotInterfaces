@@ -17,6 +17,7 @@ select RUL_CODE, RUL_PRIMARY
    -- 5 times quicker with NOT EXISTS then with: and RUL_CODE = (select max(c.RUL_CODE) from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY)  -- excluding past log entries
    and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and c.RUL_CODE > l.RUL_CODE)  -- excluding past log entries
    and RUL_DATE >= DATE'2017-01-01'   -- SPEED-UP: exclude reservation log entries before 2017
+   and instr(RUL_SIHOT_CAT, '_') = 0
  -- already ordered by V_ACU_RES_UNSYNCED: order by RUL_CODE
 /*
   ae:12-07-16 first beta of combined RUL/AROL logs for 2016 and onwards.
@@ -24,6 +25,7 @@ select RUL_CODE, RUL_PRIMARY
   ae:04-08-16 V02: added RUL_SIHOT columns.
   ae:08-03-17 V03: changed RUL_DATE filter from 2012-01-01 to 2017-01-01 - NEVER ROLLED OUT.
   ae:10-03-17 V04: added SIHOT_LAST_HOTEL_C column and changed RUL_DATE filter from 2012-01-01 to 2017-01-01.
+  ae:24-03-17 V05: added RUL_SIHOT_CAT filter for to prevent HOTMOVE errors for unsynced reservations.
 */
 /
 
