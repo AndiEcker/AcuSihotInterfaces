@@ -40,7 +40,8 @@ FILTER_CRITERIA_SEP = '::'
 
 COLUMN_ATTRIBUTE_SEP = '__'
 
-cae = ConsoleApp(__version__, "Monitor the Acumen and Sihot interfaces and servers")
+cae = ConsoleApp(__version__, "Monitor the Acumen and Sihot interfaces and servers",
+                 config_eval_vars=dict(date_format=DATE_DISPLAY_FORMAT))
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
@@ -263,7 +264,7 @@ class FixedActionGroup(ActionGroup):
         self.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
         self._list_overflow_items = []
 
-    def remove_widget(self, widget):
+    def fixed_remove_widget(self, widget):
         super(FixedActionGroup, self).remove_widget(widget)
         if widget in self.list_action_item:
             self.list_action_item.remove(widget)
@@ -272,13 +273,17 @@ class FixedActionGroup(ActionGroup):
 
 
 class FixedActionView(ActionView):
-    def remove_widget(self, widget):
+    def fixed_remove_widget(self, widget):
+        """ ONLY NEEDED FOR OVERRIDE remove_widget(): 
         try:
             super(FixedActionView, self).remove_widget(widget)
-        except ValueError as ex:
+        except ValueError:
             # ignoring exception within ActionView.remove_widget() trying to remove children of
             # .. ActionOverflow from ActionView._list_action_items
             pass
+        """
+        super(FixedActionView, self).remove_widget(widget)
+
         if widget in self._list_action_group:
             self._list_action_group.remove(widget)
 
@@ -393,7 +398,7 @@ class AcuSihotMonitorApp(App):
 
         if self.filter_widgets:
             for w in self.filter_widgets:
-                av.remove_widget(w)
+                av.fixed_remove_widget(w)
             self.filter_widgets = []
 
         lih = mw.ids.list_header
@@ -471,9 +476,19 @@ class AcuSihotMonitorApp(App):
                 cg.show_group()
             if lg.list_action_item:
                 lg.show_group()
+            for fw in self.filter_widgets:
+                if isinstance(fw, FilterSelectionGroup):
+                    fw.show_group()
         else:
-            # mw.ids.action_view.on_width(mw.ids.action_view.width)
-            av.do_layout()
+            # first two leads to a crash and do_layout() is not showing the filter groups
+            # av.width += 1
+            # av.on_width(av.width)
+            # this is working without crash, but is not showing the filter groups:
+            # av.do_layout()
+            # this one is not showing the filter groups
+            # Clock.schedule_once(av.do_layout, 1.0)
+            # the next line is mostly working if the timeout value is given and greater/equal 0.8 (but did crash sometimes even with 0.9):
+            Clock.schedule_once(partial(av.on_width, av.width), 1.6)
 
     def _add_filters_to_actionview(self, action_view, board_dict):
         for k in board_dict:
@@ -509,8 +524,8 @@ class AcuSihotMonitorApp(App):
                     fw = FilterActionButton(text=filter_value, criteria_name=filter_name, criteria_type=filter_type)
                 action_view.add_widget(fw)
                 self.filter_widgets.append(fw)
-                # if filter_name + FILTER_SELECTION_SUFFIX in board_dict:
-                #    fw.show_group()
+                if filter_name + FILTER_SELECTION_SUFFIX in board_dict:
+                    fw.show_group()
 
     def change_filter(self, old_value, criteria_name, criteria_type, *_):
         cae.dprint('AcuSihotMonitorApp.change_filter():', old_value, criteria_name, criteria_type, _,

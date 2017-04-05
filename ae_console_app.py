@@ -64,7 +64,8 @@ class _DuplicateSysOut:
 
 
 class ConsoleApp:
-    def __init__(self, ver, desc, main_section=MAIN_SECTION_DEF, debug_level_def=DEBUG_LEVEL_DISABLED, log_file_def=''):
+    def __init__(self, ver, desc, main_section=MAIN_SECTION_DEF, debug_level_def=DEBUG_LEVEL_DISABLED, log_file_def='',
+                 config_eval_vars=None):
         app_path = sys.argv[0]
         app_fnam = os.path.basename(app_path)
         self._app_name = os.path.splitext(app_fnam)[0]
@@ -72,6 +73,7 @@ class ConsoleApp:
         uprint(self._app_name, " V", ver, "  Startup", datetime.datetime.now())
         uprint("####  Initialization......  ####")
 
+        self.config_eval_vars = config_eval_vars if config_eval_vars else dict()
         self._options = dict()
         """ self._options contains predefined and user-defined options.
             The _args_parsed instance variable ensure that the command line arguments get re-parsed if add_option()

@@ -498,7 +498,7 @@ def run_import(acu_user, acu_password):
         return ''
 
     ''' **************************************************************************************
-        RCI Bookings Import              #####################################################
+        ####  RCI Bookings Import            #################################################
         biggest differences to TCI and Booking.com import:
          o  client and matchcode explicitly created as guest record in Sihot
          o  room assigned to reservation
@@ -768,7 +768,7 @@ def run_import(acu_user, acu_password):
 
 
 def quit_app(err_log=None):
-    cae.shutdown(13 if set_opt_err else (12 if err_log else 0))
+    cae.shutdown(12 if err_log else 0)
 
 
 if run_mode == RUN_MODE_UI:
