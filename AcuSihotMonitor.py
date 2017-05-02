@@ -125,6 +125,7 @@ def sih_reservation_discrepancies(data_dict):
     results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
                                            " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'")
     if not results:  # no error message then process fetched rows
+        ERR_SEP = '//'
         results = []
         for crow in req.rows:
             if crow['SIHOT_GDSNO']:
@@ -134,29 +135,50 @@ def sih_reservation_discrepancies(data_dict):
                 if rd and isinstance(rd, list):
                     # compare reservation for errors/discrepancies
                     if len(rd) != 1:
-                        row_err += '/Res. count!=1 ' + str(len(rd))
-                    if rd[0]['GDSNO']['elemVal'] != crow['SIHOT_GDSNO']:
-                        row_err += '/GDS no mismatch ' + rd[0]['GDSNO']['elemVal']
-                    if rd[0]['ARR']['elemVal'] != crow['ARR_DATE'].strftime('%Y-%m-%d'):
-                        row_err += '/Arrival date mismatch ' + rd[0]['ARR']['elemVal'] + \
-                                   ' a=' + crow['ARR_DATE'].strftime('%Y-%m-%d')
-                    if rd[0]['DEP']['elemVal'] != crow['DEP_DATE'].strftime('%Y-%m-%d'):
-                        row_err += '/Depart. date mismatch ' + rd[0]['DEP']['elemVal'] + \
-                                   ' a=' + crow['DEP_DATE'].strftime('%Y-%m-%d')
-                    if (rd[0]['RN'].get('elemVal')
-                        or crow['RUL_SIHOT_ROOM']) \
+                        row_err += ERR_SEP + 'Res. count AC=1 SH=' + str(len(rd)) + \
+                                   '(' + ','.join([str(rd[n]['GDSNO']) for n in range(len(rd))]) + ')'
+                    if rd[0]['GDSNO'].get('elemVal') != crow['SIHOT_GDSNO']:
+                        row_err += ERR_SEP + 'GDS no mismatch' \
+                                   ' AC=' + str(crow['SIHOT_GDSNO']) + \
+                                   ' SH=' + str(rd[0]['GDSNO'].get('elemVal'))
+                    if rd[0]['ARR'].get('elemVal') != crow['ARR_DATE'].strftime('%Y-%m-%d'):
+                        row_err += ERR_SEP + 'Arrival date mismatch' + \
+                                   ' AC=' + crow['ARR_DATE'].strftime('%Y-%m-%d') + \
+                                   ' SH=' + str(rd[0]['ARR'].get('elemVal'))
+                    if rd[0]['DEP'].get('elemVal') != crow['DEP_DATE'].strftime('%Y-%m-%d'):
+                        row_err += ERR_SEP + 'Depart. date mismatch' + \
+                                   ' AC=' + crow['DEP_DATE'].strftime('%Y-%m-%d') + \
+                                   ' SH=' + str(rd[0]['DEP'].get('elemVal'))
+                    if rd[0]['RT'].get('elemVal') != crow['SH_RES_TYPE']:
+                        row_err += ERR_SEP + 'Res. status mismatch' + \
+                                   ' AC=' + str(crow['SH_RES_TYPE']) + \
+                                   ' SH=' + str(rd[0]['RT'].get('elemVal'))
+                    if rd[0]['MARKETCODE-NO'].get('elemVal') \
+                            and rd[0]['MARKETCODE-NO'].get('elemVal') != crow['RUL_SIHOT_RATE']:
+                        row_err += ERR_SEP + 'Market segment mismatch' + \
+                                   ' AC=' + str(crow['RUL_SIHOT_RATE']) + \
+                                   ' SH=' + str(rd[0]['MARKETCODE-NO'].get('elemVal'))
+                    if (rd[0]['RN'].get('elemVal') or crow['RUL_SIHOT_ROOM']) \
                             and rd[0]['RN'].get('elemVal') != crow['RUL_SIHOT_ROOM']:  # prevent None != '' false posit.
-                        row_err += '/Room no mismatch ' + str(rd[0]['RN'].get('elemVal')) \
-                                   + ' a=' + str(crow['RUL_SIHOT_ROOM'])
+                        row_err += ERR_SEP + 'Room no mismatch' + \
+                                   ' AC=' + str(crow['RUL_SIHOT_ROOM']) + \
+                                   ' SH=' + str(rd[0]['RN'].get('elemVal'))
+                    elif rd[0]['ID'].get('elemVal') and rd[0]['ID'].get('elemVal') != crow['RUL_SIHOT_HOTEL']:
+                        # actually the hotel ID is not provided within the Sihot interface response xml?!?!?
+                        row_err += ERR_SEP + 'Hotel ID mismatch' + \
+                                   ' AC=' + str(crow['RUL_SIHOT_HOTEL']) + \
+                                   ' SH=' + str(rd[0]['ID'].get('elemVal'))
                 elif rd:
-                    row_err += '/Unexpected search result=' + str(rd)
+                    row_err += ERR_SEP + 'Unexpected search result=' + str(rd)
                 else:
-                    row_err += '/Sihot search error ' + rs.response.error_text
+                    row_err += ERR_SEP + 'Sihot interface search error text=' + rs.response.error_text + \
+                               ' msg=' + str(rs.response.msg)
                 if row_err:
-                    results.append((crow['SIHOT_GDSNO'], row_err[1:]))
+                    results.append((crow['SIHOT_GDSNO'], crow['CD_CODE'], crow['RUL_SIHOT_RATE'],
+                                    crow['ARR_DATE'].strftime('%d-%m-%Y'), row_err[len(ERR_SEP):]))
             else:
                 results.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
-        results = (results, ('GDS_NO__18', 'Discrepancy__72L'))
+        results = (results, ('GDS_NO__18', 'Guest Ref__18', 'RO__3', 'Arrival__18', 'Discrepancy__72L'))
 
     return results if results else ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
 
@@ -487,8 +509,9 @@ class AcuSihotMonitorApp(App):
             # av.do_layout()
             # this one is not showing the filter groups
             # Clock.schedule_once(av.do_layout, 1.0)
-            # the next line is mostly working if the timeout value is given and greater/equal 0.8 (but did crash sometimes even with 0.9):
-            Clock.schedule_once(partial(av.on_width, av.width), 1.6)
+            # the next line is mostly working if the timeout value is given and greater/equal 0.8
+            # .. (but did crash sometimes with 0.9 and even with 1.6):
+            Clock.schedule_once(partial(av.on_width, av.width), 3.6)
 
     def _add_filters_to_actionview(self, action_view, board_dict):
         for k in board_dict:
