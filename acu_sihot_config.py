@@ -3,10 +3,13 @@ from ae_db import OraDB
 
 class Data:
     def __init__(self, acu_user, acu_password, acu_dsn):
-        db = OraDB(usr=acu_user, pwd=acu_password, dsn=acu_dsn)
-        self.error_message = db.connect()
-        if self.error_message:
-            print(self.error_message)
+        self.acu_user = acu_user
+        self.acu_password = acu_password
+        self.acu_dsn = acu_dsn
+        self.error_message = ''
+        db = self.connect_db()
+        if not db:      # logon/connect error
+            return
 
         self.hotel_ids = self.load_view(db, 'T_LU', ['LU_NUMBER'], "LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
 
@@ -22,14 +25,33 @@ class Data:
                                            'RO_RES_GROUP'],
                                           "RO_SIHOT_AGENCY_OBJID is not NULL")
 
+        self.room_change_max_days_diff = self.load_view(db, 'dual',
+                                                        ["F_CONST_VALUE_NUM('k.SihotRoomChangeMaxDaysDiff')"], '')[0][0]
+
         db.close()
 
-    @staticmethod
-    def load_view(db, view, cols, where):
+    def connect_db(self):
+        db = OraDB(usr=self.acu_user, pwd=self.acu_password, dsn=self.acu_dsn)
+        self.error_message = db.connect()
+        if self.error_message:
+            print(self.error_message)
+            return None
+        return db
+
+    def load_view(self, db_opt, view, cols, where):
+        if db_opt:      # use existing db connection if passed by caller
+            db = db_opt
+        else:
+            db = self.connect_db()
         err_msg = db.select(view, cols, where)
         if err_msg:
             print(err_msg)
-        return db.fetch_all()
+            ret = None
+        else:
+            ret = db.fetch_all()
+        if not db_opt:  # close temporary db connection if not passed by caller
+            db.close()
+        return ret
 
     def get_ro_agency_objid(self, ro_code):
         return next((cols[1] for cols in self.ro_agencies if cols[0] == ro_code), None)

@@ -54,6 +54,9 @@
                 id: action_previous
                 title: ''
                 with_previous: False
+            # having ActionOverflow un-commented crashes in ActionView.remove_widget() because this method is trying
+            # .. to remove non-existent items from ActionView._list_action_items that are within the list
+            # .. ActionOverflow.list_action_item
             ActionOverflow:
             FixedActionGroup:
                 id: board_group
@@ -95,3 +98,41 @@
             size_hint_y: None
             pos: self.parent.x, self.parent.y
             height: self.minimum_height
+
+<LogonWindow@GridLayout>:
+    cols: 2
+    spacing: [180, 120]
+    padding: [240, 180]
+    cols_minimum: {1: 240}
+    Label:
+        size_hint_y: .09
+        text: "User"
+    CapitalInput:
+        id: user_name
+        size_hint: .09, None
+        height: 33
+        write_tab: False
+        multiline: False
+        text: app.user_name
+    Label:
+        size_hint_y: .09
+        text: "Password"
+    TextInput:
+        id: user_password
+        size_hint: .09, None
+        height: 33
+        write_tab: False
+        multiline: False
+        password: True
+        focus: app.user_name
+        text: app.user_password
+    Button:
+        id: import_button
+        size_hint_y: .27
+        text: "Logon"
+        on_press: app.logon()
+        disabled: user_name.text == '' or user_password.text == ''
+    Button:
+        size_hint_y: .27
+        text: "Exit"
+        on_press: app.exit_app()

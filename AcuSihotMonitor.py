@@ -1,10 +1,14 @@
 """
-    0.1     first beta
+    0.1     first beta.
+    0.2     first release: added "please wait" messages using Clock.schedule_once().
 """
 import datetime
 from functools import partial
 from traceback import print_exc
 
+from kivy.config import Config      # window size have to be specified before any other kivy imports
+Config.set('graphics', 'width', '1800')
+Config.set('graphics', 'height', '999')
 from kivy.app import App
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -23,7 +27,9 @@ from acu_sihot_config import Data
 from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, \
     SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
 
-__version__ = '0.1'
+
+__version__ = '0.2'
+
 
 ROOT_BOARD_NAME = 'All'
 BACK_BOARD_NAME = 'BACK'
@@ -56,6 +62,10 @@ uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
        cae.get_option('serverKernelPort'))
 uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+
+
+config_data = None      # public Data() instance for Acumen config/data fetches
+
 
 """ TESTS """
 
@@ -120,11 +130,15 @@ def ass_test_link_alive():
 
 def sih_reservation_discrepancies(data_dict):
     beg_day = data_dict['first_arrival_criteria']  # datetime.datetime.today()
-    end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))  # days=1)  # 9)
+    end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))
     req = ResToSihot(cae)
     results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
                                            " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'")
-    if not results:  # no error message then process fetched rows
+    if results:
+        # error message
+        results = (results,)
+    else:   # no error message then process fetched rows
+        max_offset = datetime.timedelta(days=config_data.room_change_max_days_diff)
         ERR_SEP = '//'
         results = []
         for crow in req.rows:
@@ -139,14 +153,16 @@ def sih_reservation_discrepancies(data_dict):
                                    '(' + ','.join([str(rd[n]['GDSNO']) for n in range(len(rd))]) + ')'
                     if rd[0]['GDSNO'].get('elemVal') != crow['SIHOT_GDSNO']:
                         row_err += ERR_SEP + 'GDS no mismatch' \
-                                   ' AC=' + str(crow['SIHOT_GDSNO']) + \
+                                             ' AC=' + str(crow['SIHOT_GDSNO']) + \
                                    ' SH=' + str(rd[0]['GDSNO'].get('elemVal'))
-                    if rd[0]['ARR'].get('elemVal') != crow['ARR_DATE'].strftime('%Y-%m-%d'):
-                        row_err += ERR_SEP + 'Arrival date mismatch' + \
+                    if abs(datetime.datetime.strptime(rd[0]['ARR'].get('elemVal'), '%Y-%m-%d') - crow['ARR_DATE'])\
+                            > max_offset:
+                        row_err += ERR_SEP + 'Arrival date offset more than ' + str(max_offset) + ' days' + \
                                    ' AC=' + crow['ARR_DATE'].strftime('%Y-%m-%d') + \
                                    ' SH=' + str(rd[0]['ARR'].get('elemVal'))
-                    if rd[0]['DEP'].get('elemVal') != crow['DEP_DATE'].strftime('%Y-%m-%d'):
-                        row_err += ERR_SEP + 'Depart. date mismatch' + \
+                    if abs(datetime.datetime.strptime(rd[0]['DEP'].get('elemVal'), '%Y-%m-%d') - crow['DEP_DATE']) \
+                            > max_offset:
+                        row_err += ERR_SEP + 'Departure date offset more than ' + str(max_offset) + ' days' + \
                                    ' AC=' + crow['DEP_DATE'].strftime('%Y-%m-%d') + \
                                    ' SH=' + str(rd[0]['DEP'].get('elemVal'))
                     if rd[0]['RT'].get('elemVal') != crow['SH_RES_TYPE']:
@@ -178,7 +194,7 @@ def sih_reservation_discrepancies(data_dict):
                                     crow['ARR_DATE'].strftime('%d-%m-%Y'), row_err[len(ERR_SEP):]))
             else:
                 results.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
-        results = (results, ('GDS_NO__18', 'Guest Ref__18', 'RO__3', 'Arrival__18', 'Discrepancy__72L'))
+        results = (results, ('GDS_NO__18', 'Guest Ref__18', 'RO__06', 'Arrival__18', 'Discrepancy__72L'))
 
     return results if results else ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
 
@@ -233,14 +249,11 @@ def sih_reservation_search(data_dict):
 
 
 def sih_test_notification():
-    return ''
+    return 'NOT IMPLEMENTED'
 
 
 def cfg_agency_match_codes():
-    config_data = Data(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'))
-    acu_db = connect_db()
-    agencies = config_data.load_view(acu_db, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_MC is not NULL")
-    acu_db.close()
+    agencies = config_data.load_view(None, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_MC is not NULL")
     ret = ""
     for agency in agencies:
         ret += ", " + agency[0] + "=" + config_data.get_ro_agency_matchcode(agency[0])
@@ -248,10 +261,7 @@ def cfg_agency_match_codes():
 
 
 def cfg_agency_obj_ids():
-    config_data = Data(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'))
-    acu_db = connect_db()
-    agencies = config_data.load_view(acu_db, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_OBJID is not NULL")
-    acu_db.close()
+    agencies = config_data.load_view(None, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_OBJID is not NULL")
     ret = ""
     for agency in agencies:
         ret += ", " + agency[0] + "=" + str(config_data.get_ro_agency_objid(agency[0]))
@@ -281,7 +291,7 @@ class CheckItem(BoxLayout):
 
 
 class FixedActionGroup(ActionGroup):
-    def fixed_clear_widgets(self):      # cannot override ActionGroup.clear_widgets() because show_group() is using it
+    def fixed_clear_widgets(self):  # cannot override ActionGroup.clear_widgets() because show_group() is using it
         super(FixedActionGroup, self).clear_widgets()
         self.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
         self._list_overflow_items = []
@@ -324,9 +334,16 @@ class FilterSelectionButton(ActionButton):
     criteria_type = ObjectProperty()
 
 
+class CapitalInput(TextInput):
+    def insert_text(self, substring, from_undo=False):
+        return super(CapitalInput, self).insert_text(substring.upper(), from_undo=from_undo)
+
+
 class AcuSihotMonitorApp(App):
     landscape = BooleanProperty()
     list_header_height = NumericProperty()
+    user_name = StringProperty(cae.get_option('acuUser'))
+    user_password = StringProperty(cae.get_option('acuPassword'))
 
     def __init__(self, **kwargs):
         super(AcuSihotMonitorApp, self).__init__(**kwargs)
@@ -345,17 +362,54 @@ class AcuSihotMonitorApp(App):
         self.filter_change_popup = None
         self.filter_change_criteria = ''
 
+        self.app_started = False
+        self.main_win = None
+        self.logon_win = None
+
     def build(self):
         cae.dprint('AcuSihotMonitorApp.build()', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        self.root = MainWindow()
-        self.go_to_board(ROOT_BOARD_NAME)
+        self.root = FloatLayout()
+        self.main_win = MainWindow()
+        self.logon_win = Factory.LogonWindow()
+        usr = cae.get_option('acuUser')
+        pwd = cae.get_option('acuPassword')
+        if usr and pwd and self.init_config_data(usr, pwd, cae.get_option('acuDSN')):
+            self.root.add_widget(self.main_win)
+            self.go_to_board(ROOT_BOARD_NAME)
+        else:
+            self.root.add_widget(self.logon_win)
         return self.root
+
+    @staticmethod
+    def init_config_data(user_name, user_pass, db_dsn):
+        global config_data
+        config_data = Data(user_name, user_pass, db_dsn)
+        if config_data.error_message:
+            pu = Popup(title='Logon Error', content=Label(text=config_data.error_message), size_hint=(.9, .3))
+            pu.open()
+            return False
+        return True
+
+    def logon(self):
+        user_name = self.logon_win.ids.user_name.text
+        user_pass = self.logon_win.ids.user_password.text
+        if self.init_config_data(user_name, user_pass, cae.get_option('acuDSN')):
+            cae.set_option('acuUser', user_name)
+            cae.set_option('acuPassword', user_pass, save_to_config=False)
+            self.root.clear_widgets()
+            self.root.add_widget(self.main_win)
+            self.go_to_board(ROOT_BOARD_NAME)
+
+    @staticmethod
+    def exit_app():
+        cae.shutdown()
 
     def screen_size_changed(self):
         self.landscape = self.root.width >= self.root.height
 
     def on_start(self):
         cae.dprint('AcuSihotMonitorApp.on_start()', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.app_started = True
 
     def board_items(self, board_name):
         return [ci for ci in self.check_list
@@ -397,13 +451,14 @@ class AcuSihotMonitorApp(App):
             board_name = self.board_history[-1]
         else:
             board_name = ROOT_BOARD_NAME
-        self.display_board(board_name)
+        self.main_win.ids.action_previous.title += " (displaying board " + board_name + " - please wait)"
+        cb = partial(self.display_board, board_name)
+        Clock.schedule_once(cb)
 
     def display_board(self, board_name, *_):
         cae.dprint('AcuSihotMonitorApp.display_board()', board_name, _, 'Stack=', self.board_history,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-
-        mw = self.root
+        mw = self.main_win
         av = mw.ids.action_view
 
         bg = mw.ids.board_group
@@ -491,17 +546,7 @@ class AcuSihotMonitorApp(App):
 
         mw.ids.action_previous.title = board_name
 
-        if False:
-            if bg.list_action_item:
-                bg.show_group()
-            if cg.list_action_item:
-                cg.show_group()
-            if lg.list_action_item:
-                lg.show_group()
-            for fw in self.filter_widgets:
-                if isinstance(fw, FilterSelectionGroup):
-                    fw.show_group()
-        else:
+        if self.app_started:  # prevent crash on app startup
             # first two leads to a crash and do_layout() is not showing the filter groups
             # av.width += 1
             # av.on_width(av.width)
@@ -511,7 +556,13 @@ class AcuSihotMonitorApp(App):
             # Clock.schedule_once(av.do_layout, 1.0)
             # the next line is mostly working if the timeout value is given and greater/equal 0.8
             # .. (but did crash sometimes with 0.9 and even with 1.6):
-            Clock.schedule_once(partial(av.on_width, av.width), 3.6)
+            # now after adding app_startup and not doing a refresh on app startup the following call is working even
+            # .. with 0.3 seconds, but I want to go back and try do_layout directly:
+            # Clock.schedule_once(partial(av.on_width, av.width), 0.3) #3.6)
+            # calling directly av.do_layout() - with or without Clock-schedule_once() is still not showing the entries
+            # .. within the drop downs - so going back to
+            # Clock.schedule_once(av.do_layout, 0.3)
+            Clock.schedule_once(partial(av.on_width, av.width), 0.3)
 
     def _add_filters_to_actionview(self, action_view, board_dict):
         for k in board_dict:
@@ -538,7 +589,7 @@ class AcuSihotMonitorApp(App):
                         results = [r[0] for r in acu_db.fetch_all()]
                         acu_db.close()
                     else:
-                        results = filter_selection      # hard coded list of selection values
+                        results = filter_selection  # hard coded list of selection values
                     fw = FilterSelectionGroup(text=filter_value, mode='spinner')
                     for r in results:
                         ab = FilterSelectionButton(text=r, criteria_name=filter_name, criteria_type=filter_type)
@@ -585,17 +636,19 @@ class AcuSihotMonitorApp(App):
         self.filter_changed(new_value)
 
     def filter_changed(self, new_value):
+        cae.dprint('AcuSihotMonitorApp.filter_changed():', new_value, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         # will be done by display_board() anyway: self.filter_widgets.text = new_date.strftime(DATE_DISPLAY_FORMAT)
-        curr_check = self.root.ids.action_previous.title
+        title_obj = self.main_win.ids.action_previous
+        curr_check = title_obj.title
         check_dict = self.check_list[self.check_index(curr_check)]
         check_dict[self.filter_change_criteria + FILTER_CRITERIA_SUFFIX] = new_value
-        results = run_check(curr_check, check_dict)
-        self.update_check_result(curr_check, results, datetime.datetime.now().strftime('%d-%m-%y %H:%M:%S'))
-        self.display_board(curr_check)
+        title_obj.title = "(running check " + curr_check + " - please wait)"
+        cb = partial(self.run_curr_check, curr_check, check_dict)
+        Clock.schedule_once(cb)
 
     def do_checks(self, check_name):
         cae.dprint('AcuSihotMonitorApp.do_checks():', check_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        title_obj = self.root.ids.action_previous
+        title_obj = self.main_win.ids.action_previous
         curr_board = title_obj.title
         if check_name.startswith(REFRESH_BOARD_PREFIX):
             check_name = check_name[len(REFRESH_BOARD_PREFIX):]
@@ -606,13 +659,18 @@ class AcuSihotMonitorApp(App):
             cb = partial(self.display_board, check_name)
             Clock.schedule_once(cb)
 
+    def run_curr_check(self, curr_check, check_dict, *_):
+        results = run_check(curr_check, check_dict)
+        self.update_check_result(curr_check, results, datetime.datetime.now().strftime('%d-%m-%y %H:%M:%S'))
+        self.display_board(curr_check)
+
     def run_checks(self, check_name, curr_board, *args, run_at=None):
         cae.dprint('AcuSihotMonitorApp.run_checks():', check_name, curr_board, args, run_at,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        root_check = False
+        # root_check = False
         if not run_at:
             run_at = datetime.datetime.now().strftime('%d-%m-%y %H:%M:%S')
-            root_check = True
+            # root_check = True
 
         check_items = self.board_items(check_name)
         if check_items:
@@ -622,14 +680,15 @@ class AcuSihotMonitorApp(App):
                 ret += ' / ' + self.run_checks(check_item['name'], curr_board, run_at=run_at)
             results = (ret[3:],)
         else:
-            Clock.tick()
+            # Clock.tick()
             results = run_check(check_name, self.check_list[self.check_index(check_name)])
-            Clock.tick()
+            # Clock.tick()
 
         self.update_check_result(check_name, results, run_at)
+        self.display_board(check_name)
 
-        if root_check:
-            self.root.ids.action_previous.title = curr_board
+        # if root_check:
+        #    self.main_win.ids.action_previous.title = curr_board
 
         return str(results[0])
 
@@ -644,7 +703,9 @@ class AcuSihotMonitorApp(App):
         self.check_list[check_index]['last_check'] = run_at
 
         # save updated CHECKS to config/INI file
-        self.ca.set_config('checks', self.check_list)
+        err_msg = self.ca.set_config('checks', self.check_list)
+        if err_msg:
+            uprint("AcuSihotMonitorApp.update_check_result() error={} checks_list={}".format(err_msg, self.check_list))
 
     @staticmethod
     def column_attributes(column_names):

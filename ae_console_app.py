@@ -258,7 +258,7 @@ class ConsoleApp:
                 cfg_parser = ConfigParser()
                 cfg_parser.read(cfg_fnam)
                 if isinstance(val, dict) or isinstance(val, list) or isinstance(val, tuple):
-                    str_val = "'''" + repr(val) + "'''"
+                    str_val = "'''" + repr(val).replace('%', '%%') + "'''"
                 else:
                     str_val = str(val)
                 cfg_parser.set(section, name, str_val)

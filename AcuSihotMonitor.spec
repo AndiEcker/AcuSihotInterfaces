@@ -25,5 +25,5 @@ exe = EXE(pyz,
           name='AcuSihotMonitor',
           debug=False,
           strip=False,
-          upx=True,
-          console=True )
+          upx=False,
+          console=False )
