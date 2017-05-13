@@ -34,7 +34,7 @@ def prepare_eval_str(val):
     """ check val if needs to be evaluated and return non-empty-and-stripped-eval-string if yes else '' """
 
     if isinstance(val, bytes):
-        val = val.decode()  # convert bytes to string
+        val = val.decode('utf-8', 'replace')  # convert bytes to string
 
     ret = ''
     if isinstance(val, str):

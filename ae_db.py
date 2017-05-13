@@ -67,6 +67,17 @@ class OraDB:
             where_group_order = '1=1'
         if not bind_vars:
             bind_vars = dict()
+        else:
+            new_dict = dict()
+            for key, val in bind_vars.items():
+                if isinstance(val, list):       # expand IN clause bind list variable to separate bind variables
+                    var_list = [key + '_' + str(_) for _ in range(len(val))]
+                    where_group_order = where_group_order.replace(':' + key, ':' + ',:'.join(var_list))
+                    for var_val in zip(var_list, val):
+                        new_dict[var_val[0]] = var_val[1]
+                else:
+                    new_dict[key] = val
+            bind_vars = new_dict
         sq = "select {} from {} where {}".format(','.join(cols), from_join, where_group_order)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint('oraDB-' + sq)

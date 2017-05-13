@@ -14,7 +14,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
-from kivy.uix.actionbar import ActionButton, ActionGroup, ActionView
+from kivy.uix.actionbar import ActionButton, ActionGroup, ActionView, ActionToggleButton  # ActionCheck
 from kivy.uix.popup import Popup
 from kivy.lang.builder import Factory
 from kivy.properties import BooleanProperty, NumericProperty, StringProperty, DictProperty, ObjectProperty
@@ -329,9 +329,17 @@ class FilterSelectionGroup(FixedActionGroup):
     pass
 
 
-class FilterSelectionButton(ActionButton):
+class FilterSelectionItem(ActionButton):
     criteria_name = StringProperty()
     criteria_type = ObjectProperty()
+
+
+class FilterSelectionButton(FilterSelectionItem):
+    """ ActionButton for to select a single filter value from a selection list """
+
+
+class FilterSelectionToggleButton(FilterSelectionItem):
+    """ ActionToggleButton for to toggle item within multi_select filter check list """
 
 
 class CapitalInput(TextInput):
@@ -572,6 +580,8 @@ class AcuSihotMonitorApp(App):
                 filter_type = type(filter_value)
                 if filter_type is datetime.date:
                     filter_value = filter_value.strftime(DATE_DISPLAY_FORMAT)
+                else:
+                    filter_value = str(filter_value)    # convert to string if multi_select
                 filter_value += FILTER_CRITERIA_SEP
                 if self.landscape:
                     filter_value += filter_name
@@ -591,9 +601,15 @@ class AcuSihotMonitorApp(App):
                     else:
                         results = filter_selection  # hard coded list of selection values
                     fw = FilterSelectionGroup(text=filter_value, mode='spinner')
-                    for r in results:
-                        ab = FilterSelectionButton(text=r, criteria_name=filter_name, criteria_type=filter_type)
-                        fw.add_widget(ab)
+                    if isinstance(board_dict[filter_name + FILTER_CRITERIA_SUFFIX], list):
+                        for r in results:
+                            ab = FilterSelectionToggleButton(text=r, state='down' if r in board_dict[k] else 'normal',
+                                                             criteria_name=filter_name, criteria_type=filter_type)
+                            fw.add_widget(ab)
+                    else:
+                        for r in results:
+                            ab = FilterSelectionButton(text=r, criteria_name=filter_name, criteria_type=filter_type)
+                            fw.add_widget(ab)
                 else:
                     fw = FilterActionButton(text=filter_value, criteria_name=filter_name, criteria_type=filter_type)
                 action_view.add_widget(fw)
@@ -641,7 +657,13 @@ class AcuSihotMonitorApp(App):
         title_obj = self.main_win.ids.action_previous
         curr_check = title_obj.title
         check_dict = self.check_list[self.check_index(curr_check)]
-        check_dict[self.filter_change_criteria + FILTER_CRITERIA_SUFFIX] = new_value
+        if isinstance(check_dict[self.filter_change_criteria + FILTER_CRITERIA_SUFFIX], list):  # multi_select
+            if new_value in check_dict[self.filter_change_criteria + FILTER_CRITERIA_SUFFIX]:
+                check_dict[self.filter_change_criteria + FILTER_CRITERIA_SUFFIX].remove(new_value)
+            else:
+                check_dict[self.filter_change_criteria + FILTER_CRITERIA_SUFFIX].append(new_value)
+        else:
+            check_dict[self.filter_change_criteria + FILTER_CRITERIA_SUFFIX] = new_value
         title_obj.title = "(running check " + curr_check + " - please wait)"
         cb = partial(self.run_curr_check, curr_check, check_dict)
         Clock.schedule_once(cb)
@@ -746,7 +768,7 @@ class AcuSihotMonitorApp(App):
                 if isinstance(dd, datetime.date):
                     txt = dd.strftime(DATE_DISPLAY_FORMAT) + FILTER_CRITERIA_SEP + txt
                 elif dd:
-                    txt = dd + FILTER_CRITERIA_SEP + txt
+                    txt = str(dd) + FILTER_CRITERIA_SEP + txt
         return txt
 
 
