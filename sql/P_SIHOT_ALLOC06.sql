@@ -24,7 +24,8 @@ BEGIN
                      ARO_STATUS = case when pcAction = 'RM' then 330 else 300 end
      where ARO_STATUS in (200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + k.SihotRoomChangeMaxDaysDiff;
   end if;
-  pcExtraInfo := case when lcCheckOutInfo is not NULL then 'CO' || lcCheckOutInfo end || case when lcCheckInInfo is not NULL then 'CI' || lcCheckInInfo end;
+  pcExtraInfo := substr(case when lcCheckOutInfo is not NULL then 'CO' || lcCheckOutInfo end || case when lcCheckInInfo is not NULL then 'CI' || lcCheckInInfo end
+                        || ' Req' || pcExtraInfo, 1, 1995);
 END
 /*
   ae:14-12-16 first beta - for SIHOT sync/migration project.
@@ -33,6 +34,7 @@ END
   ae:21-02-17 V03: added population of ARO_RECD_KEY for to not show blue dots in Acumen Lobby window (for Marian). 
   ae:15-03-17 V04: extended valid date range offset from 2 to 4 days - see WO #42288 from Esther.
   ae:03-05-17 V05: using k package constant for the maximum days of difference between expected and real arrival/departure (see also P_SIHOT_ALLOC()).
+  ae:16-05-17 V06: added Sihot request to pcExtraInfo OUT value for to be added to the T_SRSL.SRSL_MESSAGE column for debugging.
 */;
 /
 

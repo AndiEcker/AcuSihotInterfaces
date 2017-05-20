@@ -1,6 +1,7 @@
 """
     0.1     first beta.
     0.2     first release: added "please wait" messages using Clock.schedule_once().
+    0.3     ported to Python 3.5 with the option to use the angle backend (via KIVY_GL_BACKEND=angle_sdl2 env var).
 """
 import datetime
 from functools import partial
@@ -28,7 +29,7 @@ from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, Res
     SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
 
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 
 ROOT_BOARD_NAME = 'All'
@@ -138,8 +139,7 @@ def sih_reservation_discrepancies(data_dict):
         # error message
         results = (results,)
     else:   # no error message then process fetched rows
-        max_offset = datetime.timedelta(days=config_data.room_change_max_days_diff)
-        ERR_SEP = '//'
+        err_sep = '//'
         results = []
         for crow in req.rows:
             if crow['SIHOT_GDSNO']:
@@ -149,54 +149,71 @@ def sih_reservation_discrepancies(data_dict):
                 if rd and isinstance(rd, list):
                     # compare reservation for errors/discrepancies
                     if len(rd) != 1:
-                        row_err += ERR_SEP + 'Res. count AC=1 SH=' + str(len(rd)) + \
-                                   '(' + ','.join([str(rd[n]['GDSNO']) for n in range(len(rd))]) + ')'
-                    if rd[0]['GDSNO'].get('elemVal') != crow['SIHOT_GDSNO']:
-                        row_err += ERR_SEP + 'GDS no mismatch' \
-                                             ' AC=' + str(crow['SIHOT_GDSNO']) + \
-                                   ' SH=' + str(rd[0]['GDSNO'].get('elemVal'))
-                    if abs(datetime.datetime.strptime(rd[0]['ARR'].get('elemVal'), '%Y-%m-%d') - crow['ARR_DATE'])\
-                            > max_offset:
-                        row_err += ERR_SEP + 'Arrival date offset more than ' + str(max_offset) + ' days' + \
-                                   ' AC=' + crow['ARR_DATE'].strftime('%Y-%m-%d') + \
-                                   ' SH=' + str(rd[0]['ARR'].get('elemVal'))
-                    if abs(datetime.datetime.strptime(rd[0]['DEP'].get('elemVal'), '%Y-%m-%d') - crow['DEP_DATE']) \
-                            > max_offset:
-                        row_err += ERR_SEP + 'Departure date offset more than ' + str(max_offset) + ' days' + \
-                                   ' AC=' + crow['DEP_DATE'].strftime('%Y-%m-%d') + \
-                                   ' SH=' + str(rd[0]['DEP'].get('elemVal'))
-                    if rd[0]['RT'].get('elemVal') != crow['SH_RES_TYPE']:
-                        row_err += ERR_SEP + 'Res. status mismatch' + \
-                                   ' AC=' + str(crow['SH_RES_TYPE']) + \
-                                   ' SH=' + str(rd[0]['RT'].get('elemVal'))
-                    if rd[0]['MARKETCODE-NO'].get('elemVal') \
-                            and rd[0]['MARKETCODE-NO'].get('elemVal') != crow['RUL_SIHOT_RATE']:
-                        row_err += ERR_SEP + 'Market segment mismatch' + \
-                                   ' AC=' + str(crow['RUL_SIHOT_RATE']) + \
-                                   ' SH=' + str(rd[0]['MARKETCODE-NO'].get('elemVal'))
-                    if (rd[0]['RN'].get('elemVal') or crow['RUL_SIHOT_ROOM']) \
-                            and rd[0]['RN'].get('elemVal') != crow['RUL_SIHOT_ROOM']:  # prevent None != '' false posit.
-                        row_err += ERR_SEP + 'Room no mismatch' + \
-                                   ' AC=' + str(crow['RUL_SIHOT_ROOM']) + \
-                                   ' SH=' + str(rd[0]['RN'].get('elemVal'))
-                    elif rd[0]['ID'].get('elemVal') and rd[0]['ID'].get('elemVal') != crow['RUL_SIHOT_HOTEL']:
-                        # actually the hotel ID is not provided within the Sihot interface response xml?!?!?
-                        row_err += ERR_SEP + 'Hotel ID mismatch' + \
-                                   ' AC=' + str(crow['RUL_SIHOT_HOTEL']) + \
-                                   ' SH=' + str(rd[0]['ID'].get('elemVal'))
+                        row_err += err_sep + 'Res. count AC=1 SH=' + str(len(rd)) + \
+                                   ('(' + ','.join([rd[n]['_RES-HOTEL'].get('elemVal', '') + '='
+                                                   + str(rd[n]['ARR'].get('elemVal')) + '...'
+                                                   + str(rd[n]['DEP'].get('elemVal')) for n in range(len(rd))]) + ')'
+                                    if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE else '')
+                    row_err = _sih_check_all_res(crow, rd, row_err, err_sep)
                 elif rd:
-                    row_err += ERR_SEP + 'Unexpected search result=' + str(rd)
+                    row_err += err_sep + 'Unexpected search result=' + str(rd)
                 else:
-                    row_err += ERR_SEP + 'Sihot interface search error text=' + rs.response.error_text + \
+                    row_err += err_sep + 'Sihot interface search error text=' + rs.response.error_text + \
                                ' msg=' + str(rs.response.msg)
                 if row_err:
                     results.append((crow['SIHOT_GDSNO'], crow['CD_CODE'], crow['RUL_SIHOT_RATE'],
-                                    crow['ARR_DATE'].strftime('%d-%m-%Y'), row_err[len(ERR_SEP):]))
+                                    crow['ARR_DATE'].strftime('%d-%m-%Y'), row_err[len(err_sep):]))
             else:
                 results.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
         results = (results, ('GDS_NO__18', 'Guest Ref__18', 'RO__06', 'Arrival__18', 'Discrepancy__72L'))
 
     return results if results else ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
+
+
+def _sih_check_all_res(crow, rd, row_err, err_sep):
+    max_offset = datetime.timedelta(days=config_data.room_change_max_days_diff)
+    acu_sep = ' AC='
+    sih_sep = ' SH='
+    for n in range(len(rd)):
+        if len(rd) > 1:
+            sih_sep = ' SH' + str(n + 1) + '='
+        if rd[n]['GDSNO'].get('elemVal') != crow['SIHOT_GDSNO']:
+            row_err += err_sep + 'GDS no mismatch' + \
+                       acu_sep + str(crow['SIHOT_GDSNO']) + \
+                       sih_sep + str(rd[n]['GDSNO'].get('elemVal'))
+        if abs(datetime.datetime.strptime(rd[n]['ARR'].get('elemVal'), '%Y-%m-%d') - crow['ARR_DATE']) > max_offset:
+            row_err += err_sep + 'Arrival date offset more than ' + str(max_offset.days) + ' days' + \
+                       acu_sep + crow['ARR_DATE'].strftime('%Y-%m-%d') + \
+                       sih_sep + str(rd[n]['ARR'].get('elemVal'))
+        if abs(datetime.datetime.strptime(rd[n]['DEP'].get('elemVal'), '%Y-%m-%d') - crow['DEP_DATE']) > max_offset:
+            row_err += err_sep + 'Departure date offset more than ' + str(max_offset.days) + ' days' + \
+                       acu_sep + crow['DEP_DATE'].strftime('%Y-%m-%d') + \
+                       sih_sep + str(rd[n]['DEP'].get('elemVal'))
+        if rd[n]['RT'].get('elemVal') != crow['SH_RES_TYPE']:
+            row_err += err_sep + 'Res. status mismatch' + \
+                       acu_sep + str(crow['SH_RES_TYPE']) + \
+                       sih_sep + str(rd[n]['RT'].get('elemVal'))
+        # Marketcode-no is mostly empty in Sihot RES-SEARCH response!!!
+        if rd[n]['MARKETCODE-NO'].get('elemVal') and rd[n]['MARKETCODE-NO'].get('elemVal') != crow['RUL_SIHOT_RATE']:
+            row_err += err_sep + 'Market segment mismatch' + \
+                       acu_sep + str(crow['RUL_SIHOT_RATE']) + \
+                       sih_sep + str(rd[n]['MARKETCODE-NO'].get('elemVal'))
+        # RN can be empty/None - prevent None != '' false posit.
+        if rd[n]['RN'].get('elemVal', crow['RUL_SIHOT_ROOM']) and rd[n]['RN'].get('elemVal') != crow['RUL_SIHOT_ROOM']:
+            row_err += err_sep + 'Room no mismatch' + \
+                       acu_sep + str(crow['RUL_SIHOT_ROOM']) + \
+                       sih_sep + str(rd[n]['RN'].get('elemVal'))
+        elif rd[n]['_RES-HOTEL'].get('elemVal') and rd[n]['_RES-HOTEL'].get('elemVal') != str(crow['RUL_SIHOT_HOTEL']):
+            row_err += err_sep + 'Hotel-ID mismatch' + \
+                       acu_sep + str(crow['RUL_SIHOT_HOTEL']) + \
+                       sih_sep + str(rd[n]['_RES-HOTEL'].get('elemVal'))
+        elif rd[n]['ID'].get('elemVal') and str(rd[n]['ID'].get('elemVal')) != str(crow['RUL_SIHOT_HOTEL']):
+            # actually the hotel ID is not provided within the Sihot interface response xml?!?!?
+            row_err += err_sep + 'Hotel ID mismatch' + \
+                       acu_sep + str(crow['RUL_SIHOT_HOTEL']) + \
+                       sih_sep + str(rd[n]['ID'].get('elemVal'))
+
+    return row_err
 
 
 def sih_reservation_search(data_dict):

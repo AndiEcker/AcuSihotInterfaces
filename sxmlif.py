@@ -1385,7 +1385,7 @@ class ClientToSihot(SihotXmlBuilder):
 
 class ResSearch(SihotXmlBuilder):
     def search(self, hotel_id=None, from_date=datetime.date.today(), to_date=datetime.date.today(),
-               matchcode=None, name=None, gdsno=None, flags='', scope=None):
+               matchcode=None, name=None, gdsno=None, flags='', scope=None, guest_id=None):
         self.beg_xml(operation_code='RES-SEARCH')
         if hotel_id:
             self.add_tag('ID', hotel_id)
@@ -1403,6 +1403,8 @@ class ResSearch(SihotXmlBuilder):
             self.add_tag('FLAGS', flags if flags[0] != ';' else flags[1:])
         if scope:
             self.add_tag('SCOPE', scope)  # e.g. EXPORTEXTENDEDCOMMENT;FORCECALCDAYPRICE;CALCSUMDAYPRICE
+        if guest_id:
+            self.add_tag('CENTRAL-GUEST-ID', guest_id)  # this is not filtering nothing (tried GID from Sihot-To-Acu IF)
         self.end_xml()
 
         err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
