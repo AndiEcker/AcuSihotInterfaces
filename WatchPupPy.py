@@ -9,7 +9,7 @@ import datetime
 import subprocess
 from configparser import ConfigParser
 
-from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_ISO_FULL, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB, DEF_USER, DEF_DSN
 from ae_notification import Notification
 from sxmlif import PostMessage, GuestInfo, SXML_DEF_ENCODING
@@ -108,7 +108,7 @@ def reset_last_run_time(interval, force=False):
             cmd_cfg_parser.read(cmd_cfg_file_name)
             last_start = cmd_cfg_parser.get(MAIN_SECTION_DEF, last_rt_prefix + 'lastRt')
             if last_start[0] == '@':
-                last_start_dt = datetime.datetime.strptime(last_start[1:], DATE_ISO_FULL)
+                last_start_dt = datetime.datetime.strptime(last_start[1:], DATE_TIME_ISO)
                 interval_delta = datetime.timedelta(seconds=interval)
                 now_dt = datetime.datetime.now()
                 if not force and last_start_dt + interval_delta >= now_dt:

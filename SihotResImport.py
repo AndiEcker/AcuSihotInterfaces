@@ -505,18 +505,76 @@ def run_import(acu_user, acu_password):
          o  possibly update of reservation inventory type (AOWN_ROREF) in Acumen needed
         **************************************************************************************
     '''
-    RCI_RESORT = 1  # BHC=1442, BHH=2398, HMC=2429, PBC=0803 (see also RS_RCI_CODE)
+    # ###  AW4 file columns (new format changed in May 2017 - see the 3 new columns in 2nd row of RCI_FILE_HEADER)  ###
+    RCI_FILE_HEADER = 'RESORT NAME\tRESORT ID\tRESERVATION NUMBER' \
+                      '\tLINE_OF_BUS_SUB_GRP_NM\tLINE_OF_BUS_NM\tTIER' \
+                      '\tSTART DATE\tSTATUS\tRSVN TYPE\tGUEST CERT' \
+                      '\tRCI ID\tMBR1 LAST\tMBR1 FIRST\tMBR EMAIL\tMBR TYPE\tGST LAST\tGST FIRST\tGST ADDR1' \
+                      '\tGST ADDR2\tGST ITY\tGST STATE\tGST ZIP\tGST CNTRY\tGST PHONE\tGST EMAIL\tBOOK DT' \
+                      '\tCXL DT\tUNIT\tBED\tOWNER ID\tOWNER FIRST\tOWNER LAST\tINT EXCH\tETL_ACTV_FLG' \
+                      '\tETL_ACTV_FLG\tETL_ACTV_FLG\tETL_ACTV_FLG\tETL_ACTV_FLG\n'
+    # RCI_RESORT_NAME = 0               # ResortId + ResortName (not used)
+    RCI_RESORT_ID = 1                   # BHC=1442, BHH=2398, HMC=2429, PBC=0803 (see also RS_RCI_CODE)
     RCI_BOOK_REF = 2
-    RCI_ARR_DATE = 3
-    RCI_BOOK_TYPE = 4
-    # RCI_IS_GUEST = 6
-    RCI_SURNAME = 8
-    RCI_FORENAME = 9
-    RCI_GUEST_SURNAME = 12
-    RCI_GUEST_FORENAME = 13
-    RCI_APT_NO = 24
-    # RCI_ROOM_SIZE = 25
-    RCI_COL_COUNT = 35
+    # RCI_LINE_OF_BUS_SUB_GRP_NM = 3    # e.g. 141 (newly added and not used)
+    # RCI_LINE_OF_BUS_NM = 4            # e.g. Member (newly added and not used)
+    # RCI_TIER = 5                      # e.g. STANDARD (newly added and not used)
+    RCI_ARR_DATE = 6
+    RCI_BOOK_STATUS = 7                 # STATUS, e.g. Reserved/Cancelled
+    RCI_IS_GUEST = 9                    # GUEST CERT, e.g. Y/N
+    RCI_CLIENT_ID = 10
+    RCI_CLIENT_SURNAME = 11
+    RCI_CLIENT_FORENAME = 12
+    RCI_CLIENT_EMAIL = 13
+    RCI_GUEST_SURNAME = 15
+    RCI_GUEST_FORENAME = 16
+    RCI_GUEST_ADDR1 = 17
+    RCI_GUEST_ADDR2 = 18
+    RCI_GUEST_CITY = 19
+    RCI_GUEST_STATE = 20
+    RCI_GUEST_ZIP = 21
+    RCI_GUEST_COUNTRY = 22
+    RCI_GUEST_PHONE = 23
+    RCI_GUEST_EMAIL = 24
+    RCI_BOOK_DATE = 25
+    RCI_CANCEL_DATE = 26
+    RCI_APT_NO = 27
+    RCI_ROOM_SIZE = 28
+    RCI_COL_COUNT = 38
+
+    # ###  AP7 file columns (new format changed in May 2017 - see new TIER column in 2nd row of RCIP_FILE_HEADER)  ###
+    RCIP_FILE_HEADER = 'RESORT ID\tRESORT NAME\tRSVN LINK\tRESERVATION NUMBER\tSYSTEM' \
+                       '\tTIER' \
+                       '\tCHK IN DT\tCHK OUT DT\tNIGHTS\tRSVN STATUS\tRSVN TYPE\tGUEST CERT' \
+                       '\tUNIT TYPE 1\tUNIT NBR 1\tUNIT TYPE 2\tUNIT NBR 2\tUNIT TYPE 3\tUNIT NBR 3' \
+                       '\tMBR ID\tMBR1 LAST	MBR1 FIRST\tMBR TIER\tLOCKOFF\tLOCKOFF UNIT TYPE' \
+                       '\tGUARANTEED_CD\tGUARANTEED_FLG\tMSTR UNIT TYPE\tMSTR UNIT NBR' \
+                       '\tGST LAST\tGST FIRST\tGST ADDR1\tGST ADDR2\tGST CITY\tGST STATE\tGST ZIP\tGST CNTRY' \
+                       '\tGST PHONE\tGST EMAIL\tINT EXCH\tBOOK DT\tCXL DT\tMASTER ARRIVAL DATE'
+    RCIP_RESORT_ID = 0                  # BHC=1442, BHH=2398, HMC=2429, PBC=0803 (see also RS_RCI_CODE)
+    RCIP_BOOK_REF = 3
+    RCIP_ARR_DATE = 6
+    RCIP_DEP_DATE = 7
+    RCIP_BOOK_STATUS = 9                # e.g. R=Reserved/C=Cancelled
+    RCIP_IS_GUEST = 11
+    RCIP_ROOM_SIZE = 12
+    RCIP_APT_NO = 13
+    RCIP_CLIENT_ID = 18
+    RCIP_CLIENT_SURNAME = 19
+    RCIP_CLIENT_FORENAME = 20
+    RCIP_GUEST_SURNAME = 28
+    RCIP_GUEST_FORENAME = 29
+    RCIP_GUEST_ADDR1 = 30
+    RCIP_GUEST_ADDR2 = 31
+    RCIP_GUEST_CITY = 32
+    RCIP_GUEST_STATE = 33
+    RCIP_GUEST_ZIP = 34
+    RCIP_GUEST_COUNTRY = 35
+    RCIP_GUEST_PHONE = 36
+    RCIP_GUEST_EMAIL = 37
+    RCIP_BOOK_DATE = 39
+    RCIP_CANCEL_DATE = 40
+    RCIP_COL_COUNT = 42
 
     def rci_line_to_res_row(curr_line, file_name, line_num, rows):
         curr_cols = curr_line.split('\t')
@@ -524,30 +582,38 @@ def run_import(acu_user, acu_password):
             return 'rci_line_to_res_row(): incomplete line (missing end of line)'
         elif len(curr_cols) != RCI_COL_COUNT:
             return 'rci_line_to_res_row(): incomplete line (missing {} columns)'.format(RCI_COL_COUNT - len(curr_cols))
-        elif curr_cols[RCI_RESORT] not in ('1442', '2398', '2429', '0803'):
-            return 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCI_RESORT])
-        elif curr_cols[RCI_BOOK_TYPE] != 'Reserved':
+        elif curr_cols[RCI_BOOK_STATUS] != 'Reserved':
             return ''  # skip/hide request and incomplete bookings (without any apartment value)
-        elif 'RCI POINTS' in curr_cols[RCI_SURNAME] + curr_cols[RCI_FORENAME] \
+        elif 'RCI POINTS' in curr_cols[RCI_CLIENT_SURNAME] + curr_cols[RCI_CLIENT_FORENAME] \
                 + curr_cols[RCI_GUEST_SURNAME] + curr_cols[RCI_GUEST_FORENAME]:
             return ''  # skip/ignore RCI Points bookings
 
         row = dict()
+        row['RUL_SIHOT_HOTEL'] = rc_to_sihot_hotel_id(curr_cols[RCI_RESORT_ID])
+        if not row['RUL_SIHOT_HOTEL']:
+            return 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCI_RESORT_ID])
         row['RH_EXT_BOOK_REF'] = curr_cols[RCI_BOOK_REF]
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCI_ARR_DATE][:10], '%Y-%m-%d')
         row['DEP_DATE'] = row['ARR_DATE'] + datetime.timedelta(7)
         row['RUL_SIHOT_ROOM'] = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCI_APT_NO]) == 3 else '') \
             + curr_cols[RCI_APT_NO]
-        # room_size = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
-        # comment = room_size + ' (' + row['RUL_SIHOT_ROOM'] + ')'
+        room_size = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
+        comment = room_size + ' (' + row['RUL_SIHOT_ROOM'] + ')'
+
+        row['_ARR_WEEK'] = rc_arr_to_week(row['ARR_DATE'])
+        if curr_cols[RCI_IS_GUEST] == 'Y':
+            row['_GUEST_OF'] = curr_cols[RCI_CLIENT_SURNAME] + ', ' + curr_cols[RCI_CLIENT_FORENAME]
+            if row['_GUEST_OF'] == ', ':
+                row['_GUEST_OF'] = '(unknown)'
+        else:
+            row['_GUEST_OF'] = ''
 
         row['_FILE_NAME'] = file_name
         row['_LINE_NUM'] = line_num
-        rows.append(row)
-        return ''
 
-    RCIP_RESORT = 0
-    RCIP_COL_COUNT = 99
+        rows.append(row)
+
+        return ''
 
     def rcip_line_to_res_row(curr_line, file_name, line_num, rows):
         curr_cols = curr_line.split('\t')
@@ -556,10 +622,26 @@ def run_import(acu_user, acu_password):
             return 'rcip_line_to_res_row(): incomplete line (missing end of line)'
         elif len(curr_cols) != RCIP_COL_COUNT:
             return 'rcip_line_to_res_row(): incomplete line, missing {} columns'.format(RCIP_COL_COUNT - len(curr_cols))
-        elif curr_cols[RCIP_RESORT] not in ('1442', '2398', '2429', '0803'):
-            return 'rcip_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCIP_RESORT])
 
         row = dict()
+        row['RUL_SIHOT_HOTEL'] = rc_to_sihot_hotel_id(curr_cols[RCIP_RESORT_ID])
+        if not row['RUL_SIHOT_HOTEL']:
+            return 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCIP_RESORT_ID])
+        row['RH_EXT_BOOK_REF'] = curr_cols[RCIP_BOOK_REF]
+        row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_ARR_DATE][:10], '%Y-%m-%d')
+        row['DEP_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_DEP_DATE][:10], '%Y-%m-%d')
+        row['RUL_SIHOT_ROOM'] = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCIP_APT_NO]) == 3 else '') \
+            + curr_cols[RCIP_APT_NO]
+        room_size = 'STUDIO' if curr_cols[RCIP_ROOM_SIZE][0] == 'S' else curr_cols[RCIP_ROOM_SIZE][0] + ' BED'
+        comment = room_size + ' (' + row['RUL_SIHOT_ROOM'] + ')'
+
+        row['_ARR_WEEK'] = rc_arr_to_week(row['ARR_DATE'])
+        if curr_cols[RCIP_IS_GUEST] == 'Y':
+            row['_GUEST_OF'] = curr_cols[RCIP_CLIENT_SURNAME] + ', ' + curr_cols[RCIP_CLIENT_FORENAME]
+            if row['_GUEST_OF'] == ', ':
+                row['_GUEST_OF'] = '(unknown)'
+        else:
+            row['_GUEST_OF'] = ''
 
         row['_FILE_NAME'] = file_name
         row['_LINE_NUM'] = line_num
@@ -568,9 +650,22 @@ def run_import(acu_user, acu_password):
 
         return ''
 
+    def rc_to_sihot_hotel_id(rc_resort_id):
+        return cae.get_config(rc_resort_id, 'RcResortIds')
+
+    def rc_arr_to_week(arr_date):
+        year = arr_date.year
+        week_1_begin = datetime.datetime.strptime(cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
+        if arr_date < week_1_begin:
+            week_1_begin = datetime.datetime.strptime(cae.get_config(str(year - 1), 'RcWeeks'), '%Y-%m-%d')
+        diff = arr_date - week_1_begin
+        return 1 + int(diff.days / 7)
+
+    #
     # #########################################################
     # LOAD import files
     # #########################################################
+    #
     collect_files()
     res_rows = []
     error_msg = ''
@@ -667,13 +762,9 @@ def run_import(acu_user, acu_password):
             points_import = False
             for idx, ln in enumerate(lines):
                 if idx == 0:  # first line is header
-                    if ln == 'RESORT NAME\tRESORT ID\tRESERVATION NUMBER\tSTART DATE\tSTATUS\tRSVN TYPE\tGUEST CERT' \
-                             '\tRCI ID\tMBR1 LAST\tMBR1 FIRST\tMBR EMAIL\tMBR TYPE\tGST LAST\tGST FIRST\tGST ADDR1' \
-                             '\tGST ADDR2\tGST ITY\tGST STATE\tGST ZIP\tGST CNTRY\tGST PHONE\tGST EMAIL\tBOOK DT' \
-                             '\tCXL DT\tUNIT\tBED\tOWNER ID\tOWNER FIRST\tOWNER LAST\tINT EXCH\tETL_ACTV_FLG' \
-                             '\tETL_ACTV_FLG\tETL_ACTV_FLG\tETL_ACTV_FLG\tETL_ACTV_FLG\n':
+                    if ln == RCI_FILE_HEADER:
                         points_import = False
-                    elif ln == '':
+                    elif ln == RCIP_FILE_HEADER:
                         points_import = True
                     else:
                         error_msg = 'Invalid file header'

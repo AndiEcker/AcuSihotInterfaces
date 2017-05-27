@@ -6,7 +6,7 @@
 """
 import datetime
 
-from ae_console_app import ConsoleApp, Progress, uprint, DATE_ISO_FULL, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE
 from ae_notification import Notification
 from ae_db import DEF_USER, DEF_DSN
 from acu_sihot_config import Data
@@ -74,7 +74,7 @@ lastUnfinishedRunTime = cae.get_config(last_rt_prefix + 'lastRt')
 if lastUnfinishedRunTime.startswith('@'):
     uprint("****  Synchronization process is still running from last batch, started at ", lastUnfinishedRunTime[1:])
     cae.shutdown(4)
-app_env_err = cae.set_config(last_rt_prefix + 'lastRt', '@' + datetime.datetime.now().strftime(DATE_ISO_FULL))
+app_env_err = cae.set_config(last_rt_prefix + 'lastRt', '@' + datetime.datetime.now().strftime(DATE_TIME_ISO))
 if app_env_err:
     uprint(app_env_err)
 

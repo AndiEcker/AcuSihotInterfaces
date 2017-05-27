@@ -7,7 +7,8 @@ from textwrap import wrap
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, \
+    ILLEGAL_XML_SUB     # needed for to clean and re-parse XML on invalid char code exception/error
 from ae_tcp import TcpClient
 from ae_db import OraDB, MAX_STRING_LENGTH
 
@@ -642,6 +643,11 @@ MAP_WEB_RES = \
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES-NR'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'SUB-NR'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'OBJID'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'EMAIL'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'DEP-TIME'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'COUNTRY'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CITY'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'LANG'},
         {'elemName': '/RESERVATION'},
         {'elemName': '/ARESLIST'},
     )
@@ -685,9 +691,6 @@ MAP_RES_DEF = MAP_WEB_RES
 
 
 class SihotXmlParser:  # XMLParser interface
-
-    reg_expr = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);")  # needed for clean and re-parse on char code error
-
     def __init__(self, ca):
         super(SihotXmlParser, self).__init__()
         self._xml = ''
@@ -709,19 +712,34 @@ class SihotXmlParser:  # XMLParser interface
 
     def parse_xml(self, xml):
         self.ca.dprint('SihotXmlParser.parse_xml():', xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        self._xml = xml
         try:
             self._parser = XMLParser(target=self)
             self._parser.feed(xml)
+            self._xml = xml
         except ParseError as pex:
             # invalid char encodings cannot be fixed with encoding="cp1252/utf-8/.."
             uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
-                   "- retrying with cleaned-up XML data.")
-            xml_cleaned = self.reg_expr.sub('', xml)
-            self.ca.dprint('SihotXmlParser.parse_xml() cleaned-up xml=', xml_cleaned,
+                   "- first retrying clean-up of &#1; and &#7; in XML data.")
+            xml_cleaned = xml.replace('&#1;', '¿1¿').replace('&#7;', '¿7¿')
+            try:
+                self._parser = XMLParser(target=self)
+                self._parser.feed(xml_cleaned)
+            except ParseError as pex:
+                uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
+                       "- second retrying clean-up of invalid unicode in XML data.")
+                xml_cleaned = ILLEGAL_XML_SUB.sub('?', xml_cleaned)
+                try:
+                    self._parser = XMLParser(target=self)
+                    self._parser.feed(xml_cleaned)
+                except ParseError as pex:
+                    uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
+                           "- third retrying with clean-up of all &#XXX; in XML data.")
+                    xml_cleaned = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);").sub('¿', xml_cleaned)
+                    self._parser = XMLParser(target=self)
+                    self._parser.feed(xml_cleaned)
+
+            self.ca.dprint('SihotXmlParser.parse_xml() successfully cleaned-up xml=', xml_cleaned,
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            self._parser = XMLParser(target=self)
-            self._parser.feed(xml_cleaned)
             self._xml = xml_cleaned
 
     def get_xml(self):
@@ -1389,8 +1407,8 @@ class ResSearch(SihotXmlBuilder):
         self.beg_xml(operation_code='RES-SEARCH')
         if hotel_id:
             self.add_tag('ID', hotel_id)
-        else:
-            flags += ';' + 'ALL-HOTELS'
+        elif 'ALL-HOTELS' not in flags:
+            flags += (';' if flags else '') + 'ALL-HOTELS'
         self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))  # mandatory?
         self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
         if matchcode:

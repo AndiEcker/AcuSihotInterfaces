@@ -2,6 +2,9 @@ import sys
 import os
 import datetime
 
+from builtins import chr            # works like unichr() also in Python 2
+import re
+
 from configparser import ConfigParser
 from argparse import ArgumentParser
 
@@ -11,8 +14,26 @@ DEBUG_LEVEL_VERBOSE = 2
 
 MAIN_SECTION_DEF = 'Settings'
 
-DATE_ISO_FULL = '%Y-%m-%d %H:%M:%S.%f'
+DATE_TIME_ISO = '%Y-%m-%d %H:%M:%S.%f'
+DATE_ISO = '%Y-%m-%d'
 
+# illegal characters in XML
+# .. taken from https://stackoverflow.com/questions/1707890/fast-way-to-filter-illegal-xml-unicode-chars-in-python
+ILLEGAL_XML_CHARS = [(0x00, 0x08), (0x0B, 0x0C), (0x0E, 0x1F),
+                     (0x7F, 0x84), (0x86, 0x9F),
+                     (0xFDD0, 0xFDDF), (0xFFFE, 0xFFFF)]
+if sys.maxunicode >= 0x10000:  # not narrow build of Python
+    ILLEGAL_XML_CHARS.extend([(0x1FFFE, 0x1FFFF), (0x2FFFE, 0x2FFFF),
+                              (0x3FFFE, 0x3FFFF), (0x4FFFE, 0x4FFFF),
+                              (0x5FFFE, 0x5FFFF), (0x6FFFE, 0x6FFFF),
+                              (0x7FFFE, 0x7FFFF), (0x8FFFE, 0x8FFFF),
+                              (0x9FFFE, 0x9FFFF), (0xAFFFE, 0xAFFFF),
+                              (0xBFFFE, 0xBFFFF), (0xCFFFE, 0xCFFFF),
+                              (0xDFFFE, 0xDFFFF), (0xEFFFE, 0xEFFFF),
+                              (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
+ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
+
+# save original stdout/stderr
 ori_std_out = sys.stdout
 ori_std_err = sys.stderr
 app_std_out = ori_std_out
@@ -218,7 +239,13 @@ class ConsoleApp:
              else (c.getfloat if isinstance(default_value, float)
                    else (c.getint if isinstance(default_value, int)
                          else c.get)))
-        return f(section if section else self._main_section, name, fallback=default_value)
+        cfg_val = f(section if section else self._main_section, name, fallback=default_value)
+        if isinstance(default_value, datetime.datetime) and isinstance(cfg_val, str):
+            cfg_val = datetime.datetime.strptime(cfg_val, DATE_TIME_ISO)
+        elif isinstance(default_value, datetime.date) and isinstance(cfg_val, str):
+            day = datetime.datetime.strptime(cfg_val, DATE_ISO)
+            cfg_val = datetime.date(day.year, day.month, day.day)
+        return cfg_val
 
     def get_config(self, name, section=None, default_value=None, check_eval_only=False):
         f = self._get_cfg
@@ -259,6 +286,10 @@ class ConsoleApp:
                 cfg_parser.read(cfg_fnam)
                 if isinstance(val, dict) or isinstance(val, list) or isinstance(val, tuple):
                     str_val = "'''" + repr(val).replace('%', '%%') + "'''"
+                elif isinstance(val, datetime.datetime):
+                    str_val = val.strftime(DATE_TIME_ISO)
+                elif isinstance(val, datetime.date):
+                    str_val = val.strftime(DATE_ISO)
                 else:
                     str_val = str(val)
                 cfg_parser.set(section, name, str_val)

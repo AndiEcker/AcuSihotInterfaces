@@ -15,7 +15,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
-from kivy.uix.actionbar import ActionButton, ActionGroup, ActionView, ActionToggleButton  # ActionCheck
+from kivy.uix.actionbar import ActionButton, ActionGroup, ActionView
 from kivy.uix.popup import Popup
 from kivy.lang.builder import Factory
 from kivy.properties import BooleanProperty, NumericProperty, StringProperty, DictProperty, ObjectProperty
@@ -227,7 +227,7 @@ def sih_reservation_search(data_dict):
     # available filters: hotel_id, from_date, to_date, matchcode, name, gdsno, flags, scope
     filters = {k[:-len(FILTER_CRITERIA_SUFFIX)]: v for k, v in data_dict.items() if k.endswith(FILTER_CRITERIA_SUFFIX)}
     rd = rs.search(**filters)
-    results = list()
+    results = []
     if rd and isinstance(rd, list):
         for row in rd:
             # col_values = [(str(row[col[len(list_marker_prefix):]]['elemListVal'])

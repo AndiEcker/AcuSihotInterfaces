@@ -1,6 +1,7 @@
 # Interfaces between Sihot.PMS and Acumen
 
->Tools and processes for to migrate and synchronize system configuration, room status, clients and reservations between Sihot.PMS and Acumen.
+>Tools and processes for to migrate and synchronize system configuration, room status, clients and reservations 
+between Sihot.PMS and Acumen.
 
 ## Available Commands
 
@@ -9,6 +10,8 @@ This interface suite project is including the following command line tools:
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Web, Sxml |
+| AcuSihotMonitor | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
+| ClientQuestionnaireExport | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
@@ -18,22 +21,26 @@ This interface suite project is including the following command line tools:
 | WatchPupPy | Periodically execute and supervise command | - |
 | WebRestTester | Reservation interface testing tool | Web |
 
-### Command line arguments
+### General command line arguments
 
-Most of the available commands are using the same command line options. The following command line options are available (sorted by the long name of the option - displayed in the first column):
+Most of the available commands are using the same command line options. The following command line options are available
+(sorted by the long name of the option - displayed in the first column):
 
 | Option | Description | Default | Short option | Commands |
 | --- | --- | --- | --- | --- |
-| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
 | cmdInterval | Command interval in seconds | 3600 | s | WatchPupPy |
+| dateFrom | Date of first check-out to export | (current date - 7 days or last-runs dateTo plus 1 day) | F | ClientQuestionnaireExport |
+| dateTill | Date of last check-out to export | (current date) | T | ClientQuestionnaireExport |
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose) | 0 | D | (all) |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
+| exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
@@ -41,29 +48,98 @@ Most of the available commands are using the same command line options. The foll
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | y | SihotResImport |
 | resHistory | Migrate also the clients reservation history (0=No, 1=Yes) | 1 | r | SihotMigration |
-| serverIP | IP address of the interface server | localhost | i | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
-| timeout | Timeout in seconds for TCP/IP connections | 39.6 | t | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| timeout | Timeout in seconds for TCP/IP connections | 39.6 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SihotResImport, SihotResSync |
-| xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 
-Currently all the 26 ascii lower case letters are used for the command line argument short options (apart from `| l |` which is throwing the exception `argparse.ArgumentError: conflicting option string: -l`).
+Currently all the 26 ascii lower case letters are used for the command line argument short options (apart from `| l |`
+which is throwing the exception `argparse.ArgumentError: conflicting option string: -l`).
+
+### AcuSihotMonitor Application
+
+AcuSihotMonitor is a kivy application that would run on Windows, Linux, Mac OS X, Android and iOS and allows to check
+the correct functionality of the Acumen and Sihot servers and interfaces.
+
+### ClientQuestionnaireExport Application
+
+ClientQuestionnaireExport is a command line tool that exports all check-outs within a given date range into a CSV file
+for to be sent to a service company for to do the client questionnaires. FYI: this tools is replacing the currently
+used Oracle procedure SALES.TRIPADVISOR (runs every Tuesday around 11 am). There is a similar export available
+within the Sihot.PMS EXE application via the menu entry `Export / Export stays for Marketing` (with the checkbox
+`Email filter` checked) which is exporting a CSV file into the folder U:/transfer/staysformarketing/.
+
+#### HotelNames INI/config section
+
+This section are defining the hotel names that will be included into the CSV file. The variable name is the Sihot
+hotel id. Only the check-outs of hotels that have a hotel name defined will be exported/included in the CSV file.
+
+Currently only the PBC and BHC hotels are processed.
+
+#### HotelLocationIds INI/config section
+
+This section are defining the location ids used by the client questionnaire service for to be included into the
+CSV file. The variable name is the Sihot hotel id. Only the check-outs of hotels that have a location id 
+defined will be exported/included in the CSV file.
+
+The location IDs provided are 535055 for the BHC hotel and 288275 for the PBC hotel.
+
+#### columnSeparator INI/config setting
+
+Allows to specify the character used for to separate the columns of the CSV file. The default value is the comma (`,`).
+
+#### maxLengthOfStay INI/config setting
+
+Because the Sihot WEB interface is only allowing to search for arrival dates a maximum length of a stay can be
+specified for to include them into the exported CSV file. The default value is 42 days.
+
+#### resSearchFlags INI/config setting
+
+Allows to specify the flags provided by the Sihot WEB interface `RES-SEARCH` command. The default value is `ALL-HOTELS`.
+
+#### resSearchScope INI/config setting
+
+Allows to specify the scope flags provided by the Sihot WEB interface `RES-SEARCH` command. The default value is 
+`NOORDERER;NORATES;NOPERSTYPES`.
+
+#### fileCaption INI/config setting
+
+Allows to specify/change the header/caption of the exported CSV file. The default value is 
+`UNIQUEID,CHECKIN,CHECKOUT,FIRSTNAME,LASTNAME,EMAIL,CITY,COUNTRY,RESORT,LOCATIONID,STAYMONTH,STAYYEAR,LANGUAGE`.
+
+#### fileColumns INI/config setting
+
+Allows to specify/change the content of the data row columns exported CSV file. The default value is
+`['<unique_id>', 'ARR', 'DEP',
+  LIST_MARKER_PREFIX + 'NAME2', LIST_MARKER_PREFIX + 'NAME',
+  LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'EMAIL', LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'CITY',
+  LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'COUNTRY', '<hotel_id_to_name(hotel_id)>',
+  '<hotel_id_to_location_id(hotel_id)>',  # '<"xx-0000-xx">',
+  '<check_out.month>', '<check_out.year>',
+  PARSE_ONLY_TAG_PREFIX + 'LANG',
+  ]`.
 
 
 ## System Configurations And Mappings
 
-Most of the configuration keys/options and mapping tables are stored within the Lookup Tables (`T_LU`) of the Oracle database of the Acumen server. Others are stored in newly added columns within other Acumen configuration tables. Some are hard coded within the Acumen Oracle views (e.g. V_ACU_RES_DATA). Default values for the command line arguments can be specified within different Configuration files (with the file extensions INI or CFG).
+Most of the configuration keys/options and mapping tables are stored within the Lookup Tables (`T_LU`) of the Oracle
+database of the Acumen server. Others are stored in newly added columns within other Acumen configuration tables.
+Some are hard coded within the Acumen Oracle views (e.g. V_ACU_RES_DATA). Default values for the command line arguments
+can be specified within different Configuration files (with the file extensions INI or CFG).
 
 ### Hotel IDs
 
-The `SIHOT_HOTELS` lookup class is mapping the Acumen hotel IDs (3 characters stored in the column `LU_ID`) onto the numeric Sihot Hotel Ids (stored in `LU_NUMBER`). Additionally this lookup class is used for to configure the currently active hotels in the Sihot system (initially only ANY/999, BHC/1 and PBC/4):
+The `SIHOT_HOTELS` lookup class is mapping the Acumen hotel IDs (3 characters stored in the column `LU_ID`) onto the
+numeric Sihot Hotel Ids (stored in `LU_NUMBER`). Additionally this lookup class is used for to configure the currently
+active hotels in the Sihot system (initially only ANY/999, BHC/1 and PBC/4):
 
 | Acumen Hotel Code | Resort Name | Currently Active (1=yes, 0=no) | Sihot Hotel Id |
 | :---: | :--- | :---:  | :---: |
@@ -87,9 +163,14 @@ The `SIHOT_HOTELS` lookup class is mapping the Acumen hotel IDs (3 characters st
 
 ### Room Categories
 
-The Acumen reservation requests are mainly classified by the room size and requested apartment features, whereas the Sihot.PMS room categories are need to be setup for to include room size and features.
+The Acumen reservation requests are mainly classified by the room size and requested apartment features, whereas the
+Sihot.PMS room categories are need to be setup for to include room size and features.
 
-There are several lookup classes with the lookup class name prefix `SIHOT_CATS_` within the Acumen/Oracle lookup table for to map/transform the Acumen unit sizes and optionally also requested apartment features into Sihot room categories. These mappings can be setup for each hotel individually and the pseudo hotel ANY can be used as fallback for all real hotels. Therefore the ANY hotel need to specify at least one mapping/transformation for all available Acumen room/unit sizes: HOTEL/STUDIO/1...4 BED.
+There are several lookup classes with the lookup class name prefix `SIHOT_CATS_` within the Acumen/Oracle lookup table
+for to map/transform the Acumen unit sizes and optionally also requested apartment features into Sihot room categories.
+These mappings can be setup for each hotel individually and the pseudo hotel ANY can be used as fallback for all real
+hotels. Therefore the ANY hotel need to specify at least one mapping/transformation for all available Acumen room/unit
+sizes: HOTEL/STUDIO/1...4 BED.
 
 | Room Size | Requested Apartment Feature | Sihot room category |
 | :---: | --- | :---: |
@@ -103,7 +184,8 @@ There are several lookup classes with the lookup class name prefix `SIHOT_CATS_`
 
 #### BHC room category overloads
 
-The `SIHOT_CATS_BHC` lookup class is specifying the following room size/feature mappings to the Sihot room categories in hotel 1:
+The `SIHOT_CATS_BHC` lookup class is specifying the following room size/feature mappings to the Sihot room categories in
+hotel 1:
 
 | Room Size | Requested Apartment Feature | Sihot room category |
 | :---: | --- | :---: |
@@ -132,15 +214,18 @@ The `SIHOT_CATS_PBC` lookup class is specifying the following room size/feature 
 
 #### Room specific overloads
 
-The two new `T_AP` columns `AP_SIHOT_CAT` and `AP_SIHOT_HOTEL` can be used for the individual mapping of each apartment onto a specific Sihot.PMS Hotel Id and Room Price Category (room size and paid supplements).
+The two new `T_AP` columns `AP_SIHOT_CAT` and `AP_SIHOT_HOTEL` can be used for the individual mapping of each apartment
+onto a specific Sihot.PMS Hotel Id and Room Price Category (room size and paid supplements).
 
-Specially the Hotel Id mapping will be needed for the 16 BHC sweets that are planned to be migrated to new Club Paradiso pseudo resort.
+Specially the Hotel Id mapping will be needed for the 16 BHC sweets that are planned to be migrated to new Club Paradiso
+pseudo resort.
 
 
 
 ### Language / Nationality
 
-The mapping of the language and nationalities is done by storing the Sihot language IDs in the Acumen `T_LG` table (`LG_SIHOT_LANG VARCHAR2(2 BYTE)`).
+The mapping of the language and nationalities is done by storing the Sihot language IDs in the Acumen `T_LG` table
+(`LG_SIHOT_LANG VARCHAR2(2 BYTE)`).
 
 | Sihot Id | Acumen Code |
 | --- | --- |
@@ -157,7 +242,8 @@ The mapping of the language and nationalities is done by storing the Sihot langu
 
 ### Booking Types Market Segmentation
 
-The Acumen Reservation Booking Types (ResOcc types) are mapped onto the Sihot Market Segments with the help of 6 new `T_RO` columns.
+The Acumen Reservation Booking Types (ResOcc types) are mapped onto the Sihot Market Segments with the help of 6 new
+`T_RO` columns.
 
 | column name | column content |
 | --- | --- |
@@ -171,7 +257,9 @@ The Acumen Reservation Booking Types (ResOcc types) are mapped onto the Sihot Ma
 
 #### Remapped market segment codes
 
-The value in `RO_SIHOT_MKT_SEG` is also optional and only needed if the Acumen Reservation Booking Type code (`RO_CODE`) is different to the Sihot.PMS market segment code. The following table is showing the manual mappings for the Acumen lower-case booking types:
+The value in `RO_SIHOT_MKT_SEG` is also optional and only needed if the Acumen Reservation Booking Type code (`RO_CODE`)
+is different to the Sihot.PMS market segment code. The following table is showing the manual mappings for the Acumen
+lower-case booking types:
 
 | Sihot Market segment ID | Acumen Reservation Booking Type |
 | --- | --- |
@@ -198,7 +286,8 @@ The value in `RO_SIHOT_MKT_SEG` is also optional and only needed if the Acumen R
 
 #### Mapping of Acumen Reservation Group to Sihot Channel
 
-The following table shows the mapping between the Sihot CHANNEL field IDs (stored in the `RO_SIHOT_RES_GROUP` column) and the Acumen reservation groups (with the `RO_RES_GROUP` column):
+The following table shows the mapping between the Sihot CHANNEL field IDs (stored in the `RO_SIHOT_RES_GROUP` column)
+and the Acumen reservation groups (with the `RO_RES_GROUP` column):
 
 | Acumen Reservation Group | Sihot Channel Id |
 | --- | --- |
@@ -230,14 +319,23 @@ Underneath the mapping of the Sihot NN field (`RO_SIHOT_SP_GROUP`) onto the Acum
 
 #### Orderer Agency Configuration for each Market Segment
 
-The `RO_AGENCY_` columns are needed for to store the Sihot.PMS guest object ids of an optional orderer/agency that will then be used for these types of bookings.
-Individual agencies got currently only mapped to the two Thomas Cook booking types: the `TK` (Thomas Cook Scandinavian) bookings got associated to the Sihot guest Object ID `27` and the matchcode `TCRENT` whereas the `tk` (Thomas Cook UK) booking type is associated to the object id `20` and the matchcode `TCAG`.
+The `RO_AGENCY_` columns are needed for to store the Sihot.PMS guest object ids of an optional orderer/agency that will
+then be used for these types of bookings.
+
+Individual agencies got currently only mapped to the two Thomas Cook booking types: the `TK` (Thomas Cook Scandinavian)
+bookings got associated to the Sihot guest Object ID `27` and the matchcode `TCRENT` whereas the `tk` (Thomas Cook UK)
+booking type is associated to the object id `20` and the matchcode `TCAG`.
 
 
 #### Market Segment Synchronization and Rate
 
-The value within the `RO_SIHOT_RATE` column is not only defining a default rate (Sihot.PMS rate code) for each Reservation Booking Type - it is also used as a flag: if there is a non-empty value then all bookings with this Reservation Booking Type are then automatically included into the synchronization process from Acumen to Sihot.PMS.
-The value of the column `RO_SIHOT_RATE` is currently initialized with the following where clause which includes all bookings of our Timeshare Owners, Club Paradiso Members, RCI visitors, Marketing visitors, Thomas Cook visitors and Owner External Rentals:
+The value within the `RO_SIHOT_RATE` column is not only defining a default rate (Sihot.PMS rate code) for each
+Reservation Booking Type - it is also used as a flag: if there is a non-empty value then all bookings with this
+Reservation Booking Type are then automatically included into the synchronization process from Acumen to Sihot.PMS.
+
+The value of the column `RO_SIHOT_RATE` is currently initialized with the following where clause which includes all
+bookings of our Timeshare Owners, Club Paradiso Members, RCI visitors, Marketing visitors, Thomas Cook visitors and
+Owner External Rentals:
 
 ```
  where RO_CLASS in ('B', 'R')
@@ -250,49 +348,69 @@ The value of the column `RO_SIHOT_RATE` is currently initialized with the follow
        );
 ```
 
-The Thomas Cook bookings are still synchronized in the first project phase for to provide a smooth migration for our Rental Department - although they meanwhile can be imported directly with the SihotResImport command tool into the Sihot.PMS.
+The Thomas Cook bookings are still synchronized in the first project phase for to provide a smooth migration for our
+Rental Department - although they meanwhile can be imported directly with the SihotResImport command tool into the
+Sihot.PMS.
 
 
 ### Acumen Client Owner Type Classification
 
-For to minimize the amount of client data to migrate to Sihot.PMS we had to classify the Acumen clients by their type of ownership(s). For each product a owner type can be specified/configured within the new column `RS_SIHOT_GUEST_TYPE`.
+For to minimize the amount of client data to migrate to Sihot.PMS we had to classify the Acumen clients by their type of
+ownership(s). For each product a owner type can be specified/configured within the new column `RS_SIHOT_GUEST_TYPE`.
 
 The current mapping is setting a general owner flag for to group all timeshare/resort owners together with less important owner types like e.g. tablet, lifestyle, experience or explorer. For special treatment we only need to specify distinguishable client types for Investors (new fractionals/share holders) and Keys Members.
 
 
 ### SIHOT package mappings
 
-The Sihot.PMS Package code can be specified as the value of the key-value attribute `SIHOT_PACK` within the `LU_CHAR` column of each meal plan/board. All Acumen meal plans are stored within the lookup classes `BOARDS` (for all bookings) and `MKT_BOARDS` (only for marketing bookings).
+The Sihot.PMS Package code can be specified as the value of the key-value attribute `SIHOT_PACK` within the `LU_CHAR`
+column of each meal plan/board. All Acumen meal plans are stored within the lookup classes `BOARDS` (for all bookings)
+and `MKT_BOARDS` (only for marketing bookings).
 
 ### Thomas Cook Allotment mappings
 
-For to create tour operator bookings via the WEB interface you need to specify the internal number of the allotment contract. This internal allotment contract number is nowhere visible in the GUI of Sihot.PMS and has to be determined by Michael after the creation of the allotment in Sihot.
+For to create tour operator bookings via the WEB interface you need to specify the internal number of the allotment
+contract. This internal allotment contract number is nowhere visible in the GUI of Sihot.PMS and has to be determined
+by Michael after the creation of the allotment in Sihot.
 
-Each hotel and tour operator has a individual internal allotment contract number. So for our two tour operators Thomas Cook Northern/Scandinavia and U.K. for the two initial hotels (1 and 4) we need to configure four numbers, which are currently specified within the database view `V_ACU_RES_DATA` in the expression of column `SIHOT_ALLOTMENT_NO`. 
+Each hotel and tour operator has a individual internal allotment contract number. So for our two tour operators Thomas
+Cook Northern/Scandinavia and U.K. for the two initial hotels (1 and 4) we need to configure four numbers, which are
+currently specified within the database view `V_ACU_RES_DATA` in the expression of column `SIHOT_ALLOTMENT_NO`. 
 
 
 ### Configuration files
 
-The default values of each command line argument can be set within one of the configurations files. If the values are not specified in the app configuration file then the option default/fallback values will be searched within the base config file: first in the app name section then in the default main section. More information on the several supported configuration files and values you find in the module/package `console_app`.
+The default values of each command line argument can be set within one of the configurations files. If the values are
+not specified in the app configuration file then the option default/fallback values will be searched within the base
+config file: first in the app name section then in the default main section. More information on the several supported
+configuration files and values you find in the module/package `console_app`.
 
-The following configuration values are not available as command line argument options (can only be specified within a configuration file):
+The following configuration values are not available as command line argument options (can only be specified within a
+configuration file):
             
 | Section Name | Key/Option Name | Description |
 | --- | --- | --- |
-| Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr` or `smtpTo`).
+| Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as
+warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr`
+or `smtpTo`).
 
 
 
 ## System Synchronization
 
-Every client that got created first on the Acumen system and then get migrated as guest record onto the Sihot system will by synchronized by the Sihot guest object id. This id will be stored for each pax a our Acumen couple client record in the two new columns `CD_SIHOT_OBJID` and `CD_SIHOT_OBJID2`.
+Every client that got created first on the Acumen system and then get migrated as guest record onto the Sihot system
+will by synchronized by the Sihot guest object id. This id will be stored for each pax a our Acumen couple client
+record in the two new columns `CD_SIHOT_OBJID` and `CD_SIHOT_OBJID2`.
 
-Reservations created first within the Acumen system and then synchronized to Sihot get linked/associated to the Acumen Requested Unit record with the new `T_RU` column `RU_SIHOT_OBJID` for to store Sihot reservation record object id.
+Reservations created first within the Acumen system and then synchronized to Sihot get linked/associated to the Acumen
+Requested Unit record with the new `T_RU` column `RU_SIHOT_OBJID` for to store Sihot reservation record object id.
 
 
 ### Requested Unit Log
 
-The following 8 new columns got added to the Acumen Requested Unit Log table (`T_RUL`) for to store also any other booking changes of a synchronized reservation that are happening in a associated table like e.g. room change in the related Apartment Reservation (`T_ARO`) or board/meal plan change in the Marketing Prospect (`T_PRC`):
+The following 8 new columns got added to the Acumen Requested Unit Log table (`T_RUL`) for to store also any other
+booking changes of a synchronized reservation that are happening in a associated table like e.g. room change in the
+related Apartment Reservation (`T_ARO`) or board/meal plan change in the Marketing Prospect (`T_PRC`):
 
 | Column Name | Column Content |
 | --- | --- |
@@ -305,7 +423,9 @@ The following 8 new columns got added to the Acumen Requested Unit Log table (`T
 | RUL_SIHOT_LAST_CAT | Previous Unit/Price category - needed for cancellation |
 | RUL_SIHOT_LAST_HOTEL | Previous Hotel Id - needed for cancellation and hotel moves |
 
-These columns got added later on mainly because of performance enhancements by condensing/focusing all these other changes within the latest not synchronized requested unit log entry/record and also for to keep references of deleted `T_RU` records for to be propagated onto Sihot.PMS.
+These columns got added later on mainly because of performance enhancements by condensing/focusing all these other
+changes within the latest not synchronized requested unit log entry/record and also for to keep references of deleted
+`T_RU` records for to be propagated onto Sihot.PMS.
 
 
 ### Synchronization Log
@@ -321,8 +441,3 @@ The synchronization process is fully logged within the new `T_SRSL` table provid
 | SRSL_DATE | Date/Time of the insert into this log table |
 | SRSL_LOGREF | Audit Trail Log Id (for debugging only) - Primary Key of either RUL/Requested Unit Log, AROL/Apartment Reservation Log or LOG/Client Details Log |
 | SRSL_MESSAGE | Final or Error Message/Response of Sihot.PMS (taken from the MSG response xml element) |
-
-
-# Monitor Application
-
-AcuSihotMonitor is a kivy application that runs on Windows, Linux, Mac OS X, Android and iOS and allows to check the correct functionality of the Acumen and Sihot servers and interfaces.
