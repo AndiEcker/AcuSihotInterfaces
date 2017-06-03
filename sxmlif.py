@@ -719,24 +719,31 @@ class SihotXmlParser:  # XMLParser interface
         except ParseError as pex:
             # invalid char encodings cannot be fixed with encoding="cp1252/utf-8/.."
             uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
-                   "- first retrying clean-up of &#1; and &#7; in XML data.")
-            xml_cleaned = xml.replace('&#1;', '¿1¿').replace('&#7;', '¿7¿')
+                   "- first retrying clean-up of &#128; (==€), &#1; and &#7; in XML data.")
+            xml_cleaned = xml.replace('&#1;', '¿1¿').replace('&#7;', '¿7¿').replace('&#128;', '€')
             try:
                 self._parser = XMLParser(target=self)
                 self._parser.feed(xml_cleaned)
             except ParseError as pex:
                 uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
-                       "- second retrying clean-up of invalid unicode in XML data.")
-                xml_cleaned = ILLEGAL_XML_SUB.sub('?', xml_cleaned)
+                       "- second retry replacing of all &#NNN; in XML data.")
+                xml_cleaned = re.compile("&#([0-9]+);").sub(lambda m: chr(int(m.group(0)[2:-1])), xml_cleaned)
                 try:
                     self._parser = XMLParser(target=self)
                     self._parser.feed(xml_cleaned)
                 except ParseError as pex:
                     uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
-                           "- third retrying with clean-up of all &#XXX; in XML data.")
-                    xml_cleaned = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);").sub('¿', xml_cleaned)
-                    self._parser = XMLParser(target=self)
-                    self._parser.feed(xml_cleaned)
+                           "- third retrying clean-up of invalid unicode in XML data.")
+                    xml_cleaned = ILLEGAL_XML_SUB.sub('¿_¿', xml_cleaned)
+                    try:
+                        self._parser = XMLParser(target=self)
+                        self._parser.feed(xml_cleaned)
+                    except ParseError as pex:
+                        uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
+                               "- fourth retrying with clean-up of all &#NNN; and &#xNNN; in XML data.")
+                        xml_cleaned = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);").sub('¿?¿', xml_cleaned)
+                        self._parser = XMLParser(target=self)
+                        self._parser.feed(xml_cleaned)
 
             self.ca.dprint('SihotXmlParser.parse_xml() successfully cleaned-up xml=', xml_cleaned,
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)

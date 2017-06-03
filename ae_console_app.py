@@ -2,11 +2,11 @@ import sys
 import os
 import datetime
 
-from builtins import chr            # works like unichr() also in Python 2
+from builtins import chr  # works like unichr() also in Python 2
 import re
 
 from configparser import ConfigParser
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentTypeError
 
 DEBUG_LEVEL_DISABLED = 0
 DEBUG_LEVEL_ENABLED = 1
@@ -59,10 +59,10 @@ def prepare_eval_str(val):
 
     ret = ''
     if isinstance(val, str):
-        if (val.startswith("'''") and val.endswith("'''"))\
+        if (val.startswith("'''") and val.endswith("'''")) \
                 or (val.startswith('"""') and val.endswith('"""')):
             ret = val[3:-3]
-        elif (val.startswith("[") and val.endswith("]"))\
+        elif (val.startswith("[") and val.endswith("]")) \
                 or (val.startswith("{") and val.endswith("}")) \
                 or (val.startswith("(") and val.endswith(")")):
             ret = val
@@ -133,6 +133,22 @@ class ConsoleApp:
                         choices=(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE))
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
 
+    @staticmethod
+    def _parse_date_time(dat):
+        try:
+            return datetime.datetime.strptime(dat, DATE_TIME_ISO)
+        except ValueError:
+            msg = "Not a valid date/time: '{}' - expected format: {}.".format(dat, DATE_TIME_ISO)
+            raise ArgumentTypeError(msg)
+
+    @staticmethod
+    def _parse_date(dat):
+        try:
+            return datetime.datetime.strptime(dat, DATE_ISO).date()
+        except ValueError:
+            msg = "Not a valid date: '{}' - expected format: {}.".format(dat, DATE_ISO)
+            raise ArgumentTypeError(msg)
+
     def add_option(self, name, desc, value, short_opt=None, eval_opt=False, choices=None):
         """ defining and adding an new option for this console app as INI/cfg var and as command line argument.
 
@@ -156,7 +172,12 @@ class ConsoleApp:
         cfg_val, evaluate = self.get_config(name, default_value=value, check_eval_only=True)
         if not short_opt:
             short_opt = name[0]
-        self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=cfg_val, type=type(cfg_val),
+        arg_type = type(cfg_val)
+        if arg_type is datetime.datetime:
+            arg_type = self._parse_date_time
+        elif arg_type is datetime.date:
+            arg_type = self._parse_date
+        self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=cfg_val, type=arg_type,
                                       choices=choices, metavar=name)
         self._options[name] = dict(desc=desc, val=value, evaluate=evaluate or eval_opt)
 
@@ -176,9 +197,10 @@ class ConsoleApp:
                     except Exception as ex:
                         uprint("ConsoleApp._parse_args() exception '{}' on evaluating the option {} with value: '{}'"
                                .format(ex, k, eval_str))
-            self._options[k]['val'] = (bool(val) if isinstance(self._options[k]['val'], bool)
-                                       else (float(val) if isinstance(self._options[k]['val'], float)
-                                             else (int(val) if isinstance(self._options[k]['val'], int)
+            def_val = self._options[k]['val']
+            self._options[k]['val'] = (bool(val) if isinstance(def_val, bool)
+                                       else (float(val) if isinstance(def_val, float)
+                                             else (int(val) if isinstance(def_val, int)
                                                    else val)))
 
         log_file = self._options['logFile']['val']
@@ -262,7 +284,7 @@ class ConsoleApp:
                                                 cfg_parser=self._cfg_parser_env)),
                 cfg_parser=self._cfg_parser_cwd)
         eval_str = prepare_eval_str(ret)
-        if check_eval_only:     # check if caller requested to return tuple of value and eval
+        if check_eval_only:  # check if caller requested to return tuple of value and eval
             ret = (ret, bool(eval_str) or isinstance(ret, list) or isinstance(ret, dict) or isinstance(ret, tuple))
 
         elif eval_str:
@@ -311,10 +333,10 @@ class ConsoleApp:
             uprint("****  Non-zero exit code:", exit_code)
         uprint('####  Shutdown............  ####')
         if self._log_file:
-            app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
+            app_std_err.log_file = None  # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
             app_std_out.log_file = None
-            sys.stdout = ori_std_out        # set back for to prevent stack overflow/recursion error with kivy logger:
-            sys.stderr = ori_std_err        # .. "Fatal Python error: Cannot recover from stack overflow"
+            sys.stdout = ori_std_out  # set back for to prevent stack overflow/recursion error with kivy logger:
+            sys.stderr = ori_std_err  # .. "Fatal Python error: Cannot recover from stack overflow"
             self._log_file.close()
         sys.exit(exit_code)
 
@@ -322,7 +344,7 @@ class ConsoleApp:
 class Progress:
     def __init__(self, debug_level,  # default next message built only if >= DEBUG_LEVEL_VERBOSE
                  start_counter=0, total_count=0,  # pass either start_counter or total_counter (never both)
-                 start_msg="", next_msg="",       # message templates/masks for start, processing and end
+                 start_msg="", next_msg="",  # message templates/masks for start, processing and end
                  end_msg=" ###  Finished processing of {total_count} having {err_counter} failures:{err_msg}",
                  err_msg=" ###  {err_counter} failures on processing item {run_counter} of {total_count}:{err_msg}",
                  nothing_to_do_msg=''):

@@ -74,6 +74,7 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
     uprint('SMTP Uri/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
     if cae.get_option('sendOutput'):
         send_output = 1
+uprint('Send Output (subprocess call method: 1=check_output, 0=check_call)', cae.get_option('sendOutput'))
 
 
 command_interval = cae.get_option('cmdInterval')  # in seconds
