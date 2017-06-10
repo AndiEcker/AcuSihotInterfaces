@@ -150,6 +150,8 @@ MAP_KERNEL_CLIENT = \
         {'elemName': 'ZIP', 'colName': 'CD_POSTAL'},
         {'elemName': 'CITY', 'colName': 'CD_CITY'},
         {'elemName': 'T-COUNTRY-CODE', 'colName': 'SIHOT_COUNTRY'},
+        {'elemName': 'T-STATE', 'colName': 'SIHOT_STATE',
+         'elemHideIf': "'SIHOT_STATE' not in c or not c['SIHOT_STATE']"},
         {'elemName': 'T-LANGUAGE', 'colName': 'SIHOT_LANG'},
         {'elemName': 'COMMENT', 'colName': 'SH_COMMENT',
          'colValFromAcu': "SIHOT_GUEST_TYPE || ' ExtRefs=' || EXT_REFS"},
