@@ -57,7 +57,7 @@ class OraDB:
             except Exception as ex:
                 err_msg = "oraDB-connect cursors " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint(err_msg if err_msg else "OraDB: Oracle database cursor created.")
+            uprint(err_msg or "OraDB: Oracle database cursor created.")
         return err_msg
 
     def select(self, from_join, cols=None, where_group_order='', bind_vars=None):
@@ -108,7 +108,7 @@ class OraDB:
         except Exception as ex:
             uprint("oraDB fetch_all() exception: " + str(ex))
             rows = None
-        return rows if rows else []
+        return rows or []
 
     def fetch_value(self, col_idx=0):
         try:

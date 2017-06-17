@@ -1128,7 +1128,7 @@ class SihotXmlBuilder:
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
-            self.response = response_parser if response_parser else Response(self.ca)
+            self.response = response_parser or Response(self.ca)
             self.response.parse_xml(sc.received_xml)
             if self.response.server_error() != '0':
                 err_msg = "**** SihotXmlBuilder.send_to_server() server return code " + \
@@ -1141,7 +1141,7 @@ class SihotXmlBuilder:
     @staticmethod
     def new_tag(tag, val='', opening=True, closing=True):
         return ('<' + tag + '>' if opening else '') \
-               + (val if val else '') \
+               + (val or '') \
                + ('</' + tag + '>' if closing else '')
 
     @staticmethod
@@ -1359,7 +1359,7 @@ class ClientToSihot(SihotXmlBuilder):
             self._prepare_guest_xml(c_row, action=action, col_name_suffix='2' if first_person else '')
             err_msg = self.send_to_server()
         if not err_msg and self.acu_connected and self.response:
-            err_msg = self._store_sihot_objid('CD', first_person if first_person else c_row['CD_CODE'], self.response,
+            err_msg = self._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response,
                                               col_name_suffix="2" if first_person else "")
         return err_msg, action
 

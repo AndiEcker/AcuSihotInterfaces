@@ -31,7 +31,7 @@ class Notification:
         else:
             self._mail_host = mail_host
             self._mail_port = 25    # use default SMTP port 25, or use port 587 for E-SMTP
-        self._local_mail_host = local_mail_host if local_mail_host else self._mail_host
+        self._local_mail_host = local_mail_host or self._mail_host
 
         self._mail_from = mail_from
         self._mail_to = mail_to

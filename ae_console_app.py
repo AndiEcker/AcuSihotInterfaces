@@ -94,7 +94,7 @@ class ConsoleApp:
         uprint(self._app_name, " V", ver, "  Startup", datetime.datetime.now())
         uprint("####  Initialization......  ####")
 
-        self.config_eval_vars = config_eval_vars if config_eval_vars else dict()
+        self.config_eval_vars = config_eval_vars or dict()
         self._options = dict()
         """ self._options contains predefined and user-defined options.
             The _args_parsed instance variable ensure that the command line arguments get re-parsed if add_option()
@@ -256,12 +256,12 @@ class ConsoleApp:
         return self.set_config(name, val, cfg_fnam) if save_to_config else ''
 
     def _get_cfg(self, name, section=None, default_value=None, cfg_parser=None):
-        c = cfg_parser if cfg_parser else self._cfg_parser_app
+        c = cfg_parser or self._cfg_parser_app
         f = (c.getboolean if isinstance(default_value, bool)
              else (c.getfloat if isinstance(default_value, float)
                    else (c.getint if isinstance(default_value, int)
                          else c.get)))
-        cfg_val = f(section if section else self._main_section, name, fallback=default_value)
+        cfg_val = f(section or self._main_section, name, fallback=default_value)
         if isinstance(default_value, datetime.datetime) and isinstance(cfg_val, str):
             cfg_val = datetime.datetime.strptime(cfg_val, DATE_TIME_ISO)
         elif isinstance(default_value, datetime.date) and isinstance(cfg_val, str):
@@ -345,16 +345,20 @@ class Progress:
     def __init__(self, debug_level,  # default next message built only if >= DEBUG_LEVEL_VERBOSE
                  start_counter=0, total_count=0,  # pass either start_counter or total_counter (never both)
                  start_msg="", next_msg="",  # message templates/masks for start, processing and end
-                 end_msg=" ###  Finished processing of {total_count} having {err_counter} failures:{err_msg}",
-                 err_msg=" ###  {err_counter} failures on processing item {run_counter} of {total_count}:{err_msg}",
+                 end_msg="Finished processing of {total_count} having {err_counter} failures:{err_msg}",
+                 err_msg="{err_counter} failures on processing item {run_counter} of {total_count}:{err_msg}",
                  nothing_to_do_msg=''):
         if not next_msg and debug_level >= DEBUG_LEVEL_VERBOSE:
-            next_msg = " ###  Processing '{processed_id}': " + \
+            next_msg = "Processing '{processed_id}': " + \
                        ("left" if start_counter > 0 and total_count == 0 else "item") + \
                        " {run_counter} of {total_count}. {err_counter} errors={err_msg}"
-        self._next_msg = next_msg
-        self._end_msg = end_msg
-        self._err_msg = err_msg
+
+        def _complete_msg_prefix(msg, pch='#'):
+            return (pch in msg and msg) or msg and " " + pch * 3 + "  " + msg or ""
+
+        self._next_msg = _complete_msg_prefix(next_msg)
+        self._end_msg = _complete_msg_prefix(end_msg)
+        self._err_msg = _complete_msg_prefix(err_msg, '*')
 
         self._err_counter = 0
         self._run_counter = start_counter + 1  # def=decrementing run_counter
@@ -366,7 +370,7 @@ class Progress:
             self._delta = 1
         elif start_counter <= 0:
             if nothing_to_do_msg:
-                uprint(nothing_to_do_msg)
+                uprint(_complete_msg_prefix(nothing_to_do_msg))
             return  # RETURN -- empty set - nothing to process
 
         if start_msg:

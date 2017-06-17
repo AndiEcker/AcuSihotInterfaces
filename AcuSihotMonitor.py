@@ -167,7 +167,7 @@ def sih_reservation_discrepancies(data_dict):
                 results.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
         results = (results, ('GDS_NO__18', 'Guest Ref__18', 'RO__06', 'Arrival__18', 'Discrepancy__72L'))
 
-    return results if results else ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
+    return results or ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
 
 
 def _sih_check_all_res(crow, rd, row_err, err_sep):

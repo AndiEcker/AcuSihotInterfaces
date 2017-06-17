@@ -61,7 +61,7 @@ class Data:
 
     def get_ro_sihot_mkt_seg(self, ro_code):
         sihot_mkt_seg = next((cols[3] for cols in self.ro_agencies if cols[0] == ro_code), None)
-        return sihot_mkt_seg if sihot_mkt_seg else ro_code
+        return sihot_mkt_seg or ro_code
 
     def get_ro_res_group(self, ro_code):
         return next((cols[4] for cols in self.ro_agencies if cols[0] == ro_code), None)

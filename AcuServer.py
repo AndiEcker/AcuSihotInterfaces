@@ -130,7 +130,7 @@ def alloc_trigger(oc, guest_id, room_number, old_room_number, sihot_xml):
                              'SRSL_ACTION': oc,
                              'SRSL_STATUS': 'ERR' if err_msg else 'SYNCED',
                              'SRSL_MESSAGE': err_msg + extra_info if err_msg else extra_info[1:],
-                             'SRSL_LOGREF': guest_id if guest_id else '-1',
+                             'SRSL_LOGREF': guest_id or '-1',
                              },
                   commit=True)              # COMMIT
 
