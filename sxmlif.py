@@ -1,14 +1,13 @@
 # SiHOT xml interface
 import datetime
-import re
 from copy import deepcopy
 from textwrap import wrap
 
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, \
-    ILLEGAL_XML_SUB     # needed for to clean and re-parse XML on invalid char code exception/error
+# fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
+from ae_console_app import fix_encoding, uprint, DEBUG_LEVEL_VERBOSE
 from ae_tcp import TcpClient
 from ae_db import OraDB, MAX_STRING_LENGTH
 
@@ -714,10 +713,25 @@ class SihotXmlParser:  # XMLParser interface
 
     def parse_xml(self, xml):
         self.ca.dprint('SihotXmlParser.parse_xml():', xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        try_counter = 0
+        xml_cleaned = xml
+        while True:
+            try:
+                self._parser = XMLParser(target=self)
+                self._parser.feed(xml_cleaned)
+                self._xml = xml_cleaned
+                break
+            except ParseError as pex:
+                xml_cleaned = fix_encoding(xml_cleaned, try_counter, pex,
+                                           "SihotXmlParser.parse_xml() ParseError exception")
+                if not xml_cleaned:
+                    raise
+            try_counter += 1
+        '''        
         try:
             self._parser = XMLParser(target=self)
-            self._parser.feed(xml)
-            self._xml = xml
+            self._parser.feed(xml_cleaned)
+            self._xml = xml_cleaned
         except ParseError as pex:
             # invalid char encodings cannot be fixed with encoding="cp1252/utf-8/.."
             uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
@@ -750,6 +764,7 @@ class SihotXmlParser:  # XMLParser interface
             self.ca.dprint('SihotXmlParser.parse_xml() successfully cleaned-up xml=', xml_cleaned,
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self._xml = xml_cleaned
+        '''
 
     def get_xml(self):
         return self._xml
@@ -1369,7 +1384,7 @@ class ClientToSihot(SihotXmlBuilder):
         err_msg, action_p1 = self._send_person_to_sihot(c_row)
         couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
         action_p2 = ''
-        if not err_msg and c_row['CD_CODE2']:  # check for second contact person
+        if not err_msg and 'CD_CODE2' in c_row and c_row['CD_CODE2']:  # check for second contact person
             crow2 = deepcopy(c_row)
             for col_name in c_row.keys():
                 elem_name = PARSE_ONLY_TAG_PREFIX + 'P2_' + self.col_elem[col_name]
@@ -1386,7 +1401,7 @@ class ClientToSihot(SihotXmlBuilder):
                 and not self.use_kernel_interface:
             # unlink second person if no longer exists in Acumen
             couple_linkage = '-P2'
-            err_msg = self._send_link_to_sihot(c_row['CD_CODE'], c_row['CD_CODE2'], delete=True)
+            err_msg = self._send_link_to_sihot(c_row['CD_CODE'], '', delete=True)
         action = action_p1 + ('/' + action_p2 if action_p2 else '')
 
         if self.acu_connected:
@@ -1524,61 +1539,60 @@ class ResToSihot(SihotXmlBuilder):
     def _ensure_clients_exist_and_updated(self, crow):
         err_msg = ''
         if 'CD_CODE' in crow and crow['CD_CODE']:
-            client_synced = bool(crow['CD_SIHOT_OBJID'])
             acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
                                        map_client=self.map_client, connect_to_acu=self.acu_connected)
             if self.acu_connected:
+                client_synced = bool(crow['CD_SIHOT_OBJID'])
                 if client_synced:
                     err_msg = acu_client.fetch_from_acu_by_acu(crow['CD_CODE'])
                 else:
                     err_msg = acu_client.fetch_from_acu_by_cd(crow['CD_CODE'])
-            if not err_msg:
-                if acu_client.row_count:
-                    err_msg = acu_client.send_client_to_sihot()
-                elif not client_synced:
-                    err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): client not found: ' + crow['CD_CODE']
                 if not err_msg:
-                    if self.acu_connected:
+                    if acu_client.row_count:
+                        err_msg = acu_client.send_client_to_sihot()
+                    elif not client_synced:
+                        err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): client not found: ' + crow['CD_CODE']
+                    if not err_msg:
                         err_msg = acu_client.fetch_from_acu_by_cd(crow['CD_CODE'])  # re-fetch OBJIDs
-                        if not err_msg and not acu_client.row_count:
-                            err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): IntErr/client invalid: ' \
-                                      + crow['CD_CODE']
-                        if not err_msg:
-                            # transfer just created guest OBJIDs from guest to reservation record
-                            crow['CD_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
-                            crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] if crow['OC_SIHOT_OBJID'] \
-                                else acu_client.cols['CD_SIHOT_OBJID']
-                            crow['CD_SIHOT_OBJID2'] = acu_client.cols['CD_SIHOT_OBJID2']
-                    else:
-                        # get client/occupant objid directly from acu_client.response
-                        crow['CD_SIHOT_OBJID'] = acu_client.response.objid
+                    if not err_msg and not acu_client.row_count:
+                        err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): IntErr/client: ' + crow['CD_CODE']
+                    if not err_msg:
+                        # transfer just created guest OBJIDs from guest to reservation record
+                        crow['CD_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
+                        crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] or acu_client.cols['CD_SIHOT_OBJID']
+                        crow['CD_SIHOT_OBJID2'] = acu_client.cols['CD_SIHOT_OBJID2']
+            else:
+                err_msg = acu_client.send_client_to_sihot(crow)
+                if not err_msg:
+                    # get client/occupant objid directly from acu_client.response
+                    crow['CD_SIHOT_OBJID'] = acu_client.response.objid
 
         if not err_msg and 'OC_CODE' in crow and crow['OC_CODE']:
-            client_synced = bool(crow['OC_SIHOT_OBJID'])
             acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
                                        map_client=self.map_client, connect_to_acu=self.acu_connected)
             if self.acu_connected:
+                client_synced = bool(crow['OC_SIHOT_OBJID'])
                 if client_synced:
                     err_msg = acu_client.fetch_from_acu_by_acu(crow['OC_CODE'])
                 else:
                     err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
-            if not err_msg:
-                if acu_client.row_count:
-                    err_msg = acu_client.send_client_to_sihot()
-                elif not client_synced:
-                    err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): orderer not found: ' + crow['OC_CODE']
                 if not err_msg:
-                    if self.acu_connected:
+                    if acu_client.row_count:
+                        err_msg = acu_client.send_client_to_sihot()
+                    elif not client_synced:
+                        err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): invalid orderer ' + crow['OC_CODE']
+                    if not err_msg:
                         err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
-                        if not err_msg and not acu_client.row_count:
-                            err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): IntErr/orderer: ' \
-                                      + crow['OC_CODE']
-                        if not err_msg:
-                            # transfer just created guest OBJIDs from guest to reservation record
-                            crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
-                    else:
-                        # get orderer objid directly from acu_client.response
-                        crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.response.objid
+                    if not err_msg and not acu_client.row_count:
+                        err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): IntErr/orderer: ' + crow['OC_CODE']
+                    if not err_msg:
+                        # transfer just created guest OBJIDs from guest to reservation record
+                        crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
+            else:
+                err_msg = acu_client.send_client_to_sihot(crow)
+                if not err_msg:
+                    # get orderer objid directly from acu_client.response
+                    crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.response.objid
 
         return err_msg
 

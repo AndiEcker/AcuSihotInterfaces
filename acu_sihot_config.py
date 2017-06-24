@@ -38,12 +38,12 @@ class Data:
             return None
         return db
 
-    def load_view(self, db_opt, view, cols, where):
+    def load_view(self, db_opt, view, cols, where, bind_vars=None):
         if db_opt:      # use existing db connection if passed by caller
             db = db_opt
         else:
             db = self.connect_db()
-        err_msg = db.select(view, cols, where)
+        err_msg = db.select(view, cols, where, bind_vars)
         if err_msg:
             print(err_msg)
             ret = None

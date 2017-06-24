@@ -33,6 +33,29 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
                               (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
 ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
 
+
+def fix_encoding(text, try_counter=2, pex=None, context='ae_console_app.fix_encoding()'):
+    """ used for to encode invalid char encodings in text that cannot be fixed with encoding="cp1252/utf-8/.. """
+    if try_counter == 0:
+        try_method = "replacing &#128 with €, &#1; with ¿1¿ and &#7; with ¿7¿"
+        text = text.replace('&#1;', '¿1¿').replace('&#7;', '¿7¿').replace('&#128;', '€')
+    elif try_counter == 1:
+        try_method = "replacing &#NNN; with chr(NNN)"
+        text = re.compile("&#([0-9]+);").sub(lambda m: chr(int(m.group(0)[2:-1])), text)
+    elif try_counter == 2:
+        try_method = "replacing invalid unicode code points with ¿_¿"
+        text = ILLEGAL_XML_SUB.sub('¿_¿', text)
+    elif try_counter == 3:
+        try_method = "replacing &#NNN; and &#xNNN; with ¿?¿"
+        text = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);").sub('¿?¿', text)
+    else:
+        try_method = ""
+        text = None
+    if try_method:
+        uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method)
+    return text
+
+
 # save original stdout/stderr
 ori_std_out = sys.stdout
 ori_std_err = sys.stderr
@@ -44,11 +67,31 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
     if not file:
         file = app_std_out  # cannot be specified as argument default because ConsoleApp._check_logging() may change it
     enc = file.encoding
-    if enc == 'UTF-8':
-        print(*objects, sep=sep, end=end, file=file, flush=flush)
-    else:
-        print(*map(lambda obj: str(obj).encode(enc, errors=encode_errors_def).decode(enc), objects),
-              sep=sep, end=end, file=file, flush=flush)
+
+    # even with enc == 'UTF-8' I got the error:
+    # ..UnicodeEncodeError: 'charmap' codec can't encode character '\x9f' in position 191: character maps to <undefined>
+    # if enc == 'UTF-8':
+    #     print(*objects, sep=sep, end=end, file=file, flush=flush)
+    # else:
+    #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
+    #           sep=sep, end=end, file=file, flush=flush)
+    print_objects = objects
+    try_counter = 1     # skip try_counter == 0 because it is very specific to the Sihot XML interface
+    while True:
+        try:
+            print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),
+                  sep=sep, end=end, file=file, flush=flush)
+            break
+        except UnicodeEncodeError:
+            fixed_objects = []
+            for obj in print_objects:
+                if isinstance(obj, str) or isinstance(obj, bytes):
+                    obj = fix_encoding(obj, try_counter)
+                    if not obj:
+                        raise
+                fixed_objects.append(obj)
+            print_objects = fixed_objects
+        try_counter += 1
 
 
 def prepare_eval_str(val):
@@ -346,7 +389,7 @@ class Progress:
                  start_counter=0, total_count=0,  # pass either start_counter or total_counter (never both)
                  start_msg="", next_msg="",  # message templates/masks for start, processing and end
                  end_msg="Finished processing of {total_count} having {err_counter} failures:{err_msg}",
-                 err_msg="{err_counter} failures on processing item {run_counter} of {total_count}:{err_msg}",
+                 err_msg="{err_counter} failures on processing of {total_count} items, current={run_counter}:{err_msg}",
                  nothing_to_do_msg=''):
         if not next_msg and debug_level >= DEBUG_LEVEL_VERBOSE:
             next_msg = "Processing '{processed_id}': " + \
@@ -374,7 +417,8 @@ class Progress:
             return  # RETURN -- empty set - nothing to process
 
         if start_msg:
-            uprint(start_msg.format(run_counter=self._run_counter + self._delta, total_count=self._total_count))
+            uprint(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
+                                                          total_count=self._total_count))
 
     def next(self, processed_id='', error_msg='', next_msg=''):
         self._run_counter += self._delta

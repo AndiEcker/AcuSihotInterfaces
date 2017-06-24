@@ -6,7 +6,7 @@
     0.4     changed console and UPX pyinstaller flags from True to False.
     0.5     removed Booking.com imports and added RCI booking imports (using Acumen reservation inventory data).
     0.6     31-03-17: removed hyphen and sub-booking-id from GDSNO and dup-exec/-startup lock (lastRt).
-    0.7     31-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
+    0.7     3?-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
 """
 import sys
 import os
@@ -15,7 +15,7 @@ import glob
 import datetime
 import csv
 
-from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE
 from ae_notification import Notification
 from ae_db import DEF_USER, DEF_DSN
 from ae_lockfile import LockFile
@@ -26,7 +26,6 @@ from sxmlif import ResToSihot, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot
 
 __version__ = '0.7'
-
 
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  debug_level_def=DEBUG_LEVEL_VERBOSE)
@@ -77,9 +76,14 @@ uprint('Use Kernel for clients:', 'Yes' if cae.get_option('useKernelForClient') 
 uprint('Use Kernel for reservations:', 'Yes' if cae.get_option('useKernelForRes') else 'No (WEB)')
 uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
 
-
 # check if Acumen domain/user/pw is fully specified and show kivy UI for to enter them if not
 ui_app = None if cae.get_config('acuPassword') else 'STARTUP'
+
+# init constants and load constant config settings
+CLIENT_REF_SEP = ','
+RCI_MATCH_AND_BOOK_CODE_PREFIX = 'rci'
+
+client_refs_add_exclude = cae.get_config('ClientRefsAddExclude').split(CLIENT_REF_SEP)
 
 # file collection - lists of files to be imported
 tci_files = []
@@ -106,7 +110,7 @@ def collect_files():
 def run_import(acu_user, acu_password):
     global tci_files, bkc_files, rci_files
 
-    NO_FILE_CONTEXT_PREFIX = '@'
+    NO_FILE_PREFIX_CHAR = '@'
 
     error_log = []
     import_log = []
@@ -129,7 +133,7 @@ def run_import(acu_user, acu_password):
 
     conf_data = Data(acu_user=acu_user, acu_password=acu_password, acu_dsn=cae.get_option('acuDSN'))
     if conf_data.error_message:
-        log_error(conf_data.error_message, NO_FILE_CONTEXT_PREFIX + 'UserLogOn', importance=4)
+        log_error(conf_data.error_message, NO_FILE_PREFIX_CHAR + 'UserLogOn', importance=4)
         return conf_data.error_message
 
     '''# #########################################################
@@ -140,10 +144,7 @@ def run_import(acu_user, acu_password):
     log_file_prefix = os.path.splitext(os.path.basename(lf))[0]
     log_file_path = os.path.dirname(lf)
 
-    log_import('Acumen Usr: ' + acu_user, NO_FILE_CONTEXT_PREFIX + 'RunImport', importance=4)
-
-    CLIENT_REF_SEP = ','
-    RCI_MATCHCODE_PREFIX = 'rci'
+    log_import('Acumen Usr: ' + acu_user, NO_FILE_PREFIX_CHAR + 'RunImport', importance=4)
 
     clients_changed = False
 
@@ -523,7 +524,8 @@ def run_import(acu_user, acu_password):
          o  update of clients data (Sihot objid in local db and EXT_REFS in Sihot db)
         **************************************************************************************
     '''
-    def rc_to_sihot_hotel_id(rc_resort_id):
+
+    def rc_rci_to_sihot_hotel_id(rc_resort_id):
         return cae.get_config(rc_resort_id, 'RcResortIds')
 
     def rc_arr_to_year_week(arr_date):
@@ -539,32 +541,19 @@ def run_import(acu_user, acu_password):
         diff = arr_date - week_1_begin
         return year, 1 + int(diff.days / 7)
 
-    def rc_mkt_seg_grp(sihot_obj_id, rci_ref, is_guest, clients):
+    def rc_mkt_seg_grp(cols, is_guest):
         """ determine seg=RE RG RI RL  and  grp=RCI External, RCI Guest, RCI Internal, RCI External """
-        nonlocal clients_changed
-        # check first if client exists is owner using sihot object id and then the rci_ref
-        key = None
-        for c_rec in clients:
-            if sihot_obj_id == c_rec['CD_SIHOT_OBJID'] \
-                    or CLIENT_REF_SEP + rci_ref + CLIENT_REF_SEP in c_rec['EXT_REFS']:
-                if c_rec['IS_OWNER']:
-                    key = 'Internal'
-                if not c_rec['CD_SIHOT_OBJID']:
-                    c_rec['CD_SIHOT_OBJID'] = sihot_obj_id
-                    clients_changed = True
-                elif CLIENT_REF_SEP + rci_ref + CLIENT_REF_SEP not in c_rec['EXT_REFS']:
-                    c_rec['EXT_REFS'] += rci_ref + CLIENT_REF_SEP
-                    clients_changed = True
-                break
-        else:
-            client = {'CD_CODE': RCI_MATCHCODE_PREFIX + rci_ref, 'CD_SIHOT_OBJID': sihot_obj_id, 'IS_OWNER': 0,
-                      'EXT_REFS': CLIENT_REF_SEP + rci_ref + CLIENT_REF_SEP}
-            clients.append(client)
-            clients_changed = True
-        if not key:     # not an owner/internal, so will be either Guest or External
+        if clients_data[cols[RC_OCC_CLIENTS_IDX]][RCD_IS_OWNER]:
+            key = 'Internal'
+        else:  # not an owner/internal, so will be either Guest or External
             key = 'Guest' if is_guest else 'External'
-        seg, desc, grp = cae.get_config(key, 'RcMktSeg').split(',')
-
+        seg, desc, grp = cae.get_config(key, 'RcMktSegments').split(',')
+        if cols[RC_FILE_NAME][:3].upper() == 'RL_':
+            if debug_level >= DEBUG_LEVEL_VERBOSE:
+                log_import('Reclassified booking from ' + seg + '/' + grp + ' into RL/RCI External',
+                           cols[RC_FILE_NAME], cols[RC_LINE_NUM], importance=1)
+            # seg, grp = 'RL', 'RCI External'
+            seg, desc, grp = cae.get_config('Leads', 'RcMktSegments').split(',')
         return seg, grp
 
     def rc_ref_normalize(rci_ref):
@@ -574,56 +563,53 @@ def run_import(acu_user, acu_password):
         # check and correct RCI weeks and points member IDs to the format 9-999999 if possible
         length = len(ret)
         no_hyphen = '-' not in ret
-        if length == 6 and no_hyphen and ret[0] in '123456789':   # 5-prefix for EU, 1-prefix for USA
+        if length == 6 and no_hyphen and ret[0] in '123456789':  # 5-prefix for EU, 1-prefix for USA
             ret = ret[0] + '-' + ret[1:]
-        elif length >= 7 and no_hyphen:     # 7+ digits (before 2015 we only converted 8+ digits)
+        elif length >= 7 and no_hyphen:  # 7+ digits (before 2015 we only converted 8+ digits)
             if ret[-3:-1] == '00' and ret[-1] in '123456789':
                 ret = ret[-1] + '-' + ret[0:-3]
             else:
                 ret = ret[:-5] + '-' + ret[-5:]
         elif length < 3 or length > 10 or no_hyphen:
-            ret = None                      # invalid rci ref
+            ret = None  # invalid rci ref
 
         return ret
-
-    def rc_allocated_room(room_no, arr_date):
-        year, week = rc_arr_to_year_week(arr_date)
-        for r_rec in res_inv_data:
-            if r_rec['AOWN_WKREF'] == room_no.lstrip('0') + '-' + ('0' + str(week))[:2] and r_rec['AOWN_YEAR'] == year:
-                if r_rec['AOWN_GRANTED_TO'] == 'HR' or not r_rec['AOWN_SWAPPED_WITH'] \
-                        or r_rec['AOWN_ROREF'] in ('RW', 'RX', 'rW'):
-                    return room_no
-        return ''
 
     '''# #########################################################
        # reservation inventory and client data management
        # #########################################################
     '''
+    RCD_MATCH_CODE = 0
+    RCD_OBJ_ID = 1
+    RCD_EXT_REFS = 2
+    RCD_IS_OWNER = 3
+    clients_data = []
 
-    def rc_fetch_client_data(acu_data):
+    def rc_fetch_clients_data(acu_data):
+        nonlocal clients_data
+
         # establish file lock
         file_lock = LockFile(cae.get_config('RCI_CLIENT_FETCH_LOCK_FILE'))
         err_msg = file_lock.lock()
         if err_msg:
             return None, err_msg
 
+        # check if file exists (or if it is instead the first run or a reset)
         client_file_name = cae.get_config('RCI_CLIENT_DATA_FILE')
         if os.path.isfile(client_file_name):
             with open(client_file_name) as f:
-                clients = eval(f.read())
+                clients_data = eval(f.read())
             file_lock.unlock()
-            return clients, ""
+            return ""
 
-        # file not exists (first run or reset)
-        log_import('Fetching client data from Acumen (needs some minutes)', NO_FILE_CONTEXT_PREFIX + 'FetchClientData',
-                   importance=4)
         # fetch from Acumen on first run or after reset (deleted cache files) - after locking cache files
-        clients = \
+        log_import('Fetching client data from Acumen (needs some minutes)', NO_FILE_PREFIX_CHAR + 'FetchClientData',
+                   importance=4)
+        clients_data = \
             acu_data.load_view(None, 'V_ACU_CD_DATA',
                                ["CD_CODE", "CD_SIHOT_OBJID",
-                                "trim('" + CLIENT_REF_SEP + "' from '" + CLIENT_REF_SEP + "' || CD_RCI_REF"
-                                " || '" + CLIENT_REF_SEP + "' || replace(replace(EXT_REFS, 'RCIP=', ''), 'RCI=', ''))"
-                                " as EXT_REFS",
+                                "trim('" + CLIENT_REF_SEP + "' from CD_RCI_REF || '" + CLIENT_REF_SEP +
+                                "' || replace(replace(EXT_REFS, 'RCIP=', ''), 'RCI=', '')) as EXT_REFS",
                                 "case when instr(SIHOT_GUEST_TYPE, 'O') > 0 or instr(SIHOT_GUEST_TYPE, 'I') > 0"
                                 " or instr(SIHOT_GUEST_TYPE, 'K') > 0 then 1 else 0 end as IS_OWNER",
                                 ],
@@ -633,18 +619,18 @@ def run_import(acu_user, acu_password):
         # check for duplicate and blocked RCI Ids in verbose debug mode
         if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
             log_import('Checking clients data for duplicates and resort IDs',
-                       NO_FILE_CONTEXT_PREFIX + 'CheckClientsData', importance=3)
-            rc_check_clients_data(clients)
+                       NO_FILE_PREFIX_CHAR + 'CheckClientsData', importance=3)
+            rc_check_clients_data()
 
         # save fetched data to cache
         with open(client_file_name, 'w') as f:
-            f.write(repr(clients))
+            f.write(repr(clients_data))
 
         file_lock.unlock()
 
-        return clients, ""
+        return ""
 
-    def rc_store_client_data(clients):
+    def rc_store_client_data():
         # establish file lock
         file_lock = LockFile(cae.get_config('RCI_CLIENT_FETCH_LOCK_FILE'))
         err_msg = file_lock.lock()
@@ -652,94 +638,113 @@ def run_import(acu_user, acu_password):
             return err_msg
 
         with open(cae.get_config('RCI_CLIENT_DATA_FILE'), 'w') as f:
-            f.write(repr(clients))
+            f.write(repr(clients_data))
 
         file_lock.unlock()
 
         return ""
 
-    def rc_check_clients_data(clients):
-        resort_ids = cae.get_config('ClientRefsAddExclude').split(CLIENT_REF_SEP)
+    def rc_check_clients_data():
         resort_codes = cae.get_config('ClientRefsResortCodes').split(CLIENT_REF_SEP)
         found_ids = {}
-        for c_rec in clients:
-            if c_rec[2]:
-                for rci_id in c_rec[2].split(CLIENT_REF_SEP):
+        for c_rec in clients_data:
+            if c_rec[RCD_EXT_REFS]:
+                for rci_id in c_rec[RCD_EXT_REFS].split(CLIENT_REF_SEP):
                     if rci_id not in found_ids:
                         found_ids[rci_id] = [c_rec]
-                    elif [_ for _ in found_ids[rci_id] if _[0] != c_rec[0]]:
+                    elif [_ for _ in found_ids[rci_id] if _[RCD_MATCH_CODE] != c_rec[RCD_MATCH_CODE]]:
                         found_ids[rci_id].append(c_rec)
-                    if rci_id in resort_ids and c_rec[0] not in resort_codes:
-                        log_import('Resort RCI ID {} found in client {}'.format(rci_id, c_rec[0]),
-                                   NO_FILE_CONTEXT_PREFIX + 'CheckClientsDataResortId', importance=2)
+                    if rci_id in client_refs_add_exclude and c_rec[RCD_MATCH_CODE] not in resort_codes:
+                        log_import('Resort RCI ID {} found in client {}'.format(rci_id, c_rec[RCD_MATCH_CODE]),
+                                   NO_FILE_PREFIX_CHAR + 'CheckClientsDataResortId', importance=2)
+                    elif c_rec[RCD_MATCH_CODE] in resort_codes and rci_id not in client_refs_add_exclude:
+                        log_import('Resort {} is missing RCI ID {}'.format(c_rec[RCD_MATCH_CODE], rci_id),
+                                   NO_FILE_PREFIX_CHAR + 'CheckClientsDataResortId', importance=2)
         # prepare found duplicate ids, prevent duplicate printouts and re-order for to separate RCI refs from others
         dup_ids = []
         for ref, recs in found_ids.items():
             if len(recs) > 1:
                 dup_ids.append('Duplicate external {} ref {} found in clients: {}'
                                .format(ref.split('=')[0] if '=' in ref else 'RCI',
-                                       repr(ref), ';'.join([_[0] for _ in recs])))
-        dup_ids.sort()
-        for dup in dup_ids:
-            log_import(dup, NO_FILE_CONTEXT_PREFIX + 'CheckClientsDataExtRefDuplicates', importance=2)
+                                       repr(ref), ';'.join([_[RCD_MATCH_CODE] for _ in recs])))
+        for dup in sorted(dup_ids):
+            log_import(dup, NO_FILE_PREFIX_CHAR + 'CheckClientsDataExtRefDuplicates', importance=2)
 
-    def rc_get_clients_idx(imp_client_ref):
+    def rc_get_clients_idx(imp_rci_ref):
         """ determine list index in cached clients_data """
         nonlocal clients_data, clients_changed
         # check first if client exists
         for list_idx, c_rec in enumerate(clients_data):
-            # c_rec/clients_data tuple indexes: 0=CD_CODE, 1=CD_SIHOT_OBJID, 2=EXT_REFS, 3=IS_OWNER
-            if c_rec[2] \
-                    and CLIENT_REF_SEP + imp_client_ref + CLIENT_REF_SEP in CLIENT_REF_SEP + c_rec[2] + CLIENT_REF_SEP:
+            ext_refs = c_rec[RCD_EXT_REFS]
+            if ext_refs and imp_rci_ref in ext_refs.split(CLIENT_REF_SEP):
                 break
         else:
-            client = (RCI_MATCHCODE_PREFIX + imp_client_ref, None, 0, CLIENT_REF_SEP + imp_client_ref + CLIENT_REF_SEP)
+            client = (RCI_MATCH_AND_BOOK_CODE_PREFIX + imp_rci_ref, None, imp_rci_ref, 0)
             clients_data.append(client)
             list_idx = len(clients_data) - 1
             clients_changed = True
         return list_idx
 
-    def rc_complete_clients_data_with_obj_id(client_obj_id):
+    def rc_complete_clients_data_with_obj_id(cl_idx, client_obj_id):
         """ complete clients_data with imported data and sihot objid """
         nonlocal clients_data, clients_changed
-        # c_rec/clients_data tuple indexes: 0=CD_CODE, 1=CD_SIHOT_OBJID, 2=EXT_REFS, 3=IS_OWNER
-        c_rec = clients_data[clients_idx]
-        if not c_rec[1]:
-            clients_data[clients_idx] = (c_rec[0], client_obj_id, c_rec[2], c_rec[3])
+        c_rec = clients_data[cl_idx]
+        if not c_rec[RCD_OBJ_ID] or c_rec[RCD_OBJ_ID] != client_obj_id:
+            clients_data[cl_idx] = (c_rec[RCD_MATCH_CODE], client_obj_id, c_rec[RCD_EXT_REFS], c_rec[RCD_IS_OWNER])
             clients_changed = True
 
-    def rc_complete_client_row_with_ext_refs(client_row):
+    def rc_complete_client_row_with_ext_refs(c_row, ext_refs):
         """ complete client row for to send to Sihot with external references (EXT_REFS) """
-        # c_rec/clients_data tuple indexes: 0=CD_CODE, 1=CD_SIHOT_OBJID, 2=EXT_REFS, 3=IS_OWNER
-        ext_refs = [_ if '=' in _ else 'RCI=' + _ for _ in clients_data[clients_idx][2].split(CLIENT_REF_SEP)]
-        client_row['EXT_REFS'] = CLIENT_REF_SEP.join(ext_refs)
+        ext_ext_refs = [_ if '=' in _ else 'RCI=' + _ for _ in ext_refs.split(CLIENT_REF_SEP)]
+        c_row['EXT_REFS'] = CLIENT_REF_SEP.join(ext_ext_refs)
+
+    # Reservation Inventory data management
+
+    RID_WKREF = 0
+    RID_YEAR = 1
+    RID_ROREF = 2
+    RID_SWAPPED = 3
+    RID_GRANTED = 4
+
+    res_inv_data = []
 
     def rc_fetch_res_inv_data(acu_data):
+        nonlocal res_inv_data
         inv_file_name = cae.get_config('RCI_RES_INV_DATA_FILE')
         if os.path.isfile(inv_file_name):
             with open(inv_file_name) as f:
-                return eval(f.read()), ""
+                res_inv_data = eval(f.read())
+                return ""
 
         # file not exists (first run or reset)
         log_import('Fetching reservation inventory from Acumen (needs some minutes)',
-                   NO_FILE_CONTEXT_PREFIX + 'FetchResInv', importance=4)
+                   NO_FILE_PREFIX_CHAR + 'FetchResInv', importance=4)
         file_lock = LockFile(cae.get_config('RCI_RES_INV_FETCH_LOCK_FILE'))
         err_msg = file_lock.lock()
         if err_msg:
-            return None, err_msg
+            return err_msg
 
         # fetch from Acumen on first run or after reset (deleted cache files) - after locking cache files
-        res_inv = acu_data.load_view(None, 'T_AOWN_VIEW',
-                                     ['AOWN_WKREF', 'AOWN_YEAR', 'AOWN_ROREF',  # 'AOWN_RSREF',
-                                      'AOWN_SWAPPED_WITH', 'AOWN_GRANTED_TO'],
-                                     "AOWN_YEAR >= to_char(sysdate, 'YYYY')"
-                                     " and AOWN_RSREF in ('BHC', 'BHH', 'HMC', 'PBC')")
+        res_inv_data = acu_data.load_view(None, 'T_AOWN_VIEW',
+                                          ['AOWN_WKREF', 'AOWN_YEAR', 'AOWN_ROREF',  # 'AOWN_RSREF',
+                                           'AOWN_SWAPPED_WITH', 'AOWN_GRANTED_TO'],
+                                          "AOWN_YEAR >= to_char(sysdate, 'YYYY')"
+                                          " and AOWN_RSREF in ('BHC', 'BHH', 'HMC', 'PBC')")
         with open(inv_file_name, 'w') as f:
-            f.write(repr(res_inv))
+            f.write(repr(res_inv_data))
 
         file_lock.unlock()
 
-        return res_inv, ""
+        return ""
+
+    def rc_allocated_room(room_no, arr_date):
+        year, week = rc_arr_to_year_week(arr_date)
+        for r_rec in res_inv_data:
+            if r_rec[RID_WKREF] == room_no.lstrip('0') + '-' + ('0' + str(week))[:2] and r_rec[RID_YEAR] == year:
+                if r_rec[RID_GRANTED] == 'HR' or not r_rec[RID_SWAPPED] \
+                        or r_rec[RID_ROREF] in ('RW', 'RX', 'rW'):
+                    return room_no
+        return ''
 
     '''# #########################################################
        # RCI inbounds/weeks and RCI points import file processing
@@ -751,18 +756,18 @@ def run_import(acu_user, acu_password):
                       '\tLINE_OF_BUS_SUB_GRP_NM\tLINE_OF_BUS_NM\tTIER' \
                       '\tSTART DATE\tSTATUS\tRSVN TYPE\tGUEST CERT' \
                       '\tRCI ID\tMBR1 LAST\tMBR1 FIRST\tMBR EMAIL\tMBR TYPE\tGST LAST\tGST FIRST\tGST ADDR1' \
-                      '\tGST ADDR2\tGST ITY\tGST STATE\tGST ZIP\tGST CNTRY\tGST PHONE\tGST EMAIL\tBOOK DT' \
+                      '\tGST ADDR2\tGST CITY\tGST STATE\tGST ZIP\tGST CNTRY\tGST PHONE\tGST EMAIL\tBOOK DT' \
                       '\tCXL DT\tUNIT\tBED\tOWNER ID\tOWNER FIRST\tOWNER LAST\tINT EXCH\tETL_ACTV_FLG' \
                       '\tETL_ACTV_FLG\tETL_ACTV_FLG\tETL_ACTV_FLG\tETL_ACTV_FLG\n'
     # RCI_RESORT_NAME = 0               # ResortId + ResortName (not used)
-    RCI_RESORT_ID = 1                   # BHC=1442, BHH=2398, HMC=2429, PBC=0803 (see also RS_RCI_CODE)
+    RCI_RESORT_ID = 1  # BHC=1442, BHH=2398, HMC=2429, PBC=0803 (see also RS_RCI_CODE)
     RCI_BOOK_REF = 2
     # RCI_LINE_OF_BUS_SUB_GRP_NM = 3    # e.g. 141 (newly added and not used)
     # RCI_LINE_OF_BUS_NM = 4            # e.g. Member (newly added and not used)
     # RCI_TIER = 5                      # e.g. STANDARD (newly added and not used)
     RCI_ARR_DATE = 6
-    RCI_BOOK_STATUS = 7                 # STATUS, e.g. Reserved/Cancelled
-    RCI_IS_GUEST = 9                    # GUEST CERT, e.g. Y/N
+    RCI_BOOK_STATUS = 7  # STATUS, e.g. Reserved/Cancelled
+    RCI_IS_GUEST = 9  # GUEST CERT, e.g. Y/N
     RCI_CLIENT_ID = 10
     RCI_CLIENT_SURNAME = 11
     RCI_CLIENT_FORENAME = 12
@@ -786,32 +791,46 @@ def run_import(acu_user, acu_password):
     RCI_OWNER_SURNAME = 31
     RCI_COL_COUNT = 38
 
-    def rci_imp_line_check(curr_line):
+    def rci_imp_line_check(curr_line, is_points, file_name, line_num):
         err_msg = ''
         curr_cols = curr_line.split('\t')
         if curr_line[-1] != '\n':
             err_msg = 'rci_line_to_res_row(): incomplete line (missing end of line)'
-        elif len(curr_cols) != RCI_COL_COUNT:
-            err_msg = 'rci_line_to_res_row(): incomplete line (missing {} columns)'\
+        elif len(curr_cols) < RCI_COL_COUNT:
+            err_msg = 'rci_line_to_res_row(): incomplete line (missing {} columns)' \
                 .format(RCI_COL_COUNT - len(curr_cols))
+        elif len(curr_cols) > RCI_COL_COUNT:
+            err_msg = 'rci_line_to_res_row(): wrong line format, having {} extra columns' \
+                .format(len(curr_cols) - RCI_COL_COUNT)
         elif curr_cols[RCI_BOOK_STATUS] not in ('Reserved', 'Cancelled'):
-            curr_cols = None  # skip/hide request and incomplete bookings (without any apartment value)
+            curr_cols = None
+            err_msg = 'Skip/hide request and incomplete bookings (without any apartment value)'
         elif 'RCI POINTS' in curr_cols[RCI_CLIENT_SURNAME] + curr_cols[RCI_CLIENT_FORENAME] \
                 + curr_cols[RCI_GUEST_SURNAME] + curr_cols[RCI_GUEST_FORENAME]:
-            curr_cols = None  # skip/ignore RCI Points bookings
+            curr_cols = None
+            err_msg = 'Skip/ignore RCI Points bookings'
+        else:
+            for _ in range(RCI_COL_COUNT, RC_COL_COUNT):
+                curr_cols.append('Unused')
+            curr_cols[RC_FILE_NAME] = file_name
+            curr_cols[RC_LINE_NUM] = line_num
+            curr_cols[RC_POINTS] = is_points
+            cid = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
+            curr_cols[RC_OCC_CLIENTS_IDX] = rc_get_clients_idx(cid)
+            cid = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
+            # sometimes resort is the "owner", e.g. 2429-55555/2429-99928 for HMC - in Sihot we are not hiding resort
+            # if cid in client_refs_add_exclude:
+            #     curr_cols[RC_OWN_CLIENTS_IDX] = -1
+            # else:
+            curr_cols[RC_OWN_CLIENTS_IDX] = rc_get_clients_idx(cid)
+
         return curr_cols, err_msg
 
-    def rci_line_to_client_row(curr_cols, file_name, line_num, rows):
+    def rci_line_to_occ_client_row(curr_cols):
         row = dict()
-        if curr_cols[RCI_IS_GUEST] == 'Y':
-            row['CD_SNAM1'] = curr_cols[RCI_GUEST_SURNAME]
-            row['CD_FNAM1'] = curr_cols[RCI_GUEST_FORENAME]
-        else:
-            rci_ref = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
-            row['CD_RCI_REF'] = rci_ref        # Sihot MATCH-ADM element
-            row['CD_CODE'] = RCI_MATCHCODE_PREFIX + rci_ref
-            row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
-            row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
+        row['CD_CODE'] = clients_data[curr_cols[RC_OCC_CLIENTS_IDX]][RCD_MATCH_CODE]
+        row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
+        row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
         row['CD_ADD11'] = curr_cols[RCI_GUEST_ADDR1]
         row['CD_ADD12'] = curr_cols[RCI_GUEST_ADDR2]
         row['SIHOT_COUNTRY'] = curr_cols[RCI_GUEST_COUNTRY]
@@ -820,33 +839,57 @@ def run_import(acu_user, acu_password):
         row['CD_CITY'] = curr_cols[RCI_GUEST_CITY]
         row['CD_EMAIL'] = curr_cols[RCI_GUEST_EMAIL]
         row['CD_HTEL1'] = curr_cols[RCI_GUEST_PHONE]
+        ext_refs = clients_data[curr_cols[RC_OCC_CLIENTS_IDX]][RCD_EXT_REFS].split(CLIENT_REF_SEP)
+        if ext_refs:
+            row['CD_RCI_REF'] = ext_refs[0]  # first ref coming from Acu.CD_RCI_REF and put into Sihot MATCH-ADM element
+
         # constant values - needed for to be accepted by the Sihot Kernel interface
         row['CD_SIHOT_OBJID'] = None
         row['SIHOT_GUESTTYPE1'] = '1'
 
-        row['=FILE_NAME'] = file_name
-        row['=LINE_NUM'] = line_num
+        return row, ''
 
-        rows.append(row)
+    def rci_line_to_own_client_row(curr_cols):
+        row = dict()
+        row['CD_CODE'] = clients_data[curr_cols[RC_OWN_CLIENTS_IDX]][RCD_MATCH_CODE]
+        row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
+        row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
+        row['CD_ADD11'] = curr_cols[RCI_GUEST_ADDR1]
+        row['CD_ADD12'] = curr_cols[RCI_GUEST_ADDR2]
+        row['SIHOT_COUNTRY'] = curr_cols[RCI_GUEST_COUNTRY]
+        row['SIHOT_STATE'] = curr_cols[RCI_GUEST_STATE]
+        row['CD_POSTAL'] = curr_cols[RCI_GUEST_ZIP]
+        row['CD_CITY'] = curr_cols[RCI_GUEST_CITY]
+        row['CD_EMAIL'] = curr_cols[RCI_GUEST_EMAIL]
+        row['CD_HTEL1'] = curr_cols[RCI_GUEST_PHONE]
+        ext_refs = clients_data[curr_cols[RC_OWN_CLIENTS_IDX]][RCD_EXT_REFS].split(CLIENT_REF_SEP)
+        if ext_refs:
+            row['CD_RCI_REF'] = ext_refs[0]  # first ref coming from Acu.CD_RCI_REF and put into Sihot MATCH-ADM element
+        # constant values - needed for to be accepted by the Sihot Kernel interface
+        row['CD_SIHOT_OBJID'] = None
+        row['SIHOT_GUESTTYPE1'] = '1'
 
-        return ''
+        return row, ''
 
-    def rci_line_to_res_row(curr_cols, file_name, line_num, rows, client_row):
+    def rci_line_to_res_row(curr_cols):
         """ used for to import RCI inbounds for week owners (RI/RO), leads (RL) and CPA owners (RI/RO) """
         row = dict()
         comments = []
 
-        row['RUL_SIHOT_HOTEL'] = rc_to_sihot_hotel_id(curr_cols[RCI_RESORT_ID])
+        row['RUL_SIHOT_HOTEL'] = rc_rci_to_sihot_hotel_id(curr_cols[RCI_RESORT_ID])
         if not row['RUL_SIHOT_HOTEL']:
-            return 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCI_RESORT_ID])
+            return None, 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCI_RESORT_ID])
 
         if curr_cols[RCI_BOOK_STATUS] == 'Cancelled':
             comments.append('Cancelled=' + curr_cols[RCI_CANCEL_DATE])
-        row['SH_RES_TYPE'] = 'S' if curr_cols[RCI_BOOK_STATUS] == 'Cancelled' else '1'
-        row['RUL_ACTION'] = ACTION_DELETE if curr_cols[RCI_BOOK_STATUS] == 'Cancelled' else ACTION_INSERT
-        row['SIHOT_GDSNO'] = RCI_MATCHCODE_PREFIX + curr_cols[RCI_BOOK_REF]
+            row['SH_RES_TYPE'] = 'S'
+            row['RUL_ACTION'] = ACTION_DELETE
+        else:
+            row['SH_RES_TYPE'] = '1'
+            row['RUL_ACTION'] = ACTION_INSERT
+        row['SIHOT_GDSNO'] = RCI_MATCH_AND_BOOK_CODE_PREFIX + curr_cols[RCI_BOOK_REF]
         row['RH_EXT_BOOK_REF'] = curr_cols[RCI_BOOK_REF]
-        row['RH_EXT_BOOK_DATE'] = curr_cols[RCI_BOOK_DATE]
+        row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(curr_cols[RCI_BOOK_DATE][:10], '%Y-%m-%d')
 
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCI_ARR_DATE][:10], '%Y-%m-%d')
         row['DEP_DATE'] = row['ARR_DATE'] + datetime.timedelta(7)
@@ -855,27 +898,26 @@ def run_import(acu_user, acu_password):
         comments.append(rsi + ' (' + rno + ')')
         row['RUL_SIHOT_ROOM'] = rc_allocated_room(rno, row['ARR_DATE'])
 
-        row['CD_SIHOT_OBJID'] = client_row['CD_SIHOT_OBJID']
+        cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
+        cl_own_idx = curr_cols[RC_OWN_CLIENTS_IDX] if curr_cols[RC_OWN_CLIENTS_IDX] > -1 else cl_occ_idx
         own_rci_ref = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
-        if CLIENT_REF_SEP + own_rci_ref + CLIENT_REF_SEP \
-                in CLIENT_REF_SEP + cae.get_config('ClientRefsAddExclude') + CLIENT_REF_SEP:
-            row['=OWN_RCI_REF'] = ''    # is sometimes the resort e.g. 242955555/242999928 for HMC
-        else:
-            row['=OWN_RCI_REF'] = own_rci_ref
-        if curr_cols[RCI_IS_GUEST] == 'Y':
-            row['=GUEST_OF'] = curr_cols[RCI_CLIENT_SURNAME] + ', ' + curr_cols[RCI_CLIENT_FORENAME]
-            if row['=GUEST_OF'] == ', ':
-                row['=GUEST_OF'] = '(unknown)'
-            comments.append('GuestOf=' + row['=GUEST_OF'])
+        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = clients_data[cl_own_idx][RCD_OBJ_ID]
+        row['SH_MC'] = row['OC_CODE'] = clients_data[cl_own_idx][RCD_MATCH_CODE]
+
+        is_guest = curr_cols[RCI_IS_GUEST] == 'Y'
+        if is_guest:                                # guest bookings doesn't provide RCI client Id
+            if curr_cols[RCI_CLIENT_SURNAME] or curr_cols[RCI_CLIENT_FORENAME]:
+                own_name = curr_cols[RCI_CLIENT_SURNAME] + ', ' + curr_cols[RCI_CLIENT_FORENAME]
+            else:
+                own_name = '(unknown)'
+            comments.append('GuestOf=' + own_rci_ref + '=' + row['OC_CODE'] + ':' + own_name)
 
             comments.append('ExcMail=' + curr_cols[RCI_CLIENT_EMAIL])
-            row['=OCC_RCI_REF'] = ""        # guest bookings doesn't provide RCI client Id
             row['SH_ADULT1_NAME'] = curr_cols[RCI_GUEST_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCI_GUEST_FORENAME]
         else:
-            row['=GUEST_OF'] = ''
-            row['=OCC_RCI_REF'] = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
-            row['CD_CODE'] = client_row['CD_CODE']  # matchcode == RCI_MATCHCODE_PREFIX + normalized_RCI_CLIENT_ID
+            row['CD_SIHOT_OBJID'] = clients_data[cl_occ_idx][RCD_OBJ_ID]
+            row['CD_CODE'] = clients_data[cl_occ_idx][RCD_MATCH_CODE]
             # has to be populated after send to Sihot: row['CD_SIHOT_OBJID'] = client_row['CD_SIHOT_OBJID']
             row['SH_ADULT1_NAME'] = curr_cols[RCI_CLIENT_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCI_CLIENT_FORENAME]
@@ -883,27 +925,21 @@ def run_import(acu_user, acu_password):
         row['SH_ROOM_SEQ1'] = 0
         row['RU_ADULTS'] = 1
 
-        if file_name[:3].upper() == 'RL_':
-            mkt_seg, mkt_grp = 'RL', 'RCI External'
-        else:
-            mkt_seg, mkt_grp = rc_mkt_seg_grp(client_row['CD_SIHOT_OBJID'], row['=OCC_RCI_REF'],
-                                              curr_cols[RCI_IS_GUEST] == 'Y', clients_data)
+        mkt_seg, mkt_grp = rc_mkt_seg_grp(curr_cols, is_guest)
         row['SIHOT_MKT_SEG'] = row['RUL_SIHOT_RATE'] = mkt_seg
         row['RO_RES_GROUP'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
         row['RU_SOURCE'] = 'R'
 
-        comments.append('Owner/Club=' + rc_ref_normalize(curr_cols[RCI_OWNER_ID]) + ' '
+        comments.append('Owner/Club=' + own_rci_ref + ' '
                         + curr_cols[RCI_OWNER_SURNAME] + ', ' + curr_cols[RCI_OWNER_FORENAME])
 
         row['SIHOT_NOTE'] = ';'.join(comments)
         row['SIHOT_TEC_NOTE'] = '|CR|'.join(comments)
 
-        row['=FILE_NAME'] = file_name
-        row['=LINE_NUM'] = line_num
+        row['=FILE_NAME'] = curr_cols[RC_FILE_NAME]
+        row['=LINE_NUM'] = curr_cols[RC_LINE_NUM]
 
-        rows.append(row)
-
-        return ''
+        return row, ''
 
     #  AP7 file columns (new format changed in May 2017 - see new TIER column in 2nd row of RCIP_FILE_HEADER)
     RCIP_FILE_HEADER = 'RESORT ID\tRESORT NAME\tRSVN LINK\tRESERVATION NUMBER\tSYSTEM' \
@@ -914,11 +950,11 @@ def run_import(acu_user, acu_password):
                        '\tGUARANTEED_CD\tGUARANTEED_FLG\tMSTR UNIT TYPE\tMSTR UNIT NBR' \
                        '\tGST LAST\tGST FIRST\tGST ADDR1\tGST ADDR2\tGST CITY\tGST STATE\tGST ZIP\tGST CNTRY' \
                        '\tGST PHONE\tGST EMAIL\tINT EXCH\tBOOK DT\tCXL DT\tMASTER ARRIVAL DATE\n'
-    RCIP_RESORT_ID = 0                  # BHC=1442, BHH=2398, HMC=2429, PBC=0803 (see also RS_RCI_CODE)
+    RCIP_RESORT_ID = 0  # BHC=1442, BHH=2398, HMC=2429, PBC=0803 (see also RS_RCI_CODE)
     RCIP_BOOK_REF = 3
     RCIP_ARR_DATE = 6
     RCIP_DEP_DATE = 7
-    RCIP_BOOK_STATUS = 9                # e.g. R=Reserved/C=Cancelled
+    RCIP_BOOK_STATUS = 9  # e.g. R=Reserved/C=Cancelled
     RCIP_IS_GUEST = 11
     RCIP_ROOM_SIZE = 12
     RCIP_APT_NO = 13
@@ -939,18 +975,37 @@ def run_import(acu_user, acu_password):
     RCIP_CANCEL_DATE = 40
     RCIP_COL_COUNT = 42
 
-    def rcip_imp_line_check(curr_line):
+    # extra columns for to store import filename and line (because we re-order for to check dup-clients/cont-res.)
+    RC_FILE_NAME = max(RCI_COL_COUNT, RCIP_COL_COUNT)
+    RC_LINE_NUM = RC_FILE_NAME + 1
+    RC_POINTS = RC_FILE_NAME + 2
+    RC_OCC_CLIENTS_IDX = RC_FILE_NAME + 3
+    RC_OWN_CLIENTS_IDX = RC_FILE_NAME + 4   # not used for points import (only one RCI ID given in import file)
+    RC_COL_COUNT = RC_FILE_NAME + 5
+
+    def rcip_imp_line_check(curr_line, is_points, file_name, line_num):
         curr_cols = curr_line.split('\t')
         if curr_line[-1] != '\n':
             err_msg = 'rcip_line_to_res_row(): incomplete line (missing end of line)'
-        elif len(curr_cols) != RCIP_COL_COUNT:
-            err_msg = 'rcip_line_to_res_row(): incomplete line, missing {} columns'\
+        elif len(curr_cols) < RCIP_COL_COUNT:
+            err_msg = 'rcip_line_to_res_row(): incomplete line, missing {} columns' \
                 .format(RCIP_COL_COUNT - len(curr_cols))
+        elif len(curr_cols) > RCIP_COL_COUNT:
+            err_msg = 'rcip_line_to_res_row(): wrong line format, having {} extra columns' \
+                .format(len(curr_cols) - RCIP_COL_COUNT)
         else:
             err_msg = ''
+            for _ in range(RCIP_COL_COUNT, RC_COL_COUNT):
+                curr_cols.append('Unused')
+            curr_cols[RC_FILE_NAME] = file_name
+            curr_cols[RC_LINE_NUM] = line_num
+            curr_cols[RC_POINTS] = is_points
+            cid = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
+            curr_cols[RC_OCC_CLIENTS_IDX] = rc_get_clients_idx(cid)
+            curr_cols[RC_OWN_CLIENTS_IDX] = -1  # does not exists for points but needed for generic client send check
         return curr_cols, err_msg
 
-    def rcip_line_to_client_row(curr_cols, file_name, line_num, rows):
+    def rcip_line_to_occ_client_row(curr_cols):
         row = dict()
         rci_ref = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
         row['CD_RCI_REF'] = rci_ref  # Sihot MATCH-ADM element
@@ -958,7 +1013,7 @@ def run_import(acu_user, acu_password):
             row['CD_SNAM1'] = curr_cols[RCIP_GUEST_SURNAME]
             row['CD_FNAM1'] = curr_cols[RCIP_GUEST_FORENAME]
         else:
-            row['CD_CODE'] = RCI_MATCHCODE_PREFIX + rci_ref
+            row['CD_CODE'] = RCI_MATCH_AND_BOOK_CODE_PREFIX + rci_ref
             row['CD_SNAM1'] = curr_cols[RCIP_CLIENT_SURNAME]
             row['CD_FNAM1'] = curr_cols[RCIP_CLIENT_FORENAME]
         row['CD_ADD11'] = curr_cols[RCIP_GUEST_ADDR1]
@@ -973,29 +1028,27 @@ def run_import(acu_user, acu_password):
         row['CD_SIHOT_OBJID'] = None
         row['SIHOT_GUESTTYPE1'] = '1'
 
-        row['=FILE_NAME'] = file_name
-        row['=LINE_NUM'] = line_num
+        return row, ''
 
-        rows.append(row)
+    def rcip_line_to_own_client_row(_):
+        return dict(), "This method gets never executed because RCI(AP7) doesn't provide owner data for points bookings"
 
-        return ''
-
-    def rcip_line_to_res_row(curr_cols, file_name, line_num, rows, client_row):
+    def rcip_line_to_res_row(curr_cols):
         row = dict()
         comments = []
 
-        row['RUL_SIHOT_HOTEL'] = rc_to_sihot_hotel_id(curr_cols[RCIP_RESORT_ID])
+        row['RUL_SIHOT_HOTEL'] = rc_rci_to_sihot_hotel_id(curr_cols[RCIP_RESORT_ID])
         if not row['RUL_SIHOT_HOTEL']:
-            return 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCIP_RESORT_ID])
+            return None, 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCIP_RESORT_ID])
 
         if curr_cols[RCIP_BOOK_STATUS] == 'C':
             comments.append('Cancelled=' + curr_cols[RCIP_CANCEL_DATE])
         row['SH_RES_TYPE'] = 'S' if curr_cols[RCIP_BOOK_STATUS] == 'C' else '1'
         row['RUL_ACTION'] = ACTION_DELETE if curr_cols[RCIP_BOOK_STATUS] == 'C' else ACTION_INSERT
 
-        row['SIHOT_GDSNO'] = RCI_MATCHCODE_PREFIX + curr_cols[RCIP_BOOK_REF]
+        row['SIHOT_GDSNO'] = RCI_MATCH_AND_BOOK_CODE_PREFIX + curr_cols[RCIP_BOOK_REF]
         row['RH_EXT_BOOK_REF'] = curr_cols[RCIP_BOOK_REF]
-        row['RH_EXT_BOOK_DATE'] = curr_cols[RCIP_BOOK_DATE]
+        row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_BOOK_DATE][:10], '%Y-%m-%d')
 
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_ARR_DATE][:10], '%Y-%m-%d')
         row['DEP_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_DEP_DATE][:10], '%Y-%m-%d')
@@ -1004,33 +1057,36 @@ def run_import(acu_user, acu_password):
         comments.append(rsi + ' (' + rno + ')')
         row['RUL_SIHOT_ROOM'] = rc_allocated_room(rno, row['ARR_DATE'])
 
-        row['CD_SIHOT_OBJID'] = client_row['CD_SIHOT_OBJID']
-        if curr_cols[RCIP_IS_GUEST] == 'Y':
-            row['=GUEST_OF'] = curr_cols[RCIP_CLIENT_SURNAME] + ', ' + curr_cols[RCIP_CLIENT_FORENAME]
-            if row['=GUEST_OF'] == ', ':
-                row['=GUEST_OF'] = '(unknown)'
-            comments.append('GuestOf=' + row['=GUEST_OF'])
-            row['=OCC_RCI_REF'] = ''                            # guest bookings doesn't provide RCI client Id
+        cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
+        cd_client_obj_id = clients_data[cl_occ_idx][RCD_OBJ_ID]
+        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = row['CD_SIHOT_OBJID'] = cd_client_obj_id
+        row['SH_MC'] = row['OC_CODE'] = row['CD_CODE'] = clients_data[cl_occ_idx][RCD_MATCH_CODE]
+
+        is_guest = curr_cols[RCIP_IS_GUEST] == 'Y'
+        if is_guest:
+            if curr_cols[RCIP_CLIENT_SURNAME] or curr_cols[RCIP_CLIENT_FORENAME]:
+                own_name = curr_cols[RCIP_CLIENT_SURNAME] + ", " + curr_cols[RCIP_CLIENT_FORENAME]
+            else:
+                own_name = '(unknown)'
+            comments.append('GuestOf=' + own_name)
             row['SH_ADULT1_NAME'] = curr_cols[RCIP_GUEST_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCIP_GUEST_FORENAME]
         else:
-            row['=GUEST_OF'] = ''
-            row['=OCC_RCI_REF'] = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
             row['SH_ADULT1_NAME'] = curr_cols[RCIP_CLIENT_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCIP_CLIENT_FORENAME]
 
-        mkt_seg, mkt_grp = rc_mkt_seg_grp(client_row['CD_SIHOT_OBJID'], row['=OCC_RCI_REF'],
-                                          curr_cols[RCIP_IS_GUEST] == 'Y', clients_data)
+        mkt_seg, mkt_grp = rc_mkt_seg_grp(curr_cols, is_guest)
         row['SIHOT_MKT_SEG'] = row['RUL_SIHOT_RATE'] = mkt_seg
         row['RO_RES_GROUP'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
         row['RU_SOURCE'] = 'R'
 
-        row['=FILE_NAME'] = file_name
-        row['=LINE_NUM'] = line_num
+        row['SIHOT_NOTE'] = ';'.join(comments)
+        row['SIHOT_TEC_NOTE'] = '|CR|'.join(comments)
 
-        rows.append(row)
+        row['=FILE_NAME'] = curr_cols[RC_FILE_NAME]
+        row['=LINE_NUM'] = curr_cols[RC_LINE_NUM]
 
-        return ''
+        return row, ''
 
     #
     # #########################################################
@@ -1038,13 +1094,13 @@ def run_import(acu_user, acu_password):
     # #########################################################
     #
     collect_files()
-    client_rows = []
+
     res_rows = []
     error_msg = ''
     debug_level = cae.get_option('debugLevel')
 
     if cae.get_option('tciPath') and tci_files:
-        log_import('Load Thomas Cook files', NO_FILE_CONTEXT_PREFIX + 'TciImportStart', importance=4)
+        log_import('Load Thomas Cook files', NO_FILE_PREFIX_CHAR + 'TciImportStart', importance=4)
         ''' sort TCI files 1.ASCENDING by actualization date and 2.DESCENDING by file type (R5 first, then R3, then R1)
             .. for to process cancellation/re-bookings in the correct order.
             .. (date and type taken from file name R?_yyyy-mm-dd hh.mm.ss.txt - ?=1-booking 3-cancellation 5-re-booking)
@@ -1054,9 +1110,9 @@ def run_import(acu_user, acu_password):
         tci_files.sort(key=lambda f: os.path.basename(f)[1], reverse=True)
         tci_files.sort(key=lambda f: os.path.basename(f)[3:13])
         if debug_level >= DEBUG_LEVEL_VERBOSE:
-            log_import("TCI files: " + str(tci_files), NO_FILE_CONTEXT_PREFIX + 'TciFileCollect', importance=1)
+            log_import("TCI files: " + str(tci_files), NO_FILE_PREFIX_CHAR + 'TciFileCollect', importance=1)
         for fn in tci_files:
-            log_import('Processing import file ' + fn, NO_FILE_CONTEXT_PREFIX + 'TciImportNextFile', importance=3)
+            log_import('Processing import file ' + fn, NO_FILE_PREFIX_CHAR + 'TciImportNextFile', importance=3)
             with open(fn, 'r') as fp:
                 lines = fp.readlines()
 
@@ -1078,12 +1134,12 @@ def run_import(acu_user, acu_password):
                 break
 
     if False and cae.get_option('bkcPath') and bkc_files and (not error_log or not cae.get_option('breakOnError')):
-        log_import('Load Booking.com import files', NO_FILE_CONTEXT_PREFIX + 'BkcImportStart', importance=4)
+        log_import('Load Booking.com import files', NO_FILE_PREFIX_CHAR + 'BkcImportStart', importance=4)
         bkc_files.sort(key=lambda f: os.path.basename(f))
         if debug_level >= DEBUG_LEVEL_VERBOSE:
-            log_import("BKC files: " + str(bkc_files), NO_FILE_CONTEXT_PREFIX + 'BkcFileCollect', importance=1)
+            log_import("BKC files: " + str(bkc_files), NO_FILE_PREFIX_CHAR + 'BkcFileCollect', importance=1)
         for fn in bkc_files:
-            log_import('Processing import file ' + fn, NO_FILE_CONTEXT_PREFIX + 'BkcImportNextFile', importance=3)
+            log_import('Processing import file ' + fn, NO_FILE_PREFIX_CHAR + 'BkcImportNextFile', importance=3)
             hotel_id = bkc_check_filename(fn)
             if not hotel_id:
                 log_error('Hotel ID prefix followed by underscore character is missing - skipping.', fn, importance=4)
@@ -1137,124 +1193,226 @@ def run_import(acu_user, acu_password):
                 break
 
     if cae.get_option('rciPath') and rci_files and (not error_log or not cae.get_option('breakOnError')):
-        log_import('Load RCI import files and send clients to Sihot', NO_FILE_CONTEXT_PREFIX + 'RciImportStart',
-                   importance=4)
-
-        res_inv_data, error_msg = rc_fetch_res_inv_data(conf_data)     # get reservation inventory data
-        if error_msg:
-            log_error(error_msg, NO_FILE_CONTEXT_PREFIX + 'RciResInvDataFetch', importance=3)
-            return error_msg
-
-        clients_data, error_msg = rc_fetch_client_data(conf_data)       # get reservation inventory data
-        if error_msg:
-            log_error(error_msg, NO_FILE_CONTEXT_PREFIX + 'RciClientDataFetch', importance=3)
-            return error_msg
-
-        client_send = ClientToSihot(cae, use_kernel_interface=cae.get_option('useKernelForClient'),
-                                    map_client=cae.get_option('mapClient'), connect_to_acu=False)
-
+        log_import("Load RCI import files", NO_FILE_PREFIX_CHAR + 'RciImportStart', importance=4)
         if debug_level >= DEBUG_LEVEL_VERBOSE:
-            log_import("RCI files: " + str(rci_files), NO_FILE_CONTEXT_PREFIX + 'RciFileCollect', importance=1)
+            log_import("RCI files: " + str(rci_files), NO_FILE_PREFIX_CHAR + 'RciFileCollect', importance=1)
+
+        # re-create resort match codes config value from Acumen data if empty
+        if not cae.get_config('ClientRefsResortCodes'):
+            m1 = conf_data.load_view(None, 'T_CD', ["CD_CODE"], "CD_RCI_REF in (:rci_refs)",
+                                     {'rci_refs': client_refs_add_exclude})
+            m2 = conf_data.load_view(None, 'T_CR', ["CR_CDREF"], "CR_REF in (:rci_refs)",
+                                     {'rci_refs': client_refs_add_exclude})
+            if m1 is None or m2 is None:
+                error_msg = "Resort match code fetch error"
+                log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciResortCodesDataFetch', importance=3)
+                return error_msg
+            match_codes = sorted(list(set([_[0] for _ in m1 + m2])))
+            cae.set_config('ClientRefsResortCodes', CLIENT_REF_SEP.join(match_codes))
+
+        error_msg = rc_fetch_clients_data(conf_data)  # get reservation inventory data
+        if error_msg:
+            log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciClientDataFetch', importance=3)
+            return error_msg
+
+        error_msg = rc_fetch_res_inv_data(conf_data)  # get reservation inventory data
+        if error_msg:
+            log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciResInvDataFetch', importance=3)
+            return error_msg
+
+        imp_rows = []
+        points_import = False
         for fn in rci_files:
-            log_import('Processing import file ' + fn, NO_FILE_CONTEXT_PREFIX + 'RciImportNextFile', importance=3)
+            log_import('Processing import file ' + fn, NO_FILE_PREFIX_CHAR + 'RciImportNextFile', importance=3)
             with open(fn, 'r', encoding='utf-16') as fp:
                 lines = fp.readlines()
 
             progress = Progress(debug_level, start_counter=len(lines),
-                                start_msg='Loading import files and sending {run_counter} clients to Sihot',
-                                nothing_to_do_msg='SihotResImport: no records found in import file ' + fn)
+                                start_msg='Loading and parsing import file ' + fn,
+                                nothing_to_do_msg='No records found in import file ' + fn)
 
-            points_import = False
             for idx, ln in enumerate(lines):
+                progress.next(processed_id='Processing import file line ' + str(idx + 1), error_msg=error_msg)
                 if debug_level >= DEBUG_LEVEL_VERBOSE:
                     log_import('Import line loaded: ' + ln, fn, idx)
-                progress.next(processed_id='record ' + str(idx), error_msg=error_msg)
                 if idx == 0:  # first line is header
                     if ln == RCI_FILE_HEADER:
                         points_import = False
                     elif ln == RCIP_FILE_HEADER:
                         points_import = True
                     else:
-                        error_msg = 'Invalid file header: ' + ln
+                        log_error('Skipped import file {} with invalid file header {}'.format(fn, ln), fn, idx)
+                        break
                 else:
                     func = rcip_imp_line_check if points_import else rci_imp_line_check
-                    imp_cols, error_msg = func(ln)
+                    imp_cols, error_msg = func(ln, points_import, fn, idx)
                     if not imp_cols:
-                        continue        # ignoring imported line
+                        if debug_level >= DEBUG_LEVEL_VERBOSE:
+                            log_import(error_msg or 'Import line skipped', fn, idx)
+                        continue  # ignoring imported line
                     if not error_msg:
-                        func = rcip_line_to_client_row if points_import else rci_line_to_client_row
-                        try:
-                            error_msg = func(imp_cols, fn, idx, client_rows)
-                        except Exception as ex:
-                            error_msg = 'client line parse exception: {}'.format(ex)
-                        if not error_msg:
-                            if debug_level >= DEBUG_LEVEL_VERBOSE:
-                                log_import('Parsed client data: ' + str(client_rows[-1]), fn, idx)
-                            clients_idx = rc_get_clients_idx(client_rows[-1]['CD_RCI_REF'])
-                            rc_complete_client_row_with_ext_refs(client_rows[-1])   # populate EXT_REFS
-                            try:
-                                error_msg = client_send.send_client_to_sihot(client_rows[-1])
-                                if not error_msg:
-                                    client_rows[-1]['CD_SIHOT_OBJID'] = client_send.response.objid
-                                    rc_complete_clients_data_with_obj_id(client_rows[-1]['CD_SIHOT_OBJID'])
-                            except Exception as ex:
-                                error_msg = 'client send exception: {}'.format(ex)
-                            if not error_msg:
-                                if debug_level >= DEBUG_LEVEL_VERBOSE:
-                                    log_import('Sent client: ' + str(client_rows[-1]), fn, idx)
-                                func = rcip_line_to_res_row if points_import else rci_line_to_res_row
-                                try:
-                                    error_msg = func(imp_cols, fn, idx, res_rows, client_rows[-1])
-                                except Exception as ex:
-                                    error_msg = 'res line parse exception: {}'.format(ex)
+                        imp_rows.append(imp_cols)
                 if error_msg:
-                    log_error('RCI{} - '.format('P' if points_import else '') + error_msg, fn, idx)
+                    log_error('RCI{} import line error: {}'.format('P' if points_import else '', error_msg), fn, idx)
                     if cae.get_option('breakOnError'):
                         break
-                elif idx > 0:
-                    log_import('Parsed import line: ' + str(res_rows[-1]), fn, idx)
+            progress.finished(error_msg=error_msg)
+            error_msg = ""
+            if error_log and cae.get_option('breakOnError'):
+                break
+
+        if not error_log or not cae.get_option('breakOnError'):
+            log_import('Processing clients', NO_FILE_PREFIX_CHAR + 'RciProcessClients', importance=4)
+            progress = Progress(debug_level, start_counter=len(imp_rows),
+                                start_msg='Sending {run_counter} clients to Sihot',
+                                nothing_to_do_msg='No client records to be send to Sihot')
+            client_send = ClientToSihot(cae, use_kernel_interface=cae.get_option('useKernelForClient'),
+                                        map_client=cae.get_option('mapClient'), connect_to_acu=False)
+
+            # sent_clients is for to detect clients sent already by SihotResSync and duplicate clients in import file
+            sent_clients = [i for i, _ in enumerate(clients_data) if _[RCD_OBJ_ID]]
+            for lni, imp_cols in enumerate(imp_rows):
+                progress.next(processed_id='Parsing and sending client ' + str(lni), error_msg=error_msg)
+                fn, idx = imp_cols[RC_FILE_NAME], imp_cols[RC_LINE_NUM]
+                which_clients = ['occupant', 'owner']
+                clients_indexes = [imp_cols[RC_OCC_CLIENTS_IDX], imp_cols[RC_OWN_CLIENTS_IDX]]
+                if imp_cols[RC_POINTS]:
+                    funcs = [rcip_line_to_occ_client_row, rcip_line_to_own_client_row]
+                else:
+                    funcs = [rci_line_to_occ_client_row, rci_line_to_own_client_row]
+                which_client = ''       # needed only for to suppress PyCharm warning
+                for which_client, clients_idx, func in zip(which_clients, clients_indexes, funcs):
+                    if clients_idx == -1:
+                        continue
+                    try:
+                        client_row, error_msg = func(imp_cols)
+                    except Exception as ex:
+                        error_msg = which_client + '/client line parse exception: {}'.format(ex)
+                    if not error_msg:
+                        if debug_level >= DEBUG_LEVEL_VERBOSE:
+                            log_import('Parsed ' + which_client + '/client data: ' + str(client_row), fn, idx)
+                        if clients_idx in sent_clients:
+                            if debug_level >= DEBUG_LEVEL_VERBOSE:
+                                log_import(which_client + '/client {} skip'.format(clients_data[clients_idx]), fn, idx)
+                            continue
+                        rc_complete_client_row_with_ext_refs(client_row, clients_data[clients_idx][RCD_EXT_REFS])
+                        try:
+                            error_msg = client_send.send_client_to_sihot(client_row)
+                            if not error_msg:
+                                if debug_level >= DEBUG_LEVEL_VERBOSE:
+                                    log_import('Sent ' + which_client + '/client: ' + str(client_row), fn, idx)
+                                client_row['CD_SIHOT_OBJID'] = client_send.response.objid
+                                rc_complete_clients_data_with_obj_id(clients_idx, client_row['CD_SIHOT_OBJID'])
+                                sent_clients.append(clients_idx)
+                        except Exception as ex:
+                            error_msg = which_client + '/client send exception: {}'.format(ex)
+                        if error_msg:
+                            break
+
+                if error_msg:
+                    log_error(which_client + '/client parse/send error: {}'.format(error_msg), fn, idx)
+                    if cae.get_option('breakOnError'):
+                        break
 
             progress.finished(error_msg=error_msg)
-            if error_msg and cae.get_option('breakOnError'):
-                break
+            error_msg = ""
+
+        # now parse reservations
+        if not error_log or not cae.get_option('breakOnError'):
+            log_import('Parsing reservations', NO_FILE_PREFIX_CHAR + 'RciParseRes', importance=4)
+            progress = Progress(debug_level, start_counter=len(imp_rows),
+                                start_msg='Parsing {run_counter} reservations',
+                                nothing_to_do_msg='No reservation records to be parsed')
+            for lni, imp_cols in enumerate(imp_rows):
+                progress.next(processed_id='Parsing reservation ' + str(lni), error_msg=error_msg)
+                fn, idx = imp_cols[RC_FILE_NAME], imp_cols[RC_LINE_NUM]
+                func = rcip_line_to_res_row if imp_cols[RC_POINTS] else rci_line_to_res_row
+                try:
+                    if debug_level >= DEBUG_LEVEL_VERBOSE:
+                        log_import('Parsing import line: ' + str(imp_cols), fn, idx)
+                    res_row, error_msg = func(imp_cols)
+                    if debug_level >= DEBUG_LEVEL_VERBOSE:
+                        log_import('Parsed import columns: ' + str(res_row), fn, idx)
+                    res_rows.append(res_row)
+                except Exception as ex:
+                    error_msg = 'res line parse exception: {}'.format(ex)
+                if error_msg:
+                    log_error('Parse reservation error: {}'.format(error_msg), fn, idx)
+                    if cae.get_option('breakOnError'):
+                        break
+
+            progress.finished(error_msg=error_msg)
+            error_msg = ""
 
         # overwrite clients data if at least one client got changed/extended
         if clients_changed:
-            rc_store_client_data(clients_data)
+            rc_store_client_data()
 
     # #########################################################
     #  SEND imported reservation bookings
     # #########################################################
 
     if not error_log or not cae.get_option('breakOnError'):
-        log_import('Sending reservations to Sihot', NO_FILE_CONTEXT_PREFIX + 'SendResStart', importance=4)
-
+        log_import('Sending reservations to Sihot', NO_FILE_PREFIX_CHAR + 'SendResStart', importance=4)
+        progress = Progress(debug_level, start_counter=len(res_rows),
+                            start_msg='Prepare sending of {run_counter} reservation request changes to Sihot',
+                            nothing_to_do_msg='No reservations found for to be sent')
         res_send = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
                               map_res=cae.get_option('mapRes'),
                               use_kernel_for_new_clients=cae.get_option('useKernelForClient'),
                               map_client=cae.get_option('mapClient'),
                               connect_to_acu=False)
-        progress = Progress(debug_level, start_counter=len(res_rows),
-                            start_msg='Prepare sending of {run_counter} reservation request changes to Sihot',
-                            nothing_to_do_msg='SihotResImport: no files found in import folder(s)')
-        for crow in res_rows:
-            error_msg = res_send.send_row_to_sihot(crow)
+
+        # order rows to be send by rci ref, mkt seg and arrival date for to detect and merge multi-week bookings
+        res_rows.sort(key=lambda f: f['RUL_SIHOT_HOTEL'] + f['RUL_SIHOT_ROOM'] +
+                      f['OC_CODE'] + f['SH_ADULT1_NAME'] + f['SH_ADULT1_NAME2'] +
+                      f['SIHOT_MKT_SEG'] + f['SH_RES_TYPE'] + f['ARR_DATE'].strftime('%Y-%m-%d'))
+        first_arr = None  # used as flag set with the arrival date if the last res_row needs to be prolonged/merged
+        extra_comments = []
+        for res_row_idx, crow in enumerate(res_rows):
             progress.next(processed_id=str(crow['RH_EXT_BOOK_REF']), error_msg=error_msg)
+            fn, idx = crow['=FILE_NAME'], crow['=LINE_NUM']
+            if res_row_idx + 1 < len(res_rows):
+                next_crow = res_rows[res_row_idx + 1]
+                if crow['RUL_SIHOT_HOTEL'] == next_crow['RUL_SIHOT_HOTEL'] \
+                        and crow['RUL_SIHOT_ROOM'] == next_crow['RUL_SIHOT_ROOM'] \
+                        and crow['OC_CODE'] == next_crow['OC_CODE'] \
+                        and crow['SH_ADULT1_NAME'] == next_crow['SH_ADULT1_NAME'] \
+                        and crow['SH_ADULT1_NAME'] == next_crow['SH_ADULT1_NAME'] \
+                        and crow['SIHOT_MKT_SEG'] == next_crow['SIHOT_MKT_SEG'] \
+                        and crow['SH_RES_TYPE'] == next_crow['SH_RES_TYPE'] \
+                        and crow['DEP_DATE'] == next_crow['ARR_DATE']:
+                    if debug_level >= DEBUG_LEVEL_VERBOSE:
+                        log_import('Merge res: \n     ' + str(crow) + '\n     ' + str(next_crow), fn, idx, importance=1)
+                    if not first_arr:
+                        first_arr = crow['ARR_DATE']
+                    extra_comments.append('Merged GDS-NO ' + crow['SIHOT_GDSNO'])
+                    continue
+            if first_arr:
+                crow['ARR_DATE'] = first_arr
+                crow['SIHOT_NOTE'] += ';' + ';'.join(extra_comments)
+                crow['SIHOT_TEC_NOTE'] += '|CR|' + '|CR|'.join(extra_comments)
+                first_arr = None
+                extra_comments = []
+            try:
+                error_msg = res_send.send_row_to_sihot(crow)
+            except Exception as ex:
+                error_msg = 'reservation send exception: {}'.format(ex)
             if error_msg:
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
-                    log_import('Ignoring error sending res: ' + str(crow), crow['=FILE_NAME'], crow['=LINE_NUM'])
+                    log_import('Ignoring error sending res: ' + str(crow), fn, idx)
                     error_msg = ''
                     continue
-                log_error(error_msg, crow['=FILE_NAME'], crow['=LINE_NUM'])
+                log_error(error_msg, fn, idx)
                 if cae.get_option('breakOnError'):
                     break
             elif debug_level >= DEBUG_LEVEL_VERBOSE:
-                log_import('Sent res: ' + str(crow), crow['=FILE_NAME'], crow['=LINE_NUM'])
+                log_import('Sent res: ' + str(crow), fn, idx)
 
         warnings = res_send.get_warnings()
         if warnings:
             if debug_level >= DEBUG_LEVEL_VERBOSE:
-                log_import('Sending warnings: ' + warnings, NO_FILE_CONTEXT_PREFIX + 'SendResWarnings')
+                log_import('Sending warnings: ' + warnings, NO_FILE_PREFIX_CHAR + 'SendResWarnings')
             if notification:
                 notification.send_notification(warnings, subject='SihotResImport warnings notification',
                                                mail_to=cae.get_option('warningsMailToAddr'))
@@ -1265,7 +1423,7 @@ def run_import(acu_user, acu_password):
     # logging and clean up
     # #########################################################
 
-    log_import('Move Import Files to user/server logs', NO_FILE_CONTEXT_PREFIX + 'MoveImportFiles', importance=4)
+    log_import('Move Import Files to user/server logs', NO_FILE_PREFIX_CHAR + 'MoveImportFiles', importance=4)
     for sfn in tci_files + bkc_files + rci_files:
         imp_file_path = os.path.dirname(sfn)
         imp_dir_name = os.path.basename(os.path.normpath(imp_file_path))
@@ -1282,11 +1440,11 @@ def run_import(acu_user, acu_password):
         if not os.path.isdir(ddn):
             os.mkdir(ddn)
         log_msg = '\n\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in import_log
-                              if _['context'][0] == NO_FILE_CONTEXT_PREFIX or sfn in _['context'])
+                              if _['context'][0] == NO_FILE_PREFIX_CHAR or sfn in _['context'])
         with open(os.path.join(ddn, log_file_prefix + '_' + imp_file_name + '_import.log'), 'a') as fh:
-            fh.write(log_msg)
+            fh.write(fix_encoding(log_msg))
 
-        if [_ for _ in error_log if sfn in _['context']]:
+        if [_ for _ in error_log if sfn in _['context']]:   # sfn == _['context'] should work too
             continue  # don't move file if there were errors
 
         # finally move the imported file to the processed sub-folder (on the users machine)
@@ -1302,14 +1460,14 @@ def run_import(acu_user, acu_password):
             notification_err = notification.send_notification(error_text, subject="SihotResImport error notification")
             if notification_err:
                 error_text += "Notification send error: " + notification_err
-                log_import("Notification send error: " + notification_err, NO_FILE_CONTEXT_PREFIX + 'SendNotification')
+                log_import("Notification send error: " + notification_err, NO_FILE_PREFIX_CHAR + 'SendNotification')
         uprint('Error Log:\n', error_text)
         with open(os.path.join(log_file_path, log_file_prefix + '_errors.log'), 'a') as fh:
             fh.write(error_text)
 
     log_msg = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in import_log)
     with open(os.path.join(log_file_path, log_file_prefix + '_import.log'), 'a') as fh:
-        fh.write(log_msg)
+        fh.write(fix_encoding(log_msg))
 
     if error_text and ui_app:
         return error_text  # don't quit app for to show errors on screen to user
@@ -1320,9 +1478,10 @@ def quit_app(err_log=None):
     cae.shutdown(12 if err_log else 0)
 
 
-if ui_app:      # ui_app is not None if user need to logon - will be re-initialized here to the kivy App class instance
+if ui_app:  # ui_app is not None if user need to logon - will be re-initialized here to the kivy App class instance
     sys.argv = [sys.argv[0]]  # remove command line options for to prevent errors in kivy args_parse
     from kivy.app import App
+    from kivy.core.window import Window
     from kivy.lang.builder import Factory
     from kivy.properties import NumericProperty, StringProperty
     from kivy.uix.textinput import TextInput
@@ -1354,8 +1513,20 @@ if ui_app:      # ui_app is not None if user need to logon - will be re-initiali
                 fn = os.path.splitext(os.path.basename(fn))[0]
                 self.file_names += '\n' + fn
 
+        def key_down_callback(self, keyboard, key_code, scan_code, text, modifiers, *args, **kwargs):
+            cae.dprint('kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}'
+                       .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs))
+            if key_code == 27:                                                  # escape key
+                self.exit_app()
+                return True
+            elif key_code == 13 and not self.root.ids.import_button.disabled:   # enter key
+                self.run_import()
+                return True
+            return False
+
         def on_start(self):
             cae.dprint('App.on_start()')
+            Window.bind(on_key_down=self.key_down_callback)
 
         def on_stop(self):
             cae.dprint('App.on_stop()')
