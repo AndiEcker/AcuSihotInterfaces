@@ -15,6 +15,7 @@ from ae_db import OraDB, MAX_STRING_LENGTH
 ACTION_DELETE = 'DELETE'
 ACTION_INSERT = 'INSERT'
 ACTION_UPDATE = 'UPDATE'
+ACTION_SEARCH = 'SEARCH'
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
 # .. so we use ISO-8859-15 instead ?!?!? (see
@@ -72,14 +73,6 @@ def convert2date(xml_string):
 
 #  ELEMENT-COLUMN-MAPS  #################################
 
-MAP_GUEST_INFO = \
-    (
-        {'elemName': 'MATCHCODE', 'colName': 'CD_CODE', 'elemHideIf': "not 'CD_CODE' in c"},
-        {'elemName': 'GUEST-NR', 'colName': 'SH_GUEST_NO', 'elemHideIf': "not 'SH_GUEST_NO' in c"},
-        {'elemName': 'FLAGS', 'colName': 'SH_FLAGS', 'colVal': 'MATCH-EXACT-MATCHCODE;FIND-ALSO-DELETED-GUESTS',
-         'elemHideIf': "not 'SH_GUEST_NO' in c"}
-    )
-
 # used as WEB interface template for GuestFromSihot.elem_col_map instance and as read-only constant by ClientToSihot
 # missing fields in SiHOT for initials (CD_INIT1/2) and profession (CD_INDUSTRY1/2 - only in WEB9 interface)
 MAP_WEB_CLIENT = \
@@ -133,6 +126,12 @@ MAP_KERNEL_CLIENT = \
          'elemHideInActions': ACTION_INSERT},
         {'elemName': 'MATCHCODE', 'colName': 'CD_CODE'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_MATCHCODE', 'colName': 'CD_CODE2'},
+        {'elemName': 'GUEST-NR', 'colName': 'SH_GUEST_NO',
+         'colValFromAcu': "''",
+         'elemHideIf': "'SH_GUEST_NO' not in c"},  # GUEST-SEARCH
+        {'elemName': 'FLAGS', 'colName': 'SH_FLAGS',
+         'colValFromAcu': "''",
+         'elemHideIf': "not 'SH_GUEST_NO' in c"},  # for GUEST-SEARCH only
         {'elemName': 'T-SALUTATION', 'colName': 'SIHOT_SALUTATION1'},  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-SALUTATION', 'colName': 'SIHOT_SALUTATION2'},
         {'elemName': 'T-TITLE', 'colName': 'SIHOT_TITLE1'},
@@ -150,11 +149,13 @@ MAP_KERNEL_CLIENT = \
         {'elemName': 'CITY', 'colName': 'CD_CITY'},
         {'elemName': 'T-COUNTRY-CODE', 'colName': 'SIHOT_COUNTRY'},
         {'elemName': 'T-STATE', 'colName': 'SIHOT_STATE',
+         'colValFromAcu': "''",
          'elemHideIf': "'SIHOT_STATE' not in c or not c['SIHOT_STATE']"},
         {'elemName': 'T-LANGUAGE', 'colName': 'SIHOT_LANG'},
         {'elemName': 'COMMENT', 'colName': 'SH_COMMENT',
          'colValFromAcu': "SIHOT_GUEST_TYPE || ' ExtRefs=' || EXT_REFS"},
-        {'elemName': 'COMMUNICATION/'},
+        {'elemName': 'COMMUNICATION/',
+         'elemHideInActions': ACTION_SEARCH},
         {'elemName': 'PHONE-1', 'colName': 'CD_HTEL1'},
         {'elemName': 'PHONE-2', 'colName': 'CD_WTEL1'},
         {'elemName': 'FAX-1', 'colName': 'CD_FAX'},
@@ -163,8 +164,10 @@ MAP_KERNEL_CLIENT = \
         {'elemName': 'EMAIL-2', 'colName': 'CD_SIGNUP_EMAIL'},
         {'elemName': 'MOBIL-1', 'colName': 'CD_MOBILE1'},
         {'elemName': 'MOBIL-2', 'colName': 'CD_LAST_SMS_TEL'},
-        {'elemName': '/COMMUNICATION'},
-        {'elemName': 'ADD-DATA/'},
+        {'elemName': '/COMMUNICATION',
+         'elemHideInActions': ACTION_SEARCH},
+        {'elemName': 'ADD-DATA/',
+         'elemHideInActions': ACTION_SEARCH},
         {'elemName': 'T-PERSON-GROUP', 'colName': 'SH_PTYPE',
          'colValFromAcu': "'1A'"},
         {'elemName': 'D-BIRTHDAY', 'colName': 'CD_DOB1',
@@ -176,89 +179,111 @@ MAP_KERNEL_CLIENT = \
         {'elemName': 'INTERNET-PASSWORD', 'colName': 'CD_PASSWORD'},
         {'elemName': 'MATCH-ADM', 'colName': 'CD_RCI_REF'},
         {'elemName': 'MATCH-SM', 'colName': 'SIHOT_SF_ID'},
-        {'elemName': '/ADD-DATA'},
-        {'elemName': 'L-EXTIDS/'},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS']"},
+        {'elemName': '/ADD-DATA',
+         'elemHideInActions': ACTION_SEARCH},
+        {'elemName': 'L-EXTIDS/',
+         'elemHideInActions': ACTION_SEARCH},
+        {'elemName': 'EXTID/', 'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS']"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE1',
          'colValFromAcu': "substr(EXT_REFS, 1, instr(EXT_REFS, '=') - 1)",
-         'elemHideIf': "not c['EXT_REFS']"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS']"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID1',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 1), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS']"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS']"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS']"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS']"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE2',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 2), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID2',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 2), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE3',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 3), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID3',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 3), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE4',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 4), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID4',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 4), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE5',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 5), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID5',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 5), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE6',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 6), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID6',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 6), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE7',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 7), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID7',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 7), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE8',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 8), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID8',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 8), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE9',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 9), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID9',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 9), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
-        {'elemName': 'EXTID/', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
+        {'elemName': 'EXTID/',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
         {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE10',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 10), '[^=]+', 1, 1)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
         {'elemName': 'ID', 'colName': 'EXT_REF_ID10',
          'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 10), '[^=]+', 1, 2)",
-         'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
-        {'elemName': '/EXTID', 'elemHideIf': "not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
-        {'elemName': '/L-EXTIDS'},
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
+        {'elemName': '/EXTID',
+         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
+        {'elemName': '/L-EXTIDS',
+         'elemHideInActions': ACTION_SEARCH},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'EXT_REFS', 'colName': 'EXT_REFS'},  # only for elemHideIf expressions
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'CDLREF', 'colName': 'CDL_CODE'},
         # {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
@@ -822,7 +847,7 @@ class Response(SihotXmlParser):  # response xml parser for kernel or web interfa
         # guest/client interface response elements
         self._base_tags.append('MATCHCODE')
         self.matchcode = None  # added for to remove pycharm warning
-        self._base_tags.append('GUEST-NR')  # used only by GuestInfo
+        self._base_tags.append('GUEST-NR')  # used only by GuestSearch
         self.guest_nr = None
         # reservation interface response elements
         self._base_tags += ('OBJID', 'GDSNO')  # , 'RESERVATION ACCOUNT-ID')
@@ -878,25 +903,74 @@ class CatRoomResponse(Response):
 
 
 class GuestInfoResponse(Response):
-    def __init__(self, ca, key_elem_name, ret_elem_name):
+    def __init__(self, ca, ret_elem_names=None, key_elem_name=None):
+        """ ret_elem_names is a list of xml element names (or response attributes) to return. If there is only one
+             list element with a leading ':' character then self.ret_elem_values will be a dict with the search value
+             as the key. If ret_elem_names consists of exact one item then ret_elem_values will be a list with the
+             plain return values. If ret_elem_names contains more than one item then self.ret_elem_values will be
+             a dict where the ret_elem_names are used as keys. If the ret_elem_names list is empty (or None) then the
+             returned self.ret_elem_values list of dicts will provide all elements that are returned by the
+             Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
+
+            key_elem_name is the element name used for the search (only needed if self._return_value_as_key==True)
+        """
         super(GuestInfoResponse, self).__init__(ca)
-        self.key_elem_name = key_elem_name
-        self.ret_elem_name = ret_elem_name
-        self.ret_elem_values = {}
-        self.key_elem_index = 0
+        self._key_elem_name = key_elem_name
+        if not ret_elem_names:
+            ret_elem_names = [_['elemName'] for _ in MAP_KERNEL_CLIENT]
+        self._ret_elem_names = ret_elem_names    # list of names of XML-elements or response-base-attributes
+        self._return_value_as_key = len(ret_elem_names) == 1 and ret_elem_names[0][0] == ':'
+
+        self.ret_elem_values = {} if self._return_value_as_key else []
+        self._key_elem_index = 0
+        self._in_guest_profile = False
+        self._col_map_parser = ColMapXmlParser(ca, deepcopy(MAP_KERNEL_CLIENT))
+
+    def parse_xml(self, xml):
+        super(GuestInfoResponse, self).parse_xml(xml)
+        self._key_elem_index = 0
+        self._in_guest_profile = False
 
     def start(self, tag, attrib):
+        if self._in_guest_profile:
+            self._col_map_parser.start(tag, attrib)
         if super(GuestInfoResponse, self).start(tag, attrib) is None:
             return None  # processed by base class
         if tag == 'GUEST-PROFILE':
-            self.key_elem_index += 1
+            self._key_elem_index += 1
+            self._in_guest_profile = True
+            return None
+        return tag
+
+    def data(self, data):
+        if self._in_guest_profile:
+            self._col_map_parser.data(data)
+        if super(GuestInfoResponse, self).data(data) is None:
+            return None  # processed by base class
+        return data
 
     def end(self, tag):
         if tag == 'GUEST-PROFILE':
-            key = getattr(self, self.key_elem_name)
-            if self.key_elem_index > 1:
-                key += '_' + str(self.key_elem_index)
-            self.ret_elem_values[key] = getattr(self, self.ret_elem_name)
+            self._in_guest_profile = False
+            if self._return_value_as_key:
+                key = getattr(self, self._key_elem_name)
+                if self._key_elem_index > 1:
+                    key += '_' + str(self._key_elem_index)
+                self.ret_elem_values[key] = getattr(self, self._ret_elem_names[0][1:])
+            else:
+                keys = self._ret_elem_names
+                if len(keys) == 1:
+                    self.ret_elem_values.append(getattr(self, self.ret_elem_values[0]))
+                else:
+                    values = dict()
+                    for key in keys:
+                        elem = self._col_map_parser.elem_col_map[key]
+                        elem_val = elem['elemListVal'] if 'elemListVal' in elem \
+                            else (elem['elemVal'] if 'elemVal' in elem else None)
+                        values[key] = getattr(self, key, elem_val)
+                    self.ret_elem_values.append(values)
+        # for completeness call also SihotXmlParser.end() and ColMapXmlParser.end()
+        return super(GuestInfoResponse, self).end(self._col_map_parser.end(tag))
 
 
 class RoomChange(SihotXmlParser):
@@ -1045,7 +1119,7 @@ class SihotXmlBuilder:
                 uprint('SihotXmlBuilder.__init__() db connect error:', err_msg)
             else:
                 self.acu_connected = connect_to_acu  # ==True
-        self._rows = []  # used by inheriting class for to store the rows to send to SiHOT.PMS
+        self._rows = []  # list of dicts, used by inheriting class for to store the rows to send to SiHOT.PMS
         self._current_row_i = 0
 
         self._xml = ''
@@ -1106,7 +1180,7 @@ class SihotXmlBuilder:
     def add_tag(self, tag, val=''):
         self._xml += self.new_tag(tag, val)
 
-    def prepare_map_xml(self, col_values, action=''):
+    def prepare_map_xml(self, col_values, action='', include_empty_values=True):
         inner_xml = ''
         for tag, col, hide_expr, val in self.sihot_elem_col:
             if hide_expr:
@@ -1128,7 +1202,7 @@ class SihotXmlBuilder:
             elif tag.startswith('/'):
                 self._indent -= 1
                 inner_xml += self.new_tag(tag[1:], opening=False)
-            else:
+            elif include_empty_values or (col and col in col_values) or val:
                 inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(col_values[col]
                                                                                 if col and col in col_values else val))
         return inner_xml
@@ -1253,7 +1327,7 @@ class ConfigDict(SihotXmlBuilder):
 
         err_msg = self.send_to_server(response_parser=ConfigDictResponse(self.ca))
 
-        return self.response.key_values if not err_msg else err_msg
+        return err_msg or self.response.key_values
 
 
 class CatRooms(SihotXmlBuilder):
@@ -1269,46 +1343,100 @@ class CatRooms(SihotXmlBuilder):
 
         err_msg = self.send_to_server(response_parser=CatRoomResponse(self.ca))
 
-        return self.response.cat_rooms if not err_msg else err_msg
+        return err_msg or self.response.cat_rooms
 
 
-class GuestInfo(SihotXmlBuilder):
+class GuestSearch(SihotXmlBuilder):
     def __init__(self, ca):
-        super(GuestInfo, self).__init__(ca, col_map=MAP_GUEST_INFO, use_kernel_interface=True)
+        super(GuestSearch, self).__init__(ca, col_map=MAP_KERNEL_CLIENT, use_kernel_interface=True)
 
-    def get_objid_by_matchcode(self, matchcode):
-        return self.get_elem_from_guest('matchcode', matchcode, 'objid')
-
-    def get_guest_no_by_matchcode(self, matchcode):
-        return self.get_elem_from_guest('matchcode', matchcode, 'guest_nr')
-
-    def get_objid_by_guest_no(self, guest_no):
-        return self.get_elem_from_guest('guest_nr', guest_no, 'objid')
-
-    def get_elem_from_guest(self, key_elem_name, key_elem_value, ret_elem_name):
-        self.beg_xml(operation_code='GUEST-SEARCH')
-        col_values = {'CD_CODE' if key_elem_name == 'matchcode' else 'SH_GUEST_NO': key_elem_value}
-        self.add_tag('GUEST-SEARCH-REQUEST', self.prepare_map_xml(col_values))
+    def get_guest(self, obj_id):
+        """ return dict with guest data OR None in case of error
+        """
+        self.beg_xml(operation_code='GUEST-GET')
+        self.add_tag('GUEST-PROFILE',
+                     self.prepare_map_xml({'CD_SIHOT_OBJID': obj_id}, action=ACTION_SEARCH, include_empty_values=False))
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=GuestInfoResponse(self.ca, key_elem_name, ret_elem_name))
+        rp = GuestInfoResponse(self.ca)
+        err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
-            self.ca.dprint("GuestInfo.get_elem_from_guest() col_values|result: ", col_values, self.xml,
+            ret = self.response.ret_elem_values[0]
+            self.ca.dprint("GuestSearch.guest_get() obj_id|xml|result: ", obj_id, self.xml, ret,
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            rl = self.response.ret_elem_values
-            if key_elem_value in rl:
-                ret = rl[key_elem_value]
-            elif key_elem_name == 'matchcode' and key_elem_value + 'P2' in rl:
-                ret = 'Only found OBJID of 2nd person matchcode: ' + rl[key_elem_value + 'P2']
-            elif key_elem_name == 'matchcode' and key_elem_value[:-2] in rl:
-                ret = 'Only found OBJID of 1st person matchcode: ' + rl[key_elem_value[:-2]]
-            else:
-                ret = key_elem_name + ' not found!!!'
-            if len(rl) > 1:
-                ret += '\n... Found more than one guest - full Response (all returned values):\n... ' + str(rl)
         else:
-            uprint("GuestInfo.get_elem_from_guest() col_values|error: ", col_values, err_msg)
+            uprint("GuestSearch.guest_get() obj_id|error: ", obj_id, err_msg)
             ret = None
+        return ret
+
+    def get_guest_no_by_matchcode(self, matchcode, exact_matchcode=True):
+        col_values = {'CD_CODE': matchcode,
+                      'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
+                      }
+        return self.search_guests(col_values, ['guest_nr'])
+
+    def get_objid_by_guest_no(self, guest_no):
+        col_values = {'SH_GUEST_NO': guest_no,
+                      'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
+                      }
+        return self.search_guests(col_values, ['objid'])
+
+    def get_objid_by_guest_names(self, surname, forename):
+        col_values = {'CD_SNAM1': surname,
+                      'CD_FNAM1': forename,
+                      'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
+                      }
+        return self.search_guests(col_values, ['objid'])
+
+    def get_objid_by_email(self, email):
+        col_values = {'CD_EMAIL': email,
+                      'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
+                      }
+        return self.search_guests(col_values, ['objid'])
+
+    def get_objid_by_matchcode(self, matchcode, exact_matchcode=True):
+        col_values = {'CD_CODE': matchcode,
+                      'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
+                      }
+        ret = self.search_guests(col_values, [':objid'], key_elem_name='matchcode')
+        return self._check_and_get_objid_of_matchcode_search(ret, matchcode, exact_matchcode)
+
+    def search_guests(self, col_values, ret_elem_names, key_elem_name=None):
+        """ return dict with search element/attribute value as the dict key if len(ret_elem_names)==1 and if
+            ret_elem_names[0][0]==':' (in this case key_elem_name has to provide the search element/attribute name)
+            OR return list of values if len(ret_elem_names) == 1
+            OR return list of dict with ret_elem_names keys if len(ret_elem_names) >= 2
+            OR return None in case of error.
+        """
+        self.beg_xml(operation_code='GUEST-SEARCH')
+        self.add_tag('GUEST-SEARCH-REQUEST',
+                     self.prepare_map_xml(col_values, action=ACTION_SEARCH, include_empty_values=False))
+        self.end_xml()
+
+        rp = GuestInfoResponse(self.ca, ret_elem_names, key_elem_name=key_elem_name)
+        err_msg = self.send_to_server(response_parser=rp)
+        if not err_msg and self.response:
+            ret = self.response.ret_elem_values
+            self.ca.dprint("GuestSearch.search_guests() col_values|xml|result: ", col_values, self.xml, ret,
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        else:
+            uprint("GuestSearch.search_guests() col_values|error: ", col_values, err_msg)
+            ret = None
+        return ret
+
+    @staticmethod
+    def _check_and_get_objid_of_matchcode_search(ret_elem_values, key_elem_value, exact_matchcode):
+        s = '\n   ...'
+        if key_elem_value in ret_elem_values:
+            ret = ret_elem_values[key_elem_value]
+        elif key_elem_value + 'P2' in ret_elem_values:
+            ret = ret_elem_values[key_elem_value + 'P2'] + s + 'Only found OBJID of 2nd person matchcode: '
+        elif key_elem_value[-2:] == 'P2' and key_elem_value[:-2] in ret_elem_values:
+            ret = ret_elem_values[key_elem_value[:-2]] + s + 'Only found OBJID of 1st person matchcode: '
+        else:
+            ret = s + 'OBJID of matchcode {} not found!!!'.format(key_elem_value)
+        if len(ret_elem_values) > 1 and not exact_matchcode:
+            ret += s + 'Found more than one guest - full Response (all returned values):' + s + str(ret_elem_values)
         return ret
 
 
@@ -1462,7 +1590,7 @@ class ResSearch(SihotXmlBuilder):
             4  == The given search data is not valid
             5  == An (internal) error occurred when searching for reservations.
         """
-        return self.response.res_list if not err_msg else err_msg
+        return err_msg or self.response.res_list
 
 
 class ResToSihot(SihotXmlBuilder):

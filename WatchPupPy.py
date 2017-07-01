@@ -12,7 +12,7 @@ from configparser import ConfigParser
 from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB, DEF_USER, DEF_DSN
 from ae_notification import Notification
-from sxmlif import PostMessage, GuestInfo, SXML_DEF_ENCODING
+from sxmlif import PostMessage, GuestSearch, SXML_DEF_ENCODING
 
 __version__ = '0.5'
 
@@ -214,7 +214,7 @@ while True:
             tc_ag_mc = 'TCAG'
 
         if check_sihot_kernel:
-            gi = GuestInfo(cae)
+            gi = GuestSearch(cae)
             tc_sc_obj_id2 = gi.get_objid_by_matchcode(tc_sc_mc)
             if tc_sc_obj_id != tc_sc_obj_id2:
                 err_msg = 'Sihot kernel check found Thomas Cook Northern matchcode discrepancy: expected={} got={}.' \

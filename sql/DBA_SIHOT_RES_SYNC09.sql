@@ -6,7 +6,7 @@
 --- VERSION 04: speed-up and refactored RUL column initialization and added RO_SIHOT_RES_GROUP/RO_SIHOT_SP_GROUP for to store SIHOT CHANNEL/NN mappings.
 --- VERSION 05: moved update of default values to the end of the script and changed STIC default to more detectable values.
 --- VERSION 06: after room category and project structure refacturing and revising initiated by me, Gary and supported by the help of KP.
---- VERSION 07: changed to map to new TK/tk contracts - created by Fabián (see email from 9-12-2016).
+--- VERSION 07: changed to map to new TK/tk contracts - created by Fabiï¿½n (see email from 9-12-2016).
 --- VERSION 08: performance tuning of the UPDATE statement for to populate the new T_RUL columns.
 --- VERSION 09: more performance tuning and added new procedure P_SIHOT_ALLOC.
  
@@ -29,7 +29,7 @@ exec P_PROC_SET('DBA_SIHOT_RES_SYNC', '2016_V09', 'test');
 
 prompt DATA LOOKUP CHANGES - needed for to populate new columns in following DDL CHANGES section - more DATA CHANGES at the end of this script
 
--- changed according the new setup done by Fabián - see his email from 09/12/2016 11:22
+-- changed according the new setup done by Fabiï¿½n - see his email from 09/12/2016 11:22
 
 prompt add new lookup class for to transform unit size to sihot cat (only ANY fallback need to specify transforms for all Acumen unit sizes: HOTEL/STUDIO..3 BED)
 
@@ -399,7 +399,7 @@ create table LOBBY.SIHOT_RES_SYNC_LOG
     SRSL_STATUS     VARCHAR2(12 BYTE)      NOT NULL,
     SRSL_DATE       DATE default sysdate   NOT NULL,
     SRSL_LOGREF     NUMBER(10)             NOT NULL,    -- NOT USED FOR UNSYNCED VIEWS - only informativ for debugging
-    SRSL_MESSAGE    VARCHAR2(1998 BYTE)
+    SRSL_MESSAGE    VARCHAR2(1999 BYTE)                 -- 27-06-2017 13:38 changed size from 1998 to 1999
   )
   TABLESPACE LOBBY
   PCTUSED    0

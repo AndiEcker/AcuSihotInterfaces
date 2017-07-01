@@ -313,6 +313,29 @@ class TestGuestInfo:
         ret = guest_info.get_objid_by_matchcode(create_test_guest.matchcode)
         assert ret == create_test_guest.objid
 
+    def test_get_guest_with_test_client(self, guest_info, create_test_guest):
+        ret = guest_info.get_guest(create_test_guest.objid)
+        assert guest_info.response.objid == create_test_guest.objid     # OBJID passed only to response (ret is empty)
+        # also MATCHCODE element is in response (and empty in ret): assert ret['MATCHCODE']==create_test_guest.matchcode
+        assert guest_info.response.matchcode == create_test_guest.matchcode
+        assert guest_info.response.objid == create_test_guest.objid
+        assert ret['NAME-1'] == create_test_guest.surname
+        assert ret['NAME-2'] == create_test_guest.forename
+        assert ret['T-GUEST'] == create_test_guest.guest_type
+
+    def test_get_guest_with_10_ext_refs(self, guest_info):
+        objid = guest_info.get_objid_by_matchcode('E396693')
+        assert objid
+        ret = guest_info.get_guest(objid)
+        assert ret['MATCH-ADM'] == '4806-00208'
+        assert 'RCI' in ret['TYPE']
+        assert 'RCIP' in ret['TYPE']
+        assert 'RCI=1442-11521' in ret['COMMENT']
+        assert '5445-12771' in ret['ID']
+        assert '5-207931' in ret['ID']
+        # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
+        # .. so this one fails: assert '1442-11521' in ret['ID']
+
 
 class TestClientFromAcuToSihot:
     def test_couple_with_different_surname(self, acu_guest):
@@ -470,13 +493,14 @@ class TestClientFromAcuToSihot:
             if acu_guest.row_count:
                 row = acu_guest.cols
                 assert row['CD_CODE'] == 'E396693'
-                # RCI=1442-11521,RCI=1442-55556,RCI=2429-09033,RCI=2429-09777,RCI=2429-12042,RCI=2429-13656,RCI=2429-55556,
-                # .. RCI=2972-00047,RCI=5445-12771,RCIP=5-207931
+                # RCI=1442-11521,RCI=1442-55556,RCI=2429-09033,RCI=2429-09777,RCI=2429-12042,RCI=2429-13656,
+                # .. RCI=2429-55556,RCI=2972-00047,RCI=5445-12771,RCIP=5-207931
                 assert 'RCI=1442-11521' in row['EXT_REFS']
                 assert 'RCI=2972-00047' in row['EXT_REFS']
                 assert 'RCIP=5-207931' in row['EXT_REFS']
                 assert len(row['EXT_REFS'].split(',')) == 10
                 error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+                # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
                 assert not error_msg
 
     def test_client_with_objid_but_deleted_in_sihot(self, acu_guest):  # E610488, ObjId=294
@@ -658,7 +682,7 @@ class TestResFromAcuToSihot:
             for row in rows:
                 assert row['RUL_SIHOT_HOTEL'] in (1, 4)
                 error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
-                assert not error_msg
+                assert 'has Check-Ins' in error_msg
 
     def test_external_rental2(self, acu_res):
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'E588450'")
@@ -683,7 +707,7 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             rows = acu_res.rows
-            assert len(rows) == 14
+            assert len(rows) >= 15
             error_msg = acu_res.send_rows_to_sihot()
             assert not error_msg
 

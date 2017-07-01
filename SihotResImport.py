@@ -791,7 +791,7 @@ def run_import(acu_user, acu_password):
     RCI_OWNER_SURNAME = 31
     RCI_COL_COUNT = 38
 
-    def rci_imp_line_check(curr_line, is_points, file_name, line_num):
+    def rci_imp_line_check(curr_line, file_name, line_num):
         err_msg = ''
         curr_cols = curr_line.split('\t')
         if curr_line[-1] != '\n':
@@ -814,7 +814,7 @@ def run_import(acu_user, acu_password):
                 curr_cols.append('Unused')
             curr_cols[RC_FILE_NAME] = file_name
             curr_cols[RC_LINE_NUM] = line_num
-            curr_cols[RC_POINTS] = is_points
+            curr_cols[RC_POINTS] = False
             cid = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
             curr_cols[RC_OCC_CLIENTS_IDX] = rc_get_clients_idx(cid)
             cid = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
@@ -983,7 +983,7 @@ def run_import(acu_user, acu_password):
     RC_OWN_CLIENTS_IDX = RC_FILE_NAME + 4   # not used for points import (only one RCI ID given in import file)
     RC_COL_COUNT = RC_FILE_NAME + 5
 
-    def rcip_imp_line_check(curr_line, is_points, file_name, line_num):
+    def rcip_imp_line_check(curr_line, file_name, line_num):
         curr_cols = curr_line.split('\t')
         if curr_line[-1] != '\n':
             err_msg = 'rcip_line_to_res_row(): incomplete line (missing end of line)'
@@ -999,7 +999,7 @@ def run_import(acu_user, acu_password):
                 curr_cols.append('Unused')
             curr_cols[RC_FILE_NAME] = file_name
             curr_cols[RC_LINE_NUM] = line_num
-            curr_cols[RC_POINTS] = is_points
+            curr_cols[RC_POINTS] = True
             cid = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
             curr_cols[RC_OCC_CLIENTS_IDX] = rc_get_clients_idx(cid)
             curr_cols[RC_OWN_CLIENTS_IDX] = -1  # does not exists for points but needed for generic client send check
@@ -1245,7 +1245,7 @@ def run_import(acu_user, acu_password):
                         break
                 else:
                     func = rcip_imp_line_check if points_import else rci_imp_line_check
-                    imp_cols, error_msg = func(ln, points_import, fn, idx)
+                    imp_cols, error_msg = func(ln, fn, idx)
                     if not imp_cols:
                         if debug_level >= DEBUG_LEVEL_VERBOSE:
                             log_import(error_msg or 'Import line skipped', fn, idx)

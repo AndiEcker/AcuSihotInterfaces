@@ -5,7 +5,7 @@ import pytest
 from configparser import ConfigParser
 from ae_db import OraDB
 from acu_sihot_config import Data
-from sxmlif import PostMessage, ConfigDict, CatRooms, GuestInfo, ClientToSihot, ResToSihot
+from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot
 
 
 @pytest.fixture(scope="module")
@@ -44,7 +44,7 @@ def cat_rooms(console_app_env):
 
 @pytest.fixture()
 def guest_info(console_app_env):
-    return GuestInfo(console_app_env)
+    return GuestSearch(console_app_env)
 
 
 @pytest.fixture()
@@ -61,12 +61,13 @@ def acu_res(console_app_env):
 def create_test_guest(console_app_env):
     # prevent duplicate creation of test client
     mc = 'T800001'
-    gi = GuestInfo(console_app_env)
-    objid = gi.get_objid_by_matchcode(mc)
-    if objid:
-        guest = gi
-        guest.matchcode = mc
-        guest.objid = objid
+    sn = 'Tester800001'
+    fn = 'Pepe'
+    gt = '1'    # Guest (not Company)
+    gs = GuestSearch(console_app_env)
+    objid = gs.get_objid_by_matchcode(mc)
+    if objid and '\n' not in objid:
+        guest = gs
     else:
         guest = ClientToSihot(console_app_env, connect_to_acu=False)
         col_values = {}
@@ -74,16 +75,19 @@ def create_test_guest(console_app_env):
             if col == 'CD_CODE':
                 col_values[col] = mc
             elif col == 'CD_SNAM1':
-                col_values[col] = 'Tester800001'
+                col_values[col] = sn
             elif col == 'CD_FNAM1':
-                col_values[col] = 'Pepe'
+                col_values[col] = fn
             elif col == 'SIHOT_GUESTTYPE1':
-                col_values[col] = '1A'
+                col_values[col] = gt
             else:
                 col_values[col] = None
         guest.send_client_to_sihot(col_values)
-        guest.matchcode = col_values['CD_CODE']     # added for easier testing
-        guest.objid = guest.response.objid
+    guest.matchcode = mc     # added guest attributes for easier testing
+    guest.objid = guest.response.objid
+    guest.surname = sn
+    guest.forename = fn
+    guest.guest_type = gt
 
     return guest
 
@@ -119,12 +123,14 @@ class ConsoleApp:
                              warningFragments='')
 
     def get_config(self, name, value=None):
-        uprint('ConsoleAppMock.get_config', name)
-        return self._options[name] if name in self._options else value
+        ret = self._options[name] if name in self._options else value
+        uprint('ConsoleAppMock.get_config', name, '=', ret)
+        return ret
 
     def get_option(self, name, value=None):
-        uprint('ConsoleAppMock.get_option', name)
-        return self._options[name] if name in self._options else value
+        ret = self._options[name] if name in self._options else value
+        uprint('ConsoleAppMock.get_option', name, '=', ret)
+        return ret
 
     def set_option(self, name, val, cfg_fnam=None, save_to_config=True):
         uprint('ConsoleAppMock.set_option', name, val, cfg_fnam, save_to_config)
