@@ -120,7 +120,11 @@ class ConsoleApp:
                              acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
                              acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
                              debugLevel=2,  # 2==DEBUG_LEVEL_VERBOSE
-                             warningFragments='')
+                             warningFragments='',
+                             sfSandboxUser=cfg.get('Settings', 'sfSandboxUser'),
+                             sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
+                             sfToken=cfg.get('Settings', 'sfToken'),
+                             )
 
     def get_config(self, name, value=None):
         ret = self._options[name] if name in self._options else value

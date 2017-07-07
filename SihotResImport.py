@@ -24,6 +24,7 @@ from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot
+from sfif import SfInterface
 
 __version__ = '0.7'
 
@@ -56,6 +57,8 @@ cae.add_option('mapRes', "Reservation mapping of xml to db items", MAP_RES_DEF, 
 
 cae.add_option('breakOnError', "Abort importation if an error occurs (0=No, 1=Yes)", 0, 'b')
 
+debug_level = cae.get_option('debugLevel')
+
 uprint('Import path/file-mask for Thomas Cook/RCI:', cae.get_option('tciPath'), cae.get_option('rciPath'))
 notification = None
 if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
@@ -63,7 +66,7 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
                                 mail_from=cae.get_option('smtpFrom'),
                                 mail_to=cae.get_option('smtpTo'),
                                 used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
-                                debug_level=cae.get_option('debugLevel'))
+                                debug_level=debug_level)
     uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
     if cae.get_option('warningsMailToAddr'):
         uprint('Warnings SMTP receiver address:', cae.get_option('warningsMailToAddr'))
@@ -111,7 +114,6 @@ def run_import(acu_user, acu_password):
     global tci_files, bkc_files, rci_files
 
     NO_FILE_PREFIX_CHAR = '@'
-
     error_log = []
     import_log = []
 
@@ -131,10 +133,19 @@ def run_import(acu_user, acu_password):
         if ui_app:
             ui_app.root.ids.error_log.text += msg
 
+    # open Acumen data connection
     conf_data = Data(acu_user=acu_user, acu_password=acu_password, acu_dsn=cae.get_option('acuDSN'))
     if conf_data.error_message:
-        log_error(conf_data.error_message, NO_FILE_PREFIX_CHAR + 'UserLogOn', importance=4)
+        log_error(conf_data.error_message, NO_FILE_PREFIX_CHAR + 'AcumenUserLogOn', importance=4)
         return conf_data.error_message
+
+    # open and check Salesforce connection
+    sb = debug_level >= DEBUG_LEVEL_VERBOSE
+    sales_force = SfInterface(username=cae.get_config('sfSandboxUser') if sb else cae.get_config('sfUser'),
+                              password=cae.get_config('sfPassword'), token=cae.get_config('sfToken'), sandbox=sb)
+    if sales_force.error_msg:
+        log_error(sales_force.error_msg, NO_FILE_PREFIX_CHAR + 'SalesforceUserLogOn', importance=4)
+        return sales_force.error_msg
 
     '''# #########################################################
        #  prepare data cache and logging
@@ -583,6 +594,7 @@ def run_import(acu_user, acu_password):
     RCD_OBJ_ID = 1
     RCD_EXT_REFS = 2
     RCD_IS_OWNER = 3
+    RCD_SF_ID = 4
     clients_data = []
 
     def rc_fetch_clients_data(acu_data):
@@ -612,12 +624,17 @@ def run_import(acu_user, acu_password):
                                 "' || replace(replace(EXT_REFS, 'RCIP=', ''), 'RCI=', '')) as EXT_REFS",
                                 "case when instr(SIHOT_GUEST_TYPE, 'O') > 0 or instr(SIHOT_GUEST_TYPE, 'I') > 0"
                                 " or instr(SIHOT_GUEST_TYPE, 'K') > 0 then 1 else 0 end as IS_OWNER",
+                                "SIHOT_SF_ID",
                                 ],
                                # found also SPX/TRC prefixes for RCI refs/ids in EXT_REFS/T_CR
-                               "CD_SIHOT_OBJID is not NULL or CD_RCI_REF is not NULL or instr(EXT_REFS, 'RCI') > 0")
+                               "CD_SIHOT_OBJID is not NULL or CD_RCI_REF is not NULL or instr(EXT_REFS, 'RCI') > 0"
+                               " or instr(EXT_REFS, 'SF=') > 0 or SIHOT_SF_ID is not NULL")
+
+        # fetch from Salesforce all clients with main/external RCI Ids
+
 
         # check for duplicate and blocked RCI Ids in verbose debug mode
-        if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
+        if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import('Checking clients data for duplicates and resort IDs',
                        NO_FILE_PREFIX_CHAR + 'CheckClientsData', importance=3)
             rc_check_clients_data()
@@ -654,12 +671,13 @@ def run_import(acu_user, acu_password):
                         found_ids[rci_id] = [c_rec]
                     elif [_ for _ in found_ids[rci_id] if _[RCD_MATCH_CODE] != c_rec[RCD_MATCH_CODE]]:
                         found_ids[rci_id].append(c_rec)
-                    if rci_id in client_refs_add_exclude and c_rec[RCD_MATCH_CODE] not in resort_codes:
-                        log_import('Resort RCI ID {} found in client {}'.format(rci_id, c_rec[RCD_MATCH_CODE]),
-                                   NO_FILE_PREFIX_CHAR + 'CheckClientsDataResortId', importance=2)
-                    elif c_rec[RCD_MATCH_CODE] in resort_codes and rci_id not in client_refs_add_exclude:
-                        log_import('Resort {} is missing RCI ID {}'.format(c_rec[RCD_MATCH_CODE], rci_id),
-                                   NO_FILE_PREFIX_CHAR + 'CheckClientsDataResortId', importance=2)
+                    if c_rec[RCD_MATCH_CODE]:
+                        if rci_id in client_refs_add_exclude and c_rec[RCD_MATCH_CODE] not in resort_codes:
+                            log_import('Resort RCI ID {} found in client {}'.format(rci_id, c_rec[RCD_MATCH_CODE]),
+                                       NO_FILE_PREFIX_CHAR + 'CheckClientsDataResortId')
+                        elif c_rec[RCD_MATCH_CODE] in resort_codes and rci_id not in client_refs_add_exclude:
+                            log_import('Resort {} is missing RCI ID {}'.format(c_rec[RCD_MATCH_CODE], rci_id),
+                                       NO_FILE_PREFIX_CHAR + 'CheckClientsDataResortId')
         # prepare found duplicate ids, prevent duplicate printouts and re-order for to separate RCI refs from others
         dup_ids = []
         for ref, recs in found_ids.items():
@@ -668,9 +686,9 @@ def run_import(acu_user, acu_password):
                                .format(ref.split('=')[0] if '=' in ref else 'RCI',
                                        repr(ref), ';'.join([_[RCD_MATCH_CODE] for _ in recs])))
         for dup in sorted(dup_ids):
-            log_import(dup, NO_FILE_PREFIX_CHAR + 'CheckClientsDataExtRefDuplicates', importance=2)
+            log_import(dup, NO_FILE_PREFIX_CHAR + 'CheckClientsDataExtRefDuplicates')
 
-    def rc_get_clients_idx(imp_rci_ref):
+    def rc_get_clients_idx(imp_rci_ref, file_name, line_num):
         """ determine list index in cached clients_data """
         nonlocal clients_data, clients_changed
         # check first if client exists
@@ -679,7 +697,13 @@ def run_import(acu_user, acu_password):
             if ext_refs and imp_rci_ref in ext_refs.split(CLIENT_REF_SEP):
                 break
         else:
-            client = (RCI_MATCH_AND_BOOK_CODE_PREFIX + imp_rci_ref, None, imp_rci_ref, 0)
+            sf_contact_id, dup_contacts = sales_force.contact_by_rci_id(imp_rci_ref)
+            if sales_force.error_msg:
+                log_error("rc_get_clients_idx() error " + sales_force.error_msg, file_name, line_num, importance=3)
+            if len(dup_contacts) > 0:
+                log_error("Found duplicate Salesforce client(s) with main or external RCI ID {}. Used client {}, dup={}"
+                          .format(imp_rci_ref, sf_contact_id, dup_contacts), file_name, line_num)
+            client = (RCI_MATCH_AND_BOOK_CODE_PREFIX + imp_rci_ref, None, imp_rci_ref, 0, sf_contact_id)
             clients_data.append(client)
             list_idx = len(clients_data) - 1
             clients_changed = True
@@ -690,7 +714,8 @@ def run_import(acu_user, acu_password):
         nonlocal clients_data, clients_changed
         c_rec = clients_data[cl_idx]
         if not c_rec[RCD_OBJ_ID] or c_rec[RCD_OBJ_ID] != client_obj_id:
-            clients_data[cl_idx] = (c_rec[RCD_MATCH_CODE], client_obj_id, c_rec[RCD_EXT_REFS], c_rec[RCD_IS_OWNER])
+            clients_data[cl_idx] = (c_rec[RCD_MATCH_CODE], client_obj_id, c_rec[RCD_EXT_REFS], c_rec[RCD_IS_OWNER],
+                                    c_rec[RCD_SF_ID])
             clients_changed = True
 
     def rc_complete_client_row_with_ext_refs(c_row, ext_refs):
@@ -816,13 +841,13 @@ def run_import(acu_user, acu_password):
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = False
             cid = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
-            curr_cols[RC_OCC_CLIENTS_IDX] = rc_get_clients_idx(cid)
+            curr_cols[RC_OCC_CLIENTS_IDX] = rc_get_clients_idx(cid, file_name, line_num)
             cid = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
             # sometimes resort is the "owner", e.g. 2429-55555/2429-99928 for HMC - in Sihot we are not hiding resort
             # if cid in client_refs_add_exclude:
             #     curr_cols[RC_OWN_CLIENTS_IDX] = -1
             # else:
-            curr_cols[RC_OWN_CLIENTS_IDX] = rc_get_clients_idx(cid)
+            curr_cols[RC_OWN_CLIENTS_IDX] = rc_get_clients_idx(cid, file_name, line_num)
 
         return curr_cols, err_msg
 
@@ -924,6 +949,7 @@ def run_import(acu_user, acu_password):
         row['SH_PRES_SEQ1'] = 0
         row['SH_ROOM_SEQ1'] = 0
         row['RU_ADULTS'] = 1
+        row['RU_CHILDREN'] = 0
 
         mkt_seg, mkt_grp = rc_mkt_seg_grp(curr_cols, is_guest)
         row['SIHOT_MKT_SEG'] = row['RUL_SIHOT_RATE'] = mkt_seg
@@ -1001,7 +1027,7 @@ def run_import(acu_user, acu_password):
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = True
             cid = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
-            curr_cols[RC_OCC_CLIENTS_IDX] = rc_get_clients_idx(cid)
+            curr_cols[RC_OCC_CLIENTS_IDX] = rc_get_clients_idx(cid, file_name, line_num)
             curr_cols[RC_OWN_CLIENTS_IDX] = -1  # does not exists for points but needed for generic client send check
         return curr_cols, err_msg
 
@@ -1074,6 +1100,8 @@ def run_import(acu_user, acu_password):
         else:
             row['SH_ADULT1_NAME'] = curr_cols[RCIP_CLIENT_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCIP_CLIENT_FORENAME]
+        row['RU_ADULTS'] = 1
+        row['RU_CHILDREN'] = 0
 
         mkt_seg, mkt_grp = rc_mkt_seg_grp(curr_cols, is_guest)
         row['SIHOT_MKT_SEG'] = row['RUL_SIHOT_RATE'] = mkt_seg
@@ -1097,7 +1125,6 @@ def run_import(acu_user, acu_password):
 
     res_rows = []
     error_msg = ''
-    debug_level = cae.get_option('debugLevel')
 
     if cae.get_option('tciPath') and tci_files:
         log_import('Load Thomas Cook files', NO_FILE_PREFIX_CHAR + 'TciImportStart', importance=4)
@@ -1112,7 +1139,7 @@ def run_import(acu_user, acu_password):
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("TCI files: " + str(tci_files), NO_FILE_PREFIX_CHAR + 'TciFileCollect', importance=1)
         for fn in tci_files:
-            log_import('Processing import file ' + fn, NO_FILE_PREFIX_CHAR + 'TciImportNextFile', importance=3)
+            log_import('Processing import file ' + fn, fn, importance=3)
             with open(fn, 'r') as fp:
                 lines = fp.readlines()
 
@@ -1139,7 +1166,7 @@ def run_import(acu_user, acu_password):
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("BKC files: " + str(bkc_files), NO_FILE_PREFIX_CHAR + 'BkcFileCollect', importance=1)
         for fn in bkc_files:
-            log_import('Processing import file ' + fn, NO_FILE_PREFIX_CHAR + 'BkcImportNextFile', importance=3)
+            log_import('Processing import file ' + fn, fn, importance=3)
             hotel_id = bkc_check_filename(fn)
             if not hotel_id:
                 log_error('Hotel ID prefix followed by underscore character is missing - skipping.', fn, importance=4)
@@ -1223,7 +1250,7 @@ def run_import(acu_user, acu_password):
         imp_rows = []
         points_import = False
         for fn in rci_files:
-            log_import('Processing import file ' + fn, NO_FILE_PREFIX_CHAR + 'RciImportNextFile', importance=3)
+            log_import('Processing import file ' + fn, fn, importance=3)
             with open(fn, 'r', encoding='utf-16') as fp:
                 lines = fp.readlines()
 
