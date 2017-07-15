@@ -4,7 +4,7 @@ import pytest
 
 from configparser import ConfigParser
 from ae_db import OraDB
-from acu_sihot_config import Data
+from acu_sf_sh_sys_data import AssSysData
 from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot
 
 
@@ -23,8 +23,7 @@ def db_connected(console_app_env):
 
 @pytest.fixture()
 def config_data(console_app_env):
-    return Data(console_app_env.get_option('acuUser'), console_app_env.get_option('acuPassword'),
-                console_app_env.get_option('acuDSN'))
+    return AssSysData(console_app_env)
 
 
 @pytest.fixture()
@@ -119,7 +118,7 @@ class ConsoleApp:
                              timeout=39.6, xmlEncoding='utf8',
                              acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
                              acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
-                             debugLevel=2,  # 2==DEBUG_LEVEL_VERBOSE
+                             debugLevel=cfg.getint('Settings', 'debugLevel', fallback=2),  # 2==DEBUG_LEVEL_VERBOSE
                              warningFragments='',
                              sfSandboxUser=cfg.get('Settings', 'sfSandboxUser'),
                              sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),

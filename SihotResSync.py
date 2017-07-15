@@ -9,7 +9,7 @@ import datetime
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE
 from ae_notification import Notification
 from ae_db import DEF_USER, DEF_DSN
-from acu_sihot_config import Data
+from acu_sf_sh_sys_data import AssSysData
 from sxmlif import ClientToSihot, ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
@@ -127,7 +127,7 @@ if not error_msg:
     try:
         uprint("####  Sync Req/ARU Changes  ####")
 
-        config_data = Data(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'))
+        config_data = AssSysData(cae)
         hotel_ids = config_data.get_hotel_ids()     # determine active/valid Sihot-hotels
         acumen_req = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
                                 map_res=cae.get_option('mapRes'),

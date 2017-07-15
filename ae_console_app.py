@@ -1,9 +1,9 @@
 import sys
 import os
 import datetime
-
 from builtins import chr  # works like unichr() also in Python 2
 import re
+import inspect
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentTypeError
@@ -54,6 +54,21 @@ def fix_encoding(text, try_counter=2, pex=None, context='ae_console_app.fix_enco
     if try_method:
         uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method)
     return text
+
+
+def full_stack_trace(ex):
+    ret = "Exception {}. Traceback:\n".format(repr(ex))
+
+    tb = sys.exc_info()[2]
+    for item in reversed(inspect.getouterframes(tb.tb_frame)[1:]):
+        ret += 'File "{1}", line {2}, in {3}\n'.format(*item)
+        for line in item[4]:
+            ret += ' '*4 + line.lstrip()
+    for item in inspect.getinnerframes(tb):
+        ret += 'file "{1}", line {2}, in {3}\n'.format(*item)
+        for line in item[4]:
+            ret += ' '*4 + line.lstrip()
+    return ret
 
 
 # save original stdout/stderr

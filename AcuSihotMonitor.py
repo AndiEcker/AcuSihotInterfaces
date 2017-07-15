@@ -24,7 +24,7 @@ from kivy.clock import Clock
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_calendar import DateChangeScreen
 from ae_db import OraDB, DEF_USER, DEF_DSN
-from acu_sihot_config import Data
+from acu_sf_sh_sys_data import AssSysData
 from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, \
     SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
 
@@ -398,7 +398,7 @@ class AcuSihotMonitorApp(App):
         self.logon_win = Factory.LogonWindow()
         usr = cae.get_option('acuUser')
         pwd = cae.get_option('acuPassword')
-        if usr and pwd and self.init_config_data(usr, pwd, cae.get_option('acuDSN')):
+        if usr and pwd and self.init_config_data(usr, pwd):
             self.root.add_widget(self.main_win)
             self.go_to_board(ROOT_BOARD_NAME)
         else:
@@ -406,9 +406,9 @@ class AcuSihotMonitorApp(App):
         return self.root
 
     @staticmethod
-    def init_config_data(user_name, user_pass, db_dsn):
+    def init_config_data(user_name, user_pass):
         global config_data
-        config_data = Data(user_name, user_pass, db_dsn)
+        config_data = AssSysData(cae, user_name, user_pass)
         if config_data.error_message:
             pu = Popup(title='Logon Error', content=Label(text=config_data.error_message), size_hint=(.9, .3))
             pu.open()
@@ -418,7 +418,7 @@ class AcuSihotMonitorApp(App):
     def logon(self):
         user_name = self.logon_win.ids.user_name.text
         user_pass = self.logon_win.ids.user_password.text
-        if self.init_config_data(user_name, user_pass, cae.get_option('acuDSN')):
+        if self.init_config_data(user_name, user_pass):
             cae.set_option('acuUser', user_name)
             cae.set_option('acuPassword', user_pass, save_to_config=False)
             self.root.clear_widgets()

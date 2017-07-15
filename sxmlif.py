@@ -1724,13 +1724,12 @@ class ResToSihot(SihotXmlBuilder):
 
         return err_msg
 
-    def send_row_to_sihot(self, crow=None, commit=False):
+    def send_row_to_sihot(self, crow=None, commit=False, ensure_client=True):
         if not crow:
             crow = self.cols
         action = crow['RUL_ACTION']
 
-        err_msg = self._ensure_clients_exist_and_updated(crow)
-
+        err_msg = self._ensure_clients_exist_and_updated(crow) if ensure_client else ""
         if not err_msg:
             err_msg = self._send_res_to_sihot(crow, action, commit)
             if self.acu_connected and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']) \

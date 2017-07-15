@@ -1,7 +1,15 @@
-from smtplib import SMTP  # , SMTP_SSL
+from smtplib import SMTP, SMTP_SSL, SMTP_PORT, SMTP_SSL_PORT
 from email.mime.text import MIMEText
 
 from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+
+
+DEF_ENC_PORT = SMTP_PORT        # ==25
+DEF_ENC_SERVICE_NAME = 'smtp'
+SSL_ENC_PORT = SMTP_SSL_PORT    # ==465
+SSL_ENC_SERVICE_NAME = 'smtps'
+TSL_ENC_PORT = 587
+TSL_ENC_SERVICE_NAME = 'smtpTLS'
 
 
 class Notification:
@@ -10,7 +18,11 @@ class Notification:
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint(' ###  New Notification({}, {}, {}, {}, {}).'
                    .format(smtp_server_uri, mail_from, mail_to, local_mail_host, used_system))
-        # split smtp server URI into host, user, pw and port
+        # split smtp server URI into service, host, user, pw and port (all apart host are optional)
+        if '://' in smtp_server_uri:
+            self._mail_service, smtp_server_uri = smtp_server_uri.split('://')
+        else:
+            self._mail_service = DEF_ENC_SERVICE_NAME
         if '@' in smtp_server_uri:    # [user[:password]@]mail_server_host[:mail_server_port]
             pos = smtp_server_uri.rindex('@')
             user_info = smtp_server_uri[:pos]
@@ -30,7 +42,9 @@ class Notification:
             self._mail_port = int(mail_host[pos + 1:])
         else:
             self._mail_host = mail_host
-            self._mail_port = 25    # use default SMTP port 25, or use port 587 for E-SMTP
+            # default SMTP port: 25/DEF_ENC_PORT, port 587/TSL_ENC_PORT for E-SMTP/TLS or 465/SSL_ENC_PORT for smtps/SSL
+            self._mail_port = SSL_ENC_PORT if self._mail_service == SSL_ENC_SERVICE_NAME \
+                else (TSL_ENC_PORT if self._mail_service == TSL_ENC_SERVICE_NAME else DEF_ENC_PORT)
         self._local_mail_host = local_mail_host or self._mail_host
 
         self._mail_from = mail_from
@@ -71,13 +85,16 @@ class Notification:
             message['From'] = self._mail_from
             message['To'] = ', '.join(mail_to)
             # Oracle P_SENDMAIL() is using smtp server as local host
-            # SMTP_SSL always throws "SSL:UNKNOWN_PROTOCOL" error: with (SMTP_SSL if self._mail_port == 587 else SMTP)\
-            with SMTP(self._mail_host, self._mail_port, local_hostname=self._local_mail_host) as s:
+            # SMTP_SSL could throw "SSL:UNKNOWN_PROTOCOL" error
+            conn_type = SMTP_SSL if self._mail_port == SSL_ENC_PORT or self._mail_service == SSL_ENC_SERVICE_NAME \
+                else SMTP
+            with conn_type(self._mail_host, self._mail_port, local_hostname=self._local_mail_host) as s:
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                     s.set_debuglevel(1)
                 s.ehlo()
-                # using s.starttls() is throwing error "STARTTLS extension not supported by server."
-                # s.starttls()
+                # using s.starttls() could throwing error "STARTTLS extension not supported by server."
+                if self._mail_service == TSL_ENC_SERVICE_NAME:
+                    s.starttls()
                 s.login(self._user_name, self._user_password)
                 unreached_recipients = s.send_message(message, self._mail_from, mail_to)
                 if unreached_recipients:
