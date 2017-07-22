@@ -34,25 +34,33 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
 ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
 
 
-def fix_encoding(text, try_counter=2, pex=None, context='ae_console_app.fix_encoding()'):
+def fix_encoding(text, encoding='ascii', try_counter=2, pex=None, context='ae_console_app.fix_encoding()'):
     """ used for to encode invalid char encodings in text that cannot be fixed with encoding="cp1252/utf-8/.. """
+    ori_text = text
     if try_counter == 0:
-        try_method = "replacing &#128 with €, &#1; with ¿1¿ and &#7; with ¿7¿"
+        try_method = "replacing &#128 with €, &#1; with ¿1¿ and &#7; with ¿7¿ for Sihot XML"
         text = text.replace('&#1;', '¿1¿').replace('&#7;', '¿7¿').replace('&#128;', '€')
     elif try_counter == 1:
-        try_method = "replacing &#NNN; with chr(NNN)"
+        try_method = "replacing &#NNN; with chr(NNN) for Sihot XML"
         text = re.compile("&#([0-9]+);").sub(lambda m: chr(int(m.group(0)[2:-1])), text)
     elif try_counter == 2:
+        try_method = "recode to backslash-replaced " + encoding + " encoding"
+        text = text.encode(encoding, errors='backslashreplace').decode(encoding)
+    elif try_counter == 3:
         try_method = "replacing invalid unicode code points with ¿_¿"
         text = ILLEGAL_XML_SUB.sub('¿_¿', text)
-    elif try_counter == 3:
+    elif try_counter == 4:
         try_method = "replacing &#NNN; and &#xNNN; with ¿?¿"
         text = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);").sub('¿?¿', text)
     else:
         try_method = ""
         text = None
     if try_method:
-        uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method)
+        try:        # first try to put ori_text in error message
+            uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
+                   ", ascii text='" + ori_text.encode('ascii', errors='backslashreplace').decode('ascii') + "'")
+        except UnicodeEncodeError:
+            uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method)
     return text
 
 
@@ -83,7 +91,7 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
         file = app_std_out  # cannot be specified as argument default because ConsoleApp._check_logging() may change it
     enc = file.encoding
 
-    # even with enc == 'UTF-8' I got the error:
+    # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
     # ..UnicodeEncodeError: 'charmap' codec can't encode character '\x9f' in position 191: character maps to <undefined>
     # if enc == 'UTF-8':
     #     print(*objects, sep=sep, end=end, file=file, flush=flush)
@@ -91,7 +99,7 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
     #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
     #           sep=sep, end=end, file=file, flush=flush)
     print_objects = objects
-    try_counter = 1     # skip try_counter == 0 because it is very specific to the Sihot XML interface
+    try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface
     while True:
         try:
             print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),
@@ -101,7 +109,7 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
             fixed_objects = []
             for obj in print_objects:
                 if isinstance(obj, str) or isinstance(obj, bytes):
-                    obj = fix_encoding(obj, try_counter)
+                    obj = fix_encoding(obj, enc, try_counter)
                     if not obj:
                         raise
                 fixed_objects.append(obj)
@@ -135,7 +143,12 @@ class _DuplicateSysOut:
 
     def write(self, message):
         if self.log_file:
-            self.log_file.write(message)
+            try:
+                self.log_file.write(message)
+            except UnicodeEncodeError:
+                # log file has different encoding than console, so simply replace with backslash
+                enc = self.log_file.encoding
+                self.log_file.write(fix_encoding(message, encoding=enc))
         self.sys_out.write(message)
 
     def __getattr__(self, attr):

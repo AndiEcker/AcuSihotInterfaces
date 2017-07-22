@@ -47,6 +47,11 @@ ERR_MESSAGE_PREFIX_CONTINUE = 'CONTINUE:'
 # elemName prefix for column mappings that are parsed (*Parsed classes) but are not included into XML (*Builder classes)
 PARSE_ONLY_TAG_PREFIX = '_'
 
+# ensure client modes (used by ResToSihot.send_row_to_sihot())
+ECM_ENSURE_WITH_ERRORS = 0
+ECM_TRY_AND_IGNORE_ERRORS = 1
+ECM_DO_NOT_SEND_CLIENT = 2
+
 
 #  HELPER METHODS  ###################################
 
@@ -128,10 +133,10 @@ MAP_KERNEL_CLIENT = \
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_MATCHCODE', 'colName': 'CD_CODE2'},
         {'elemName': 'GUEST-NR', 'colName': 'SH_GUEST_NO',
          'colValFromAcu': "''",
-         'elemHideIf': "'SH_GUEST_NO' not in c"},  # GUEST-SEARCH
+         'elemHideIf': "'SH_GUEST_NO' not in c or not c['SH_GUEST_NO']"},   # for GUEST-SEARCH only
         {'elemName': 'FLAGS', 'colName': 'SH_FLAGS',
          'colValFromAcu': "''",
-         'elemHideIf': "not 'SH_GUEST_NO' in c"},  # for GUEST-SEARCH only
+         'elemHideIf': "'SH_FLAGS' not in c or not c['SH_FLAGS']"},         # for GUEST-SEARCH only
         {'elemName': 'T-SALUTATION', 'colName': 'SIHOT_SALUTATION1'},  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-SALUTATION', 'colName': 'SIHOT_SALUTATION2'},
         {'elemName': 'T-TITLE', 'colName': 'SIHOT_TITLE1'},
@@ -737,7 +742,7 @@ class SihotXmlParser:  # XMLParser interface
         self._parser = None  # reset to XMLParser(target=self) in self.parse_xml() and close in self.close()
 
     def parse_xml(self, xml):
-        self.ca.dprint('SihotXmlParser.parse_xml():', xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.ca.dprint("SihotXmlParser.parse_xml():", xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         try_counter = 0
         xml_cleaned = xml
         while True:
@@ -747,49 +752,11 @@ class SihotXmlParser:  # XMLParser interface
                 self._xml = xml_cleaned
                 break
             except ParseError as pex:
-                xml_cleaned = fix_encoding(xml_cleaned, try_counter, pex,
-                                           "SihotXmlParser.parse_xml() ParseError exception")
+                xml_cleaned = fix_encoding(xml_cleaned, try_counter=try_counter, pex=pex,
+                                           context="SihotXmlParser.parse_xml() ParseError exception")
                 if not xml_cleaned:
                     raise
             try_counter += 1
-        '''        
-        try:
-            self._parser = XMLParser(target=self)
-            self._parser.feed(xml_cleaned)
-            self._xml = xml_cleaned
-        except ParseError as pex:
-            # invalid char encodings cannot be fixed with encoding="cp1252/utf-8/.."
-            uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
-                   "- first retrying clean-up of &#128; (==€), &#1; and &#7; in XML data.")
-            xml_cleaned = xml.replace('&#1;', '¿1¿').replace('&#7;', '¿7¿').replace('&#128;', '€')
-            try:
-                self._parser = XMLParser(target=self)
-                self._parser.feed(xml_cleaned)
-            except ParseError as pex:
-                uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
-                       "- second retry replacing of all &#NNN; in XML data.")
-                xml_cleaned = re.compile("&#([0-9]+);").sub(lambda m: chr(int(m.group(0)[2:-1])), xml_cleaned)
-                try:
-                    self._parser = XMLParser(target=self)
-                    self._parser.feed(xml_cleaned)
-                except ParseError as pex:
-                    uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
-                           "- third retrying clean-up of invalid unicode in XML data.")
-                    xml_cleaned = ILLEGAL_XML_SUB.sub('¿_¿', xml_cleaned)
-                    try:
-                        self._parser = XMLParser(target=self)
-                        self._parser.feed(xml_cleaned)
-                    except ParseError as pex:
-                        uprint("SihotXmlParser.parse_xml() ParseError exception: " + str(pex) +
-                               "- fourth retrying with clean-up of all &#NNN; and &#xNNN; in XML data.")
-                        xml_cleaned = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);").sub('¿?¿', xml_cleaned)
-                        self._parser = XMLParser(target=self)
-                        self._parser.feed(xml_cleaned)
-
-            self.ca.dprint('SihotXmlParser.parse_xml() successfully cleaned-up xml=', xml_cleaned,
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            self._xml = xml_cleaned
-        '''
 
     def get_xml(self):
         return self._xml
@@ -812,7 +779,7 @@ class SihotXmlParser:  # XMLParser interface
 
     def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
         if self._curr_attr and data.strip():
-            self.ca.dprint('SihotXmlParser.data(): ', self._curr_tag, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.ca.dprint("SihotXmlParser.data(): ", self._curr_tag, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             setattr(self, self._curr_attr, getattr(self, self._curr_attr) + data)
             return None
         return data
@@ -1036,7 +1003,7 @@ class GuestFromSihot(ColMapXmlParser):
     def end(self, tag):
         super(GuestFromSihot, self).end(tag)
         if tag == 'GUEST':  # using tag because self._curr_tag got reset by super method of end()
-            self.ca.dprint('GuestFromSihot.end(): guest data parsed', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.ca.dprint("GuestFromSihot.end(): guest data parsed", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.acu_col_values = dict()
             for c in self.elem_col_map.keys():
                 if 'elemVal' in self.elem_col_map[c] and self.elem_col_map[c]['elemVal']:
@@ -1067,7 +1034,7 @@ class ResFromSihot(ColMapXmlParser):
                         msg.append(self.elem_col_map[k]['elemName'] + '=' + str(self.elem_col_map[k]['elemListVal']))
                     elif 'elemVal' in self.elem_col_map[k]:
                         msg.append(self.elem_col_map[k]['elemName'] + '=' + self.elem_col_map[k]['elemVal'])
-                self.ca.dprint('ResFromSihot.end() reservation parsed:{}'.format(','.join(msg)))
+                self.ca.dprint("ResFromSihot.end() reservation parsed:{}".format(",".join(msg)))
             self.res_list.append(deepcopy(self.elem_col_map))
             # reset elemVal and elemListVal for next reservation record in the same response
             self.elem_col_map = deepcopy(self.blank_elem_col_map)
@@ -1116,7 +1083,7 @@ class SihotXmlBuilder:
                                 debug_level=ca.get_option('debugLevel'))
             err_msg = self.ora_db.connect()
             if err_msg:
-                uprint('SihotXmlBuilder.__init__() db connect error:', err_msg)
+                uprint("SihotXmlBuilder.__init__() db connect error:", err_msg)
             else:
                 self.acu_connected = connect_to_acu  # ==True
         self._rows = []  # list of dicts, used by inheriting class for to store the rows to send to SiHOT.PMS
@@ -1191,8 +1158,8 @@ class SihotXmlBuilder:
                 try:
                     hide = eval(hide_expr, {}, l)
                 except (Exception, KeyError, NameError, SyntaxError, SyntaxWarning, TypeError) as ex:
-                    uprint('SihotXmlBuilder.prepare_map_xml() ignoring expression evaluation error:', ex,
-                           'Expr=', hide_expr)
+                    uprint("SihotXmlBuilder.prepare_map_xml() ignoring expression evaluation error:", ex,
+                           "Expr=", hide_expr)
                     continue
                 if hide:
                     continue
@@ -1430,13 +1397,13 @@ class GuestSearch(SihotXmlBuilder):
         if key_elem_value in ret_elem_values:
             ret = ret_elem_values[key_elem_value]
         elif key_elem_value + 'P2' in ret_elem_values:
-            ret = ret_elem_values[key_elem_value + 'P2'] + s + 'Only found OBJID of 2nd person matchcode: '
+            ret = ret_elem_values[key_elem_value + 'P2'] + s + "Only found OBJID of 2nd person matchcode: "
         elif key_elem_value[-2:] == 'P2' and key_elem_value[:-2] in ret_elem_values:
-            ret = ret_elem_values[key_elem_value[:-2]] + s + 'Only found OBJID of 1st person matchcode: '
+            ret = ret_elem_values[key_elem_value[:-2]] + s + "Only found OBJID of 1st person matchcode: "
         else:
-            ret = s + 'OBJID of matchcode {} not found!!!'.format(key_elem_value)
+            ret = s + "OBJID of matchcode {} not found!!!".format(key_elem_value)
         if len(ret_elem_values) > 1 and not exact_matchcode:
-            ret += s + 'Found more than one guest - full Response (all returned values):' + s + str(ret_elem_values)
+            ret += s + "Found more than one guest - full Response (all returned values):" + s + str(ret_elem_values)
         return ret
 
 
@@ -1664,7 +1631,9 @@ class ResToSihot(SihotXmlBuilder):
             err_msg = ""
         return err_msg, warn_msg
 
-    def _ensure_clients_exist_and_updated(self, crow):
+    def _ensure_clients_exist_and_updated(self, crow, ensure_client_mode):
+        if ensure_client_mode == ECM_DO_NOT_SEND_CLIENT:
+            return ""
         err_msg = ''
         if 'CD_CODE' in crow and crow['CD_CODE']:
             acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
@@ -1695,7 +1664,7 @@ class ResToSihot(SihotXmlBuilder):
                     # get client/occupant objid directly from acu_client.response
                     crow['CD_SIHOT_OBJID'] = acu_client.response.objid
 
-        if not err_msg and 'OC_CODE' in crow and crow['OC_CODE']:
+        if not err_msg and 'OC_CODE' in crow and len(crow['OC_CODE']) == 7:  # exclude pseudo client like TCAG/TCRENT
             acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
                                        map_client=self.map_client, connect_to_acu=self.acu_connected)
             if self.acu_connected:
@@ -1712,7 +1681,8 @@ class ResToSihot(SihotXmlBuilder):
                     if not err_msg:
                         err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
                     if not err_msg and not acu_client.row_count:
-                        err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): IntErr/orderer: ' + crow['OC_CODE']
+                        err_msg = "ResToSihot._ensure_clients_exist_and_updated(): IntErr/orderer: " + crow['OC_CODE'] \
+                            + ", cols=" + repr(getattr(acu_client, 'cols', "unDef")) + ", synced=" + str(client_synced)
                     if not err_msg:
                         # transfer just created guest OBJIDs from guest to reservation record
                         crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
@@ -1722,14 +1692,14 @@ class ResToSihot(SihotXmlBuilder):
                     # get orderer objid directly from acu_client.response
                     crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.response.objid
 
-        return err_msg
+        return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
-    def send_row_to_sihot(self, crow=None, commit=False, ensure_client=True):
+    def send_row_to_sihot(self, crow=None, commit=False, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
         if not crow:
             crow = self.cols
         action = crow['RUL_ACTION']
 
-        err_msg = self._ensure_clients_exist_and_updated(crow) if ensure_client else ""
+        err_msg = self._ensure_clients_exist_and_updated(crow, ensure_client_mode)
         if not err_msg:
             err_msg = self._send_res_to_sihot(crow, action, commit)
             if self.acu_connected and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']) \
@@ -1750,41 +1720,42 @@ class ResToSihot(SihotXmlBuilder):
         return err_msg
 
     def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False, commit_last_row=True):
-        ret_msg = ''
+        ret_msg = ""
         for row in self.rows:
             err_msg = self.send_row_to_sihot(row, commit=commit_per_row)
             if err_msg:
                 if break_on_error:
                     return err_msg  # BREAK/RETURN first error message
-                ret_msg += '\n' + err_msg
+                ret_msg += "\n" + err_msg
         if commit_last_row:
             ret_msg += self.ora_db.commit()
         return ret_msg
 
     def res_id_label(self):
-        return 'GDS/VOUCHER/CD/RO' + ('/RU/RUL' if self.ca.get_option('debugLevel') else '')
+        return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.ca.get_option('debugLevel') else "")
 
     def res_id_values(self, crow):
         return str((crow['SIHOT_GDSNO'] if crow['SIHOT_GDSNO'] else crow['RUL_PRIMARY'])) + \
-               '/' + str(crow['RH_EXT_BOOK_REF']) + \
-               '/' + str(crow['CD_CODE']) + '/' + str(crow['RUL_SIHOT_RATE']) + \
-               ('/' + str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']) if self.ca.get_option('debugLevel')
-                else '')
+               "/" + str(crow['RH_EXT_BOOK_REF']) + \
+               "/" + str(crow['CD_CODE']) + "/" + str(crow['RUL_SIHOT_RATE']) + \
+               ("/" + str(crow['RUL_PRIMARY']) + "/" + str(crow['RUL_CODE'])
+                if self.ca.get_option('debugLevel') and 'RUL_PRIMARY' in crow and 'RUL_CODE' in crow
+                else "")
 
-    def res_id_desc(self, crow, error_msg, separator='\n\n'):
+    def res_id_desc(self, crow, error_msg, separator="\n\n"):
         indent = 8
-        return crow['RUL_ACTION'] + ' RESERVATION: ' \
-            + (crow['ARR_DATE'].strftime('%d-%m') if crow['ARR_DATE'] else 'unknown') + '..' \
-            + (crow['DEP_DATE'].strftime('%d-%m-%y') if crow['DEP_DATE'] else 'unknown') \
-            + ' in ' + (crow['RUL_SIHOT_ROOM'] + '=' if crow['RUL_SIHOT_ROOM'] else '') + crow['RUL_SIHOT_CAT'] \
-            + ('!' + crow['SH_PRICE_CAT'] if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
-               else '') \
-            + ' at hotel ' + str(crow['RUL_SIHOT_HOTEL']) \
-            + separator + ' ' * indent + self.res_id_label() + '==' + self.res_id_values(crow) \
-            + (separator + '\n'.join(wrap('ERROR: ' + _strip_error_message(error_msg), subsequent_indent=' ' * indent))
-               if error_msg else '') \
-            + (separator + '\n'.join(wrap('TRAIL: ' + crow['RUL_CHANGES'], subsequent_indent=' ' * indent))
-               if 'RUL_CHANGES' in crow and crow['RUL_CHANGES'] else '')
+        return crow['RUL_ACTION'] + " RESERVATION: " \
+            + (crow['ARR_DATE'].strftime('%d-%m') if crow['ARR_DATE'] else "unknown") + ".." \
+            + (crow['DEP_DATE'].strftime('%d-%m-%y') if crow['DEP_DATE'] else "unknown") \
+            + " in " + (crow['RUL_SIHOT_ROOM'] + "=" if crow['RUL_SIHOT_ROOM'] else "") + crow['RUL_SIHOT_CAT'] \
+            + ("!" + crow['SH_PRICE_CAT'] if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
+               else "") \
+            + " at hotel " + str(crow['RUL_SIHOT_HOTEL']) \
+            + separator + " " * indent + self.res_id_label() + "==" + self.res_id_values(crow) \
+            + (separator + "\n".join(wrap("ERROR: " + _strip_error_message(error_msg), subsequent_indent=" " * indent))
+               if error_msg else "") \
+            + (separator + "\n".join(wrap("TRAIL: " + crow['RUL_CHANGES'], subsequent_indent=" " * indent))
+               if 'RUL_CHANGES' in crow and crow['RUL_CHANGES'] else "")
 
     def get_warnings(self):
         return self._warning_msgs + "\n\nEnd_Of_Message\n" if self._warning_msgs else ""

@@ -6,6 +6,7 @@ from configparser import ConfigParser
 from ae_db import OraDB
 from acu_sf_sh_sys_data import AssSysData
 from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot
+from sfif import SfInterface
 
 
 @pytest.fixture(scope="module")
@@ -89,6 +90,16 @@ def create_test_guest(console_app_env):
     guest.guest_type = gt
 
     return guest
+
+
+@pytest.fixture(scope='module')
+def salesforce_connection(console_app_env):
+    return SfInterface(username=console_app_env.get_config('sfSandboxUser')
+                       if console_app_env.get_option('debugLevel') >= 2 else console_app_env.get_config('sfUser'),
+                       password=console_app_env.get_config('sfPassword'),
+                       token=console_app_env.get_config('sfToken'),
+                       sandbox=True,
+                       client_id='TestSfInterface')
 
 
 ############################################################################

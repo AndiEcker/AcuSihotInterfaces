@@ -6,14 +6,15 @@
 """
 import datetime
 
-from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import Notification
 from ae_db import DEF_USER, DEF_DSN
-from acu_sf_sh_sys_data import AssSysData
+
 from sxmlif import ClientToSihot, ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
-    ACTION_UPDATE, ACTION_DELETE
+    ACTION_UPDATE, ACTION_DELETE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
+from acu_sf_sh_sys_data import AssSysData
 
 __version__ = '0.4'
 
@@ -147,7 +148,7 @@ if not error_msg:
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             for crow in room_rows:
                 crow['RUL_SIHOT_ROOM'] = ''
-                error_msg = acumen_req.send_row_to_sihot(crow)
+                error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
                 if error_msg and notification:
                     error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
                                 + '\n\nWARNINGS=' + acumen_req.get_warnings()
@@ -168,7 +169,7 @@ if not error_msg:
                 crow['RUL_SIHOT_CAT'] = crow['RUL_SIHOT_LAST_CAT']
                 crow['RUL_ACTION'] = 'DELETE'
                 crow['SH_RES_TYPE'] = 'S'
-                error_msg = acumen_req.send_row_to_sihot(crow)
+                error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
                 if error_msg and notification:
                     error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
                                 + '\n\nWARNINGS=' + acumen_req.get_warnings()
@@ -191,7 +192,7 @@ if not error_msg:
                     continue        # skip HOTMOVE if new hotel is a non-Sihot-hotel
                 elif crow['RUL_SIHOT_LAST_HOTEL'] not in hotel_ids:
                     crow['RUL_ACTION'] = 'INSERT'
-                error_msg = acumen_req.send_row_to_sihot(crow)
+                error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS)
                 rid = acumen_req.res_id_values(crow)
                 progress.next(processed_id=rid, error_msg=error_msg)
                 if error_msg:
@@ -212,7 +213,7 @@ if not error_msg:
         send_notification('Synced Reservations', str(datetime.datetime.now()),
                           progress.get_end_message(error_msg=error_msg))
     except Exception as ex:
-        app_env_err += '\n\nSync Req/ARU Changes exception: ' + str(ex)
+        app_env_err += '\n\nSync Req/ARU Changes exception: ' + full_stack_trace(ex)
 
 
 # release dup exec lock

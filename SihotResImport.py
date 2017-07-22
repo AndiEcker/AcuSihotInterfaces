@@ -23,7 +23,7 @@ from acu_sf_sh_sys_data import AssSysData, EXT_REFS_SEP, RCI_MATCH_AND_BOOK_CODE
 from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
-    ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot
+    ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot, ECM_DO_NOT_SEND_CLIENT
 
 __version__ = '0.8'
 
@@ -58,7 +58,7 @@ cae.add_option('breakOnError', "Abort importation if an error occurs (0=No, 1=Ye
 
 debug_level = cae.get_option('debugLevel')
 
-uprint('Import path/file-mask for Thomas Cook/RCI:', cae.get_option('tciPath'), cae.get_option('rciPath'))
+uprint("Import path/file-mask for Thomas Cook/RCI:", cae.get_option('tciPath'), cae.get_option('rciPath'))
 notification = None
 if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
     notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
@@ -68,18 +68,20 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
                                 debug_level=debug_level)
     uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
     if cae.get_option('warningsMailToAddr'):
-        uprint('Warnings SMTP receiver address:', cae.get_option('warningsMailToAddr'))
+        uprint("Warnings SMTP receiver address:", cae.get_option('warningsMailToAddr'))
 
-uprint('Acumen DSN:', cae.get_option('acuDSN'))
-uprint('Server IP/WEB-port/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
+uprint("Acumen DSN:", cae.get_option('acuDSN'))
+uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('serverIP'), cae.get_option('serverPort'),
        cae.get_option('serverKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
-uprint('Use Kernel for clients:', 'Yes' if cae.get_option('useKernelForClient') else 'No (WEB)')
-uprint('Use Kernel for reservations:', 'Yes' if cae.get_option('useKernelForRes') else 'No (WEB)')
-uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
+uprint("TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+uprint("Use Kernel for clients:", "Yes" if cae.get_option('useKernelForClient') else "No (WEB)")
+uprint("Use Kernel for reservations:", "Yes" if cae.get_option('useKernelForRes') else "No (WEB)")
+uprint("Break on error:", "Yes" if cae.get_option('breakOnError') else "No")
+if cae.get_config('warningFragments'):
+    uprint('Warning Fragments:', cae.get_config('warningFragments'))
 
-# check if Acumen domain/user/pw is fully specified and show kivy UI for to enter them if not
-ui_app = None if cae.get_config('acuPassword') else 'STARTUP'
+# max. length of label text shown in UI/screen log
+MAX_SCREEN_LOG_LEN = cae.get_config('max_text_len', default_value=99999)
 
 # file collection - lists of files to be imported
 tci_files = []
@@ -103,8 +105,12 @@ def collect_files():
 '''
 
 
-def run_import(acu_user, acu_password):
+def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None):
     global tci_files, bkc_files, rci_files
+
+    if not got_cancelled:
+        def got_cancelled():
+            return False
 
     #  prepare logging env
     lf = cae.get_option('logFile')
@@ -120,18 +126,18 @@ def run_import(acu_user, acu_password):
         import_log.append(dict(message=msg, context=ctx, line=line + 1))
         msg = ' ' * (4 - importance) + '*' * importance + '  ' + msg
         uprint(msg)
-        if ui_app and importance > 2:
-            ui_app.root.ids.error_log.text += '\n' + msg
+        if amend_screen_log:
+            amend_screen_log(msg, True)
 
     def log_import(msg, ctx, line=-1, importance=2):
         seps = '\n' * (importance - 2)
         import_log.append(dict(message=seps + msg, context=ctx, line=line + 1))
         msg = seps + ' ' * (4 - importance) + '#' * importance + '  ' + msg
         uprint(msg)
-        if ui_app and importance > 2:
-            ui_app.root.ids.error_log.text += msg
+        if amend_screen_log:
+            amend_screen_log(msg)
 
-    log_import('Acumen Usr: ' + acu_user, NO_FILE_PREFIX_CHAR + 'RunImport', importance=4)
+    log_import("Acumen Usr: " + acu_user, NO_FILE_PREFIX_CHAR + 'RunImport', importance=4)
 
     # logon to and prepare Acumen, Salesforce, Sihot and config data env
     conf_data = AssSysData(cae, acu_user=acu_user, acu_password=acu_password,
@@ -140,7 +146,9 @@ def run_import(acu_user, acu_password):
         log_error(conf_data.error_message, NO_FILE_PREFIX_CHAR + 'UserLogOn', importance=4)
         return conf_data.error_message
 
-    sub_res_id = 0  # for group reservations
+    log_import("successful user login", NO_FILE_PREFIX_CHAR + 'SuccessfulUserLogin')
+
+    sub_res_id = 0      # sub-reservation-id for TCI/BKC group reservations
 
     ''' **************************************************************************************
         Thomas Cook Bookings Import              #############################################
@@ -218,14 +226,14 @@ def run_import(acu_user, acu_password):
 
         # no header for to check but each last_line should start with either CNL, BOK or RBO
         if len(curr_cols) <= TCI_NEW_LINE:
-            return 'tci_line_to_res_row(): incomplete line, missing {} columns' \
+            return "tci_line_to_res_row(): incomplete line, missing {} columns" \
                 .format(TCI_NEW_LINE - len(curr_cols) + 1)
         elif curr_cols[TCI_BOOK_TYPE] not in ('CNL', 'BOK', 'RBO'):
-            return 'tci_line_to_res_row(): invalid line prefix {}'.format(curr_line[:3])
+            return "tci_line_to_res_row(): invalid line prefix {}".format(curr_line[:3])
         elif curr_cols[TCI_RESORT] not in ('BEVE', 'PABE'):
-            return 'tci_line_to_res_row(): invalid resort {}'.format(curr_cols[TCI_RESORT])
+            return "tci_line_to_res_row(): invalid resort {}".format(curr_cols[TCI_RESORT])
         elif curr_cols[TCI_NEW_LINE] != '\n':
-            return 'tci_line_to_res_row(): incomplete line (missing end of line)'
+            return "tci_line_to_res_row(): incomplete line (missing end of line)"
 
         room_cat, half_board, comments = tci_cat_board_comments(curr_cols)
         is_adult = curr_cols[TCI_PAX_TYPE] in ('M', 'F')
@@ -360,9 +368,9 @@ def run_import(acu_user, acu_password):
 
     def bkc_check_header(curr_cols, line):
         if len(curr_cols) != BKC_COL_COUNT:
-            return 'bkc_check_header(): invalid column count, {} differ'.format(BKC_COL_COUNT - len(curr_cols))
+            return "bkc_check_header(): invalid column count, {} differ".format(BKC_COL_COUNT - len(curr_cols))
         elif line != BKC_HEADER_LINE:
-            return 'bkc_check_header(): invalid header or file format {}'.format(line)
+            return "bkc_check_header(): invalid header or file format {}".format(line)
         return ''
 
     def bkc_cat_pax_board_comments(curr_cols, resort):
@@ -377,7 +385,7 @@ def run_import(acu_user, acu_password):
             room_size = '1 BED'
         else:
             if room_info[:3] != 'STU':
-                comments.append('bkc_room_cat_pax_board() warning: room size missing (using Studio)')
+                comments.append("bkc_room_cat_pax_board() warning: room size missing (using Studio)")
             room_size = 'STUDIO'
         ap_feats = []
         if room_info.find('SUPERIOR') >= 0:  # 748==AFT_CODE of "Refurbished" apt. feature
@@ -416,12 +424,12 @@ def run_import(acu_user, acu_password):
 
         # no header for to check but each last_line should start with either CNL, BOK or RBO
         if len(curr_cols) != BKC_COL_COUNT:
-            return 'bkc_line_to_res_row(): invalid column count, {} differ'.format(BKC_COL_COUNT - len(curr_cols))
+            return "bkc_line_to_res_row(): invalid column count, {} differ".format(BKC_COL_COUNT - len(curr_cols))
         elif len(curr_cols[BKC_BOOK_DATE].split('-')[0]) != 4:
             return "bkc_line_to_res_row(): invalid booking date format '{}' instead of YYYY-MM-DD" \
                 .format(curr_cols[BKC_BOOK_DATE])
         elif curr_cols[BKC_CHANNEL] != 'Booking.com':
-            return 'bkc_line_to_res_row(): invalid channel {} instead of Booking.com'.format(curr_cols[BKC_CHANNEL])
+            return "bkc_line_to_res_row(): invalid channel {} instead of Booking.com".format(curr_cols[BKC_CHANNEL])
 
         room_cat, adults, children, board, comments = bkc_cat_pax_board_comments(curr_cols, resort)
         curr_arr = datetime.datetime.strptime(curr_cols[BKC_ARR_DATE], '%Y-%m-%d')
@@ -606,20 +614,20 @@ def run_import(acu_user, acu_password):
         err_msg = ''
         curr_cols = curr_line.split('\t')
         if curr_line[-1] != '\n':
-            err_msg = 'rci_line_to_res_row(): incomplete line (missing end of line)'
+            err_msg = "rci_line_to_res_row(): incomplete line (missing end of line)"
         elif len(curr_cols) < RCI_COL_COUNT:
-            err_msg = 'rci_line_to_res_row(): incomplete line (missing {} columns)' \
+            err_msg = "rci_line_to_res_row(): incomplete line (missing {} columns)" \
                 .format(RCI_COL_COUNT - len(curr_cols))
         elif len(curr_cols) > RCI_COL_COUNT:
-            err_msg = 'rci_line_to_res_row(): wrong line format, having {} extra columns' \
+            err_msg = "rci_line_to_res_row(): wrong line format, having {} extra columns" \
                 .format(len(curr_cols) - RCI_COL_COUNT)
         elif curr_cols[RCI_BOOK_STATUS] not in ('Reserved', 'Cancelled'):
             curr_cols = None
-            err_msg = 'Skip/hide request and incomplete bookings (without any apartment value)'
+            err_msg = "Skip/hide request and incomplete bookings (without any apartment value)"
         elif 'RCI POINTS' in curr_cols[RCI_CLIENT_SURNAME] + curr_cols[RCI_CLIENT_FORENAME] \
                 + curr_cols[RCI_GUEST_SURNAME] + curr_cols[RCI_GUEST_FORENAME]:
             curr_cols = None
-            err_msg = 'Skip/ignore RCI Points bookings'
+            err_msg = "Skip/ignore RCI Points bookings"
         else:
             for _ in range(RCI_COL_COUNT, RC_COL_COUNT):
                 curr_cols.append('Unused')
@@ -689,7 +697,7 @@ def run_import(acu_user, acu_password):
 
         row['RUL_SIHOT_HOTEL'] = conf_data.rci_to_sihot_hotel_id(curr_cols[RCI_RESORT_ID])
         if not row['RUL_SIHOT_HOTEL']:
-            return None, 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCI_RESORT_ID])
+            return None, "rci_line_to_res_row(): invalid resort id {}".format(curr_cols[RCI_RESORT_ID])
 
         if curr_cols[RCI_BOOK_STATUS] == 'Cancelled':
             comments.append('Cancelled=' + curr_cols[RCI_CANCEL_DATE])
@@ -747,11 +755,13 @@ def run_import(acu_user, acu_password):
         row['RO_RES_GROUP'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
         row['RU_SOURCE'] = 'R'
 
-        comments.append('Owner/Club=' + own_rci_ref + ' '
+        row['RUL_SIHOT_PACK'] = 'RO'
+
+        comments.append("Owner/Club=" + own_rci_ref + ' '
                         + curr_cols[RCI_OWNER_SURNAME] + ', ' + curr_cols[RCI_OWNER_FORENAME])
 
-        row['SIHOT_NOTE'] = ';'.join(comments)
-        row['SIHOT_TEC_NOTE'] = '|CR|'.join(comments)
+        row['SIHOT_NOTE'] = ";".join(comments)
+        row['SIHOT_TEC_NOTE'] = "|CR|".join(comments)
 
         row['=FILE_NAME'] = curr_cols[RC_FILE_NAME]
         row['=LINE_NUM'] = curr_cols[RC_LINE_NUM]
@@ -803,12 +813,12 @@ def run_import(acu_user, acu_password):
     def rcip_imp_line_check(curr_line, file_name, line_num):
         curr_cols = curr_line.split('\t')
         if curr_line[-1] != '\n':
-            err_msg = 'rcip_line_to_res_row(): incomplete line (missing end of line)'
+            err_msg = "rcip_line_to_res_row(): incomplete line (missing end of line)"
         elif len(curr_cols) < RCIP_COL_COUNT:
-            err_msg = 'rcip_line_to_res_row(): incomplete line, missing {} columns' \
+            err_msg = "rcip_line_to_res_row(): incomplete line, missing {} columns" \
                 .format(RCIP_COL_COUNT - len(curr_cols))
         elif len(curr_cols) > RCIP_COL_COUNT:
-            err_msg = 'rcip_line_to_res_row(): wrong line format, having {} extra columns' \
+            err_msg = "rcip_line_to_res_row(): wrong line format, having {} extra columns" \
                 .format(len(curr_cols) - RCIP_COL_COUNT)
         else:
             err_msg = ''
@@ -857,7 +867,7 @@ def run_import(acu_user, acu_password):
 
         row['RUL_SIHOT_HOTEL'] = conf_data.rci_to_sihot_hotel_id(curr_cols[RCIP_RESORT_ID])
         if not row['RUL_SIHOT_HOTEL']:
-            return None, 'rci_line_to_res_row(): invalid resort id {}'.format(curr_cols[RCIP_RESORT_ID])
+            return None, "rci_line_to_res_row(): invalid resort id {}".format(curr_cols[RCIP_RESORT_ID])
 
         if curr_cols[RCIP_BOOK_STATUS] == 'C':
             comments.append('Cancelled=' + curr_cols[RCIP_CANCEL_DATE])
@@ -902,6 +912,8 @@ def run_import(acu_user, acu_password):
         row['RO_RES_GROUP'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
         row['RU_SOURCE'] = 'R'
 
+        row['RUL_SIHOT_PACK'] = 'RO'
+
         row['SIHOT_NOTE'] = ';'.join(comments)
         row['SIHOT_TEC_NOTE'] = '|CR|'.join(comments)
 
@@ -920,8 +932,8 @@ def run_import(acu_user, acu_password):
     res_rows = []
     error_msg = ''
 
-    if cae.get_option('tciPath') and tci_files:
-        log_import('Starting Thomas Cook import', NO_FILE_PREFIX_CHAR + 'TciImportStart', importance=4)
+    if cae.get_option('tciPath') and tci_files and not got_cancelled():
+        log_import("Starting Thomas Cook import", NO_FILE_PREFIX_CHAR + 'TciImportStart', importance=4)
         ''' sort TCI files 1.ASCENDING by actualization date and 2.DESCENDING by file type (R5 first, then R3, then R1)
             .. for to process cancellation/re-bookings in the correct order.
             .. (date and type taken from file name R?_yyyy-mm-dd hh.mm.ss.txt - ?=1-booking 3-cancellation 5-re-booking)
@@ -933,19 +945,23 @@ def run_import(acu_user, acu_password):
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("TCI files: " + str(tci_files), NO_FILE_PREFIX_CHAR + 'TciFileCollect', importance=1)
         for fn in tci_files:
-            log_import('Processing import file ' + fn, fn, importance=4)
+            if got_cancelled():
+                break
+            log_import("Processing import file " + fn, fn, importance=4)
             with open(fn, 'r') as fp:
                 lines = fp.readlines()
 
             last_ln = ''
             for idx, ln in enumerate(lines):
+                if got_cancelled():
+                    break
                 if debug_level >= DEBUG_LEVEL_VERBOSE:
                     log_import('Import line loaded: ' + ln, fn, idx)
                 try:
                     error_msg = tci_line_to_res_row(ln, last_ln, fn, idx, res_rows)
                 except Exception as ex:
-                    error_msg = 'TCI Line parse exception: {}'.format(ex)
-                log_import('Parsed import line: ' + str(res_rows[-1]), fn, idx)
+                    error_msg = "TCI Line parse exception: {}".format(ex)
+                log_import("Parsed import line: " + str(res_rows[-1]), fn, idx)
                 if error_msg:
                     log_error(error_msg, fn, idx)
                     if cae.get_option('breakOnError'):
@@ -954,16 +970,19 @@ def run_import(acu_user, acu_password):
             if error_log and cae.get_option('breakOnError'):
                 break
 
-    if False and cae.get_option('bkcPath') and bkc_files and (not error_log or not cae.get_option('breakOnError')):
-        log_import('Starting Booking.com import', NO_FILE_PREFIX_CHAR + 'BkcImportStart', importance=4)
+    if False and cae.get_option('bkcPath') and bkc_files and (not error_log or not cae.get_option('breakOnError')) \
+            and not got_cancelled():
+        log_import("Starting Booking.com import", NO_FILE_PREFIX_CHAR + 'BkcImportStart', importance=4)
         bkc_files.sort(key=lambda f: os.path.basename(f))
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("BKC files: " + str(bkc_files), NO_FILE_PREFIX_CHAR + 'BkcFileCollect', importance=1)
         for fn in bkc_files:
-            log_import('Processing import file ' + fn, fn, importance=4)
+            if got_cancelled():
+                break
+            log_import("Processing import file " + fn, fn, importance=4)
             hotel_id = bkc_check_filename(fn)
             if not hotel_id:
-                log_error('Hotel ID prefix followed by underscore character is missing - skipping.', fn, importance=4)
+                log_error("Hotel ID prefix followed by underscore character is missing - skipping.", fn, importance=4)
                 continue
 
             with open(fn, 'r', encoding='utf-8-sig') as fp:  # encoding is removing the utf8 BOM
@@ -972,8 +991,10 @@ def run_import(acu_user, acu_password):
             header = ''
             imp_rows = []
             for idx, ln in enumerate(lines):
+                if got_cancelled():
+                    break
                 if debug_level >= DEBUG_LEVEL_VERBOSE:
-                    log_import('Import line loaded: ' + ln, fn, idx)
+                    log_import("Import line loaded: " + ln, fn, idx)
                 try:
                     ln = bkc_normalize_line(ln)
                     cs = [c for c in csv.reader([ln])][0]
@@ -984,27 +1005,29 @@ def run_import(acu_user, acu_password):
                     else:
                         imp_rows.append(cs)
                 except Exception as ex:
-                    error_msg = 'Booking.com line normalize exception: {}'.format(ex)
-                log_import('Normalized import line: ' + str(imp_rows[-1]), fn, idx)
+                    error_msg = "Booking.com line normalize exception: {}".format(ex)
+                log_import("Normalized import line: " + str(imp_rows[-1]), fn, idx)
                 if error_msg:
                     log_error(error_msg, fn, idx)
                     if cae.get_option('breakOnError'):
                         break
 
-            if error_log and cae.get_option('breakOnError'):
+            if got_cancelled() or (error_log and cae.get_option('breakOnError')):
                 break
 
             # sort by ext book ref, room info, adults and arrival date for to allow to join date ranges
             imp_rows.sort(key=lambda f: f[BKC_BOOK_REF] + f[BKC_ROOM_INFO] + f[BKC_ADULTS] + f[BKC_ARR_DATE])
 
             for idx, ln in enumerate(imp_rows):
+                if got_cancelled():
+                    break
                 if debug_level >= DEBUG_LEVEL_VERBOSE:
-                    log_import('Parsing import line: ' + ln, fn, int(ln[BKC_LINE_NUM]))
+                    log_import("Parsing import line: " + ln, fn, int(ln[BKC_LINE_NUM]))
                 try:
                     error_msg = bkc_line_to_res_row(ln, hotel_id, fn, int(ln[BKC_LINE_NUM]), res_rows)
                 except Exception as ex:
-                    error_msg = 'Booking.com line parse exception: {}'.format(ex)
-                log_import('Parsed import line: ' + str(res_rows[-1]), fn, int(ln[BKC_LINE_NUM]))
+                    error_msg = "Booking.com line parse exception: {}".format(ex)
+                log_import("Parsed import line: " + str(res_rows[-1]), fn, int(ln[BKC_LINE_NUM]))
                 if error_msg:
                     log_error(error_msg, fn, int(ln[BKC_LINE_NUM]))
                     if cae.get_option('breakOnError'):
@@ -1013,7 +1036,8 @@ def run_import(acu_user, acu_password):
             if error_log and cae.get_option('breakOnError'):
                 break
 
-    if cae.get_option('rciPath') and rci_files and (not error_log or not cae.get_option('breakOnError')):
+    if cae.get_option('rciPath') and rci_files and (not error_log or not cae.get_option('breakOnError')) \
+            and not got_cancelled():
         log_import("Starting RCI import", NO_FILE_PREFIX_CHAR + 'RciImportStart', importance=4)
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("RCI files: " + str(rci_files), NO_FILE_PREFIX_CHAR + 'RciFileCollect', importance=1)
@@ -1044,37 +1068,42 @@ def run_import(acu_user, acu_password):
         imp_rows = []
         points_import = False
         for fn in rci_files:
-            log_import('Processing import file ' + fn, fn, importance=4)
+            if got_cancelled():
+                break
+            log_import("Processing import file " + fn, fn, importance=4)
             with open(fn, 'r', encoding='utf-16') as fp:
                 lines = fp.readlines()
 
             progress = Progress(debug_level, start_counter=len(lines),
-                                start_msg='Loading and parsing import file ' + fn,
-                                nothing_to_do_msg='No records found in import file ' + fn)
+                                start_msg="Loading and parsing import file " + fn,
+                                nothing_to_do_msg="No records found in import file " + fn)
 
             for idx, ln in enumerate(lines):
+                if got_cancelled():
+                    break
                 progress.next(processed_id='import file line ' + str(idx + 1), error_msg=error_msg)
                 if debug_level >= DEBUG_LEVEL_VERBOSE:
-                    log_import('Import line loaded: ' + ln, fn, idx)
+                    log_import("Import line loaded: " + ln, fn, idx)
                 if idx == 0:  # first line is header
                     if ln == RCI_FILE_HEADER:
                         points_import = False
                     elif ln == RCIP_FILE_HEADER:
                         points_import = True
                     else:
-                        log_error('Skipped import file {} with invalid file header {}'.format(fn, ln), fn, idx)
+                        log_error("Skipped import file {} with invalid file header {}".format(fn, ln), fn, idx)
                         break
                 else:
                     func = rcip_imp_line_check if points_import else rci_imp_line_check
                     imp_cols, error_msg = func(ln, fn, idx)
                     if not imp_cols:
                         if debug_level >= DEBUG_LEVEL_VERBOSE:
-                            log_import(error_msg or 'Import line skipped', fn, idx)
+                            log_import(error_msg or "Import line skipped", fn, idx)
+                        error_msg = ""
                         continue  # ignoring imported line
                     if not error_msg:
                         imp_rows.append(imp_cols)
                 if error_msg:
-                    log_error('RCI{} import line error: {}'.format('P' if points_import else '', error_msg), fn, idx)
+                    log_error("RCI{} import line error: {}".format('P' if points_import else '', error_msg), fn, idx)
                     if cae.get_option('breakOnError'):
                         break
             progress.finished(error_msg=error_msg)
@@ -1082,18 +1111,20 @@ def run_import(acu_user, acu_password):
             if error_log and cae.get_option('breakOnError'):
                 break
 
-        if not error_log or not cae.get_option('breakOnError'):
-            log_import('Processing clients', NO_FILE_PREFIX_CHAR + 'RciProcessClients', importance=4)
+        if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
+            log_import("Processing clients", NO_FILE_PREFIX_CHAR + 'RciProcessClients', importance=4)
             progress = Progress(debug_level, start_counter=len(imp_rows),
-                                start_msg='Sending {run_counter} clients to Sihot',
-                                nothing_to_do_msg='No client records to be send to Sihot')
+                                start_msg="Sending {run_counter} clients to Sihot",
+                                nothing_to_do_msg="No client records to be send to Sihot")
             client_send = ClientToSihot(cae, use_kernel_interface=cae.get_option('useKernelForClient'),
                                         map_client=cae.get_option('mapClient'), connect_to_acu=False)
 
             # sent_contacts is for to detect clients sent already by SihotResSync and duplicate clients in import file
             sent_clients = conf_data.sent_contacts()
             for lni, imp_cols in enumerate(imp_rows):
-                progress.next(processed_id='Parsing and sending client ' + str(lni), error_msg=error_msg)
+                if got_cancelled():
+                    break
+                progress.next(processed_id="Parsing and sending client " + str(lni), error_msg=error_msg)
                 fn, idx = imp_cols[RC_FILE_NAME], imp_cols[RC_LINE_NUM]
                 which_clients = ['occupant', 'owner']
                 clients_indexes = [imp_cols[RC_OCC_CLIENTS_IDX], imp_cols[RC_OWN_CLIENTS_IDX]]
@@ -1107,13 +1138,13 @@ def run_import(acu_user, acu_password):
                     try:
                         client_row, error_msg = func(imp_cols)
                     except Exception as ex:
-                        error_msg = which_client + '/client line parse exception: {}'.format(ex)
+                        error_msg = which_client + "/client line parse exception: {}".format(ex)
                     if not error_msg:
                         if debug_level >= DEBUG_LEVEL_VERBOSE:
-                            log_import('Parsed ' + which_client + '/client data: ' + str(client_row), fn, idx)
+                            log_import("Parsed " + which_client + "/client data: " + str(client_row), fn, idx)
                         if clients_idx in sent_clients:
                             if debug_level >= DEBUG_LEVEL_VERBOSE:
-                                log_import(which_client + '/client {} skip'
+                                log_import(which_client + "/client {} skip"
                                            .format(conf_data.contacts[clients_idx]), fn, idx)
                             continue
                         rc_complete_client_row_with_ext_refs(client_row, conf_data.contact_ext_refs(clients_idx))
@@ -1121,12 +1152,12 @@ def run_import(acu_user, acu_password):
                             error_msg = client_send.send_client_to_sihot(client_row)
                             if not error_msg:
                                 if debug_level >= DEBUG_LEVEL_VERBOSE:
-                                    log_import('Sent ' + which_client + '/client: ' + str(client_row), fn, idx)
+                                    log_import("Sent " + which_client + "/client: " + str(client_row), fn, idx)
                                 client_row['CD_SIHOT_OBJID'] = client_send.response.objid
                                 conf_data.complete_contacts_with_sh_id(clients_idx, client_row['CD_SIHOT_OBJID'])
                                 sent_clients.append(clients_idx)
                         except Exception as ex:
-                            error_msg = which_client + '/client send exception: {}'.format(full_stack_trace(ex))
+                            error_msg = which_client + "/client send exception: {}".format(full_stack_trace(ex))
                         if error_msg:
                             break
 
@@ -1139,26 +1170,28 @@ def run_import(acu_user, acu_password):
             error_msg = ""
 
         # now parse reservations
-        if not error_log or not cae.get_option('breakOnError'):
-            log_import('Parsing reservations', NO_FILE_PREFIX_CHAR + 'RciParseRes', importance=4)
+        if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
+            log_import("Parsing reservations", NO_FILE_PREFIX_CHAR + 'RciParseRes', importance=4)
             progress = Progress(debug_level, start_counter=len(imp_rows),
-                                start_msg='Parsing {run_counter} reservations',
-                                nothing_to_do_msg='No reservation records to be parsed')
+                                start_msg="Parsing {run_counter} reservations",
+                                nothing_to_do_msg="No reservation records to be parsed")
             for lni, imp_cols in enumerate(imp_rows):
-                progress.next(processed_id='Parsing reservation ' + str(lni), error_msg=error_msg)
+                if got_cancelled():
+                    break
+                progress.next(processed_id="Parsing reservation " + str(lni), error_msg=error_msg)
                 fn, idx = imp_cols[RC_FILE_NAME], imp_cols[RC_LINE_NUM]
                 func = rcip_line_to_res_row if imp_cols[RC_POINTS] else rci_line_to_res_row
                 try:
                     if debug_level >= DEBUG_LEVEL_VERBOSE:
-                        log_import('Parsing import line: ' + str(imp_cols), fn, idx)
+                        log_import("Parsing import line: " + str(imp_cols), fn, idx)
                     res_row, error_msg = func(imp_cols)
                     if debug_level >= DEBUG_LEVEL_VERBOSE:
-                        log_import('Parsed import columns: ' + str(res_row), fn, idx)
+                        log_import("Parsed import columns: " + str(res_row), fn, idx)
                     res_rows.append(res_row)
                 except Exception as ex:
-                    error_msg = 'res line parse exception: {}'.format(ex)
+                    error_msg = "res line parse exception: {}".format(ex)
                 if error_msg:
-                    log_error('Parse reservation error: {}'.format(error_msg), fn, idx)
+                    log_error("Parse reservation error: {}".format(error_msg), fn, idx)
                     if cae.get_option('breakOnError'):
                         break
 
@@ -1173,11 +1206,11 @@ def run_import(acu_user, acu_password):
     #  SEND imported reservation bookings
     # #########################################################
 
-    if not error_log or not cae.get_option('breakOnError'):
-        log_import('Sending reservations to Sihot', NO_FILE_PREFIX_CHAR + 'SendResStart', importance=4)
+    if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
+        log_import("Sending reservations to Sihot", NO_FILE_PREFIX_CHAR + 'SendResStart', importance=4)
         progress = Progress(debug_level, start_counter=len(res_rows),
-                            start_msg='Prepare sending of {run_counter} reservation request changes to Sihot',
-                            nothing_to_do_msg='No reservations found for to be sent')
+                            start_msg="Prepare sending of {run_counter} reservation request changes to Sihot",
+                            nothing_to_do_msg="No reservations found for to be sent")
         res_send = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
                               map_res=cae.get_option('mapRes'),
                               use_kernel_for_new_clients=cae.get_option('useKernelForClient'),
@@ -1191,6 +1224,8 @@ def run_import(acu_user, acu_password):
         first_arr = None  # used as flag set with the arrival date if the last res_row needs to be prolonged/merged
         extra_comments = []
         for res_row_idx, crow in enumerate(res_rows):
+            if got_cancelled():
+                break
             progress.next(processed_id=str(crow['RH_EXT_BOOK_REF']), error_msg=error_msg)
             fn, idx = crow['=FILE_NAME'], crow['=LINE_NUM']
             if res_row_idx + 1 < len(res_rows):
@@ -1204,7 +1239,7 @@ def run_import(acu_user, acu_password):
                         and crow['SH_RES_TYPE'] == next_crow['SH_RES_TYPE'] \
                         and crow['DEP_DATE'] == next_crow['ARR_DATE']:
                     if debug_level >= DEBUG_LEVEL_VERBOSE:
-                        log_import('Merge res: \n     ' + str(crow) + '\n     ' + str(next_crow), fn, idx, importance=1)
+                        log_import("Merge res: \n     " + str(crow) + "\n     " + str(next_crow), fn, idx, importance=1)
                     if not first_arr:
                         first_arr = crow['ARR_DATE']
                     extra_comments.append('Merged GDS-NO ' + crow['SIHOT_GDSNO'])
@@ -1216,35 +1251,39 @@ def run_import(acu_user, acu_password):
                 first_arr = None
                 extra_comments = []
             try:
-                error_msg = res_send.send_row_to_sihot(crow, ensure_client=False)
+                error_msg = res_send.send_row_to_sihot(crow, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
             except Exception as ex:
-                error_msg = 'reservation send exception: {}'.format(full_stack_trace(ex))
+                error_msg = "reservation send exception: {}".format(full_stack_trace(ex))
             if error_msg:
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
-                    log_import('Ignoring error sending res: ' + str(crow), fn, idx)
+                    log_import("Ignoring error sending res: " + str(crow), fn, idx)
                     error_msg = ''
                     continue
                 log_error(error_msg, fn, idx)
                 if cae.get_option('breakOnError'):
                     break
             elif debug_level >= DEBUG_LEVEL_VERBOSE:
-                log_import('Sent res: ' + str(crow), fn, idx)
+                log_import("Sent res: " + str(crow), fn, idx)
 
         warnings = res_send.get_warnings()
-        if warnings:
-            if debug_level >= DEBUG_LEVEL_VERBOSE:
-                log_import('Sending warnings: ' + warnings, NO_FILE_PREFIX_CHAR + 'SendResWarnings')
-            if notification:
-                notification.send_notification(warnings, subject='SihotResImport warnings notification',
-                                               mail_to=cae.get_option('warningsMailToAddr'))
-
         progress.finished(error_msg=error_msg)
+    else:
+        warnings = ""
 
     # #########################################################
     # logging and clean up
     # #########################################################
 
-    log_import('Pass Import Files to user/server logs', NO_FILE_PREFIX_CHAR + 'MoveImportFiles', importance=4)
+    if got_cancelled():
+        log_error("Import cancelled by user", NO_FILE_PREFIX_CHAR + 'UserCancellation', importance=4)
+    log_import("Log and send warnings", NO_FILE_PREFIX_CHAR + 'LogSendWarnings', importance=4)
+    if warnings:
+        if debug_level >= DEBUG_LEVEL_VERBOSE:
+            log_import("Sending warnings: " + warnings, NO_FILE_PREFIX_CHAR + 'SendResWarnings')
+        if notification:
+            notification.send_notification(warnings, subject="SihotResImport warnings notification",
+                                           mail_to=cae.get_option('warningsMailToAddr'))
+    log_import("Pass Import Files to user/server logs", NO_FILE_PREFIX_CHAR + 'MoveImportFiles', importance=4)
     for sfn in tci_files + bkc_files + rci_files:
         imp_file_path = os.path.dirname(sfn)
         imp_dir_name = os.path.basename(os.path.normpath(imp_file_path))
@@ -1254,7 +1293,7 @@ def run_import(acu_user, acu_password):
         dfn = os.path.join(log_file_path, imp_dir_name, log_file_prefix + '_' + imp_file_name)
         shutil.copy2(sfn, dfn)
         if debug_level >= DEBUG_LEVEL_VERBOSE:
-            log_import(sfn + ' copied to ' + dfn, sfn)
+            log_import(sfn + " copied to " + dfn, sfn)
 
         # create import log file for each import file (on the user machine)
         ddn = os.path.join(imp_file_path, 'processed')
@@ -1265,7 +1304,7 @@ def run_import(acu_user, acu_password):
         with open(os.path.join(ddn, log_file_prefix + '_' + imp_file_name + '_import.log'), 'a') as fh:
             fh.write(fix_encoding(log_msg))
 
-        if [_ for _ in error_log if sfn in _['context']]:   # sfn == _['context'] should work too
+        if got_cancelled() or [_ for _ in error_log if sfn in _['context']]:   # sfn == _['context'] should work too
             continue  # don't move file if there were errors
 
         # finally move the imported file to the processed sub-folder (on the users machine)
@@ -1274,7 +1313,6 @@ def run_import(acu_user, acu_password):
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import(sfn + ' moved to ' + dfn, sfn)
 
-    error_text = ''
     if error_log:
         error_text = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in error_log)
         if notification:
@@ -1284,28 +1322,35 @@ def run_import(acu_user, acu_password):
                 log_import("Notification send error: " + notification_err, NO_FILE_PREFIX_CHAR + 'SendNotification')
         uprint('Error Log:\n', error_text)
         with open(os.path.join(log_file_path, log_file_prefix + '_errors.log'), 'a') as fh:
-            fh.write(error_text)
+            fh.write(fix_encoding(error_text))
 
     log_msg = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in import_log)
     with open(os.path.join(log_file_path, log_file_prefix + '_import.log'), 'a') as fh:
         fh.write(fix_encoding(log_msg))
 
-    if error_text and ui_app:
-        return error_text  # don't quit app for to show errors on screen to user
-    quit_app(error_log)
+    if not amend_screen_log:        # import running in console mode (no UI)
+        quit_app(error_log)
 
 
 def quit_app(err_log=None):
     cae.shutdown(12 if err_log else 0)
 
 
-if ui_app:  # ui_app is not None if user need to logon - will be re-initialized here to the kivy App class instance
+if cae.get_config('acuPassword'):
+    # running without ui in console
+    run_import(cae.get_option('acuUser'), cae.get_option('acuPassword'))
+
+else:
+    # no password given, then we need the kivy UI for to logon the user
+    import threading
     sys.argv = [sys.argv[0]]  # remove command line options for to prevent errors in kivy args_parse
     from kivy.app import App
     from kivy.core.window import Window
     from kivy.lang.builder import Factory
     from kivy.properties import NumericProperty, StringProperty
     from kivy.uix.textinput import TextInput
+    from kivy.utils import escape_markup
+    from kivy.clock import mainthread
 
 
     class CapitalInput(TextInput):
@@ -1319,14 +1364,18 @@ if ui_app:  # ui_app is not None if user need to logon - will be re-initialized 
         user_name = StringProperty(cae.get_option('acuUser'))
         user_password = StringProperty(cae.get_option('acuPassword'))
 
+        cancel_import = threading.Event()
+        _thread = None
+
         def build(self):
-            cae.dprint('App.build()')
+            cae.dprint("App.build()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.display_files()
-            self.title = 'Sihot Reservation Import  V' + __version__
+            self.title = "Sihot Reservation Import  V" + __version__
             self.root = Factory.MainWindow()
             return self.root
 
         def display_files(self):
+            cae.dprint("App.display_files()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             collect_files()  # collect files for showing them in the user interface
             self.file_count = len(imp_files)
             self.file_names = ''
@@ -1335,44 +1384,95 @@ if ui_app:  # ui_app is not None if user need to logon - will be re-initialized 
                 self.file_names += '\n' + fn
 
         def key_down_callback(self, keyboard, key_code, scan_code, text, modifiers, *args, **kwargs):
-            cae.dprint('kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}'
-                       .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs))
-            if key_code == 27:                                                  # escape key
+            if True:   # change to True for debugging - leave dprint for hiding Pycharm inspection "Parameter not used"
+                cae.dprint("App.kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}"
+                           .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs),
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            if self._thread and self._thread.is_alive():                        # block kbd while import is running
+                return True
+            elif key_code == 27:                                                # escape key
                 self.exit_app()
                 return True
             elif key_code == 13 and not self.root.ids.import_button.disabled:   # enter key
-                self.run_import()
+                self.start_import()
                 return True
             return False
 
         def on_start(self):
-            cae.dprint('App.on_start()')
+            cae.dprint("App.on_start()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             Window.bind(on_key_down=self.key_down_callback)
 
         def on_stop(self):
-            cae.dprint('App.on_stop()')
+            cae.dprint("App.on_stop()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cancel_import.set()
             self.exit_app()
 
-        @staticmethod
-        def exit_app():
-            cae.dprint('App.quit_app()')
-            quit_app()
+        @mainthread
+        def amend_screen_log(self, text, is_error=False):
+            # text = text.replace('[', '&bl;').replace(']', '&br;').replace('&', '&amp;') # convert special markup chars
+            text = '\n' + escape_markup(text)
+            if is_error:
+                text = '[color=ff99aa]' + text + '[/color]'
+            ti = self.root.ids.error_log
+            ti.text = (ti.text + text)[-MAX_SCREEN_LOG_LEN:]
+            self.root.ids.scroll_view.scroll_y = 0
 
-        def run_import(self):
-            cae.dprint('App.run_import()')
+        def start_import(self):
+            cae.dprint("App.start_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             usr = self.root.ids.user_name.text
             cae.set_config('acuUser', usr.upper())
-            self.root.ids.import_button.disabled = True
-            error_text = run_import(usr, self.root.ids.user_password.text)
-            self.root.ids.error_log.text += '\n\n\n' + '-' * 69 + '\n' + str(error_text[:-9999])
-            self.user_password = ''  # wipe pw, normally run_import() exits the app, only executed on login error
-            self.display_files()
-            self.root.ids.import_button.disabled = False
+            self.prepare_ui_for_import()
 
+            self._thread = threading.Thread(target=self.exec_import,
+                                            args=(usr, self.root.ids.user_password.text,
+                                                  self.cancel_import.is_set, self.amend_screen_log))
+            self._thread.start()
 
-    ui_app = SihotResImportApp()
-    ui_app.run()
+        def prepare_ui_for_import(self):
+            cae.dprint("App.prepare_ui_for_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            ids = self.root.ids
+            ids.user_name.disabled = True
+            ids.user_password.disabled = True
+            ids.import_button.disabled = True
+            ids.exit_or_cancel_button.text = "Cancel Import"
 
-else:
-    # running without ui in console
-    run_import(cae.get_option('acuUser'), cae.get_option('acuPassword'))
+        def exec_import(self, usr, pw, event_is_set_func, amend_screen_log_func):
+            cae.dprint("App.exec_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            run_import(usr, pw, event_is_set_func, amend_screen_log_func)
+            self.finalize_import()
+
+        def finalize_import(self):
+            cae.dprint("App.finalize_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            ids = self.root.ids
+            self.user_password = ""         # reset pw - user need to enter again for new import run
+            ids.user_password.text = ""     # .. should be set by app.user_password kv expression but isn't
+            self.display_files()            # self.file_count (triggering reset of import_button.text/.disabled)
+            # ids.import_button.disabled = not self.file_count or not ids.user_name.text or not ids.user_password.text
+            ids.exit_or_cancel_button.text = "Exit"
+            ids.user_name.disabled = False
+            ids.user_password.disabled = False
+            self._thread = None
+
+        def exit_app_or_cancel_import(self):
+            cae.dprint("App.exit_app_or_cancel_import(), thread-alive={}, is_set={}"
+                       .format(self._thread.is_alive() if self._thread else 'finished', self.cancel_import.is_set()),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            if self._thread and self._thread.is_alive():
+                self.cancel_import.set()
+                self._thread.join()
+                self.cancel_import.clear()
+            # elif self.cancel_import.is_set():   # if import got just cancelled - leave UI running
+            #     self.cancel_import.clear()
+            else:
+                self.exit_app()
+
+        def exit_app(self):
+            cae.dprint("App.exit_app()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            if self._thread and self._thread.is_alive():
+                self.cancel_import.set()
+                cae.dprint("  ....  waiting for to join/finish worker thread")
+                self._thread.join()
+                cae.dprint("  ....  worker thread successfully joined/finished")
+            quit_app()
+
+    SihotResImportApp().run()

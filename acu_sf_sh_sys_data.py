@@ -3,9 +3,9 @@ import datetime
 
 from ae_lockfile import LockFile
 from ae_db import OraDB
-from sfif import SfInterface
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 
+from sfif import SfInterface
 
 # init constants and load constant config settings
 EXT_REFS_SEP = ','
@@ -27,7 +27,7 @@ _GRANTED = 4
 
 
 def _dummy_stub(*args, **kwargs):
-    uprint("Unexpected call of acu_sf_sh_sys_data._dummy_stub()", args, kwargs)
+    uprint("****** Unexpected call of acu_sf_sh_sys_data._dummy_stub()", args, kwargs)
 
 
 class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
@@ -79,7 +79,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message = self.sales_force.error_msg
             return
 
-        self.client_refs_add_exclude = cae.get_config('ClientRefsAddExclude').split(EXT_REFS_SEP)
+        self.client_refs_add_exclude = cae.get_config('ClientRefsAddExclude', default_value='').split(EXT_REFS_SEP)
 
         # --- contacts is caching contact data like external references/Ids, owner status ...
         self.contacts = []

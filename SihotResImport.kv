@@ -11,10 +11,12 @@
         halign: 'justify'
         valign: 'top'
     ScrollView:
+        id: scroll_view
         size_hint_y: .69
         Label:
             size_hint_y: None
             id: error_log
+            markup: True
             text_size: self.parent.width, None
             size: self.texture_size
     Label:
@@ -41,9 +43,10 @@
         id: import_button
         size_hint_y: .27
         text: "Import " + str(app.file_count) + " file(s)"
-        on_press: app.run_import()
+        on_press: app.start_import()
         disabled: app.file_count == 0 or user_name.text == '' or user_password.text == ''
     Button:
+        id: exit_or_cancel_button
         size_hint_y: .27
         text: "Exit"
-        on_press: app.exit_app()
+        on_press: app.exit_app_or_cancel_import()
