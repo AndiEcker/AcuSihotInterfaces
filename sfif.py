@@ -30,6 +30,8 @@ class SfInterface:
         self.error_msg = ""
         if not self._conn:
             self._connect()
+            if self.error_msg:
+                return None
         response = None
         try:
             response = self._conn.query_all(soql_query)

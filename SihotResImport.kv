@@ -5,48 +5,61 @@
     padding: [24, 18]
     cols_minimum: {1: 240}
     Label:
-        size_hint_y: .69
+        #size_hint_y: None
+        #size: self.texture_size
+        size_hint: None, None
+        size: file_names.texture_size[0], user_name.font_size * 1.89
+        text: "User"
+    CapitalInput:
+        id: user_name
+        size_hint_y: None
+        height: self.font_size * 1.95
+        write_tab: False
+        multiline: False
+        text: app.user_name
+    Label:
+        #size_hint_y: None
+        #size: self.texture_size
+        size_hint: None, None
+        size: file_names.texture_size[0], user_password.font_size * 1.89
+        text: "Password"
+    TextInput:
+        id: user_password
+        size_hint_y: None
+        height: self.font_size * 1.95
+        write_tab: False
+        multiline: False
+        password: True
+        focus: bool(app.user_name)  # without the bool cast focus changes to False if users clicks on self after app.run
+        text: app.user_password
+    Button:
+        id: import_button
+        #size_hint_y: None
+        #height: self.font_size * 2.7
+        size_hint: None, None
+        size: file_names.texture_size[0], self.font_size * 2.7
+        text: "Import " + str(app.file_count) + " file(s)"
+        on_press: app.start_import()
+        disabled: app.file_count == 0 or user_name.text == '' or user_password.text == ''
+    Button:
+        id: exit_or_cancel_button
+        size_hint_y: None
+        height: self.font_size * 2.7
+        text: "Exit"
+        on_press: app.exit_app_or_cancel_import()
+    Label:
+        id: file_names
         text: str(app.file_count) + " file(s) found: " + app.file_names
-        text_size: self.size
+        # text_size: self.size
+        size_hint_x: None
+        width: self.texture_size[0]
         halign: 'justify'
         valign: 'top'
     ScrollView:
         id: scroll_view
-        size_hint_y: .69
         Label:
             size_hint_y: None
             id: error_log
             markup: True
             text_size: self.parent.width, None
             size: self.texture_size
-    Label:
-        size_hint_y: .09
-        text: "User"
-    CapitalInput:
-        id: user_name
-        size_hint_y: .09
-        write_tab: False
-        multiline: False
-        text: app.user_name
-    Label:
-        size_hint_y: .09
-        text: "Password"
-    TextInput:
-        id: user_password
-        size_hint_y: .09
-        write_tab: False
-        multiline: False
-        password: True
-        focus: app.user_name
-        text: app.user_password
-    Button:
-        id: import_button
-        size_hint_y: .27
-        text: "Import " + str(app.file_count) + " file(s)"
-        on_press: app.start_import()
-        disabled: app.file_count == 0 or user_name.text == '' or user_password.text == ''
-    Button:
-        id: exit_or_cancel_button
-        size_hint_y: .27
-        text: "Exit"
-        on_press: app.exit_app_or_cancel_import()

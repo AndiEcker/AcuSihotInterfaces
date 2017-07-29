@@ -8,14 +8,20 @@ import inspect
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentTypeError
 
+# supported debugging levels
 DEBUG_LEVEL_DISABLED = 0
 DEBUG_LEVEL_ENABLED = 1
 DEBUG_LEVEL_VERBOSE = 2
 
+# default name of main config section
 MAIN_SECTION_DEF = 'Settings'
 
+# default date/time formats in config files/variables
 DATE_TIME_ISO = '%Y-%m-%d %H:%M:%S.%f'
 DATE_ISO = '%Y-%m-%d'
+
+# core encoding that will always work independent from destination (console, file system, XMLParser, ...)
+DEF_ENCODING = 'ascii'
 
 # illegal characters in XML
 # .. taken from https://stackoverflow.com/questions/1707890/fast-way-to-filter-illegal-xml-unicode-chars-in-python
@@ -34,7 +40,7 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
 ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
 
 
-def fix_encoding(text, encoding='ascii', try_counter=2, pex=None, context='ae_console_app.fix_encoding()'):
+def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='ae_console_app.fix_encoding()'):
     """ used for to encode invalid char encodings in text that cannot be fixed with encoding="cp1252/utf-8/.. """
     ori_text = text
     if try_counter == 0:
@@ -44,6 +50,8 @@ def fix_encoding(text, encoding='ascii', try_counter=2, pex=None, context='ae_co
         try_method = "replacing &#NNN; with chr(NNN) for Sihot XML"
         text = re.compile("&#([0-9]+);").sub(lambda m: chr(int(m.group(0)[2:-1])), text)
     elif try_counter == 2:
+        if not encoding:
+            encoding = DEF_ENCODING
         try_method = "recode to backslash-replaced " + encoding + " encoding"
         text = text.encode(encoding, errors='backslashreplace').decode(encoding)
     elif try_counter == 3:
@@ -58,7 +66,8 @@ def fix_encoding(text, encoding='ascii', try_counter=2, pex=None, context='ae_co
     if try_method:
         try:        # first try to put ori_text in error message
             uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
-                   ", ascii text='" + ori_text.encode('ascii', errors='backslashreplace').decode('ascii') + "'")
+                   ", " + DEF_ENCODING + " text='" +
+                   ori_text.encode(DEF_ENCODING, errors='backslashreplace').decode(DEF_ENCODING) + "'")
         except UnicodeEncodeError:
             uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method)
     return text
@@ -99,7 +108,7 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
     #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
     #           sep=sep, end=end, file=file, flush=flush)
     print_objects = objects
-    try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface
+    try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
     while True:
         try:
             print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),

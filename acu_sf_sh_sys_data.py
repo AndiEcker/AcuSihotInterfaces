@@ -71,10 +71,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         db.close()
 
         # open and check Salesforce connection
-        sb = self.debug_level >= DEBUG_LEVEL_VERBOSE
-        self.sales_force = SfInterface(username=cae.get_config('sfSandboxUser') if sb else cae.get_config('sfUser'),
-                                       password=cae.get_config('sfPassword'), token=cae.get_config('sfToken'),
-                                       sandbox=sb)
+        usr = cae.get_config('sfUser')
+        self.sales_force = SfInterface(usr, password=cae.get_config('sfPassword'), token=cae.get_config('sfToken'),
+                                       sandbox=cae.get_config('sfIsSandbox',
+                                                              default_value='test' in usr.lower()
+                                                                            or 'sandbox' in usr.lower()),
+                                       client_id=cae.get_config('sfClientId', default_value='SfInterface'))
         if self.sales_force.error_msg:
             self.error_message = self.sales_force.error_msg
             return
@@ -163,7 +165,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     # =================  helpers  =========================================================================
 
     def rci_to_sihot_hotel_id(self, rc_resort_id):
-        return self.cae.get_config(rc_resort_id, 'RcResortIds')
+        return self.cae.get_config(rc_resort_id, 'RcResortIds', default_value=-369)     # pass default for int type ret
 
     def rci_to_sihot_room_cat(self, sh_hotel_id, room_size):
         return self.get_size_cat('BHC' if sh_hotel_id == 1 else 'PBC', room_size)
@@ -235,7 +237,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             return ""
 
         # fetch from Acumen on first run or after reset (deleted cache files) - after locking cache files
-        self._warn('Fetching client data from Acumen (needs some minutes)', self._ctx_no_file + 'FetchClientData',
+        self._warn("Fetching client data from Acumen (needs some minutes)", self._ctx_no_file + 'FetchClientData',
                    importance=4)
         contacts = \
             self.load_view(None, 'V_ACU_CD_DATA',
@@ -301,16 +303,16 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                         found_ids[rci_id].append(c_rec)
                     if c_rec[_ACU_ID]:
                         if rci_id in self.client_refs_add_exclude and c_rec[_ACU_ID] not in resort_codes:
-                            self._warn('Resort RCI ID {} found in client {}'.format(rci_id, c_rec[_ACU_ID]),
+                            self._warn("Resort RCI ID {} found in client {}".format(rci_id, c_rec[_ACU_ID]),
                                        self._ctx_no_file + 'CheckClientsDataResortId')
                         elif c_rec[_ACU_ID] in resort_codes and rci_id not in self.client_refs_add_exclude:
-                            self._warn('Resort {} is missing RCI ID {}'.format(c_rec[_ACU_ID], rci_id),
+                            self._warn("Resort {} is missing RCI ID {}".format(c_rec[_ACU_ID], rci_id),
                                        self._ctx_no_file + 'CheckClientsDataResortId')
         # prepare found duplicate ids, prevent duplicate printouts and re-order for to separate RCI refs from others
         dup_ids = []
         for ref, recs in found_ids.items():
             if len(recs) > 1:
-                dup_ids.append('Duplicate external {} ref {} found in clients: {}'
+                dup_ids.append("Duplicate external {} ref {} found in clients: {}"
                                .format(ref.split('=')[0] if '=' in ref else 'RCI',
                                        repr(ref), ';'.join([_[_ACU_ID] for _ in recs])))
         for dup in sorted(dup_ids):
@@ -326,8 +328,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         else:
             sf_contact_id, dup_contacts = self.sales_force.contact_by_rci_id(imp_rci_ref)
             if self.sales_force.error_msg:
-                self._err("get_contact_index() contact fetch error " + self.sales_force.error_msg, file_name, line_num,
-                          importance=3)
+                self._err("get_contact_index() Salesforce connect/fetch error " + self.sales_force.error_msg,
+                          file_name, line_num, importance=3)
             if len(dup_contacts) > 0:
                 self._err("Found duplicate Salesforce client(s) with main or external RCI ID {}. Used client {}, dup={}"
                           .format(imp_rci_ref, sf_contact_id, dup_contacts), file_name, line_num)
@@ -354,7 +356,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         seg, desc, grp = self.cae.get_config(key, 'RcMktSegments').split(',')
         if file_name[:3].upper() == 'RL_':
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                self._warn('Reclassified booking from ' + seg + '/' + grp + ' into RL/RCI External',
+                self._warn("Reclassified booking from " + seg + "/" + grp + " into RL/RCI External",
                            file_name, line_num, importance=1)
             # seg, grp = 'RL', 'RCI External'
             seg, desc, grp = self.cae.get_config('Leads', 'RcMktSegments').split(',')
@@ -364,6 +366,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         """ complete contacts with imported data and sihot objid """
         c_rec = self.contacts[c_idx]
         if not c_rec[_SH_ID] or c_rec[_SH_ID] != sh_id:
+            if c_rec[_SH_ID]:
+                self._warn("Sihot guest object id changed from {} to {} for Salesforce contact {}"
+                           .format(c_rec[_SH_ID], sh_id, c_rec[_SF_ID]))
             self.contacts[c_idx] = (c_rec[_ACU_ID], c_rec[_SF_ID], sh_id, c_rec[_EXT_REFS], c_rec[_IS_OWNER])
             self.contacts_changed = True
 
@@ -389,7 +394,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 return ""
 
         # file not exists (first run or reset)
-        self._warn('Fetching reservation inventory from Acumen (needs some minutes)',
+        self._warn("Fetching reservation inventory from Acumen (needs some minutes)",
                    self._ctx_no_file + 'FetchResInv', importance=4)
         file_lock = LockFile(self.cae.get_config('RES_INV_LOCK_FILE'))
         err_msg = file_lock.lock()

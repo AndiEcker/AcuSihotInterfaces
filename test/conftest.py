@@ -94,12 +94,14 @@ def create_test_guest(console_app_env):
 
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
-    return SfInterface(username=console_app_env.get_config('sfSandboxUser')
-                       if console_app_env.get_option('debugLevel') >= 2 else console_app_env.get_config('sfUser'),
+    usr = console_app_env.get_config('sfUser')
+    return SfInterface(username=usr,
                        password=console_app_env.get_config('sfPassword'),
                        token=console_app_env.get_config('sfToken'),
-                       sandbox=True,
-                       client_id='TestSfInterface')
+                       sandbox=console_app_env.get_config('sfIsSandbox',
+                                                          default_value='test' in usr.lower()
+                                                                        or 'sandbox' in usr.lower()),
+                       client_id=console_app_env.get_config('sfClientId', default_value='TestSfInterface'))
 
 
 ############################################################################
@@ -131,7 +133,6 @@ class ConsoleApp:
                              acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
                              debugLevel=cfg.getint('Settings', 'debugLevel', fallback=2),  # 2==DEBUG_LEVEL_VERBOSE
                              warningFragments='',
-                             sfSandboxUser=cfg.get('Settings', 'sfSandboxUser'),
                              sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
                              sfToken=cfg.get('Settings', 'sfToken'),
                              )

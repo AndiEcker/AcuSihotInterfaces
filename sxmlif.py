@@ -1616,25 +1616,25 @@ class ResToSihot(SihotXmlBuilder):
                 err_msg = self._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response)
             err_msg += self._add_to_acumen_sync_log('RU', crow['RUL_PRIMARY'],
                                                     action,
-                                                    'ERR' + (self.response.server_error() if self.response else '')
-                                                    if err_msg else 'SYNCED',
-                                                    err_msg + ('W' + warn_msg if warn_msg else ''),
+                                                    "ERR" + (self.response.server_error() if self.response else "")
+                                                    if err_msg else "SYNCED",
+                                                    err_msg + ("W" + warn_msg if warn_msg else ""),
                                                     crow['RUL_CODE'],
                                                     commit=commit)
         return err_msg
 
     def _handle_error(self, crow, err_msg):
-        warn_msg = ''
+        warn_msg = ""
         if [frag for frag in self._warning_frags if frag in err_msg]:
-            warn_msg = self.res_id_desc(crow, err_msg, separator='\n')
-            self._warning_msgs += '\n\n' + warn_msg
+            warn_msg = self.res_id_desc(crow, err_msg, separator="\n")
+            self._warning_msgs += "\n\n" + warn_msg
             err_msg = ""
         return err_msg, warn_msg
 
     def _ensure_clients_exist_and_updated(self, crow, ensure_client_mode):
         if ensure_client_mode == ECM_DO_NOT_SEND_CLIENT:
             return ""
-        err_msg = ''
+        err_msg = ""
         if 'CD_CODE' in crow and crow['CD_CODE']:
             acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
                                        map_client=self.map_client, connect_to_acu=self.acu_connected)
@@ -1648,11 +1648,11 @@ class ResToSihot(SihotXmlBuilder):
                     if acu_client.row_count:
                         err_msg = acu_client.send_client_to_sihot()
                     elif not client_synced:
-                        err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): client not found: ' + crow['CD_CODE']
+                        err_msg = "ResToSihot._ensure_clients_exist_and_updated(): client not found: " + crow['CD_CODE']
                     if not err_msg:
                         err_msg = acu_client.fetch_from_acu_by_cd(crow['CD_CODE'])  # re-fetch OBJIDs
                     if not err_msg and not acu_client.row_count:
-                        err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): IntErr/client: ' + crow['CD_CODE']
+                        err_msg = "ResToSihot._ensure_clients_exist_and_updated(): IntErr/client: " + crow['CD_CODE']
                     if not err_msg:
                         # transfer just created guest OBJIDs from guest to reservation record
                         crow['CD_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
@@ -1677,7 +1677,7 @@ class ResToSihot(SihotXmlBuilder):
                     if acu_client.row_count:
                         err_msg = acu_client.send_client_to_sihot()
                     elif not client_synced:
-                        err_msg = 'ResToSihot._ensure_clients_exist_and_updated(): invalid orderer ' + crow['OC_CODE']
+                        err_msg = "ResToSihot._ensure_clients_exist_and_updated(): invalid orderer " + crow['OC_CODE']
                     if not err_msg:
                         err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
                     if not err_msg and not acu_client.row_count:
@@ -1703,7 +1703,7 @@ class ResToSihot(SihotXmlBuilder):
         if not err_msg:
             err_msg = self._send_res_to_sihot(crow, action, commit)
             if self.acu_connected and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']) \
-                    and 'Could not find a key identifier' in err_msg:  # WEB interface
+                    and "Could not find a key identifier" in err_msg:  # WEB interface
                 self.ca.dprint("ResToSihot.send_row_to_sihot() ignoring CD_SIHOT_OBJID(" +
                                str(crow['CD_SIHOT_OBJID']) + "/" + str(crow['CD_SIHOT_OBJID2']) + ") error: " + err_msg)
                 crow['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead

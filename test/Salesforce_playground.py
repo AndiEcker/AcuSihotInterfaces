@@ -7,12 +7,13 @@ cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas
                  debug_level_def=DEBUG_LEVEL_VERBOSE)
 
 sf_user = cae.get_config('sfUser')
-sf_sandbox_user = cae.get_config('sfSandboxUser')
 sf_pw = cae.get_config('sfPassword')
 sf_token = cae.get_config('sfToken')
 
-sb = Salesforce(username=sf_sandbox_user, password=sf_pw, security_token=sf_token, sandbox=True, client_id='ResImport')
+sb = Salesforce(username=sf_user, password=sf_pw, security_token=sf_token, sandbox=True, client_id='ResImport')
 print('Salesforce object:', sb)
+
+print('Top-level objects describe:', sb.describe())
 
 print('Contact metadata:', sb.Contact.metadata())
 print('Contact describe:', sb.Contact.describe())
@@ -26,7 +27,7 @@ print('SOQL query:', result)
 contact = sb.search("FIND {Pepper}")
 print('SOSL search:', contact)
 
-contact_id = contact[0]['Id']
+contact_id = contact['searchRecords'][0]['Id']
 print('Contact Id:', contact_id)
 
 c_data = sb.Contact.get(contact_id)
@@ -115,7 +116,7 @@ print('SOSL exact ext ref type search:', ext_ref)
 ext_ref = sb.search("FIND {1234\-56789}")
 print('SOSL exact ext ref search:', ext_ref)
 
-ext_ref_id = [_['Id'] for _ in ext_ref if _['attributes']['type'] == 'External_Ref__c'][0]
+ext_ref_id = [_['Id'] for _ in ext_ref['searchRecords'] if _['attributes']['type'] == 'External_Ref__c'][0]
 ext_ref_data = sb.External_Ref__c.get(ext_ref_id)
 print('Ext Ref Data:', ext_ref_data)
 
