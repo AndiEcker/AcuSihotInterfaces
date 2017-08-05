@@ -49,6 +49,13 @@ class SfInterface:
                 .format(soql_query)
         return response
 
+    def sf_types(self):
+        if not self._conn:
+            self._connect()
+            if self.error_msg:
+                return None
+        return self._conn
+
     def contacts_with_rci_id(self, ext_refs_sep):
         contacts = []
         res = self._soql_query_all("SELECT Id, CD_CODE__c, RCI_Reference__c, Sihot_Guest_Object_Id__c, RecordType.Id,"
@@ -90,9 +97,32 @@ class SfInterface:
                                                                  self.REF_TYPE_EXT)
         return sf_contact_id, dup_contacts
 
+    def contact_by_email(self, email):
+        soql_query = "SELECT Id FROM Contact WHERE Email = '{}'".format(email)
+        res = self._soql_query_all(soql_query)
+        if not self.error_msg and res['totalSize'] > 0:
+            return res['records'][0]['Id']
+        return None
+
     def contact_sh_id(self, sf_contact_id):
         sh_id = None
         res = self._soql_query_all("SELECT Sihot_Guest_Object_Id__c FROM Contact WHERE Id = '{}'".format(sf_contact_id))
         if not self.error_msg and res['totalSize'] > 0:
             sh_id = res['records'][0]['Sihot_Guest_Object_Id__c']
         return sh_id
+
+    def contact_data_by_id(self, sf_contact_id, field_names):
+        sf_dict = dict()
+        res = self._soql_query_all("SELECT " + ", ".join(field_names) + " FROM Contact WHERE Id = '{}'"
+                                   .format(sf_contact_id))
+        if not self.error_msg and res['totalSize'] > 0:
+            sf_dict = res['records'][0]
+        return sf_dict
+
+    def record_type_id(self, dev_name, obj_type='Contact'):
+        rec_type_id = None
+        res = self._soql_query_all("Select Id From RecordType Where SobjectType = '{}' and DeveloperName = '{}'"
+                                   .format(obj_type, dev_name))
+        if not self.error_msg and res['totalSize'] > 0:
+            rec_type_id = res['records'][0]['Id']
+        return rec_type_id

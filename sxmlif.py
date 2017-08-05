@@ -675,10 +675,16 @@ MAP_WEB_RES = \
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'SUB-NR'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'OBJID'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'EMAIL'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'PHONE'},
+        # PHONE1, MOBIL1 and EMAIL1 are only available in RES person scope/section but not in RES-SEARCH OC
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'PHONE1'},
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'MOBIL1'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'DEP-TIME'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'COUNTRY'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'CITY'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'STREET'},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'LANG'},
+        {'elemName': PARSE_ONLY_TAG_PREFIX + 'MARKETCODE'},     # RES-SEARCH has no MARKETCODE-NO element/tag
         {'elemName': '/RESERVATION'},
         {'elemName': '/ARESLIST'},
     )

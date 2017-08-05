@@ -228,3 +228,29 @@ if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
     ids = [_['Id'] + '=' + er['Reference_No_or_ID__c'] for _ in records for er in _['External_References__r']['records']]
     print('    Ext Ref Ids of unique SOQL query:', ids)
+
+
+# SOQL query to include record type of contact
+result = sb.query_all("SELECT Id, Name, RecordType.DeveloperName FROM Contact WHERE LastName = 'Pepper'")
+if result['done'] and result['totalSize'] > 0:
+    records = result['records']
+    rec_type = records[0]['RecordType']['DeveloperName']
+    print("Fetch contact data with RecordType", rec_type, records)
+
+# check create/update/delete of Contact object
+result = sb.query_all("Select Id From RecordType Where SobjectType = 'Contact' and DeveloperName = 'Rentals'")
+if result['done'] and result['totalSize'] > 0:
+    rec_type = result['records'][0]['Id']
+    print("RecordTypeId=", rec_type)    # == '0129E000000CmLVQA0'
+    email = 'y_u_h_u@yahoo.com'
+    result = sb.query_all("SELECT Id FROM Contact WHERE Email = '" + email + "'")
+    if result['done']:
+        if result['totalSize'] > 0:
+            print(".. updating")
+            sb.Contact.update(result['records'][0]['Id'],
+                              {'FirstName': 'Sally', 'lastName': 'S-force', 'RecordTypeId': rec_type,
+                               'Email': email})
+        else:
+            print(".. inserting")
+            sb.Contact.create({'FirstName': 'Sally', 'lastName': 'S-force', 'RecordTypeId': rec_type,
+                               'Email': email})

@@ -12,6 +12,7 @@ from argparse import ArgumentParser, ArgumentTypeError
 DEBUG_LEVEL_DISABLED = 0
 DEBUG_LEVEL_ENABLED = 1
 DEBUG_LEVEL_VERBOSE = 2
+_debug_level = DEBUG_LEVEL_DISABLED
 
 # default name of main config section
 MAIN_SECTION_DEF = 'Settings'
@@ -63,7 +64,7 @@ def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='
     else:
         try_method = ""
         text = None
-    if try_method:
+    if try_method and _debug_level >= DEBUG_LEVEL_ENABLED:
         try:        # first try to put ori_text in error message
             uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
                    ", " + DEF_ENCODING + " text='" +
@@ -262,9 +263,11 @@ class ConsoleApp:
         self._options[name] = dict(desc=desc, val=value, evaluate=evaluate or eval_opt)
 
     def _parse_args(self):
-        # this method should only get called once and only after all the options have been added with self.add_option().
-        # self.add_option() sets the determined config file value as the default value and then following call of
-        # .. _arg_parser.parse_args() overwrites it with command line argument value if given
+        """ this should only get called once and only after all the options have been added with self.add_option().
+            self.add_option() sets the determined config file value as the default value and then following call of
+            .. _arg_parser.parse_args() overwrites it with command line argument value if given
+        """
+        global _debug_level
         args = self._arg_parser.parse_args()
 
         for k in self._options.keys():
@@ -299,8 +302,9 @@ class ConsoleApp:
         uprint("####  Startup finished....  ####")
 
         # finished argument parsing - now print chosen option values to the console
-        if self._options['debugLevel']['val']:
-            uprint("Debug Level (" + str(DEBUG_LEVEL_VERBOSE) + "=verbose):", self._options['debugLevel']['val'])
+        _debug_level = self._options['debugLevel']['val']
+        if _debug_level:
+            uprint("Debug Level (" + str(DEBUG_LEVEL_VERBOSE) + "=verbose):", _debug_level)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             uprint("System Environment: argv[0]=", sys.argv[0],
                    "executable=", sys.executable,

@@ -62,7 +62,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self.ro_agencies = self.load_view(db, 'T_RO',
                                           ['RO_CODE', 'RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC', 'RO_SIHOT_RATE',
-                                           'RO_RES_GROUP'],
+                                           'RO_RES_GROUP', 'RO_SIHOT_RES_GROUP'],
                                           "RO_SIHOT_AGENCY_OBJID is not NULL")
 
         self.room_change_max_days_diff = self.load_view(db, 'dual',

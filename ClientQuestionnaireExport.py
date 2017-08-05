@@ -22,7 +22,7 @@ __version__ = '0.1'
 
 LIST_MARKER_PREFIX = '*'
 LINE_SEPARATOR = '\n'
-SIHOT_PROVIDES_CHECKOUT_TIME = False    # 3333333333
+SIHOT_PROVIDES_CHECKOUT_TIME = False    # currently there is no real checkout time available in Sihot
 SIHOT_DATE_FORMAT = '%Y-%m-%d %H:%M:%S' if SIHOT_PROVIDES_CHECKOUT_TIME else '%Y-%m-%d'
 
 startup_date = datetime.datetime.now() if SIHOT_PROVIDES_CHECKOUT_TIME else datetime.date.today()
@@ -43,24 +43,24 @@ cae.add_option('dateTill', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME els
 cae.add_option('exportFile', "Full path and name of the CSV file (appending new checkouts if already exits)", '', 'x')
 
 
-uprint('Server IP/Web-port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+uprint("Server IP/Web-port:", cae.get_option('serverIP'), cae.get_option('serverPort'))
+uprint("TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
 export_fnam = cae.get_option('exportFile')
-uprint('Export file:', export_fnam)
+uprint("Export file:", export_fnam)
 date_from = cae.get_option('dateFrom')
 date_till = cae.get_option('dateTill')
-uprint('Date range including checkouts from', date_from.strftime(SIHOT_DATE_FORMAT),
+uprint("Date range including checkouts from", date_from.strftime(SIHOT_DATE_FORMAT),
        'and till/before', date_till.strftime(SIHOT_DATE_FORMAT))
 
 column_separator = cae.get_config('columnSeparator', default_value=',')
-uprint('Column separator character:', column_separator)
+uprint("Column separator character:", column_separator)
 max_len_of_stay = cae.get_config('maxLengthOfStay', default_value=42)
-uprint('Maximum length of stay:', max_len_of_stay,
-       ' - includes arrivals back to', date_from - datetime.timedelta(days=max_len_of_stay))
+uprint("Maximum length of stay:", max_len_of_stay,
+       " - includes arrivals back to", date_from - datetime.timedelta(days=max_len_of_stay))
 search_flags = cae.get_config('ResSearchFlags', default_value='ALL-HOTELS')
-uprint('Search flags:', search_flags)
+uprint("Search flags:", search_flags)
 search_scope = cae.get_config('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
-uprint('Search scope:', search_scope)
+uprint("Search scope:", search_scope)
 file_caption = cae.get_config('fileCaption',
                               default_value='UNIQUEID' + column_separator
                                             + 'CHECKIN' + column_separator + 'CHECKOUT' + column_separator
@@ -70,7 +70,7 @@ file_caption = cae.get_config('fileCaption',
                                             + 'LOCATIONID' + column_separator
                                             + 'STAYMONTH' + column_separator + 'STAYYEAR' + column_separator
                                             + 'LANGUAGE')
-uprint('File caption:', file_caption)
+uprint("File caption:", file_caption)
 file_columns = cae.get_config('fileColumns',
                               default_value=['<unique_id>', 'ARR', 'DEP',
                                              LIST_MARKER_PREFIX + 'NAME2', LIST_MARKER_PREFIX + 'NAME',
@@ -82,13 +82,13 @@ file_columns = cae.get_config('fileColumns',
                                              '<check_out.month>', '<check_out.year>',
                                              LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'LANG',
                                              ])
-uprint('File columns:', file_columns)
+uprint("File columns:", file_columns)
 
 if not export_fnam:
-    uprint('Invalid or empty export file name - please specify with the --exportFile option.')
+    uprint("Invalid or empty export file name - please specify with the --exportFile option.")
     cae.shutdown(15)
 elif date_from >= date_till:
-    uprint('Specified date range is invalid - dateFrom({}) has to be before dateTill({}).'.format(date_from, date_till))
+    uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({}).".format(date_from, date_till))
     cae.shutdown(18)
 
 
@@ -99,13 +99,13 @@ def get_col_val(row, col_nam, arri=-1):
         col_nam = col_nam[len(LIST_MARKER_PREFIX):]
 
     if col_nam not in row:
-        col_val = '(missing)'
+        col_val = "(missing)"
     elif is_list and 'elemListVal' in row[col_nam] and len(row[col_nam]['elemListVal']) > arri:
         col_val = row[col_nam]['elemListVal'][arri]
     elif 'elemVal' in row[col_nam]:
-        col_val = row_dict[col_nam]['elemVal']
+        col_val = row[col_nam]['elemVal']
     else:
-        col_val = '(incomplete)'
+        col_val = "(incomplete)"
 
     return col_val
 
@@ -186,7 +186,7 @@ try:
     # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
     all_rows = res_search.search(from_date=first_checkin, to_date=last_checkout, flags=search_flags, scope=search_scope)
     if all_rows and isinstance(all_rows, str):
-        uprint(' ***  Sihot.PMS reservation search error:', all_rows)
+        uprint(" ***  Sihot.PMS reservation search error:", all_rows)
         cae.shutdown(21)
     elif all_rows and isinstance(all_rows, list):
         exp_file_exists = os.path.exists(export_fnam)
@@ -244,10 +244,10 @@ try:
                         f.write(c_val)
             f.write(LINE_SEPARATOR)
     else:
-        uprint(' ***  Unspecified Sihot.PMS reservation search error')
+        uprint(" ***  Unspecified Sihot.PMS reservation search error")
         cae.shutdown(24)
 except Exception as ex:
-    uprint(' ***  Exception:', str(ex))
+    uprint(" ***  Exception:", str(ex))
     print_exc()
     cae.shutdown(27)
 
