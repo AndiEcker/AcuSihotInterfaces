@@ -54,6 +54,15 @@ class Notification:
         self.debug_level = debug_level
 
     def send_notification(self, msg_body, subject=None, mail_to=None, data_dict=None):
+        """
+        send a notification email
+
+        :param msg_body: email body text (including \n for new lines)
+        :param subject: email subject text (optional, default="Notification")
+        :param mail_to: list of email receiver addresses (optional: default=instance/self mail_to addresses)
+        :param data_dict: dict of additional data used for to display and for to evaluate mail_to expression (optional)
+        :return: error message on error or empty string if notification got send successfully
+        """
         if self._mail_body_footer:
             msg_body += '\n' + self._mail_body_footer
         if not subject:
@@ -62,6 +71,8 @@ class Notification:
             subject += ' [' + self._used_system + ']'
         if not mail_to:
             mail_to = self._mail_to
+        title_ext = " with subject='" + subject + "'" + \
+                    (" and data_dict='" + str(data_dict) + "'" if data_dict else "") + "."
         if isinstance(mail_to, str):
             mail_to_expr = mail_to
             try:
@@ -69,7 +80,7 @@ class Notification:
             except Exception as ex:
                 uprint(" **** Notification.send_notification() exception '" + str(ex) +
                        "' on evaluating of expression '" + str(mail_to_expr) +
-                       "' with subject='" + subject + "' and data_dict='" + str(data_dict) + "'.")
+                       "'" + title_ext)
         if not isinstance(mail_to, list):
             uprint(" **** Notification.send_notification(): invalid email-to address list or expression '" +
                    str(mail_to) + "' - using ITDevmen fallback!")
@@ -77,7 +88,7 @@ class Notification:
 
         # log error message and try to send it per email
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint(' #### Notification.send_notification(): "{}" with subject "{}".'.format(msg_body, subject))
+            uprint(" #### Notification.send_notification(): '" + str(msg_body) + "'" + title_ext)
         err_msg = ''
         try:
             message = MIMEText(msg_body)

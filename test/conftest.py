@@ -6,7 +6,7 @@ from configparser import ConfigParser
 from ae_db import OraDB
 from acu_sf_sh_sys_data import AssSysData
 from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot
-from sfif import SfInterface
+from sfif import prepare_connection
 
 
 @pytest.fixture(scope="module")
@@ -94,14 +94,8 @@ def create_test_guest(console_app_env):
 
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
-    usr = console_app_env.get_config('sfUser')
-    return SfInterface(username=usr,
-                       password=console_app_env.get_config('sfPassword'),
-                       token=console_app_env.get_config('sfToken'),
-                       sandbox=console_app_env.get_config('sfIsSandbox',
-                                                          default_value='test' in usr.lower()
-                                                                        or 'sandbox' in usr.lower()),
-                       client_id=console_app_env.get_config('sfClientId', default_value='TestSfInterface'))
+    sf_conn, sf_sandbox = prepare_connection(console_app_env, client_id='TestSfInterface')
+    return sf_conn
 
 
 ############################################################################
@@ -135,6 +129,8 @@ class ConsoleApp:
                              warningFragments='',
                              sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
                              sfToken=cfg.get('Settings', 'sfToken'),
+                             emailValidatorBaseUrl=cfg.get('Settings', 'emailValidatorBaseUrl'),
+                             emailValidatorApiKey=cfg.get('Settings', 'emailValidatorApiKey'),
                              )
 
     def get_config(self, name, value=None):

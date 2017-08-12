@@ -1,7 +1,28 @@
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
+from ae_console_app import uprint
 
 # contact record type id for owners
 OWNER_RECORD_TYPE_ID = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
+
+
+def prepare_connection(cae, client_id='', use_production=False, print_on_console=False):
+    sf_sandbox = cae.get_config('sfIsSandbox', default_value=not use_production)
+    if sf_sandbox == use_production:
+        uprint('******  Salesforce sandbox/production usage discrepancy: sandbox={}, use_production={}'
+               .format(sf_sandbox, use_production))
+        sf_sandbox = not use_production
+
+    suffix = 'Production' if use_production else ''
+    sf_user = cae.get_config('sfUser' + suffix, default_value=cae.get_config('sfUser', default_value=''))
+    sf_client = cae.get_config('sfClientId' + suffix,
+                               default_value=cae.get_config('sfClientId', default_value=client_id))
+    sf_token = cae.get_config('sfToken' + suffix, default_value=cae.get_config('sfToken', default_value=''))
+    sf_pw = cae.get_config('sfPassword' + suffix, default_value=cae.get_config('sfPassword', default_value=''))
+    sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
+    if print_on_console:
+        uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
+
+    return sf_conn, sf_sandbox
 
 
 class SfInterface:
@@ -57,7 +78,7 @@ class SfInterface:
         return self._conn
 
     def contacts_with_rci_id(self, ext_refs_sep):
-        contacts = []
+        contact_tuples = []
         res = self._soql_query_all("SELECT Id, CD_CODE__c, RCI_Reference__c, Sihot_Guest_Object_Id__c, RecordType.Id,"
                                    " (SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE 'RCI%')"
                                    " FROM Contact")
@@ -66,10 +87,10 @@ class SfInterface:
                 ext_refs = [c['RCI_Reference__c']] if c['RCI_Reference__c'] else []
                 ext_refs.extend([_['Reference_No_or_ID__c'] for _ in c['External_References__r']['records']])
                 if ext_refs:
-                    contacts.append((c['CD_CODE__c'], c['Id'], c['Sihot_Guest_Object_Id__c'],
-                                     ext_refs_sep.join(ext_refs),
-                                     1 if c['RecordType']['Id'] == OWNER_RECORD_TYPE_ID else 0))
-        return contacts
+                    contact_tuples.append((c['CD_CODE__c'], c['Id'], c['Sihot_Guest_Object_Id__c'],
+                                          ext_refs_sep.join(ext_refs),
+                                          1 if c['RecordType']['Id'] == OWNER_RECORD_TYPE_ID else 0))
+        return contact_tuples
 
     REF_TYPE_ALL = 'all'
     REF_TYPE_MAIN = 'main'
@@ -118,6 +139,47 @@ class SfInterface:
         if not self.error_msg and res['totalSize'] > 0:
             sf_dict = res['records'][0]
         return sf_dict
+
+    def contacts_not_validated(self, rec_type_dev_name=None, validate_email=True, validate_phone=False):
+        assert validate_email or validate_phone
+        q = "SELECT Id, Country__c" \
+            + (", Email, CD_email_valid__c" if validate_email else "") \
+            + (", HomePhone, CD_Htel_valid__c, MobilePhone, CD_mtel_valid__c, Work_Phone__c, CD_wtel_valid__c"
+               if validate_phone else "") \
+            + " FROM Contact WHERE" \
+            + (" RecordType.DeveloperName = '" + rec_type_dev_name + "' and" if rec_type_dev_name else "") \
+            + "(" \
+            + ("(Email != Null and CD_email_valid__c = NULL)" if validate_email else "") \
+            + (" or " if validate_email and validate_phone else "") \
+            + ("(HomePhone != NULL and CD_Htel_valid__c = NULL)"
+               + " or (MobilePhone != NULL and CD_mtel_valid__c = NULL)"
+               + " or (Work_Phone__c != NULL and CD_wtel_valid__c = NULL)" if validate_phone else "") \
+            + ") ORDER BY Country__c"
+        res = self._soql_query_all(q)
+        if self.error_msg or res['totalSize'] <= 0:
+            contact_dicts = []
+        else:
+            contact_dicts = [{k: v for k, v in rec.items() if k != 'attributes'} for rec in res['records']]
+            assert len(contact_dicts) == res['totalSize']
+        return contact_dicts
+
+    def contact_upsert(self, fields_dict):
+        err = msg = ""
+        if 'Id' in fields_dict:     # update?
+            sf_id = fields_dict['Id']
+            del fields_dict['Id']
+            try:
+                sf_http_code = self._conn.Contact.update(sf_id, fields_dict)
+                msg = "Salesforce Contact {} updated with {}, status={}".format(sf_id, fields_dict, sf_http_code)
+            except Exception as ex:
+                err = "Salesforce Contact update raised exception {}".format(ex)
+        else:
+            try:
+                sf_http_code = self._conn.Contact.create(fields_dict)
+                msg = "Salesforce Contact created with {}, status={}".format(fields_dict, sf_http_code)
+            except Exception as ex:
+                err = "Salesforce Contact creation raised exception {}".format(ex)
+        return err, msg
 
     def record_type_id(self, dev_name, obj_type='Contact'):
         rec_type_id = None

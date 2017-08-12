@@ -3,8 +3,7 @@ from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, Salesf
 
 __version__ = '0.1'
 
-cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
-                 debug_level_def=DEBUG_LEVEL_VERBOSE)
+cae = ConsoleApp(__version__, "Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE)
 
 sf_user = cae.get_config('sfUser')
 sf_pw = cae.get_config('sfPassword')
@@ -254,3 +253,15 @@ if result['done'] and result['totalSize'] > 0:
             print(".. inserting")
             sb.Contact.create({'FirstName': 'Sally', 'lastName': 'S-force', 'RecordTypeId': rec_type,
                                'Email': email})
+
+# extract data for to double check phone validation done with data-8 against the byteplant phone validator
+result = sb.query_all("SELECT Id, Country__c, HomePhone, MobilePhone, Work_Phone__c,"
+                      " CD_Htel_valid__c, CD_mtel_valid__c, CD_wtel_valid__c"
+                      " FROM Contact"
+                      " WHERE CD_Htel_valid__c != NULL or CD_mtel_valid__c != NULL or CD_wtel_valid__c != NULL")
+if result['done'] and result['totalSize'] > 0:
+    records = result['records']
+    for rec in records:
+        print(rec['Id'], rec['Country__c'],
+              rec['HomePhone'], rec['CD_Htel_valid__c'], rec['MobilePhone'], rec['CD_mtel_valid__c'],
+              rec['Work_Phone__c'], rec['CD_wtel_valid__c'])
