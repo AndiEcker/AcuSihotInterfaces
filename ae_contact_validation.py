@@ -11,7 +11,7 @@ class EmailValidator:
         Alternative and free email validation (MX-record, DNS and extended regular expression match) with free
         pip python module: https://github.com/syrusakbary/validate_email/blob/master/validate_email.py
     """
-    def __init__(self, base_url, api_key, pause_seconds=3.0, max_retries=3):
+    def __init__(self, base_url, api_key, pause_seconds=9.0, max_retries=3):
         assert base_url
         self._base_url = base_url
         assert api_key
@@ -22,10 +22,11 @@ class EmailValidator:
         self._max_retries = max_retries
 
     def validate(self, email):
+        pause_seconds = self._pause_seconds
         try:
             for tries in range(1, self._max_retries + 1):
-                if tries > 1 and self._pause_seconds:
-                    time.sleep(self._pause_seconds)
+                if tries > 1 and pause_seconds:
+                    time.sleep(pause_seconds)
                 # POST==GET: res = requests.post(self._base_url, data=dict(EmailAddress=email, APIKey=self._api_key))
                 res = requests.get(self._base_url, params=dict(EmailAddress=email, APIKey=self._api_key))
                 if res.status_code != requests.codes.ok:    # ==200
@@ -40,7 +41,9 @@ class EmailValidator:
                 if status in (200, 207, 215):
                     break
                 if tries == self._max_retries:
-                    return "EmailValidator.validate(): {}: {} status={}".format(ret['info'], ret['details'], status)
+                    return "EmailValidator.validate(): maximum/{} retries reached. ret={}".format(tries, ret)
+                if status in (114, 118):
+                    pause_seconds += 3.0 * (tries ** 2.0)
         except requests.exceptions.RequestException as ex:
             return "EmailValidator.validate(): requests exception {} raised".format(ex)
         except Exception as ex:
@@ -50,7 +53,7 @@ class EmailValidator:
 
 
 class PhoneValidator:
-    def __init__(self, base_url, api_key, pause_seconds=3.0, max_retries=3):
+    def __init__(self, base_url, api_key, pause_seconds=9.0, max_retries=3):
         assert base_url
         self._base_url = base_url
         assert api_key
@@ -61,10 +64,11 @@ class PhoneValidator:
         self._max_retries = max_retries
 
     def validate(self, phone, country_code='', ret_val_dict=None):
+        pause_seconds = self._pause_seconds
         try:
             for tries in range(1, self._max_retries + 1):
-                if tries > 1 and self._pause_seconds:
-                    time.sleep(self._pause_seconds)
+                if tries > 1 and pause_seconds:
+                    time.sleep(pause_seconds)
                 res = requests.get(self._base_url, params=dict(PhoneNumber=phone, CountryCode=country_code,
                                                                APIKey=self._api_key))
                 if res.status_code != requests.codes.ok:    # ==200
@@ -74,15 +78,20 @@ class PhoneValidator:
 
                 ret = json.loads(res.text)
                 status = ret['status']
-                if status in ('VALID_CONFIRMED',):
-                    if ret_val_dict:
+                # other status: VALID_UNCONFIRMED, INVALID, DELAYED, RATE_LIMIT_EXCEEDED, API_KEY_INVALID_OR_DEPLETED
+                if status in ('VALID_CONFIRMED', 'VALID_UNCONFIRMED'):
+                    if ret_val_dict is not None:
                         # pass back other fields like line-type, location, reformatted phone number, ...
                         # .. see also https://www.phone-validator.net/phone-number-online-validation-api.html
+                        if 'formatinternational' in ret:
+                            if ret['formatinternational'].startswith('+'):
+                                ret['formatinternational'] = '00' + ret['formatinternational'][1:]
+                            ret['formatinternational'] = ret['formatinternational'].replace(' ', '')
                         ret_val_dict.update(ret)
                     break
-                # other status: VALID_UNCONFIRMED, INVALID, DELAYED, RATE_LIMIT_EXCEEDED, API_KEY_INVALID_OR_DEPLETED
                 if tries == self._max_retries:
-                    return "PhoneValidator.validate(): {}: {} status={}".format(ret['info'], ret['details'], status)
+                    return "PhoneValidator.validate(): maximum/{} retries reached. ret={}".format(tries, ret)
+                pause_seconds += 3.0 * (tries ** 2.0)
         except requests.exceptions.RequestException as ex:
             return "PhoneValidator.validate(): requests exception {} raised".format(ex)
         except Exception as ex:
@@ -92,7 +101,7 @@ class PhoneValidator:
 
 
 class AddressValidator:
-    def __init__(self, base_url, api_key, pause_seconds=3.0, max_retries=3,
+    def __init__(self, base_url, api_key, pause_seconds=9.0, max_retries=3,
                  auto_complete_search_url='', auto_complete_fetch_url=''):
         assert base_url
         self._base_url = base_url
@@ -109,11 +118,12 @@ class AddressValidator:
     def auto_complete(self, address, country_code='', ret_val_dict=None):
         assert self._auto_complete_search_url and self._auto_complete_fetch_url
         address = address.replace('\n', ',').replace('\r', ',')
+        pause_seconds = self._pause_seconds
         try:
-            result_ids = []
+            result_ids = list()
             for tries in range(1, self._max_retries + 1):
-                if tries > 1 and self._pause_seconds:
-                    time.sleep(self._pause_seconds)
+                if tries > 1 and pause_seconds:
+                    time.sleep(pause_seconds)
                 res = requests.get(self._auto_complete_search_url, params=dict(Query=address, Country=country_code,
                                                                                APIKey=self._api_key))
                 if res.status_code != requests.codes.ok:    # ==200
@@ -127,12 +137,13 @@ class AddressValidator:
                     result_ids = [_['id'] for _ in results]
                     break
                 if tries == self._max_retries:
-                    return "AddressValidator.auto_complete(): {}: {} results={}".format(ret['info'], ret['details'],
-                                                                                        results)
+                    return "AddressValidator.validate(): maximum/{} retries reached. ret={}".format(tries, ret)
+                pause_seconds += 3.0 * (tries ** 2.0)
+
             for addr_id in result_ids:
                 for tries in range(1, self._max_retries + 1):
-                    if tries > 1 and self._pause_seconds:
-                        time.sleep(self._pause_seconds)
+                    if tries > 1 and pause_seconds:
+                        time.sleep(pause_seconds)
                     res = requests.get(self._auto_complete_fetch_url, params=dict(id=addr_id, APIKey=self._api_key))
                     if res.status_code != requests.codes.ok:  # ==200
                         if tries == self._max_retries:
@@ -142,14 +153,15 @@ class AddressValidator:
                     ret = json.loads(res.text)
                     results = ret['result']
                     if results:
-                        if ret_val_dict:
+                        if ret_val_dict is not None:
                             # pass back fetched fields like formatted-address, country, state, city, street, ...
                             # .. see also https://www.address-validator.net/address-online-verification-api.html
                             ret_val_dict.update(results)
                         break
                     if tries == self._max_retries:
-                        return "AddressValidator.auto_complete(): {}: {} status={}".format(ret['info'], ret['details'],
-                                                                                           results)
+                        return "AddressValidator.validate(): maximum/{} retries reached. ret={}".format(tries, ret)
+                    pause_seconds += 3.0 * (tries ** 2.0)
+
         except requests.exceptions.RequestException as ex:
             return "AddressValidator.auto_complete(): requests exception {} raised".format(ex)
         except Exception as ex:
@@ -158,10 +170,11 @@ class AddressValidator:
         return ""
 
     def validate(self, street, city, country_code='', postal='', state='', apt_suite='', ret_val_dict=None):
+        pause_seconds = self._pause_seconds
         try:
             for tries in range(1, self._max_retries + 1):
-                if tries > 1 and self._pause_seconds:
-                    time.sleep(self._pause_seconds)
+                if tries > 1 and pause_seconds:
+                    time.sleep(pause_seconds)
                 res = requests.get(self._base_url, params=dict(StreetAddress=street, City=city,
                                                                CountryCode=country_code, PostalCode=postal, State=state,
                                                                AdditionalAddressInfo=apt_suite,
@@ -174,7 +187,7 @@ class AddressValidator:
                 ret = json.loads(res.text)
                 status = ret['status']
                 if status in ('VALID',):
-                    if ret_val_dict:
+                    if ret_val_dict is not None:
                         # pass back other fields like formatted-address, street, city, street-number, postal-code, ...
                         # .. see also https://www.address-validator.net/address-online-verification-api.html
                         ret_val_dict.update(ret)
@@ -182,7 +195,9 @@ class AddressValidator:
                 # other status: SUSPECT, INVALID, DELAYED, RATE_LIMIT_EXCEEDED, API_KEY_INVALID_OR_DEPLETED, RESTRICTED,
                 # .. INTERNAL_ERROR
                 if tries == self._max_retries:
-                    return "AddressValidator.validate(): {}: {} status={}".format(ret['info'], ret['details'], status)
+                    return "AddressValidator.validate(): maximum/{} retries reached. ret={}".format(tries, ret)
+                pause_seconds += 3.0 * (tries ** 2.0)
+
         except requests.exceptions.RequestException as ex:
             return "AddressValidator.validate(): requests exception {} raised".format(ex)
         except Exception as ex:

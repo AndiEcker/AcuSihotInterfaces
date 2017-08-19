@@ -94,7 +94,7 @@ class OraDB:
 
     def selected_column_names(self):
         curs_desc = self.cursor_description()
-        col_names = []
+        col_names = list()
         if curs_desc:
             for col_desc in curs_desc:
                 col_names.append(col_desc[0])
@@ -108,7 +108,7 @@ class OraDB:
         except Exception as ex:
             uprint("oraDB fetch_all() exception: " + str(ex))
             rows = None
-        return rows or []
+        return rows or list()
 
     def fetch_value(self, col_idx=0):
         try:

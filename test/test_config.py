@@ -12,6 +12,38 @@ class TestSystem:
         kvs = config_dict.get_key_values(config_type='10', hotel_id='1')
         assert lang_id in kvs
 
+    def test_config_missing_acu_mkt_seg(self, config_dict, db_connected):
+        mss = config_dict.get_key_values(config_type='MA', hotel_id='1')
+        db_connected.select('T_RO', ['nvl(RO_SIHOT_MKT_SEG, RO_CODE)'])
+        ros = db_connected.fetch_all()
+        db_connected.close()
+        not_found_ros = list()
+        for ms in mss:
+            for ro in ros:
+                if ms == ro[0]:
+                    break
+            else:
+                not_found_ros.append(ms)
+        assert not not_found_ros
+
+    def test_config_mkt_seg_hotel_diffs(self, config_dict):
+        mss1 = config_dict.get_key_values(config_type='MA', hotel_id='1')
+        mss4 = config_dict.get_key_values(config_type='MA', hotel_id='4')
+        ms_diff = list()
+        for ms1 in mss1:
+            for ms4 in mss4:
+                if ms1 == ms4:
+                    break
+            else:
+                ms_diff.append(ms1)
+        for ms4 in mss4:
+            for ms1 in mss1:
+                if ms4 == ms1:
+                    break
+            else:
+                ms_diff.append(ms4)
+        assert not ms_diff
+
     def test_cat_rooms_bhc(self, cat_rooms, db_connected):      # see also TestRoomCat class further down
         db_connected.select('T_AP', ['AP_CODE', 'AP_SIHOT_CAT'],
                             "F_RESORT(AP_CODE) = 'BHC' and AP_SIHOT_CAT is not NULL")

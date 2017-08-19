@@ -41,9 +41,9 @@ cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 
 
 cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", [], 'r')
+cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
 
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", [], 'v')
+cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
 
 
 debug_level = cae.get_option('debugLevel')

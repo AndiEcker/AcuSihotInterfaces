@@ -1,7 +1,7 @@
-# Interfaces between Sihot.PMS and Acumen
+# Interfaces between Sihot.PMS, Acumen and Salesforce
 
 >Tools and processes for to migrate and synchronize system configuration, room status, clients and reservations 
-between Sihot.PMS and Acumen.
+between Sihot.PMS, Acumen and Salesforce.
 
 ## Available Commands
 
@@ -14,6 +14,8 @@ This interface suite project is including the following command line tools:
 | ClientQuestionnaireExport | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
+| SfContactValidator | Salesforce Contact Data Validator | - |
+| ShSfContactMigration | Migrate contactable guests from Sihot to Salesforce | Web |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
 | SihotResImport | Import Thomas Cook (Scandinavian) R*.txt files into Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
@@ -31,14 +33,16 @@ Most of the available commands are using the same command line options. The foll
 | acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfContactValidator |
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
 | cmdInterval | Command interval in seconds | 3600 | s | WatchPupPy |
-| dateFrom | Date of first check-out to export | (current date - 7 days or last-runs dateTo plus 1 day) | F | ClientQuestionnaireExport |
-| dateTill | Date of last check-out to export | (current date) | T | ClientQuestionnaireExport |
+| dateFrom | Date of first check-out to export | (current date - 7 days or last-runs dateTo plus 1 day) | F | ClientQuestionnaireExport, ShSfContactMigration |
+| dateTill | Date of last check-out to export | (current date) | T | ClientQuestionnaireExport, ShSfContactMigration |
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose) | 0 | D | (all) |
+| emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfContactValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
 | help | Show help on all the available command line argument options | - | h | (all) |
@@ -46,28 +50,31 @@ Most of the available commands are using the same command line options. The foll
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
+| phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfContactValidator |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | y | SihotResImport |
+| recordTypesToValidate | Contact record type(s) to be validated | 'Rentals' | R | SfContactValidator |
 | resHistory | Migrate also the clients reservation history (0=No, 1=Yes) | 1 | r | SihotMigration |
-| serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
-| timeout | Timeout in seconds for TCP/IP connections | 39.6 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| timeout | Timeout in seconds for TCP/IP connections | 39.6 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SihotResImport, SihotResSync |
-| xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| useSfProduction | Salesforce system to use (0=sandbox, 1=production) | 0 | S | SfContactValidator, ShSfContactMigration |
+| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync |
+| xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options (apart from `| l |`
 which is throwing the exception `argparse.ArgumentError: conflicting option string: -l`).
 
 ### AcuSihotMonitor Application
 
-AcuSihotMonitor is a kivy application that would run on Windows, Linux, Mac OS X, Android and iOS and allows to check
-the correct functionality of the Acumen and Sihot servers and interfaces.
+AcuSihotMonitor is a kivy application for Windows, Linux, Mac OS X, Android and iOS and allows to check
+the correct functionality of the Salesforce, Acumen and Sihot servers and interfaces.
 
 ### ClientQuestionnaireExport Application
 

@@ -846,7 +846,7 @@ class ConfigDictResponse(Response):
         self._base_tags += ('KEY', 'VALUE')  # VALUE for key value (remove from additional error info - see 'VALU')
         self.value = None  # added for to remove pycharm warning
         self.key = None
-        self.key_values = {}  # for to store the dict with all key values
+        self.key_values = dict()  # for to store the dict with all key values
 
     def end(self, tag):
         if super(ConfigDictResponse, self).end(tag) is None:
@@ -863,13 +863,13 @@ class CatRoomResponse(Response):
         self._base_tags += ('NAME', 'RN')
         self.name = None  # added for to remove pycharm warning
         self.rn = None
-        self.cat_rooms = {}  # for to store the dict with all key values
+        self.cat_rooms = dict()  # for to store the dict with all key values
 
     def end(self, tag):
         if super(CatRoomResponse, self).end(tag) is None:
             return None  # tag used/processed by base class
         elif tag == 'NAME':
-            self.cat_rooms[self.name] = []
+            self.cat_rooms[self.name] = list()
         elif tag == 'RN':
             self.cat_rooms[self.name].append(self.rn)
         return tag
@@ -894,7 +894,7 @@ class GuestInfoResponse(Response):
         self._ret_elem_names = ret_elem_names    # list of names of XML-elements or response-base-attributes
         self._return_value_as_key = len(ret_elem_names) == 1 and ret_elem_names[0][0] == ':'
 
-        self.ret_elem_values = {} if self._return_value_as_key else []
+        self.ret_elem_values = dict() if self._return_value_as_key else list()
         self._key_elem_index = 0
         self._in_guest_profile = False
         self._col_map_parser = ColMapXmlParser(ca, deepcopy(MAP_KERNEL_CLIENT))
@@ -1034,7 +1034,7 @@ class ResFromSihot(ColMapXmlParser):
         super(ResFromSihot, self).end(tag)
         if tag == 'RESERVATION':  # using tag because self._curr_tag got reset by super method of end()
             if self.ca.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
-                msg = []
+                msg = list()
                 for k in self.elem_col_map:
                     if 'elemListVal' in self.elem_col_map[k]:
                         msg.append(self.elem_col_map[k]['elemName'] + '=' + str(self.elem_col_map[k]['elemListVal']))
@@ -1066,9 +1066,9 @@ class SihotXmlBuilder:
         # self.acu_col_expres = [c['colValFromAcu'] + " as " + c['colName'] if 'colValFromAcu' in c else c['colName']
         #                       for c in col_map if 'colName' in c and 'colVal' not in c]
         # alternative version preventing duplicate column names
-        self.fix_col_values = {}
-        self.acu_col_names = []  # acu_col_names and acu_col_expres need to be in sync
-        self.acu_col_expres = []
+        self.fix_col_values = dict()
+        self.acu_col_names = list()  # acu_col_names and acu_col_expres need to be in sync
+        self.acu_col_expres = list()
         for c in col_map:
             if 'colName' in c:
                 if 'colVal' in c:
@@ -1092,7 +1092,7 @@ class SihotXmlBuilder:
                 uprint("SihotXmlBuilder.__init__() db connect error:", err_msg)
             else:
                 self.acu_connected = connect_to_acu  # ==True
-        self._rows = []  # list of dicts, used by inheriting class for to store the rows to send to SiHOT.PMS
+        self._rows = list()  # list of dicts, used by inheriting class for to store the rows to send to SiHOT.PMS
         self._current_row_i = 0
 
         self._xml = ''
@@ -1106,7 +1106,7 @@ class SihotXmlBuilder:
 
     @property
     def cols(self):
-        return self._rows[self._current_row_i] if len(self._rows) > self._current_row_i else {}
+        return self._rows[self._current_row_i] if len(self._rows) > self._current_row_i else dict()
 
     # def next_row(self): self._current_row_i += 1
 
@@ -1121,7 +1121,7 @@ class SihotXmlBuilder:
     # --- database fetching
 
     def fetch_all_from_acu(self):
-        self._rows = []
+        self._rows = list()
         plain_rows = self.ora_db.fetch_all()
         for r in plain_rows:
             col_values = self.fix_col_values.copy()
@@ -1162,7 +1162,7 @@ class SihotXmlBuilder:
                 l['c'] = col_values
                 l['datetime'] = datetime
                 try:
-                    hide = eval(hide_expr, {}, l)
+                    hide = eval(hide_expr, dict(), l)
                 except (Exception, KeyError, NameError, SyntaxError, SyntaxWarning, TypeError) as ex:
                     uprint("SihotXmlBuilder.prepare_map_xml() ignoring expression evaluation error:", ex,
                            "Expr=", hide_expr)

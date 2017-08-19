@@ -30,7 +30,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 
     cae.add_option('smtpServerUri', "SMTP notification server URI [user[:pw]@]host[:port]", '', 'c')
     cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-    cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", [], 'r')
+    cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
 
     uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
     uprint('Server IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))

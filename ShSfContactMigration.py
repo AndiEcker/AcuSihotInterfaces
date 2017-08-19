@@ -8,10 +8,13 @@ import datetime
 import time
 import re
 from traceback import print_exc
+import pprint
 
-from ae_console_app import ConsoleApp, uprint
+from copy import deepcopy
+
+from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from sxmlif import ResSearch, SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
-from sfif import prepare_connection
+from sfif import prepare_connection, CONTACT_REC_TYPE_RENTALS
 from ae_notification import Notification
 
 __version__ = '0.1'
@@ -23,6 +26,9 @@ SIHOT_DATE_FORMAT = '%Y-%m-%d %H:%M:%S' if SIHOT_PROVIDES_CHECKOUT_TIME else '%Y
 startup_date = datetime.datetime.now() if SIHOT_PROVIDES_CHECKOUT_TIME else datetime.date.today()
 mail_re = re.compile('[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+\.[a-zA-Z]{2,4}$')
 
+PP_DEF_WIDTH = 120
+pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
+
 cae = ConsoleApp(__version__, "Migrate contactable guests from Sihot to Salesforce")
 cae.add_option('serverIP', "IP address of the Sihot interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the Sihot WEB interface", 14777, 'w')
@@ -30,18 +36,19 @@ cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 1869.
 cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('dateFrom', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
-               " of first check-in to be migrated", startup_date - datetime.timedelta(days=21), 'F')
+               " of first check-in to be migrated", startup_date - datetime.timedelta(days=2), 'F')
 cae.add_option('dateTill', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
-               " of last check-in to be migrated", startup_date, 'T')
+               " of last check-in to be migrated", startup_date - datetime.timedelta(days=1), 'T')
 
 cae.add_option('useSfProduction', "Salesforce system to use (0=sandbox, 1=production)", 0, 'S', choices=(0, 1))
 
 cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", [], 'r')
+cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
 
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", [], 'v')
+cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
 
+debug_level = cae.get_option('debugLevel')
 
 uprint("Server IP/Web-port:", cae.get_option('serverIP'), cae.get_option('serverPort'))
 uprint("TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
@@ -50,7 +57,7 @@ date_from = cae.get_option('dateFrom')
 date_till = cae.get_option('dateTill')
 uprint("Date range including check-ins from", date_from.strftime(SIHOT_DATE_FORMAT),
        'and till/before', date_till.strftime(SIHOT_DATE_FORMAT))
-if date_from >= date_till:
+if date_from > date_till:
     uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({}).".format(date_from, date_till))
     cae.shutdown(18)
 elif date_till > startup_date:
@@ -67,16 +74,22 @@ uprint("Search flags:", search_flags)
 search_scope = cae.get_config('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
 uprint("Search scope:", search_scope)
 
-allowed_mkt_src = cae.get_config('MarketSources', default_value=[])
+allowed_mkt_src = cae.get_config('MarketSources', default_value=list())
 uprint("Allowed Market Sources:", allowed_mkt_src)
 
-invalid_email_fragments = cae.get_config('InvalidEmailFragments', default_value=[])
+invalid_email_fragments = cae.get_config('InvalidEmailFragments', default_value=list())
 uprint("Invalid email fragments:", invalid_email_fragments)
 restrict_to_valid_emails = cae.get_config('restrictToValidEmails', default_value=True)
 if restrict_to_valid_emails:
     uprint("      Only sending valid email addresses")
+default_email_address = cae.get_config('defaultEmailAddress', default_value='ClientHasNoEmail@signallia.com')
+# html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>
+msf_beg = cae.get_config('monoSpacedFontBegin', default_value='<pre>')
+msf_end = cae.get_config('monoSpacedFontEnd', default_value='</pre>')
 
-sf_conn, sf_sandbox = prepare_connection(cae, client_id='ShSfContactMigration',
+ignore_case_fields = cae.get_config('ignoreCaseFields', default_value=['Email'])
+
+sf_conn, sf_sandbox = prepare_connection(cae, client_id_default='ShSfContactMigration',
                                          use_production=cae.get_option('useSfProduction'))
 
 notification = warning_notification_emails = None
@@ -84,15 +97,14 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
     notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
                                 mail_from=cae.get_option('smtpFrom'),
                                 mail_to=cae.get_option('smtpTo'),
-                                used_system=cae.get_option('serverIP') + '/' + ("SF sandbox" if sf_sandbox else "SF"),
+                                used_system=cae.get_option('serverIP') + '/Salesforce' + ("sandbox" if sf_sandbox
+                                                                                          else "production"),
                                 debug_level=cae.get_option('debugLevel'))
     uprint("SMTP Uri/From/To:", cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
     warning_notification_emails = cae.get_option('warningsMailToAddr')
     if warning_notification_emails:
         uprint("Warnings SMTP receiver address(es):", warning_notification_emails)
 
-
-REC_TYPE_DEV_NAME = 'Rentals'
 ELEM_MISSING = "(missing)"
 ELEM_EMPTY = "(empty)"
 
@@ -104,11 +116,10 @@ AI_SCORE = ADD_INFO_PREFIX + 'score'
 AI_SF_ID = ADD_INFO_PREFIX + 'sf_id'
 AI_SF_CURR_DATA = ADD_INFO_PREFIX + 'sf_curr_data'
 
-
-log_errors = []
-log_items = []           # warnings on Sihot data
-ups_warnings = []           # warnings on Salesforce upserts
-notification_lines = []     # user notifications
+log_errors = list()
+log_items = list()              # warnings on Sihot data
+ups_warnings = list()           # warnings on Salesforce upserts
+notification_lines = list()     # user notifications
 
 
 def add_log_msg(msg, is_error=False):
@@ -133,22 +144,24 @@ def strip_add_info_keys(sfd):
 def strip_add_info_from_sf_data(sfd, strip_populated_sf_fields=False, record_type_id=None):
     sfs = dict()
     sfc = sfd[AI_SF_CURR_DATA] if strip_populated_sf_fields else None
-    for data_key in strip_add_info_keys(sfd):
-        is_rec_type_key = (data_key == 'RecordType.DeveloperName')
-        if not sfc or is_rec_type_key or not sfc[data_key]:
+    sid = sfd[AI_SF_ID] or sfd[AI_SH_RL_ID]
+    for key in strip_add_info_keys(sfd):
+        is_rec_type_key = (key == 'RecordType.DeveloperName')
+        if not sfc or is_rec_type_key or not sfc[key] or key in ('Previous_Arrival_Info__c',) \
+                or (key == 'Email' and sfc[key].lower() == default_email_address.lower() and key in sfd and sfd[key]):
             if record_type_id and is_rec_type_key:
                 sfs['RecordTypeId'] = record_type_id
             else:
-                sfs[data_key] = sfd[data_key]
-        elif sfc[data_key] != sfd[data_key]:
-            ups_warnings.append("Salesforce field {} has different value {} then Sihot {}"
-                                .format(data_key, sfc[data_key], sfd[data_key]))
+                sfs[key] = sfd[key]
+        elif sfc[key].lower() != sfd[key].lower() if key in ignore_case_fields else sfc[key] != sfd[key]:
+            ups_warnings.append("Guest/Contact {}: field {} has different value in Salesforce '{}' then in Sihot '{}'"
+                                .format(sid, key, sfc[key], sfd[key]))
     return sfs
 
 
 def ext_sf_dict(sfd, msg, skip_it=True):
     add_log_msg(("Skipping " if skip_it else "") + "res-id " + sfd[AI_SH_RL_ID]
-                + " with " + msg + '; Sihot data=' + str(strip_add_info_from_sf_data(sfd)))
+                + " with " + msg + '; Sihot data=' + pretty_print.pformat(strip_add_info_from_sf_data(sfd)))
     sfd[AI_WARNINGS].append(msg)
     if skip_it:
         sfd[AI_SCORE] -= 1.0
@@ -210,15 +223,19 @@ def name_is_valid(name):
 
 
 def valid_name_indexes(shd):
-    indexes = []
-    if 'NAME' in shd:
-        col_def = shd['NAME']
-        if 'elemListVal' in col_def:
-            for idx, name in enumerate(col_def['elemListVal']):
-                if name and name_is_valid(name):
+    indexes = list()
+    if 'NAME' in shd and 'NAME2' in shd:
+        col_def1 = shd['NAME']
+        col_def2 = shd['NAME2']
+        if 'elemListVal' in col_def1 and 'elemListVal' in col_def2:
+            for idx, name in enumerate(col_def1['elemListVal']):
+                name2 = col_def2['elemListVal'][idx]
+                if name and name_is_valid(name) and name2 and name_is_valid(name2):
                     indexes.append(idx)
-        if not indexes and 'elemVal' in col_def and col_def['elemVal'] and name_is_valid(col_def['elemVal']):
-            col_def['elemListVal'] = [col_def['elemVal']]
+        if not indexes and 'elemVal' in col_def1 and col_def1['elemVal'] and name_is_valid(col_def1['elemVal']) \
+                and 'elemVal' in col_def2 and col_def2['elemVal'] and name_is_valid(col_def2['elemVal']):
+            col_def1['elemListVal'] = [col_def1['elemVal']]
+            col_def2['elemListVal'] = [col_def2['elemVal']]
             indexes.append(0)
     return indexes
 
@@ -228,14 +245,14 @@ def email_is_valid(email):
     if email and mail_re.match(email):
         for frag in invalid_email_fragments:
             if frag in email:
-                break       # email is invalid/filtered-out
+                break  # email is invalid/filtered-out
         else:
             return True
     return False
 
 
 def valid_email_indexes(shd):
-    indexes = []
+    indexes = list()
     if PARSE_ONLY_TAG_PREFIX + 'EMAIL' in shd:
         col_def = shd[PARSE_ONLY_TAG_PREFIX + 'EMAIL']
         if 'elemListVal' in col_def:
@@ -250,12 +267,13 @@ def valid_email_indexes(shd):
 
 def score_match_name_to_email(sfd):
     mail_name = sfd['Email'].lower()
-    mail_names = mail_name.replace('.', ' ').replace('-', ' ').replace('_', ' ').split()
-    pers_name = sfd['FirstName'].lower() + " " + sfd['LastName'].lower()
-    pers_names = pers_name.replace('.', ' ').replace('-', ' ').split()
-    sfd[AI_SCORE] += len(set(mail_names).intersection(pers_names)) * 3.0 \
-        + len([_ for _ in pers_names if _ in mail_name]) * 1.5 \
-        + len([_ for _ in mail_name if _ in pers_name]) / len(mail_name)
+    if mail_name:
+        mail_names = mail_name.replace('.', ' ').replace('-', ' ').replace('_', ' ').split()
+        pers_name = sfd['FirstName'].lower() + " " + sfd['LastName'].lower()
+        pers_names = pers_name.replace('.', ' ').replace('-', ' ').split()
+        sfd[AI_SCORE] += len(set(mail_names).intersection(pers_names)) * 3.0 \
+            + len([_ for _ in pers_names if _ in mail_name]) * 1.5 \
+            + len([_ for _ in mail_name if _ in pers_name]) / len(mail_name)
 
 
 def date_range_chunks():
@@ -267,37 +285,13 @@ def date_range_chunks():
         chunk_till = min(chunk_from + add_days, date_till)
         yield chunk_from, chunk_till
 
-uprint("####  Fetching from Sihot")
-all_rows = []
-try:
-    res_search = ResSearch(cae)
-    # the from/to date range filter of WEB ResSearch is filtering the arrival date only (not date range/departure)
-    # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
-    # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
-    for chunk_beg, chunk_end in date_range_chunks():
-        chunk_rows = res_search.search(from_date=chunk_beg, to_date=chunk_end, flags=search_flags, scope=search_scope)
-        if chunk_rows and isinstance(chunk_rows, str):
-            uprint(" ***  Sihot.PMS reservation search error:", chunk_rows)
-            cae.shutdown(21)
-        elif not chunk_rows or not isinstance(chunk_rows, list):
-            uprint(" ***  Unspecified Sihot.PMS reservation search error")
-            cae.shutdown(24)
-        uprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
-               .format(len(chunk_rows), chunk_beg, chunk_end, search_flags, search_scope))
-        all_rows.extend(chunk_rows)
-        time.sleep(sh_fetch_pause_seconds)
-except Exception as ex:
-    uprint(" ***  Sihot interface exception:", str(ex))
-    print_exc()
-    cae.shutdown(27)
 
-
-def prepare_mig_data(shd, arri, sh_res_id, email, snam, src, hot_id):
+def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
     """ mig MARKETCODE, LANG, NAME, NAME2, EMAIL, PHONE, COUNTRY, CITY, STREET, GDSNO, RES-HOTEL, RN, ARR, DEP """
     sfd = dict()
-    sfd['RecordType.DeveloperName'] = REC_TYPE_DEV_NAME
+    sfd['RecordType.DeveloperName'] = CONTACT_REC_TYPE_RENTALS
     # FirstName or LastName or Name (combined field - not works with UPDATE/CREATE) or Full_Name__c (Formula)
-    sfd['FirstName'] = get_col_val(shd, 'NAME2', arri)
+    sfd['FirstName'] = fnam     # get_col_val(shd, 'NAME2', arri)
     sfd['LastName'] = snam
     # Language (Picklist) or Spoken_Languages__c (Picklist, multi-select) ?!?!?
     lc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'LANG', arri)
@@ -305,7 +299,7 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, src, hot_id):
     # Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000) or LeadSource (Picklist)
     # .. or Source__c (Picklist) or HERE_HOW__c (Picklist) ?!?!?
     sfd['Description'] = "Market Source=" + src
-    sfd['Email'] = email
+    sfd['Email'] = email if email_is_valid(email) else default_email_address
     # HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
     sfd['HomePhone'] = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'PHONE', arri)
     # Mobile phone number is not provided by Sihot WEB RES-SEARCH
@@ -316,20 +310,22 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, src, hot_id):
     sfd['MailingCity'] = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'CITY', arri)
     # Country__c/code (Picklist) or Address_3__c (Text, 100) or MailingCountry
     # .. and remap, e.g. Great Britain need to be UK not GB (ISO2)
-    cc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'COUNTRY', arri)[:2]     # ES has sometimes suffix w/ two numbers
+    cc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'COUNTRY', arri)[:2]  # ES has sometimes suffix w/ two numbers
     sfd['Country__c'] = cae.get_config(cc_iso2, 'CountryCodes', default_value=cc_iso2)
     # Booking__c (Long Text Area, 32768) or use field Previous_Arrival_Info__c (Text, 100) ?!?!?
-    sfd['Previous_Arrival_Info__c'] = "Hotel=" + hot_id \
-        + " Room=" + get_col_val(shd, 'RN', arri) \
-        + " Arr=" + get_col_val(shd, 'ARR', arri) \
-        + " Dep=" + get_col_val(shd, 'DEP', arri) \
-        + " Sihot GdsNo=" + get_col_val(shd, 'GDSNO', arri)
+    sfd['Previous_Arrival_Info__c'] = (""
+                                       + " Arr=" + get_col_val(shd, 'ARR', arri)
+                                       + " Dep=" + get_col_val(shd, 'DEP', arri)
+                                       + " Hotel=" + hot_id
+                                       + " Room=" + get_col_val(shd, 'RN', arri)
+                                       + " Sihot GdsNo=" + get_col_val(shd, 'GDSNO', arri)
+                                       ).strip()
 
     sfd[AI_SH_RES_ID] = sh_res_id
-    sfd[AI_SH_RL_ID] = sh_res_id + '=' + str(arr_index + 1)   # rooming list id
+    sfd[AI_SH_RL_ID] = sh_res_id + '=' + str(arr_index + 1)  # rooming list id
     sfd[AI_WARNINGS] = list()
     sfd[AI_SCORE] = 0.0
-    sfd[AI_SF_ID] = None           # populate later with data from Salesforce
+    sfd[AI_SF_ID] = None  # populate later with data from Salesforce
     sfd[AI_SF_CURR_DATA] = None
 
     return sfd
@@ -363,15 +359,40 @@ def layout_message(sfd, cols):
     return txt + "-" * 108
 
 
+uprint("####  Fetching from Sihot")
+all_rows = list()
+try:
+    res_search = ResSearch(cae)
+    # the from/to date range filter of WEB ResSearch is filtering the arrival date only (not date range/departure)
+    # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
+    # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
+    for chunk_beg, chunk_end in date_range_chunks():
+        chunk_rows = res_search.search(from_date=chunk_beg, to_date=chunk_end, flags=search_flags, scope=search_scope)
+        if chunk_rows and isinstance(chunk_rows, str):
+            uprint(" ***  Sihot.PMS reservation search error:", chunk_rows)
+            cae.shutdown(21)
+        elif not chunk_rows or not isinstance(chunk_rows, list):
+            uprint(" ***  Unspecified Sihot.PMS reservation search error")
+            cae.shutdown(24)
+        uprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
+               .format(len(chunk_rows), chunk_beg, chunk_end, search_flags, search_scope))
+        all_rows.extend(chunk_rows)
+        time.sleep(sh_fetch_pause_seconds)
+except Exception as ex:
+    uprint(" ***  Sihot interface exception:", str(ex))
+    print_exc()
+    cae.shutdown(27)
+
+
 # collect all the emails found in this export run (for to skip duplicates)
 uprint("####  Evaluate reservations fetched from Sihot")
-found_emails = []
-valid_contacts = []
+found_emails = list()
+valid_contacts = list()
 try:
     dup_res = 0
     dup_emails = 0
-    rooming_list_ids = []
-    existing_contact_ids = []
+    rooming_list_ids = list()
+    existing_contact_ids = list()
     for row_dict in all_rows:
         hotel_id, res_id = get_hotel_and_res_id(row_dict)
 
@@ -386,8 +407,9 @@ try:
         for arr_index in arr_indexes:
             email_addr = get_col_val(row_dict, PARSE_ONLY_TAG_PREFIX + 'EMAIL', arr_index)
             surname = get_col_val(row_dict, 'NAME', arr_index)
+            forename = get_col_val(row_dict, 'NAME2', arr_index)
             mkt_src = get_col_val(row_dict, PARSE_ONLY_TAG_PREFIX + 'MARKETCODE', arr_index)
-            sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email_addr, surname, mkt_src, hotel_id)
+            sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email_addr, surname, forename, mkt_src, hotel_id)
 
             if not hotel_id or hotel_id == '999':
                 ext_sf_dict(sf_dict, "invalid hotel-id {}".format(hotel_id))
@@ -404,9 +426,11 @@ try:
             if res_type in ('S', 'N', '', None):
                 ext_sf_dict(sf_dict, "invalid/cancel/no-show reservation type {}".format(res_type))
             if not email_addr:
-                ext_sf_dict(sf_dict, "missing email address")
+                ext_sf_dict(sf_dict, "missing email address", skip_it=restrict_to_valid_emails)
             if not name_is_valid(surname):
                 ext_sf_dict(sf_dict, "missing/invalid surname {}".format(surname))
+            if not name_is_valid(forename):
+                ext_sf_dict(sf_dict, "missing/invalid forename {}".format(forename))
             if not mkt_src:
                 ext_sf_dict(sf_dict, "missing market source")
             res_group = get_col_val(row_dict, 'CHANNEL', verbose=True)
@@ -424,51 +448,62 @@ try:
                         reverse=True)
     uprint("####  Detecting reservation-id/email duplicates and fetch current Salesforce contact data (if available)")
     notification_lines.append("####  Validate and compare Sihot and Salesforce contact data")
-    mig_contacts = list()
+    contacts_to_mig = list()
     for sf_dict in valid_contacts:
         rl_id = sf_dict[AI_SH_RL_ID]
         if rl_id in rooming_list_ids:
-            add_log_msg("Res-id {:12} is duplicated; data={}".format(rl_id, sf_dict))
+            add_log_msg("Res-id {:12} is duplicated; data={}".format(rl_id, pretty_print.pformat(sf_dict)))
             dup_res += 1
             continue
         rooming_list_ids.append(rl_id)
         email_addr = sf_dict['Email']
-        if email_addr in found_emails:
-            add_log_msg("Res-id {:12} with duplicate email address {}; data={}".format(rl_id, email_addr, sf_dict))
-            dup_emails += 1
-            continue
-        found_emails.append(email_addr)
-
-        mig_contacts.append(sf_dict)
-
-        sf_id = sf_conn.contact_by_email(email_addr)
-        if sf_id:
-            sf_cd = sf_conn.contact_data_by_id(sf_id, strip_add_info_keys(sf_dict))
-            if sf_conn.error_msg:
-                notification_add_line("SF-ERROR: '{}' in data fetch of contact ID {}".format(sf_conn.error_msg, sf_id),
-                                      is_error=True)
+        if email_is_valid(email_addr):
+            if email_addr in found_emails:
+                add_log_msg("Res-id {:12} with duplicate email address {}; data={}"
+                            .format(rl_id, email_addr, pretty_print.pformat(sf_dict)))
+                dup_emails += 1
                 continue
-            sf_dict[AI_SF_ID] = sf_id
-            sf_dict[AI_SF_CURR_DATA] = sf_cd
-            existing_contact_ids.append(sf_dict)
+            found_emails.append(email_addr)
+
+            contacts_to_mig.append(sf_dict)
+
+            sf_id = sf_conn.contact_by_email(email_addr)
+            if sf_id:
+                sf_cd = sf_conn.contact_data_by_id(sf_id, strip_add_info_keys(sf_dict))
+                if sf_conn.error_msg:
+                    notification_add_line("SF-FETCH-DATA-ERROR: '{}' of contact ID {}".format(sf_conn.error_msg, sf_id),
+                                          is_error=True)
+                    continue
+                sf_dict[AI_SF_ID] = sf_id
+                sf_dict[AI_SF_CURR_DATA] = sf_cd
+                existing_contact_ids.append(sf_dict)
+        elif not restrict_to_valid_emails:
+            # ensure that also clients with clienthasnoemail@s... will be uploaded to Salesforce if email not restricted
+            contacts_to_mig.append(sf_dict)
 
     uprint("####  Migrating contacts to Salesforce")
     notification_lines.append("####  Migrating Sihot guest data to Salesforce")
-    rec_type_id = sf_conn.record_type_id(REC_TYPE_DEV_NAME)
-    for sf_dict in mig_contacts:
+    rec_type_id = sf_conn.record_type_id(CONTACT_REC_TYPE_RENTALS)
+    contacts_migrated = list()
+    send_errors = 0
+    for sf_dict in contacts_to_mig:
         sf_send = strip_add_info_from_sf_data(sf_dict, strip_populated_sf_fields=True, record_type_id=rec_type_id)
         sfi = sf_dict[AI_SF_ID]
-        if sfi:
-            sf_conn.sf_types().Contact.update(sfi, sf_send)
+        err_msg, log_msg = sf_conn.contact_upsert(sf_send)
+        if err_msg:
+            send_errors += 1
+            notification_add_line(("Error {} in {} of Sihot Res-Id {:12} with match score {:6.3}"
+                                   " to Salesforce; sent data={}"
+                                   + (" full data={full_data}" if debug_level >= DEBUG_LEVEL_VERBOSE else ""))
+                                  .format(err_msg, "updating Contact " + sfi if sfi else "migrating",
+                                          sf_dict[AI_SH_RL_ID], sf_dict[AI_SCORE], pretty_print.pformat(sf_send),
+                                          full_data=sf_dict))
         else:
-            sf_conn.sf_types().Contact.create(sf_send)
-        if sf_conn.error_msg:
-            notification_add_line("UPSERT of Salesforce Contact Id {} with error: {}".format(sfi, sf_conn.error_msg),
-                                  is_error=True)
-        else:
-            notification_add_line("Migrated Sihot Res-Id {:12} {} with match score {:6.3} to Salesforce; data={}"
+            contacts_migrated.append(sf_dict)
+        if log_msg:
+            notification_add_line("Migrated Sihot Res-Id {:12} {} with match score {:6.3} to Salesforce; data={}, {}"
                                   .format(sf_dict[AI_SH_RL_ID], "updated Contact " + sfi if sfi else "migrated",
-                                          sf_dict[AI_SCORE], sf_dict))
+                                          sf_dict[AI_SCORE], pretty_print.pformat(sf_dict), log_msg))
 
     uprint(" ###  Sihot-Salesforce data mismatches (not updated in Salesforce) - UPSERT warnings:")
     for upsert_msg in ups_warnings:
@@ -478,45 +513,49 @@ try:
     uprint("####  Migration Summary")
     uprint()
     valid_contact_count = len(valid_contacts)
-    mig_contact_count = valid_contact_count - dup_res - dup_emails
-    assert len(mig_contacts) == mig_contact_count
-    notification_add_line("Filtered duplicate {} res-ids and {} emails out of valid/fetched {}/{} Sihot guests/clients"
-                          .format(dup_res, dup_emails, valid_contact_count, len(all_rows)))
-    uprint("Found {} unique emails out of valid {} emails".format(dup_emails, len(found_emails), found_emails))
-    uprint("Skipped {} duplicates out of {} valid Sihot reservation-rooming-ids".format(dup_res, rooming_list_ids))
+    mig_contact_count = valid_contact_count - dup_res - dup_emails - send_errors
+    assert len(contacts_migrated) == mig_contact_count
+    notification_add_line("Duplicate {}/{} res-ids/emails and {} upload errors out of valid {} Sihot guests/clients"
+                          .format(dup_res, dup_emails, send_errors, valid_contact_count))
+    uprint("Found {} unique emails: {}".format(len(found_emails), found_emails))
+    uprint("Skipped {} duplicates of loaded reservation-rooming-ids: {}".format(dup_res, rooming_list_ids))
     uprint()
     uprint(" ###  Comparision of {} existing Sf contacts".format(len(existing_contact_ids)))
     for sf_dict in existing_contact_ids:
-        uprint("  ##  Sf-Id", sf_dict[AI_SF_ID])
-        uprint("      SH:", sf_dict)
-        uprint("      SF:", sf_dict[AI_SF_CURR_DATA])
+        ec = deepcopy(sf_dict)
+        uprint("  ##  Sf-Id", ec[AI_SF_ID])
+        uprint("      SF:", pprint.pformat(ec[AI_SF_CURR_DATA], indent=9, width=PP_DEF_WIDTH))
+        del ec[AI_SF_CURR_DATA]
+        uprint("      SH:", pprint.pformat(ec, indent=9, width=PP_DEF_WIDTH))
 
     uprint()
     uprint("####  ", mig_contact_count, "Contacts migrated:")
-    notification_lines.append("####  Migrated Contacts")
+    contacts_notifications = list()
+    contacts_notifications.append("####  {} MIGRATED CONTACTS:\n\n".format(mig_contact_count))
     layout_fields = ['RecordType.DeveloperName', 'FirstName', 'LastName', 'Email', 'HomePhone',
                      'MailingStreet', 'MailingCity', 'Country__c',
                      'Language__c', 'Description', 'Previous_Arrival_Info__c']
-    for sf_dict in mig_contacts:
+    for sf_dict in contacts_migrated:
         contact_layout = layout_message(sf_dict, layout_fields)
         uprint(contact_layout)
-        for line in contact_layout.split("\n"):
-            notification_lines.append(line)
+        # add as one monospaced font block with including \n to prevent double \n\n
+        contacts_notifications.append(msf_beg + contact_layout + msf_end)
+    notification_lines = contacts_notifications + ["\n\n####  FULL PROTOCOL:\n"] + notification_lines
 
 except Exception as ex:
     notification_add_line("Migration interrupted by exception: {}".format(ex), is_error=True)
     print_exc()
 
-
 if notification:
-    subject = "Sihot Salesforce Contact Migration notification" + (" (sandbox/test system)" if sf_sandbox else "")
-    mail_body = "\n".join(notification_lines)
+    subject = "Sihot Salesforce Contact Migration protocol" + (" (sandbox/test system)" if sf_sandbox else "")
+    mail_body = "\n\n".join(notification_lines)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
         uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
         cae.shutdown(36)
     if warning_notification_emails and (ups_warnings or log_errors):
-        mail_body = "Salesforce update warnings:\n" + "\n".join(ups_warnings) + "\n\nERRORS:\n" + "\n".join(log_errors)
+        mail_body = "MIGRATION WARNINGS:\n\n" + ("\n\n".join(ups_warnings) if ups_warnings else "NONE") \
+                    + "\n\nERRORS:\n\n" + ("\n\n".join(log_errors) if log_errors else "NONE")
         subject = "Sihot Salesforce Contact Migration errors/discrepancies" + (" (sandbox)" if sf_sandbox else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
@@ -526,7 +565,9 @@ if notification:
 if log_errors:
     cae.shutdown(42)
 
-if date_till == startup_date:
-    cae.set_config('dateFrom', date_till)
+# CURRENTLY DISABLED because this is running daily and the command line args defaults
+# if date_till == startup_date - datetime.timedelta(days=1):
+#    cae.set_config('dateFrom', date_till)
+#    uprint("  ##  Changed next runs From Date to", date_till)
 
 cae.shutdown()

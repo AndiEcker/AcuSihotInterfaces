@@ -84,11 +84,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.client_refs_add_exclude = cae.get_config('ClientRefsAddExclude', default_value='').split(EXT_REFS_SEP)
 
         # --- contacts is caching contact data like external references/Ids, owner status ...
-        self.contacts = []
+        self.contacts = list()
         self.contacts_changed = False
 
         # --- res_inv_data is caching banking/swap/grant info
-        self.res_inv_data = []
+        self.res_inv_data = list()
 
     def connect_db(self):
         db = OraDB(usr=self.acu_user, pwd=self.acu_password, dsn=self.acu_dsn)
@@ -133,7 +133,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if ap_feats:  # optional list of apartment feature ids (AFT_CODEs)
             var = 2 ** len(ap_feats)  # all possible ordered variations of apt features
             ap_feats = [str(ft) for ft in sorted(ap_feats)]
-        for resort in [rs_code] + (['ANY'] if rs_code != 'ANY' and allow_any else []):
+        for resort in [rs_code] + (['ANY'] if rs_code != 'ANY' and allow_any else list()):
             view = self.resort_cats[resort]
             if not view:
                 continue
@@ -293,7 +293,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     def check_contacts(self):
         resort_codes = self.cae.get_config('ClientRefsResortCodes').split(EXT_REFS_SEP)
-        found_ids = {}
+        found_ids = dict()
         for c_rec in self.contacts:
             if c_rec[_EXT_REFS]:
                 for rci_id in c_rec[_EXT_REFS].split(EXT_REFS_SEP):
@@ -309,7 +309,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                             self._warn("Resort {} is missing RCI ID {}".format(c_rec[_ACU_ID], rci_id),
                                        self._ctx_no_file + 'CheckClientsDataResortId')
         # prepare found duplicate ids, prevent duplicate printouts and re-order for to separate RCI refs from others
-        dup_ids = []
+        dup_ids = list()
         for ref, recs in found_ids.items():
             if len(recs) > 1:
                 dup_ids.append("Duplicate external {} ref {} found in clients: {}"

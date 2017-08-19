@@ -1,21 +1,39 @@
+from copy import deepcopy
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 from ae_console_app import uprint
 
-# contact record type id for owners
-OWNER_RECORD_TYPE_ID = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
+# argument values for SfInterface.contacts_not_valid()
+EMAIL_DO_NOT_VALIDATE = ""
+EMAIL_NOT_VALIDATED = "NULL"
+EMAIL_INVALIDATED = "'0'"
+EMAIL_INVALID = EMAIL_NOT_VALIDATED + ',' + EMAIL_INVALIDATED
+
+PHONE_DO_NOT_VALIDATE = ""
+PHONE_NOT_VALIDATED = "NULL"
+PHONE_INVALIDATED = "'0'"
+PHONE_INVALID = PHONE_NOT_VALIDATED + ',' + PHONE_INVALIDATED
+
+ADDR_DO_NOT_VALIDATE = ""
+ADDR_NOT_VALIDATED = "NULL"
+ADDR_INVALIDATED = "'0'"
+ADDR_INVALID = ADDR_NOT_VALIDATED + ',' + ADDR_INVALIDATED
+
+# contact record types and ids
+CONTACT_REC_TYPE_ID_OWNERS = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
+CONTACT_REC_TYPE_RENTALS = 'Rentals'
 
 
-def prepare_connection(cae, client_id='', use_production=False, print_on_console=False):
+def prepare_connection(cae, client_id_default='', use_production=False, print_on_console=True):
     sf_sandbox = cae.get_config('sfIsSandbox', default_value=not use_production)
     if sf_sandbox == use_production:
-        uprint('******  Salesforce sandbox/production usage discrepancy: sandbox={}, use_production={}'
+        uprint('****  Salesforce sandbox/production usage discrepancy: sandbox={}, use_production={}'
                .format(sf_sandbox, use_production))
         sf_sandbox = not use_production
 
     suffix = 'Production' if use_production else ''
     sf_user = cae.get_config('sfUser' + suffix, default_value=cae.get_config('sfUser', default_value=''))
     sf_client = cae.get_config('sfClientId' + suffix,
-                               default_value=cae.get_config('sfClientId', default_value=client_id))
+                               default_value=cae.get_config('sfClientId', default_value=client_id_default))
     sf_token = cae.get_config('sfToken' + suffix, default_value=cae.get_config('sfToken', default_value=''))
     sf_pw = cae.get_config('sfPassword' + suffix, default_value=cae.get_config('sfPassword', default_value=''))
     sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
@@ -78,18 +96,18 @@ class SfInterface:
         return self._conn
 
     def contacts_with_rci_id(self, ext_refs_sep):
-        contact_tuples = []
+        contact_tuples = list()
         res = self._soql_query_all("SELECT Id, CD_CODE__c, RCI_Reference__c, Sihot_Guest_Object_Id__c, RecordType.Id,"
                                    " (SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE 'RCI%')"
                                    " FROM Contact")
         if not self.error_msg and res['totalSize'] > 0:
             for c in res['records']:  # list of Contact OrderedDicts
-                ext_refs = [c['RCI_Reference__c']] if c['RCI_Reference__c'] else []
+                ext_refs = [c['RCI_Reference__c']] if c['RCI_Reference__c'] else list()
                 ext_refs.extend([_['Reference_No_or_ID__c'] for _ in c['External_References__r']['records']])
                 if ext_refs:
                     contact_tuples.append((c['CD_CODE__c'], c['Id'], c['Sihot_Guest_Object_Id__c'],
                                           ext_refs_sep.join(ext_refs),
-                                          1 if c['RecordType']['Id'] == OWNER_RECORD_TYPE_ID else 0))
+                                          1 if c['RecordType']['Id'] == CONTACT_REC_TYPE_ID_OWNERS else 0))
         return contact_tuples
 
     REF_TYPE_ALL = 'all'
@@ -98,7 +116,7 @@ class SfInterface:
 
     def contact_by_rci_id(self, imp_rci_ref, sf_contact_id=None, dup_contacts=None, which_ref=REF_TYPE_ALL):
         if not dup_contacts:
-            dup_contacts = []
+            dup_contacts = list()
         if which_ref in (self.REF_TYPE_MAIN, self.REF_TYPE_ALL):
             soql_query = "SELECT Id FROM Contact WHERE RCI_Reference__c = '{}'".format(imp_rci_ref)
             col_name = 'Id'
@@ -134,30 +152,37 @@ class SfInterface:
 
     def contact_data_by_id(self, sf_contact_id, field_names):
         sf_dict = dict()
-        res = self._soql_query_all("SELECT " + ", ".join(field_names) + " FROM Contact WHERE Id = '{}'"
-                                   .format(sf_contact_id))
+        res = self._soql_query_all("SELECT {} FROM Contact WHERE Id = '{}'"
+                                   .format(", ".join(field_names), sf_contact_id))
         if not self.error_msg and res['totalSize'] > 0:
             sf_dict = res['records'][0]
         return sf_dict
 
-    def contacts_not_validated(self, rec_type_dev_name=None, validate_email=True, validate_phone=False):
-        assert validate_email or validate_phone
-        q = "SELECT Id, Country__c" \
-            + (", Email, CD_email_valid__c" if validate_email else "") \
-            + (", HomePhone, CD_Htel_valid__c, MobilePhone, CD_mtel_valid__c, Work_Phone__c, CD_wtel_valid__c"
-               if validate_phone else "") \
-            + " FROM Contact WHERE" \
-            + (" RecordType.DeveloperName = '" + rec_type_dev_name + "' and" if rec_type_dev_name else "") \
-            + "(" \
-            + ("(Email != Null and CD_email_valid__c = NULL)" if validate_email else "") \
-            + (" or " if validate_email and validate_phone else "") \
-            + ("(HomePhone != NULL and CD_Htel_valid__c = NULL)"
-               + " or (MobilePhone != NULL and CD_mtel_valid__c = NULL)"
-               + " or (Work_Phone__c != NULL and CD_wtel_valid__c = NULL)" if validate_phone else "") \
-            + ") ORDER BY Country__c"
+    def contacts_not_valid(self, rec_type_dev_names=None, email_validation=EMAIL_NOT_VALIDATED,
+                           phone_validation=PHONE_DO_NOT_VALIDATE, addr_validation=ADDR_DO_NOT_VALIDATE):
+        assert not rec_type_dev_names or rec_type_dev_names.startswith("'") and rec_type_dev_names.endswith("'") \
+            and rec_type_dev_names.count(",") == rec_type_dev_names.replace(" ", "").count("','")
+        assert (email_validation != EMAIL_DO_NOT_VALIDATE or phone_validation != PHONE_DO_NOT_VALIDATE) \
+            and addr_validation == ADDR_DO_NOT_VALIDATE     # address validation currently not fully implemented
+        q = ("SELECT Id, Country__c"
+             + (", Email, CD_email_valid__c" if email_validation != EMAIL_DO_NOT_VALIDATE else "")
+             + (", HomePhone, CD_Htel_valid__c, MobilePhone, CD_mtel_valid__c, Work_Phone__c, CD_wtel_valid__c"
+                if phone_validation != PHONE_DO_NOT_VALIDATE else "")
+             + " FROM Contact WHERE"
+             + (" RecordType.DeveloperName in (" + rec_type_dev_names + ") and " if rec_type_dev_names else "")
+             + "("
+             + ("(Email != Null and CD_email_valid__c in ({email_validation}))" if email_validation else "")
+             + (" or " if email_validation != EMAIL_DO_NOT_VALIDATE and phone_validation != PHONE_DO_NOT_VALIDATE
+                else "")
+             + ("(HomePhone != NULL and CD_Htel_valid__c in ({phone_validation}))"
+                + " or (MobilePhone != NULL and CD_mtel_valid__c in ({phone_validation}))"
+                + " or (Work_Phone__c != NULL and CD_wtel_valid__c in ({phone_validation}))"
+                if phone_validation != PHONE_DO_NOT_VALIDATE
+                else "")
+             + ") ORDER BY Country__c").format(email_validation=email_validation, phone_validation=phone_validation)
         res = self._soql_query_all(q)
         if self.error_msg or res['totalSize'] <= 0:
-            contact_dicts = []
+            contact_dicts = list()
         else:
             contact_dicts = [{k: v for k, v in rec.items() if k != 'attributes'} for rec in res['records']]
             assert len(contact_dicts) == res['totalSize']
@@ -166,11 +191,12 @@ class SfInterface:
     def contact_upsert(self, fields_dict):
         err = msg = ""
         if 'Id' in fields_dict:     # update?
-            sf_id = fields_dict['Id']
-            del fields_dict['Id']
+            fd = deepcopy(fields_dict)     # copy to local dict fd for to prevent changing the passed-in dict field_dict
+            sf_id = fd['Id']
+            del fd['Id']
             try:
-                sf_http_code = self._conn.Contact.update(sf_id, fields_dict)
-                msg = "Salesforce Contact {} updated with {}, status={}".format(sf_id, fields_dict, sf_http_code)
+                sf_http_code = self._conn.Contact.update(sf_id, fd)
+                msg = "{} updated with {}, status={}".format(sf_id, fd, sf_http_code)
             except Exception as ex:
                 err = "Salesforce Contact update raised exception {}".format(ex)
         else:
@@ -179,6 +205,9 @@ class SfInterface:
                 msg = "Salesforce Contact created with {}, status={}".format(fields_dict, sf_http_code)
             except Exception as ex:
                 err = "Salesforce Contact creation raised exception {}".format(ex)
+
+        self.error_msg = err if err else ""
+
         return err, msg
 
     def record_type_id(self, dev_name, obj_type='Contact'):

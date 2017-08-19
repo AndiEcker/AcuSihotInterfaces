@@ -140,7 +140,7 @@ def sih_reservation_discrepancies(data_dict):
         results = (results,)
     else:   # no error message then process fetched rows
         err_sep = '//'
-        results = []
+        results = list()
         for crow in req.rows:
             if crow['SIHOT_GDSNO']:
                 rs = ResSearch(cae)
@@ -227,7 +227,7 @@ def sih_reservation_search(data_dict):
     # available filters: hotel_id, from_date, to_date, matchcode, name, gdsno, flags, scope
     filters = {k[:-len(FILTER_CRITERIA_SUFFIX)]: v for k, v in data_dict.items() if k.endswith(FILTER_CRITERIA_SUFFIX)}
     rd = rs.search(**filters)
-    results = []
+    results = list()
     if rd and isinstance(rd, list):
         for row in rd:
             # col_values = [(str(row[col[len(list_marker_prefix):]]['elemListVal'])
@@ -236,7 +236,7 @@ def sih_reservation_search(data_dict):
             #                else row[col]['elemVal'])
             #               if col in row or col[len(list_marker_prefix):] in row else '(undef.)'
             #               for col in result_columns]
-            col_values = []
+            col_values = list()
             for c in result_columns:
                 is_list = c.startswith(list_marker_prefix)
                 if is_list:
@@ -253,7 +253,7 @@ def sih_reservation_search(data_dict):
                     col_val = '(missing)'
                 col_values.append(col_val)
             results.append(col_values)
-        column_names = []
+        column_names = list()
         for c in result_columns:
             if c.startswith(list_marker_prefix):
                 c = c[len(list_marker_prefix):]
@@ -310,8 +310,8 @@ class CheckItem(BoxLayout):
 class FixedActionGroup(ActionGroup):
     def fixed_clear_widgets(self):  # cannot override ActionGroup.clear_widgets() because show_group() is using it
         super(FixedActionGroup, self).clear_widgets()
-        self.list_action_item = []  # missing in ActionGroup.clear_widgets() ?!?!?
-        self._list_overflow_items = []
+        self.list_action_item = list()  # missing in ActionGroup.clear_widgets() ?!?!?
+        self._list_overflow_items = list()
 
     def fixed_remove_widget(self, widget):
         super(FixedActionGroup, self).remove_widget(widget)
@@ -381,9 +381,9 @@ class AcuSihotMonitorApp(App):
         self.check_list = cae.get_config('checks', default_value=cae.get_config('checks_template'))
         cae.dprint("AcuSihotMonitorApp.__init__() check_list", self.check_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         # self.boards = {k:v for ci in self.checks}
-        self.board_history = []
+        self.board_history = list()
 
-        self.filter_widgets = []
+        self.filter_widgets = list()
         self.filter_change_popup = None
         self.filter_change_criteria = ''
 
@@ -501,7 +501,7 @@ class AcuSihotMonitorApp(App):
         if self.filter_widgets:
             for w in self.filter_widgets:
                 av.fixed_remove_widget(w)
-            self.filter_widgets = []
+            self.filter_widgets = list()
 
         lih = mw.ids.list_header
         lih.clear_widgets()
@@ -609,7 +609,7 @@ class AcuSihotMonitorApp(App):
                         err_msg = acu_db.select(from_join=filter_selection['from_join'],
                                                 cols=filter_selection['cols'],
                                                 where_group_order=filter_selection.get('where_group_order'),
-                                                bind_vars=filter_selection.get('bind_vars', {}))
+                                                bind_vars=filter_selection.get('bind_vars', dict()))
                         if err_msg:
                             cae.dprint('AcuSihotMonitor._add_filters_to_actionview() select error:', err_msg)
                             continue

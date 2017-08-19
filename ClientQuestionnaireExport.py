@@ -149,7 +149,7 @@ def hotel_id_to_location_id(h_id):
 
 
 # collect all the emails found in this export run (for to skip duplicates)
-found_emails = []
+found_emails = list()
 
 
 def email_is_valid(email):
@@ -164,7 +164,7 @@ def email_is_valid(email):
 
 
 def valid_email_indexes(row):
-    indexes = []
+    indexes = list()
     if PARSE_ONLY_TAG_PREFIX + 'EMAIL' in row:
         if 'elemListVal' in row[PARSE_ONLY_TAG_PREFIX + 'EMAIL']:
             for idx, email in enumerate(row[PARSE_ONLY_TAG_PREFIX + 'EMAIL']['elemListVal']):
@@ -193,7 +193,7 @@ try:
         with open(export_fnam, 'a' if exp_file_exists else 'w') as f:
             if not exp_file_exists:
                 f.write(file_caption)
-            unique_ids = []
+            unique_ids = list()
             for row_dict in all_rows:
                 hotel_id, res_id = get_hotel_and_res_id(row_dict)
                 if not hotel_id or not res_id:

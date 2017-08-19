@@ -116,7 +116,7 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
                   sep=sep, end=end, file=file, flush=flush)
             break
         except UnicodeEncodeError:
-            fixed_objects = []
+            fixed_objects = list()
             for obj in print_objects:
                 if isinstance(obj, str) or isinstance(obj, bytes):
                     obj = fix_encoding(obj, enc, try_counter)

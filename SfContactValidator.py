@@ -1,27 +1,65 @@
 from ae_console_app import ConsoleApp, DEBUG_LEVEL_VERBOSE, uprint
 from ae_contact_validation import EmailValidator, PhoneValidator, AddressValidator
 from ae_notification import Notification
-from sfif import prepare_connection
+from sfif import prepare_connection, CONTACT_REC_TYPE_RENTALS, \
+    EMAIL_DO_NOT_VALIDATE, EMAIL_NOT_VALIDATED, EMAIL_INVALIDATED, EMAIL_INVALID, \
+    PHONE_DO_NOT_VALIDATE, PHONE_NOT_VALIDATED, PHONE_INVALIDATED, PHONE_INVALID, \
+    ADDR_DO_NOT_VALIDATE, ADDR_NOT_VALIDATED, ADDR_INVALIDATED, ADDR_INVALID
 
 __version__ = '0.1'
 
-cae = ConsoleApp(__version__, "Salesforce Contact Validator", debug_level_def=DEBUG_LEVEL_VERBOSE)
+cae = ConsoleApp(__version__, "Salesforce Contact Data Validator", debug_level_def=DEBUG_LEVEL_VERBOSE)
 
 cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", [], 'r')
+cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
 
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", [], 'v')
+cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
+
+cae.add_option('recordTypesToValidate', "Contact record type(s) to be validated", "'" + CONTACT_REC_TYPE_RENTALS + "'",
+               'R')
+
+cae.add_option('emailsToValidate', "Emails to be validated", EMAIL_NOT_VALIDATED, 'E',
+               choices=(EMAIL_DO_NOT_VALIDATE, EMAIL_NOT_VALIDATED, EMAIL_INVALIDATED, EMAIL_INVALID))
+cae.add_option('phonesToValidate', "Phones to be validated", PHONE_DO_NOT_VALIDATE, 'P',
+               choices=(PHONE_DO_NOT_VALIDATE, PHONE_NOT_VALIDATED, PHONE_INVALIDATED, PHONE_INVALID))
+cae.add_option('addressesToValidate', "Post addresses to be validated", ADDR_DO_NOT_VALIDATE, 'A',
+               choices=(ADDR_DO_NOT_VALIDATE, ADDR_NOT_VALIDATED, ADDR_INVALIDATED, ADDR_INVALID))
+
+cae.add_option('useSfProduction', "Salesforce system to use (0=sandbox, 1=production)", 0, 'S', choices=(0, 1))
 
 
-sf_conn, sf_sandbox = prepare_connection(cae, client_id='SfContactValidator',
-                                         use_production=cae.get_option('useSfProduction'), print_on_console=True)
+invalid_email_fragments = cae.get_config('InvalidEmailFragments', default_value=list())
+uprint("Configured fragments for to detect invalid email address:", invalid_email_fragments)
 
-email_validator = EmailValidator(cae.get_config('emailValidatorBaseUrl'), cae.get_config('emailValidatorApiKey'))
-phone_validator = PhoneValidator(cae.get_config('phoneValidatorBaseUrl'), cae.get_config('phoneValidatorApiKey'))
-addr_validator = AddressValidator(cae.get_config('addressValidatorBaseUrl'), cae.get_config('addressValidatorApiKey'),
-                                  auto_complete_search_url=cae.get_config('addressValidatorSearchUrl'),
-                                  auto_complete_fetch_url=cae.get_config('addressValidatorFetchUrl'))
+
+sf_conn, sf_sandbox = prepare_connection(cae, client_id_default='SfContactValidator',
+                                         use_production=cae.get_option('useSfProduction'))
+
+email_validator = phone_validator = addr_validator = None
+email_validation = cae.get_option('emailsToValidate')
+api_key = cae.get_config('emailValidatorApiKey')
+if api_key:
+    email_validator = EmailValidator(cae.get_config('emailValidatorBaseUrl'), api_key)
+elif email_validation != EMAIL_DO_NOT_VALIDATE:
+    uprint("SfContactValidator email validation configuration error: api key is missing")
+    cae.shutdown(3)
+phone_validation = cae.get_option('phonesToValidate')
+api_key = cae.get_config('phoneValidatorApiKey')
+if api_key:
+    phone_validator = PhoneValidator(cae.get_config('phoneValidatorBaseUrl'), api_key)
+elif phone_validation != PHONE_DO_NOT_VALIDATE:
+    uprint("SfContactValidator phone validation configuration error: api key is missing")
+    cae.shutdown(6)
+addr_validation = cae.get_option('addressesToValidate')
+api_key = cae.get_config('addressValidatorApiKey')
+if api_key:
+    addr_validator = AddressValidator(cae.get_config('addressValidatorBaseUrl'), api_key,
+                                      auto_complete_search_url=cae.get_config('addressValidatorSearchUrl'),
+                                      auto_complete_fetch_url=cae.get_config('addressValidatorFetchUrl'))
+elif addr_validation != ADDR_DO_NOT_VALIDATE:
+    uprint("SfContactValidator address validation configuration error: api key is missing")
+    cae.shutdown(9)
 
 
 notification = warning_notification_emails = None
@@ -37,32 +75,53 @@ if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_op
         uprint("Warnings SMTP receiver address(es):", warning_notification_emails)
 
 
-log_items = []              # log entries with warnings and errors
-log_errors = []             # errors only (send to warningsMailToAddr)
+log_items = list()              # log entries with warnings and errors
+log_errors = list()             # errors only (send to warningsMailToAddr)
 
 
-def add_log_msg(msg, is_error=False):
+def add_log_msg(msg, is_error=False, importance=2):
     global log_errors, log_items
+    assert 0 < importance < 5
     if is_error:
         log_errors.append(msg)
-    msg = ("  **  " if is_error else "  ##  ") + msg
+    msg = " " * (4 - importance) + ("*" if is_error else "#") * importance + "  " + msg
     log_items.append(msg)
     uprint(msg)
 
 
 # fetch rental Contacts migrated with ShSfContactMigration app for to validate email address and phone numbers
-contacts = sf_conn.contacts_not_validated(rec_type_dev_name='Rentals', validate_phone=True)
-add_log_msg("Found {} not fully validated contacts".format(len(contacts)))
+contacts = sf_conn.contacts_not_valid(rec_type_dev_names=cae.get_option('recordTypesToValidate'),
+                                      email_validation=email_validation,
+                                      phone_validation=phone_validation,
+                                      addr_validation=addr_validation)
+add_log_msg("Validating {} contacts, checking email={}, phone={}, address={}"
+            .format(len(contacts), email_validation, phone_validation, addr_validation), importance=4)
+emails_validated = phones_validated = addresses_validated = contacts_updated = 0
 for rec in contacts:
-    cae.dprint("Validating Contact", rec)
-    if 'Email' in rec and rec['Email'] and rec['CD_email_valid__c'] is None:
-        err_msg = email_validator.validate(rec['Email'])
-        if err_msg:
-            rec['CD_email_valid__c'] = '0'
-            add_log_msg("{Id} email {Email} is invalid. Reason={err_msg}".format(err_msg=err_msg, **rec), is_error=True)
+    cae.dprint("Checking Contact for needed validation", rec)
+    update_in_sf = False
+    if email_validator and 'Email' in rec and rec['Email'] and email_validation != EMAIL_DO_NOT_VALIDATE \
+            and eval("rec['CD_email_valid__c'] in (" + email_validation.replace('NULL', 'None') + ",)"):
+        for frag in invalid_email_fragments:
+            if frag in rec['Email']:
+                add_log_msg("{Id} email {Email} is invalid because contains fragment {frag}.".format(frag=frag, **rec))
+                break
         else:
-            rec['CD_email_valid__c'] = '1'
-    if 'HomePhone' in rec and rec['HomePhone'] and rec['CD_Htel_valid__c'] is None:
+            err_msg = email_validator.validate(rec['Email'])
+            if not err_msg:
+                rec['CD_email_valid__c'] = '1'
+                add_log_msg("{Id} email {Email} is valid.".format(**rec))
+            elif "'status': 114" in err_msg or "'status': 118" in err_msg:
+                rec['CD_email_valid__c'] = None
+                add_log_msg("{Id} email {Email} validation timed out. Error={err_msg}".format(err_msg=err_msg, **rec))
+            else:
+                rec['CD_email_valid__c'] = '0'
+                add_log_msg("{Id} email {Email} is invalid. Reason={err_msg}"
+                            .format(err_msg=err_msg, **rec), is_error=True)
+            update_in_sf = True
+        emails_validated += 1
+    if phone_validator and 'HomePhone' in rec and rec['HomePhone'] and phone_validation != PHONE_DO_NOT_VALIDATE \
+            and eval("rec['CD_Htel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
         corr = dict()
         err_msg = phone_validator.validate(rec['HomePhone'], country_code=rec['Country__c'], ret_val_dict=corr)
         if err_msg:
@@ -71,58 +130,106 @@ for rec in contacts:
                         is_error=True)
         else:
             rec['CD_Htel_valid__c'] = '1'
-            if rec['HomePhone'] != corr['formatinternational']:
-                add_log_msg("{Id} home phone {HomePhone} correcting to {formatinternational}".format(**rec, **corr))
-                rec['HomePhone'] = corr['formatinternational']
-            if rec['Country__c'] != corr['countrycode']:
-                add_log_msg("{Id} country code {Country__c} correcting to {countrycode}".format(**rec, **corr))
-                rec['Country__c'] = corr['countrycode']
-    if 'MobilePhone' in rec and rec['MobilePhone'] and rec['CD_mtel_valid__c'] is None:
-        err_msg = phone_validator.validate(rec['MobilePhone'], country_code=rec['Country__c'])
+            add_log_msg("{Id} homephone {HomePhone} is valid.".format(**rec))
+            if 'formatinternational' in corr and corr['formatinternational']:
+                if rec['HomePhone'] != corr['formatinternational']:
+                    add_log_msg("{Id} home phone {HomePhone} correcting to {formatinternational}".format(**rec, **corr))
+                    rec['HomePhone'] = corr['formatinternational']
+                    update_in_sf = True
+            elif 'formatnational' in corr and corr['formatnational']:
+                if rec['HomePhone'] != corr['formatnational']:
+                    add_log_msg("{Id} home phone {HomePhone} correcting to {formatnational}".format(**rec, **corr))
+                    rec['HomePhone'] = corr['formatnational']
+                    update_in_sf = True
+            if 'countrycode' in corr and corr['countrycode']:
+                if rec['Country__c'] != corr['countrycode']:
+                    add_log_msg("{Id} country code {Country__c} correcting to {countrycode}".format(**rec, **corr))
+                    rec['Country__c'] = corr['countrycode']
+                    update_in_sf = True
+        phones_validated += 1
+    if phone_validator and 'MobilePhone' in rec and rec['MobilePhone'] and phone_validation != PHONE_DO_NOT_VALIDATE \
+            and eval("rec['CD_mtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
+        corr = dict()
+        err_msg = phone_validator.validate(rec['MobilePhone'], country_code=rec['Country__c'], ret_val_dict=corr)
         if err_msg:
             rec['CD_mtel_valid__c'] = '0'
-            add_log_msg("{Id} home phone {MobilePhone} is invalid. Reason={err_msg}".format(err_msg=err_msg, **rec),
+            add_log_msg("{Id} mobile phone {MobilePhone} is invalid. Reason={err_msg}".format(err_msg=err_msg, **rec),
                         is_error=True)
         else:
             rec['CD_mtel_valid__c'] = '1'
-            if rec['MobilePhone'] != corr['formatinternational']:
-                add_log_msg("{Id} mobile phone {MobilePhone} correcting to {formatinternational}".format(**rec, **corr))
-                rec['MobilePhone'] = corr['formatinternational']
-            if rec['Country__c'] != corr['countrycode']:
-                add_log_msg("{Id} country code {Country__c} correcting to {countrycode}".format(**rec, **corr))
-                rec['Country__c'] = corr['countrycode']
-    if 'Work_Phone__c' in rec and rec['Work_Phone__c'] and rec['CD_wtel_valid__c'] is None:
-        err_msg = phone_validator.validate(rec['Work_Phone__c'], country_code=rec['Country__c'])
+            add_log_msg("{Id} mobile phone {MobilePhone} is valid.".format(**rec))
+            if 'formatinternational' in corr and corr['formatinternational']:
+                if rec['MobilePhone'] != corr['formatinternational']:
+                    add_log_msg("{Id} mobile phone {MobilePhone} correcting to {formatinternational}"
+                                .format(**rec, **corr))
+                    rec['MobilePhone'] = corr['formatinternational']
+                    update_in_sf = True
+            elif 'formatnational' in corr and corr['formatnational']:
+                if rec['MobilePhone'] != corr['formatnational']:
+                    add_log_msg("{Id} mobile phone {MobilePhone} correcting to {formatnational}".format(**rec, **corr))
+                    rec['MobilePhone'] = corr['formatnational']
+                    update_in_sf = True
+            if 'countrycode' in corr and corr['countrycode']:
+                if rec['Country__c'] != corr['countrycode']:
+                    add_log_msg("{Id} country code {Country__c} correcting to {countrycode}".format(**rec, **corr))
+                    rec['Country__c'] = corr['countrycode']
+                    update_in_sf = True
+        phones_validated += 1
+    if phone_validator and 'Work_Phone__c' in rec and rec['Work_Phone__c'] \
+            and phone_validation != PHONE_DO_NOT_VALIDATE \
+            and eval("rec['CD_wtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
+        corr = dict()
+        err_msg = phone_validator.validate(rec['Work_Phone__c'], country_code=rec['Country__c'], ret_val_dict=corr)
         if err_msg:
             rec['CD_wtel_valid__c'] = '0'
-            add_log_msg("{Id} home phone {Work_Phone__c} is invalid. Reason={err_msg}".format(err_msg=err_msg, **rec),
+            add_log_msg("{Id} work phone {Work_Phone__c} is invalid. Reason={err_msg}".format(err_msg=err_msg, **rec),
                         is_error=True)
         else:
             rec['CD_wtel_valid__c'] = '1'
-            if rec['Work_Phone__c'] != corr['formatinternational']:
-                add_log_msg("{Id} work phone {Work_Phone__c} correcting to {formatinternational}".format(**rec, **corr))
-                rec['Work_Phone__c'] = corr['formatinternational']
-            if rec['Country__c'] != corr['countrycode']:
-                add_log_msg("{Id} country code {Country__c} correcting to {countrycode}".format(**rec, **corr))
-                rec['Country__c'] = corr['countrycode']
+            add_log_msg("{Id} work phone {Work_Phone__c} is valid.".format(**rec))
+            if 'formatinternational' in corr and corr['formatinternational']:
+                if rec['Work_Phone__c'] != corr['formatinternational']:
+                    add_log_msg("{Id} work phone {Work_Phone__c} correcting to {formatinternational}"
+                                .format(**rec, **corr))
+                    rec['Work_Phone__c'] = corr['formatinternational']
+                    update_in_sf = True
+            elif 'formatnational' in corr and corr['formatnational']:
+                if rec['Work_Phone__c'] != corr['formatnational']:
+                    add_log_msg("{Id} work phone {Work_Phone__c} correcting to {formatnational}".format(**rec, **corr))
+                    rec['Work_Phone__c'] = corr['formatnational']
+                    update_in_sf = True
+            if 'countrycode' in corr and corr['countrycode']:
+                if rec['Country__c'] != corr['countrycode']:
+                    add_log_msg("{Id} country code {Country__c} correcting to {countrycode}".format(**rec, **corr))
+                    rec['Country__c'] = corr['countrycode']
+                    update_in_sf = True
+        phones_validated += 1
 
-    err_msg, log_msg = sf_conn.contact_upsert(rec)
-    if err_msg:
-        add_log_msg(err_msg, is_error=True)
-    if log_msg:
-        cae.dprint(log_msg)
+    if update_in_sf:
+        err_msg, log_msg = sf_conn.contact_upsert(rec)
+        if err_msg:
+            add_log_msg(err_msg, is_error=True)
+        else:
+            contacts_updated += 1
+        if log_msg:
+            add_log_msg(log_msg)
 
+
+add_log_msg("Validation summary: updated {} of {} contacts, validated emails={}, phones={}, addresses={}, ERRORS={}"
+            .format(contacts_updated, len(contacts), emails_validated, phones_validated, addresses_validated,
+                    len(log_errors)),
+            importance=4)
 
 if notification:
-    subject = "Sihot Salesforce Contact Migration protocol" + (" (sandbox/test system)" if sf_sandbox else "")
-    mail_body = "\n".join(log_items)
+    subject = "Sihot Salesforce Contact Validation protocol" + (" (sandbox/test system)" if sf_sandbox else "")
+    mail_body = "\n\n".join(log_items)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
         uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
         cae.shutdown(36)
     if warning_notification_emails and log_errors:
-        mail_body = "\n".join(log_errors)
-        subject = "Sihot Salesforce Contact Migration errors/discrepancies" + (" (sandbox)" if sf_sandbox else "")
+        mail_body = "\n\n".join(log_errors)
+        subject = "Sihot Salesforce Contact Validation errors/discrepancies" + (" (sandbox)" if sf_sandbox else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
             uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))

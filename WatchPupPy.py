@@ -37,7 +37,7 @@ cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 
 
 cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", [], 'r')
+cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
 
 cae.add_option('sendOutput',
                "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')

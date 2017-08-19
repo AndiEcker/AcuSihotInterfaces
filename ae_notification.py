@@ -53,7 +53,7 @@ class Notification:
         self._mail_body_footer = mail_body_footer
         self.debug_level = debug_level
 
-    def send_notification(self, msg_body, subject=None, mail_to=None, data_dict=None):
+    def send_notification(self, msg_body='', subject=None, mail_to=None, data_dict=None, body_style=''):
         """
         send a notification email
 
@@ -61,6 +61,7 @@ class Notification:
         :param subject: email subject text (optional, default="Notification")
         :param mail_to: list of email receiver addresses (optional: default=instance/self mail_to addresses)
         :param data_dict: dict of additional data used for to display and for to evaluate mail_to expression (optional)
+        :param body_style: mime text body style (optional, def='html' if '</' in msg_body else 'plain')
         :return: error message on error or empty string if notification got send successfully
         """
         if self._mail_body_footer:
@@ -85,13 +86,20 @@ class Notification:
             uprint(" **** Notification.send_notification(): invalid email-to address list or expression '" +
                    str(mail_to) + "' - using ITDevmen fallback!")
             mail_to = ['ITDevmen@acumen.es']
+        body_style = body_style or 'html' if '</' in msg_body else 'plain'
+        if body_style == 'html':
+            # using the <pre>...</pre> tags we no longer need replace(' ', '&nbsp;')
+            msg_body = str(msg_body).replace('\r\n', '<br>').replace('\n', '<br>').replace('\r', '<br>')
+            # adding html special char conversion disables all other html tags too:
+            #    .replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>') \
+            #    .replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
         # log error message and try to send it per email
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint(" #### Notification.send_notification(): '" + str(msg_body) + "'" + title_ext)
         err_msg = ''
         try:
-            message = MIMEText(msg_body)
+            message = MIMEText(msg_body, _subtype=body_style)
             message['Subject'] = subject
             message['From'] = self._mail_from
             message['To'] = ', '.join(mail_to)

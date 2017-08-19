@@ -2,7 +2,7 @@ from acu_sf_sh_sys_data import EXT_REFS_SEP
 
 
 class TestSfInterface:
-    sf_id_of_rci_id = {}
+    sf_id_of_rci_id = dict()
 
     def test_all_contacts(self, salesforce_connection):
         assert salesforce_connection.error_msg == ""

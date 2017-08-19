@@ -70,7 +70,7 @@ def create_test_guest(console_app_env):
         guest = gs
     else:
         guest = ClientToSihot(console_app_env, connect_to_acu=False)
-        col_values = {}
+        col_values = dict()
         for col in guest.acu_col_names:
             if col == 'CD_CODE':
                 col_values[col] = mc
@@ -94,7 +94,7 @@ def create_test_guest(console_app_env):
 
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
-    sf_conn, sf_sandbox = prepare_connection(console_app_env, client_id='TestSfInterface')
+    sf_conn, sf_sandbox = prepare_connection(console_app_env, client_id_default='TestSfInterface')
     return sf_conn
 
 
@@ -133,8 +133,8 @@ class ConsoleApp:
                              emailValidatorApiKey=cfg.get('Settings', 'emailValidatorApiKey'),
                              )
 
-    def get_config(self, name, value=None):
-        ret = self._options[name] if name in self._options else value
+    def get_config(self, name, default_value=None):
+        ret = self._options[name] if name in self._options else default_value
         uprint('ConsoleAppMock.get_config', name, '=', ret)
         return ret
 

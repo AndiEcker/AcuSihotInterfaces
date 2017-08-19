@@ -35,8 +35,8 @@ cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_
 
 cae.add_option('smtpServerUri', "SMTP error notification server URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", [], 'r')
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", [], 'v')
+cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
+cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
@@ -84,18 +84,18 @@ if cae.get_config('warningFragments'):
 MAX_SCREEN_LOG_LEN = cae.get_config('max_text_len', default_value=69999)
 
 # file collection - lists of files to be imported
-tci_files = []
-bkc_files = []
-rci_files = []
-imp_files = []
+tci_files = list()
+bkc_files = list()
+rci_files = list()
+imp_files = list()
 
 
 def collect_files():
     global tci_files, bkc_files, rci_files, imp_files
-    tci_files = glob.glob(cae.get_option('tciPath')) if cae.get_option('tciPath') else []
-    # bkc_files = glob.glob(cae.get_option('bkcPath')) if cae.get_option('bkcPath') else []
-    bkc_files = []
-    rci_files = glob.glob(cae.get_option('rciPath')) if cae.get_option('rciPath') else []
+    tci_files = glob.glob(cae.get_option('tciPath')) if cae.get_option('tciPath') else list()
+    # bkc_files = glob.glob(cae.get_option('bkcPath')) if cae.get_option('bkcPath') else list()
+    bkc_files = list()
+    rci_files = glob.glob(cae.get_option('rciPath')) if cae.get_option('rciPath') else list()
     imp_files = tci_files + bkc_files + rci_files
 
 
@@ -118,8 +118,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     log_file_path = os.path.dirname(lf)
 
     NO_FILE_PREFIX_CHAR = '@'
-    error_log = []
-    import_log = []
+    error_log = list()
+    import_log = list()
 
     def log_error(msg, ctx, line=-1, importance=2):
         error_log.append(dict(message=msg, context=ctx, line=line + 1))
@@ -196,8 +196,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         # or room_size[3:] not in ('', 'ETG', 'HIF', 'SEA', 'VIE', 'SUP') or len(room_size) < 3:
         #    err_msg = 'Warning: Unknown Apartment Size'
 
-        comments = []
-        ap_feats = []
+        comments = list()
+        ap_feats = list()
         if room_size[3:] == 'ETG':  # A22ETG / A34ETG == 1 bed / 2 bed with Duplex
             comments.append('#Duplex')  # 752 == AFT_CODE of "Duplex" apt.feature - HARD - CODED?!?!?
             ap_feats.append(752)  # paid supplement
@@ -240,7 +240,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         comments.append(curr_cols[TCI_COMMENT])  # start with apartment feature comments then client comment
         meal_plan = curr_cols[TCI_MEAL_PLAN]
 
-        row = {}
+        row = dict()
         if last_line:  # check if current line is an extension of the booking from last line (only not in first line)
             last_cols = last_line.split(';')
             if int(last_cols[TCI_BOOK_IDX]) + 1 == int(curr_cols[TCI_BOOK_IDX]) \
@@ -387,7 +387,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             if room_info[:3] != 'STU':
                 comments.append("bkc_room_cat_pax_board() warning: room size missing (using Studio)")
             room_size = 'STUDIO'
-        ap_feats = []
+        ap_feats = list()
         if room_info.find('SUPERIOR') >= 0:  # 748==AFT_CODE of "Refurbished" apt. feature
             ap_feats.append(748)
             comments.insert(0, '#Sterling')
@@ -436,7 +436,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         curr_dep = datetime.datetime.strptime(curr_cols[BKC_DEP_DATE], '%Y-%m-%d')
 
         ext_key = curr_cols[BKC_BOOK_REF]
-        row = {}
+        row = dict()
         if rows:  # check if current line is an extension of the booking from last line (only not in first line)
             if BKC_GDSNO_PREFIX + ext_key in rows[-1]['SIHOT_GDSNO']:  # 'in' instead of '==' for to detect group res
                 # check if date range extension or additional room - assuming additional room
@@ -696,7 +696,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     def rci_line_to_res_row(curr_cols):
         """ used for to import RCI inbounds for week owners (RI/RO), leads (RL) and CPA owners (RI/RO) """
         row = dict()
-        comments = []
+        comments = list()
 
         row['RUL_SIHOT_HOTEL'] = conf_data.rci_to_sihot_hotel_id(curr_cols[RCI_RESORT_ID])
         if not row['RUL_SIHOT_HOTEL'] or row['RUL_SIHOT_HOTEL'] <= 0:
@@ -866,7 +866,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
     def rcip_line_to_res_row(curr_cols):
         row = dict()
-        comments = []
+        comments = list()
 
         row['RUL_SIHOT_HOTEL'] = conf_data.rci_to_sihot_hotel_id(curr_cols[RCIP_RESORT_ID])
         if not row['RUL_SIHOT_HOTEL'] or row['RUL_SIHOT_HOTEL'] <= 0:
@@ -932,7 +932,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     #
     collect_files()
 
-    res_rows = []
+    res_rows = list()
     error_msg = ''
 
     if cae.get_option('tciPath') and tci_files and not got_cancelled():
@@ -995,7 +995,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 lines = fp.readlines()
             # check/remove header and parse all other lines normalized into column list
             header = ''
-            imp_rows = []
+            imp_rows = list()
             for idx, ln in enumerate(lines):
                 if got_cancelled():
                     log_error("User cancelled processing of BKC import lines", fn, idx, importance=4)
@@ -1073,7 +1073,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciResInvDataFetch', importance=3)
             return
 
-        imp_rows = []
+        imp_rows = list()
         points_import = False
         for fn in rci_files:
             if got_cancelled():
@@ -1234,7 +1234,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                       f['OC_CODE'] + f['SH_ADULT1_NAME'] + f['SH_ADULT1_NAME2'] +
                       f['SIHOT_MKT_SEG'] + f['SH_RES_TYPE'] + f['ARR_DATE'].strftime('%Y-%m-%d'))
         first_arr = None  # used as flag set with the arrival date if the last res_row needs to be prolonged/merged
-        merged_res_ids = []
+        merged_res_ids = list()
         for res_row_idx, crow in enumerate(res_rows):
             fn, idx = crow['=FILE_NAME'], crow['=LINE_NUM']
             if got_cancelled():
@@ -1261,7 +1261,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 crow['SIHOT_NOTE'] += ';' + 'Merged: ' + ' '.join(merged_res_ids)
                 crow['SIHOT_TEC_NOTE'] += '|CR|' + 'Merged with RCI booking(s): ' + ', '.join(merged_res_ids)
                 first_arr = None
-                merged_res_ids = []
+                merged_res_ids = list()
             try:
                 error_msg = res_send.send_row_to_sihot(crow, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
             except Exception as ex:
