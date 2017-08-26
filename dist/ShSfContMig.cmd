@@ -1,0 +1,2 @@
+rem start migration of clients arrived yesterday to Salesforce Contacts
+ShSfContactMigration.exe -D=1 --serverIP=10.103.222.52 --sfUser=sihotinterface@signallia.com --sfToken=3pMzmRuWFBU4DafhJJFZrzRjD --sfIsSandbox=False --smtpTo=['SalesDeck.Reception@silverpoint.com','Nieves.TurBonet@silverpoint.com','Silverpoint.IPC@silverpoint.com','CentralTO@silverpoint.com','ITDevmen@acumen.es'] --warningsMailToAddr=['SalesDeck.Reception@silverpoint.com','Nieves.TurBonet@silverpoint.com','Silverpoint.IPC@silverpoint.com','CentralTO@silverpoint.com','ITDevmen@acumen.es']

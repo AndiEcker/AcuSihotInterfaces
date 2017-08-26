@@ -9,6 +9,7 @@
     0.7     30-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
     0.8     15-07-17: refactoring moving contacts and res_inv_data to acu_sf_sh_sys_data.py.
 """
+import json
 import sys
 import os
 import shutil
@@ -29,9 +30,10 @@ __version__ = '0.8'
 
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  debug_level_def=DEBUG_LEVEL_VERBOSE)
-cae.add_option('tciPath', "Import path and file mask for Thomas Cook R*.TXT files", 'C:/TC_Import/R*.txt', 'j')
+# cae.add_option('tciPath', "Import path and file mask for Thomas Cook R*.TXT files", 'C:/TC_Import/R*.txt', 'j')
 # cae.add_option('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
 cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'y')
+cae.add_option('jsonPath', "Import path and file mask for OTA JSON files", 'C:/JSON_Import/*.json', 'j')
 
 cae.add_option('smtpServerUri', "SMTP error notification server URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
@@ -58,7 +60,7 @@ cae.add_option('breakOnError', "Abort importation if an error occurs (0=No, 1=Ye
 
 debug_level = cae.get_option('debugLevel')
 
-uprint("Import path/file-mask for Thomas Cook/RCI:", cae.get_option('tciPath'), cae.get_option('rciPath'))
+uprint("Import path/file-mask for OTA-JSON/RCI:", cae.get_option('jsonPath'), cae.get_option('rciPath'))
 notification = None
 if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
     notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
@@ -87,16 +89,19 @@ MAX_SCREEN_LOG_LEN = cae.get_config('max_text_len', default_value=69999)
 tci_files = list()
 bkc_files = list()
 rci_files = list()
+jso_files = list()
 imp_files = list()
 
 
 def collect_files():
-    global tci_files, bkc_files, rci_files, imp_files
-    tci_files = glob.glob(cae.get_option('tciPath')) if cae.get_option('tciPath') else list()
+    global tci_files, bkc_files, rci_files, jso_files, imp_files
+    # tci_files = glob.glob(cae.get_option('tciPath')) if cae.get_option('tciPath') else list()
+    tci_files = list()
     # bkc_files = glob.glob(cae.get_option('bkcPath')) if cae.get_option('bkcPath') else list()
     bkc_files = list()
     rci_files = glob.glob(cae.get_option('rciPath')) if cae.get_option('rciPath') else list()
-    imp_files = tci_files + bkc_files + rci_files
+    jso_files = glob.glob(cae.get_option('jsonPath')) if cae.get_option('jsonPath') else list()
+    imp_files = tci_files + bkc_files + rci_files + jso_files
 
 
 '''# #########################################################
@@ -544,7 +549,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
     def rc_country_to_iso2(rci_country):
         """ convert RCI country names into Sihot ISO2 country codes """
-        iso_code = cae.get_config(rci_country, section='RcCountryToSihot')
+        iso_code = cae.get_config(rci_country.lower(), section='RcCountryToSihot')
         if not iso_code:
             iso_code = rci_country[:2]      # use first two letters if country is not defined in cfg file
         return iso_code
@@ -925,6 +930,15 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         return row, ''
 
+    '''# #########################################################
+       # OTA/JSON import file processing
+       # #########################################################
+    '''
+
+    def json_imp_to_res_row(file_name, row):
+        row['=FILE_NAME'] = file_name
+        return row, ''
+
     #
     # #########################################################
     # LOAD import files
@@ -1214,6 +1228,42 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         if conf_data.contacts_changed:
             conf_data.save_contacts()
 
+    if cae.get_option('jsonPath') and jso_files and (not error_log or not cae.get_option('breakOnError')) \
+            and not got_cancelled():
+        log_import("Starting OTA JSON import", NO_FILE_PREFIX_CHAR + 'JsonImportStart', importance=4)
+        if debug_level >= DEBUG_LEVEL_VERBOSE:
+            log_import("JSON files: " + str(jso_files), NO_FILE_PREFIX_CHAR + 'JsonFileCollect', importance=1)
+
+        progress = Progress(debug_level, start_counter=len(jso_files),
+                            start_msg="Loading and parsing JSON import files",
+                            nothing_to_do_msg="No JSON files found in import folder " + cae.get_option('jsonPath'))
+        for fn in jso_files:
+            if got_cancelled():
+                log_error("User cancelled loading of JSON import files", fn, importance=4)
+                break
+            log_import("Loading JSON import file " + fn, fn, importance=4)
+            with open(fn, 'r', encoding='utf-8') as fp:
+                json_data = json.load(fp)
+
+            if debug_level >= DEBUG_LEVEL_VERBOSE:
+                log_import("JSON import file loaded: " + fn, fn)
+
+            res_row, error_msg = json_imp_to_res_row(fn, json_data)
+            if not res_row:
+                if debug_level >= DEBUG_LEVEL_VERBOSE:
+                    log_import(error_msg or "JSON import file skipped", fn)
+                error_msg = ""
+                continue  # ignoring imported file
+            if not error_msg:
+                res_rows.append(res_row)
+            progress.next(processed_id='import file ' + fn, error_msg=error_msg)
+            if error_msg:
+                log_error("OTA/JSON import error: {}".format(error_msg), fn)
+                if cae.get_option('breakOnError'):
+                    break
+
+        progress.finished(error_msg=error_msg)
+
     # #######################################################################################
     #  SEND imported reservation bookings of all supported booking channels (BKC, TCI, RCI)
     # #######################################################################################
@@ -1271,7 +1321,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                     log_import("Ignoring error sending res: " + str(crow), fn, idx)
                     error_msg = ''
                     continue
-                if 'A_Persons::setDataRoom not available!' in error_msg:
+                if 'setDataRoom not available!' in error_msg:  # was: 'A_Persons::setDataRoom not available!'
                     error_msg = "Apartment {} occupied between {} and {} - created GDS-No {} for manual allocation." \
                         .format(crow['RUL_SIHOT_ROOM'], crow['ARR_DATE'].strftime('%d-%m-%Y'),
                                 crow['DEP_DATE'].strftime('%d-%m-%Y'), crow['SIHOT_GDSNO']) \
@@ -1303,7 +1353,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                                            mail_to=cae.get_option('warningsMailToAddr'))
 
     log_import("Pass Import Files to user/server logs", NO_FILE_PREFIX_CHAR + 'MoveImportFiles', importance=4)
-    for sfn in tci_files + bkc_files + rci_files:
+    for sfn in tci_files + bkc_files + rci_files + jso_files:
         imp_file_path = os.path.dirname(sfn)
         imp_dir_name = os.path.basename(os.path.normpath(imp_file_path))
         imp_file_name = os.path.basename(sfn)

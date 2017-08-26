@@ -106,6 +106,7 @@ def reset_last_run_time(interval, force=False):
         cmd_cfg_file_name = os.path.splitext(command_line_args[0])[0] + '.ini'
         if os.path.isfile(cmd_cfg_file_name):
             cmd_cfg_parser = ConfigParser()
+            cmd_cfg_parser.optionxform = str  # or use 'lambda option: option' to have case-sensitive INI/CFG var names
             cmd_cfg_parser.read(cmd_cfg_file_name)
             last_start = cmd_cfg_parser.get(MAIN_SECTION_DEF, last_rt_prefix + 'lastRt')
             if last_start[0] == '@':

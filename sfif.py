@@ -1,4 +1,5 @@
 from copy import deepcopy
+import pprint
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 from ae_console_app import uprint
 
@@ -23,19 +24,15 @@ CONTACT_REC_TYPE_ID_OWNERS = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000M
 CONTACT_REC_TYPE_RENTALS = 'Rentals'
 
 
-def prepare_connection(cae, client_id_default='', use_production=False, print_on_console=True):
-    sf_sandbox = cae.get_config('sfIsSandbox', default_value=not use_production)
-    if sf_sandbox == use_production:
-        uprint('****  Salesforce sandbox/production usage discrepancy: sandbox={}, use_production={}'
-               .format(sf_sandbox, use_production))
-        sf_sandbox = not use_production
-
-    suffix = 'Production' if use_production else ''
-    sf_user = cae.get_config('sfUser' + suffix, default_value=cae.get_config('sfUser', default_value=''))
-    sf_client = cae.get_config('sfClientId' + suffix,
-                               default_value=cae.get_config('sfClientId', default_value=client_id_default))
-    sf_token = cae.get_config('sfToken' + suffix, default_value=cae.get_config('sfToken', default_value=''))
-    sf_pw = cae.get_config('sfPassword' + suffix, default_value=cae.get_config('sfPassword', default_value=''))
+def prepare_connection(cae, print_on_console=True):
+    sf_user = cae.get_option('sfUser')
+    if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
+        uprint("sfif.prepare_connection(): skipped because of unspecified credentials")
+        return None, None
+    sf_pw = cae.get_option('sfPassword')
+    sf_token = cae.get_option('sfToken')
+    sf_sandbox = cae.get_option('sfIsSandbox', default_value='test' in sf_user.lower() or 'sandbox' in sf_user.lower())
+    sf_client = cae.get_option('sfClientId')
     sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
     if print_on_console:
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
@@ -60,27 +57,35 @@ class SfInterface:
             self._conn = Salesforce(username=self._user, password=self._pw, security_token=self._tok,
                                     sandbox=self._sb, client_id=self._client)
         except SalesforceAuthenticationFailed as sf_ex:
-            self.error_msg = "SfInterface.__init__(): Salesforce{} authentication failed with exception: {}" \
-                .format(' (sandbox)' if self._sb else '', sf_ex)
-        else:
-            self.error_msg = ""
+            self.error_msg = "SfInterface.__init__(): Salesforce {} authentication failed with exception: {}" \
+                .format('Sandbox' if self._sb else 'Production', sf_ex)
 
-    def _soql_query_all(self, soql_query):
+    def _ensure_lazy_connect(self):
+        if 'INVALID_LOGIN' in self.error_msg:
+            uprint(" ***  Invalid Salesforce login occurred - preventing lock of user account {}; last error={}"
+                   .format(self._user, self.error_msg))
+            return False
         self.error_msg = ""
         if not self._conn:
             self._connect()
             if self.error_msg:
-                return None
+                return False
+        return True
+
+    def _soql_query_all(self, soql_query):
+        if not self._ensure_lazy_connect():
+            return None
         response = None
         try:
             response = self._conn.query_all(soql_query)
         except SalesforceExpiredSession:
-            print("  **  Trying to re-connect expired Salesforce session...")
-            self._connect()
-            try:
-                response = self._conn.query_all(soql_query)
-            except Exception as sf_ex:
-                self.error_msg = "SfInterface._soql_query_all({}) re-connect exception: {}".format(soql_query, sf_ex)
+            uprint("  **  Trying to re-connect expired Salesforce session...")
+            self._conn = None
+            if self._ensure_lazy_connect():
+                try:
+                    response = self._conn.query_all(soql_query)
+                except Exception as sf_ex:
+                    self.error_msg = "SfInterface._soql_query_all({}) reconnect exception: {}".format(soql_query, sf_ex)
         except Exception as sf_ex:
             self.error_msg = "SfInterface._soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
         if response and not response['done']:
@@ -89,11 +94,9 @@ class SfInterface:
         return response
 
     def sf_types(self):
-        if not self._conn:
-            self._connect()
-            if self.error_msg:
-                return None
-        return self._conn
+        if self._ensure_lazy_connect():
+            return self._conn
+        return None
 
     def contacts_with_rci_id(self, ext_refs_sep):
         contact_tuples = list()
@@ -103,7 +106,8 @@ class SfInterface:
         if not self.error_msg and res['totalSize'] > 0:
             for c in res['records']:  # list of Contact OrderedDicts
                 ext_refs = [c['RCI_Reference__c']] if c['RCI_Reference__c'] else list()
-                ext_refs.extend([_['Reference_No_or_ID__c'] for _ in c['External_References__r']['records']])
+                if c['External_References__r']:
+                    ext_refs.extend([_['Reference_No_or_ID__c'] for _ in c['External_References__r']['records']])
                 if ext_refs:
                     contact_tuples.append((c['CD_CODE__c'], c['Id'], c['Sihot_Guest_Object_Id__c'],
                                           ext_refs_sep.join(ext_refs),
@@ -189,6 +193,9 @@ class SfInterface:
         return contact_dicts
 
     def contact_upsert(self, fields_dict):
+        if not self._ensure_lazy_connect():
+            return self.error_msg, ""
+
         err = msg = ""
         if 'Id' in fields_dict:     # update?
             fd = deepcopy(fields_dict)     # copy to local dict fd for to prevent changing the passed-in dict field_dict
@@ -196,17 +203,20 @@ class SfInterface:
             del fd['Id']
             try:
                 sf_http_code = self._conn.Contact.update(sf_id, fd)
-                msg = "{} updated with {}, status={}".format(sf_id, fd, sf_http_code)
+                msg = "{} updated with {}, status={}" \
+                    .format(sf_id, pprint.pformat(fd, indent=9), pprint.pformat(sf_http_code, indent=9))
             except Exception as ex:
                 err = "Salesforce Contact update raised exception {}".format(ex)
         else:
             try:
                 sf_http_code = self._conn.Contact.create(fields_dict)
-                msg = "Salesforce Contact created with {}, status={}".format(fields_dict, sf_http_code)
+                msg = "Salesforce Contact created with {}, status={}" \
+                    .format(pprint.pformat(fields_dict, indent=9), sf_http_code)
             except Exception as ex:
                 err = "Salesforce Contact creation raised exception {}".format(ex)
 
-        self.error_msg = err if err else ""
+        if err:
+            self.error_msg = err
 
         return err, msg
 

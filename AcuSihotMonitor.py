@@ -59,6 +59,12 @@ cae.add_option('serverKernelPort', "IP port of the Sihot KERNEL interface", 1477
 cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 39.6)
 cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 
+cae.add_option('sfUser', "Salesforce account user name", '', 'y')
+cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
+cae.add_option('sfToken', "Salesforce account token string", '', 'o')
+cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'C')
+cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
        cae.get_option('serverKernelPort'))

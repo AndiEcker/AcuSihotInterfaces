@@ -127,7 +127,7 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
         try_counter += 1
 
 
-def prepare_eval_str(val):
+def determine_eval_str(val):
     """ check val if needs to be evaluated and return non-empty-and-stripped-eval-string if yes else '' """
 
     if isinstance(val, bytes):
@@ -166,50 +166,62 @@ class _DuplicateSysOut:
 
 
 class ConsoleApp:
-    def __init__(self, ver, desc, main_section=MAIN_SECTION_DEF, debug_level_def=DEBUG_LEVEL_DISABLED, log_file_def='',
-                 config_eval_vars=None):
-        app_path = sys.argv[0]
-        app_fnam = os.path.basename(app_path)
+    def __init__(self, app_version, app_desc, main_section=MAIN_SECTION_DEF, debug_level_def=DEBUG_LEVEL_DISABLED,
+                 log_file_def='', config_eval_vars=None):
+        """ encapsulating ConfigParser and ArgumentParser for python console applications
+            :param app_version          application version
+            :param app_desc             application description
+            :param main_section         name of main config file section (def=MAIN_SECTION_DEF)
+            :param debug_level_def      default debug level (DEBUG_LEVEL_DISABLED)
+            :param log_file_def         default log file name
+            :param config_eval_vars     dict of additional application specific data values that are used in eval
+                                        expressions (e.g. AcuSihotMonitor.ini)
+        """
+        self._main_section = main_section
+        self.config_eval_vars = config_eval_vars or dict()
+
+        cwd_path = os.getcwd()
+        app_path_fnam_ext = sys.argv[0]
+        app_fnam = os.path.basename(app_path_fnam_ext)
+        app_path = os.path.dirname(app_path_fnam_ext)
+
         self._app_name = os.path.splitext(app_fnam)[0]
-        self._app_version = ver
-        uprint(self._app_name, " V", ver, "  Startup", datetime.datetime.now())
+        self._app_version = app_version
+
+        uprint(self._app_name, " V", app_version, "  Startup", datetime.datetime.now(), app_desc)
         uprint("####  Initialization......  ####")
 
-        self.config_eval_vars = config_eval_vars or dict()
-        self._options = dict()
-        """ self._options contains predefined and user-defined options.
-            The _args_parsed instance variable ensure that the command line arguments get re-parsed if add_option()
-            get called after a first call to either get_option() or dprint(), which are initiating
-            the re-fetch of the args and INI/cfg vars.
         """
+            :ivar _options              contains predefined and user-defined options.
+            :ivar _args_parsed          flag to ensure that the command line arguments get re-parsed if add_option()
+                                        get called after a first call to methods which are initiating the re-fetch of
+                                        the args and INI/cfg vars (like e.g. get_option() or dprint()).
+        """
+        self._options = dict()
         self._args_parsed = False
         self._log_file = None
 
-        # determine main config file (also for to store configs): 1st in cwd, then in app path
-        cfg_fnam_cwd = os.path.join(os.getcwd(), self._app_name)
-        cfg_fnam_app = os.path.splitext(app_path)[0]
-        if os.path.isfile(cfg_fnam_cwd + '.cfg'):
-            cfg_fnam_cwd += '.cfg'
-            self._cfg_fnam = cfg_fnam_cwd
-        elif os.path.isfile(cfg_fnam_cwd + '.ini'):
-            cfg_fnam_cwd += '.ini'
-            self._cfg_fnam = cfg_fnam_cwd
-        elif os.path.isfile(cfg_fnam_app + '.cfg'):
-            cfg_fnam_app += '.cfg'
-            self._cfg_fnam = cfg_fnam_app
-        else:
-            cfg_fnam_app += '.ini'
-            self._cfg_fnam = cfg_fnam_app
+        # compile list of cfg/ini files - the last file overwrites previously loaded variable values
+        INI_EXT = '.ini'
+        cwd_path_fnam = os.path.join(cwd_path, self._app_name)
+        app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
+        config_files = [os.path.join(cwd_path, '.console_app_env.cfg'), os.path.join(app_path, '.console_app_env.cfg'),
+                        app_path_fnam + '.cfg', app_path_fnam + INI_EXT,
+                        cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT,
+                        ]
+        # last existing INI file is default config file to write to
+        for cfg_fnam in reversed(config_files):
+            if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
+                self._cfg_fnam = cfg_fnam
+                break
+        else:   # .. and if there is no INI file at all then create a INI file in the cwd
+            self._cfg_fnam = cwd_path_fnam + INI_EXT
 
-        self._main_section = main_section
-        self._cfg_parser_cwd = ConfigParser()
-        self._cfg_parser_cwd.read(cfg_fnam_cwd)
-        self._cfg_parser_app = ConfigParser()
-        self._cfg_parser_app.read(cfg_fnam_app)
-        self._cfg_parser_env = ConfigParser()
-        self._cfg_parser_env.read('.console_app_env.cfg')
-        self._arg_parser = ArgumentParser(description=desc)
+        self._cfg_parser = ConfigParser()
+        self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
+        self._cfg_parser.read(config_files)
 
+        self._arg_parser = ArgumentParser(description=app_desc)
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
                         choices=(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE))
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
@@ -230,17 +242,23 @@ class ConsoleApp:
             msg = "Not a valid date: '{}' - expected format: {}.".format(dat, DATE_ISO)
             raise ArgumentTypeError(msg)
 
+    @staticmethod
+    def _parse_bool(val):
+        try:
+            return bool(eval(val))
+        except ValueError:
+            msg = "Not a valid boolean: '{}' - expected e.g. True, False, 0, 1, ...".format(val)
+            raise ArgumentTypeError(msg)
+
     def add_option(self, name, desc, value, short_opt=None, eval_opt=False, choices=None):
-        """ defining and adding an new option for this console app as INI/cfg var and as command line argument.
+        """ defining and adding an new option for this app as INI/CFG var and as command line argument.
 
             The name and desc arguments are strings that are specifying the name and short description of the option
             of the console app. The name value will also be available as long command line argument option (case-sens.).
 
-            The value argument is specifying the default value and the type of the option.
-            If the config values are not specified in the app config file then the option default/fallback values will
-            be searched within the base config file: first in the app name section then in the default main section.
-            Only if they also not there then the value argument/parameter of this method is used as the default
-            value for this option. The command line argument option value will always overwrite this value.
+            The value argument is specifying the default value and the type of the option. It will be used only
+            if the config values are not specified in any config file. The command line argument option value
+            will always overwrite this value (and any value in any config file).
 
             If the short option character get not passed into short_opt then the first character of the name
             is used. The short options 'D' and 'L' are used internally (recommending using only lower-case options).
@@ -249,18 +267,24 @@ class ConsoleApp:
             True for the evaluate parameter or you enclose the string expression with triple high commas.
         """
         self._args_parsed = False
-        # determine config value for to use as default for command line arg
-        cfg_val, evaluate = self.get_config(name, default_value=value, check_eval_only=True)
         if not short_opt:
             short_opt = name[0]
+
+        # determine config value for to use as default for command line arg
+        cfg_val = self._get_config_val(name, default_value=value)
+        eval_cfg_val = bool(determine_eval_str(cfg_val)) \
+            or isinstance(cfg_val, list) or isinstance(cfg_val, dict) or isinstance(cfg_val, tuple)
         arg_type = type(cfg_val)
         if arg_type is datetime.datetime:
             arg_type = self._parse_date_time
         elif arg_type is datetime.date:
             arg_type = self._parse_date
+        elif arg_type is bool:
+            arg_type = self._parse_bool
+
         self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=cfg_val, type=arg_type,
                                       choices=choices, metavar=name)
-        self._options[name] = dict(desc=desc, val=value, evaluate=evaluate or eval_opt)
+        self._options[name] = dict(desc=desc, val=value, evaluate=eval_cfg_val or eval_opt)
 
     def _parse_args(self):
         """ this should only get called once and only after all the options have been added with self.add_option().
@@ -270,21 +294,21 @@ class ConsoleApp:
         global _debug_level
         args = self._arg_parser.parse_args()
 
-        for k in self._options.keys():
-            val = getattr(args, k)
-            if self._options[k]['evaluate']:
-                eval_str = prepare_eval_str(val)
+        for key in self._options.keys():
+            val = getattr(args, key)
+            if self._options[key]['evaluate']:
+                eval_str = determine_eval_str(val)
                 if eval_str:
                     try:
                         val = eval(eval_str)
                     except Exception as ex:
                         uprint("ConsoleApp._parse_args() exception '{}' on evaluating the option {} with value: '{}'"
-                               .format(ex, k, eval_str))
-            def_val = self._options[k]['val']
-            self._options[k]['val'] = (bool(val) if isinstance(def_val, bool)
-                                       else (float(val) if isinstance(def_val, float)
-                                             else (int(val) if isinstance(def_val, int)
-                                                   else val)))
+                               .format(ex, key, eval_str))
+            def_val = self._options[key]['val']
+            self._options[key]['val'] = (bool(val) if isinstance(def_val, bool)
+                                         else (float(val) if isinstance(def_val, float)
+                                               else (int(val) if isinstance(def_val, int)
+                                                     else val)))
 
         log_file = self._options['logFile']['val']
         if log_file:  # enable logging
@@ -319,76 +343,72 @@ class ConsoleApp:
 
         self._args_parsed = True
 
-    def get_option(self, name, value=None):
+    def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
 
             The returned value has the same type as the value specified in the add_option() call and is the value from
-            either (ordered by precedence - first specified value will be returned):
-            - the command line args option
-            - the app config/INI main section (def section name=MAIN_SECTION_DEF)
-            - the env config/INI app section
-            - the env config/INI main section
-            - the value argument passed into the add_option() method call (defining the option)
-            - the value argument passed into this method (should actually not happen - add_option() didn't get called)
+            either (ordered by precedence - first specified/found value will be returned):
+            - command line arguments option
+            - default section of INI file in the current working directory (cwd)
+            - default section of CFG file in the current working directory (cwd)
+            - default section of INI file in the application directory (where the main py or exe file is placed)
+            - default section of CFG file in the application directory (where the main py or exe file is placed)
+            - default section of .console_app_env.cfg in the cwd
+            - default section of .console_app_env.cfg in the application directory
+            - value argument passed into the add_option() method call (defining the option)
+            - default_value argument passed into this method (should actually not happen-add_option() didn't get called)
         """
         if not self._args_parsed:
             self._parse_args()
-        return self._options[name]['val'] if name in self._options else value
+        return self._options[name]['val'] if name in self._options else default_value
 
     def set_option(self, name, val, cfg_fnam=None, save_to_config=True):
+        global _debug_level
         self._options[name]['val'] = val
+        if name == 'debugLevel' and not save_to_config:
+            _debug_level = val
         return self.set_config(name, val, cfg_fnam) if save_to_config else ''
 
-    def _get_cfg(self, name, section=None, default_value=None, cfg_parser=None):
-        c = cfg_parser or self._cfg_parser_app
-        f = (c.getboolean if isinstance(default_value, bool)
-             else (c.getfloat if isinstance(default_value, float)
-                   else (c.getint if isinstance(default_value, int)
-                         else c.get)))
-        cfg_val = f(section or self._main_section, name, fallback=default_value)
-        if isinstance(default_value, datetime.datetime) and isinstance(cfg_val, str):
-            cfg_val = datetime.datetime.strptime(cfg_val, DATE_TIME_ISO)
-        elif isinstance(default_value, datetime.date) and isinstance(cfg_val, str):
-            day = datetime.datetime.strptime(cfg_val, DATE_ISO)
-            cfg_val = datetime.date(day.year, day.month, day.day)
-        return cfg_val
+    def _get_config_val(self, name, section=None, default_value=None, cfg_parser=None):
+        cfg_parser = cfg_parser or self._cfg_parser
+        get_func = (cfg_parser.getboolean if isinstance(default_value, bool)
+                    else (cfg_parser.getfloat if isinstance(default_value, float)
+                    else (cfg_parser.getint if isinstance(default_value, int)
+                          else cfg_parser.get)))
+        val = get_func(section or self._main_section, name, fallback=default_value)
+        if isinstance(default_value, datetime.datetime) and isinstance(val, str):
+            val = datetime.datetime.strptime(val, DATE_TIME_ISO)
+        elif isinstance(default_value, datetime.date) and isinstance(val, str):
+            day = datetime.datetime.strptime(val, DATE_ISO)
+            val = datetime.date(day.year, day.month, day.day)
+        return val
 
-    def get_config(self, name, section=None, default_value=None, check_eval_only=False):
-        f = self._get_cfg
-        ret = f(name,  # cwd cfg
-                section=section,
-                default_value=f(name,  # app cfg
-                                section=section,
-                                default_value=f(name,  # env app sec
-                                                section=self._app_name,
-                                                default_value=f(name,  # env main sec
-                                                                section=section,
-                                                                default_value=default_value,
-                                                                cfg_parser=self._cfg_parser_env),
-                                                cfg_parser=self._cfg_parser_env)),
-                cfg_parser=self._cfg_parser_cwd)
-        eval_str = prepare_eval_str(ret)
-        if check_eval_only:  # check if caller requested to return tuple of value and eval
-            ret = (ret, bool(eval_str) or isinstance(ret, list) or isinstance(ret, dict) or isinstance(ret, tuple))
-
-        elif eval_str:
+    def get_config(self, name, section=None, default_value=None, cfg_parser=None):
+        val = self._get_config_val(name, section=section, default_value=default_value, cfg_parser=cfg_parser)
+        eval_str = determine_eval_str(val)
+        if eval_str:
             try:
-                ret = eval(eval_str)
+                val = eval(eval_str)
             except Exception as ex:
                 uprint("ConsoleApp.get_config() exception '{}' on evaluating the option {} with value '{}'"
                        .format(ex, name, eval_str))
-        return ret
+        return val
 
     def set_config(self, name, val, cfg_fnam=None, section=None):
+        global _debug_level
         if not cfg_fnam:
             cfg_fnam = self._cfg_fnam
         if not section:
             section = self._main_section
 
+        if name == 'debugLevel':
+            _debug_level = val
+
         err_msg = ''
         if os.path.isfile(cfg_fnam):
             try:
-                cfg_parser = ConfigParser()
+                cfg_parser = ConfigParser()     # not using self._cfg_parser for to put INI vars from other files
+                cfg_parser.optionxform = str    # or use 'lambda option: option' to have case sensitive var names
                 cfg_parser.read(cfg_fnam)
                 if isinstance(val, dict) or isinstance(val, list) or isinstance(val, tuple):
                     str_val = "'''" + repr(val).replace('%', '%%') + "'''"
@@ -397,20 +417,23 @@ class ConsoleApp:
                 elif isinstance(val, datetime.date):
                     str_val = val.strftime(DATE_ISO)
                 else:
-                    str_val = str(val)
+                    str_val = str(val)       # using str() here because repr() will put high-commas around string values
                 cfg_parser.set(section, name, str_val)
                 with open(cfg_fnam, 'w') as configfile:
                     cfg_parser.write(configfile)
             except Exception as ex:
                 err_msg = "****  ConsoleApp.set_option(" + str(name) + ", " + str(val) + ") exception: " + str(ex)
         else:
-            err_msg = "****  INI file " + str(cfg_fnam) + " not found. Please set the INI/cfg variable " + \
+            err_msg = "****  INI/CFG file " + str(cfg_fnam) + " not found. Please set the ini/cfg variable " + \
                       section + "/" + str(name) + " manually to the value " + str(val)
         return err_msg
 
     def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_ENABLED):
         if self.get_option('debugLevel') >= minimum_debug_level:
             uprint(*objects, sep=sep, end=end, file=file)
+
+    def app_name(self):
+        return self._app_name
 
     def shutdown(self, exit_code=0):
         if exit_code:

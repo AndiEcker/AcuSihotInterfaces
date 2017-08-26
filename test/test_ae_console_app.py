@@ -16,5 +16,3 @@ class TestIllegalXmlChars:
         except ValueError as ex:
             print(full_stack_trace(ex))
             assert full_stack_trace(ex)
-
-

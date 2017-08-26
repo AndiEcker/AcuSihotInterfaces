@@ -10,6 +10,12 @@ __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Salesforce Contact Data Validator", debug_level_def=DEBUG_LEVEL_VERBOSE)
 
+cae.add_option('sfUser', "Salesforce account user name", '', 'y')
+cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
+cae.add_option('sfToken', "Salesforce account token string", '', 'o')
+cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'C')
+cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+
 cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
 cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
 cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
@@ -26,15 +32,11 @@ cae.add_option('phonesToValidate', "Phones to be validated", PHONE_DO_NOT_VALIDA
 cae.add_option('addressesToValidate', "Post addresses to be validated", ADDR_DO_NOT_VALIDATE, 'A',
                choices=(ADDR_DO_NOT_VALIDATE, ADDR_NOT_VALIDATED, ADDR_INVALIDATED, ADDR_INVALID))
 
-cae.add_option('useSfProduction', "Salesforce system to use (0=sandbox, 1=production)", 0, 'S', choices=(0, 1))
-
 
 invalid_email_fragments = cae.get_config('InvalidEmailFragments', default_value=list())
 uprint("Configured fragments for to detect invalid email address:", invalid_email_fragments)
 
-
-sf_conn, sf_sandbox = prepare_connection(cae, client_id_default='SfContactValidator',
-                                         use_production=cae.get_option('useSfProduction'))
+sf_conn, sf_sandbox = prepare_connection(cae)
 
 email_validator = phone_validator = addr_validator = None
 email_validation = cae.get_option('emailsToValidate')

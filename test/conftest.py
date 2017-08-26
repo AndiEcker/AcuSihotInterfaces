@@ -94,7 +94,7 @@ def create_test_guest(console_app_env):
 
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
-    sf_conn, sf_sandbox = prepare_connection(console_app_env, client_id_default='TestSfInterface')
+    sf_conn, sf_sandbox = prepare_connection(console_app_env)
     return sf_conn
 
 
@@ -113,24 +113,29 @@ def uprint(*objects, sep=' ', end='\n', file=sys.stdout, encode_errors_def='back
 
 class ConsoleApp:
     def __init__(self, *args):
-        uprint("####  Initialization......  ####")
+        uprint("####  TEST Initialization.. ####")
         uprint('ConsoleAppMock.__init__', args)
         cfg = ConfigParser()
+        cfg.optionxform = str   # for case-sensitive config vars
         cfg.read('../.console_app_env.cfg')
 
         self._options = dict(serverIP=cfg.get('Settings', 'serverIP', fallback='10.103.222.70'),
                              # serverIP: DEV=10.103.222.71 or TEST=.70 or LIVE='tf-sh-sihot1v.acumen.es'
                              serverPort=cfg.get('Settings', 'serverPort', fallback=14777),
                              serverKernelPort=cfg.get('Settings', 'serverKernelPort', fallback=14772),
-                             timeout=39.6, xmlEncoding='utf8',
+                             timeout=369.0, xmlEncoding='utf8',
                              acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
                              acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
                              debugLevel=cfg.getint('Settings', 'debugLevel', fallback=2),  # 2==DEBUG_LEVEL_VERBOSE
                              warningFragments='',
                              sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
                              sfToken=cfg.get('Settings', 'sfToken'),
+                             sfClientId=cfg.get('Settings', 'sfClientId', fallback='AcuSihotInterfaces_TEST'),
+                             sfIsSandbox=cfg.get('Settings', 'sfIsSandbox', fallback=True),
                              emailValidatorBaseUrl=cfg.get('Settings', 'emailValidatorBaseUrl'),
                              emailValidatorApiKey=cfg.get('Settings', 'emailValidatorApiKey'),
+                             phoneValidatorBaseUrl=cfg.get('Settings', 'phoneValidatorBaseUrl'),
+                             phoneValidatorApiKey=cfg.get('Settings', 'phoneValidatorApiKey'),
                              )
 
     def get_config(self, name, default_value=None):
@@ -138,8 +143,8 @@ class ConsoleApp:
         uprint('ConsoleAppMock.get_config', name, '=', ret)
         return ret
 
-    def get_option(self, name, value=None):
-        ret = self._options[name] if name in self._options else value
+    def get_option(self, name, default_value=None):
+        ret = self._options[name] if name in self._options else default_value
         uprint('ConsoleAppMock.get_option', name, '=', ret)
         return ret
 

@@ -64,6 +64,18 @@ class PhoneValidator:
         self._max_retries = max_retries
 
     def validate(self, phone, country_code='', ret_val_dict=None):
+        """ validate phone number
+
+        Phone validator does not accept leading 00 instead of leading + character, so this method is correcting
+        them accordingly.
+
+        :param phone:           phone number
+        :param country_code:    ISO2 country code (optional)
+        :param ret_val_dict:    dictionary for to pass back the response values from the API
+        :return:                validated phone number in international format (with leading 00)
+        """
+        if phone.startswith('00'):  # convert phone number international format from 00 to + prefix
+            phone = '+' + phone[2:]
         pause_seconds = self._pause_seconds
         try:
             for tries in range(1, self._max_retries + 1):
@@ -81,12 +93,12 @@ class PhoneValidator:
                 # other status: VALID_UNCONFIRMED, INVALID, DELAYED, RATE_LIMIT_EXCEEDED, API_KEY_INVALID_OR_DEPLETED
                 if status in ('VALID_CONFIRMED', 'VALID_UNCONFIRMED'):
                     if ret_val_dict is not None:
-                        # pass back other fields like line-type, location, reformatted phone number, ...
-                        # .. see also https://www.phone-validator.net/phone-number-online-validation-api.html
                         if 'formatinternational' in ret:
-                            if ret['formatinternational'].startswith('+'):
+                            if ret['formatinternational'].startswith('+'):  # convert int format from + to 00 prefix
                                 ret['formatinternational'] = '00' + ret['formatinternational'][1:]
                             ret['formatinternational'] = ret['formatinternational'].replace(' ', '')
+                        # pass back other fields like line-type, location, reformatted phone number, ...
+                        # .. see also https://www.phone-validator.net/phone-number-online-validation-api.html
                         ret_val_dict.update(ret)
                     break
                 if tries == self._max_retries:

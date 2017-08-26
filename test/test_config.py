@@ -1,3 +1,80 @@
+class TestTourOps:
+    def test_missing_agencies_in_sihot(self, db_connected, guest_info):
+        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
+                            "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
+        rows = db_connected.fetch_all()
+        db_connected.close()
+        ags = guest_info.search_agencies()
+
+        failures = list()
+        for row in rows:
+            assert row[0] > 0, "Acumen Agency object id is not specified for matchcode {}".format(row[1])
+            assert row[1], "Acumen Agency match code is not specified for obj-id {}".format(row[0])
+            for sha in ags:
+                if sha['OBJID'] == str(row[0]) and sha['MATCHCODE'] == row[1]:
+                    break
+            else:
+                failures.append("Acumen Object-ID {} or Matchcode {} not found in Sihot agencies"
+                                .format(row[0], row[1]))
+        if failures:
+            print("Acumen agencies", rows)
+            print("Sihot agencies", ags)
+            for f in failures:
+                print(f)
+        assert not failures
+
+    def test_missing_agencies_in_acumen(self, guest_info, db_connected):
+        ags = guest_info.search_agencies()
+        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
+                            "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
+        rows = db_connected.fetch_all()
+        db_connected.close()
+
+        failures = list()
+        for sha in ags:
+            if not sha['MATCHCODE']:
+                continue            # skip guests wrongly configured (missing Matchcode)
+            assert sha['OBJID'], "Sihot Agency object id is not specified for matchcode {}".format(sha['MATCHCODE'])
+            for row in rows:
+                if sha['OBJID'] == str(row[0]) and sha['MATCHCODE'] == row[1]:
+                    break
+            else:
+                failures.append("Sihot Object-ID {} or Matchcode {} not found in Acumen agencies"
+                                .format(sha['OBJID'], sha['MATCHCODE']))
+        if failures:
+            print("Sihot agencies", ags)
+            print("Acumen agencies", rows)
+            for f in failures:
+                print(f)
+        assert not failures
+
+    def test_get_thomas_cook_ag_objid_by_matchcode(self, guest_info, db_connected):
+        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
+        rows = db_connected.fetch_all()
+        db_connected.close()
+        obj_id = str(rows[0][0])
+        mc = rows[0][1]                                     # == 'TCAG'
+        assert mc == 'TCAG'
+        ret = guest_info.get_objid_by_matchcode(mc)         # tk rental (AG)
+        assert ret == obj_id                                # == '20'
+
+    def test_get_thomas_cook_rental_objid_by_matchcode(self, guest_info, db_connected):
+        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
+        rows = db_connected.fetch_all()
+        db_connected.close()
+        obj_id = str(rows[0][0])
+        mc = rows[0][1]                                     # == 'TCRENT'
+        assert mc == 'TCRENT'
+        ret = guest_info.get_objid_by_matchcode(mc)         # TK rentals
+        assert ret == obj_id                                # == '27'
+
+    def test_config_data_get_thomas_cook_agency(self, guest_info, config_data):
+        mc = config_data.get_ro_agency_matchcode('TK')
+        obj_id = guest_info.get_objid_by_matchcode(mc)
+        objid = str(config_data.get_ro_agency_objid('TK'))
+        assert obj_id == objid
+
+
 class TestSystem:
     def test_post_info_message_to_sihot(self, post_message):
         ret = post_message.post_message('test_config running TestSystem')
@@ -95,34 +172,6 @@ class TestSystem:
                     if not found:
                         err += "\nroom {} / {} not configured/found in Acumen".format(r, cat)
         assert not err
-
-
-class TestTourOps:
-    def test_get_thomas_cook_ag_objid_by_matchcode(self, guest_info, db_connected):
-        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
-        rows = db_connected.fetch_all()
-        db_connected.close()
-        obj_id = str(rows[0][0])
-        mc = rows[0][1]                                     # == 'TCAG'
-        assert mc == 'TCAG'
-        ret = guest_info.get_objid_by_matchcode(mc)         # tk rental (AG)
-        assert ret == obj_id                                # == '20'
-
-    def test_get_thomas_cook_rental_objid_by_matchcode(self, guest_info, db_connected):
-        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
-        rows = db_connected.fetch_all()
-        db_connected.close()
-        obj_id = str(rows[0][0])
-        mc = rows[0][1]                                     # == 'TCRENT'
-        assert mc == 'TCRENT'
-        ret = guest_info.get_objid_by_matchcode(mc)         # TK rentals
-        assert ret == obj_id                                # == '27'
-
-    def test_config_data_get_agency(self, guest_info, config_data):
-        mc = config_data.get_ro_agency_matchcode('TK')
-        obj_id = guest_info.get_objid_by_matchcode(mc)
-        objid = str(config_data.get_ro_agency_objid('TK'))
-        assert obj_id == objid
 
 
 class TestRoomCat:

@@ -5,9 +5,15 @@ __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE)
 
-sf_user = cae.get_config('sfUser')
-sf_pw = cae.get_config('sfPassword')
-sf_token = cae.get_config('sfToken')
+cae.add_option('sfUser', "Salesforce account user name", '', 'y')
+cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
+cae.add_option('sfToken', "Salesforce account token string", '', 'o')
+cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'c')
+cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+
+sf_user = cae.get_option('sfUser')
+sf_pw = cae.get_option('sfPassword')
+sf_token = cae.get_option('sfToken')
 
 sb = Salesforce(username=sf_user, password=sf_pw, security_token=sf_token, sandbox=True, client_id='ResImport')
 print('Salesforce object:', sb)

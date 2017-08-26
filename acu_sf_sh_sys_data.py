@@ -5,7 +5,7 @@ from ae_lockfile import LockFile
 from ae_db import OraDB
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 
-from sfif import SfInterface
+from sfif import prepare_connection
 
 # init constants and load constant config settings
 EXT_REFS_SEP = ','
@@ -71,13 +71,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         db.close()
 
         # open and check Salesforce connection
-        usr = cae.get_config('sfUser')
-        self.sales_force = SfInterface(usr, password=cae.get_config('sfPassword'), token=cae.get_config('sfToken'),
-                                       sandbox=cae.get_config('sfIsSandbox',
-                                                              default_value='test' in usr.lower()
-                                                                            or 'sandbox' in usr.lower()),
-                                       client_id=cae.get_config('sfClientId', default_value='SfInterface'))
-        if self.sales_force.error_msg:
+        self.sales_force, _ = prepare_connection(cae)
+        if self.sales_force and self.sales_force.error_msg:
             self.error_message = self.sales_force.error_msg
             return
 

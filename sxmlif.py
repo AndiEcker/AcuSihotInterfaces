@@ -941,6 +941,9 @@ class GuestInfoResponse(Response):
                         elem_val = elem['elemListVal'] if 'elemListVal' in elem \
                             else (elem['elemVal'] if 'elemVal' in elem else None)
                         values[key] = getattr(self, key, elem_val)
+                        # Q&D fix for search_agencies(): prevent to add elemListVal key/item in next run
+                        if 'elemVal' in elem:
+                            elem.pop('elemVal')
                     self.ret_elem_values.append(values)
         # for completeness call also SihotXmlParser.end() and ColMapXmlParser.end()
         return super(GuestInfoResponse, self).end(self._col_map_parser.end(tag))
@@ -1374,6 +1377,12 @@ class GuestSearch(SihotXmlBuilder):
         ret = self.search_guests(col_values, [':objid'], key_elem_name='matchcode')
         return self._check_and_get_objid_of_matchcode_search(ret, matchcode, exact_matchcode)
 
+    def search_agencies(self):
+        col_values = {'SIHOT_GUESTTYPE1': 7,
+                      'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
+                      }
+        return self.search_guests(col_values, ['OBJID', 'MATCHCODE'])
+
     def search_guests(self, col_values, ret_elem_names, key_elem_name=None):
         """ return dict with search element/attribute value as the dict key if len(ret_elem_names)==1 and if
             ret_elem_names[0][0]==':' (in this case key_elem_name has to provide the search element/attribute name)
@@ -1670,7 +1679,8 @@ class ResToSihot(SihotXmlBuilder):
                     # get client/occupant objid directly from acu_client.response
                     crow['CD_SIHOT_OBJID'] = acu_client.response.objid
 
-        if not err_msg and 'OC_CODE' in crow and len(crow['OC_CODE']) == 7:  # exclude pseudo client like TCAG/TCRENT
+        if not err_msg and 'OC_CODE' in crow and crow['OC_CODE'] \
+                and len(crow['OC_CODE']) == 7:  # exclude pseudo client like TCAG/TCRENT
             acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
                                        map_client=self.map_client, connect_to_acu=self.acu_connected)
             if self.acu_connected:

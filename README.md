@@ -25,8 +25,8 @@ This interface suite project is including the following command line tools:
 
 ### General command line arguments
 
-Most of the available commands are using the same command line options. The following command line options are available
-(sorted by the long name of the option - displayed in the first column):
+Most of the available commands are using the same command line options. All names of the following command line options
+are case-sensitive. The following table is listing them sorted by the option name (see the first column named Option):
 
 | Option | Description | Default | Short option | Commands |
 | --- | --- | --- | --- | --- |
@@ -46,6 +46,7 @@ Most of the available commands are using the same command line options. The foll
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
 | help | Show help on all the available command line argument options | - | h | (all) |
+| jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
@@ -57,6 +58,11 @@ Most of the available commands are using the same command line options. The foll
 | serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| sfClientId | Salesforce client/application name/id | SignalliaSfInterface/cae.app_name() | C | SfContactValidator, ShSfContactMigration |
+| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | SfContactValidator, ShSfContactMigration |
+| sfPassword | Salesforce user account password | - | a | SfContactValidator, ShSfContactMigration |
+| sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration |
+| sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
@@ -64,12 +70,13 @@ Most of the available commands are using the same command line options. The foll
 | timeout | Timeout in seconds for TCP/IP connections | 39.6 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| useSfProduction | Salesforce system to use (0=sandbox, 1=production) | 0 | S | SfContactValidator, ShSfContactMigration |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync |
 | xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 
-Currently all the 26 ascii lower case letters are used for the command line argument short options (apart from `| l |`
-which is throwing the exception `argparse.ArgumentError: conflicting option string: -l`).
+Currently all the 26 ascii lower case letters are used for the command line argument short options.
+Some like 'm' are used in different command line applications. 
+The following lower case letters could be used more easily than others (for to prevent duplicates/conflicts) for future/upcoming command line options with less conflicts: | l | m | n | q.
+
 
 ### AcuSihotMonitor Application
 
@@ -134,6 +141,84 @@ Allows to specify/change the content of the data row columns exported CSV file. 
   PARSE_ONLY_TAG_PREFIX + 'LANG',
   ]`.
 
+### SihotResImport Application
+
+Combined Console/Kivy Application for to import reservation bookings, changes and cancellations from CSV or JSON files
+into the Sihot system.
+
+The provided command line parameters are documented above in the section "General command line arguments". The most
+import is `jsonPath` for to specify the import path and file mask for OTA JSON files - this value defaults 
+to `C:/JSON_Import/*.json`.
+
+For to run this application in console mode (headless without any user interface), simply specify a valid 
+Acumen user name (acuUser) and password (acuPassword) as command line parameters (or via one of supported config/INI files).
+
+There are four command line parameters specifying the used Sihot server (production or test): `serverIP` is the DNS name
+or IP address of the SIHOT interface server, `serverPort` is the IP port of the used WEB interface and optionally
+you can specify via `timeout` the timeout value in seconds for TCP/IP connections (default=39.6) and via `xmlEncoding`
+the charset encoding used for the xml data (default='cp1252').
+
+Another four command line parameters are for to configure the notifcation emails: `smtpServerUri` specifies the 
+SMTP server URI (including user name, password, host and port). The sender address has to be specified by
+`smtpFrom`, the list of SMTP receivers by `smtpTo` (for the protocol) and `warningsMailToAddr` (for the
+warnings/discrepancy notifications.
+
+By passing the numeric value 1 to the optional command line argument `breakOnError` you could abort the importation
+if an error occurs in one of the JSON files.
+
+#### JSON field names
+
+The following section is documenting the available json field names for to be populated with the reservation details 
+of each booking coming via email from OTA channels that are not supported by Siteminder (the tool to convert each
+email into the json format is written in C#.NET by Nitesh): 
+
+| Field Name | Field Type | Description | Example Values |
+| --- | --- | --- |
+| RUL_SIHOT_HOTEL | Numeric | Sihot Hotel Id | 1=PBC, 4=BHC |
+| SH_RES_TYPE | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
+| RUL_ACTION | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
+| SIHOT_GDSNO | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
+| RH_EXT_BOOK_REF | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
+| RH_EXT_BOOK_DATE | Date | Sihot Reservation Booking Date | 24-12-2016 |
+| ARR_DATE | Date | Arrival Date | 28-02-2017 |
+| DEP_DATE | Date | Departure Date | 07-03-2017 |
+| RUL_SIHOT_CAT | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
+| SH_PRICE_CAT | String | Paid Sihot Room Category (mostly same as RUL_SIHOT_CAT) | '1STS', '1JNP', '2BSS' |
+| RUL_SIHOT_ROOM | String | Sihot Room Number (optional) | '0426', 'A112' |
+| SH_OBJID | String | Sihot Orderer Object Id of OTA channel | '123456' |
+| OC_SIHOT_OBJID | String | Sihot Orderer Object Id of OTA channel (same as SH_OBJID) | '123456' |
+| SH_MC | String | Sihot Orderer Matchcode of OTA channel | 'OTAxyz' |
+| OC_CODE | String | Sihot Orderer Matchcode of OTA channel (same as SH_MC) | 'OTAxyz' |
+| SIHOT_NOTE | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
+| SIHOT_TEC_NOTE | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '|CR|' for to separate various comments) |
+| RUL_SIHOT_PACK | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
+| SIHOT_MKT_SEG | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
+| RUL_SIHOT_RATE | String | Sihot Price Rate (mostly same as SIHOT_MKT_SEG) | 'XY', 'TK', 'TC' |
+| SIHOT_PAYMENT_INST | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
+| RU_SOURCE | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
+| RO_RES_GROUP | String | Sihot Reservation Channel | 'RS'=Rental SP |
+| RU_ADULTS | Numeric | Number of Adults | 1, 2, 4 |
+| RU_CHILDREN | Numeric | Number of Children | 0, 1, 2 |
+| SH_ADULT1_NAME | String | Surname of first adult | 'Smith' | 
+| SH_ADULT1_NAME2 | String | Forename of first adult | 'John' | 
+| SH_PERS_SEQ1 | Numeric | Rooming List Person First Adults Sequence Number | 0 | 
+| SH_ROOM_SEQ1 | Numeric | Rooming List First Adults Room Sequence Number | 0 | 
+| SH_ADULT2_NAME | String | Surname of second adult | 'Miller' | 
+| SH_ADULT2_NAME2 | String | Forename of second adult | 'Joanna' |
+| SH_PERS_SEQ2 | Numeric | Rooming List Person Second Adults Sequence Number | 1 | 
+| SH_ROOM_SEQ2 | Numeric | Rooming List Second Adults Room Sequence Number | 0 | 
+| SH_CHILD1_NAME | String | Surname of first children | 'Smith' | 
+| SH_CHILD1_NAME2 | String | Forename of first children | 'Paul' | 
+| SH_PERS_SEQ11 | Numeric | Rooming List Person First Children Sequence Number | 10 | 
+| SH_ROOM_SEQ11 | Numeric | Rooming List First Children Room Sequence Number | 0 | 
+| SH_CHILD2_NAME | String | Surname of second children | 'Miller' | 
+| SH_CHILD2_NAME2 | String | Forename of second children | 'Debra' |
+| SH_PERS_SEQ12 | Numeric | Rooming List Person Second Children Sequence Number | 11 | 
+| SH_ROOM_SEQ12 | Numeric | Rooming List Second Children Room Sequence Number | 0 |
+| SH_ROOMS | Numeric | Number of Rooms in Rooming List (optional if 1) | 1 | 
+| SH_EXT_REF | String | Flight Number (optional) | 'ABC-2345' |
+| SIHOT_ALLOTMENT_NO | Numeric | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
+ 
 
 ## System Configurations And Mappings
 
