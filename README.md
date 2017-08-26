@@ -173,7 +173,7 @@ of each booking coming via email from OTA channels that are not supported by Sit
 email into the json format is written in C#.NET by Nitesh): 
 
 | Field Name | Field Type | Description | Example Values |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | RUL_SIHOT_HOTEL | Numeric | Sihot Hotel Id | 1=PBC, 4=BHC |
 | SH_RES_TYPE | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
 | RUL_ACTION | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
