@@ -72,8 +72,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # open and check Salesforce connection
         self.sales_force, _ = prepare_connection(cae)
-        if self.sales_force and self.sales_force.error_msg:
+        if not self.sales_force:
+            self.error_message = "Salesforce connection failed - please check your account data and credentials"
+            cae.dprint(self.error_message)
+            return
+        elif self.sales_force.error_msg:
             self.error_message = self.sales_force.error_msg
+            cae.dprint(self.error_message)
             return
 
         self.client_refs_add_exclude = cae.get_config('ClientRefsAddExclude', default_value='').split(EXT_REFS_SEP)

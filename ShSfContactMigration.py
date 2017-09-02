@@ -1,5 +1,5 @@
 """
-    ShSfContactMigration is a tool for to migrate every Sihot rental guest with valid contact data as a contact
+    ShSfContactMigration is a tool for to migrate every Sihot rental guest with valid contact data as a Contact
     object into the Salesforce system.
 
     0.1     first beta.
@@ -95,6 +95,9 @@ ignore_case_fields = cae.get_config('ignoreCaseFields', default_value=['Email'])
 changeable_contact_fields = cae.get_config('changeableContactFields', default_value=['Email'])
 
 sf_conn, sf_sandbox = prepare_connection(cae)
+if not sf_conn:
+    uprint("Salesforce account connection could not be established - please check your account data and credentials")
+    cae.shutdown(20)
 
 notification = warning_notification_emails = None
 if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
@@ -160,11 +163,13 @@ def strip_add_info_from_sf_data(sfd, strip_populated_sf_fields=False, record_typ
             send_key = key
             send_val = sfd.get(key, "")
         # check if sihot field data (sfd) has to be included into sfs (send to Salesforce or displayed in log)
-        if sfc and sfc[key] and (key not in changeable_contact_fields or sf_has_valid_email):
+        if sfc and key in sfc and sfc[key] and (key not in changeable_contact_fields
+                                                or (sf_has_valid_email and key == 'Email')):
             sh_val = sfd.get(key, "")
             sf_val = sfc[key]
-            cae.dprint("Contact {}: prevented change of field {} to '{}' (from '{}')"
-                       .format(sid, key, sh_val, sf_val))
+            if sh_val != sf_val:
+                cae.dprint("Contact {}: prevented change of field {} to '{}' (from '{}')"
+                           .format(sid, key, sh_val, sf_val))
             if key in ignore_case_fields:
                 sh_val = sh_val.lower()
                 sf_val = sf_val.lower()
@@ -290,7 +295,8 @@ def valid_email_indexes(shd):
 
 def score_match_name_to_email(sfd):
     mail_name = sfd['Email'].lower()
-    if mail_name:
+    if mail_name and '@' in mail_name:
+        mail_name = mail_name.split('@')[0]
         mail_names = mail_name.replace('.', ' ').replace('-', ' ').replace('_', ' ').split()
         pers_name = sfd['FirstName'].lower() + " " + sfd['LastName'].lower()
         pers_names = pers_name.replace('.', ' ').replace('-', ' ').split()
@@ -336,16 +342,18 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
     cc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'COUNTRY', arri)[:2]  # ES has sometimes suffix w/ two numbers
     sfd['Country__c'] = cae.get_config(cc_iso2, 'CountryCodes', default_value=cc_iso2)
     # Booking__c (Long Text Area, 32768) or use field Previous_Arrival_Info__c (Text, 100) ?!?!?
+    sh_rl_id = sh_res_id + '=' + str(arri + 1)  # rooming list id
     sfd['Previous_Arrival_Info__c'] = (""
                                        + " Arr=" + get_col_val(shd, 'ARR', arri)
                                        + " Dep=" + get_col_val(shd, 'DEP', arri)
                                        + " Hotel=" + hot_id
                                        + " Room=" + get_col_val(shd, 'RN', arri)
-                                       + " Sihot GdsNo=" + get_col_val(shd, 'GDSNO', arri)
+                                       + " GdsNo=" + get_col_val(shd, 'GDSNO', arri)
+                                       + " ResId=" + sh_rl_id
                                        ).strip()
 
     sfd[AI_SH_RES_ID] = sh_res_id
-    sfd[AI_SH_RL_ID] = sh_res_id + '=' + str(arr_index + 1)  # rooming list id
+    sfd[AI_SH_RL_ID] = sh_rl_id
     sfd[AI_WARNINGS] = list()
     sfd[AI_SCORE] = 0.0
     sfd[AI_SF_ID] = None  # populate later with data from Salesforce
@@ -402,7 +410,7 @@ try:
         all_rows.extend(chunk_rows)
         time.sleep(sh_fetch_pause_seconds)
 except Exception as ex:
-    uprint(" ***  Sihot interface exception:", str(ex))
+    uprint(" ***  Sihot interface reservation fetch exception:", str(ex))
     print_exc()
     cae.shutdown(27)
 
@@ -412,10 +420,6 @@ uprint("####  Evaluate reservations fetched from Sihot")
 found_emails = list()
 valid_contacts = list()
 try:
-    dup_res = 0
-    dup_emails = 0
-    rooming_list_ids = list()
-    existing_contact_ids = list()
     for row_dict in all_rows:
         hotel_id, res_id = get_hotel_and_res_id(row_dict)
 
@@ -471,6 +475,10 @@ try:
                         reverse=True)
     uprint("####  Detecting reservation-id/email duplicates and fetch current Salesforce contact data (if available)")
     notification_lines.append("####  Validate and compare Sihot and Salesforce contact data")
+    dup_res = 0
+    dup_emails = 0
+    rooming_list_ids = list()
+    existing_contact_ids = list()
     contacts_to_mig = list()
     for sh_dict in valid_contacts:
         rl_id = sh_dict[AI_SH_RL_ID]
@@ -555,7 +563,7 @@ try:
         ec = deepcopy(sh_dict)
         uprint("  ##  Sf-Id", ec[AI_SF_ID])
         uprint("      SF:", pprint.pformat(ec[AI_SF_CURR_DATA], indent=9, width=PP_DEF_WIDTH))
-        del ec[AI_SF_CURR_DATA]
+        ec.pop(AI_SF_CURR_DATA)
         uprint("      SH:", pprint.pformat(ec, indent=9, width=PP_DEF_WIDTH))
 
     uprint()

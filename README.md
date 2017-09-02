@@ -33,6 +33,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| additionalContactFilter | Additional WHERE filter clause for Contact SOQL query | W | SfContactValidator |
 | addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfContactValidator |
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
@@ -52,17 +53,17 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfContactValidator |
-| rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | y | SihotResImport |
+| rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
 | recordTypesToValidate | Contact record type(s) to be validated | 'Rentals' | R | SfContactValidator |
 | resHistory | Migrate also the clients reservation history (0=No, 1=Yes) | 1 | r | SihotMigration |
 | serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| sfClientId | Salesforce client/application name/id | SignalliaSfInterface/cae.app_name() | C | SfContactValidator, ShSfContactMigration |
-| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | SfContactValidator, ShSfContactMigration |
-| sfPassword | Salesforce user account password | - | a | SfContactValidator, ShSfContactMigration |
-| sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration |
-| sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration |
+| sfClientId | Salesforce client/application name/id | SignalliaSfInterface/cae.app_name() | C | SfContactValidator, ShSfContactMigration, SihotResImport |
+| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | SfContactValidator, ShSfContactMigration, SihotResImport |
+| sfPassword | Salesforce user account password | - | a | SfContactValidator, ShSfContactMigration, SihotResImport |
+| sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration, SihotResImport |
+| sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration, SihotResImport |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
@@ -158,6 +159,12 @@ or IP address of the SIHOT interface server, `serverPort` is the IP port of the 
 you can specify via `timeout` the timeout value in seconds for TCP/IP connections (default=39.6) and via `xmlEncoding`
 the charset encoding used for the xml data (default='cp1252').
 
+Meanwhile and for to check the client data against our Salesforce system this application needs also a user account for
+the Salesforce system. If you start this application using E:\AcuServer\ of the Sihot production system as the current
+working directory then you don't need to specify anything to use the Salesforce sandbox, but for production you need at
+least to specify the user name (sfUser), the security token (sfToken), the sandbox flag set to False (sfIsSandbox=False)
+and the password (the password can be omitted if you use our SihotInterface user account).
+
 Another four command line parameters are for to configure the notifcation emails: `smtpServerUri` specifies the 
 SMTP server URI (including user name, password, host and port). The sender address has to be specified by
 `smtpFrom`, the list of SMTP receivers by `smtpTo` (for the protocol) and `warningsMailToAddr` (for the
@@ -173,7 +180,7 @@ of each booking coming via email from OTA channels that are not supported by Sit
 email into the json format is written in C#.NET by Nitesh): 
 
 | Field Name | Field Type | Description | Example Values |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | RUL_SIHOT_HOTEL | Numeric | Sihot Hotel Id | 1=PBC, 4=BHC |
 | SH_RES_TYPE | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
 | RUL_ACTION | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |

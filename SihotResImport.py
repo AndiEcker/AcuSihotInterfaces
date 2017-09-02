@@ -8,6 +8,7 @@
     0.6     31-03-17: removed hyphen and sub-booking-id from GDSNO and dup-exec/-startup lock (lastRt).
     0.7     30-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
     0.8     15-07-17: refactoring moving contacts and res_inv_data to acu_sf_sh_sys_data.py.
+    0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
 """
 import json
 import sys
@@ -16,6 +17,7 @@ import shutil
 import glob
 import datetime
 import csv
+from traceback import format_exc
 
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import Notification
@@ -26,13 +28,13 @@ from sxmlif import ResToSihot, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot, ECM_DO_NOT_SEND_CLIENT
 
-__version__ = '0.8'
+__version__ = '0.9'
 
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  debug_level_def=DEBUG_LEVEL_VERBOSE)
 # cae.add_option('tciPath', "Import path and file mask for Thomas Cook R*.TXT files", 'C:/TC_Import/R*.txt', 'j')
 # cae.add_option('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
-cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'y')
+cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'Y')
 cae.add_option('jsonPath', "Import path and file mask for OTA JSON files", 'C:/JSON_Import/*.json', 'j')
 
 cae.add_option('smtpServerUri', "SMTP error notification server URI [user[:pw]@]host[:port]", '', 'c')
@@ -43,6 +45,12 @@ cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if di
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
+
+cae.add_option('sfUser', "Salesforce account user name", '', 'y')
+cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
+cae.add_option('sfToken', "Salesforce account token string", '', 'o')
+cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'C')
+cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
 
 cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')
@@ -935,8 +943,14 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
        # #########################################################
     '''
 
-    def json_imp_to_res_row(file_name, row):
+    def json_imp_to_res_row(row, file_name, res_index):
+        row['ARR_DATE'] = datetime.datetime.strptime(row['ARR_DATE'], '%Y-%m-%d')
+        row['DEP_DATE'] = datetime.datetime.strptime(row['DEP_DATE'], '%Y-%m-%d')
+        row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(row['RH_EXT_BOOK_DATE'], '%Y-%m-%d')
+
         row['=FILE_NAME'] = file_name
+        row['=LINE_NUM'] = res_index
+
         return row, ''
 
     #
@@ -1246,26 +1260,31 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 json_data = json.load(fp)
 
             if debug_level >= DEBUG_LEVEL_VERBOSE:
-                log_import("JSON import file loaded: " + fn, fn)
+                log_import("JSON import file {} loaded; content={}".format(fn, json_data), fn)
 
-            res_row, error_msg = json_imp_to_res_row(fn, json_data)
-            if not res_row:
-                if debug_level >= DEBUG_LEVEL_VERBOSE:
-                    log_import(error_msg or "JSON import file skipped", fn)
-                error_msg = ""
-                continue  # ignoring imported file
-            if not error_msg:
-                res_rows.append(res_row)
-            progress.next(processed_id='import file ' + fn, error_msg=error_msg)
+            for idx, json_res in enumerate(json_data):
+                res_row, error_msg = json_imp_to_res_row(json_res, fn, idx)
+                if not res_row:
+                    if debug_level >= DEBUG_LEVEL_VERBOSE:
+                        log_import(error_msg or "JSON import file/reservation skipped", fn, idx)
+                    error_msg = ""
+                    continue  # ignoring imported reservation
+                if not error_msg:
+                    res_rows.append(res_row)
+                progress.next(processed_id="import file {} reservation {}".format(fn, idx + 1), error_msg=error_msg)
+                if error_msg:
+                    log_error("OTA/JSON reservation import error: {}".format(error_msg), fn, idx)
+                    if cae.get_option('breakOnError'):
+                        break
             if error_msg:
-                log_error("OTA/JSON import error: {}".format(error_msg), fn)
+                log_error("OTA/JSON file import error: {}".format(error_msg), fn)
                 if cae.get_option('breakOnError'):
                     break
 
         progress.finished(error_msg=error_msg)
 
     # #######################################################################################
-    #  SEND imported reservation bookings of all supported booking channels (BKC, TCI, RCI)
+    #  SEND imported reservation bookings of all supported booking channels (RCI, JSON)
     # #######################################################################################
 
     if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
@@ -1279,7 +1298,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                               map_client=cae.get_option('mapClient'),
                               connect_to_acu=False)
 
-        # order rows to be send by rci ref, mkt seg and arrival date for to detect and merge multi-week bookings
+        # order rows to be send by hotel, apt, orderer, mkt seg and arrival date for to detect/merge multi-week bookings
         res_rows.sort(key=lambda f: str(f['RUL_SIHOT_HOTEL']) + f['RUL_SIHOT_ROOM'] +
                       f['OC_CODE'] + f['SH_ADULT1_NAME'] + f['SH_ADULT1_NAME2'] +
                       f['SIHOT_MKT_SEG'] + f['SH_RES_TYPE'] + f['ARR_DATE'].strftime('%Y-%m-%d'))
@@ -1365,16 +1384,16 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             log_import(sfn + " copied to " + dfn, sfn)
 
         ddn = os.path.join(imp_file_path, 'processed')
+        if not os.path.isdir(ddn):
+            os.mkdir(ddn)
 
+        # if no error happened in the imported file - then move it to the processed sub-folder (on the users machine)
         if not [_ for _ in error_log if sfn in _['context']]:   # sfn == _['context'] should work too
-            # no error happened in the imported file - then move it to the processed sub-folder (on the users machine)
             dfn = os.path.join(ddn, log_file_prefix + '_' + imp_file_name)
             os.rename(sfn, dfn)
             log_import(sfn + ' moved to ' + dfn, sfn)
 
         # create import log file for each import file (on the user machine)
-        if not os.path.isdir(ddn):
-            os.mkdir(ddn)
         log_msg = '\n\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in import_log
                               if _['context'][0] == NO_FILE_PREFIX_CHAR or sfn in _['context'])
         with open(os.path.join(ddn, log_file_prefix + '_' + imp_file_name + '_import.log'), 'a') as fh:
@@ -1405,7 +1424,15 @@ def quit_app(err_log=None):
 
 if cae.get_option('acuPassword'):
     # running without ui in console
-    run_import(cae.get_option('acuUser'), cae.get_option('acuPassword'))
+
+    # (added next line for to remove inspection warning on "too broad exception clause")
+    # noinspection PyBroadException
+    try:
+        run_import(cae.get_option('acuUser'), cae.get_option('acuPassword'))
+    except KeyboardInterrupt:
+        uprint("Reservation Import cancelled by user")
+    except Exception as ri_ex:
+        uprint(format_exc())
 
 else:
     # no password given, then we need the kivy UI for to logon the user
@@ -1515,7 +1542,14 @@ else:
 
         def exec_import(self, usr, pw, event_is_set_func, amend_screen_log_func):
             cae.dprint("App.exec_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            run_import(usr, pw, event_is_set_func, amend_screen_log_func)
+            # (added next line for to remove inspection warning on "too broad exception clause")
+            # noinspection PyBroadException
+            try:
+                run_import(usr, pw, event_is_set_func, amend_screen_log_func)
+            except Exception:
+                exc_and_tb = format_exc()
+                cae.dprint(exc_and_tb)
+                self.amend_screen_log(exc_and_tb, is_error=True)
             self.finalize_import()
 
         def finalize_import(self):

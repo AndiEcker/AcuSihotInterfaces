@@ -2,7 +2,8 @@
     0.1     first beta.
     0.2     refactored to use V_ACU_RES_UNSYNCED (including resort filter) and T_SRSL.
     0.3     added error counter to Progress, refactored lastId into LastRt and removed processed_A*.
-    0.4     removed more fields on DELETE action and implemented DELETE for room allocations moved to non-Sihot-hotels
+    0.4     removed more fields on DELETE action and implemented DELETE for room allocations moved to non-Sihot-hotels.
+    0.5     changed SihotResSync.ini and SyncLIVE.cmd for to specify log and debug level in ini + small refactorings.
 """
 import datetime
 
@@ -16,7 +17,7 @@ from sxmlif import ClientToSihot, ResToSihot, \
     ACTION_UPDATE, ACTION_DELETE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
 from acu_sf_sh_sys_data import AssSysData
 
-__version__ = '0.4'
+__version__ = '0.5'
 
 cae = ConsoleApp(__version__, "Synchronize reservation changes from Acumen/Oracle system to the SiHOT-PMS")
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')

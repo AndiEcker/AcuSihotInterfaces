@@ -3,21 +3,27 @@ import pprint
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 from ae_console_app import uprint
 
-# argument values for SfInterface.contacts_not_valid()
+# argument values for validate_flag_info() and SfInterface.contacts_to_validate()
 EMAIL_DO_NOT_VALIDATE = ""
 EMAIL_NOT_VALIDATED = "NULL"
 EMAIL_INVALIDATED = "'0'"
+EMAIL_VALID = "'1'"
 EMAIL_INVALID = EMAIL_NOT_VALIDATED + ',' + EMAIL_INVALIDATED
+EMAIL_ALL = EMAIL_NOT_VALIDATED + ',' + EMAIL_INVALIDATED + ',' + EMAIL_VALID
 
 PHONE_DO_NOT_VALIDATE = ""
 PHONE_NOT_VALIDATED = "NULL"
 PHONE_INVALIDATED = "'0'"
+PHONE_VALID = "'1'"
 PHONE_INVALID = PHONE_NOT_VALIDATED + ',' + PHONE_INVALIDATED
+PHONE_ALL = PHONE_NOT_VALIDATED + ',' + PHONE_INVALIDATED + ',' + PHONE_VALID
 
 ADDR_DO_NOT_VALIDATE = ""
 ADDR_NOT_VALIDATED = "NULL"
 ADDR_INVALIDATED = "'0'"
+ADDR_VALID = "'1'"
 ADDR_INVALID = ADDR_NOT_VALIDATED + ',' + ADDR_INVALIDATED
+ADDR_ALL = ADDR_NOT_VALIDATED + ',' + ADDR_INVALIDATED + ',' + ADDR_VALID
 
 # contact record types and ids
 CONTACT_REC_TYPE_ID_OWNERS = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
@@ -38,6 +44,106 @@ def prepare_connection(cae, print_on_console=True):
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
     return sf_conn, sf_sandbox
+
+
+def validate_flag_info(validate_flag):
+    if validate_flag in (EMAIL_DO_NOT_VALIDATE, PHONE_DO_NOT_VALIDATE, ADDR_DO_NOT_VALIDATE):
+        info = "Do Not Validate"
+    elif validate_flag in (EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED, ADDR_NOT_VALIDATED):
+        info = "Not Validated Only"
+    elif validate_flag in (EMAIL_INVALIDATED, PHONE_INVALIDATED, ADDR_INVALIDATED):
+        info = "Invalidated Only"
+    elif validate_flag in (EMAIL_INVALID, PHONE_INVALID, ADDR_INVALID):
+        info = "Invalidated And Not Validated"
+    elif validate_flag in (EMAIL_VALID, PHONE_VALID, ADDR_VALID):
+        info = "Re-validate Valid"
+    elif validate_flag in (EMAIL_ALL, PHONE_ALL, ADDR_ALL):
+        info = "All"
+    else:
+        info = validate_flag + " (undeclared)"
+
+    return info
+
+
+def correct_email(email, changed=False, removed=None):
+    """ check and correct email address from a user input (removing all comments)
+
+    Regular expressions are not working for all edge cases (see the answer to this SO question:
+    https://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address) because RFC822
+    is very complex (even the reg expression recommended by RFC 5322 is not complete; there is also a
+    more readable form given in the informational RFC 3696). Additionally a regular expression
+    does not allow corrections. Therefore this function is using a procedural approach (using recommendations from
+    RFC 822 and https://en.wikipedia.org/wiki/Email_address).
+
+    :param email:       email address
+    :param changed:     (optional) flag if email address got changed (before calling this function) - will be returned
+                        unchanged if email did not get corrected.
+    :param removed:     (optional) list declared by caller for to pass back all the removed characters including
+                        the index in the format "<index>:<removed_character(s)>".
+    :return:            tuple of (possibly corrected email address, flag if email got changed/corrected)
+    """
+
+    if removed is None:
+        removed = list()
+
+    in_domain_part = False
+    in_quoted_part = False
+    in_comment = False
+    local_part = ""
+    domain_part = ""
+    domain_beg_idx = -1
+    domain_end_idx = len(email)
+    comment = ''
+    last_ch = ''
+    for idx, ch in enumerate(email):
+        if in_comment:
+            comment += ch
+            if ch == ')':
+                in_comment = False
+                removed.append(comment)
+            continue
+        elif ch == '"':
+            if in_domain_part \
+                    or last_ch != '.' and idx and not in_quoted_part \
+                    or idx + 1 < domain_end_idx and email[idx + 1] not in ('.', '@') and in_quoted_part:
+                removed.append(str(idx) + ':' + ch)
+                changed = True
+                continue
+            in_quoted_part = not in_quoted_part
+        elif ch == '(' and not in_domain_part and (not last_ch or email[idx:].find(')@') >= 0):
+            comment = str(idx) + ':('
+            in_comment = True
+            changed = True
+            continue
+        elif ch == '@' and not in_domain_part and not in_quoted_part:
+            in_domain_part = True
+            domain_beg_idx = idx + 1
+        elif not in_domain_part and ch in ' "(),:;<>@[\]' and in_quoted_part:
+            pass
+        elif in_domain_part and not (ch.isalnum() or ch in ('-', '.') and idx not in (domain_beg_idx, domain_end_idx)) \
+                or (not in_domain_part and not ch.isalnum() and ch not in "!#$%&'*+-/=?^_`{|}~"
+                    and (ch != '.' or last_ch == '.' and not in_quoted_part)):
+            removed.append(str(idx) + ':' + ch)
+            changed = True
+            last_ch = ch
+            continue
+
+        if in_domain_part:
+            domain_part += ch
+        else:
+            local_part += ch
+        last_ch = ch
+
+    if local_part.startswith('.'):
+        local_part = local_part[1:]
+        removed.append(str(0) + ':' + '.')
+        changed = True
+    if local_part.endswith('.'):
+        local_part = local_part[:-1]
+        removed.append(str(len(local_part)) + ':' + '.')
+        changed = True
+
+    return local_part + domain_part, changed
 
 
 class SfInterface:
@@ -162,8 +268,9 @@ class SfInterface:
             sf_dict = res['records'][0]
         return sf_dict
 
-    def contacts_not_valid(self, rec_type_dev_names=None, email_validation=EMAIL_NOT_VALIDATED,
-                           phone_validation=PHONE_DO_NOT_VALIDATE, addr_validation=ADDR_DO_NOT_VALIDATE):
+    def contacts_to_validate(self, rec_type_dev_names=None, additional_filter='',
+                             email_validation=EMAIL_NOT_VALIDATED,
+                             phone_validation=PHONE_DO_NOT_VALIDATE, addr_validation=ADDR_DO_NOT_VALIDATE):
         assert not rec_type_dev_names or rec_type_dev_names.startswith("'") and rec_type_dev_names.endswith("'") \
             and rec_type_dev_names.count(",") == rec_type_dev_names.replace(" ", "").count("','")
         assert (email_validation != EMAIL_DO_NOT_VALIDATE or phone_validation != PHONE_DO_NOT_VALIDATE) \
@@ -173,6 +280,7 @@ class SfInterface:
              + (", HomePhone, CD_Htel_valid__c, MobilePhone, CD_mtel_valid__c, Work_Phone__c, CD_wtel_valid__c"
                 if phone_validation != PHONE_DO_NOT_VALIDATE else "")
              + " FROM Contact WHERE"
+             + (" (" + additional_filter + ") and " if additional_filter else "")
              + (" RecordType.DeveloperName in (" + rec_type_dev_names + ") and " if rec_type_dev_names else "")
              + "("
              + ("(Email != Null and CD_email_valid__c in ({email_validation}))" if email_validation else "")
@@ -200,20 +308,18 @@ class SfInterface:
         if 'Id' in fields_dict:     # update?
             fd = deepcopy(fields_dict)     # copy to local dict fd for to prevent changing the passed-in dict field_dict
             sf_id = fd['Id']
-            del fd['Id']
+            fd.pop('Id')
             try:
                 sf_http_code = self._conn.Contact.update(sf_id, fd)
-                msg = "{} updated with {}, status={}" \
-                    .format(sf_id, pprint.pformat(fd, indent=9), pprint.pformat(sf_http_code, indent=9))
+                msg = "{} updated with {}, status={}".format(sf_id, pprint.pformat(fd, indent=9), sf_http_code)
             except Exception as ex:
-                err = "Salesforce Contact update raised exception {}".format(ex)
+                err = "Contact update raised exception {}. sent={}".format(ex, pprint.pformat(fd, indent=9))
         else:
             try:
                 sf_http_code = self._conn.Contact.create(fields_dict)
-                msg = "Salesforce Contact created with {}, status={}" \
-                    .format(pprint.pformat(fields_dict, indent=9), sf_http_code)
+                msg = "Contact created with {}, status={}".format(pprint.pformat(fields_dict, indent=9), sf_http_code)
             except Exception as ex:
-                err = "Salesforce Contact creation raised exception {}".format(ex)
+                err = "Contact creation raised exception {}. sent={}".format(ex, pprint.pformat(fields_dict, indent=9))
 
         if err:
             self.error_msg = err

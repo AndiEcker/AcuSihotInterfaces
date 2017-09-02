@@ -772,7 +772,7 @@ class AcuSihotMonitorApp(App):
     def label_attributes(column_attributes, text):
         kca = dict(column_attributes)
         kca['text'] = text
-        del kca['column_name']
+        kca.pop('column_name')
         return kca
 
     @staticmethod

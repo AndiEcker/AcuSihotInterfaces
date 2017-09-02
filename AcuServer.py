@@ -2,7 +2,7 @@
     0.1     first beta (only support GUEST-CREATE/-CHANGE of WEB interface 9.0).
     0.2     extended to support SXML interface V9.0 Level 1 of Minibar/Wellness-center.
 """
-from traceback import format_stack
+from traceback import format_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_notification import Notification
@@ -228,7 +228,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                 cae.dprint('Before call of ', SUPPORTED_OCS[oc]['ocProcessor'])
                 xml_response = SUPPORTED_OCS[oc]['ocProcessor'](req)
             except Exception as ex:
-                msg = "SihotRequestXmlHandler.handle_xml() exception: '" + str(ex) + "'\n" + str(format_stack())
+                msg = "SihotRequestXmlHandler.handle_xml() exception: '" + str(ex) + "'\n" + str(format_exc())
                 notify(msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
                 xml_response = create_ack_response(req, '969', msg)
 
