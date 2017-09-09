@@ -461,6 +461,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_ADULT1_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'SH_ADULT1_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 0"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Second adult of client
@@ -488,6 +490,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 1 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_ADULT2_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 1 or 'SH_ADULT2_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 1"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 3
@@ -508,6 +512,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_ADULT3_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 2 or 'SH_ADULT3_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 2"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 4
@@ -528,6 +534,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_ADULT4_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 3 or 'SH_ADULT4_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 3"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 5
@@ -548,6 +556,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_ADULT5_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 4 or 'SH_ADULT5_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 4"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 6
@@ -568,6 +578,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_ADULT6_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_ADULTS'] <= 5 or 'SH_ADULT6_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_ADULTS'] <= 5"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 1
@@ -589,6 +601,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_CHILD1_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'SH_CHILD1_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 0"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 2
@@ -610,6 +624,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_CHILD2_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'SH_CHILD2_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 1"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 3
@@ -631,6 +647,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_CHILD3_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'SH_CHILD3_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 2"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 4
@@ -652,6 +670,8 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
         {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'colName': 'SH_CHILD4_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'SH_CHILD4_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'ACTION', 'colName': 'RUL_ACTION'},
@@ -1585,7 +1605,7 @@ class ResToSihot(SihotXmlBuilder):
         self.use_kernel_for_new_clients = use_kernel_for_new_clients
         self.map_client = map_client
 
-        self._warning_frags = self.ca.get_config('warningFragments')  # list of text fragments to identify as warning
+        self._warning_frags = self.ca.get_config('warningFragments') or list() # list of fragments to identify warnings
         self._warning_msgs = ""
 
     def _fetch_from_acu(self, view, where_group_order, history_only, future_only):

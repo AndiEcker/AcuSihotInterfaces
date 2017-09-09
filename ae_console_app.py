@@ -80,12 +80,14 @@ def full_stack_trace(ex):
     tb = sys.exc_info()[2]
     for item in reversed(inspect.getouterframes(tb.tb_frame)[1:]):
         ret += 'File "{1}", line {2}, in {3}\n'.format(*item)
-        for line in item[4]:
-            ret += ' '*4 + line.lstrip()
+        if item[4]:
+            for line in item[4]:
+                ret += ' '*4 + line.lstrip()
     for item in inspect.getinnerframes(tb):
         ret += 'file "{1}", line {2}, in {3}\n'.format(*item)
-        for line in item[4]:
-            ret += ' '*4 + line.lstrip()
+        if item[4]:
+            for line in item[4]:
+                ret += ' '*4 + line.lstrip()
     return ret
 
 
@@ -167,15 +169,16 @@ class _DuplicateSysOut:
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, main_section=MAIN_SECTION_DEF, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 log_file_def='', config_eval_vars=None):
+                 log_file_def='', config_eval_vars=None, additional_cfg_fnam=None):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
-            :param app_version          application version
-            :param app_desc             application description
-            :param main_section         name of main config file section (def=MAIN_SECTION_DEF)
-            :param debug_level_def      default debug level (DEBUG_LEVEL_DISABLED)
-            :param log_file_def         default log file name
+            :param app_version          application version.
+            :param app_desc             application description.
+            :param main_section         name of main config file section (def=MAIN_SECTION_DEF).
+            :param debug_level_def      default debug level (DEBUG_LEVEL_DISABLED).
+            :param log_file_def         default log file name.
             :param config_eval_vars     dict of additional application specific data values that are used in eval
-                                        expressions (e.g. AcuSihotMonitor.ini)
+                                        expressions (e.g. AcuSihotMonitor.ini).
+            :param additional_cfg_fnam  additional CFG/INI file name (including relative path from app_path).
         """
         self._main_section = main_section
         self.config_eval_vars = config_eval_vars or dict()
@@ -196,6 +199,7 @@ class ConsoleApp:
             :ivar _args_parsed          flag to ensure that the command line arguments get re-parsed if add_option()
                                         get called after a first call to methods which are initiating the re-fetch of
                                         the args and INI/cfg vars (like e.g. get_option() or dprint()).
+            :ivar _log_file             file handle of currently opened log file (opened in self._parse_args()).
         """
         self._options = dict()
         self._args_parsed = False
@@ -209,7 +213,9 @@ class ConsoleApp:
                         app_path_fnam + '.cfg', app_path_fnam + INI_EXT,
                         cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT,
                         ]
-        # last existing INI file is default config file to write to
+        if additional_cfg_fnam:
+            config_files.append(os.path.join(app_path, additional_cfg_fnam))
+        # last existing INI/CFG file is default config file to write to
         for cfg_fnam in reversed(config_files):
             if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
                 self._cfg_fnam = cfg_fnam

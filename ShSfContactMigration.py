@@ -14,7 +14,7 @@ from copy import deepcopy
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from sxmlif import ResSearch, SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
-from sfif import prepare_connection, CONTACT_REC_TYPE_RENTALS
+from sfif import prepare_connection, CONTACT_REC_TYPE_RENTALS, correct_email, correct_phone
 from ae_notification import Notification
 
 __version__ = '0.1'
@@ -194,10 +194,10 @@ def ext_sf_dict(sfd, msg, skip_it=True):
         sfd[AI_SCORE] -= 1.0
 
 
-def get_col_val(shd, col_nam, arri=-1, verbose=False):
+def get_col_val(shd, col_nam, arri=-1, verbose=False, default_value=None):
     """ get the column value from the row_dict variable, using arr_index in case of multiple values """
     if col_nam not in shd:
-        col_val = ELEM_MISSING if verbose else ""
+        col_val = ELEM_MISSING if verbose else default_value
     else:
         col_def = shd[col_nam]
         if 'elemListVal' in col_def and len(col_def['elemListVal']) > arri:
@@ -208,8 +208,8 @@ def get_col_val(shd, col_nam, arri=-1, verbose=False):
             col_val = ""
         if not col_val and 'elemVal' in col_def and col_def['elemVal']:
             col_val = col_def['elemVal']
-        if not col_val and verbose:
-            col_val = ELEM_EMPTY
+        if not col_val:
+            col_val = ELEM_EMPTY if verbose else default_value
 
     return col_val
 
@@ -269,13 +269,14 @@ def valid_name_indexes(shd):
 
 
 def email_is_valid(email):
-    email = email.lower()
-    if email and mail_re.match(email):
-        for frag in invalid_email_fragments:
-            if frag in email:
-                break  # email is invalid/filtered-out
-        else:
-            return True
+    if email:
+        email = email.lower()
+        if mail_re.match(email):
+            for frag in invalid_email_fragments:
+                if frag in email:
+                    break  # email is invalid/filtered-out
+            else:
+                return True
     return False
 
 
@@ -317,11 +318,20 @@ def date_range_chunks():
 
 def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
     """ mig MARKETCODE, LANG, NAME, NAME2, EMAIL, PHONE, COUNTRY, CITY, STREET, GDSNO, RES-HOTEL, RN, ARR, DEP """
+    sh_rl_id = sh_res_id + '=' + str(arri + 1)  # rooming list id
     sfd = dict()
+    sfd[AI_SH_RES_ID] = sh_res_id
+    sfd[AI_SH_RL_ID] = sh_rl_id
+    sfd[AI_WARNINGS] = list()
+    sfd[AI_SCORE] = 0.0
+    sfd[AI_SF_ID] = None  # populate later with data from Salesforce
+    sfd[AI_SF_CURR_DATA] = None
+
     sfd['RecordType.DeveloperName'] = CONTACT_REC_TYPE_RENTALS
     # FirstName or LastName or Name (combined field - not works with UPDATE/CREATE) or Full_Name__c (Formula)
     sfd['FirstName'] = fnam     # get_col_val(shd, 'NAME2', arri)
     sfd['LastName'] = snam
+    sfd['Birthdate'] = get_col_val(shd, 'DOB', arri)
     # Language (Picklist) or Spoken_Languages__c (Picklist, multi-select) ?!?!?
     lc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'LANG', arri)
     sfd['Language__c'] = cae.get_config(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
@@ -330,7 +340,11 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
     sfd['Description'] = "Market Source=" + src
     sfd['Email'] = email if email_is_valid(email) else default_email_address
     # HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
-    sfd['HomePhone'] = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'PHONE', arri)
+    phone_changes = list()
+    sfd['HomePhone'], phone_changed = correct_phone(get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'PHONE', arri),
+                                                    changed=False, removed=phone_changes)
+    if phone_changed:
+        ext_sf_dict(sfd, "HomePhone corrected, removed 'index:char'=" + str(phone_changes))
     # Mobile phone number is not provided by Sihot WEB RES-SEARCH
     # sfd['MobilePhone'] = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'MOBIL', arri)
     # Address_1__c or MailingStreet
@@ -338,26 +352,19 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
     # MailingCity or City (Text, 50) or Address_2__c (Text, 80)
     sfd['MailingCity'] = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'CITY', arri)
     # Country__c/code (Picklist) or Address_3__c (Text, 100) or MailingCountry
-    # .. and remap, e.g. Great Britain need to be UK not GB (ISO2)
-    cc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'COUNTRY', arri)[:2]  # ES has sometimes suffix w/ two numbers
+    # .. and remap, e.g. Great Britain need to be UK not GB (ISO2).
+    # .. Also remove extra characters, because ES has sometimes suffix w/ two numbers
+    cc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'COUNTRY', arri, default_value="")[:2]
     sfd['Country__c'] = cae.get_config(cc_iso2, 'CountryCodes', default_value=cc_iso2)
     # Booking__c (Long Text Area, 32768) or use field Previous_Arrival_Info__c (Text, 100) ?!?!?
-    sh_rl_id = sh_res_id + '=' + str(arri + 1)  # rooming list id
     sfd['Previous_Arrival_Info__c'] = (""
-                                       + " Arr=" + get_col_val(shd, 'ARR', arri)
-                                       + " Dep=" + get_col_val(shd, 'DEP', arri)
-                                       + " Hotel=" + hot_id
-                                       + " Room=" + get_col_val(shd, 'RN', arri)
-                                       + " GdsNo=" + get_col_val(shd, 'GDSNO', arri)
+                                       + " Arr=" + get_col_val(shd, 'ARR', arri, default_value='')
+                                       + " Dep=" + get_col_val(shd, 'DEP', arri, default_value='')
+                                       + " Hotel=" + str(hot_id)
+                                       + " Room=" + get_col_val(shd, 'RN', arri, default_value='')
+                                       + " GdsNo=" + get_col_val(shd, 'GDSNO', arri, default_value='')
                                        + " ResId=" + sh_rl_id
                                        ).strip()
-
-    sfd[AI_SH_RES_ID] = sh_res_id
-    sfd[AI_SH_RL_ID] = sh_rl_id
-    sfd[AI_WARNINGS] = list()
-    sfd[AI_SCORE] = 0.0
-    sfd[AI_SF_ID] = None  # populate later with data from Salesforce
-    sfd[AI_SF_CURR_DATA] = None
 
     return sfd
 
@@ -378,7 +385,10 @@ def layout_message(sfd, cols):
             sfv = sf_curr_data[col]
         if shv or sfv:
             col_label = (col[:-3] if col[-3:] == '__c' else ("Record Type" if col == rtd else col)).replace("_", " ")
-            txt += form_str.format(col_label, shv)
+            try:
+                txt += form_str.format(col_label, shv)
+            except TypeError:
+                txt += str(col_label) + ":::" + str(shv)
             if sfv:
                 txt += " (SF={})".format(sfv)
             txt += "\n"
@@ -432,12 +442,16 @@ try:
                                             verbose=True)))
             continue
         for arr_index in arr_indexes:
-            email_addr = get_col_val(row_dict, PARSE_ONLY_TAG_PREFIX + 'EMAIL', arr_index)
+            mail_changes = list()
+            email_addr, mail_changed = correct_email(get_col_val(row_dict, PARSE_ONLY_TAG_PREFIX + 'EMAIL', arr_index),
+                                                     changed=False, removed=mail_changes)
             surname = get_col_val(row_dict, 'NAME', arr_index)
             forename = get_col_val(row_dict, 'NAME2', arr_index)
             mkt_src = get_col_val(row_dict, PARSE_ONLY_TAG_PREFIX + 'MARKETCODE', arr_index)
             sh_dict = prepare_mig_data(row_dict, arr_index, res_id, email_addr, surname, forename, mkt_src, hotel_id)
 
+            if mail_changed:
+                ext_sf_dict(sh_dict, "email corrected, removed 'index:char'=" + str(mail_changes))
             if not hotel_id or hotel_id == '999':
                 ext_sf_dict(sh_dict, "invalid hotel-id {}".format(hotel_id))
             if not res_id:
@@ -570,7 +584,7 @@ try:
     uprint("####  ", mig_contact_count, "Contacts migrated:")
     contacts_notifications = list()
     contacts_notifications.append("####  {} MIGRATED CONTACTS:\n\n".format(mig_contact_count))
-    layout_fields = ['RecordType.DeveloperName', 'FirstName', 'LastName', 'Email', 'HomePhone',
+    layout_fields = ['RecordType.DeveloperName', 'FirstName', 'LastName', 'Birthdate', 'Email', 'HomePhone',
                      'MailingStreet', 'MailingCity', 'Country__c',
                      'Language__c', 'Description', 'Previous_Arrival_Info__c']
     for sh_dict in contacts_migrated:

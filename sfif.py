@@ -82,68 +82,113 @@ def correct_email(email, changed=False, removed=None):
                         the index in the format "<index>:<removed_character(s)>".
     :return:            tuple of (possibly corrected email address, flag if email got changed/corrected)
     """
+    if email is None:
+        return None, False
 
     if removed is None:
         removed = list()
 
-    in_domain_part = False
+    in_local_part = True
     in_quoted_part = False
     in_comment = False
     local_part = ""
     domain_part = ""
     domain_beg_idx = -1
-    domain_end_idx = len(email)
+    domain_end_idx = len(email) - 1
     comment = ''
     last_ch = ''
+    ch_before_comment = ''
     for idx, ch in enumerate(email):
+        next_ch = email[idx + 1] if idx + 1 < domain_end_idx else ''
         if in_comment:
             comment += ch
             if ch == ')':
                 in_comment = False
                 removed.append(comment)
+                last_ch = ch_before_comment
             continue
-        elif ch == '"':
-            if in_domain_part \
-                    or last_ch != '.' and idx and not in_quoted_part \
-                    or idx + 1 < domain_end_idx and email[idx + 1] not in ('.', '@') and in_quoted_part:
-                removed.append(str(idx) + ':' + ch)
-                changed = True
-                continue
-            in_quoted_part = not in_quoted_part
-        elif ch == '(' and not in_domain_part and (not last_ch or email[idx:].find(')@') >= 0):
+        elif ch == '(' and not in_quoted_part \
+                and (idx == 0 or email[idx:].find(')@') >= 0 if in_local_part
+                     else idx == domain_beg_idx or email[idx:].find(')') == domain_end_idx - idx):
             comment = str(idx) + ':('
+            ch_before_comment = last_ch
             in_comment = True
             changed = True
             continue
-        elif ch == '@' and not in_domain_part and not in_quoted_part:
-            in_domain_part = True
-            domain_beg_idx = idx + 1
-        elif not in_domain_part and ch in ' "(),:;<>@[\]' and in_quoted_part:
-            pass
-        elif in_domain_part and not (ch.isalnum() or ch in ('-', '.') and idx not in (domain_beg_idx, domain_end_idx)) \
-                or (not in_domain_part and not ch.isalnum() and ch not in "!#$%&'*+-/=?^_`{|}~"
-                    and (ch != '.' or last_ch == '.' and not in_quoted_part)):
+        elif ch == '"' \
+                and (not in_local_part
+                     or last_ch != '.' and idx and not in_quoted_part
+                     or next_ch not in ('.', '@') and last_ch != '\\' and in_quoted_part):
             removed.append(str(idx) + ':' + ch)
             changed = True
-            last_ch = ch
+            continue
+        elif ch == '@' and in_local_part and not in_quoted_part:
+            in_local_part = False
+            domain_beg_idx = idx + 1
+        elif ch.isalnum():
+            pass    # uppercase and lowercase Latin letters A to Z and a to z
+        elif ord(ch) > 127 and in_local_part:
+            pass    # international characters above U+007F
+        elif ch == '.' and in_local_part and not in_quoted_part and last_ch != '.' and idx and next_ch != '@':
+            pass    # if not the first or last unless quoted, and does not appear consecutively unless quoted
+        elif ch in ('-', '.') and not in_local_part and (last_ch != '.' or ch == '-') \
+                and idx not in (domain_beg_idx, domain_end_idx):
+            pass    # if not duplicated dot and not the first or last character in domain part
+        elif (ch in ' (),:;<>@[]' or ch in '\\"' and last_ch == '\\' or ch == '\\' and next_ch == '\\') \
+                and in_quoted_part:
+            pass    # in quoted part and in addition, a backslash or double-quote must be preceded by a backslash
+        elif ch == '"' and in_local_part:
+            in_quoted_part = not in_quoted_part
+        elif (ch in "!#$%&'*+-/=?^_`{|}~" or ch == '.'
+              and (last_ch and last_ch != '.' and next_ch != '@' or in_quoted_part)) \
+                and in_local_part:
+            pass    # special characters (in local part only and not at beg/end and no dup dot outside of quoted part)
+        else:
+            removed.append(str(idx) + ':' + ch)
+            changed = True
             continue
 
-        if in_domain_part:
-            domain_part += ch
-        else:
+        if in_local_part:
             local_part += ch
+        else:
+            domain_part += ch
         last_ch = ch
 
-    if local_part.startswith('.'):
-        local_part = local_part[1:]
-        removed.append(str(0) + ':' + '.')
-        changed = True
-    if local_part.endswith('.'):
-        local_part = local_part[:-1]
-        removed.append(str(len(local_part)) + ':' + '.')
-        changed = True
-
     return local_part + domain_part, changed
+
+
+def correct_phone(phone, changed=False, removed=None):
+    """ check and correct phone number from a user input (removing all invalid characters including spaces)
+
+    :param phone:       phone number
+    :param changed:     (optional) flag if phone got changed (before calling this function) - will be returned
+                        unchanged if phone did not get corrected.
+    :param removed:     (optional) list declared by caller for to pass back all the removed characters including
+                        the index in the format "<index>:<removed_character(s)>".
+    :return:            tuple of (possibly corrected phone number, flag if phone got changed/corrected)
+    """
+
+    if phone is None:
+        return None, False
+
+    if removed is None:
+        removed = list()
+
+    corr_phone = ''
+    got_hyphen = False
+    for idx, ch in enumerate(phone):
+        if ch.isdigit():
+            corr_phone += ch
+        elif ch == '-' and not got_hyphen:
+            got_hyphen = True
+            corr_phone += ch
+        else:
+            if ch == '+' and not corr_phone and not phone[idx + 1:].startswith('00'):
+                corr_phone = '00'
+            removed.append(str(idx) + ':' + ch)
+            changed = True
+
+    return corr_phone, changed
 
 
 class SfInterface:

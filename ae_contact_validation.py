@@ -11,7 +11,7 @@ class EmailValidator:
         Alternative and free email validation (MX-record, DNS and extended regular expression match) with free
         pip python module: https://github.com/syrusakbary/validate_email/blob/master/validate_email.py
     """
-    def __init__(self, base_url, api_key, pause_seconds=9.0, max_retries=3):
+    def __init__(self, base_url, api_key, pause_seconds=18.0, max_retries=2):
         assert base_url
         self._base_url = base_url
         assert api_key
@@ -58,7 +58,7 @@ class EmailValidator:
                 # .. e.g. 114=grey listing, 118=api rate limit (Daniels code documents 5 min. pause/wait in this case)
                 status = ret['status']
                 if tries == self._max_retries and status not in self._valid_status:
-                    err_msg = "EmailValidator.validate(): maximum/{} retries reached. ret={}".format(tries, ret)
+                    err_msg = "maximum retries ({}) reached. ret={}".format(tries, ret)
                     break
                 if status in self._valid_status and status not in self._retry_status:
                     break           # VALID
@@ -74,7 +74,7 @@ class EmailValidator:
 
 
 class PhoneValidator:
-    def __init__(self, base_url, api_key, pause_seconds=9.0, max_retries=3):
+    def __init__(self, base_url, api_key, pause_seconds=18.0, max_retries=2, alternative_country=''):
         assert base_url
         self._base_url = base_url
         assert api_key
@@ -83,22 +83,26 @@ class PhoneValidator:
         self._pause_seconds = pause_seconds
         assert max_retries > 0
         self._max_retries = max_retries
+        self._alt_country = alternative_country
         # save costs on re-validating duplicates
         self._already_validated = dict()
         # response status codes - see also https://www.phone-validator.net/phone-number-online-validation-api.html
         self._retry_status = list(('VALID_UNCONFIRMED', 'DELAYED',))            # retry the validation
         self._valid_status = list(('VALID_UNCONFIRMED', 'VALID_CONFIRMED',))    # VALID
 
-    def validate(self, phone, country_code='', ret_val_dict=None):
+    def validate(self, phone, country_code='', ret_val_dict=None, try_alternative_country=True):
         """ validate phone number
 
         Phone validator does not accept leading 00 instead of leading + character, so this method is correcting
         them accordingly.
 
-        :param phone:           phone number to be validated.
+        :param phone:           phone number to be validated (without spaces and special characters apart from + and -).
         :param country_code:    ISO2 country code (optional).
         :param ret_val_dict:    dictionary for to pass back the response values from the API including the
                                 validated phone number in international format (with leading 00).
+        :param try_alternative_country  if True and self._alt_country is specified on class instantiation and if
+                                the validation with the passed country_code was invalid then do another validation try
+                                with the country code specified in self._alt_country.
         :return:                "" if valid else error message.
         """
         if phone.startswith('00'):  # convert phone number international format from 00 to + prefix
@@ -133,7 +137,13 @@ class PhoneValidator:
                 status = ret['status']
                 # status: VALID_UNCONFIRMED, INVALID, DELAYED, RATE_LIMIT_EXCEEDED, API_KEY_INVALID_OR_DEPLETED
                 if tries == self._max_retries and status not in self._valid_status:
-                    err_msg = "PhoneValidator.validate(): maximum/{} retries reached. ret={}".format(tries, ret)
+                    err_msg = "maximum retries ({}) reached. country={} ret={}".format(tries, country_code, ret)
+                    if try_alternative_country and self._alt_country and self._alt_country != country_code:
+                        # start 2nd validation with alternative country code (for foreigners using a local prepaid SIM)
+                        err = self.validate(phone, country_code=self._alt_country, ret_val_dict=ret_val_dict)
+                        if not err:
+                            return ""       # RETURN to not overwrite self._already_validated cache with old validation
+                        err_msg += '\t\t' + err
                     break
                 if status in self._valid_status and status not in self._retry_status:
                     break           # VALID
@@ -142,8 +152,11 @@ class PhoneValidator:
             if ret_val_dict is not None and ret:
                 if 'formatinternational' in ret:
                     if ret['formatinternational'].startswith('+'):  # convert int format from + to 00 prefix
-                        ret['formatinternational'] = '00' + ret['formatinternational'][1:]
-                    ret['formatinternational'] = ret['formatinternational'].replace(' ', '')
+                        if ret['formatinternational'].startswith('+00'):
+                            ret['formatinternational'] = ret['formatinternational'][1:]
+                        else:
+                            ret['formatinternational'] = '00' + ret['formatinternational'][1:]
+                    ret['formatinternational'] = ret['formatinternational'].replace(' ', '')    # validator puts spaces
                 # pass back other fields like line-type, location, reformatted phone number, ...
                 # .. see also https://www.phone-validator.net/phone-number-online-validation-api.html
                 ret_val_dict.update(ret)
@@ -159,7 +172,7 @@ class PhoneValidator:
 
 
 class AddressValidator:
-    def __init__(self, base_url, api_key, pause_seconds=9.0, max_retries=3,
+    def __init__(self, base_url, api_key, pause_seconds=18.0, max_retries=1,
                  auto_complete_search_url='', auto_complete_fetch_url=''):
         assert base_url
         self._base_url = base_url
@@ -201,7 +214,7 @@ class AddressValidator:
                     result_ids = [_['id'] for _ in results]
                     break
                 if tries == self._max_retries:
-                    return "AddressValidator.auto_complete(): maximum/{} retries reached. ret={}".format(tries, ret)
+                    return "maximum retries ({}) reached. country={} ret={}".format(tries, country_code, ret)
                 pause_seconds += 3.0 * (tries ** 2.0)
 
             for addr_id in result_ids:
@@ -259,7 +272,7 @@ class AddressValidator:
                 # other status: SUSPECT, INVALID, DELAYED, RATE_LIMIT_EXCEEDED, API_KEY_INVALID_OR_DEPLETED, RESTRICTED,
                 # .. INTERNAL_ERROR
                 if tries == self._max_retries:
-                    return "AddressValidator.validate(): maximum/{} retries reached. ret={}".format(tries, ret)
+                    return "reached maximum retries ({}). country={} ret={}".format(tries, country_code, ret)
                 pause_seconds += 3.0 * (tries ** 2.0)
 
         except requests.exceptions.RequestException as ex:

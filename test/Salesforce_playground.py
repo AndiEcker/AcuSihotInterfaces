@@ -3,7 +3,8 @@ from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, Salesf
 
 __version__ = '0.1'
 
-cae = ConsoleApp(__version__, "Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE)
+cae = ConsoleApp(__version__, "Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE,
+                 additional_cfg_fnam='../.console_app_env.cfg')
 
 cae.add_option('sfUser', "Salesforce account user name", '', 'y')
 cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
@@ -248,17 +249,20 @@ if result['done'] and result['totalSize'] > 0:
     rec_type = result['records'][0]['Id']
     print("RecordTypeId=", rec_type)    # == '0129E000000CmLVQA0'
     email = 'y_u_h_u@yahoo.com'
+    sb.error_message = ''
     result = sb.query_all("SELECT Id FROM Contact WHERE Email = '" + email + "'")
     if result['done']:
         if result['totalSize'] > 0:
             print(".. updating")
             sb.Contact.update(result['records'][0]['Id'],
                               {'FirstName': 'Sally', 'lastName': 'S-force', 'RecordTypeId': rec_type,
-                               'Email': email})
+                               'Email': email, 'Birthdate': '1952-6-18', 'Description': None})
         else:
             print(".. inserting")
             sb.Contact.create({'FirstName': 'Sally', 'lastName': 'S-force', 'RecordTypeId': rec_type,
-                               'Email': email})
+                               'Email': email, 'Birthdate': '1962-6-18'})
+        if sb.error_message:
+            print("Salesforce error:", sb.error_message)
 
 # extract data for to double check phone validation done with data-8 against the byteplant phone validator
 result = sb.query_all("SELECT Id, Country__c, HomePhone, MobilePhone, Work_Phone__c,"

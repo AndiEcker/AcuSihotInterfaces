@@ -136,7 +136,7 @@ def ass_test_link_alive():
 
 
 def sih_reservation_discrepancies(data_dict):
-    beg_day = data_dict['first_arrival_criteria']  # datetime.datetime.today()
+    beg_day = data_dict['first_occupancy_criteria']  # datetime.datetime.today()
     end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))
     req = ResToSihot(cae)
     results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"

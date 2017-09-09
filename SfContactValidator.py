@@ -3,13 +3,15 @@
 
     0.1     first beta.
 """
+import pprint
+
 from ae_console_app import ConsoleApp, DEBUG_LEVEL_VERBOSE, uprint
 from ae_contact_validation import EmailValidator, PhoneValidator, AddressValidator
 from ae_notification import Notification
 from sfif import prepare_connection, validate_flag_info, CONTACT_REC_TYPE_RENTALS, \
     EMAIL_DO_NOT_VALIDATE, EMAIL_NOT_VALIDATED, EMAIL_INVALIDATED, EMAIL_INVALID, EMAIL_VALID, EMAIL_ALL, \
     PHONE_DO_NOT_VALIDATE, PHONE_NOT_VALIDATED, PHONE_INVALIDATED, PHONE_INVALID, PHONE_VALID, PHONE_ALL, \
-    ADDR_DO_NOT_VALIDATE, ADDR_NOT_VALIDATED, ADDR_INVALIDATED, ADDR_INVALID, ADDR_VALID, ADDR_ALL
+    ADDR_DO_NOT_VALIDATE, ADDR_NOT_VALIDATED, ADDR_INVALIDATED, ADDR_INVALID, ADDR_VALID, ADDR_ALL, correct_email
 
 __version__ = '0.2'
 
@@ -58,23 +60,51 @@ email_validator = phone_validator = addr_validator = None
 email_validation = cae.get_option('emailsToValidate')
 api_key = cae.get_config('emailValidatorApiKey')
 if api_key:
-    email_validator = EmailValidator(cae.get_config('emailValidatorBaseUrl'), api_key)
+    args = dict()
+    pause_seconds = cae.get_config('emailValidatorPauseSeconds')
+    if pause_seconds:
+        args['pause_seconds'] = pause_seconds
+    max_retries = cae.get_config('emailValidatorMaxRetries')
+    if max_retries:
+        args['max_retries'] = max_retries
+    email_validator = EmailValidator(cae.get_config('emailValidatorBaseUrl'), api_key, **args)
 elif email_validation != EMAIL_DO_NOT_VALIDATE:
     uprint("SfContactValidator email validation configuration error: api key is missing")
     cae.shutdown(3)
 phone_validation = cae.get_option('phonesToValidate')
 api_key = cae.get_config('phoneValidatorApiKey')
 if api_key:
-    phone_validator = PhoneValidator(cae.get_config('phoneValidatorBaseUrl'), api_key)
+    args = dict()
+    pause_seconds = cae.get_config('phoneValidatorPauseSeconds')
+    if pause_seconds:
+        args['pause_seconds'] = pause_seconds
+    max_retries = cae.get_config('phoneValidatorMaxRetries')
+    if max_retries:
+        args['max_retries'] = max_retries
+    alternative_country = cae.get_config('phoneValidatorAlternativeCountry')
+    if alternative_country:
+        args['alternative_country'] = alternative_country
+    phone_validator = PhoneValidator(cae.get_config('phoneValidatorBaseUrl'), api_key, **args)
 elif phone_validation != PHONE_DO_NOT_VALIDATE:
     uprint("SfContactValidator phone validation configuration error: api key is missing")
     cae.shutdown(6)
 addr_validation = cae.get_option('addressesToValidate')
 api_key = cae.get_config('addressValidatorApiKey')
 if api_key:
-    addr_validator = AddressValidator(cae.get_config('addressValidatorBaseUrl'), api_key,
-                                      auto_complete_search_url=cae.get_config('addressValidatorSearchUrl'),
-                                      auto_complete_fetch_url=cae.get_config('addressValidatorFetchUrl'))
+    args = dict()
+    pause_seconds = cae.get_config('addressValidatorPauseSeconds')
+    if pause_seconds:
+        args['pause_seconds'] = pause_seconds
+    max_retries = cae.get_config('addressValidatorMaxRetries')
+    if max_retries:
+        args['max_retries'] = max_retries
+    search_url = cae.get_config('addressValidatorSearchUrl')
+    if search_url:
+        args['auto_complete_search_url'] = search_url
+    fetch_url = cae.get_config('addressValidatorFetchUrl')
+    if fetch_url:
+        args['auto_complete_fetch_url'] = fetch_url
+    addr_validator = AddressValidator(cae.get_config('addressValidatorBaseUrl'), api_key, **args)
 elif addr_validation != ADDR_DO_NOT_VALIDATE:
     uprint("SfContactValidator address validation configuration error: api key is missing")
     cae.shutdown(9)
@@ -118,6 +148,7 @@ add_log_msg("Validating {} contacts, checking email={}, phone={}, address={}"
                     validate_flag_info(addr_validation)),
             importance=4)
 emails_validated = phones_validated = addresses_validated = contacts_updated = 0
+skipped_email_ids = dict()
 for rec in contacts:
     cae.dprint("Checking Contact for needed validation", rec)
     update_in_sf = False
@@ -125,11 +156,15 @@ for rec in contacts:
             and eval("rec['CD_email_valid__c'] in (" + email_validation.replace('NULL', 'None') + ",)"):
         for frag in invalid_email_fragments:
             if frag in rec['Email']:
-                add_log_msg("{Id} email {Email} skipped because contains fragment {frag}.".format(frag=frag, **rec))
+                if frag not in skipped_email_ids:
+                    skipped_email_ids[frag] = list()
+                skipped_email_ids[frag].append(rec['Id'])
                 break
         else:
-            if ' ' in rec['Email']:
-                rec['Email'] = rec['Email'].replace(' ', '')
+            email_changes = list()
+            rec['Email'], email_changed = correct_email(rec['Email'], changed=False, removed=email_changes)
+            if email_changed:
+                add_log_msg("{Id} email {Email} corrected; removed 'index:char'={chg}".format(chg=email_changes, **rec))
                 update_in_sf = True
             err_msg = email_validator.validate(rec['Email'])
             validation_flag = rec['CD_email_valid__c']
@@ -148,15 +183,18 @@ for rec in contacts:
         emails_validated += 1
     if phone_validator and 'HomePhone' in rec and rec['HomePhone'] and phone_validation != PHONE_DO_NOT_VALIDATE \
             and eval("rec['CD_Htel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
-        corr = dict()
-        if ' ' in rec['HomePhone']:
-            rec['HomePhone'] = rec['HomePhone'].replace(' ', '')
+        phone_changes = list()
+        rec['HomePhone'], phone_changed = correct_email(rec['HomePhone'], changed=False, removed=phone_changes)
+        if phone_changed:
+            add_log_msg("{Id} home phone {HomePhone} corrected; removed 'index:char'={chg}"
+                        .format(chg=phone_changes, **rec))
             update_in_sf = True
+        corr = dict()
         err_msg = phone_validator.validate(rec['HomePhone'], country_code=rec['Country__c'], ret_val_dict=corr)
         validation_flag = rec['CD_Htel_valid__c']
         if err_msg:
             validation_flag = '0'
-            add_log_msg("{Id} home phone {HomePhone} is invalid (in {Country__c}). Reason={err_msg}"
+            add_log_msg("{Id} home phone {HomePhone} is invalid. Reason={err_msg}"
                         .format(err_msg=err_msg, **rec), is_error=True)
         else:
             validation_flag = '1'
@@ -181,15 +219,18 @@ for rec in contacts:
         phones_validated += 1
     if phone_validator and 'MobilePhone' in rec and rec['MobilePhone'] and phone_validation != PHONE_DO_NOT_VALIDATE \
             and eval("rec['CD_mtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
-        corr = dict()
-        if ' ' in rec['MobilePhone']:
-            rec['MobilePhone'] = rec['MobilePhone'].replace(' ', '')
+        phone_changes = list()
+        rec['MobilePhone'], phone_changed = correct_email(rec['MobilePhone'], changed=False, removed=phone_changes)
+        if phone_changed:
+            add_log_msg("{Id} mobile phone {MobilePhone} corrected; removed 'index:char'={chg}"
+                        .format(chg=phone_changes, **rec))
             update_in_sf = True
+        corr = dict()
         err_msg = phone_validator.validate(rec['MobilePhone'], country_code=rec['Country__c'], ret_val_dict=corr)
         validation_flag = rec['CD_mtel_valid__c']
         if err_msg:
             validation_flag = '0'
-            add_log_msg("{Id} mobile phone {MobilePhone} is invalid (in {Country__c}). Reason={err_msg}"
+            add_log_msg("{Id} mobile phone {MobilePhone} is invalid. Reason={err_msg}"
                         .format(err_msg=err_msg, **rec), is_error=True)
         else:
             validation_flag = '1'
@@ -216,15 +257,19 @@ for rec in contacts:
     if phone_validator and 'Work_Phone__c' in rec and rec['Work_Phone__c'] \
             and phone_validation != PHONE_DO_NOT_VALIDATE \
             and eval("rec['CD_wtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
-        corr = dict()
-        if ' ' in rec['Work_Phone__c']:
-            rec['Work_Phone__c'] = rec['Work_Phone__c'].replace(' ', '')
+        phone_changes = list()
+        rec['Work_Phone__c'], phone_changed = correct_email(rec['Work_Phone__c'], changed=False, removed=phone_changes)
+        if phone_changed:
+            add_log_msg("{Id} work phone {Work_Phone__c} corrected; removed 'index:char'={chg}"
+                        .format(chg=phone_changes, **rec))
             update_in_sf = True
-        err_msg = phone_validator.validate(rec['Work_Phone__c'], country_code=rec['Country__c'], ret_val_dict=corr)
+        corr = dict()
+        err_msg = phone_validator.validate(rec['Work_Phone__c'], country_code=rec['Country__c'], ret_val_dict=corr,
+                                           try_alternative_country=False)
         validation_flag = rec['CD_wtel_valid__c']
         if err_msg:
             validation_flag = '0'
-            add_log_msg("{Id} work phone {Work_Phone__c} is invalid (in {Country__c}). Reason={err_msg}"
+            add_log_msg("{Id} work phone {Work_Phone__c} is invalid. Reason={err_msg}"
                         .format(err_msg=err_msg, **rec), is_error=True)
         else:
             validation_flag = '1'
@@ -263,6 +308,11 @@ add_log_msg("Updated {} of {} contacts having {} errors while validating emails=
             .format(contacts_updated, len(contacts), len(log_errors), emails_validated, phones_validated,
                     addresses_validated),
             importance=4)
+
+if skipped_email_ids:
+    for frag, id_list in skipped_email_ids.items():
+        add_log_msg("{} Emails skipped because contains fragment {} in Salesforce Ids: {}"
+                    .format(len(id_list), frag, pprint.pformat(id_list, indent=9, compact=True)))
 
 if notification:
     subject = "Salesforce Contact Validation protocol" + (" (sandbox/test system)" if sf_sandbox else "")

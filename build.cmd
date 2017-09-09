@@ -13,6 +13,7 @@ rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource SihotResIm
 rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile SihotResImport.spec
 rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource SihotResImport.kv SihotResImport.py
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotResImport.spec
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotResImport_console.spec
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotResSync.py
 c:\Python35\Scripts\pyinstaller --onefile TestConnectivity.py
 c:\Python35\Scripts\pyinstaller --onefile WatchPupPy.py

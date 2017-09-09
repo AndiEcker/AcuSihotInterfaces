@@ -1208,7 +1208,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             progress.finished(error_msg=error_msg)
             error_msg = ""
 
-        # now parse reservations
+        # now parse RCI reservations
         if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
             log_import("Parsing reservations", NO_FILE_PREFIX_CHAR + 'RciParseRes', importance=4)
             progress = Progress(debug_level, start_counter=len(imp_rows),
