@@ -3,31 +3,16 @@
     0.2     first release: added "please wait" messages using Clock.schedule_once().
     0.3     ported to Python 3.5 with the option to use the angle backend (via KIVY_GL_BACKEND=angle_sdl2 env var).
 """
+import sys
 import datetime
 from functools import partial
 from traceback import print_exc
 
-from kivy.config import Config      # window size have to be specified before any other kivy imports
-Config.set('graphics', 'width', '1800')
-Config.set('graphics', 'height', '999')
-from kivy.app import App
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
-from kivy.uix.actionbar import ActionButton, ActionGroup, ActionView
-from kivy.uix.popup import Popup
-from kivy.lang.builder import Factory
-from kivy.properties import BooleanProperty, NumericProperty, StringProperty, DictProperty, ObjectProperty
-from kivy.clock import Clock
-
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from ae_calendar import DateChangeScreen
 from ae_db import OraDB, DEF_USER, DEF_DSN
 from acu_sf_sh_sys_data import AssSysData
 from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, \
     SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
-
 
 __version__ = '0.3'
 
@@ -73,25 +58,34 @@ uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('x
 
 config_data = None      # public Data() instance for Acumen config/data fetches
 
+""" KIVY IMPORTS - done here for (1) prevent PyCharm import inspection warning and (2) remove command line options """
+if True:        # added for to hide PyCharm inspection warning "module level import not at top of file"
+    sys.argv = [sys.argv[0]]  # remove command line options for to prevent errors in kivy args_parse
+    from kivy.config import Config      # window size have to be specified before any other kivy imports
+    Config.set('graphics', 'width', '1800')
+    Config.set('graphics', 'height', '999')
+    from kivy.app import App
+    from kivy.uix.floatlayout import FloatLayout
+    from kivy.uix.boxlayout import BoxLayout
+    from kivy.uix.label import Label
+    from kivy.uix.textinput import TextInput
+    from kivy.uix.actionbar import ActionButton, ActionGroup, ActionView
+    from kivy.uix.popup import Popup
+    from kivy.lang.builder import Factory
+    from kivy.properties import BooleanProperty, NumericProperty, StringProperty, DictProperty, ObjectProperty
+    from kivy.clock import Clock
+    from kivy.core.window import Window
+
+    from ae_calendar import DateChangeScreen
+
 
 """ TESTS """
 
 
-def run_check(check_name, data_dict):
+def run_check(check_name, data_dict, app_inst):
     try:
         if 'from_join' in data_dict:  # direct query/fetch against/from Acumen
-            bind_vars = {_[:-len(FILTER_CRITERIA_SUFFIX)]: data_dict[_] for _ in data_dict
-                         if _.endswith(FILTER_CRITERIA_SUFFIX)}
-            acu_db = connect_db()
-            err_msg = acu_db.select(from_join=data_dict['from_join'], cols=data_dict['cols'],
-                                    where_group_order=data_dict.get('where_group_order'), bind_vars=bind_vars)
-            if err_msg:
-                cae.dprint('AcuSihotMonitor.run_check() select error:', err_msg)
-                results = (err_msg,)
-            else:
-                results = (acu_db.fetch_all(), acu_db.selected_column_names())
-            acu_db.close()
-
+            results = db_fetch(data_dict)
         elif check_name == 'Time Sync':
             results = (ass_test_time_sync(),)
         elif check_name == 'Link Alive':
@@ -108,7 +102,8 @@ def run_check(check_name, data_dict):
             results = (cfg_agency_match_codes(),)
         elif check_name == 'Agency Object Ids':
             results = (cfg_agency_obj_ids(),)
-
+        elif check_name == 'Room Category Discrepancies':
+            results = cfg_room_cat_discrepancies(data_dict, app_inst)
         else:
             results = ("Unknown Check Name '{}'".format(check_name),)
     except Exception as ex:
@@ -140,7 +135,8 @@ def sih_reservation_discrepancies(data_dict):
     end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))
     req = ResToSihot(cae)
     results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
-                                           " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'")
+                                           " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'"
+                                           " order by ARR_DATE, CD_CODE")
     if results:
         # error message
         results = (results,)
@@ -167,11 +163,11 @@ def sih_reservation_discrepancies(data_dict):
                     row_err += err_sep + 'Sihot interface search error text=' + rs.response.error_text + \
                                ' msg=' + str(rs.response.msg)
                 if row_err:
-                    results.append((crow['SIHOT_GDSNO'], crow['CD_CODE'], crow['RUL_SIHOT_RATE'],
-                                    crow['ARR_DATE'].strftime('%d-%m-%Y'), row_err[len(err_sep):]))
+                    results.append((crow['ARR_DATE'].strftime('%d-%m-%Y'), crow['CD_CODE'], crow['RUL_SIHOT_RATE'],
+                                    crow['SIHOT_GDSNO'], row_err[len(err_sep):]))
             else:
                 results.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
-        results = (results, ('GDS_NO__18', 'Guest Ref__18', 'RO__06', 'Arrival__18', 'Discrepancy__72L'))
+        results = (results, ('Arrival__18', 'Guest Ref__18', 'RO__06', 'GDS_NO__18', 'Discrepancy__72L'))
 
     return results or ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
 
@@ -291,6 +287,40 @@ def cfg_agency_obj_ids():
     return ret[2:]
 
 
+def cfg_room_cat_discrepancies(data_dict, app_inst):
+    result, column_names = db_fetch(data_dict, from_join_name='_from_join')
+    if isinstance(result, str):
+        return result, None
+
+    column_names.append("Discrepancies__69")
+    discrepancies = list()
+    sihot_cat_apts = dict()
+    for hotel_id in config_data.get_hotel_ids(data_dict['resort_criteria']):
+        hotel_cat_apts = app_inst.cat_rooms.get_cat_rooms(hotel_id=str(hotel_id))
+        for cat, apts in hotel_cat_apts.items():
+            prev_apts = sihot_cat_apts.get(cat, list())
+            sihot_cat_apts[cat] = prev_apts + apts
+    # UNCOMMENT THIS AND THE LINE DOWN FOR TO CREATE SQL UPDATE COMMANDS FOR TO CONFIG/SET AP_SIHOT_CAT: sql = ""
+    for cols in result:
+        dis = ""
+        if cols[2] and cols[2] != cols[3]:
+            dis += "\nDifferent Acumen apartment and lookup category"
+        if cols[3] not in sihot_cat_apts:
+            dis += "\nSihot is missing Acumen category " + cols[3]
+        elif cols[1] not in sihot_cat_apts[cols[3]]:
+            for cat, apts in sihot_cat_apts.items():
+                if cols[1] in apts:
+                    dis += "\nDifferent Sihot room category " + cat
+                    # sql += "\r\nupdate T_AP set AP_SIHOT_CAT = '" + cat + "' where AP_CODE = '" + cols[1] + "';"
+                    break
+            else:
+                dis += "\nApartment missing in Sihot"
+        if dis:
+            discrepancies.append(cols + (dis[1:],))
+
+    return discrepancies, column_names
+
+
 """ HELPERS """
 
 
@@ -300,6 +330,22 @@ def connect_db():
                    cae.get_option('acuDSN'), debug_level=cae.get_option('debugLevel'))
     acu_db.connect()
     return acu_db
+
+
+def db_fetch(data_dict, from_join_name='from_join'):
+    bind_vars = {_[:-len(FILTER_CRITERIA_SUFFIX)]: data_dict[_] for _ in data_dict
+                 if _.endswith(FILTER_CRITERIA_SUFFIX)}
+    acu_db = connect_db()
+    err_msg = acu_db.select(from_join=data_dict[from_join_name], cols=data_dict['cols'],
+                            where_group_order=data_dict.get('where_group_order'), bind_vars=bind_vars)
+    if err_msg:
+        cae.dprint('AcuSihotMonitor.db_fetch() select error:', err_msg)
+        results = (err_msg,)
+    else:
+        results = (acu_db.fetch_all(), acu_db.selected_column_names())
+    acu_db.close()
+
+    return results
 
 
 """ UI """
@@ -431,16 +477,30 @@ class AcuSihotMonitorApp(App):
             self.root.add_widget(self.main_win)
             self.go_to_board(ROOT_BOARD_NAME)
 
+    def on_start(self):
+        cae.dprint("App.on_start()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        Window.bind(on_key_down=self.key_down_callback)
+        self.app_started = True
+
+    def key_down_callback(self, keyboard, key_code, scan_code, text, modifiers, *args, **kwargs):
+        if True:  # change to True for debugging - leave dprint for hiding Pycharm inspection "Parameter not used"
+            cae.dprint("App.kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}"
+                       .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        if key_code == 27:  # escape key
+            self.exit_app()
+            return True
+        elif key_code == 13 and not self.logon_win.ids.import_button.disabled:  # enter key
+            self.logon()
+            return True
+        return False
+
     @staticmethod
     def exit_app():
         cae.shutdown()
 
     def screen_size_changed(self):
         self.landscape = self.root.width >= self.root.height
-
-    def on_start(self):
-        cae.dprint('AcuSihotMonitorApp.on_start()', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        self.app_started = True
 
     def board_items(self, board_name):
         return [ci for ci in self.check_list
@@ -705,7 +765,7 @@ class AcuSihotMonitorApp(App):
             Clock.schedule_once(cb)
 
     def run_curr_check(self, curr_check, check_dict, *_):
-        results = run_check(curr_check, check_dict)
+        results = run_check(curr_check, check_dict, self)
         self.update_check_result(curr_check, results, datetime.datetime.now().strftime('%d-%m-%y %H:%M:%S'))
         self.display_board(curr_check)
 
@@ -726,7 +786,7 @@ class AcuSihotMonitorApp(App):
             results = (ret[3:],)
         else:
             # Clock.tick()
-            results = run_check(check_name, self.check_list[self.check_index(check_name)])
+            results = run_check(check_name, self.check_list[self.check_index(check_name)], self)
             # Clock.tick()
 
         self.update_check_result(check_name, results, run_at)
@@ -757,12 +817,12 @@ class AcuSihotMonitorApp(App):
         column_attributes = list()
         for cn in column_names:
             attributes = dict()
-            l = cn.split(COLUMN_ATTRIBUTE_SEP)
-            attributes['column_name'] = l[0]
-            if len(l) > 1:
-                attributes['size_hint_x'] = int(l[1][:2]) / 100
-                if len(l[1]) > 2:
-                    attributes['halign'] = 'left' if l[1][2] == 'L' else ('right' if l[1][2] == 'R' else 'justify')
+            x = cn.split(COLUMN_ATTRIBUTE_SEP)
+            attributes['column_name'] = x[0]
+            if len(x) > 1:
+                attributes['size_hint_x'] = int(x[1][:2]) / 100
+                if len(x[1]) > 2:
+                    attributes['halign'] = 'left' if x[1][2] == 'L' else ('right' if x[1][2] == 'R' else 'justify')
                 else:
                     attributes['halign'] = 'center'
             column_attributes.append(attributes)

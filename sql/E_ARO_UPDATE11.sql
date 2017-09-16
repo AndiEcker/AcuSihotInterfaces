@@ -181,7 +181,9 @@ BEGIN
       or :NEW.ARO_STATUS = 120 and :OLD.ARO_STATUS <> 120 then
         P_RH_RUL_INSERT('A', 'DELETE', lcChanges, :OLD.ARO_BOARDREF, NULL, :OLD.ARO_APREF, :OLD.ARO_RHREF, :OLD.ARO_EXP_ARRIVE, :OLD.ARO_EXP_DEPART);
       end if;
-      P_RH_RUL_INSERT('A', 'UPDATE', lcChanges, :NEW.ARO_BOARDREF, NULL, :NEW.ARO_APREF, :NEW.ARO_RHREF, :NEW.ARO_EXP_ARRIVE, :NEW.ARO_EXP_DEPART);
+      if not (:NEW.ARO_STATUS = 120 and :OLD.ARO_STATUS <> 120) then
+        P_RH_RUL_INSERT('A', 'UPDATE', lcChanges, :NEW.ARO_BOARDREF, NULL, :NEW.ARO_APREF, :NEW.ARO_RHREF, :NEW.ARO_EXP_ARRIVE, :NEW.ARO_EXP_DEPART);
+      end if;
     end if;
   end if;
 END
@@ -195,5 +197,6 @@ END
   ae:19-07-16 V08: added notification on change of resOcc type from flybuy to keys.
   ae:06-08-15 V09: added population of the new RUL_SIHOT* columns and unsync-block on apt. check-in.
   ae:21-02-17 V10: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and added pcCaller parameter to call of P_RUL_INSERT().
+  ae:14-09-17 V11: added if statement to prevent call of P_RH_RUL_INSERT() on ARO cancellation.
 */;
 /

@@ -51,14 +51,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not db:      # logon/connect error
             return
 
-        self.hotel_ids = self.load_view(db, 'T_LU', ['LU_NUMBER'], "LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
+        self.hotel_ids = self.load_view(db, 'T_LU', ['LU_NUMBER', 'LU_ID'],
+                                        "LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
 
         any_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_ANY'")
         bhc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHC'")
         pbc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_PBC'")
-        self.resort_cats = {'ANY': any_cats, 'BHC': bhc_cats, 'PBC': pbc_cats}
+        bhh_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHH'")
+        hmc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_HMC'")
+        self.resort_cats = {'ANY': any_cats, 'BHC': bhc_cats, 'PBC': pbc_cats, 'BHH': bhh_cats, 'HMC': hmc_cats}
 
-        self.ap_cats = self.load_view(db, 'T_AP', ['AP_CODE', 'AP_SIHOT_CAT'], "F_RESORT(AP_CODE) in ('BHC', 'PBC')")
+        self.ap_cats = self.load_view(db, 'T_AP, T_AT, T_LU', ['AP_CODE', 'AP_SIHOT_CAT'],
+                                      "AP_ATREF = AT_CODE and AT_RSREF = LU_ID"
+                                      " and LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
 
         self.ro_agencies = self.load_view(db, 'T_RO',
                                           ['RO_CODE', 'RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC', 'RO_SIHOT_RATE',
@@ -159,16 +164,34 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def get_room_cat(self, room_no):
         return next((cols[1] for cols in self.ap_cats if cols[0] == room_no), None)
 
-    def get_hotel_ids(self):
-        return [cols[0] for cols in self.hotel_ids]
+    def get_hotel_ids(self, acu_rs_codes=None):
+        if acu_rs_codes is None:
+            hot_id_list = [cols[0] for cols in self.hotel_ids]
+        else:
+            hot_id_list = [cols[0] for cols in self.hotel_ids if cols[1] in acu_rs_codes]
+        return hot_id_list
 
     # =================  helpers  =========================================================================
+
+    def hotel_acu_to_sihot(self, rs_code):
+        sh_hotel_id = 0
+        for sh_hotel_id, acu_rs_code in self.hotel_ids:
+            if acu_rs_code == rs_code:
+                break
+        return sh_hotel_id
+
+    def hotel_sihot_to_acu(self, hotel_id):
+        acu_rs_code = ''
+        for sh_hotel_id, acu_rs_code in self.hotel_ids:
+            if sh_hotel_id == hotel_id:
+                break
+        return acu_rs_code
 
     def rci_to_sihot_hotel_id(self, rc_resort_id):
         return self.cae.get_config(rc_resort_id, 'RcResortIds', default_value=-369)     # pass default for int type ret
 
     def rci_to_sihot_room_cat(self, sh_hotel_id, room_size):
-        return self.get_size_cat('BHC' if sh_hotel_id == 1 else 'PBC', room_size)
+        return self.get_size_cat(self.hotel_sihot_to_acu(sh_hotel_id), room_size)
 
     def rc_arr_to_year_week(self, arr_date):
         year = arr_date.year

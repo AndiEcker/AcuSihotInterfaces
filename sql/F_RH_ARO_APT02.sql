@@ -1,15 +1,16 @@
--- renamed F_RH_ARO_APT() into F_RH_ARO_APT()
-drop function LOBBY.RU_ARO_APT;
-
-create or replace function LOBBY.RH_ARO_APT (pnRH_Code IN T_RH.RH_CODE%type, pdFrom IN date, pdTo IN date)
+create or replace function LOBBY.RH_ARO_APT (pnRH_Code IN T_RH.RH_CODE%type, pdFrom IN date, pdTo IN date, pnSihotFormat IN number := 0)
   RETURN T_AP.AP_CODE%type
 IS
   lcApt     T_ARO.ARO_APREF%type := NULL;
   lcLastApt T_ARO.ARO_APREF%type;
+  lcRS      T_AT.AT_RSREF%type;
   
   cursor cARO is
     select * from T_ARO where ARO_RHREF = pnRH_Code and ARO_EXP_ARRIVE < pdTo and ARO_EXP_DEPART > pdFrom and ARO_STATUS <> 120
      order by nvl(ARO_RECD_KEY, nvl(ARO_TIMEIN, ARO_EXP_ARRIVE));
+  
+  cursor cRS is
+    select AT_RSREF from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = lcApt;
      
 BEGIN
   if pdFrom > trunc(sysdate) then
@@ -33,11 +34,21 @@ BEGIN
     end if;
   end if;
   
+  if lcApt is not NULL and pnSihotFormat <> 0 and length(lcApt) = 3 then
+    open  cRS;
+    fetch cRS into lcRS;
+    close cRS;
+    if lcRS = 'PBC' then
+      lcApt := '0' || lcApt;
+    end if;
+  end if;
+  
   return lcApt;
 END
 /*
   ae:05-08-16 V00: first beta - added for SIHOT sync/migration project.
   ae:21-02-17 V01: changed name from F_RU_ARO_APT() into F_RH_ARO_APT().
+  ae:14-09-17 V02: added pnSihotFormat parameter (for the project adding/migrating BHH/HMC to Sihot).
 */;
 /
 

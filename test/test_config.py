@@ -127,9 +127,12 @@ class TestSystem:
         rows = db_connected.fetch_all()
         db_connected.close()
         cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='1')
+        assert isinstance(cat_room_dict, dict)
         err = ''
         for ap_code, ap_sihot_cat in rows:
-            if ap_code not in cat_room_dict[ap_sihot_cat]:
+            if ap_sihot_cat not in cat_room_dict:
+                err += "\nroom category {} from Acumen is not defined in Sihot".format(ap_sihot_cat)
+            elif ap_code not in cat_room_dict[ap_sihot_cat]:
                 sh_cat = ''
                 for k, v in cat_room_dict.items():
                     if ap_code in v:
@@ -151,11 +154,14 @@ class TestSystem:
         rows = db_connected.fetch_all()
         db_connected.close()
         cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='4')
+        assert isinstance(cat_room_dict, dict)
         err = ''
         for ap_code, ap_sihot_cat in rows:
             if len(ap_code) == 3:
                 ap_code = '0' + ap_code
-            if ap_code not in cat_room_dict[ap_sihot_cat]:
+            if ap_sihot_cat not in cat_room_dict:
+                err += "\nroom category {} from Acumen is not defined in Sihot".format(ap_sihot_cat)
+            elif ap_code not in cat_room_dict[ap_sihot_cat]:
                 sh_cat = ''
                 for k, v in cat_room_dict.items():
                     if ap_code in v:
@@ -171,6 +177,60 @@ class TestSystem:
                     found = [r for a, c in rows if r == a and c == cat]
                     if not found:
                         err += "\nroom {} / {} not configured/found in Acumen".format(r, cat)
+        assert not err
+
+    def test_cat_rooms_bhh(self, cat_rooms, db_connected):
+        db_connected.select('T_AP', ['AP_CODE', 'AP_SIHOT_CAT'],
+                            "F_RESORT(AP_CODE) = 'BHH' and AP_SIHOT_CAT is not NULL")
+        rows = db_connected.fetch_all()
+        db_connected.close()
+        cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='2')
+        assert isinstance(cat_room_dict, dict)
+        err = ''
+        for ap_code, ap_sihot_cat in rows:
+            if ap_sihot_cat not in cat_room_dict:
+                err += "\nroom category {} from Acumen is not defined in Sihot".format(ap_sihot_cat)
+            elif ap_code not in cat_room_dict[ap_sihot_cat]:
+                sh_cat = ''
+                for k, v in cat_room_dict.items():
+                    if ap_code in v:
+                        sh_cat += '/' + k
+                err += "\n{} is room category {} in Acumen but {} in Sihot".format(ap_code, ap_sihot_cat, sh_cat[1:])
+        assert not err
+
+        for cat, rooms in cat_room_dict.items():
+            for r in rooms:
+                if r[0] != 'V' or cat != 'VR':  # exclude Sihot virtual rooms (which doesn't exist in Acumen)
+                    found = [r for a, c in rows if r == a and c == cat]
+                    if not found:
+                        err += "\nroom {} with category {} not configured/found in Acumen".format(r, cat)
+        assert not err
+
+    def test_cat_rooms_hmc(self, cat_rooms, db_connected):
+        db_connected.select('T_AP', ['AP_CODE', 'AP_SIHOT_CAT'],
+                            "F_RESORT(AP_CODE) = 'HMC' and AP_SIHOT_CAT is not NULL")
+        rows = db_connected.fetch_all()
+        db_connected.close()
+        cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='3')
+        assert isinstance(cat_room_dict, dict)
+        err = ''
+        for ap_code, ap_sihot_cat in rows:
+            if ap_sihot_cat not in cat_room_dict:
+                err += "\nroom category {} from Acumen is not defined in Sihot".format(ap_sihot_cat)
+            elif ap_code not in cat_room_dict[ap_sihot_cat]:
+                sh_cat = ''
+                for k, v in cat_room_dict.items():
+                    if ap_code in v:
+                        sh_cat += '/' + k
+                err += "\n{} is room category {} in Acumen but {} in Sihot".format(ap_code, ap_sihot_cat, sh_cat[1:])
+        assert not err
+
+        for cat, rooms in cat_room_dict.items():
+            for r in rooms:
+                if r[0] != 'V' or cat != 'VR':  # exclude Sihot virtual rooms (which doesn't exist in Acumen)
+                    found = [r for a, c in rows if r == a and c == cat]
+                    if not found:
+                        err += "\nroom {} with category {} not configured/found in Acumen".format(r, cat)
         assert not err
 
 

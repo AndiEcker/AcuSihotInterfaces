@@ -583,7 +583,10 @@ try:
     uprint()
     uprint("####  ", mig_contact_count, "Contacts migrated:")
     contacts_notifications = list()
-    contacts_notifications.append("####  {} MIGRATED CONTACTS:\n\n".format(mig_contact_count))
+    range_str = ("BETWEEN" + date_from.strftime(SIHOT_DATE_FORMAT) + " AND " + date_till.strftime(SIHOT_DATE_FORMAT)) \
+        if date_till != date_from else "ON " + date_from.strftime(SIHOT_DATE_FORMAT)
+    contacts_notifications.append("####  {} MIGRATED CONTACTS ARRIVED {}:\n\n"
+                                  .format(mig_contact_count, range_str))
     layout_fields = ['RecordType.DeveloperName', 'FirstName', 'LastName', 'Birthdate', 'Email', 'HomePhone',
                      'MailingStreet', 'MailingCity', 'Country__c',
                      'Language__c', 'Description', 'Previous_Arrival_Info__c']

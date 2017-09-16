@@ -320,8 +320,10 @@ MAP_WEB_RES = \
          'colValFromAcu': "nvl(OC_CODE, CD_CODE)"},
         {'elemName': 'GDSNO', 'colName': 'SIHOT_GDSNO',
          'colValFromAcu': "nvl(SIHOT_GDSNO, case when RUL_SIHOT_RATE in ('TC', 'TK') then"
+                          " case when RUL_ACTION <> 'UPDATE' then"
                           " (select 'TC' || RH_EXT_BOOK_REF from T_RH where"
                           " RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
+                          " else '(lost)' end"
                           " else to_char(RUL_PRIMARY) end)"},  # RUL_PRIMARY needed for to delete/cancel res
         {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF', 'elemHideInActions': ACTION_DELETE},
         {'elemName': 'EXT-KEY', 'colName': 'SIHOT_LINK_GROUP', 'elemHideInActions': ACTION_DELETE,
@@ -398,11 +400,11 @@ MAP_WEB_RES = \
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
                        " or c['RO_RES_GROUP'][:5] not in ('Owner', 'Promo')"},
         {'elemName': 'ARR', 'colName': 'ARR_DATE',
-         'colValFromAcu': "case when ARR_DATE is not NULL then ARR_DATE else"
+         'colValFromAcu': "case when ARR_DATE is not NULL then ARR_DATE when RUL_ACTION <> 'UPDATE' then"
                           " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
                           " 'DD-MM-YY') end"},
         {'elemName': 'DEP', 'colName': 'DEP_DATE',
-         'colValFromAcu': "case when DEP_DATE is not NULL then DEP_DATE else"
+         'colValFromAcu': "case when DEP_DATE is not NULL then DEP_DATE when RUL_ACTION <> 'UPDATE' then"
                           " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
                           " 'DD-MM-YY') + "
                           "to_number(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_DAYS')) end"},
@@ -1016,8 +1018,8 @@ class ColMapXmlParser(SihotXmlParser):
         if tag in self.elem_col_map:
             self.elem_col_map[tag]['elemVal'] += data
             if 'elemListVal' in self.elem_col_map[tag]:
-                l = self.elem_col_map[tag]['elemListVal']
-                l[-1] += data
+                # add string fragment to last list item
+                self.elem_col_map[tag]['elemListVal'][-1] += data
             return None
         return data
 
@@ -1180,12 +1182,12 @@ class SihotXmlBuilder:
         inner_xml = ''
         for tag, col, hide_expr, val in self.sihot_elem_col:
             if hide_expr:
-                l = dict()
-                l['a'] = action  # provide short names for evaluation
-                l['c'] = col_values
-                l['datetime'] = datetime
+                local = dict()
+                local['a'] = action  # provide short names for evaluation
+                local['c'] = col_values
+                local['datetime'] = datetime
                 try:
-                    hide = eval(hide_expr, dict(), l)
+                    hide = eval(hide_expr, dict(), local)
                 except (Exception, KeyError, NameError, SyntaxError, SyntaxWarning, TypeError) as ex:
                     uprint("SihotXmlBuilder.prepare_map_xml() ignoring expression evaluation error:", ex,
                            "Expr=", hide_expr)
@@ -1605,7 +1607,7 @@ class ResToSihot(SihotXmlBuilder):
         self.use_kernel_for_new_clients = use_kernel_for_new_clients
         self.map_client = map_client
 
-        self._warning_frags = self.ca.get_config('warningFragments') or list() # list of fragments to identify warnings
+        self._warning_frags = self.ca.get_config('warningFragments') or list()  # list of fragments to identify warnings
         self._warning_msgs = ""
 
     def _fetch_from_acu(self, view, where_group_order, history_only, future_only):
@@ -1771,27 +1773,28 @@ class ResToSihot(SihotXmlBuilder):
         return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.ca.get_option('debugLevel') else "")
 
     def res_id_values(self, crow):
-        return str((crow['SIHOT_GDSNO'] if crow['SIHOT_GDSNO'] else crow['RUL_PRIMARY'])) + \
-               "/" + str(crow['RH_EXT_BOOK_REF']) + \
-               "/" + str(crow['CD_CODE']) + "/" + str(crow['RUL_SIHOT_RATE']) + \
-               ("/" + str(crow['RUL_PRIMARY']) + "/" + str(crow['RUL_CODE'])
+        return str((crow.get('SIHOT_GDSNO') if crow.get('SIHOT_GDSNO') else crow.get('RUL_PRIMARY'))) + \
+               "/" + str(crow.get('RH_EXT_BOOK_REF')) + \
+               "/" + str(crow.get('CD_CODE')) + "/" + str(crow.get('RUL_SIHOT_RATE')) + \
+               ("/" + str(crow.get('RUL_PRIMARY')) + "/" + str(crow.get('RUL_CODE'))
                 if self.ca.get_option('debugLevel') and 'RUL_PRIMARY' in crow and 'RUL_CODE' in crow
                 else "")
 
     def res_id_desc(self, crow, error_msg, separator="\n\n"):
         indent = 8
-        return crow['RUL_ACTION'] + " RESERVATION: " \
-            + (crow['ARR_DATE'].strftime('%d-%m') if crow['ARR_DATE'] else "unknown") + ".." \
-            + (crow['DEP_DATE'].strftime('%d-%m-%y') if crow['DEP_DATE'] else "unknown") \
-            + " in " + (crow['RUL_SIHOT_ROOM'] + "=" if crow['RUL_SIHOT_ROOM'] else "") + crow['RUL_SIHOT_CAT'] \
-            + ("!" + crow['SH_PRICE_CAT'] if crow['SH_PRICE_CAT'] and crow['SH_PRICE_CAT'] != crow['RUL_SIHOT_CAT']
-               else "") \
-            + " at hotel " + str(crow['RUL_SIHOT_HOTEL']) \
+        return crow.get('RUL_ACTION', '') + " RESERVATION: " \
+            + (crow['ARR_DATE'].strftime('%d-%m') if crow.get('ARR_DATE') else "unknown") + ".." \
+            + (crow['DEP_DATE'].strftime('%d-%m-%y') if crow.get('DEP_DATE') else "unknown") \
+            + " in " + (crow['RUL_SIHOT_ROOM'] + "=" if crow.get('RUL_SIHOT_ROOM') else "") \
+            + str(crow.get('RUL_SIHOT_CAT')) \
+            + ("!" + crow.get('SH_PRICE_CAT', '')
+               if crow.get('SH_PRICE_CAT') and crow.get('SH_PRICE_CAT') != crow.get('RUL_SIHOT_CAT') else "") \
+            + " at hotel " + str(crow.get('RUL_SIHOT_HOTEL')) \
             + separator + " " * indent + self.res_id_label() + "==" + self.res_id_values(crow) \
             + (separator + "\n".join(wrap("ERROR: " + _strip_error_message(error_msg), subsequent_indent=" " * indent))
                if error_msg else "") \
-            + (separator + "\n".join(wrap("TRAIL: " + crow['RUL_CHANGES'], subsequent_indent=" " * indent))
-               if 'RUL_CHANGES' in crow and crow['RUL_CHANGES'] else "")
+            + (separator + "\n".join(wrap("TRAIL: " + crow.get('RUL_CHANGES', ''), subsequent_indent=" " * indent))
+               if 'RUL_CHANGES' in crow and crow.get('RUL_CHANGES') else "")
 
     def get_warnings(self):
         return self._warning_msgs + "\n\nEnd_Of_Message\n" if self._warning_msgs else ""
