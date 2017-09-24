@@ -104,11 +104,15 @@ imp_files = list()
 def collect_files():
     global tci_files, bkc_files, rci_files, jso_files, imp_files
     # tci_files = glob.glob(cae.get_option('tciPath')) if cae.get_option('tciPath') else list()
+    # tci_files.sort(key=lambda f: os.path.basename(f)[1], reverse=True)
+    # tci_files.sort(key=lambda f: os.path.basename(f)[3:13])
     tci_files = list()
     # bkc_files = glob.glob(cae.get_option('bkcPath')) if cae.get_option('bkcPath') else list()
+    # bkc_files.sort(key=lambda f: os.path.basename(f))
     bkc_files = list()
     rci_files = glob.glob(cae.get_option('rciPath')) if cae.get_option('rciPath') else list()
     jso_files = glob.glob(cae.get_option('jsonPath')) if cae.get_option('jsonPath') else list()
+    jso_files.sort(key=lambda f: os.path.basename(f))
     imp_files = tci_files + bkc_files + rci_files + jso_files
 
 
@@ -963,7 +967,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     res_rows = list()
     error_msg = ''
 
-    if cae.get_option('tciPath') and tci_files and not got_cancelled():
+    if False and cae.get_option('tciPath') and tci_files and not got_cancelled():
         log_import("Starting Thomas Cook import", NO_FILE_PREFIX_CHAR + 'TciImportStart', importance=4)
         ''' sort TCI files 1.ASCENDING by actualization date and 2.DESCENDING by file type (R5 first, then R3, then R1)
             .. for to process cancellation/re-bookings in the correct order.
@@ -971,8 +975,6 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             .. hour/minute/... info cannot be used because it happened (see 17-Jan-14 6:40=R1 and 6:42=R5)
             .. that the R3/5 TCI files had a higher minute value than the associated R1 file with correction booking.
         '''
-        tci_files.sort(key=lambda f: os.path.basename(f)[1], reverse=True)
-        tci_files.sort(key=lambda f: os.path.basename(f)[3:13])
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("TCI files: " + str(tci_files), NO_FILE_PREFIX_CHAR + 'TciFileCollect', importance=1)
         for fn in tci_files:
@@ -1006,7 +1008,6 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     if False and cae.get_option('bkcPath') and bkc_files and (not error_log or not cae.get_option('breakOnError')) \
             and not got_cancelled():
         log_import("Starting Booking.com import", NO_FILE_PREFIX_CHAR + 'BkcImportStart', importance=4)
-        bkc_files.sort(key=lambda f: os.path.basename(f))
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("BKC files: " + str(bkc_files), NO_FILE_PREFIX_CHAR + 'BkcFileCollect', importance=1)
         for fn in bkc_files:
@@ -1208,6 +1209,10 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             progress.finished(error_msg=error_msg)
             error_msg = ""
 
+        # overwrite clients data if at least one client got changed/extended
+        if conf_data.contacts_changed:
+            conf_data.save_contacts()
+
         # now parse RCI reservations
         if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
             log_import("Parsing reservations", NO_FILE_PREFIX_CHAR + 'RciParseRes', importance=4)
@@ -1237,10 +1242,6 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
             progress.finished(error_msg=error_msg)
             error_msg = ""
-
-        # overwrite clients data if at least one client got changed/extended
-        if conf_data.contacts_changed:
-            conf_data.save_contacts()
 
     if cae.get_option('jsonPath') and jso_files and (not error_log or not cae.get_option('breakOnError')) \
             and not got_cancelled():
@@ -1282,6 +1283,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                     break
 
         progress.finished(error_msg=error_msg)
+        error_msg = ""
 
     # #######################################################################################
     #  SEND imported reservation bookings of all supported booking channels (RCI, JSON)
@@ -1298,39 +1300,12 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                               map_client=cae.get_option('mapClient'),
                               connect_to_acu=False)
 
-        # order rows to be send by hotel, apt, orderer, mkt seg and arrival date for to detect/merge multi-week bookings
-        res_rows.sort(key=lambda f: str(f['RUL_SIHOT_HOTEL']) + f['RUL_SIHOT_ROOM'] +
-                      f['OC_CODE'] + f['SH_ADULT1_NAME'] + f['SH_ADULT1_NAME2'] +
-                      f['SIHOT_MKT_SEG'] + f['SH_RES_TYPE'] + f['ARR_DATE'].strftime('%Y-%m-%d'))
-        first_arr = None  # used as flag set with the arrival date if the last res_row needs to be prolonged/merged
-        merged_res_ids = list()
         for res_row_idx, crow in enumerate(res_rows):
             fn, idx = crow['=FILE_NAME'], crow['=LINE_NUM']
             if got_cancelled():
                 log_error("User cancelled reservation send", fn, idx, importance=4)
                 break
             progress.next(processed_id=str(crow['RH_EXT_BOOK_REF']), error_msg=error_msg)
-            if res_row_idx + 1 < len(res_rows):
-                next_crow = res_rows[res_row_idx + 1]
-                if crow['RUL_SIHOT_HOTEL'] == next_crow['RUL_SIHOT_HOTEL'] \
-                        and crow['RUL_SIHOT_ROOM'] == next_crow['RUL_SIHOT_ROOM'] \
-                        and crow['OC_CODE'] == next_crow['OC_CODE'] \
-                        and crow['SH_ADULT1_NAME'] == next_crow['SH_ADULT1_NAME'] \
-                        and crow['SH_ADULT1_NAME'] == next_crow['SH_ADULT1_NAME'] \
-                        and crow['SIHOT_MKT_SEG'] == next_crow['SIHOT_MKT_SEG'] \
-                        and crow['SH_RES_TYPE'] == next_crow['SH_RES_TYPE'] \
-                        and crow['DEP_DATE'] == next_crow['ARR_DATE']:
-                    log_import("Merge res: \n     " + str(crow) + "\n     " + str(next_crow), fn, idx, importance=1)
-                    if not first_arr:
-                        first_arr = crow['ARR_DATE']
-                    merged_res_ids.append(crow['RH_EXT_BOOK_REF'])
-                    continue
-            if first_arr:
-                crow['ARR_DATE'] = first_arr
-                crow['SIHOT_NOTE'] += ';' + 'Merged: ' + ' '.join(merged_res_ids)
-                crow['SIHOT_TEC_NOTE'] += '|CR|' + 'Merged with RCI booking(s): ' + ', '.join(merged_res_ids)
-                first_arr = None
-                merged_res_ids = list()
             try:
                 error_msg = res_send.send_row_to_sihot(crow, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
             except Exception as ex:
@@ -1397,7 +1372,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         log_msg = '\n\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in import_log
                               if _['context'][0] == NO_FILE_PREFIX_CHAR or sfn in _['context'])
         with open(os.path.join(ddn, log_file_prefix + '_' + imp_file_name + '_import.log'), 'a') as fh:
-            fh.write(fix_encoding(log_msg, encoding=fh.encoding))
+            fh.write(fix_encoding(log_msg, encoding=fh.encoding, context="SihotResImport File Log Fix Encoding"))
 
     if error_log:
         error_text = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in error_log)
@@ -1406,13 +1381,13 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             if notification_err:
                 error_text += "Notification send error: " + notification_err
                 log_import("Notification send error: " + notification_err, NO_FILE_PREFIX_CHAR + 'SendNotification')
-        uprint('Error Log:\n', error_text)
+        uprint('****  Error Log:\n', error_text)
         with open(os.path.join(log_file_path, log_file_prefix + '_errors.log'), 'a') as fh:
-            fh.write(fix_encoding(error_text, encoding=fh.encoding))
+            fh.write(fix_encoding(error_text, encoding=fh.encoding, context="SihotResImport Error Log Fix Encoding"))
 
     log_msg = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in import_log)
     with open(os.path.join(log_file_path, log_file_prefix + '_import.log'), 'a') as fh:
-        fh.write(fix_encoding(log_msg, encoding=fh.encoding))
+        fh.write(fix_encoding(log_msg, encoding=fh.encoding, context="SihotResImport Import Log Fix Encoding"))
 
     if not amend_screen_log:        # import running in console mode (no UI)
         quit_app(error_log)
@@ -1430,9 +1405,9 @@ if cae.get_option('acuPassword'):
     try:
         run_import(cae.get_option('acuUser'), cae.get_option('acuPassword'))
     except KeyboardInterrupt:
-        uprint("Reservation Import cancelled by user")
+        uprint("\n****  SihotResImport run cancelled by user\n")
     except Exception as ri_ex:
-        uprint(format_exc())
+        uprint("\n****  SihotResImport exception:\n", format_exc())
 
 else:
     # no password given, then we need the kivy UI for to logon the user

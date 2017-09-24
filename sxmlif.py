@@ -342,14 +342,14 @@ MAP_WEB_RES = \
          'colValFromAcu': "F_SIHOT_CAT('RU' || RU_CODE)"},
         # {'elemName': 'PCAT', 'colName': 'SIHOT_CAT',
         #  'colValFromAcu': "'1TIC'"},
-        {'elemName': 'ALLOTMENT-NO', 'colName': 'SIHOT_ALLOTMENT_NO', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ALLOTMENT-NO', 'colName': 'SIHOT_ALLOTMENT_NO', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c"},
         {'elemName': 'PAYMENT-INST', 'colName': 'SIHOT_PAYMENT_INST', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'SIHOT_PAYMENT_INST' not in c"},
         {'elemName': 'SALES-DATE', 'colName': 'RH_EXT_BOOK_DATE', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "not c['RH_EXT_BOOK_DATE']"},
-        # {'elemName': 'RATE-SEGMENT', 'colName': 'RUL_SIHOT_RATE',
-        #  'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('TK', 'TC')"},    # only TK/tk have defined rate segment in SIHOT
+        {'elemName': 'RATE-SEGMENT', 'colName': 'SIHOT_RATE_SEGMENT', 'colVal': '',
+         'elemHideIf': "'SIHOT_RATE_SEGMENT' not in c"},    # e.g. TK/tk have defined rate segment in SIHOT - see cfg
         {'elemName': 'RATE/'},  # package/arrangement has also to be specified in PERSON:
         {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK'},
         {'elemName': 'ISDEFAULT', 'colVal': 'Y'},
@@ -1609,28 +1609,63 @@ class ResToSihot(SihotXmlBuilder):
 
         self._warning_frags = self.ca.get_config('warningFragments') or list()  # list of fragments to identify warnings
         self._warning_msgs = ""
+        self._gds_err_rows = dict()
 
-    def _fetch_from_acu(self, view, where_group_order, history_only, future_only):
-        if history_only:
+    def _fetch_from_acu(self, view, where_group_order, date_range):
+        if date_range == 'H':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE < trunc(sysdate)"
-        elif future_only:
+        elif date_range == 'M':
+            where_group_order += (" and " if where_group_order else "") \
+                                 + "DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31"
+        elif date_range == 'P':
+            where_group_order += (" and " if where_group_order else "") + "DEP_DATE >= trunc(sysdate)"
+        elif date_range == 'F':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE >= trunc(sysdate)"
         err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order)
         if not err_msg:
             self.fetch_all_from_acu()
         return err_msg
 
-    def fetch_from_acu_by_aru(self, where_group_order='', history_only=False, future_only=False):
-        return self._fetch_from_acu('V_ACU_RES_UNSYNCED', where_group_order, history_only, future_only)
+    def fetch_from_acu_by_aru(self, where_group_order='', date_range=''):
+        return self._fetch_from_acu('V_ACU_RES_UNSYNCED', where_group_order, date_range)
 
-    def fetch_from_acu_by_cd(self, acu_id, history_only=False, future_only=False):
+    def fetch_from_acu_by_cd(self, acu_id, date_range=''):
         where_group_order = "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
-        return self._fetch_from_acu('V_ACU_RES_UNFILTERED', where_group_order, history_only, future_only)
+        return self._fetch_from_acu('V_ACU_RES_UNFILTERED', where_group_order, date_range)
 
-    def fetch_all_valid_from_acu(self, where_group_order='', history_only=False, future_only=False):
-        return self._fetch_from_acu('V_ACU_RES_FILTERED', where_group_order, history_only, future_only)
+    def fetch_all_valid_from_acu(self, where_group_order='', date_range=''):
+        return self._fetch_from_acu('V_ACU_RES_FILTERED', where_group_order, date_range)
 
-    def _prepare_res_xml(self, crow, action):
+    def _add_sihot_configs(self, crow):
+        mkt_seg = crow.get('SIHOT_MKT_SEG', crow.get('RUL_SIHOT_RATE', ''))  # SIHOT_MKT_SEG not available if RU deleted
+        hotel_id = str(crow.get('RUL_SIHOT_HOTEL', 999))
+        arr_date = crow.get('ARR_DATE')
+        today = datetime.datetime.today()
+        cf = self.ca.get_config
+
+        if arr_date and arr_date > today:            # Sihot doesn't accept allotment for reservations in the past
+            val = cf(mkt_seg + '_' + hotel_id, section='SihotAllotments',
+                     default_value=cf(mkt_seg, section='SihotAllotments'))
+            if val:
+                crow['SIHOT_ALLOTMENT_NO'] = val
+
+        if not crow.get('SIHOT_RATE_SEGMENT'):  # not specified? FYI: this column is not included in V_ACU_RES_DATA
+            val = cf(mkt_seg, section='SihotRateSegments')
+            if val:
+                crow['SIHOT_RATE_SEGMENT'] = val
+
+        val = cf(mkt_seg, section='SihotPaymentInstructions')
+        if val:
+            crow['SIHOT_PAYMENT_INST'] = val
+
+        if crow.get('RUL_ACTION', '') != 'DELETE' and crow.get('RU_STATUS', 0) != 120 and arr_date and arr_date > today:
+            val = cf(mkt_seg, section='SihotResTypes')
+            if val:
+                crow['SH_RES_TYPE'] = val
+
+    def _prepare_res_xml(self, crow):
+        self._add_sihot_configs(crow)
+        action = crow['RUL_ACTION']
         inner_xml = self.prepare_map_xml(crow, action)
         if self.use_kernel_interface:
             if action == ACTION_INSERT:
@@ -1644,15 +1679,15 @@ class ResToSihot(SihotXmlBuilder):
         self.ca.dprint("ResToSihot._prepare_res_xml() result: ", self.xml,
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-    def _send_res_to_sihot(self, crow, action, commit):
-        self._prepare_res_xml(crow, action)
+    def _send_res_to_sihot(self, crow, commit):
+        self._prepare_res_xml(crow)
 
         err_msg, warn_msg = self._handle_error(crow, self.send_to_server())
         if self.acu_connected:
             if not err_msg and self.response:
                 err_msg = self._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response)
             err_msg += self._add_to_acumen_sync_log('RU', crow['RUL_PRIMARY'],
-                                                    action,
+                                                    crow['RUL_ACTION'],
                                                     "ERR" + (self.response.server_error() if self.response else "")
                                                     if err_msg else "SYNCED",
                                                     err_msg + ("W" + warn_msg if warn_msg else ""),
@@ -1666,6 +1701,10 @@ class ResToSihot(SihotXmlBuilder):
             warn_msg = self.res_id_desc(crow, err_msg, separator="\n")
             self._warning_msgs += "\n\n" + warn_msg
             err_msg = ""
+        elif err_msg:
+            assert crow['SIHOT_GDSNO']
+            assert crow['SIHOT_GDSNO'] not in self._gds_err_rows
+            self._gds_err_rows[crow['SIHOT_GDSNO']] = (crow, err_msg)
         return err_msg, warn_msg
 
     def _ensure_clients_exist_and_updated(self, crow, ensure_client_mode):
@@ -1735,24 +1774,34 @@ class ResToSihot(SihotXmlBuilder):
     def send_row_to_sihot(self, crow=None, commit=False, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
         if not crow:
             crow = self.cols
-        action = crow['RUL_ACTION']
+        gds_no = crow['SIHOT_GDSNO']
+        if gds_no:
+            if gds_no in self._gds_err_rows:    # prevent send of follow-up changes on erroneous bookings (w/ same GDS)
+                old_id = self.res_id_desc(*self._gds_err_rows[gds_no], separator="\n")
+                warn_msg = "\n\n" + "Synchronization skipped because GDS number {} had errors in previous send: {}" \
+                           + "\nSkipped reservation: {}"
+                self._warning_msgs += warn_msg.format(gds_no, old_id, self.res_id_desc(crow, "", separator="\n"))
+                return ""
 
-        err_msg = self._ensure_clients_exist_and_updated(crow, ensure_client_mode)
-        if not err_msg:
-            err_msg = self._send_res_to_sihot(crow, action, commit)
-            if self.acu_connected and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']) \
-                    and "Could not find a key identifier" in err_msg:  # WEB interface
-                self.ca.dprint("ResToSihot.send_row_to_sihot() ignoring CD_SIHOT_OBJID(" +
-                               str(crow['CD_SIHOT_OBJID']) + "/" + str(crow['CD_SIHOT_OBJID2']) + ") error: " + err_msg)
-                crow['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead
-                crow['CD_SIHOT_OBJID2'] = None
-                err_msg = self._send_res_to_sihot(crow, action, commit)
+            err_msg = self._ensure_clients_exist_and_updated(crow, ensure_client_mode)
+            if not err_msg:
+                err_msg = self._send_res_to_sihot(crow, commit)
+                if self.acu_connected and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']) \
+                        and "Could not find a key identifier" in err_msg:  # WEB interface
+                    self.ca.dprint("ResToSihot.send_row_to_sihot() ignoring CD_SIHOT_OBJID(" +
+                                   str(crow['CD_SIHOT_OBJID']) + "/" + str(crow['CD_SIHOT_OBJID2']) + ") error: " +
+                                   err_msg)
+                    crow['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead
+                    crow['CD_SIHOT_OBJID2'] = None
+                    err_msg = self._send_res_to_sihot(crow, commit)
+        else:
+            err_msg = self.res_id_desc(crow, "ResToSihot.send_row_to_sihot(): sync with empty GDS number skipped")
 
         if err_msg:
             self.ca.dprint("ResToSihot.send_row_to_sihot() error: " + err_msg)
         else:
             self.ca.dprint("ResToSihot.send_row_to_sihot() GDSNO={} RESPONDED OBJID={}|MATCHCODE={}"
-                           .format(crow['SIHOT_GDSNO'], self.response.objid, self.response.matchcode),
+                           .format(gds_no, self.response.objid, self.response.matchcode),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return err_msg
@@ -1801,3 +1850,6 @@ class ResToSihot(SihotXmlBuilder):
 
     def wipe_warnings(self):
         self._warning_msgs = ""
+
+    def wipe_gds_errors(self):
+        self._gds_err_rows = dict()

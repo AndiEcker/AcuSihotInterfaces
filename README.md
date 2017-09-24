@@ -42,7 +42,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | cmdInterval | Command interval in seconds | 3600 | s | WatchPupPy |
 | dateFrom | Date of first check-out to export | (current date - 7 days or last-runs dateTo plus 1 day) | F | ClientQuestionnaireExport, ShSfContactMigration |
 | dateTill | Date of last check-out to export | (current date) | T | ClientQuestionnaireExport, ShSfContactMigration |
-| debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose) | 0 | D | (all) |
+| debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
 | emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfContactValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
@@ -52,10 +52,11 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
+| migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfContactValidator |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
 | recordTypesToValidate | Contact record type(s) to be validated | 'Rentals' | R | SfContactValidator |
-| resHistory | Migrate also the clients reservation history (0=No, 1=Yes) | 1 | r | SihotMigration |
+| resHistory | Migrate also the clients reservation history (0=No, 1=Yes) | 1 | R | SihotMigration |
 | serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
@@ -64,6 +65,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | sfPassword | Salesforce user account password | - | a | SfContactValidator, ShSfContactMigration, SihotResImport |
 | sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration, SihotResImport |
+| syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only | - | R | SihotResSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |

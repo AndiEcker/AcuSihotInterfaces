@@ -311,7 +311,7 @@ def cfg_room_cat_discrepancies(data_dict, app_inst):
             for cat, apts in sihot_cat_apts.items():
                 if cols[1] in apts:
                     dis += "\nDifferent Sihot room category " + cat
-                    # sql += "\r\nupdate T_AP set AP_SIHOT_CAT = '" + cat + "' where AP_CODE = '" + cols[1] + "';"
+                    # sql += "\r\n update T_AP set AP_SIHOT_CAT = '" + cat + "' where AP_CODE = '" + cols[1] + "';"
                     break
             else:
                 dis += "\nApartment missing in Sihot"

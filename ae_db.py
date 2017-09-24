@@ -149,6 +149,8 @@ class OraDB:
         return ''
 
     def commit(self):
+        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("oraDB.commit()")
         try:
             self.conn.commit()
         except Exception as ex:
@@ -156,6 +158,8 @@ class OraDB:
         return ''
 
     def rollback(self):
+        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("oraDB.rollback()")
         try:
             self.conn.rollback()
         except Exception as ex:

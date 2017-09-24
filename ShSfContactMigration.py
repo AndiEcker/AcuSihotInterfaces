@@ -385,10 +385,7 @@ def layout_message(sfd, cols):
             sfv = sf_curr_data[col]
         if shv or sfv:
             col_label = (col[:-3] if col[-3:] == '__c' else ("Record Type" if col == rtd else col)).replace("_", " ")
-            try:
-                txt += form_str.format(col_label, shv)
-            except TypeError:
-                txt += str(col_label) + ":::" + str(shv)
+            txt += form_str.format(col_label, str(shv))
             if sfv:
                 txt += " (SF={})".format(sfv)
             txt += "\n"

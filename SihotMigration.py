@@ -22,7 +22,7 @@ cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
 
-cae.add_option('resHistory', "Migrate also the clients reservation history (0=No, 1=Yes)", 1, 'r', choices=(0, 1))
+cae.add_option('resHistory', "Migrate also the clients reservation history (0=No, 1=Yes)", 1, 'R', choices=(0, 1))
 cae.add_option('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
                0, 'q', choices=(0, 1, 2))
 cae.add_option('breakOnError', "Abort migration if error occurs (0=No, 1=Yes)", 1, 'b', choices=(0, 1))
@@ -67,8 +67,8 @@ if cae.get_option('clientsFirst'):
                 # using fetch_from_acu_by_cd() would also pass reservations for currently not existing hotels
                 #  error_msg = acu_res_hist.fetch_from_acu_by_cd(cols['CD_CODE'], future_only=future_only)
                 # .. on the other hand: with aru fetch we are only migrating the synchronized resOcc types
-                error_msg = acu_res_hist.fetch_from_acu_by_aru(where_group_order="CD_CODE = '" + crow['CD_CODE'] +
-                                                                                 "'", future_only=future_only)
+                error_msg = acu_res_hist.fetch_from_acu_by_aru(where_group_order="CD_CODE = '" + crow['CD_CODE'] + "'",
+                                                               date_range='F' if future_only else '')
                 if error_msg:
                     error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + ' reservation history fetch error: ' + \
                                 error_msg + '! Data=' + str(crow)
@@ -92,7 +92,7 @@ if cae.get_option('clientsFirst'):
 uprint('####  ... ' + ('future Res......' if future_only else 'Reservations....') + '  ####')
 
 acumen_req = ResToSihot(cae)
-error_msg = acumen_req.fetch_all_valid_from_acu(future_only=future_only)
+error_msg = acumen_req.fetch_all_valid_from_acu(date_range='F' if future_only else '')
 progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.row_count,
                     start_msg='Prepare the migration of {total_count} reservations to Sihot',
                     nothing_to_do_msg='SihotMigration: acumen_req.fetch_all_valid_from_acu() returning no rows')

@@ -31,14 +31,17 @@ CONTACT_REC_TYPE_RENTALS = 'Rentals'
 
 
 def prepare_connection(cae, print_on_console=True):
-    sf_user = cae.get_option('sfUser')
+    sf_user = cae.get_option('sfUser', default_value=cae.get_config('sfUser'))
     if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
         uprint("sfif.prepare_connection(): skipped because of unspecified credentials")
         return None, None
-    sf_pw = cae.get_option('sfPassword')
-    sf_token = cae.get_option('sfToken')
-    sf_sandbox = cae.get_option('sfIsSandbox', default_value='test' in sf_user.lower() or 'sandbox' in sf_user.lower())
-    sf_client = cae.get_option('sfClientId')
+    sf_pw = cae.get_option('sfPassword', default_value=cae.get_config('sfPassword'))
+    sf_token = cae.get_option('sfToken', default_value=cae.get_config('sfToken'))
+    sf_sandbox = cae.get_option('sfIsSandbox',
+                                default_value=cae.get_config('sfIsSandbox',
+                                                             default_value='test' in sf_user.lower()
+                                                                           or 'sandbox' in sf_user.lower()))
+    sf_client = cae.get_option('sfClientId', cae.get_config('sfClientId'))
     sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
     if print_on_console:
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)

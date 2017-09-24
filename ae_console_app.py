@@ -4,6 +4,7 @@ import datetime
 from builtins import chr  # works like unichr() also in Python 2
 import re
 import inspect
+import pprint
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentTypeError
@@ -12,6 +13,7 @@ from argparse import ArgumentParser, ArgumentTypeError
 DEBUG_LEVEL_DISABLED = 0
 DEBUG_LEVEL_ENABLED = 1
 DEBUG_LEVEL_VERBOSE = 2
+DEBUG_LEVEL_TIMESTAMPED = 3
 _debug_level = DEBUG_LEVEL_DISABLED
 
 # default name of main config section
@@ -64,13 +66,15 @@ def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='
     else:
         try_method = ""
         text = None
-    if try_method and _debug_level >= DEBUG_LEVEL_ENABLED:
+    if try_method and _debug_level >= DEBUG_LEVEL_VERBOSE:
         try:        # first try to put ori_text in error message
-            uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
-                   ", " + DEF_ENCODING + " text='" +
-                   ori_text.encode(DEF_ENCODING, errors='backslashreplace').decode(DEF_ENCODING) + "'")
+            uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
+                                  ", " + DEF_ENCODING + " text:\n'" +
+                                  ori_text.encode(DEF_ENCODING, errors='backslashreplace').decode(DEF_ENCODING) + "'\n",
+                                  indent=12, width=120))
+
         except UnicodeEncodeError:
-            uprint(context + ": " + (str(pex) + '- ' if pex else '') + try_method)
+            uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method, indent=12, width=120))
     return text
 
 
@@ -110,7 +114,10 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
     # else:
     #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
     #           sep=sep, end=end, file=file, flush=flush)
-    print_objects = objects
+    if _debug_level >= DEBUG_LEVEL_TIMESTAMPED:
+        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + objects
+    else:
+        print_objects = objects
     try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
     while True:
         try:
@@ -229,7 +236,8 @@ class ConsoleApp:
 
         self._arg_parser = ArgumentParser(description=app_desc)
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
-                        choices=(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE))
+                        choices=(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
+                                 DEBUG_LEVEL_TIMESTAMPED))
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
 
     @staticmethod
