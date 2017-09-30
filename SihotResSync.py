@@ -23,7 +23,8 @@ __version__ = '0.7'
 
 ADMIN_MAIL_TO_LIST = ['ITDevmen@acumen.es']
 
-cae = ConsoleApp(__version__, "Synchronize reservation changes from Acumen/Oracle system to the SiHOT-PMS")
+cae = ConsoleApp(__version__, "Synchronize reservation changes from Acumen/Oracle system to the SiHOT-PMS",
+                 additional_cfg_files=['SihotMktSegExceptions.cfg'])
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
@@ -32,7 +33,7 @@ cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhos
 cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')
 cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
 
-cae.add_option('timeout', "Timeout value for TCP/IP connections", 39.6)
+cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
 cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('useKernelForClient', "Used interface for clients (0=web, 1=kernel)", USE_KERNEL_FOR_CLIENTS_DEF, 'g',
@@ -53,8 +54,12 @@ cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list()
 cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
 
 cae.add_option('migrationMode', "Skip room swap and hotel movement requests (0=No, 1=Yes)", 0, 'M', choices=(0, 1))
-cae.add_option('syncDateRange', "Restrict sync. of res. to: H=historical, M=present and 1 month in future"
-                                ", P=present and all future, F=future only", '', 'R', choices=('H', 'M', 'P', 'F'))
+sync_date_ranges = dict(H='historical', M='present and 1 month in future', P='present and all future', F='future only',
+                        Y30='present, 1 month in future and 30 historical', Y60='present, 1 month in future, 60 hist.',
+                        Y90='present, 1 month in future and 90 hist.', Y120='present, 1 month in future, 120 hist.')
+cae.add_option('syncDateRange', "Restrict sync. of res. to: "
+               + ", ".join([k + '=' + v for k, v in sync_date_ranges.items()]), '', 'R',
+               choices=sync_date_ranges.keys())
 
 
 debug_level = cae.get_option('debugLevel')
@@ -86,8 +91,7 @@ if migration_mode:
     uprint("!!!!  Migration mode (room swaps and hotel movements are disabled)")
 sync_date_range = cae.get_option('syncDateRange')
 if sync_date_range:
-    uprint("!!!!  Synchronizing only " + ("future" if sync_date_range == 'F' else
-                                          ("historical" if sync_date_range == 'P' else "")) + " reservations")
+    uprint("!!!!  Synchronizing only reservations in date range: " + sync_date_ranges[sync_date_range])
 
 
 lastUnfinishedRunTime = cae.get_config(last_rt_prefix + 'lastRt')

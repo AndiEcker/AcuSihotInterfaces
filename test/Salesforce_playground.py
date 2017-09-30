@@ -4,7 +4,7 @@ from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, Salesf
 __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE,
-                 additional_cfg_fnam='../.console_app_env.cfg')
+                 additional_cfg_files=['../.console_app_env.cfg'])
 
 cae.add_option('sfUser', "Salesforce account user name", '', 'y')
 cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
@@ -21,6 +21,9 @@ print('Salesforce object:', sb)
 
 print('Top-level objects describe:', sb.describe())
 
+print('Opportunity metadata:', sb.Opportunity.metadata())
+
+# OLD
 print('Contact metadata:', sb.Contact.metadata())
 print('Contact describe:', sb.Contact.describe())
 

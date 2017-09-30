@@ -38,7 +38,7 @@ ACTION_SEARCH = 'SEARCH'
 # .. Y203585/HUN - Name decoded wrongly with ISO
 SXML_DEF_ENCODING = 'cp1252'
 
-# SIHOT GUEST TYPE for owners (affiliated company)
+# SIHOT GUEST TYPE for investors/owners (affiliated company)
 SIHOT_AFF_COMPANY = 6
 
 # special error message prefixes
@@ -179,8 +179,9 @@ MAP_KERNEL_CLIENT = \
          'valToAcuConverter': convert2date},
         {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_D-BIRTHDAY', 'colName': 'CD_DOB2',
          'valToAcuConverter': convert2date},
-        {'elemName': 'T-PROFESSION', 'colName': 'CD_INDUSTRY1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-PROFESSION', 'colName': 'CD_INDUSTRY2'},
+        # 27-09-17: removed b4 migration of BHH/HMC because CD_INDUSTRY1/2 needs first grouping into 3-alphanumeric code
+        # {'elemName': 'T-PROFESSION', 'colName': 'CD_INDUSTRY1'},
+        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-PROFESSION', 'colName': 'CD_INDUSTRY2'},
         {'elemName': 'INTERNET-PASSWORD', 'colName': 'CD_PASSWORD'},
         {'elemName': 'MATCH-ADM', 'colName': 'CD_RCI_REF'},
         {'elemName': 'MATCH-SM', 'colName': 'SIHOT_SF_ID'},
@@ -836,6 +837,18 @@ class Request(SihotXmlParser):  # request from SIHOT to AcuServer
         return self.oc
 
 
+class RoomChange(SihotXmlParser):
+    def __init__(self, ca):
+        super(RoomChange, self).__init__(ca)
+        # add base tags for room number, old room number and guest objid
+        self._base_tags.append('RN')
+        self.rn = None  # added for to remove pycharm warning
+        self._base_tags.append('ORN')
+        self.orn = None
+        self._base_tags.append('GID')
+        self.gid = None
+
+
 class Response(SihotXmlParser):  # response xml parser for kernel or web interfaces
     def __init__(self, ca):
         super(Response, self).__init__(ca)
@@ -969,18 +982,6 @@ class GuestInfoResponse(Response):
                     self.ret_elem_values.append(values)
         # for completeness call also SihotXmlParser.end() and ColMapXmlParser.end()
         return super(GuestInfoResponse, self).end(self._col_map_parser.end(tag))
-
-
-class RoomChange(SihotXmlParser):
-    def __init__(self, ca):
-        super(RoomChange, self).__init__(ca)
-        # add base tags for room number, old room number and guest objid
-        self._base_tags.append('RN')
-        self.rn = None  # added for to remove pycharm warning
-        self._base_tags.append('ORN')
-        self.orn = None
-        self._base_tags.append('GID')
-        self.gid = None
 
 
 class ColMapXmlParser(SihotXmlParser):
@@ -1269,23 +1270,6 @@ class SihotXmlBuilder:
         return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = '" + str(pkey) + "'")
 
 
-class PostMessage(SihotXmlBuilder):
-    def post_message(self, msg, level=3, system='AcuSihot.Interface'):
-        self.beg_xml(operation_code='SYSMESSAGE')
-        self.add_tag('MSG', msg)
-        self.add_tag('LEVEL', str(level))
-        self.add_tag('SYSTEM', system)
-        self.end_xml()
-
-        err_msg = self.send_to_server()
-        if err_msg:
-            ret = err_msg
-        else:
-            ret = '' if self.response.rc == '0' else 'Error code ' + self.response.rc
-
-        return ret
-
-
 class AcuServer(SihotXmlBuilder):
     def time_sync(self):
         self.beg_xml(operation_code='TS')
@@ -1315,17 +1299,20 @@ class AcuServer(SihotXmlBuilder):
         return ret
 
 
-class ConfigDict(SihotXmlBuilder):
-    def get_key_values(self, config_type, hotel_id='1', language='EN'):
-        self.beg_xml(operation_code='GCF')
-        self.add_tag('CFTYPE', config_type)
-        self.add_tag('HN', hotel_id)  # mandatory
-        self.add_tag('LN', language)
+class AvailCats(SihotXmlBuilder):
+    def avail_rooms(self, hotel_id='1', from_date=datetime.date.today(), to_date=datetime.date.today(),
+                    scope=None):
+        self.beg_xml(operation_code='AV')
+        self.add_tag('ID', hotel_id)  # mandatory
+        self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))  # mandatory
+        self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
+        if scope:
+            self.add_tag('SCOPE', scope)  # pass 'DESC' for to get room description
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=ConfigDictResponse(self.ca))
+        err_msg = self.send_to_server(response_parser=CatRoomResponse(self.ca))
 
-        return err_msg or self.response.key_values
+        return err_msg or self.response.cat_rooms
 
 
 class CatRooms(SihotXmlBuilder):
@@ -1342,6 +1329,132 @@ class CatRooms(SihotXmlBuilder):
         err_msg = self.send_to_server(response_parser=CatRoomResponse(self.ca))
 
         return err_msg or self.response.cat_rooms
+
+
+class ClientToSihot(SihotXmlBuilder):
+    def __init__(self, ca, use_kernel_interface=USE_KERNEL_FOR_CLIENTS_DEF, map_client=MAP_CLIENT_DEF,
+                 connect_to_acu=True):
+        super(ClientToSihot, self).__init__(ca, col_map=map_client, use_kernel_interface=use_kernel_interface,
+                                            connect_to_acu=connect_to_acu)
+
+    def _fetch_from_acu(self, view, acu_id=''):
+        where_group_order = ''
+        if acu_id:
+            where_group_order += "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
+
+        err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order)
+        if not err_msg:
+            self.fetch_all_from_acu()
+        return err_msg
+
+    # use for sync only not for migration because we have clients w/o log entries
+    def fetch_from_acu_by_acu(self, acu_id=''):
+        return self._fetch_from_acu('V_ACU_CD_UNSYNCED', acu_id=acu_id)
+
+    # use for migration
+    def fetch_all_valid_from_acu(self):
+        return self._fetch_from_acu('V_ACU_CD_FILTERED')
+
+    # use for unfiltered client fetches
+    def fetch_from_acu_by_cd(self, acu_id):
+        return self._fetch_from_acu('V_ACU_CD_UNFILTERED', acu_id=acu_id)
+
+    def _prepare_guest_xml(self, c_row, action=None, col_name_suffix=''):
+        if not action:
+            action = ACTION_UPDATE if c_row['CD_SIHOT_OBJID' + col_name_suffix] else ACTION_INSERT
+        self.beg_xml(operation_code='GUEST-CHANGE' if action == ACTION_UPDATE else 'GUEST-CREATE')
+        self.add_tag('GUEST-PROFILE' if self.use_kernel_interface else 'GUEST',
+                     self.prepare_map_xml(c_row, action))
+        self.end_xml()
+        self.ca.dprint("ClientToSihot._prepare_guest_xml() col_values/action/result: ",
+                       c_row, action, self.xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        return action
+
+    def _prepare_guest_link_xml(self, mc1, mc2, action):
+        mct1 = self.new_tag('MATCHCODE-GUEST', self.convert_value_to_xml_string(mc1))
+        mct2 = self.new_tag('CONTACT',
+                            self.new_tag('MATCHCODE', self.convert_value_to_xml_string(mc2)) +
+                            self.new_tag('FLAG', 'DELETE' if action == ACTION_DELETE else ''))
+        self.beg_xml(operation_code='GUEST-CONTACT')
+        self.add_tag('CONTACTLIST', mct1 + mct2)
+        self.end_xml()
+        self.ca.dprint("ClientToSihot._prepare_guest_link_xml() mc1/mc2/result: ", mc1, mc2, self.xml,
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+
+    def _send_link_to_sihot(self, pk1, pk2, delete=False):
+        self._prepare_guest_link_xml(pk1, pk2, delete)
+        return self.send_to_server()
+
+    def _send_person_to_sihot(self, c_row, first_person=""):  # pass CD_CODE of first person for to send 2nd person
+        action = self._prepare_guest_xml(c_row, col_name_suffix='2' if first_person else '')
+        err_msg = self.send_to_server()
+        if 'guest exists already' in err_msg and action == ACTION_INSERT:  # and not self.use_kernel_interface:
+            action = ACTION_UPDATE
+            self._prepare_guest_xml(c_row, action=action, col_name_suffix='2' if first_person else '')
+            err_msg = self.send_to_server()
+        if not err_msg and self.acu_connected and self.response:
+            err_msg = self._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response,
+                                              col_name_suffix="2" if first_person else "")
+        return err_msg, action
+
+    def send_client_to_sihot(self, c_row=None, commit=False):
+        if not c_row:
+            c_row = self.cols
+        err_msg, action_p1 = self._send_person_to_sihot(c_row)
+        couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
+        action_p2 = ''
+        if not err_msg and 'CD_CODE2' in c_row and c_row['CD_CODE2']:  # check for second contact person
+            crow2 = deepcopy(c_row)
+            for col_name in c_row.keys():
+                elem_name = PARSE_ONLY_TAG_PREFIX + 'P2_' + self.col_elem[col_name]
+                if elem_name in self.elem_col:
+                    crow2[col_name] = c_row[self.elem_col[elem_name]]
+            err_msg, action_p2 = self._send_person_to_sihot(crow2, c_row['CD_CODE'])
+            if not err_msg and action_p2 == ACTION_INSERT and c_row['SIHOT_GUESTTYPE1'] == SIHOT_AFF_COMPANY \
+                    and not self.use_kernel_interface:  # only link owners/investors
+                couple_linkage = '=P2'
+                err_msg = self._send_link_to_sihot(c_row['CD_CODE'], c_row['CD_CODE2'])
+            else:
+                couple_linkage = '+P2'
+        elif not err_msg and action_p1 == ACTION_INSERT and c_row['SIHOT_GUESTTYPE1'] == SIHOT_AFF_COMPANY \
+                and not self.use_kernel_interface:
+            # unlink second person if no longer exists in Acumen
+            couple_linkage = '-P2'
+            err_msg = self._send_link_to_sihot(c_row['CD_CODE'], '', delete=True)
+        action = action_p1 + ('/' + action_p2 if action_p2 else '')
+
+        if self.acu_connected:
+            log_err = self._add_to_acumen_sync_log('CD', c_row['CD_CODE'],
+                                                   action,
+                                                   'ERR' + (self.response.server_error() if self.response else '')
+                                                   if err_msg else 'SYNCED' + couple_linkage,
+                                                   err_msg,
+                                                   c_row.get('CDL_CODE', -966) or -969,
+                                                   commit=commit)
+            if log_err:
+                err_msg += "\nLogErr=" + log_err
+
+        if err_msg:
+            self.ca.dprint("ClientToSihot.send_client_to_sihot() row|action p1/2|err: ", c_row, action, err_msg)
+        else:
+            self.ca.dprint("ClientToSihot.send_client_to_sihot() client={} RESPONDED OBJID={}/MATCHCODE={}"
+                           .format(c_row['CD_CODE'], self.response.objid, self.response.matchcode),
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+
+        return err_msg
+
+
+class ConfigDict(SihotXmlBuilder):
+    def get_key_values(self, config_type, hotel_id='1', language='EN'):
+        self.beg_xml(operation_code='GCF')
+        self.add_tag('CFTYPE', config_type)
+        self.add_tag('HN', hotel_id)  # mandatory
+        self.add_tag('LN', language)
+        self.end_xml()
+
+        err_msg = self.send_to_server(response_parser=ConfigDictResponse(self.ca))
+
+        return err_msg or self.response.key_values
 
 
 class GuestSearch(SihotXmlBuilder):
@@ -1444,117 +1557,21 @@ class GuestSearch(SihotXmlBuilder):
         return ret
 
 
-class ClientToSihot(SihotXmlBuilder):
-    def __init__(self, ca, use_kernel_interface=USE_KERNEL_FOR_CLIENTS_DEF, map_client=MAP_CLIENT_DEF,
-                 connect_to_acu=True):
-        super(ClientToSihot, self).__init__(ca, col_map=map_client, use_kernel_interface=use_kernel_interface,
-                                            connect_to_acu=connect_to_acu)
-
-    def _fetch_from_acu(self, view, acu_id=''):
-        where_group_order = ''
-        if acu_id:
-            where_group_order += "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
-
-        err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order)
-        if not err_msg:
-            self.fetch_all_from_acu()
-        return err_msg
-
-    # use for sync only not for migration because we have clients w/o log entries
-    def fetch_from_acu_by_acu(self, acu_id=''):
-        return self._fetch_from_acu('V_ACU_CD_UNSYNCED', acu_id=acu_id)
-
-    # use for migration
-    def fetch_all_valid_from_acu(self):
-        return self._fetch_from_acu('V_ACU_CD_FILTERED')
-
-    # use for unfiltered client fetches
-    def fetch_from_acu_by_cd(self, acu_id):
-        return self._fetch_from_acu('V_ACU_CD_UNFILTERED', acu_id=acu_id)
-
-    def _prepare_guest_xml(self, c_row, action=None, col_name_suffix=''):
-        if not action:
-            action = ACTION_UPDATE if c_row['CD_SIHOT_OBJID' + col_name_suffix] else ACTION_INSERT
-        self.beg_xml(operation_code='GUEST-CHANGE' if action == ACTION_UPDATE else 'GUEST-CREATE')
-        self.add_tag('GUEST-PROFILE' if self.use_kernel_interface else 'GUEST',
-                     self.prepare_map_xml(c_row, action))
+class PostMessage(SihotXmlBuilder):
+    def post_message(self, msg, level=3, system='AcuSihot.Interface'):
+        self.beg_xml(operation_code='SYSMESSAGE')
+        self.add_tag('MSG', msg)
+        self.add_tag('LEVEL', str(level))
+        self.add_tag('SYSTEM', system)
         self.end_xml()
-        self.ca.dprint("ClientToSihot._prepare_guest_xml() col_values/action/result: ",
-                       c_row, action, self.xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        return action
 
-    def _prepare_guest_link_xml(self, mc1, mc2, action):
-        mct1 = self.new_tag('MATCHCODE-GUEST', self.convert_value_to_xml_string(mc1))
-        mct2 = self.new_tag('CONTACT',
-                            self.new_tag('MATCHCODE', self.convert_value_to_xml_string(mc2)) +
-                            self.new_tag('FLAG', 'DELETE' if action == ACTION_DELETE else ''))
-        self.beg_xml(operation_code='GUEST-CONTACT')
-        self.add_tag('CONTACTLIST', mct1 + mct2)
-        self.end_xml()
-        self.ca.dprint("ClientToSihot._prepare_guest_link_xml() mc1/mc2/result: ", mc1, mc2, self.xml,
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-
-    def _send_link_to_sihot(self, pk1, pk2, delete=False):
-        self._prepare_guest_link_xml(pk1, pk2, delete)
-        return self.send_to_server()
-
-    def _send_person_to_sihot(self, c_row, first_person=""):  # pass CD_CODE of first person for to send 2nd person
-        action = self._prepare_guest_xml(c_row, col_name_suffix='2' if first_person else '')
         err_msg = self.send_to_server()
-        if 'guest exists already' in err_msg and action == ACTION_INSERT:  # and not self.use_kernel_interface:
-            action = ACTION_UPDATE
-            self._prepare_guest_xml(c_row, action=action, col_name_suffix='2' if first_person else '')
-            err_msg = self.send_to_server()
-        if not err_msg and self.acu_connected and self.response:
-            err_msg = self._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response,
-                                              col_name_suffix="2" if first_person else "")
-        return err_msg, action
-
-    def send_client_to_sihot(self, c_row=None, commit=False):
-        if not c_row:
-            c_row = self.cols
-        err_msg, action_p1 = self._send_person_to_sihot(c_row)
-        couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
-        action_p2 = ''
-        if not err_msg and 'CD_CODE2' in c_row and c_row['CD_CODE2']:  # check for second contact person
-            crow2 = deepcopy(c_row)
-            for col_name in c_row.keys():
-                elem_name = PARSE_ONLY_TAG_PREFIX + 'P2_' + self.col_elem[col_name]
-                if elem_name in self.elem_col:
-                    crow2[col_name] = c_row[self.elem_col[elem_name]]
-            err_msg, action_p2 = self._send_person_to_sihot(crow2, c_row['CD_CODE'])
-            if not err_msg and action_p2 == ACTION_INSERT and c_row['SIHOT_GUESTTYPE1'] == SIHOT_AFF_COMPANY \
-                    and not self.use_kernel_interface:  # only link owners/inventors
-                couple_linkage = '=P2'
-                err_msg = self._send_link_to_sihot(c_row['CD_CODE'], c_row['CD_CODE2'])
-            else:
-                couple_linkage = '+P2'
-        elif not err_msg and action_p1 == ACTION_INSERT and c_row['SIHOT_GUESTTYPE1'] == SIHOT_AFF_COMPANY \
-                and not self.use_kernel_interface:
-            # unlink second person if no longer exists in Acumen
-            couple_linkage = '-P2'
-            err_msg = self._send_link_to_sihot(c_row['CD_CODE'], '', delete=True)
-        action = action_p1 + ('/' + action_p2 if action_p2 else '')
-
-        if self.acu_connected:
-            log_err = self._add_to_acumen_sync_log('CD', c_row['CD_CODE'],
-                                                   action,
-                                                   'ERR' + (self.response.server_error() if self.response else '')
-                                                   if err_msg else 'SYNCED' + couple_linkage,
-                                                   err_msg,
-                                                   c_row['CDL_CODE'],
-                                                   commit=commit)
-            if log_err:
-                err_msg += "\nLogErr=" + log_err
-
         if err_msg:
-            self.ca.dprint("ClientToSihot.send_client_to_sihot() row|action p1/2|err: ", c_row, action, err_msg)
+            ret = err_msg
         else:
-            self.ca.dprint("ClientToSihot.send_client_to_sihot() client={} RESPONDED OBJID={}/MATCHCODE={}"
-                           .format(c_row['CD_CODE'], self.response.objid, self.response.matchcode),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            ret = '' if self.response.rc == '0' else 'Error code ' + self.response.rc
 
-        return err_msg
+        return ret
 
 
 class ResSearch(SihotXmlBuilder):
@@ -1617,6 +1634,12 @@ class ResToSihot(SihotXmlBuilder):
         elif date_range == 'M':
             where_group_order += (" and " if where_group_order else "") \
                                  + "DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31"
+        elif date_range and date_range[0] == 'Y':     # temporary/interim solution for migration of BHH/HMC - plan B
+            rows_str = date_range[1:] or "150"
+            where_group_order += (" and " if where_group_order else "") \
+                + "(DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31" \
+                + " or RUL_SIHOT_HOTEL in (1, 4, 999) or RUL_SIHOT_LAST_HOTEL in (1, 4, 999)" \
+                + " or ROWNUM < " + rows_str + ")"
         elif date_range == 'P':
             where_group_order += (" and " if where_group_order else "") + "DEP_DATE >= trunc(sysdate)"
         elif date_range == 'F':
@@ -1650,7 +1673,7 @@ class ResToSihot(SihotXmlBuilder):
                 crow['SIHOT_ALLOTMENT_NO'] = val
 
         if not crow.get('SIHOT_RATE_SEGMENT'):  # not specified? FYI: this column is not included in V_ACU_RES_DATA
-            val = cf(mkt_seg, section='SihotRateSegments')
+            val = cf(mkt_seg, section='SihotRateSegments', default_value=crow['RUL_SIHOT_RATE'])
             if val:
                 crow['SIHOT_RATE_SEGMENT'] = val
 

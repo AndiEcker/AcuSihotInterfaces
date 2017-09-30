@@ -9,7 +9,8 @@ import datetime
 import subprocess
 from configparser import ConfigParser
 
-from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, \
+    full_stack_trace
 from ae_db import OraDB, DEF_USER, DEF_DSN
 from ae_notification import Notification
 from sxmlif import PostMessage, GuestSearch, SXML_DEF_ENCODING
@@ -30,7 +31,7 @@ cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system"
 cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')
 cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
-cae.add_option('timeout', "Timeout value for TCP/IP connections", 39.6)
+cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
 cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b')
@@ -114,14 +115,14 @@ def reset_last_run_time(interval, force=False):
                 interval_delta = datetime.timedelta(seconds=interval)
                 now_dt = datetime.datetime.now()
                 if not force and last_start_dt + interval_delta >= now_dt:
-                    msg = "still locked for " + str(last_start_dt + interval_delta - now_dt)
+                    msg = cmd_cfg_file_name + " still locked for " + str(last_start_dt + interval_delta - now_dt)
                 else:
                     cmd_cfg_parser.set(MAIN_SECTION_DEF,
                                        last_rt_prefix + 'Rt_kill_' + datetime.datetime.now().strftime('%y%m%d_%H%M%S'),
                                        last_start)
                     cmd_cfg_parser.set(MAIN_SECTION_DEF,
                                        last_rt_prefix + 'lastRt', '-9')
-                    msg = "successful reset. Old value=" + str(last_start)
+                    msg = cmd_cfg_file_name + " lock reset. Old value=" + str(last_start)
             else:
                 msg = ""
         else:
@@ -288,7 +289,7 @@ while True:
         last_run = get_timer_corrected()
         run_ends += 1
     except Exception as ex:
-        err_msg += '\n\n' + 'WatchPupPy loop exception: ' + str(ex)
+        err_msg += '\n\n' + 'WatchPupPy loop exception: ' + full_stack_trace(ex)
 
 progress.finished(error_msg=err_msg)
 uprint(' #### WatchPupPy exit - successfully run', run_ends, 'of', run_starts, 'times the command', command_line_args)

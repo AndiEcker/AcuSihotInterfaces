@@ -31,7 +31,7 @@ from sxmlif import ResToSihot, \
 __version__ = '0.9'
 
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
-                 debug_level_def=DEBUG_LEVEL_VERBOSE)
+                 additional_cfg_files=['SihotMktSegExceptions.cfg'])
 # cae.add_option('tciPath', "Import path and file mask for Thomas Cook R*.TXT files", 'C:/TC_Import/R*.txt', 'j')
 # cae.add_option('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
 cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'Y')
@@ -56,7 +56,7 @@ cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhos
 cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')
 cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
 
-cae.add_option('timeout', "Timeout value for TCP/IP connections", 39.6)
+cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
 cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('useKernelForClient', "Used interface for clients (0=web, 1=kernel)", USE_KERNEL_FOR_CLIENTS_DEF, 'g')
@@ -1443,7 +1443,7 @@ else:
         def build(self):
             cae.dprint("App.build()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.display_files()
-            self.title = "Sihot Reservation Import  V" + __version__
+            self.title = "Sihot Reservation Import  V " + __version__
             self.root = Factory.MainWindow()
             return self.root
 

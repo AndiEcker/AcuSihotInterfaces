@@ -2,6 +2,7 @@
     0.1     first beta.
     0.2     first release: added "please wait" messages using Clock.schedule_once().
     0.3     ported to Python 3.5 with the option to use the angle backend (via KIVY_GL_BACKEND=angle_sdl2 env var).
+    0.4     small refactoring and bug fixes (e.g. show app version in window title, added ErrorItem to kv, ...).
 """
 import sys
 import datetime
@@ -14,7 +15,7 @@ from acu_sf_sh_sys_data import AssSysData
 from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, \
     SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
 
-__version__ = '0.3'
+__version__ = '0.4'
 
 
 ROOT_BOARD_NAME = 'All'
@@ -41,7 +42,7 @@ cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system"
 cae.add_option('serverIP', "IP address of the Sihot interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the Sihot WEB interface", 14777, 'w')
 cae.add_option('serverKernelPort', "IP port of the Sihot KERNEL interface", 14772, 'k')
-cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 39.6)
+cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 69.3)
 cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('sfUser', "Salesforce account user name", '', 'y')
@@ -445,6 +446,7 @@ class AcuSihotMonitorApp(App):
 
     def build(self):
         cae.dprint('AcuSihotMonitorApp.build()', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.title = "Acumen Sihot Monitor V " + __version__
         self.root = FloatLayout()
         self.main_win = MainWindow()
         self.logon_win = Factory.LogonWindow()
@@ -622,8 +624,9 @@ class AcuSihotMonitorApp(App):
             else:
                 if not isinstance(result, str):
                     result = self.result_text(board_dict)
-                lii = BoxLayout(size_hint_y=None, height=69)
-                cil = Label(text=result)
+                lii = BoxLayout(size_hint_y=None, height=690)
+                # cil = Label(text=result)
+                cil = Factory.ErrorItem(text=result)
                 lii.add_widget(cil)
                 lig.add_widget(lii)
 

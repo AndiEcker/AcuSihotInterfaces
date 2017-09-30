@@ -25,7 +25,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
     # default is 14773 for Acumen and Sihot on 14774
     cae.add_option('serverPort', "IP port of the interface of this server", 11000, 'w')  # 11001 for Sihot
 
-    cae.add_option('timeout', "Timeout value for TCP/IP connections", 39.6)
+    cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
     cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
     cae.add_option('smtpServerUri', "SMTP notification server URI [user[:pw]@]host[:port]", '', 'c')

@@ -13,10 +13,11 @@ select RUL_CODE, RUL_PRIMARY
   from T_RUL l
  where nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin') -- remove Acumen LOBBY actions
    -- NOW REMOVED FROM T_RUL BY DBA_SIHOT_RES_SYNC: and RUL_USER <> 'SALES'        -- removing 8939 entries with AUTOBOOKING user renamings (possibly old support tasks)
-   -- NOW EXCLUDED BY INNER JOIN TO T_RH: and (RUL_ACTION <> 'INSERT' or instr(RUL_CHANGES, 'RU_RHREF') > 0) -- exclude pending Marketing requests
+   -- NOW EXCLUDED BY INNER JOIN TO T_RH: and (RUL_ACTION <> 'INSERT' or instr(RUL_CHANGES, 'RU_RHREF') > 0) -- exclude pending Marketing requests (unfortunately not working if pending get deleted)
+   and (rul_action = 'UPDATE' and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_RHREF is not NULL) or instr(RUL_ACTION, 'RU_RHREF') > 0)
    -- 5 times quicker with NOT EXISTS then with: and RUL_CODE = (select max(c.RUL_CODE) from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY)  -- excluding past log entries
    and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and (c.RUL_ACTION = l.RUL_ACTION or c.RUL_ACTION <> 'DELETE' and l.RUL_ACTION <> 'DELETE') and c.RUL_CODE > l.RUL_CODE)  -- excluding past log entries
-   and RUL_DATE >= DATE'2017-01-01'   -- SPEED-UP: exclude reservation log entries before 2017
+   and RUL_DATE >= DATE'2012-01-01'   -- SPEED-UP: exclude reservation log entries before 2017
    and instr(RUL_SIHOT_CAT, '_') = 0
  -- already ordered by V_ACU_RES_UNSYNCED: order by RUL_CODE
 /*
@@ -27,6 +28,8 @@ select RUL_CODE, RUL_PRIMARY
   ae:10-03-17 V04: added SIHOT_LAST_HOTEL_C column and changed RUL_DATE filter from 2012-01-01 to 2017-01-01.
   ae:24-03-17 V05: added RUL_SIHOT_CAT filter for to prevent HOTMOVE errors for unsynced reservations.
   ae:15-09-17 V06: extended filter to include DELETE RUL_ACTIONS separately from UPDATE RUL_ACTIONS into sync queue.
+  ae:19-09-17 V07: re-added refactored filter for pending marketing requests.
+  ae:28-09-17 V08: changed RUL_DATE filter from 2017-01-01 back to 2012-01-01 - FOR BHH/HMC migration.
 */
 /
 

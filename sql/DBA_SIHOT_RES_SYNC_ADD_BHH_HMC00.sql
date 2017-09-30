@@ -56,7 +56,11 @@ exec P_PROC_SET('DBA_SIHOT_RES_SYNC_ADD_BHH_HMC', '2017_V00', 'dev');
 prompt initial checking for sync amount and discrepancies (see also at the end of this script - after adding BHH and HMC)
 
 -- nearly 80k
-select 'V_ACU_RES_FILTERED count=' || to_char(count(*)) from V_ACU_RES_FILTERED;
+select 'V_ACU_RES_FILTERED count=' || to_char(count(*))
+     , 'Future Only=' || sum(case when ARR_DATE >= trunc(sysdate) then 1 end) as Future_Only
+     , 'Present And Future=' || sum(case when DEP_DATE >= trunc(sysdate) then 1 end) as Present_And_Future
+     , 'Present And Next Month=' || sum(case when DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31 then 1 end) as Present_Plus_31Days
+  from V_ACU_RES_FILTERED;
 
 select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF
      , (select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as ROOM_HOTEL
@@ -66,7 +70,11 @@ select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RU
     or RUL_SIHOT_RATE is NULL
     or RUL_SIHOT_ROOM is not NULL and RUL_SIHOT_HOTEL <> nvl((select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')), -96);
 
-select 'V_ACU_RES_UNSYNCED count=' || to_char(count(*)) from V_ACU_RES_UNSYNCED;
+select 'V_ACU_RES_UNSYNCED count=' || to_char(count(*))
+     , 'Future Only=' || sum(case when ARR_DATE >= trunc(sysdate) then 1 end) as Future_Only
+     , 'Present And Future=' || sum(case when DEP_DATE >= trunc(sysdate) then 1 end) as Present_And_Future
+     , 'Present And Next Month=' || sum(case when DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31 then 1 end) as Present_Plus_31Days
+  from V_ACU_RES_UNSYNCED;
 
 select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF
   from V_ACU_RES_UNSYNCED where RUL_SIHOT_HOTEL in (2, 3);
@@ -76,6 +84,56 @@ select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RU
 prompt DATA CHANGES
 
 prompt add new lookup classes for to transform unit size to sihot cat (only ANY fallback need to specify transforms for all Acumen unit sizes: HOTEL/STUDIO..3 BED)
+
+prompt ... default category fixes for BHC (see Q_TASK_TEST000.sql - line 790)
+
+delete from T_LU where LU_CLASS = 'SIHOT_CATS_BHC' and LU_ID in ('HOTEL', 'HOTEL_757', '2 BED_757', '3 BED_752', '3 BED_757');
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHC', 'HOTEL', 'Hotel Unit', 100, 1, NULL,
+          'HOTU', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHC', 'HOTEL_757', 'Hotel Unit High Floor', 103, 1, NULL,
+          'HOTU', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHC', '2 BED_757', '3 Bedroom High Floor', 123, 1, NULL,
+          '2BSH', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHC', '3 BED_752', '3 Bedroom Duplex', 132, 1, NULL,
+          '3BPS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHC', '3 BED_757', '3 Bedroom High Floor', 133, 1, NULL,
+          '3BPS', NULL, user, sysdate, user, sysdate);
+commit;
+
+
+prompt ... default category fixes for PBC (see Q_TASK_TEST000.sql - line 790) and removing 2 BED_757 from ANY because it is only used in PBC/BHC and created there explicitly
+
+delete from T_LU where LU_CLASS = 'SIHOT_CATS_ANY' and LU_ID in ('2 BED_757');
+
+delete from T_LU where LU_CLASS = 'SIHOT_CATS_PBC' and LU_ID in ('1 BED_781', '2 BED_781', '3 BED_757', '3 BED_781');
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_PBC', '1 BED_781', '1 Bedroom Sea View', 414, 1, NULL,
+          '1JNB', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_PBC', '2 BED_781', '2 Bedroom Sea View', 424, 1, NULL,
+          '22SB', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_PBC', '3 BED_757', '3 Bedroom High Floor', 433, 1, NULL,
+          '3BPB', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_PBC', '3 BED_781', '3 Bedroom Sea View', 435, 1, NULL,
+          '3BPB', NULL, user, sysdate, user, sysdate);
+commit;
+
 
 prompt ... BHH overloads
 
@@ -106,12 +164,24 @@ insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DA
           '2BSS', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHH', '2 BED_752', '2 Bedroom duplex pool view', 223, 1, NULL,
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHH', '2 BED_752', '2 Bedroom duplex pool view', 222, 1, NULL,
           '2DDP', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHH', '2 BED_781', '2 Bedroom duplex sea view', 224, 1, NULL,
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHH', '2 BED_757', '2 Bedroom High Floor', 224, 1, NULL,
+          '2DDP', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHH', '2 BED_781', '2 Bedroom duplex sea view', 225, 1, NULL,
           '2DDS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHH', '3 BED_752', '3 Bedroom duplex', 232, 1, NULL,
+          '3BPS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_BHH', '3 BED_757', '3 Bedroom high floor', 233, 1, NULL,
+          '3BPS', NULL, user, sysdate, user, sysdate);
 commit;
 
 
@@ -120,11 +190,11 @@ prompt ... HMC overloads
 delete from T_LU where LU_CLASS = 'SIHOT_CATS_HMC';
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', 'STUDIO', 'Studio pool view', 302, 1, NULL,
-          'STDP', NULL, user, sysdate, user, sysdate);
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', 'STUDIO_757', 'Studio high floor', 303, 1, NULL,
+          'STDS', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', 'STUDIO_781', 'Studio sea view', 303, 1, NULL,
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', 'STUDIO_781', 'Studio sea view', 304, 1, NULL,
           'STDS', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
@@ -132,11 +202,15 @@ insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DA
           '1JNP', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '1 BED_757', '1 Bedroom view/high floor', 312, 1, NULL,
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '1 BED_752', '1 Bedroom duplex', 312, 1, NULL,
+          '1DDS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '1 BED_757', '1 Bedroom view/high floor', 313, 1, NULL,
           '1JNS', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '1 BED_781', '1 Bedroom etage/duplex sea view', 313, 1, NULL,
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '1 BED_781', '1 Bedroom etage/duplex sea view', 314, 1, NULL,
           '1DDS', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
@@ -144,23 +218,47 @@ insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DA
           '2BSP', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '2 BED_748', '2 Bedroom superior', 322, 1, NULL,
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '2 BED_748', '2 Bedroom Superior', 322, 1, NULL,
           '2BSS', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '2 BED_752', '2 Bedroom duplex', 323, 1, NULL,
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '2 BED_752', '2 Bedroom Duplex', 323, 1, NULL,
           '2DDO', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
-  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '2 BED_781', '2 Bedroom duplex sea view', 324, 1, NULL,
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '2 BED_757', '2 Bedroom Duplex High Floor', 324, 1, NULL,
+          '2BSS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '2 BED_781', '2 Bedroom Duplex Sea View', 325, 1, NULL,
           '2DDS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '3 BED', '3 Bedroom', 331, 1, NULL,
+          '3DDS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '3 BED_752', '3 Bedroom duplex', 332, 1, NULL,
+          '3DDS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '3 BED_757', '3 Bedroom high floor', 333, 1, NULL,
+          '3DDS', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
   values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '3 BED_781', '3 Bedroom duplex sea view', 334, 1, NULL,
           '3DDS', NULL, user, sysdate, user, sysdate);
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
                    LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '4 BED', '4 Bedroom penthouse', 341, 1, NULL,
+          '4BPS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
   values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '4 BED_752', '4 Bedroom penthouse', 343, 1, NULL,
+          '4BPS', NULL, user, sysdate, user, sysdate);
+insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
+                   LU_CHAR, LU_NUMBER, LU_CBY, LU_CWHEN, LU_MODBY, LU_MODWHEN )
+  values (S_LOOKUP_SEQ.nextval, 'SIHOT_CATS_HMC', '4 BED_757', '4 Bedroom high floor', 344, 1, NULL,
           '4BPS', NULL, user, sysdate, user, sysdate);
 commit;
 
@@ -258,6 +356,7 @@ update T_AP set AP_SIHOT_CAT = '2DDP' where AP_CODE = 'J725';
 update T_AP set AP_SIHOT_CAT = '2DDP' where AP_CODE = 'J726';
 update T_AP set AP_SIHOT_CAT = '2DDP' where AP_CODE = 'J727';
 update T_AP set AP_SIHOT_CAT = '2DDP' where AP_CODE = 'J728';
+update T_AP set AP_SIHOT_CAT = '2DDP' where AP_CODE = 'J729';
 update T_AP set AP_SIHOT_CAT = '2DDP' where AP_CODE = 'J730';
 update T_AP set AP_SIHOT_CAT = '1DDS' where AP_CODE = 'J731';
 update T_AP set AP_SIHOT_CAT = '1DDS' where AP_CODE = 'J732';
@@ -432,6 +531,7 @@ update T_AP set AP_SIHOT_CAT = '2BSU' where AP_CODE = '4301';
 update T_AP set AP_SIHOT_CAT = '2BSU' where AP_CODE = '4303';
 update T_AP set AP_SIHOT_CAT = '2BSU' where AP_CODE = '4304';
 update T_AP set AP_SIHOT_CAT = '2BSU' where AP_CODE = '4306';
+update T_AP set AP_SIHOT_CAT = '2BSS' where AP_CODE = '4308';
 update T_AP set AP_SIHOT_CAT = '1JNR' where AP_CODE = '4403';
 update T_AP set AP_SIHOT_CAT = '2BSU' where AP_CODE = '4404';
 update T_AP set AP_SIHOT_CAT = '1JNR' where AP_CODE = '4406';
@@ -469,6 +569,7 @@ update T_AP set AP_SIHOT_CAT = '1JNR' where AP_CODE = '5322';
 update T_AP set AP_SIHOT_CAT = '1JNR' where AP_CODE = '5324';
 update T_AP set AP_SIHOT_CAT = '1JNS' where AP_CODE = '5401';
 update T_AP set AP_SIHOT_CAT = '1JNS' where AP_CODE = '5402';
+update T_AP set AP_SIHOT_CAT = '2BSS' where AP_CODE = '5404';
 update T_AP set AP_SIHOT_CAT = '2BSU' where AP_CODE = '5418';
 update T_AP set AP_SIHOT_CAT = '2BSU' where AP_CODE = '5419';
 update T_AP set AP_SIHOT_CAT = '2BSU' where AP_CODE = '5422';
@@ -732,7 +833,11 @@ commit;
 prompt double-checking for sync amount and discrepancies
 
 -- nearly 80k
-select 'V_ACU_RES_FILTERED count=' || to_char(count(*)) from V_ACU_RES_FILTERED;
+select 'V_ACU_RES_FILTERED count=' || to_char(count(*))
+     , 'Future Only=' || sum(case when ARR_DATE >= trunc(sysdate) then 1 end) as Future_Only
+     , 'Present And Future=' || sum(case when DEP_DATE >= trunc(sysdate) then 1 end) as Present_And_Future
+     , 'Present And Next Month=' || sum(case when DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31 then 1 end) as Present_Plus_31Days
+  from V_ACU_RES_FILTERED;
 
 select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF
      , (select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as ROOM_HOTEL
@@ -742,7 +847,11 @@ select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RU
     or RUL_SIHOT_RATE is NULL
     or RUL_SIHOT_ROOM is not NULL and RUL_SIHOT_HOTEL <> nvl((select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')), -96);
 
-select 'V_ACU_RES_UNSYNCED count=' || to_char(count(*)) from V_ACU_RES_UNSYNCED;
+select 'V_ACU_RES_UNSYNCED count=' || to_char(count(*))
+     , 'Future Only=' || sum(case when ARR_DATE >= trunc(sysdate) then 1 end) as Future_Only
+     , 'Present And Future=' || sum(case when DEP_DATE >= trunc(sysdate) then 1 end) as Present_And_Future
+     , 'Present And Next Month=' || sum(case when DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31 then 1 end) as Present_Plus_31Days
+  from V_ACU_RES_UNSYNCED;
 
 select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF
   from V_ACU_RES_UNSYNCED where RUL_SIHOT_HOTEL in (2, 3);

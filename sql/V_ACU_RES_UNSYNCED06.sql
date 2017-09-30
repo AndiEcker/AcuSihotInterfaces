@@ -7,7 +7,7 @@ select *
    --and RU_CODE >= 1018389 -- 180046 are less/equal and 2058 are greater/equal
    --and RU_CODE = 1025884 --1024776  --1027947/TK@BHC --1018389/FB@BHH
    --and RUL_CODE = 4552688 -- adding this fixes the strange wrong RUL_SIHOT_HOTEL value error: 4 or 0 instead of 1
-   order by RUL_CODE
+   order by RUL_DATE, RUL_CODE
 /*
   ae:12-07-16 first beta of unsynced reservation changes for to be synced to SiHOT.
   ae:20-07-16 V01: removed apartment reservations, refactored for new T_SRSL, migrated resort filter from python project to here and migrated USED/MAINPROC filters onto V_ACU_RES_LOG. - NEVER ROLLED OUT.
@@ -15,6 +15,7 @@ select *
   ae:23-09-16 V03: now also allow to import reservation history (but only if room got assigned).
   ae:27-09-16 V04: added ROREF filter for deleted RUs and moved RO_SIHOT_RATE is not NULL filter to V_ACU_RES_CORE because else other resOcc types would also be migrated/synched.
   ae:30-09-16 V05: split into V_ACU_RES_FILTERED.
+  ae:17-09-17 V06: added RUL_DATE in order by clause for to ensure correct order for receycled/reused T_RUL records (done by P_RUL_INSERT()).
 */
 /
 

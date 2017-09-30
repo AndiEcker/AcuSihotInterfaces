@@ -8,7 +8,7 @@ cae = ConsoleApp(__version__, "Test SIHOT Kernel guest interface", debug_level_d
 cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
 cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
 
-cae.add_option('timeout', "Timeout value for TCP/IP connections", 39.6)
+cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
 cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')

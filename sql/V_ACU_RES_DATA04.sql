@@ -52,14 +52,13 @@ select RU_CODE
      --, '0' as SIHOT_ROOM_SEQ
      , case when abs(RU_STATUS) = 120 then 'S'
             --when RU_FROM_DATE > trunc(sysdate) and substr(RO_RES_GROUP, 1, 5) = 'Owner' and RU_RESORT <> 'BHC' then '5'  --- has to be changed if RUL_SIHOT_HOTEL differs
-            when RU_FROM_DATE > trunc(sysdate) and RU_ROREF in ('TK', 'tk') then 'K'   -- or use 'L' 
+            --when RU_FROM_DATE > trunc(sysdate) and RU_ROREF in ('TK', 'tk') then 'K'   -- or use 'L' 
             else '1' end as SIHOT_RES_TYPE
-     , --case when RU_FROM_DATE > trunc(sysdate) then case --when RU_ROREF in ('TK', 'tk') then 5
-       --                                                  when substr(RO_RES_GROUP, 1, 5) = 'Owner' and RU_RESORT <> 'BHC' then 15 end end
-       case when RU_FROM_DATE > trunc(sysdate) and RU_ROREF in ('TK', 'tk') then  case RU_RESORT  when 'BHC' then case RU_ROREF when 'TK' then 11 when 'tk' then 12 end
-                                                                                                  when 'PBC' then case RU_ROREF when 'TK' then 12 when 'tk' then 13 end end 
-       end as SIHOT_ALLOTMENT_NO  -- has to be changed if RUL_SIHOT_HOTEL differs
-     , case when RU_ROREF in ('TK', 'tk') then '1' else '0' end as SIHOT_PAYMENT_INST
+     --, case when RU_FROM_DATE > trunc(sysdate) and RU_ROREF in ('TK', 'tk') then  case RU_RESORT  when 'BHC' then case RU_ROREF when 'TK' then 11 when 'tk' then 12 end
+     --                                                                                             when 'PBC' then case RU_ROREF when 'TK' then 12 when 'tk' then 13 end end 
+     --end as SIHOT_ALLOTMENT_NO  -- has to be changed if RUL_SIHOT_HOTEL differs - MEANWHILE CONFIGERED VIA CFG FILE
+     --, case when RU_ROREF in ('TK', 'tk') then '1' else '0' end as SIHOT_PAYMENT_INST   -- MEANWHILE CONFIGERED VIA CFG FILE
+     , '0' as SIHOT_PAYMENT_INST
      -- optional (now includeed into TEC-COMMENT): requested apartment features and special requests
      --, (select listagg(AFT_DESC, ',') within group (order by AFT_DESC) from T_RAF, T_AFT where RAF_AFTREF = AFT_CODE and RAF_RUREF = RU_CODE) as SIHOT_REQ_APT_FEATURES
      --, (select listagg(PX_ALPHA, ',') within group (order by PX_ALPHA) from T_SR, T_PX where SR_PXREF = PX_CODE and (SR_WHICHTABLE = 'RU' and SR_RDREF = RU_CODE  --or  SR_WHICHTABLE = 'RD' and SR_RDREF = F_ARO_CODE() ))
@@ -73,6 +72,7 @@ select RU_CODE
   ae:27-09-16 V01: added market source groups RO_SIHOT_RES_GROUP/RO_SIHOT_SP_GROUP.
   ae:05-10-16 V02: renamed from V_ACU_RES_CORE to V_ACU_RES_DATA (similar to the V_ACU_CD_* views).
   ae:01-11-16 V03: added new SIHOT_-columns (reservation type, allotment-no, special requests, guest surcharge, apartment features).
+  ae:20-09-17 V04: removed most of the hard-coded TK/tk/TC exceptions (now done via cfg settings).
 */
 /
 

@@ -15,6 +15,7 @@ DEBUG_LEVEL_ENABLED = 1
 DEBUG_LEVEL_VERBOSE = 2
 DEBUG_LEVEL_TIMESTAMPED = 3
 _debug_level = DEBUG_LEVEL_DISABLED
+debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
 
 # default name of main config section
 MAIN_SECTION_DEF = 'Settings'
@@ -176,7 +177,7 @@ class _DuplicateSysOut:
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, main_section=MAIN_SECTION_DEF, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 log_file_def='', config_eval_vars=None, additional_cfg_fnam=None):
+                 log_file_def='', config_eval_vars=None, additional_cfg_files=None):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version          application version.
             :param app_desc             application description.
@@ -185,7 +186,7 @@ class ConsoleApp:
             :param log_file_def         default log file name.
             :param config_eval_vars     dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
-            :param additional_cfg_fnam  additional CFG/INI file name (including relative path from app_path).
+            :param additional_cfg_files list of additional CFG/INI file names (opt. incl. abs/rel. path).
         """
         self._main_section = main_section
         self.config_eval_vars = config_eval_vars or dict()
@@ -216,18 +217,30 @@ class ConsoleApp:
         INI_EXT = '.ini'
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
         app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
-        config_files = [os.path.join(cwd_path, '.console_app_env.cfg'), os.path.join(app_path, '.console_app_env.cfg'),
+        config_files = [os.path.join(app_path, '.console_app_env.cfg'), os.path.join(cwd_path, '.console_app_env.cfg'),
                         app_path_fnam + '.cfg', app_path_fnam + INI_EXT,
                         cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT,
                         ]
-        if additional_cfg_fnam:
-            config_files.append(os.path.join(app_path, additional_cfg_fnam))
+        if additional_cfg_files:
+            for cfg_fnam in additional_cfg_files:
+                add_cfg_path_fnam = os.path.join(cwd_path, cfg_fnam)
+                if os.path.isfile(add_cfg_path_fnam):
+                    config_files.append(add_cfg_path_fnam)
+                else:
+                    add_cfg_path_fnam = os.path.join(app_path, cfg_fnam)
+                    if os.path.isfile(add_cfg_path_fnam):
+                        config_files.append(add_cfg_path_fnam)
+                    elif os.path.isfile(cfg_fnam):
+                        config_files.append(cfg_fnam)
+                    else:
+                        uprint("****  Additional config file {} not found!".format(cfg_fnam))
+
         # last existing INI/CFG file is default config file to write to
         for cfg_fnam in reversed(config_files):
             if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
                 self._cfg_fnam = cfg_fnam
                 break
-        else:   # .. and if there is no INI file at all then create a INI file in the cwd
+        else:   # .. and if there is no INI file at all then create a <APP_NAME>.INI file in the cwd
             self._cfg_fnam = cwd_path_fnam + INI_EXT
 
         self._cfg_parser = ConfigParser()
@@ -236,8 +249,7 @@ class ConsoleApp:
 
         self._arg_parser = ArgumentParser(description=app_desc)
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
-                        choices=(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
-                                 DEBUG_LEVEL_TIMESTAMPED))
+                        choices=debug_levels.keys())
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
 
     @staticmethod
@@ -342,18 +354,19 @@ class ConsoleApp:
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self._options['debugLevel']['val']
         if _debug_level:
-            uprint("Debug Level (" + str(DEBUG_LEVEL_VERBOSE) + "=verbose):", _debug_level)
+            uprint("Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):", _debug_level)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
-            uprint("System Environment: argv[0]=", sys.argv[0],
-                   "executable=", sys.executable,
-                   "cwd=", os.getcwd(),
-                   "__file__=", __file__,
-                   "frozen=", getattr(sys, 'frozen', False),
-                   "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*') if getattr(sys, 'frozen', False)
-                   else os.path.dirname(os.path.abspath(__file__)),
-                   "main-cfg=", self._cfg_fnam)
+            uprint("System Environment:")
+            uprint(" "*18, "argv      =", str(sys.argv))
+            uprint(" "*18, "executable=", sys.executable)
+            uprint(" "*18, "cwd       =", os.getcwd())
+            uprint(" "*18, "__file__  =", __file__)
+            uprint(" "*18, "frozen    =", getattr(sys, 'frozen', False))
+            if getattr(sys, 'frozen', False):
+                uprint(" "*18, "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*'))
+            uprint(" "*18, "main-cfg  =", self._cfg_fnam)
         if log_file:
-            uprint('Log file: ' + log_file)
+            uprint('Log file:', log_file)
 
         self._args_parsed = True
 

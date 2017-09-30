@@ -23,6 +23,28 @@ This interface suite project is including the following command line tools:
 | WatchPupPy | Periodically execute and supervise command | - |
 | WebRestTester | Reservation interface testing tool | Web |
 
+
+### General installation instructions
+
+Most of the command line tools don't have a GUI (graphical user interface) - these need only to be distributed/provided
+into any folder where the user has execution permissions (e.g. in Windows in C:\Program Files or on any network drive).
+
+For applications of this project with an GUI (like e.g. SihotResImport or AcuSihotMonitor) please first copy the EXE
+file and KV file of the application to any folder where the user has execution privileges. Then the following steps need 
+to be done to install it for each single user on the users machine:
+
+* Create a new folder with the name if the application (e.g. SihotResImport) under %LOCALAPPDATA% (in Windows situated
+ normally under C:\users\<user name>\AppData\Local\ if the user has the profile on the local C: drive, else within the
+ AppData\Local folder of the user profile located on our servers).
+
+* Copy the INI file of the application (e.g. SihotResImport.ini) into this folder (created in the last step).
+
+* Create a new shortcut on the user’s desktop with the application name (e.g. “Sihot Reservation Import”). Then within
+ the target field put the full absolute path to application EXE file (e.g. “U:\tools\SihotResImport\SihotResImport.exe”).
+ And finally put the path of the new folder created in the first step (e.g. “C:\Users\<user name>\AppData\Local\SihotResImport”) 
+ into the Start In field of the shortcut. 
+
+ 
 ### General command line arguments
 
 Most of the available commands are using the same command line options. All names of the following command line options
@@ -70,7 +92,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
-| timeout | Timeout in seconds for TCP/IP connections | 39.6 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| timeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync |
@@ -149,6 +171,11 @@ Allows to specify/change the content of the data row columns exported CSV file. 
 Combined Console/Kivy Application for to import reservation bookings, changes and cancellations from CSV or JSON files
 into the Sihot system.
 
+Apart from the instruction in the _General Installation Instructions_ section (see above) you also have to create
+an import path folder for each supported import channel (e.g. C:\JSON_Import). The same path name has to be specified
+as command line argument when you start the SihotResImport application (see next paragraph). Please note that the user
+need to have full access (read, write and create folder privileges) within each of these import channel folders. 
+
 The provided command line parameters are documented above in the section "General command line arguments". The most
 import is `jsonPath` for to specify the import path and file mask for OTA JSON files - this value defaults 
 to `C:/JSON_Import/*.json`.
@@ -158,7 +185,7 @@ Acumen user name (acuUser) and password (acuPassword) as command line parameters
 
 There are four command line parameters specifying the used Sihot server (production or test): `serverIP` is the DNS name
 or IP address of the SIHOT interface server, `serverPort` is the IP port of the used WEB interface and optionally
-you can specify via `timeout` the timeout value in seconds for TCP/IP connections (default=39.6) and via `xmlEncoding`
+you can specify via `timeout` the timeout value in seconds for TCP/IP connections (default=69.3) and via `xmlEncoding`
 the charset encoding used for the xml data (default='cp1252').
 
 Meanwhile and for to check the client data against our Salesforce system this application needs also a user account for
@@ -472,11 +499,11 @@ and `MKT_BOARDS` (only for marketing bookings).
 
 For to create tour operator bookings via the WEB interface you need to specify the internal number of the allotment
 contract. This internal allotment contract number is nowhere visible in the GUI of Sihot.PMS and has to be determined
-by Michael after the creation of the allotment in Sihot.
+by Michael after the creation of the allotment in Sihot. UPDATE: the new version is showing the allotment number.
 
 Each hotel and tour operator has a individual internal allotment contract number. So for our two tour operators Thomas
 Cook Northern/Scandinavia and U.K. for the two initial hotels (1 and 4) we need to configure four numbers, which are
-currently specified within the database view `V_ACU_RES_DATA` in the expression of column `SIHOT_ALLOTMENT_NO`. 
+now specified within the new config file SihotMktSegExceptions.cfg. 
 
 
 ### Configuration files
