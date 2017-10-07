@@ -5,6 +5,27 @@ from sxmlif import SihotXmlParser, Response, GuestFromSihot, ResFromSihot, Sihot
     USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF
 
 
+class TestAvailCats:
+    def test_error_with_invalid_cat(self, avail_cats):
+        ret = avail_cats.avail_rooms('XxYy')
+        assert isinstance(ret, dict)
+        assert len(ret) == 0
+        assert avail_cats.response.rc == '0'
+
+    def test_error_with_invalid_hotel(self, avail_cats):
+        ret = avail_cats.avail_rooms('STDO', hotel_id='963')
+        assert isinstance(ret, dict)
+        assert len(ret) == 0
+        assert 'unknown system id' in avail_cats.response.msg
+
+    def test_avail_rooms_with_studio_cat(self, avail_cats):
+        day = datetime.date(2017, 10, 7)
+        ret = avail_cats.avail_rooms('STDO', hotel_id='4', from_date=day, to_date=day)
+        assert isinstance(ret, dict)
+        assert len(ret)
+        assert 'STDO' in ret
+
+
 class TestSihotXmlParser:
     XML_EXAMPLE = '''<?xml version="1.0" encoding="iso-8859-1"?>
     <SIHOT-Document>
@@ -308,25 +329,21 @@ class TestSihotXmlBuilder:
                 '<DATE>' + test_date + '</DATE>\n</SIHOT-Document>'
 
 
-class TestGuestInfo:
-    def test_get_objid_by_matchcode(self, guest_info, create_test_guest):
-        ret = guest_info.get_objid_by_matchcode(create_test_guest.matchcode)
-        assert ret == create_test_guest.objid
-
-    def test_get_guest_with_test_client(self, guest_info, create_test_guest):
-        ret = guest_info.get_guest(create_test_guest.objid)
-        assert guest_info.response.objid == create_test_guest.objid     # OBJID passed only to response (ret is empty)
+class TestGuestSearch:
+    def test_get_guest_with_test_client(self, guest_search, create_test_guest):
+        ret = guest_search.get_guest(create_test_guest.objid)
+        assert guest_search.response.objid == create_test_guest.objid     # OBJID passed only to response (ret is empty)
         # also MATCHCODE element is in response (and empty in ret): assert ret['MATCHCODE']==create_test_guest.matchcode
-        assert guest_info.response.matchcode == create_test_guest.matchcode
-        assert guest_info.response.objid == create_test_guest.objid
+        assert guest_search.response.matchcode == create_test_guest.matchcode
+        assert guest_search.response.objid == create_test_guest.objid
         assert ret['NAME-1'] == create_test_guest.surname
         assert ret['NAME-2'] == create_test_guest.forename
         assert ret['T-GUEST'] == create_test_guest.guest_type
 
-    def test_get_guest_with_10_ext_refs(self, guest_info):
-        objid = guest_info.get_objid_by_matchcode('E396693')
+    def test_get_guest_with_10_ext_refs(self, guest_search):
+        objid = guest_search.get_objid_by_matchcode('E396693')
         assert objid
-        ret = guest_info.get_guest(objid)
+        ret = guest_search.get_guest(objid)
         assert ret['MATCH-ADM'] == '4806-00208'
         assert 'RCI' in ret['TYPE']
         assert 'RCIP' in ret['TYPE']
@@ -335,6 +352,68 @@ class TestGuestInfo:
         assert '5-207931' in ret['ID']
         # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
         # .. so this one fails: assert '1442-11521' in ret['ID']
+
+    def test_get_guest_nos_by_matchcode(self, guest_search):
+        guest_nos = guest_search.get_guest_nos_by_matchcode('OTS')
+        assert '31' in guest_nos
+        guest_nos = guest_search.get_guest_nos_by_matchcode('SF')
+        assert '62' in guest_nos
+        guest_nos = guest_search.get_guest_nos_by_matchcode('TCAG')
+        assert '12' in guest_nos
+        guest_nos = guest_search.get_guest_nos_by_matchcode('TCRENT')
+        assert '19' in guest_nos
+
+    def test_get_objid_by_guest_no(self, guest_search):
+        obj_id1 = guest_search.get_objid_by_guest_no(31)
+        obj_id2 = guest_search.get_objid_by_matchcode('OTS')
+        assert obj_id1 == obj_id2
+        obj_id1 = guest_search.get_objid_by_guest_no(62)
+        obj_id2 = guest_search.get_objid_by_matchcode('SF')
+        assert obj_id1 == obj_id2
+        obj_id1 = guest_search.get_objid_by_guest_no(12)
+        obj_id2 = guest_search.get_objid_by_matchcode('TCAG')
+        assert obj_id1 == obj_id2
+        obj_id1 = guest_search.get_objid_by_guest_no('19')
+        obj_id2 = guest_search.get_objid_by_matchcode('TCRENT')
+        assert obj_id1 == obj_id2
+
+    def test_get_objids_by_guest_names(self, guest_search):
+        obj_ids = guest_search.get_objids_by_guest_names('OTS Open Travel Services AG', '')
+        obj_id = guest_search.get_objid_by_matchcode('OTS')
+        assert obj_id in obj_ids
+        obj_ids = guest_search.get_objids_by_guest_names('Sumar Ferdir', '')
+        obj_id = guest_search.get_objid_by_matchcode('SF')
+        assert obj_id in obj_ids
+        obj_ids = guest_search.get_objids_by_guest_names('Thomas Cook AG', '')
+        obj_id = guest_search.get_objid_by_matchcode('TCAG')
+        assert obj_id in obj_ids
+        obj_ids = guest_search.get_objids_by_guest_names('Thomas Cook Northern Europe', '')
+        obj_id = guest_search.get_objid_by_matchcode('TCRENT')
+        assert obj_id in obj_ids
+
+    def test_get_objids_by_email(self, guest_search):
+        obj_ids = guest_search.get_objids_by_email('info@opentravelservice.com')
+        obj_id = guest_search.get_objid_by_matchcode('OTS')
+        assert obj_id in obj_ids
+        obj_id = guest_search.get_objid_by_matchcode('SF')
+        assert obj_id in obj_ids
+
+    def test_get_objid_by_matchcode(self, guest_search):
+        assert guest_search.get_objid_by_matchcode('OTS') == '69'
+        assert guest_search.get_objid_by_matchcode('SF') == '100'
+        assert guest_search.get_objid_by_matchcode('TCAG') == '20'
+        assert guest_search.get_objid_by_matchcode('TCRENT') == '27'
+
+    def test_get_objid_by_matchcode2(self, guest_search, create_test_guest):
+        ret = guest_search.get_objid_by_matchcode(create_test_guest.matchcode)
+        assert ret == create_test_guest.objid
+
+    def test_search_agencies(self, guest_search):
+        ags = guest_search.search_agencies()
+        assert [_ for _ in ags if _['MATCHCODE'] == 'OTS' and _['OBJID'] == '69']
+        assert [_ for _ in ags if _['MATCHCODE'] == 'SF' and _['OBJID'] == '100']
+        assert [_ for _ in ags if _['MATCHCODE'] == 'TCAG' and _['OBJID'] == '20']
+        assert [_ for _ in ags if _['MATCHCODE'] == 'TCRENT' and _['OBJID'] == '27']
 
 
 class TestClientFromAcuToSihot:

@@ -852,11 +852,9 @@ class RoomChange(SihotXmlParser):
 class Response(SihotXmlParser):  # response xml parser for kernel or web interfaces
     def __init__(self, ca):
         super(Response, self).__init__(ca)
-        # guest/client interface response elements
+        # web and kernel (guest/client) interface response elements
         self._base_tags.append('MATCHCODE')
         self.matchcode = None  # added for to remove pycharm warning
-        self._base_tags.append('GUEST-NR')  # used only by GuestSearch
-        self.guest_nr = None
         # reservation interface response elements
         self._base_tags += ('OBJID', 'GDSNO')  # , 'RESERVATION ACCOUNT-ID')
         self.objid = None
@@ -874,21 +872,24 @@ class Response(SihotXmlParser):  # response xml parser for kernel or web interfa
         return tag
 
 
-class ConfigDictResponse(Response):
+class AvailCatsResponse(Response):
     def __init__(self, ca):
-        super(ConfigDictResponse, self).__init__(ca)
-        # guest/client interface response elements
-        self._base_tags += ('KEY', 'VALUE')  # VALUE for key value (remove from additional error info - see 'VALU')
-        self.value = None  # added for to remove pycharm warning
-        self.key = None
-        self.key_values = dict()  # for to store the dict with all key values
+        super(AvailCatsResponse, self).__init__(ca)
+        self._curr_cat = None
+        self._curr_day = None
+        self.avail_room_cats = dict()
 
-    def end(self, tag):
-        if super(ConfigDictResponse, self).end(tag) is None:
-            return None  # tag used/processed by base class
-        elif tag == 'SIHOT-CFG':
-            self.key_values[self.key] = self.value
-        return tag
+    def data(self, data):
+        if super(AvailCatsResponse, self).__init__(data) is None:
+            return None
+        if self._curr_tag == 'CAT':
+            self.avail_room_cats[data] = dict()
+            self._curr_cat = data
+        elif self._curr_tag == 'D':
+            self._curr_day = data
+        elif self._curr_tag == 'NO':
+            self.avail_room_cats[self._curr_cat][self._curr_day] = int(data)
+        return data
 
 
 class CatRoomResponse(Response):
@@ -910,7 +911,24 @@ class CatRoomResponse(Response):
         return tag
 
 
-class GuestInfoResponse(Response):
+class ConfigDictResponse(Response):
+    def __init__(self, ca):
+        super(ConfigDictResponse, self).__init__(ca)
+        # guest/client interface response elements
+        self._base_tags += ('KEY', 'VALUE')  # VALUE for key value (remove from additional error info - see 'VALU')
+        self.value = None  # added for to remove pycharm warning
+        self.key = None
+        self.key_values = dict()  # for to store the dict with all key values
+
+    def end(self, tag):
+        if super(ConfigDictResponse, self).end(tag) is None:
+            return None  # tag used/processed by base class
+        elif tag == 'SIHOT-CFG':
+            self.key_values[self.key] = self.value
+        return tag
+
+
+class GuestSearchResponse(Response):
     def __init__(self, ca, ret_elem_names=None, key_elem_name=None):
         """ ret_elem_names is a list of xml element names (or response attributes) to return. If there is only one
              list element with a leading ':' character then self.ret_elem_values will be a dict with the search value
@@ -922,7 +940,10 @@ class GuestInfoResponse(Response):
 
             key_elem_name is the element name used for the search (only needed if self._return_value_as_key==True)
         """
-        super(GuestInfoResponse, self).__init__(ca)
+        super(GuestSearchResponse, self).__init__(ca)
+        self._base_tags.append('GUEST-NR')
+        self.guest_nr = None
+
         self._key_elem_name = key_elem_name
         if not ret_elem_names:
             ret_elem_names = [_['elemName'] for _ in MAP_KERNEL_CLIENT]
@@ -935,14 +956,14 @@ class GuestInfoResponse(Response):
         self._col_map_parser = ColMapXmlParser(ca, deepcopy(MAP_KERNEL_CLIENT))
 
     def parse_xml(self, xml):
-        super(GuestInfoResponse, self).parse_xml(xml)
+        super(GuestSearchResponse, self).parse_xml(xml)
         self._key_elem_index = 0
         self._in_guest_profile = False
 
     def start(self, tag, attrib):
         if self._in_guest_profile:
             self._col_map_parser.start(tag, attrib)
-        if super(GuestInfoResponse, self).start(tag, attrib) is None:
+        if super(GuestSearchResponse, self).start(tag, attrib) is None:
             return None  # processed by base class
         if tag == 'GUEST-PROFILE':
             self._key_elem_index += 1
@@ -953,7 +974,7 @@ class GuestInfoResponse(Response):
     def data(self, data):
         if self._in_guest_profile:
             self._col_map_parser.data(data)
-        if super(GuestInfoResponse, self).data(data) is None:
+        if super(GuestSearchResponse, self).data(data) is None:
             return None  # processed by base class
         return data
 
@@ -968,7 +989,7 @@ class GuestInfoResponse(Response):
             else:
                 keys = self._ret_elem_names
                 if len(keys) == 1:
-                    self.ret_elem_values.append(getattr(self, self.ret_elem_values[0]))
+                    self.ret_elem_values.append(getattr(self, keys[0]))
                 else:
                     values = dict()
                     for key in keys:
@@ -981,7 +1002,7 @@ class GuestInfoResponse(Response):
                             elem.pop('elemVal')
                     self.ret_elem_values.append(values)
         # for completeness call also SihotXmlParser.end() and ColMapXmlParser.end()
-        return super(GuestInfoResponse, self).end(self._col_map_parser.end(tag))
+        return super(GuestSearchResponse, self).end(self._col_map_parser.end(tag))
 
 
 class ColMapXmlParser(SihotXmlParser):
@@ -1300,19 +1321,20 @@ class AcuServer(SihotXmlBuilder):
 
 
 class AvailCats(SihotXmlBuilder):
-    def avail_rooms(self, hotel_id='1', from_date=datetime.date.today(), to_date=datetime.date.today(),
-                    scope=None):
-        self.beg_xml(operation_code='AV')
+    def avail_rooms(self, room_cat, hotel_id='1', from_date=datetime.date.today(), to_date=datetime.date.today(),
+                    flags='SKIP-HIDDEN-ROOM-TYPES'):
+        self.beg_xml(operation_code='AVR')
         self.add_tag('ID', hotel_id)  # mandatory
-        self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))  # mandatory
+        self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))     # mandatory
         self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
-        if scope:
-            self.add_tag('SCOPE', scope)  # pass 'DESC' for to get room description
+        self.add_tag('CAT', room_cat)                                           # mandatory
+        if flags:
+            self.add_tag('FLAGS', flags)
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=CatRoomResponse(self.ca))
+        err_msg = self.send_to_server(response_parser=AvailCatsResponse(self.ca))
 
-        return err_msg or self.response.cat_rooms
+        return err_msg or self.response.avail_room_cats
 
 
 class CatRooms(SihotXmlBuilder):
@@ -1469,7 +1491,7 @@ class GuestSearch(SihotXmlBuilder):
                      self.prepare_map_xml({'CD_SIHOT_OBJID': obj_id}, action=ACTION_SEARCH, include_empty_values=False))
         self.end_xml()
 
-        rp = GuestInfoResponse(self.ca)
+        rp = GuestSearchResponse(self.ca)
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
             ret = self.response.ret_elem_values[0]
@@ -1480,7 +1502,7 @@ class GuestSearch(SihotXmlBuilder):
             ret = None
         return ret
 
-    def get_guest_no_by_matchcode(self, matchcode, exact_matchcode=True):
+    def get_guest_nos_by_matchcode(self, matchcode, exact_matchcode=True):
         col_values = {'CD_CODE': matchcode,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
@@ -1490,16 +1512,17 @@ class GuestSearch(SihotXmlBuilder):
         col_values = {'SH_GUEST_NO': guest_no,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(col_values, ['objid'])
+        ret = self.search_guests(col_values, ['objid'])
+        return ret[0] if len(ret) > 0 else None
 
-    def get_objid_by_guest_names(self, surname, forename):
+    def get_objids_by_guest_names(self, surname, forename):
         col_values = {'CD_SNAM1': surname,
                       'CD_FNAM1': forename,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
         return self.search_guests(col_values, ['objid'])
 
-    def get_objid_by_email(self, email):
+    def get_objids_by_email(self, email):
         col_values = {'CD_EMAIL': email,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
@@ -1530,7 +1553,7 @@ class GuestSearch(SihotXmlBuilder):
                      self.prepare_map_xml(col_values, action=ACTION_SEARCH, include_empty_values=False))
         self.end_xml()
 
-        rp = GuestInfoResponse(self.ca, ret_elem_names, key_elem_name=key_elem_name)
+        rp = GuestSearchResponse(self.ca, ret_elem_names, key_elem_name=key_elem_name)
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
             ret = self.response.ret_elem_values
@@ -1628,29 +1651,29 @@ class ResToSihot(SihotXmlBuilder):
         self._warning_msgs = ""
         self._gds_err_rows = dict()
 
-    def _fetch_from_acu(self, view, where_group_order, date_range):
+    def _fetch_from_acu(self, view, where_group_order, date_range, hints=''):
         if date_range == 'H':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE < trunc(sysdate)"
         elif date_range == 'M':
             where_group_order += (" and " if where_group_order else "") \
                                  + "DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31"
         elif date_range and date_range[0] == 'Y':     # temporary/interim solution for migration of BHH/HMC - plan B
-            rows_str = date_range[1:] or "150"
-            where_group_order += (" and " if where_group_order else "") \
-                + "(DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31" \
+            where_group_order += (" and (" if where_group_order else "") \
+                + "DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31" \
                 + " or RUL_SIHOT_HOTEL in (1, 4, 999) or RUL_SIHOT_LAST_HOTEL in (1, 4, 999)" \
-                + " or ROWNUM < " + rows_str + ")"
+                + (" or ROWNUM <= " + date_range[1:6] if date_range[1:] else "") \
+                + (")" if where_group_order else "")
         elif date_range == 'P':
             where_group_order += (" and " if where_group_order else "") + "DEP_DATE >= trunc(sysdate)"
         elif date_range == 'F':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE >= trunc(sysdate)"
-        err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order)
+        err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order, hints=hints)
         if not err_msg:
             self.fetch_all_from_acu()
         return err_msg
 
     def fetch_from_acu_by_aru(self, where_group_order='', date_range=''):
-        return self._fetch_from_acu('V_ACU_RES_UNSYNCED', where_group_order, date_range)
+        return self._fetch_from_acu('V_ACU_RES_UNSYNCED', where_group_order, date_range, hints='/*+ NO_CPU_COSTING */')
 
     def fetch_from_acu_by_cd(self, acu_id, date_range=''):
         where_group_order = "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
@@ -1845,7 +1868,7 @@ class ResToSihot(SihotXmlBuilder):
         return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.ca.get_option('debugLevel') else "")
 
     def res_id_values(self, crow):
-        return str((crow.get('SIHOT_GDSNO') if crow.get('SIHOT_GDSNO') else crow.get('RUL_PRIMARY'))) + \
+        return str(crow.get('SIHOT_GDSNO')) + \
                "/" + str(crow.get('RH_EXT_BOOK_REF')) + \
                "/" + str(crow.get('CD_CODE')) + "/" + str(crow.get('RUL_SIHOT_RATE')) + \
                ("/" + str(crow.get('RUL_PRIMARY')) + "/" + str(crow.get('RUL_CODE'))

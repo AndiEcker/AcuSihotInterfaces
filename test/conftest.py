@@ -5,13 +5,28 @@ import pytest
 from configparser import ConfigParser
 from ae_db import OraDB
 from acu_sf_sh_sys_data import AssSysData
-from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot
+from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot, AvailCats
 from sfif import prepare_connection
 
 
 @pytest.fixture(scope="module")
 def console_app_env():
     return ConsoleApp()
+
+
+@pytest.fixture()
+def acu_guest(console_app_env):
+    return ClientToSihot(console_app_env)
+
+
+@pytest.fixture()
+def acu_res(console_app_env):
+    return ResToSihot(console_app_env)
+
+
+@pytest.fixture()
+def avail_cats(console_app_env):
+    return AvailCats(console_app_env)
 
 
 @pytest.fixture()
@@ -28,11 +43,6 @@ def config_data(console_app_env):
 
 
 @pytest.fixture()
-def post_message(console_app_env):
-    return PostMessage(console_app_env)
-
-
-@pytest.fixture()
 def config_dict(console_app_env):
     return ConfigDict(console_app_env)
 
@@ -43,18 +53,13 @@ def cat_rooms(console_app_env):
 
 
 @pytest.fixture()
-def guest_info(console_app_env):
+def guest_search(console_app_env):
     return GuestSearch(console_app_env)
 
 
 @pytest.fixture()
-def acu_guest(console_app_env):
-    return ClientToSihot(console_app_env)
-
-
-@pytest.fixture()
-def acu_res(console_app_env):
-    return ResToSihot(console_app_env)
+def post_message(console_app_env):
+    return PostMessage(console_app_env)
 
 
 @pytest.fixture()
@@ -138,9 +143,12 @@ class ConsoleApp:
                              phoneValidatorApiKey=cfg.get('Settings', 'phoneValidatorApiKey'),
                              )
 
-    def get_config(self, name, default_value=None):
-        ret = self._options[name] if name in self._options else default_value
-        uprint('ConsoleAppMock.get_config', name, '=', ret)
+    def get_config(self, name, section=None, default_value=None):
+        if section == 'SihotRateSegments':
+            ret = 'CMM'     # quick fix for tests (for full fix need to include SihotMktSegExceptions.cfg)
+        else:
+            ret = self._options[name] if name in self._options else default_value
+        uprint('ConsoleAppMock.get_config', name, '=', ret, 'section=' + str(section))
         return ret
 
     def get_option(self, name, default_value=None):

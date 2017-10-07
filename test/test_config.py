@@ -1,10 +1,10 @@
 class TestTourOps:
-    def test_missing_agencies_in_sihot(self, db_connected, guest_info):
+    def test_missing_agencies_in_sihot(self, db_connected, guest_search):
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
                             "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
-        ags = guest_info.search_agencies()
+        ags = guest_search.search_agencies()
 
         failures = list()
         for row in rows:
@@ -23,8 +23,8 @@ class TestTourOps:
                 print(f)
         assert not failures
 
-    def test_missing_agencies_in_acumen(self, guest_info, db_connected):
-        ags = guest_info.search_agencies()
+    def test_missing_agencies_in_acumen(self, guest_search, db_connected):
+        ags = guest_search.search_agencies()
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
                             "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
         rows = db_connected.fetch_all()
@@ -48,31 +48,51 @@ class TestTourOps:
                 print(f)
         assert not failures
 
-    def test_get_thomas_cook_ag_objid_by_matchcode(self, guest_info, db_connected):
+    def test_get_thomas_cook_ag_objid_by_matchcode(self, guest_search, db_connected):
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
         rows = db_connected.fetch_all()
         db_connected.close()
         obj_id = str(rows[0][0])
         mc = rows[0][1]                                     # == 'TCAG'
         assert mc == 'TCAG'
-        ret = guest_info.get_objid_by_matchcode(mc)         # tk rental (AG)
+        ret = guest_search.get_objid_by_matchcode(mc)       # tk rental (AG)
         assert ret == obj_id                                # == '20'
 
-    def test_get_thomas_cook_rental_objid_by_matchcode(self, guest_info, db_connected):
+    def test_get_thomas_cook_rental_objid_by_matchcode(self, guest_search, db_connected):
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
         rows = db_connected.fetch_all()
         db_connected.close()
         obj_id = str(rows[0][0])
         mc = rows[0][1]                                     # == 'TCRENT'
         assert mc == 'TCRENT'
-        ret = guest_info.get_objid_by_matchcode(mc)         # TK rentals
+        ret = guest_search.get_objid_by_matchcode(mc)       # TK rentals
         assert ret == obj_id                                # == '27'
 
-    def test_config_data_get_thomas_cook_agency(self, guest_info, config_data):
+    def test_config_data_get_thomas_cook_agency(self, guest_search, config_data):
         mc = config_data.get_ro_agency_matchcode('TK')
-        obj_id = guest_info.get_objid_by_matchcode(mc)
+        obj_id = guest_search.get_objid_by_matchcode(mc)
         objid = str(config_data.get_ro_agency_objid('TK'))
         assert obj_id == objid
+
+    def test_get_thomas_cook_by_surname(self, guest_search):
+        obj_ids = guest_search.get_objids_by_guest_names('Thomas Cook Northern Europe', '')
+        obj_id = guest_search.get_objid_by_matchcode('TCRENT')      # TK rentals
+        assert obj_ids[0] == obj_id
+
+    def test_get_objids_by_email(self, guest_search):
+        obj_ids = guest_search.get_objids_by_email('info@opentravelservice.com')
+        obj_id = guest_search.get_objid_by_matchcode('OTS')         # Open Travel Service AG
+        assert obj_id in obj_ids
+        obj_id = guest_search.get_objid_by_matchcode('SF')          # strange: Sumar Ferdir has same email
+        assert obj_id in obj_ids
+
+    def test_get_objid_by_guest_no(self, guest_search):
+        obj_id1 = guest_search.get_objid_by_guest_no(31)
+        obj_id2 = guest_search.get_objid_by_matchcode('OTS')        # Open Travel Service AG
+        assert obj_id1 == obj_id2
+        obj_id1 = guest_search.get_objid_by_guest_no(62)
+        obj_id2 = guest_search.get_objid_by_matchcode('SF')         # Sumar Ferdir
+        assert obj_id1 == obj_id2
 
 
 class TestSystem:
@@ -213,7 +233,7 @@ class TestSystem:
         db_connected.close()
         cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='3')
         assert isinstance(cat_room_dict, dict)
-        err = ''
+        err = sql = ''
         for ap_code, ap_sihot_cat in rows:
             if ap_sihot_cat not in cat_room_dict:
                 err += "\nroom category {} from Acumen is not defined in Sihot".format(ap_sihot_cat)
@@ -223,6 +243,8 @@ class TestSystem:
                     if ap_code in v:
                         sh_cat += '/' + k
                 err += "\n{} is room category {} in Acumen but {} in Sihot".format(ap_code, ap_sihot_cat, sh_cat[1:])
+                sql += "\nupdate T_AP set AP_SIHOT_CAT = '{}' where AP_CODE = '{}';".format(sh_cat[1:], ap_code)
+        print(sql)
         assert not err
 
         for cat, rooms in cat_room_dict.items():
@@ -293,13 +315,13 @@ class TestRoomCat:
 
     def test_room_size_pbc_1bed(self, config_data):
         assert config_data.get_size_cat('PBC', '1 BED') == '1JNP'
-        assert config_data.get_size_cat('PBC', '1 BED', [752, 781, 748]) == '1STS'  # Sterling
-        assert config_data.get_size_cat('PBC', '1 BED', [757, 781]) == '1JNH'
+        assert config_data.get_size_cat('PBC', '1 BED', [752, 781, 748]) == '1JNB'  # Sterling
+        assert config_data.get_size_cat('PBC', '1 BED', [757, 781]) == '1JNB'
 
     def test_room_size_pbc_2bed(self, config_data):
         assert config_data.get_size_cat('PBC', '2 BED') == '2BSP'
-        assert config_data.get_size_cat('PBC', '2 BED', [752, 781, 748]) == '2BSP'
-        assert config_data.get_size_cat('PBC', '2 BED', [757, 781, 748]) == '2BSH'
+        assert config_data.get_size_cat('PBC', '2 BED', [752, 781, 748]) == '22SB'
+        assert config_data.get_size_cat('PBC', '2 BED', [757, 781, 748]) == '22SB'
 
     # following two tests added from TC contract setup - see Fabian's email from 21-11-2016 14:56
     def test_room_size_fabian_setup_bhc(self, config_data):

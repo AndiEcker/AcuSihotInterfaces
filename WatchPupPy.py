@@ -85,7 +85,7 @@ if command_interval:
     # initialize timeout to command_interval min 5% (if 1 hour than to 57 minutes) for (3 min.) error pause & recovering
     timeout = command_interval - max(command_interval // 20, 1)
 else:
-    timeout = None  # run server without interrupting (only re-start if crashes)
+    timeout = None  # run sub-process without interrupting (only re-start if crashes)
 check_interval = command_interval // env_checks_per_interval
 last_timer = last_run = last_check = None
 

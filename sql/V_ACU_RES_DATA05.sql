@@ -50,7 +50,7 @@ select RU_CODE
      --, case when RU_FROM_DATE = RH_FROM_DATE then 1 else row_number() over (partition by RU_RHREF order by RU_FROM_DATE) end 
      --, RU_CODE  -- no longer needed because we can anyway not have a separate market segment for each requested apt-week (RU)
      --, '0' as SIHOT_ROOM_SEQ
-     , case when abs(RU_STATUS) = 120 then 'S'
+     , case when abs(RU_STATUS) = 120 or RU_RHREF is NULL then 'S'
             --when RU_FROM_DATE > trunc(sysdate) and substr(RO_RES_GROUP, 1, 5) = 'Owner' and RU_RESORT <> 'BHC' then '5'  --- has to be changed if RUL_SIHOT_HOTEL differs
             --when RU_FROM_DATE > trunc(sysdate) and RU_ROREF in ('TK', 'tk') then 'K'   -- or use 'L' 
             else '1' end as SIHOT_RES_TYPE
@@ -65,14 +65,15 @@ select RU_CODE
      --  )) as SIHOT_SPECIAL_REQS
   from T_RU
   inner join T_RO on RU_ROREF = RO_CODE
-  inner join T_RH on RU_RHREF = RH_CODE
   inner join V_ACU_CD_DATA on RU_CDREF = CD_CODE
+  left outer join T_RH on RU_RHREF = RH_CODE
 /*
   ae:12-09-16 first beta for SiHOT migration/sync project.
   ae:27-09-16 V01: added market source groups RO_SIHOT_RES_GROUP/RO_SIHOT_SP_GROUP.
   ae:05-10-16 V02: renamed from V_ACU_RES_CORE to V_ACU_RES_DATA (similar to the V_ACU_CD_* views).
   ae:01-11-16 V03: added new SIHOT_-columns (reservation type, allotment-no, special requests, guest surcharge, apartment features).
   ae:20-09-17 V04: removed most of the hard-coded TK/tk/TC exceptions (now done via cfg settings).
+  ae:05-10-17 V05: fixed bug for to cancel Sihot reservation if marketing request set back to pending (changed join to T_RH from inner to left outer and res type to 'S' if RU_RHREF is NULL).  
 */
 /
 

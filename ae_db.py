@@ -60,7 +60,7 @@ class OraDB:
             uprint(err_msg or "OraDB: Oracle database cursor created.")
         return err_msg
 
-    def select(self, from_join, cols=None, where_group_order='', bind_vars=None):
+    def select(self, from_join, cols=None, where_group_order='', bind_vars=None, hints=''):
         if not cols:
             cols = list('*')
         if not where_group_order:
@@ -78,7 +78,7 @@ class OraDB:
                 else:
                     new_dict[key] = val
             bind_vars = new_dict
-        sq = "select {} from {} where {}".format(','.join(cols), from_join, where_group_order)
+        sq = "select {} {} from {} where {}".format(hints, ','.join(cols), from_join, where_group_order)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint('oraDB-' + sq)
         try:

@@ -55,6 +55,7 @@ cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if di
 
 cae.add_option('migrationMode', "Skip room swap and hotel movement requests (0=No, 1=Yes)", 0, 'M', choices=(0, 1))
 sync_date_ranges = dict(H='historical', M='present and 1 month in future', P='present and all future', F='future only',
+                        Y='present, 1 month in future and all for hotels 1, 4 and 999',
                         Y30='present, 1 month in future and 30 historical', Y60='present, 1 month in future, 60 hist.',
                         Y90='present, 1 month in future and 90 hist.', Y120='present, 1 month in future, 120 hist.')
 cae.add_option('syncDateRange', "Restrict sync. of res. to: "
@@ -173,7 +174,7 @@ if not error_msg:
                 for crow in room_rows:
                     crow['RUL_SIHOT_ROOM'] = ''
                     error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
-                    progress.next(processed_id=acumen_req.res_id_values(crow), error_msg=error_msg)
+                    progress.next(processed_id='RoomSwap:' + acumen_req.res_id_values(crow), error_msg=error_msg)
                     if error_msg and notification:
                         error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
@@ -199,7 +200,7 @@ if not error_msg:
                     crow['RUL_ACTION'] = 'DELETE'
                     crow['SH_RES_TYPE'] = 'S'
                     error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
-                    progress.next(processed_id=acumen_req.res_id_values(crow), error_msg=error_msg)
+                    progress.next(processed_id='HotMove:' + acumen_req.res_id_values(crow), error_msg=error_msg)
                     if error_msg and notification:
                         error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
