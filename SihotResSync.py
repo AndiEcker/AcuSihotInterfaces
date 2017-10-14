@@ -56,8 +56,10 @@ cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if di
 cae.add_option('migrationMode', "Skip room swap and hotel movement requests (0=No, 1=Yes)", 0, 'M', choices=(0, 1))
 sync_date_ranges = dict(H='historical', M='present and 1 month in future', P='present and all future', F='future only',
                         Y='present, 1 month in future and all for hotels 1, 4 and 999',
-                        Y30='present, 1 month in future and 30 historical', Y60='present, 1 month in future, 60 hist.',
-                        Y90='present, 1 month in future and 90 hist.', Y120='present, 1 month in future, 120 hist.')
+                        Y90='like Y plus the 90 oldest records in the sync queue',
+                        Y180='like Y plus the 180 oldest records in the sync queue',
+                        Y360='like Y plus the 360 oldest records in the sync queue',
+                        Y720='like Y plus the 720 oldest records in the sync queue')
 cae.add_option('syncDateRange', "Restrict sync. of res. to: "
                + ", ".join([k + '=' + v for k, v in sync_date_ranges.items()]), '', 'R',
                choices=sync_date_ranges.keys())
@@ -237,7 +239,7 @@ if not error_msg:
                     rid = acumen_req.res_id_values(crow)
                     progress.next(processed_id=rid, error_msg=error_msg)
                     if error_msg:
-                        send_notification('Acumen Reservation', rid, acumen_req.res_id_desc(crow, error_msg), crow)
+                        send_notification("Acumen Reservation", rid, acumen_req.res_id_desc(crow, error_msg), crow)
                     error_msg += acumen_req.ora_db.commit()
                     if error_msg:
                         if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
@@ -250,17 +252,17 @@ if not error_msg:
                         synced_ids.append(res_id)
             progress.finished(error_msg=error_msg)
             uprint("####  Synced IDs: " + str(synced_ids))
-            send_notification('Synced Reservations', str(datetime.datetime.now()),
+            send_notification("Synced Reservations", str(datetime.datetime.now()),
                               progress.get_end_message(error_msg=error_msg)
                               + "\n\n\nSYNCHRONIZED (" + acumen_req.res_id_label() + "): " + str(synced_ids)
                               + "\n\n\nERRORS:" + sync_errors)
             warnings = acumen_req.get_warnings()
             if notification and warnings:
-                notification.send_notification(warnings, subject='SihotResSync warnings notification',
+                notification.send_notification(warnings, subject="SihotResSync warnings notification",
                                                mail_to=cae.get_option('warningsMailToAddr'))
 
     except Exception as ex:
-        app_env_err += '\n\nSync Req/ARU Changes exception: ' + full_stack_trace(ex)
+        app_env_err += "\n\nSync Req/ARU Changes exception: " + full_stack_trace(ex)
 
 
 # release dup exec lock

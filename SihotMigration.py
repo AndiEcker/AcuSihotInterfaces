@@ -4,7 +4,7 @@
     0.3     added error counter to Progress
 """
 
-from ae_console_app import ConsoleApp, Progress, uprint
+from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace
 from ae_db import DEF_USER, DEF_DSN
 from sxmlif import ClientToSihot, ResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
 
@@ -22,25 +22,41 @@ cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
 
-cae.add_option('resHistory', "Migrate also the clients reservation history (0=No, 1=Yes)", 1, 'R', choices=(0, 1))
 cae.add_option('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
                0, 'q', choices=(0, 1, 2))
 cae.add_option('breakOnError', "Abort migration if error occurs (0=No, 1=Yes)", 1, 'b', choices=(0, 1))
 
-future_only = not cae.get_option('resHistory')
-break_on_error = cae.get_option('breakOnError')
+sync_date_ranges = dict(H='historical', M='present and 1 month in future', P='present and all future', F='future only',
+                        Y='present, 1 month in future and all for hotels 1, 4 and 999',
+                        Y90='like Y plus the 90 oldest records in the sync queue',
+                        Y180='like Y plus the 180 oldest records in the sync queue',
+                        Y360='like Y plus the 360 oldest records in the sync queue',
+                        Y720='like Y plus the 720 oldest records in the sync queue')
+cae.add_option('syncDateRange', "Restrict sync. of res. to: "
+               + ", ".join([k + '=' + v for k, v in sync_date_ranges.items()]), '', 'R',
+               choices=sync_date_ranges.keys())
+cae.add_option('includeCxlRes', "Include also cancelled reservations (0=No, 1=Yes)", 1, 'I', choices=(0, 1))
 
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
+uprint("Server IP/Web-/Kernel-port:", cae.get_option('serverIP'), cae.get_option('serverPort'),
        cae.get_option('serverKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
-uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Migrate Reservation History:', 'No' if future_only else 'Yes')
-uprint('Migrate Clients First/Separate:',
+uprint("TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
+uprint("Migrate Clients First/Separate:",
        ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
-uprint('Break on error:', 'Yes' if break_on_error else 'No')
+break_on_error = cae.get_option('breakOnError')
+uprint("Break on error:", 'Yes' if break_on_error else 'No')
+sync_date_range = cae.get_option('syncDateRange')
+future_only = sync_date_range == 'F'
+uprint("Migrate Reservation History:", 'No' if future_only else 'Yes')
+if sync_date_range and not future_only:
+    uprint("!!!!  Synchronizing only reservations in date range: " + sync_date_ranges[sync_date_range])
+include_cxl_res = cae.get_option('includeCxlRes')
+if include_cxl_res:
+    uprint("Include also cancelled reservations: Yes")
 
 
-uprint('####  Migration of .......  ####')
+error_msg = ""
+uprint("####  Migration of .......  ####")
 
 if cae.get_option('clientsFirst'):
     uprint('####  ... Clients' + ('+Res' if cae.get_option('clientsFirst') == 2 else '....')
@@ -68,7 +84,7 @@ if cae.get_option('clientsFirst'):
                 #  error_msg = acu_res_hist.fetch_from_acu_by_cd(cols['CD_CODE'], future_only=future_only)
                 # .. on the other hand: with aru fetch we are only migrating the synchronized resOcc types
                 error_msg = acu_res_hist.fetch_from_acu_by_aru(where_group_order="CD_CODE = '" + crow['CD_CODE'] + "'",
-                                                               date_range='F' if future_only else '')
+                                                               date_range=sync_date_range)
                 if error_msg:
                     error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + ' reservation history fetch error: ' + \
                                 error_msg + '! Data=' + str(crow)
@@ -89,27 +105,46 @@ if cae.get_option('clientsFirst'):
         cae.shutdown(11)
 
 
-uprint('####  ... ' + ('future Res......' if future_only else 'Reservations....') + '  ####')
+uprint("####  ... " + ("future Res......" if future_only else "Reservations....") + "  ####")
 
-acumen_req = ResToSihot(cae)
-error_msg = acumen_req.fetch_all_valid_from_acu(date_range='F' if future_only else '')
-progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.row_count,
-                    start_msg='Prepare the migration of {total_count} reservations to Sihot',
-                    nothing_to_do_msg='SihotMigration: acumen_req.fetch_all_valid_from_acu() returning no rows')
-if not error_msg:
-    for crow in acumen_req.rows:
-        error_msg = acumen_req.send_row_to_sihot(crow)
-        progress.next(processed_id=str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']), error_msg=error_msg)
-        if error_msg:
-            acumen_req.ora_db.rollback()
+try:
+    acumen_req = ResToSihot(cae)
+    error_msg = acumen_req.fetch_from_acu_by_aru(date_range=sync_date_range)
+    if not error_msg:
+        progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.row_count,
+                            start_msg='Prepare the migration of {total_count} reservations to Sihot',
+                            nothing_to_do_msg='SihotMigration: acumen_req.fetch_all_valid_from_acu() returning no rows')
+        if include_cxl_res:
+            all_rows = acumen_req.rows
         else:
-            error_msg = acumen_req.ora_db.commit()
-        if error_msg:
-            if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
-                continue
-            elif cae.get_option('breakOnError'):
-                break
+            all_rows = list()
+            del_gds_nos = list()
+            for crow in reversed(acumen_req.rows):
+                gds_no = crow['RUL_PRIMARY']
+                if gds_no in del_gds_nos:
+                    continue
+                elif crow['SH_RES_TYPE'] == 'S' and gds_no:
+                    del_gds_nos.append(gds_no)
+                else:
+                    all_rows.append(crow)
+            all_rows = reversed(all_rows)
+        for crow in all_rows:
+            error_msg = acumen_req.send_row_to_sihot(crow)
+            res_id = acumen_req.res_id_values(crow)
+            progress.next(processed_id=res_id, error_msg=error_msg)
+            if error_msg:
+                acumen_req.ora_db.rollback()
+            else:
+                error_msg = acumen_req.ora_db.commit()
+            if error_msg:
+                if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
+                    continue
+                elif cae.get_option('breakOnError'):
+                    break
 
-progress.finished(error_msg=error_msg)
+        progress.finished(error_msg=error_msg)
+
+except Exception as ex:
+    uprint("\n\nMigration Req/ARU Changes exception: " + full_stack_trace(ex))
 
 cae.shutdown(12 if error_msg else 0)

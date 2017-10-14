@@ -298,7 +298,7 @@ class ConsoleApp:
 
         # determine config value for to use as default for command line arg
         cfg_val = self._get_config_val(name, default_value=value)
-        eval_cfg_val = bool(determine_eval_str(cfg_val)) \
+        eval_cfg_val = determine_eval_str(cfg_val) \
             or isinstance(cfg_val, list) or isinstance(cfg_val, dict) or isinstance(cfg_val, tuple)
         arg_type = type(cfg_val)
         if arg_type is datetime.datetime:
@@ -322,7 +322,7 @@ class ConsoleApp:
 
         for key in self._options.keys():
             val = getattr(args, key)
-            if self._options[key]['evaluate']:
+            if self._options[key]['evaluate'] or determine_eval_str(val):
                 eval_str = determine_eval_str(val)
                 if eval_str:
                     try:

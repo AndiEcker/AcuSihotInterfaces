@@ -65,8 +65,8 @@ def _strip_error_message(error_msg):
 
     pos2 = error_msg.find('.', pos1)
     pos3 = error_msg.find('!', pos1)
-    if max(pos2, pos3) == -1:
-        pos2 = error_msg.find('', pos1)
+    if max(pos2, pos3) - pos1 <= 30:
+        pos2 = len(error_msg)
 
     return error_msg[pos1: max(pos2, pos3)]
 
@@ -331,7 +331,7 @@ MAP_WEB_RES = \
          'elemHideIf': "'SIHOT_LINK_GROUP' not in c"},
         {'elemName': 'FLAGS', 'colVal': 'IGNORE-OVERBOOKING'},  # ;NO-FALLBACK-TO-ERRONEOUS'},
         {'elemName': 'RT', 'colName': 'SH_RES_TYPE',
-         'colValFromAcu': "case when RUL_ACTION = 'DELETE' then 'S' else SIHOT_RES_TYPE end"},
+         'colValFromAcu': "case when RUL_ACTION = 'DELETE' then 'S' else nvl(SIHOT_RES_TYPE, 'S') end"},
         # {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT'},  # mandatory but could be empty (to get PMS fallback-default)
         #  'colValFromAcu': "'2TIC'"},   # mandatory but could be empty (to get PMS fallback-default)
         # RUL_SIHOT_CAT results in error 1011 for tk->TC/TK bookings with room move and room with higher/different room
@@ -880,15 +880,19 @@ class AvailCatsResponse(Response):
         self.avail_room_cats = dict()
 
     def data(self, data):
-        if super(AvailCatsResponse, self).__init__(data) is None:
+        if super(AvailCatsResponse, self).data(data) is None:
             return None
         if self._curr_tag == 'CAT':
             self.avail_room_cats[data] = dict()
             self._curr_cat = data
         elif self._curr_tag == 'D':
             self._curr_day = data
-        elif self._curr_tag == 'NO':
+        elif self._curr_tag == 'TOTAL':
             self.avail_room_cats[self._curr_cat][self._curr_day] = int(data)
+        elif self._curr_tag == 'OOO':
+            self.avail_room_cats[self._curr_cat][self._curr_day] -= int(data)
+        elif self._curr_tag == 'OCC':
+            self.avail_room_cats[self._curr_cat][self._curr_day] *= (1.0 - float(data) / 100.0)
         return data
 
 
@@ -1321,13 +1325,15 @@ class AcuServer(SihotXmlBuilder):
 
 
 class AvailCats(SihotXmlBuilder):
-    def avail_rooms(self, room_cat, hotel_id='1', from_date=datetime.date.today(), to_date=datetime.date.today(),
-                    flags='SKIP-HIDDEN-ROOM-TYPES'):
-        self.beg_xml(operation_code='AVR')
-        self.add_tag('ID', hotel_id)  # mandatory
+    def avail_rooms(self, hotel_id='', room_cat='', from_date=datetime.date.today(), to_date=datetime.date.today(),
+                    flags=''):  # SKIP-HIDDEN-ROOM-TYPES'):
+        self.beg_xml(operation_code='CATINFO')
+        if hotel_id:
+            self.add_tag('ID', hotel_id)
         self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))     # mandatory
         self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
-        self.add_tag('CAT', room_cat)                                           # mandatory
+        if room_cat:
+            self.add_tag('CAT', room_cat)
         if flags:
             self.add_tag('FLAGS', flags)
         self.end_xml()
@@ -1533,7 +1539,8 @@ class GuestSearch(SihotXmlBuilder):
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
         ret = self.search_guests(col_values, [':objid'], key_elem_name='matchcode')
-        return self._check_and_get_objid_of_matchcode_search(ret, matchcode, exact_matchcode)
+        if ret:
+            return self._check_and_get_objid_of_matchcode_search(ret, matchcode, exact_matchcode)
 
     def search_agencies(self):
         col_values = {'SIHOT_GUESTTYPE1': 7,

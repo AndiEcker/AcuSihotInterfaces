@@ -56,12 +56,15 @@ IS
 BEGIN
   lcAction := pcAction;
   -- determine caller and if either lcApRef or lcAtGeneric/lcResort need to be fetched
-  if pcCaller = 'R' then         -- called from T_RU or R_RH-update triggers
+  if pcCaller = 'R' then         -- called from T_RU or T_RH-update triggers
     lnRU_Code := pnCode;
     lcApRef := F_RH_ARO_APT(pnRHRef, pdFrom, pdTo);
     if lcApRef is NULL then
       lcAtGeneric := pcAtGeneric;
       lcResort := pcResort;
+    end if;
+    if pnRHRef is NULL then
+      lcAction := 'DELETE';
     end if;
   elsif pcCaller = 'A' then   -- called from T_ARO triggers
     lnRU_Code := pnCode;    -- F_ARO_RU_CODE(pnRHRef, pdFrom, pdTo) incorrect for multiple RUs per ARO (now determined correctly by P_RH_RUL_INSERT() and passed into pnCode)
@@ -190,7 +193,8 @@ END
   ae:27-12-16 V02: added lcCaller parameter to call of F_RU_ARO_BOARD to prevent mutating PRC cursor.
   ae:11-01-17 V03: prevent INSERT into RUL if RUL_PRIMARY value is NULL and added temporary notification for further checkings. 
   ae:21-02-17 V04: changed to detect T_ARO call by pnCode is NULL (instead of pcApRef is not NULL) because now P_RH_RUL_INSERT() is passing always the current associated apartment and added pcCaller parameter (replacing lcCaller). 
-  ae:10-03-17 V05: added population of new RUL_SIHOT_LAST_HOTEL/RUL_SIHOT_LAST_CAT columns, merging now also RU changes into same log entry. 
+  ae:10-03-17 V05: added population of new RUL_SIHOT_LAST_HOTEL/RUL_SIHOT_LAST_CAT columns, merging now also RU changes into same log entry.
+  ae:13-10-17 V06: changed RUL_ACTION value to DELETE for pending marketing requests (RU_RHREF is NULL).
 */;
 /
 

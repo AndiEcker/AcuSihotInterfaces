@@ -41,7 +41,7 @@ def prepare_connection(cae, print_on_console=True):
                                 default_value=cae.get_config('sfIsSandbox',
                                                              default_value='test' in sf_user.lower()
                                                                            or 'sandbox' in sf_user.lower()))
-    sf_client = cae.get_option('sfClientId', cae.get_config('sfClientId'))
+    sf_client = cae.get_option('sfClientId', default_value=cae.get_config('sfClientId'))
     sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
     if print_on_console:
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)

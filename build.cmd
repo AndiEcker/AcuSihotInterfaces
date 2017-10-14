@@ -8,7 +8,7 @@ rem c:\Python35\Scripts\pyinstaller --onefile KernelGuestTester.py
 rem c:\Python35\Scripts\pyinstaller --onefile MatchcodeToObjId.py
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ShSfContactMigration.py
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SfContactValidator.py
-rem c:\Python35\Scripts\pyinstaller --onefile SihotMigration.py
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotMigration.py
 rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource SihotResImport.kv SihotResImport.py
 rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile SihotResImport.spec
 rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource SihotResImport.kv SihotResImport.py

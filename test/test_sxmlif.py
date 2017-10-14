@@ -6,24 +6,34 @@ from sxmlif import SihotXmlParser, Response, GuestFromSihot, ResFromSihot, Sihot
 
 
 class TestAvailCats:
+    def test_all_hotel_all_cats(self, avail_cats):
+        ret = avail_cats.avail_rooms() # hotel_id='2')
+        assert isinstance(ret, dict)
+        assert len(ret)
+
     def test_error_with_invalid_cat(self, avail_cats):
-        ret = avail_cats.avail_rooms('XxYy')
+        ret = avail_cats.avail_rooms(room_cat='XxYy')    # resulting in empty list without any error (RC==0)
         assert isinstance(ret, dict)
         assert len(ret) == 0
         assert avail_cats.response.rc == '0'
 
     def test_error_with_invalid_hotel(self, avail_cats):
-        ret = avail_cats.avail_rooms('STDO', hotel_id='963')
-        assert isinstance(ret, dict)
-        assert len(ret) == 0
+        ret = avail_cats.avail_rooms(hotel_id='963', room_cat='STDO')
+        assert isinstance(ret, str)
+        assert avail_cats.response.rc != '0'
+        assert 'unknown system id' in ret
         assert 'unknown system id' in avail_cats.response.msg
 
     def test_avail_rooms_with_studio_cat(self, avail_cats):
         day = datetime.date(2017, 10, 7)
-        ret = avail_cats.avail_rooms('STDO', hotel_id='4', from_date=day, to_date=day)
+        ret = avail_cats.avail_rooms(hotel_id='2', room_cat='STDO', from_date=day, to_date=day)
         assert isinstance(ret, dict)
         assert len(ret)
         assert 'STDO' in ret
+        ret = avail_cats.avail_rooms(hotel_id='4', room_cat='STDP', from_date=day, to_date=day)  # no STDO in PBC
+        assert isinstance(ret, dict)
+        assert len(ret)
+        assert 'STDP' in ret
 
 
 class TestSihotXmlParser:

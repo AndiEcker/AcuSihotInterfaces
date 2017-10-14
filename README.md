@@ -69,6 +69,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
 | help | Show help on all the available command line argument options | - | h | (all) |
+| includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
 | jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
@@ -78,7 +79,6 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfContactValidator |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
 | recordTypesToValidate | Contact record type(s) to be validated | 'Rentals' | R | SfContactValidator |
-| resHistory | Migrate also the clients reservation history (0=No, 1=Yes) | 1 | R | SihotMigration |
 | serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
@@ -87,7 +87,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | sfPassword | Salesforce user account password | - | a | SfContactValidator, ShSfContactMigration, SihotResImport |
 | sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration, SihotResImport |
-| syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only | - | R | SihotResSync |
+| syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |

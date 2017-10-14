@@ -337,7 +337,7 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
     sfd['Language__c'] = cae.get_config(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
     # Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000) or LeadSource (Picklist)
     # .. or Source__c (Picklist) or HERE_HOW__c (Picklist) ?!?!?
-    sfd['Description'] = "Market Source=" + src
+    sfd['Description'] = "Market Source=" + str(src)
     sfd['Email'] = email if email_is_valid(email) else default_email_address
     # HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
     phone_changes = list()
