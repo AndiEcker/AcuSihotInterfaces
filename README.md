@@ -17,6 +17,7 @@ This interface suite project is including the following command line tools:
 | SfContactValidator | Salesforce Contact Data Validator | - |
 | ShSfContactMigration | Migrate contactable guests from Sihot to Salesforce | Web |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
+| SihotOccLogChecker | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
 | SihotResImport | Import Thomas Cook (Scandinavian) R*.txt files into Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
@@ -60,10 +61,11 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
+| correctAcumen | Correct/Fix Acumen data (0=No, 1=Yes) | 0 | A | SihotOccLogChecker |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
 | cmdInterval | Command interval in seconds | 3600 | s | WatchPupPy |
-| dateFrom | Date of first check-out to export | (current date - 7 days or last-runs dateTo plus 1 day) | F | ClientQuestionnaireExport, ShSfContactMigration |
-| dateTill | Date of last check-out to export | (current date) | T | ClientQuestionnaireExport, ShSfContactMigration |
+| dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfContactMigration, SihotOccLogChecker |
+| dateTill | End date/time of date range | (depends on command) | T | ClientQuestionnaireExport, ShSfContactMigration, SihotOccLogChecker |
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
 | emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfContactValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
@@ -107,6 +109,7 @@ The following lower case letters could be used more easily than others (for to p
 
 AcuSihotMonitor is a kivy application for Windows, Linux, Mac OS X, Android and iOS and allows to check
 the correct functionality of the Salesforce, Acumen and Sihot servers and interfaces.
+
 
 ### ClientQuestionnaireExport Application
 
@@ -166,6 +169,22 @@ Allows to specify/change the content of the data row columns exported CSV file. 
   PARSE_ONLY_TAG_PREFIX + 'LANG',
   ]`.
 
+
+### SihotOccLogChecker Application
+
+This command line tool is helping to check and optionally fix any missing occupation data changes (like Room-Checkin,
+-Checkout or -Move) within the Acumen system. Occupation data changes done in Sihot get normally transferred via
+the Sihot SXML interface first to the AcuServer and from there to the Acumen system. So if either the SXML interface
+or the AcuServer is not running (like happened recently between 16/10/2017 14:07:32 and 18/10/2017 15:09:53), then
+you can use SihotOccLogChecker for to check and repair the related T_ARO data in Acumen.
+
+#### maxDaysDiff INI/config setting
+
+Allows to specify the maximum number of days of difference between the expected and the real check-in/-out day. The
+default value is 2 days. FYI: the Oracle procedure P_SIHOT_ALLOC() that is used by AcuServer to pass occupation
+changes to Acumen is using 4 days of difference (see constant SihotRoomChangeMaxDaysDiff declared in the K package).
+
+
 ### SihotResImport Application
 
 Combined Console/Kivy Application for to import reservation bookings, changes and cancellations from CSV or JSON files
@@ -194,7 +213,7 @@ working directory then you don't need to specify anything to use the Salesforce 
 least to specify the user name (sfUser), the security token (sfToken), the sandbox flag set to False (sfIsSandbox=False)
 and the password (the password can be omitted if you use our SihotInterface user account).
 
-Another four command line parameters are for to configure the notifcation emails: `smtpServerUri` specifies the 
+Another four command line parameters are for to configure the notification emails: `smtpServerUri` specifies the 
 SMTP server URI (including user name, password, host and port). The sender address has to be specified by
 `smtpFrom`, the list of SMTP receivers by `smtpTo` (for the protocol) and `warningsMailToAddr` (for the
 warnings/discrepancy notifications.
@@ -223,8 +242,8 @@ email into the json format is written in C#.NET by Nitesh):
 | RUL_SIHOT_ROOM | String | Sihot Room Number (optional) | '0426', 'A112' |
 | SH_OBJID | String | Sihot Orderer Object Id of OTA channel | '123456' |
 | OC_SIHOT_OBJID | String | Sihot Orderer Object Id of OTA channel (same as SH_OBJID) | '123456' |
-| SH_MC | String | Sihot Orderer Matchcode of OTA channel | 'OTAxyz' |
-| OC_CODE | String | Sihot Orderer Matchcode of OTA channel (same as SH_MC) | 'OTAxyz' |
+| SH_MC | String | Sihot Orderer Matchcode of OTA channel | 'TCRENT' |
+| OC_CODE | String | Sihot Orderer Matchcode of OTA channel (same as SH_MC) | 'TCRENT' |
 | SIHOT_NOTE | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
 | SIHOT_TEC_NOTE | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '|CR|' for to separate various comments) |
 | RUL_SIHOT_PACK | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |

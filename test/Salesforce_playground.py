@@ -24,6 +24,7 @@ print('Top-level objects describe:', sb.describe())
 print('Opportunity metadata:', sb.Opportunity.metadata())
 
 # OLD
+print('Account metadata:', sb.Account.metadata())
 print('Contact metadata:', sb.Contact.metadata())
 print('Contact describe:', sb.Contact.describe())
 

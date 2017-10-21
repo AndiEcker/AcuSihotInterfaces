@@ -81,7 +81,7 @@ def client_to_acu(col_values, ca=None):
         if not err_msg:
             acu_col_values = {k: col_values[k] for k in col_values.keys() if k.startswith('CD_')}
             if ora_db.fetch_value() > 0:
-                err_msg = ora_db.update('T_CD', acu_col_values, "CD_CODE = '" + pkey + "'")
+                err_msg = ora_db.update('T_CD', acu_col_values, "CD_CODE = :cd_code", bind_vars=dict(cd_code=pkey))
             else:
                 err_msg = ora_db.insert('T_CD', acu_col_values)
     ora_db.close()

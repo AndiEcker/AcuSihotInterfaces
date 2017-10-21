@@ -7,7 +7,7 @@ import inspect
 import pprint
 
 from configparser import ConfigParser
-from argparse import ArgumentParser, ArgumentTypeError
+from argparse import ArgumentParser
 
 # supported debugging levels
 DEBUG_LEVEL_DISABLED = 0
@@ -137,25 +137,6 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
         try_counter += 1
 
 
-def determine_eval_str(val):
-    """ check val if needs to be evaluated and return non-empty-and-stripped-eval-string if yes else '' """
-
-    if isinstance(val, bytes):
-        val = val.decode('utf-8', 'replace')  # convert bytes to string
-
-    ret = ''
-    if isinstance(val, str):
-        if (val.startswith("'''") and val.endswith("'''")) \
-                or (val.startswith('"""') and val.endswith('"""')):
-            ret = val[3:-3]
-        elif (val.startswith("[") and val.endswith("]")) \
-                or (val.startswith("{") and val.endswith("}")) \
-                or (val.startswith("(") and val.endswith(")")):
-            ret = val
-
-    return ret
-
-
 class _DuplicateSysOut:
     def __init__(self, log_file, sys_out=ori_std_out):
         self.log_file = log_file
@@ -175,20 +156,89 @@ class _DuplicateSysOut:
         return getattr(self.sys_out, attr)
 
 
+class Setting:
+    def __init__(self, name='Unnamed', value=None, value_type=None):
+        """ create new Setting instance
+
+        :param name: optional name of the setting (only used for debugging/error-message).
+        :param value: optional initial value or evaluable string expression.
+        :param value_type: optional value type. cannot be changed later. will be determined latest in value getter.
+        """
+        super(Setting, self).__init__()
+        self._name = name
+        self._value = None
+        self._type = value_type
+        if value is not None:
+            self.value = value
+
+    @property
+    def value(self):
+        value = self._value
+        try:
+            if self._type != type(value):
+                if isinstance(value, bytes):    # convert bytes to string?
+                    value = str(value, encoding='utf-8')  # value.decode('utf-8', 'replace') -> shows warning in PyCharm
+                if isinstance(value, str):
+                    eval_expr = self._eval_str(value)
+                    self._value = eval(eval_expr) if eval_expr else \
+                        (bool(eval(value)) if self._type == bool else
+                         (datetime.datetime.strptime(value, DATE_TIME_ISO)
+                          if self._type == datetime.datetime and len(value) > 10 else
+                          (datetime.datetime.strptime(value, DATE_ISO).date()
+                           if self._type in (datetime.date, datetime.datetime) else
+                           (self._type(value) if self._type else value))))
+                elif self._type:
+                    self._value = self._type(value)
+            if not self._type and self._value is not None:      # the value type gets only once initialized
+                self._type = type(self._value)
+        except Exception as ex:
+            uprint("Setting.value exception '{}' on evaluating the setting {} with value: '{}'"
+                   .format(ex, self._name, value))
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        if not self._type and not isinstance(value, str) and value is not None:
+            self._type = type(value)
+        self._value = value
+
+    def convert_value(self, value):
+        self.value = value
+        return self.value
+
+    @staticmethod
+    def _eval_str(str_val):
+        """ check str_val if needs to be evaluated and return non-empty-and-stripped-eval-string if yes else '' """
+        if (str_val.startswith("'''") and str_val.endswith("'''")) \
+                or (str_val.startswith('"""') and str_val.endswith('"""')):
+            ret = str_val[3:-3]
+        elif (str_val.startswith("[") and str_val.endswith("]")) \
+                or (str_val.startswith("{") and str_val.endswith("}")) \
+                or (str_val.startswith("(") and str_val.endswith(")")) \
+                or (str_val.startswith("'") and str_val.endswith("'")) \
+                or (str_val.startswith('"') and str_val.endswith('"')):
+            ret = str_val
+        else:
+            ret = ''
+        return ret
+
+
+_config_options = None     # initialized in ConsoleApp.__init__()
+
+
 class ConsoleApp:
-    def __init__(self, app_version, app_desc, main_section=MAIN_SECTION_DEF, debug_level_def=DEBUG_LEVEL_DISABLED,
+    def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
                  log_file_def='', config_eval_vars=None, additional_cfg_files=None):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version          application version.
             :param app_desc             application description.
-            :param main_section         name of main config file section (def=MAIN_SECTION_DEF).
             :param debug_level_def      default debug level (DEBUG_LEVEL_DISABLED).
             :param log_file_def         default log file name.
             :param config_eval_vars     dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
             :param additional_cfg_files list of additional CFG/INI file names (opt. incl. abs/rel. path).
         """
-        self._main_section = main_section
+        global _config_options
         self.config_eval_vars = config_eval_vars or dict()
 
         cwd_path = os.getcwd()
@@ -203,14 +253,14 @@ class ConsoleApp:
         uprint("####  Initialization......  ####")
 
         """
-            :ivar _options              contains predefined and user-defined options.
-            :ivar _args_parsed          flag to ensure that the command line arguments get re-parsed if add_option()
+            :var  _config_options              contains predefined and user-defined options (dict of Setting instances).
+            :ivar _parsed_args          flag to ensure that the command line arguments get re-parsed if add_option()
                                         get called after a first call to methods which are initiating the re-fetch of
                                         the args and INI/cfg vars (like e.g. get_option() or dprint()).
             :ivar _log_file             file handle of currently opened log file (opened in self._parse_args()).
         """
-        self._options = dict()
-        self._args_parsed = False
+        _config_options = dict()
+        self._parsed_args = None
         self._log_file = None
 
         # compile list of cfg/ini files - the last file overwrites previously loaded variable values
@@ -252,31 +302,7 @@ class ConsoleApp:
                         choices=debug_levels.keys())
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
 
-    @staticmethod
-    def _parse_date_time(dat):
-        try:
-            return datetime.datetime.strptime(dat, DATE_TIME_ISO)
-        except ValueError:
-            msg = "Not a valid date/time: '{}' - expected format: {}.".format(dat, DATE_TIME_ISO)
-            raise ArgumentTypeError(msg)
-
-    @staticmethod
-    def _parse_date(dat):
-        try:
-            return datetime.datetime.strptime(dat, DATE_ISO).date()
-        except ValueError:
-            msg = "Not a valid date: '{}' - expected format: {}.".format(dat, DATE_ISO)
-            raise ArgumentTypeError(msg)
-
-    @staticmethod
-    def _parse_bool(val):
-        try:
-            return bool(eval(val))
-        except ValueError:
-            msg = "Not a valid boolean: '{}' - expected e.g. True, False, 0, 1, ...".format(val)
-            raise ArgumentTypeError(msg)
-
-    def add_option(self, name, desc, value, short_opt=None, eval_opt=False, choices=None):
+    def add_option(self, name, desc, value, short_opt=None, choices=None):
         """ defining and adding an new option for this app as INI/CFG var and as command line argument.
 
             The name and desc arguments are strings that are specifying the name and short description of the option
@@ -292,51 +318,34 @@ class ConsoleApp:
             For string expressions that need to evaluated for to determine their value you either can pass
             True for the evaluate parameter or you enclose the string expression with triple high commas.
         """
-        self._args_parsed = False
+        global _config_options
+        self._parsed_args = None        # request (re-)parsing of command line args
         if not short_opt:
             short_opt = name[0]
 
         # determine config value for to use as default for command line arg
+        setting = Setting(name=name, value=value)
         cfg_val = self._get_config_val(name, default_value=value)
-        eval_cfg_val = determine_eval_str(cfg_val) \
-            or isinstance(cfg_val, list) or isinstance(cfg_val, dict) or isinstance(cfg_val, tuple)
-        arg_type = type(cfg_val)
-        if arg_type is datetime.datetime:
-            arg_type = self._parse_date_time
-        elif arg_type is datetime.date:
-            arg_type = self._parse_date
-        elif arg_type is bool:
-            arg_type = self._parse_bool
+        setting.value = cfg_val
+        self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=cfg_val,
+                                      type=setting.convert_value, choices=choices, metavar=name)
+        _config_options[name] = setting
 
-        self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=cfg_val, type=arg_type,
-                                      choices=choices, metavar=name)
-        self._options[name] = dict(desc=desc, val=value, evaluate=eval_cfg_val or eval_opt)
+    def add_parameter(self, *args, **kwargs):
+        self._arg_parser.add_argument(*args, **kwargs)
 
     def _parse_args(self):
         """ this should only get called once and only after all the options have been added with self.add_option().
             self.add_option() sets the determined config file value as the default value and then following call of
             .. _arg_parser.parse_args() overwrites it with command line argument value if given
         """
-        global _debug_level
-        args = self._arg_parser.parse_args()
+        global _debug_level, _config_options
+        self._parsed_args = self._arg_parser.parse_args()
 
-        for key in self._options.keys():
-            val = getattr(args, key)
-            if self._options[key]['evaluate'] or determine_eval_str(val):
-                eval_str = determine_eval_str(val)
-                if eval_str:
-                    try:
-                        val = eval(eval_str)
-                    except Exception as ex:
-                        uprint("ConsoleApp._parse_args() exception '{}' on evaluating the option {} with value: '{}'"
-                               .format(ex, key, eval_str))
-            def_val = self._options[key]['val']
-            self._options[key]['val'] = (bool(val) if isinstance(def_val, bool)
-                                         else (float(val) if isinstance(def_val, float)
-                                               else (int(val) if isinstance(def_val, int)
-                                                     else val)))
+        for name in _config_options.keys():
+            _config_options[name].value = getattr(self._parsed_args, name)
 
-        log_file = self._options['logFile']['val']
+        log_file = _config_options['logFile'].value
         if log_file:  # enable logging
             global app_std_out, app_std_err
             try:
@@ -352,7 +361,7 @@ class ConsoleApp:
         uprint("####  Startup finished....  ####")
 
         # finished argument parsing - now print chosen option values to the console
-        _debug_level = self._options['debugLevel']['val']
+        _debug_level = _config_options['debugLevel'].value
         if _debug_level:
             uprint("Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):", _debug_level)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
@@ -367,8 +376,6 @@ class ConsoleApp:
             uprint(" "*18, "main-cfg  =", self._cfg_fnam)
         if log_file:
             uprint('Log file:', log_file)
-
-        self._args_parsed = True
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
@@ -385,40 +392,34 @@ class ConsoleApp:
             - value argument passed into the add_option() method call (defining the option)
             - default_value argument passed into this method (should actually not happen-add_option() didn't get called)
         """
-        if not self._args_parsed:
+        if not self._parsed_args:
             self._parse_args()
-        return self._options[name]['val'] if name in self._options else default_value
+        return _config_options[name].value if name in _config_options else default_value
 
     def set_option(self, name, val, cfg_fnam=None, save_to_config=True):
-        global _debug_level
-        self._options[name]['val'] = val
+        global _debug_level, _config_options
+        _config_options[name].value = val
         if name == 'debugLevel' and not save_to_config:
-            _debug_level = val
+            _debug_level = _config_options[name].value
         return self.set_config(name, val, cfg_fnam) if save_to_config else ''
+
+    def get_parameter(self, name):
+        if not self._parsed_args:
+            self._parse_args()
+        return getattr(self._parsed_args, name)
 
     def _get_config_val(self, name, section=None, default_value=None, cfg_parser=None):
         cfg_parser = cfg_parser or self._cfg_parser
-        get_func = (cfg_parser.getboolean if isinstance(default_value, bool)
-                    else (cfg_parser.getfloat if isinstance(default_value, float)
-                    else (cfg_parser.getint if isinstance(default_value, int)
-                          else cfg_parser.get)))
-        val = get_func(section or self._main_section, name, fallback=default_value)
-        if isinstance(default_value, datetime.datetime) and isinstance(val, str):
-            val = datetime.datetime.strptime(val, DATE_TIME_ISO)
-        elif isinstance(default_value, datetime.date) and isinstance(val, str):
-            day = datetime.datetime.strptime(val, DATE_ISO)
-            val = datetime.date(day.year, day.month, day.day)
+        val = cfg_parser.get(section or MAIN_SECTION_DEF, name, fallback=default_value)
         return val
 
-    def get_config(self, name, section=None, default_value=None, cfg_parser=None):
-        val = self._get_config_val(name, section=section, default_value=default_value, cfg_parser=cfg_parser)
-        eval_str = determine_eval_str(val)
-        if eval_str:
-            try:
-                val = eval(eval_str)
-            except Exception as ex:
-                uprint("ConsoleApp.get_config() exception '{}' on evaluating the option {} with value '{}'"
-                       .format(ex, name, eval_str))
+    def get_config(self, name, section=None, default_value=None, cfg_parser=None, value_type=None):
+        if name in _config_options and section in (MAIN_SECTION_DEF, '', None):
+            val = _config_options[name].value
+        else:
+            s = Setting(name=name, value=default_value, value_type=value_type)  # Setting used only for conversion/eval
+            s.value = self._get_config_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
+            val = s.value
         return val
 
     def set_config(self, name, val, cfg_fnam=None, section=None):
@@ -426,10 +427,12 @@ class ConsoleApp:
         if not cfg_fnam:
             cfg_fnam = self._cfg_fnam
         if not section:
-            section = self._main_section
+            section = MAIN_SECTION_DEF
 
-        if name == 'debugLevel':
-            _debug_level = val
+        if name in _config_options and section in (MAIN_SECTION_DEF, '', None):
+            _config_options[name].value = val
+            if name == 'debugLevel':
+                _debug_level = _config_options[name].value
 
         err_msg = ''
         if os.path.isfile(cfg_fnam):
@@ -439,9 +442,9 @@ class ConsoleApp:
                 cfg_parser.read(cfg_fnam)
                 if isinstance(val, dict) or isinstance(val, list) or isinstance(val, tuple):
                     str_val = "'''" + repr(val).replace('%', '%%') + "'''"
-                elif isinstance(val, datetime.datetime):
+                elif type(val) is datetime.datetime:
                     str_val = val.strftime(DATE_TIME_ISO)
-                elif isinstance(val, datetime.date):
+                elif type(val) is datetime.date:
                     str_val = val.strftime(DATE_ISO)
                 else:
                     str_val = str(val)       # using str() here because repr() will put high-commas around string values

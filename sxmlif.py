@@ -1261,7 +1261,7 @@ class SihotXmlBuilder:
     def convert_value_to_xml_string(value):
         # ret = str(val) if val else ''  # not working with zero value
         ret = '' if value is None else str(value)  # convert None to empty string
-        if isinstance(value, datetime.datetime) and ret.endswith(' 00:00:00'):
+        if type(value) is datetime.datetime and ret.endswith(' 00:00:00'):
             ret = ret[:-9]
         # escape special characters while preserving already escaped characters - by first un-escape then escape again
         for key, val in [('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'), ('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')]:
@@ -1292,7 +1292,7 @@ class SihotXmlBuilder:
         obj_id = response.objid if str(response.objid) else '-' + (pkey[2:] if table == 'CD' else str(pkey))
         id_col = table + "_SIHOT_OBJID" + col_name_suffix
         pk_col = table + "_CODE"
-        return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = '" + str(pkey) + "'")
+        return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = :pk", bind_vars=dict(pk=str(pkey)))
 
 
 class AcuServer(SihotXmlBuilder):

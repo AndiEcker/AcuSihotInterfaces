@@ -60,15 +60,12 @@ class OraDB:
             uprint(err_msg or "OraDB: Oracle database cursor created.")
         return err_msg
 
-    def select(self, from_join, cols=None, where_group_order='', bind_vars=None, hints=''):
-        if not cols:
-            cols = list('*')
-        if not where_group_order:
-            where_group_order = '1=1'
+    @staticmethod
+    def _prepare_in_clause(where_group_order, bind_vars, additional_col_values=None):
         if not bind_vars:
-            bind_vars = dict()
+            bind_vars = additional_col_values or dict()
         else:
-            new_dict = dict()
+            new_dict = additional_col_values or dict()
             for key, val in bind_vars.items():
                 if isinstance(val, list):       # expand IN clause bind list variable to separate bind variables
                     var_list = [key + '_' + str(_) for _ in range(len(val))]
@@ -78,6 +75,14 @@ class OraDB:
                 else:
                     new_dict[key] = val
             bind_vars = new_dict
+        return where_group_order, bind_vars
+
+    def select(self, from_join, cols=None, where_group_order='', bind_vars=None, hints=''):
+        if not cols:
+            cols = list('*')
+        if not where_group_order:
+            where_group_order = '1=1'
+        where_group_order, bind_vars = self._prepare_in_clause(where_group_order, bind_vars)
         sq = "select {} {} from {} where {}".format(hints, ','.join(cols), from_join, where_group_order)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint('oraDB-' + sq)
@@ -133,15 +138,16 @@ class OraDB:
             return "oraDB insert-execute error: " + str(ex)
         return ''
 
-    def update(self, table_name, col_values, where='', commit=False):
+    def update(self, table_name, col_values, where='', commit=False, bind_vars=None):
         if not where:
             where = "1=1"
+        where, bind_vars = self._prepare_in_clause(where, bind_vars, additional_col_values=col_values)
         sq = "update " + table_name + " set " + ", ".join([c + " = :" + c for c in col_values.keys()]) \
              + " where " + where
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("oraDB.update() query:", sq)
         try:
-            self.curs.execute(sq, **col_values)
+            self.curs.execute(sq, **bind_vars)
             if commit:
                 self.conn.commit()
         except Exception as ex:
@@ -167,7 +173,7 @@ class OraDB:
         return ''
 
     def prepare_ref_param(self, value=None):
-        if isinstance(value, datetime.datetime):
+        if isinstance(value, datetime.datetime):    # also True if value is datetime.date because inherits from datetime
             ora_type = cx_Oracle.DATETIME
         elif isinstance(value, int) or isinstance(value, float):
             ora_type = cx_Oracle.NUMBER

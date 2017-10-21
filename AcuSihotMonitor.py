@@ -851,7 +851,7 @@ class AcuSihotMonitorApp(App):
         for k in data_dict:
             if k.endswith(FILTER_CRITERIA_SUFFIX):
                 dd = data_dict[k]
-                if isinstance(dd, datetime.date):
+                if isinstance(dd, datetime.datetime):   # also True if dd is datetime.date
                     txt = dd.strftime(DATE_DISPLAY_FORMAT) + FILTER_CRITERIA_SEP + txt
                 elif dd:
                     txt = str(dd) + FILTER_CRITERIA_SEP + txt
