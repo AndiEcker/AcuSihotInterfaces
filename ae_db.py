@@ -2,6 +2,8 @@ import os
 import datetime
 
 import cx_Oracle
+from copy import deepcopy
+
 from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 
 DEF_USER = 'SIHOT_INTERFACE'
@@ -39,9 +41,10 @@ class OraDB:
         self.debug_level = debug_level
         self.conn = None
         self.curs = None
+        self.last_err_msg = ""
 
     def connect(self):
-        err_msg = ''
+        self.last_err_msg = ''
         try:
             # old style: self.conn = cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
             self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn)
@@ -50,22 +53,22 @@ class OraDB:
                 uprint("OraDB: connected to Oracle database {} via client version {} with n-/encoding {}/{}"
                        .format(self.dsn, cx_Oracle.clientversion(), self.conn.nencoding, self.conn.encoding))
         except Exception as ex:
-            err_msg = "oraDB-connect " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
+            self.last_err_msg = "oraDB-connect " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
         else:
             try:
                 self.curs = self.conn.cursor()
+                if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                    uprint("OraDB: Oracle database cursor created.")
             except Exception as ex:
-                err_msg = "oraDB-connect cursors " + self.usr + "/" + self.pwd + "@" + self.dsn + " error: " + str(ex)
-        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint(err_msg or "OraDB: Oracle database cursor created.")
-        return err_msg
+                self.last_err_msg = "oraDB-connect cursors " + self.usr + "@" + self.dsn + " error: " + str(ex)
+        return self.last_err_msg
 
     @staticmethod
     def _prepare_in_clause(where_group_order, bind_vars, additional_col_values=None):
         if not bind_vars:
-            bind_vars = additional_col_values or dict()
+            bv = deepcopy(additional_col_values or dict())
         else:
-            new_dict = additional_col_values or dict()
+            new_dict = deepcopy(additional_col_values or dict())
             for key, val in bind_vars.items():
                 if isinstance(val, list):       # expand IN clause bind list variable to separate bind variables
                     var_list = [key + '_' + str(_) for _ in range(len(val))]
@@ -74,25 +77,25 @@ class OraDB:
                         new_dict[var_val[0]] = var_val[1]
                 else:
                     new_dict[key] = val
-            bind_vars = new_dict
-        return where_group_order, bind_vars
+            bv = new_dict
+        return where_group_order, bv
 
     def select(self, from_join, cols=None, where_group_order='', bind_vars=None, hints=''):
+        self.last_err_msg = ""
         if not cols:
             cols = list('*')
         if not where_group_order:
             where_group_order = '1=1'
         where_group_order, bind_vars = self._prepare_in_clause(where_group_order, bind_vars)
         sq = "select {} {} from {} where {}".format(hints, ','.join(cols), from_join, where_group_order)
-        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint('oraDB-' + sq)
         try:
             self.curs.execute(sq, **bind_vars)
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint("oraDB-{}. BindVars={}".format(sq, bind_vars))
                 uprint("oraDB.select() cursor.description:", self.curs.description)
         except Exception as ex:
-            return "oraDB select-execute error: " + str(ex) + (" sql=" + sq if sq else "")
-        return ''
+            self.last_err_msg = "oraDB select-execute error: " + str(ex) + (" sql=" + sq if sq else "")
+        return self.last_err_msg
 
     def cursor_description(self):
         return self.curs.description if self.curs else None
@@ -106,71 +109,79 @@ class OraDB:
         return col_names
 
     def fetch_all(self):
+        self.last_err_msg = ""
         try:
             rows = self.curs.fetchall()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 uprint("oraDB fetch_all(), 1st of", len(rows), "rows:", rows[:1])
         except Exception as ex:
-            uprint("oraDB fetch_all() exception: " + str(ex))
+            self.last_err_msg = "oraDB fetch_all() exception: " + str(ex)
+            uprint(self.last_err_msg)
             rows = None
         return rows or list()
 
     def fetch_value(self, col_idx=0):
+        self.last_err_msg = ""
         try:
             val = self.curs.fetchone()[col_idx]
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 uprint("oraDB fetch_value() value: ", val)
         except Exception as ex:
-            uprint("oraDB fetch_value() exception: " + str(ex))
+            self.last_err_msg = "oraDB fetch_value() exception: " + str(ex)
+            uprint(self.last_err_msg)
             val = None
         return val
 
     def insert(self, table_name, col_values, commit=False):
+        self.last_err_msg = ""
         sq = "insert into " + table_name + " (" + ", ".join(col_values.keys()) \
              + ") values (:" + ", :".join(col_values.keys()) + ")"
-        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("oraDB.insert() query:", sq)
         try:
             self.curs.execute(sq, **col_values)
             if commit:
                 self.conn.commit()
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint("oraDB.insert() query:", sq)
         except Exception as ex:
-            return "oraDB insert-execute error: " + str(ex)
-        return ''
+            self.last_err_msg = "oraDB insert({})-execute error: {}".format(sq, ex)
+        return self.last_err_msg
 
     def update(self, table_name, col_values, where='', commit=False, bind_vars=None):
+        self.last_err_msg = ""
         if not where:
             where = "1=1"
         where, bind_vars = self._prepare_in_clause(where, bind_vars, additional_col_values=col_values)
         sq = "update " + table_name + " set " + ", ".join([c + " = :" + c for c in col_values.keys()]) \
              + " where " + where
-        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("oraDB.update() query:", sq)
         try:
             self.curs.execute(sq, **bind_vars)
             if commit:
                 self.conn.commit()
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint("oraDB.update() query:", sq)
         except Exception as ex:
-            return "oraDB update-execute error: " + str(ex)
-        return ''
+            self.last_err_msg = "oraDB update({})-execute error: {}".format(sq, ex)
+        return self.last_err_msg
 
     def commit(self):
-        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("oraDB.commit()")
+        self.last_err_msg = ""
         try:
             self.conn.commit()
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint("oraDB.commit()")
         except Exception as ex:
-            return "oraDB commit error: " + str(ex)
-        return ''
+            self.last_err_msg = "oraDB commit error: " + str(ex)
+        return self.last_err_msg
 
     def rollback(self):
-        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("oraDB.rollback()")
+        self.last_err_msg = ""
         try:
             self.conn.rollback()
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint("oraDB.rollback()")
         except Exception as ex:
-            return "oraDB rollback error: " + str(ex)
-        return ''
+            self.last_err_msg = "oraDB rollback error: " + str(ex)
+        return self.last_err_msg
 
     def prepare_ref_param(self, value=None):
         if isinstance(value, datetime.datetime):    # also True if value is datetime.date because inherits from datetime
@@ -197,27 +208,30 @@ class OraDB:
         return self.curs.rowcount
 
     def call_proc(self, proc_name, proc_args, ret_dict=None):
+        self.last_err_msg = ""
         try:
             ret = self.curs.callproc(proc_name, proc_args)
             if ret_dict:
                 ret_dict['return'] = ret
         except Exception as ex:
-            return "oraDB call_proc error: " + str(ex)
-        return ''
+            self.last_err_msg = "oraDB call_proc error: " + str(ex)
+        return self.last_err_msg
 
     def close(self, commit=True):
-        if commit:
-            err_msg = self.commit()
-        else:
-            err_msg = self.rollback()
-        try:
-            if self.curs:
+        self.last_err_msg = ""
+        if self.conn:
+            if commit:
+                self.last_err_msg = self.commit()
+            else:
+                self.last_err_msg = self.rollback()
+            try:
+                if self.curs:
+                    self.curs.close()
+                    if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                        uprint("oraDB cursor closed")
+                self.conn.close()
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint("oraDB closing cursor")
-                self.curs.close()
-            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("oraDB closing connection")
-            self.conn.close()
-        except Exception as ex:
-            err_msg += "oraDB close error: " + str(ex)
-        return err_msg
+                    uprint("oraDB connection closed")
+            except Exception as ex:
+                self.last_err_msg += "oraDB close error: " + str(ex)
+        return self.last_err_msg

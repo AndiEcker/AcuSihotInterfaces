@@ -1,6 +1,8 @@
 """
     0.1     first beta (only support GUEST-CREATE/-CHANGE of WEB interface 9.0).
     0.2     extended to support SXML interface V9.0 Level 1 of Minibar/Wellness-center.
+    0.3     made running-server-animation optional, specify debugLevel/logFile in INI and check/fix Transaction number
+            passing/increment - is always duplicated '2' instead the one sent by Sihot (see Track-It closed WO #43242).
 """
 from traceback import format_exc
 
@@ -10,7 +12,7 @@ from ae_db import OraDB, DEF_USER, DEF_DSN
 from ae_tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder, SXML_DEF_ENCODING
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 cae = None  # added for to remove Pycharm warning
 
@@ -81,7 +83,7 @@ def client_to_acu(col_values, ca=None):
         if not err_msg:
             acu_col_values = {k: col_values[k] for k in col_values.keys() if k.startswith('CD_')}
             if ora_db.fetch_value() > 0:
-                err_msg = ora_db.update('T_CD', acu_col_values, "CD_CODE = :cd_code", bind_vars=dict(cd_code=pkey))
+                err_msg = ora_db.update('T_CD', acu_col_values, "CD_CODE = :CD_CODE", bind_vars=dict(CD_CODE=pkey))
             else:
                 err_msg = ora_db.insert('T_CD', acu_col_values)
     ora_db.close()
@@ -141,8 +143,7 @@ def alloc_trigger(oc, guest_id, room_number, old_room_number, sihot_xml):
 
 def create_ack_response(req, ret_code, msg='', status=''):
     resp = SihotXmlBuilder(cae, use_kernel_interface=False, col_map=(), connect_to_acu=False)
-    resp.beg_xml(operation_code='ACK')
-    resp.add_tag('TN', getattr(req, 'tn', '69'))
+    resp.beg_xml(operation_code='ACK', transaction_number=getattr(req, 'tn', '69'))
     resp.add_tag('RC', ret_code)
     if msg:
         resp.add_tag('MSG', msg)
@@ -225,8 +226,9 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             try:
                 req = SUPPORTED_OCS[oc]['reqClass'](cae)
                 req.parse_xml(xml_request)
-                cae.dprint('Before call of ', SUPPORTED_OCS[oc]['ocProcessor'])
+                cae.dprint("Before call of", SUPPORTED_OCS[oc]['ocProcessor'], "xml:", xml_request)
                 xml_response = SUPPORTED_OCS[oc]['ocProcessor'](req)
+                cae.dprint("After call of", SUPPORTED_OCS[oc]['ocProcessor'], "xml:", xml_response)
             except Exception as ex:
                 msg = "SihotRequestXmlHandler.handle_xml() exception: '" + str(ex) + "'\n" + str(format_exc())
                 notify(msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
@@ -238,6 +240,6 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 if __name__ == '__main__':
     server = TcpServer(cae.get_option('serverIP'), cae.get_option('serverPort'), SihotRequestXmlHandler,
                        debug_level=cae.get_option('debugLevel'))
-    server.run()
+    server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 
     cae.shutdown()

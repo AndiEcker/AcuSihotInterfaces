@@ -14,7 +14,7 @@ from ae_notification import Notification
 
 __version__ = '0.1'
 
-SIHOT_DATE_FORMAT = '%d-%m-%y %H:%M:%S'
+USER_DATE_FORMAT = '%d-%m-%y %H:%M:%S'
 
 startup_date = datetime.datetime.now()
 
@@ -26,7 +26,7 @@ cae = ConsoleApp(__version__, "Sihot SXML interface log file checks and optional
 cae.add_parameter('sxml_log_file_name', help="SXML Logfile name (and path)")
 
 cae.add_option('dateFrom', "Date/time of first checked occupation", startup_date - datetime.timedelta(days=1), 'F')
-cae.add_option('dateTill', "Date/time of last checked occupation", startup_date - datetime.timedelta(days=1), 'T')
+cae.add_option('dateTill', "Date/time of last checked occupation", startup_date, 'T')
 cae.add_option('correctAcumen', "Correct room occupation status (check-in/-out) in Acumen (0=No, 1=Yes)", False, 'A')
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
@@ -51,8 +51,8 @@ sxml_log_file_name = cae.get_parameter('sxml_log_file_name')
 uprint("SXML log file:", sxml_log_file_name)
 date_from = cae.get_option('dateFrom')
 date_till = cae.get_option('dateTill')
-uprint("Date range including check-ins from", date_from.strftime(SIHOT_DATE_FORMAT),
-       'and till/before', date_till.strftime(SIHOT_DATE_FORMAT))
+uprint("Date range including check-ins from", date_from.strftime(USER_DATE_FORMAT),
+       'and till/before', date_till.strftime(USER_DATE_FORMAT))
 ac_id = cae.get_option('acuDSN')
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), ac_id)
 sys_id = ac_id
@@ -66,15 +66,30 @@ sys_id = ac_id + ("/" + sh_id if sh_id else "")
 correct_acumen = cae.get_option('correctAcumen')
 if correct_acumen:
     uprint("!!!!  Correcting Acumen Room Occupation Status")
+
+
+def convert_to_date_options_type(datetime_value):
+    return datetime_value if type(date_till) is datetime.datetime else datetime_value.date()
+
+
 if date_from > date_till:
     uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({}).".format(date_from, date_till))
     cae.shutdown(18)
-elif date_till > (startup_date if type(date_till) is datetime.datetime else startup_date.date()):
-    uprint("Future arrivals cannot be checked - dateTill({}) has to be before {}.".format(date_till, startup_date))
-    cae.shutdown(19)
+elif date_till > convert_to_date_options_type(startup_date):
+    uprint("Future arrivals cannot be checked - corrected dateTill({}) will to {}."
+           .format(date_till, convert_to_date_options_type(startup_date)))
+    date_till = convert_to_date_options_type(startup_date)
 
-max_days_diff = cae.get_config('maxDaysDiff', default_value=3)
-uprint("Maximum number of days from expected arrival/departure:", max_days_diff)
+max_days_diff = cae.get_config('maxDaysDiff', default_value=3.0)
+if max_days_diff:
+    uprint("Maximum number of days after/before expected arrival/departure:", max_days_diff)
+days_check_in_before = min(cae.get_config('daysCheckInBefore', default_value=0.0), max_days_diff)
+if days_check_in_before:
+    uprint("Searching for check-ins done maximum {} days before the expected arrival date".format(days_check_in_before))
+days_check_out_after = min(cae.get_config('daysCheckOutAfter', default_value=0.5), max_days_diff)   # 0.5 days == 12 hrs
+if days_check_out_after:
+    uprint("Searching for check-outs done maximum {} days after the expected departure".format(days_check_out_after))
+
 
 '''
 # fetch given date range in chunks for to prevent timeouts and Sihot server blocking issues
@@ -86,10 +101,6 @@ search_flags = cae.get_config('ResSearchFlags', default_value='ALL-HOTELS')
 uprint("Search flags:", search_flags)
 search_scope = cae.get_config('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
 uprint("Search scope:", search_scope)
-
-# html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>
-msf_beg = cae.get_config('monoSpacedFontBegin', default_value='<pre>')
-msf_end = cae.get_config('monoSpacedFontEnd', default_value='</pre>')
 '''
 
 notification = warning_notification_emails = None
@@ -111,6 +122,7 @@ notification_lines = list()     # user discrepancies/warnings
 ac_rows = list()                # acumen reservation occupation
 sh_rows = list()                # sihot reservation requests
 room_status = list()            # occupation room status changes (from SXML log file)
+ora_db = None
 
 
 class OccData:
@@ -187,17 +199,17 @@ def get_date_range(shd):
     if SIHOT_PROVIDES_CHECKOUT_TIME:
         d_str = shd['ARR']['elemVal']
         t_str = shd['ARR-TIME']['elemVal']
-        checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
+        checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, USER_DATE_FORMAT)
         dt_key = PARSE_ONLY_TAG_PREFIX + 'DEP-TIME'
         if dt_key in shd and 'elemVal' in shd[dt_key] and shd[dt_key]['elemVal']:
             d_str = shd['DEP']['elemVal']
             t_str = shd[dt_key]['elemVal']
-            checked_out = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
+            checked_out = datetime.datetime.strptime(d_str + ' ' + t_str, USER_DATE_FORMAT)
         else:
             checked_out = None
     else:
-        checked_in = datetime.datetime.strptime(shd['ARR']['elemVal'], SIHOT_DATE_FORMAT).date()
-        checked_out = datetime.datetime.strptime(shd['DEP']['elemVal'], SIHOT_DATE_FORMAT).date()
+        checked_in = datetime.datetime.strptime(shd['ARR']['elemVal'], USER_DATE_FORMAT).date()
+        checked_out = datetime.datetime.strptime(shd['DEP']['elemVal'], USER_DATE_FORMAT).date()
     return checked_in, checked_out
 
 
@@ -258,39 +270,54 @@ def get_xml_element(xml, element_name):
 
 
 def check_occ_change(dt, oc, rn, sent_xml, ln):
-    def _filter_ac_rows(d):
+    def _filter_ac_rows_by_req_borders(td):
+        td_in_before = datetime.timedelta(days=days_check_in_before if days_check_in_before else 0)
+        td_out_after = datetime.timedelta(days=days_check_out_after if days_check_out_after else 0)
         if oc in ('CI', 'RI'):
-            return [_ for _ in ac_rows if _[3] - d <= dtc <= _[3] + d and _[5] == rn]
+            return [_ for _ in ac_rows if _[3] - td_in_before <= dtt <= _[3] + td and _[5] == rn]
         else:  # oc in ('CO', 'RO')
-            return [_ for _ in ac_rows if _[4] - d <= dtc <= _[4] + d and _[5] == rn]
+            return [_ for _ in ac_rows if _[4] - td <= dtt <= _[4] + td_out_after and _[5] == rn]
 
-    dtc = datetime.datetime(dt.year, dt.month, dt.day) if type(date_from) is datetime.date else dt
+    def _filter_ac_rows_by_aro():
+        return [_ for _ in ac_rows if _[3] <= dtt <= _[4] + datetime.timedelta(hours=12) and _[5] == rn]
+
+    dtt = dt if type(date_from) is datetime.datetime else datetime.datetime(dt.year, dt.month, dt.day)  # trunc datetime
     diff = datetime.timedelta(days=max_days_diff)
-    rows = _filter_ac_rows(diff)
     sn = get_xml_element(sent_xml, 'SN')
+    dts = dt.strftime(USER_DATE_FORMAT)
+    dlv = debug_level >= DEBUG_LEVEL_VERBOSE
+    rows = _filter_ac_rows_by_req_borders(diff)
     if len(rows) > 1:
-        if debug_level >= DEBUG_LEVEL_VERBOSE:
-            add_log_msg("More than one ({}) matching Acumen reservations found: {}".format(len(rows), rows))
+        if dlv:
+            add_log_msg("{}:{: >4}@{}#{: <6}  More than one ({}) matching Acumen reservations found; acu/xml: {}/{}"
+                        .format(oc, rn, dts, ln, len(rows), rows, sent_xml))
         if sn:      # filter on surname (only given for oc==CI/RM currently)
             rows = [_ for _ in rows if _[2].upper() == sn.upper()]
-            if debug_level >= DEBUG_LEVEL_VERBOSE:
+            if dlv:
                 add_log_msg("... {} after filtering by surname {}".format(len(rows), sn))
         while len(rows) != 1 and diff.days > 0:
             diff = datetime.timedelta(days=diff.days - 1)
-            rows = _filter_ac_rows(diff)
-            if debug_level >= DEBUG_LEVEL_VERBOSE:
+            rows = _filter_ac_rows_by_req_borders(diff)
+            if dlv:
                 add_log_msg("... {} after filtering by decremented maxDiffDays to {}".format(len(rows), diff.days))
-    dts = dt.strftime(SIHOT_DATE_FORMAT)
+    elif len(rows) == 0 and oc not in ('CO', 'RO'):     # 1 ARO for several RUs - ignoring checkouts
+        if dlv:
+            add_log_msg("{}:{: >4}@{}#{: <6}  No Acumen reservation found; xml: {}".format(oc, rn, dts, ln, sent_xml))
+        rows = _filter_ac_rows_by_aro()
+        if dlv:
+            add_log_msg("... {} after checking long ARO for several RUs: {}".format(len(rows), rows))
     if len(rows) > 1:
-        add_log_msg("{}:{: >4}@{}#{: <6}  More than one Acumen reservation found: {}".format(oc, rn, dts, ln, rows),
-                    is_error=True)
+        add_log_msg("{}:{: >4}@{}#{: <6}  {}more than one ({}) Acumen reservations found: {}"
+                    .format(oc, rn, dts, ln, "... still " if dlv else "", len(rows), rows), is_error=True)
     elif len(rows) == 1:
         r = rows[0]
         od = OccData(oc, dt, rn, r[0], r[6], r[3], r[4], r[1] + "/" + r[2] + "=" + r[9] + "#" + str(r[10]))
         room_status.append(od)
-        add_log_msg("{}:{: >4}@{}#{: <6}  Occupation/Acumen data: {}/{}".format(oc, rn, dts, ln, od, rows[0]))
-    elif debug_level >= DEBUG_LEVEL_VERBOSE:
-        add_log_msg("{}:{: >4}@{}#{: <6}  No Acumen reservation found".format(oc, rn, dts, ln))
+        add_log_msg("{}:{: >4}@{}#{: <6}  found Acumen reservation; Occupation/Acumen{} data: {}/{}{}"
+                    .format(oc, rn, dts, ln, "/Xml" if dlv else "", od, rows[0], "/" + sent_xml if dlv else ""))
+    elif dlv:
+        add_log_msg("{}:{: >4}@{}#{: <6}  {}no Acumen reservation found"
+                    .format(oc, rn, dts, ln, "... still " if oc not in ('CO', 'RO') else ""))
 
 
 def check_occ_discrepancies(od):
@@ -311,6 +338,8 @@ def check_occ_discrepancies(od):
                 cols = dict(ARO_STATUS=390 if od.op_code == 'CO' else 320, ARO_TIMEIN=od.aro_exp_arrive,
                             ARO_TIMEOUT=od.time_stamp)
                 wrn.append("TimeIn missing too - status={}".format(od.aro_status))
+    if cols and 'ARO_TIMEIN' in cols:
+        cols['ARO_RECD_KEY'] = cols['ARO_TIMEIN']
     if cols and debug_level >= DEBUG_LEVEL_VERBOSE:
         msg += " FIX=" + str(cols)
     if cols or wrn:
@@ -329,6 +358,7 @@ def check_occ_discrepancies(od):
         else:
             notification_add_line("Successfully fixed missing {}: {}".format(msg, od))
             ora_db.commit()
+    return bool(cols)
 
 
 add_log_msg("Fetching reservations from Acumen", importance=4)
@@ -385,61 +415,91 @@ except Exception as ex:
 
 # process log file
 add_log_msg("Processing log file " + sxml_log_file_name, importance=4)
+fixable = 0
 try:
     with open(sxml_log_file_name, encoding='cp1252') as log_file:
         lines = log_file.readlines()
         op_code = last_line = ''
+        added_lines = 0
+        last_ts = datetime.datetime.now()
+        biggest_gap = datetime.timedelta(days=0)
+        first_log_date = None
         for line_no, line_str in enumerate(lines):
             line_str = line_str[:-1]    # remove trailing \n
             if op_code:
                 room_no = get_xml_element(line_str, 'RN')
                 if not room_no:     # especially CI has mostly two lines (with RN in the second line)
                     last_line += line_str
+                    added_lines += 1
                     continue
                 elif last_line:
                     line_str = last_line + line_str
+                    line_no -= added_lines
                 cae.dprint("\nParse Log Entry:", time_stamp, op_code, line_str, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                 check_occ_change(time_stamp, 'RI' if op_code == 'RM' else op_code, room_no, line_str[2:], line_no)
                 room_no = get_xml_element(line_str, 'ORN')
                 if room_no:
                     check_occ_change(time_stamp, 'RO', room_no, line_str[2:], line_no)
                 op_code = last_line = ''
+                added_lines = 0
                 continue
 
             time_stamp = get_log_time_stamp(line_str)
             if not time_stamp:
                 continue
-            tsc = time_stamp.date() if type(date_from) is datetime.date else time_stamp
+            if not first_log_date:
+                first_log_date = time_stamp
+            if time_stamp - last_ts > biggest_gap:
+                biggest_gap = time_stamp - last_ts
+            last_ts = time_stamp
+            tsc = convert_to_date_options_type(time_stamp)
             if tsc < date_from:
                 continue
             elif tsc > date_till:
                 break
             elif ': onReceive: ' in line_str and line_str[-2:] in ('CI', 'CO', 'RM'):
                 op_code = line_str[-2:]
+        if convert_to_date_options_type(first_log_date) > date_from:
+            cae.dprint("Log file gap between specified begin date {} and {}".format(date_from, first_log_date))
+        if convert_to_date_options_type(last_ts) < date_till:
+            cae.dprint("Log file gap/cut from end of log file {} till specified end date {}".format(last_ts, date_till))
+        cae.dprint("Biggest gap between log entries in specified log file:", biggest_gap)
 
     add_log_msg("Running " + str(len(room_status)) + " discrepancy checks"
                 + (" and data fixes" if correct_acumen else ""), importance=4)
-    for occ_data in room_status:
-        check_occ_discrepancies(occ_data)
+    fixed_aro_codes = list()
+    for occ_data in reversed(room_status):  # process reversed to detect&skip multiple occupation changes on same ARO
+        if occ_data.aro_code in fixed_aro_codes:
+            add_log_msg("Occupation got already fixed; Acumen data: {}".format(occ_data))
+            continue
+        if check_occ_discrepancies(occ_data):
+            fixed_aro_codes.append(occ_data.aro_code)
+            fixable += 1
+
 except Exception as ex:
     add_log_msg("Processing interrupted by exception: {}".format(ex), is_error=True, importance=3)
     print_exc()
 
+if ora_db:
+    ora_db.close()
 add_log_msg("Finished " + str(len(room_status)) + " discrepancy checks"
-            + (" and data fixes" if correct_acumen else ""), importance=4)
+            + (" and data fixes" if correct_acumen else "") + " - number of fixable AROs=" + str(fixable), importance=4)
 
 
 send_err = send_err2 = None
 if notification:
-    subject = "Sihot Occupation Log Checker protocol [" + sys_id + "]"
-    mail_body = str(len(log_items)) + " PROTOCOL ENTRIES:\n\n" + "\n\n".join(log_items)
-    send_err = notification.send_notification(mail_body, subject=subject)
+    subject = "Sihot Occupation Log Checker protocol"
+    param_desc = ("FIXING" if correct_acumen else "CHECKING") + " OCC CHANGES BETWEEN " \
+        + date_from.strftime(USER_DATE_FORMAT) + " AND " + date_till.strftime(USER_DATE_FORMAT)
+    mail_body = str(len(log_items)) + " PROTOCOL ENTRIES WHILE " + param_desc + ":\n\n" + "\n\n".join(log_items)
+    send_err = notification.send_notification(mail_body, subject=subject, body_style='plain')
     if send_err:
         add_log_msg(subject + " send error: {}. mail-body={}".format(send_err, mail_body), is_error=True, importance=4)
     if warning_notification_emails and (notification_lines or log_errors):
-        mail_body = str(len(notification_lines)) + " DISCREPANCIES:\n\n" + "\n\n".join(notification_lines) \
-                    + "\n\n" + str(len(log_errors)) + " ERRORS:\n\n" + "\n\n".join(log_errors)
-        subject = "Sihot Occupation Log Checker discrepancies/errors [" + sys_id + "]"
+        subject = "Sihot Occupation Log Checker discrepancies/errors"
+        mail_body = str(len(notification_lines)) + " DISCREPANCIES WHILE " + param_desc + ":\n\n" \
+            + "\n\n".join(notification_lines) \
+            + "\n\n" + str(len(log_errors)) + " ERRORS:\n\n" + "\n\n".join(log_errors)
         send_err2 = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err2:
             add_log_msg(subject + " send error: {}. mail-body={}".format(send_err2, mail_body), is_error=True,

@@ -4,7 +4,7 @@ select RU_CODE
      , RU_STATUS
      , RU_RESORT, RU_ATGENERIC
      , RU_FROM_DATE as ARR_DATE, RU_FROM_DATE + RU_DAYS as DEP_DATE
-     , RU_ADULTS, RU_CHILDREN
+     , greatest(RU_ADULTS, 2) as RU_ADULTS, RU_CHILDREN
      , RU_RHREF, RU_ROREF
      , RU_FLIGHT_AIRPORT, RU_FLIGHT_NO, to_char(RU_FLIGHT_LANDS, 'HH24:MI:SS') as RU_FLIGHT_LANDS, RU_FLIGHT_PICKUP
      --, RU_BOARDREF                  -- ordered meal plan - no longer needed since we are having RUL_SIHOT_PACK
@@ -74,6 +74,7 @@ select RU_CODE
   ae:01-11-16 V03: added new SIHOT_-columns (reservation type, allotment-no, special requests, guest surcharge, apartment features).
   ae:20-09-17 V04: removed most of the hard-coded TK/tk/TC exceptions (now done via cfg settings).
   ae:05-10-17 V05: fixed bug for to cancel Sihot reservation if marketing request set back to pending (changed join to T_RH from inner to left outer and res type to 'S' if RU_RHREF is NULL).  
+  ae:26-10-17 V06: added greatest(RU_ADULTS, 2) for to ensure a minimum of 2 adults created in the Sihot system.
 */
 /
 

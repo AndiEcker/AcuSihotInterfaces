@@ -4,7 +4,7 @@ import datetime
 from sxmlif import SihotXmlParser, Response, GuestFromSihot, ResFromSihot, SihotXmlBuilder, \
     USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF
 
-
+'''
 class TestAvailCats:
     def test_all_hotel_all_cats(self, avail_cats):
         ret = avail_cats.avail_rooms() # hotel_id='2')
@@ -34,6 +34,7 @@ class TestAvailCats:
         assert isinstance(ret, dict)
         assert len(ret)
         assert 'STDP' in ret
+'''
 
 
 class TestSihotXmlParser:

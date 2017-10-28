@@ -14,7 +14,6 @@ DEBUG_LEVEL_DISABLED = 0
 DEBUG_LEVEL_ENABLED = 1
 DEBUG_LEVEL_VERBOSE = 2
 DEBUG_LEVEL_TIMESTAMPED = 3
-_debug_level = DEBUG_LEVEL_DISABLED
 debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
 
 # default name of main config section
@@ -23,6 +22,16 @@ MAIN_SECTION_DEF = 'Settings'
 # default date/time formats in config files/variables
 DATE_TIME_ISO = '%Y-%m-%d %H:%M:%S.%f'
 DATE_ISO = '%Y-%m-%d'
+
+# initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
+_ca_instance = None
+
+
+def get_debug_level():
+    if _ca_instance and 'debugLevel' in _ca_instance.config_options:
+        return _ca_instance.config_options['debugLevel'].value
+    return DEBUG_LEVEL_DISABLED
+
 
 # core encoding that will always work independent from destination (console, file system, XMLParser, ...)
 DEF_ENCODING = 'ascii'
@@ -67,7 +76,7 @@ def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='
     else:
         try_method = ""
         text = None
-    if try_method and _debug_level >= DEBUG_LEVEL_VERBOSE:
+    if try_method and get_debug_level() >= DEBUG_LEVEL_VERBOSE:
         try:        # first try to put ori_text in error message
             uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
                                   ", " + DEF_ENCODING + " text:\n'" +
@@ -94,66 +103,6 @@ def full_stack_trace(ex):
             for line in item[4]:
                 ret += ' '*4 + line.lstrip()
     return ret
-
-
-# save original stdout/stderr
-ori_std_out = sys.stdout
-ori_std_err = sys.stderr
-app_std_out = ori_std_out
-app_std_err = ori_std_err
-
-
-def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_def='backslashreplace'):
-    if not file:
-        file = app_std_out  # cannot be specified as argument default because ConsoleApp._check_logging() may change it
-    enc = file.encoding
-
-    # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
-    # ..UnicodeEncodeError: 'charmap' codec can't encode character '\x9f' in position 191: character maps to <undefined>
-    # if enc == 'UTF-8':
-    #     print(*objects, sep=sep, end=end, file=file, flush=flush)
-    # else:
-    #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
-    #           sep=sep, end=end, file=file, flush=flush)
-    if _debug_level >= DEBUG_LEVEL_TIMESTAMPED:
-        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + objects
-    else:
-        print_objects = objects
-    try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
-    while True:
-        try:
-            print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),
-                  sep=sep, end=end, file=file, flush=flush)
-            break
-        except UnicodeEncodeError:
-            fixed_objects = list()
-            for obj in print_objects:
-                if isinstance(obj, str) or isinstance(obj, bytes):
-                    obj = fix_encoding(obj, enc, try_counter)
-                    if not obj:
-                        raise
-                fixed_objects.append(obj)
-            print_objects = fixed_objects
-        try_counter += 1
-
-
-class _DuplicateSysOut:
-    def __init__(self, log_file, sys_out=ori_std_out):
-        self.log_file = log_file
-        self.sys_out = sys_out
-
-    def write(self, message):
-        if self.log_file:
-            try:
-                self.log_file.write(message)
-            except UnicodeEncodeError:
-                # log file has different encoding than console, so simply replace with backslash
-                enc = self.log_file.encoding
-                self.log_file.write(fix_encoding(message, encoding=enc))
-        self.sys_out.write(message)
-
-    def __getattr__(self, attr):
-        return getattr(self.sys_out, attr)
 
 
 class Setting:
@@ -223,12 +172,76 @@ class Setting:
         return ret
 
 
-_config_options = None     # initialized in ConsoleApp.__init__()
+# save original stdout/stderr
+ori_std_out = sys.stdout
+ori_std_err = sys.stderr
+app_std_out = ori_std_out
+app_std_err = ori_std_err
+
+
+class _DuplicateSysOut:
+    def __init__(self, log_file, sys_out=ori_std_out):
+        self.log_file = log_file
+        self.sys_out = sys_out
+
+    def write(self, message):
+        if self.log_file and not self.log_file.closed:
+            try:
+                self.log_file.write(message)
+            except UnicodeEncodeError:
+                # log file has different encoding than console, so simply replace with backslash
+                enc = self.log_file.encoding
+                self.log_file.write(fix_encoding(message, encoding=enc))
+        if not self.sys_out.closed:
+            self.sys_out.write(message)
+
+    def __getattr__(self, attr):
+        return getattr(self.sys_out, attr)
+
+
+def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_def='backslashreplace'):
+    if not file:
+        # app_std_out cannot be specified as file argument default because get initialized after import of this module
+        # .. within ConsoleApp._open_log_file(). Use ori_std_out for animation prints (see ae_tcp.py/TcpServer.run()).
+        file = ori_std_out if end == '\r' else app_std_out
+    enc = file.encoding
+
+    # creating new log file and backup of current one if the current one has more than 20 MB in size
+    if _ca_instance is not None:
+        _ca_instance.log_file_check_rotation()
+
+    # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
+    # ..UnicodeEncodeError: 'charmap' codec can't encode character '\x9f' in position 191: character maps to <undefined>
+    # if enc == 'UTF-8':
+    #     print(*objects, sep=sep, end=end, file=file, flush=flush)
+    # else:
+    #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
+    #           sep=sep, end=end, file=file, flush=flush)
+    if get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
+        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + objects
+    else:
+        print_objects = objects
+    try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
+    while True:
+        try:
+            print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),
+                  sep=sep, end=end, file=file, flush=flush)
+            break
+        except UnicodeEncodeError:
+            fixed_objects = list()
+            for obj in print_objects:
+                if isinstance(obj, str) or isinstance(obj, bytes):
+                    obj = fix_encoding(obj, enc, try_counter)
+                    if not obj:
+                        raise
+                fixed_objects.append(obj)
+            print_objects = fixed_objects
+        try_counter += 1
 
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 log_file_def='', config_eval_vars=None, additional_cfg_files=None):
+                 log_file_def='', config_eval_vars=None, additional_cfg_files=None, num_log_backups=9, log_max_size=20):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version          application version.
             :param app_desc             application description.
@@ -237,8 +250,28 @@ class ConsoleApp:
             :param config_eval_vars     dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
             :param additional_cfg_files list of additional CFG/INI file names (opt. incl. abs/rel. path).
+            :param num_log_backups      maximum number of log file backups.
+            :param log_max_size         maximum size in MBytes of a log file.
         """
-        global _config_options
+        """
+            :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
+                                        as flag to ensure that the command line arguments get re-parsed if add_option()
+                                        get called after a first call to methods which are initiating the re-fetch of
+                                        the args and INI/cfg vars (like e.g. get_option() or dprint()).
+            :ivar _log_file_obj         file handle of currently opened log file (opened in self._parse_args()).
+            :ivar _num_log_backups      maximum number of rotating backups of the log file.
+            :ivar _log_max_size         maximum size in MBytes of a log file.
+            :ivar config_options        module variable with pre-/user-defined options (dict of Setting instances).
+            :var  _ca_instance          module variable referencing this (singleton) instance.
+        """
+        global _ca_instance
+        self._parsed_args = None
+        self._log_file_obj = None       # has to be initialized before _ca_instance, else uprint() will throw exception
+        self._num_log_backups = num_log_backups
+        self._log_max_size = log_max_size
+        self.config_options = dict()
+        _ca_instance = self
+
         self.config_eval_vars = config_eval_vars or dict()
 
         cwd_path = os.getcwd()
@@ -251,17 +284,6 @@ class ConsoleApp:
 
         uprint(self._app_name, " V", app_version, "  Startup", datetime.datetime.now(), app_desc)
         uprint("####  Initialization......  ####")
-
-        """
-            :var  _config_options              contains predefined and user-defined options (dict of Setting instances).
-            :ivar _parsed_args          flag to ensure that the command line arguments get re-parsed if add_option()
-                                        get called after a first call to methods which are initiating the re-fetch of
-                                        the args and INI/cfg vars (like e.g. get_option() or dprint()).
-            :ivar _log_file             file handle of currently opened log file (opened in self._parse_args()).
-        """
-        _config_options = dict()
-        self._parsed_args = None
-        self._log_file = None
 
         # compile list of cfg/ini files - the last file overwrites previously loaded variable values
         INI_EXT = '.ini'
@@ -318,7 +340,6 @@ class ConsoleApp:
             For string expressions that need to evaluated for to determine their value you either can pass
             True for the evaluate parameter or you enclose the string expression with triple high commas.
         """
-        global _config_options
         self._parsed_args = None        # request (re-)parsing of command line args
         if not short_opt:
             short_opt = name[0]
@@ -329,7 +350,7 @@ class ConsoleApp:
         setting.value = cfg_val
         self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=cfg_val,
                                       type=setting.convert_value, choices=choices, metavar=name)
-        _config_options[name] = setting
+        self.config_options[name] = setting
 
     def add_parameter(self, *args, **kwargs):
         self._arg_parser.add_argument(*args, **kwargs)
@@ -339,21 +360,16 @@ class ConsoleApp:
             self.add_option() sets the determined config file value as the default value and then following call of
             .. _arg_parser.parse_args() overwrites it with command line argument value if given
         """
-        global _debug_level, _config_options
         self._parsed_args = self._arg_parser.parse_args()
 
-        for name in _config_options.keys():
-            _config_options[name].value = getattr(self._parsed_args, name)
+        for name in self.config_options.keys():
+            self.config_options[name].value = getattr(self._parsed_args, name)
 
-        log_file = _config_options['logFile'].value
+        log_file = self.config_options['logFile'].value
         if log_file:  # enable logging
-            global app_std_out, app_std_err
             try:
-                if self._log_file:
-                    self._log_file.close()
-                self._log_file = open(log_file, "a")
-                app_std_out = sys.stdout = _DuplicateSysOut(self._log_file)
-                app_std_err = sys.stderr = _DuplicateSysOut(self._log_file, sys_out=ori_std_err)
+                self._close_log_file()
+                self._open_log_file()
             except Exception as ex:
                 uprint("****  ConsoleApp._parse_args(): enable logging exception=", ex)
 
@@ -361,7 +377,7 @@ class ConsoleApp:
         uprint("####  Startup finished....  ####")
 
         # finished argument parsing - now print chosen option values to the console
-        _debug_level = _config_options['debugLevel'].value
+        _debug_level = self.config_options['debugLevel'].value
         if _debug_level:
             uprint("Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):", _debug_level)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
@@ -383,6 +399,8 @@ class ConsoleApp:
             The returned value has the same type as the value specified in the add_option() call and is the value from
             either (ordered by precedence - first specified/found value will be returned):
             - command line arguments option
+            - default section of the INI/CFG file(s) that got specified in the additional_cfg_files parameter of this
+              object instantiation (see __init__() method of this class).
             - default section of INI file in the current working directory (cwd)
             - default section of CFG file in the current working directory (cwd)
             - default section of INI file in the application directory (where the main py or exe file is placed)
@@ -394,13 +412,10 @@ class ConsoleApp:
         """
         if not self._parsed_args:
             self._parse_args()
-        return _config_options[name].value if name in _config_options else default_value
+        return self.config_options[name].value if name in self.config_options else default_value
 
     def set_option(self, name, val, cfg_fnam=None, save_to_config=True):
-        global _debug_level, _config_options
-        _config_options[name].value = val
-        if name == 'debugLevel' and not save_to_config:
-            _debug_level = _config_options[name].value
+        self.config_options[name].value = val
         return self.set_config(name, val, cfg_fnam) if save_to_config else ''
 
     def get_parameter(self, name):
@@ -414,8 +429,8 @@ class ConsoleApp:
         return val
 
     def get_config(self, name, section=None, default_value=None, cfg_parser=None, value_type=None):
-        if name in _config_options and section in (MAIN_SECTION_DEF, '', None):
-            val = _config_options[name].value
+        if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
+            val = self.config_options[name].value
         else:
             s = Setting(name=name, value=default_value, value_type=value_type)  # Setting used only for conversion/eval
             s.value = self._get_config_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
@@ -423,16 +438,13 @@ class ConsoleApp:
         return val
 
     def set_config(self, name, val, cfg_fnam=None, section=None):
-        global _debug_level
         if not cfg_fnam:
             cfg_fnam = self._cfg_fnam
         if not section:
             section = MAIN_SECTION_DEF
 
-        if name in _config_options and section in (MAIN_SECTION_DEF, '', None):
-            _config_options[name].value = val
-            if name == 'debugLevel':
-                _debug_level = _config_options[name].value
+        if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
+            self.config_options[name].value = val
 
         err_msg = ''
         if os.path.isfile(cfg_fnam):
@@ -465,16 +477,54 @@ class ConsoleApp:
     def app_name(self):
         return self._app_name
 
+    def _open_log_file(self):
+        global app_std_out, app_std_err
+        self._log_file_obj = open(self.config_options['logFile'].value, "a")
+        if app_std_out == ori_std_out:      # first call/open-of-log-file?
+            app_std_out = sys.stdout = _DuplicateSysOut(self._log_file_obj)
+            app_std_err = sys.stderr = _DuplicateSysOut(self._log_file_obj, sys_out=ori_std_err)
+        else:
+            app_std_out.log_file = self._log_file_obj
+            app_std_err.log_file = self._log_file_obj
+
+    def _backup_log_file(self):
+        if self._log_file_obj:
+            return "log file is still open - you have to call _close_log_file() before"
+        log_file_path, log_file_ext = os.path.splitext(self.config_options['logFile'].value)
+        for i in range(self._num_log_backups - 1, -1, -1):
+            sfn = log_file_path + ("-" + str(i) if i else "") + log_file_ext
+            dfn = log_file_path + "-" + str(i + 1) + log_file_ext
+            if os.path.exists(sfn):
+                if os.path.exists(dfn):
+                    os.remove(dfn)
+                os.rename(sfn, dfn)
+
+    def _close_log_file(self):
+        global app_std_out, app_std_err
+        if self._log_file_obj:
+            app_std_out.log_file = None
+            app_std_err.log_file = None
+            self._log_file_obj.close()
+            self._log_file_obj = None
+
+    def log_file_check_rotation(self):
+        if self._log_file_obj is not None:
+            self._log_file_obj.seek(0, 2)  # due to non-posix-compliant Windows feature
+            if self._log_file_obj.tell() >= self._log_max_size * 1024 * 1024:
+                self._close_log_file()
+                self._backup_log_file()
+                self._open_log_file()
+
     def shutdown(self, exit_code=0):
         if exit_code:
             uprint("****  Non-zero exit code:", exit_code)
         uprint('####  Shutdown............  ####')
-        if self._log_file:
+        if self._log_file_obj:
             app_std_err.log_file = None  # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
             app_std_out.log_file = None
             sys.stdout = ori_std_out  # set back for to prevent stack overflow/recursion error with kivy logger:
             sys.stderr = ori_std_err  # .. "Fatal Python error: Cannot recover from stack overflow"
-            self._log_file.close()
+            self._close_log_file()
         sys.exit(exit_code)
 
 

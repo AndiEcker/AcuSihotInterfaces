@@ -2,6 +2,7 @@
     0.4     changed command call from check_call() to check_output() for to determine and pass StdOut/StdErr  AND
             added outer try exception fallback into main loop (for to catch strange/unsuspected errors)
     0.5     added new option sendOutput for to allow caller to use either check_call() or check_output().
+    0.6     added outage check of T_SRSL/ARO (Sihot-To-Acumen interface), changed run lock reset to be optional.
 """
 import os
 import time
@@ -15,9 +16,11 @@ from ae_db import OraDB, DEF_USER, DEF_DSN
 from ae_notification import Notification
 from sxmlif import PostMessage, GuestSearch, SXML_DEF_ENCODING
 
-__version__ = '0.5'
+__version__ = '0.6'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
+MAX_SRSL_ARO_OUTAGE_HOURS = 9.0
+
 
 cae = ConsoleApp(__version__, "Periodically execute and supervise command")
 cae.add_option('cmdLine', "command [line] to execute", '', 'x')
@@ -89,6 +92,13 @@ else:
 check_interval = command_interval // env_checks_per_interval
 last_timer = last_run = last_check = None
 
+reset_run_time_lock = cae.get_config('resetRunTimeLock', default_value=False)
+if reset_run_time_lock:
+    uprint("Resetting Run-Time-Lock is activated!")
+
+
+last_sync = datetime.datetime.now()
+
 
 def get_timer_corrected():
     """ get timer ticker value (seconds) and reset all timer vars on overflow (which should actually never happen
@@ -103,6 +113,8 @@ def get_timer_corrected():
 
         
 def reset_last_run_time(interval, force=False):
+    if not reset_run_time_lock:
+        return
     try:
         cmd_cfg_file_name = os.path.splitext(command_line_args[0])[0] + '.ini'
         if os.path.isfile(cmd_cfg_file_name):
@@ -157,7 +169,7 @@ while True:
             if notification:
                 send_err = notification.send_notification(err_msg, subject='WatchPupPy notification')
                 if send_err:
-                    uprint(' #### WatchPupPy send notification error: {}. Unsent error message: {}.'
+                    uprint(' ####  WatchPupPy send notification error: {}. Unsent error message: {}.'
                            .format(send_err, err_msg))
             else:
                 uprint(' **** ' + err_msg)
@@ -188,27 +200,74 @@ while True:
                            debug_level=cae.get_option('debugLevel'))
             err_msg = ora_db.connect()
             if err_msg:
+                ora_db.close()
                 err_msg = "Acumen environment check connection error: " + err_msg
                 continue
+
             err_msg = ora_db.select('dual', ['sysdate'])
             if err_msg:
                 ora_db.close()
                 err_msg = "Acumen environment check selection error: " + err_msg
                 continue
+
             err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
+            if err_msg:
+                ora_db.close()
+                err_msg = "Acumen environment T_RO/TK selection error: " + err_msg
+                continue
             rows = ora_db.fetch_all()
+            if ora_db.last_err_msg:
+                ora_db.close()
+                err_msg = "Acumen environment fetch T_RO/TK error: " + ora_db.last_err_msg
+                continue
             tc_sc_obj_id = str(rows[0][0])  # == '27'
             tc_sc_mc = rows[0][1]  # == 'TCRENT'
+
             err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
+            if err_msg:
+                ora_db.close()
+                err_msg = "Acumen environment T_RO/tk selection error: " + err_msg
+                continue
             rows = ora_db.fetch_all()
+            if ora_db.last_err_msg:
+                ora_db.close()
+                err_msg = "Acumen environment fetch T_RO/tk error: " + ora_db.last_err_msg
+                continue
             tc_ag_obj_id = str(rows[0][0])  # == '20'
             tc_ag_mc = rows[0][1]  # == 'TCAG'
-            ora_db.close()
+
             if tc_sc_obj_id != '27' or tc_sc_mc != 'TCRENT' or tc_ag_obj_id != '20' or tc_ag_mc != 'TCAG':
                 err_msg = ("Acumen environment check found Thomas Cook configuration errors/discrepancies:"
                            " expected {}/{}/{}/{} but got {}/{}/{}/{}.") \
                     .format('27', 'TCRENT', '20', 'TCAG', tc_sc_obj_id, tc_sc_mc, tc_ag_obj_id, tc_ag_mc)
                 continue
+
+            err_msg = ora_db.select('T_SRSL', ['MAX(SRSL_DATE)'], "SRSL_TABLE = 'ARO' and SRSL_STATUS = 'SYNCED'")
+            if err_msg:
+                ora_db.close()
+                err_msg = "Acumen environment T_SRSL/ARO selection error: " + err_msg
+                continue
+            rows = ora_db.fetch_all()
+            if ora_db.last_err_msg:
+                ora_db.close()
+                err_msg = "Acumen environment fetch T_SRSL/ARO error: " + ora_db.last_err_msg
+                continue
+            newest_sync = rows[0][0]
+            if newest_sync < last_sync:     # directly after WatchPupPy startup use newest_sync instead of startup-time
+                last_sync, newest_sync = newest_sync, last_sync
+            if newest_sync - last_sync > datetime.timedelta(hours=MAX_SRSL_ARO_OUTAGE_HOURS):
+                warn_msg = "Sihot-To-Acumen/AcuServer does not have new sync entries since {} (more than {} hours)" \
+                    .format(last_sync, MAX_SRSL_ARO_OUTAGE_HOURS)
+                if notification:
+                    send_err = notification.send_notification(warn_msg, subject='WatchPupPy warning notification')
+                    if send_err:
+                        uprint(' ####  WatchPupPy warning notification send error: {}. Unsent warning message: {}.'
+                               .format(send_err, err_msg))
+                else:
+                    uprint(warn_msg)
+            last_sync = newest_sync
+
+            ora_db.close()
         else:
             tc_sc_obj_id = '27'
             tc_sc_mc = 'TCRENT'

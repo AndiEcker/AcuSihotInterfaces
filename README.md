@@ -10,15 +10,15 @@ This interface suite project is including the following command line tools:
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Web, Sxml |
-| AcuSihotMonitor | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| ClientQuestionnaireExport | Export check-outs from Sihot to CSV file | Web |
+| [AcuSihotMonitor](#AcuSihotMonitor-Application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
+| [ClientQuestionnaireExport](#ClientQuestionnaireExport-Application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
 | SfContactValidator | Salesforce Contact Data Validator | - |
 | ShSfContactMigration | Migrate contactable guests from Sihot to Salesforce | Web |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
-| SihotOccLogChecker | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
-| SihotResImport | Import Thomas Cook (Scandinavian) R*.txt files into Sihot.PMS | Kernel, Web |
+| [SihotOccLogChecker](#SihotOccLogChecker-Application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
+| [SihotResImport](#SihotResImport-Application) | Import Thomas Cook (Scandinavian) R*.txt files into Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
 | WatchPupPy | Periodically execute and supervise command | - |
@@ -53,9 +53,9 @@ are case-sensitive. The following table is listing them sorted by the option nam
 
 | Option | Description | Default | Short option | Commands |
 | --- | --- | --- | --- | --- |
-| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | additionalContactFilter | Additional WHERE filter clause for Contact SOQL query | W | SfContactValidator |
 | addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfContactValidator |
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
@@ -90,14 +90,14 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration, SihotResImport |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
 | timeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotResImport, SihotResSync |
+| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 | xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options.
@@ -173,16 +173,65 @@ Allows to specify/change the content of the data row columns exported CSV file. 
 ### SihotOccLogChecker Application
 
 This command line tool is helping to check and optionally fix any missing occupation data changes (like Room-Checkin,
--Checkout or -Move) within the Acumen system. Occupation data changes done in Sihot get normally transferred via
-the Sihot SXML interface first to the AcuServer and from there to the Acumen system. So if either the SXML interface
-or the AcuServer is not running (like happened recently between 16/10/2017 14:07:32 and 18/10/2017 15:09:53), then
-you can use SihotOccLogChecker for to check and repair the related T_ARO data in Acumen.
+-Checkout or -Move) within the Acumen system.
+
+The tool is parsing each Check-In (CI), Check-Out (CO) and Room.Move (RM) in the Sihot SXML interface log file for to
+compare it with the Acumen data. There will be lots of discrepancies shown for reservations that are imported
+into Sihot via Siteminder or created manually (because they not existing in Acumen). Therefore on the first run you only
+need to the check the summary at the end of the console output (as well as at the end of the log file, created mostly
+in the log sub-folder). 
+
+The summary consists e.g. of the number of fixable reservations - if this value is zero than everything is ok, because
+there is nothing that this tool could repair for you. A few line above you should double check if there any gaps between
+the specified date range and the log entry timestamps within the specified log file.
+
+Occupation data changes done in Sihot get normally transferred via the Sihot SXML interface first to the AcuServer 
+and from there to the Acumen system. So if either the SXML interface
+or the AcuServer is not running correctly (like happened recently between 16/10/2017 14:07:32 and 18/10/2017 15:09:53),
+then you can use SihotOccLogChecker for to check and repair the related T_ARO data in Acumen.
+
+So for to check the discrepancies for the above date range you have to provide the exact date range with the
+command line options `dateFrom` and `dateTill` to SihotOccLogChecker, like shown underneath:
+
+`--dateFrom="2017-10-16 14:07:33.0" -dateTill="2017-10-18 15:09:52.0"`
+
+The default value for `dateFrom` is yesterday at the same time and for `dateTill` it is the current time.
+
+Additionally you have to specify the Acumen server with the `acuDSN` command line option, the Acumen user name and
+password with the `acuUser` and `acuPassword` command line options and finally the path and filename of the Sihot
+SXML log file as command line parameter (e.g. `E:\sihot\log\SP\SXML_ACUMEN@SP.log` directly from tf-sh-sihot1v or
+`\tf-sh-sihot1v\e$\sihot\log\sp\SXML_ACUMEN@SP.log` from the network).
+
+After checking the discrepancies you can add the `correctAcumen` command line option for to fix the Acumen
+occupation status. If you want for example to fix the missing occupation changes in our second big outage (between
+21/10/2017 17:54:38 and 23/10/2017 10:20:50) in Acumen you have to specify the following command line arguments: 
+
+`-F="2017-10-21 17:54:38.0" -T="2017-10-23 10:20:50.0" -A=1 -u=AECKER -p=password -d=SP.WORLD`
+
+In the last example the short options got used (see the Short Option column in the section
+[General command line arguments](#General-command-line-arguments) above). For a more verbose output you can also
+pass the `debugLevel` command line option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
+with timestamp).
 
 #### maxDaysDiff INI/config setting
 
 Allows to specify the maximum number of days of difference between the expected and the real check-in/-out day. The
 default value is 2 days. FYI: the Oracle procedure P_SIHOT_ALLOC() that is used by AcuServer to pass occupation
 changes to Acumen is using 4 days of difference (see constant SihotRoomChangeMaxDaysDiff declared in the K package).
+
+#### daysCheckInBefore INI/config setting
+
+This config variable allows this tool to search also for Acumen reservations that got checked-in the given number
+of days before the expected arrival date.
+ 
+Please note that the value of this setting is restricted by the value of the maxDaysDiff INI/config setting (see above).
+
+#### daysCheckOutAfter INI/config setting
+
+This config variable allows this tool to search also for Acumen reservations that got checked-out the given number
+of days after the expected departure date.
+
+Please note that the value of this setting is restricted by the value of the maxDaysDiff INI/config setting (see above).
 
 
 ### SihotResImport Application
@@ -195,9 +244,9 @@ an import path folder for each supported import channel (e.g. C:\JSON_Import). T
 as command line argument when you start the SihotResImport application (see next paragraph). Please note that the user
 need to have full access (read, write and create folder privileges) within each of these import channel folders. 
 
-The provided command line parameters are documented above in the section "General command line arguments". The most
-import is `jsonPath` for to specify the import path and file mask for OTA JSON files - this value defaults 
-to `C:/JSON_Import/*.json`.
+The provided command line options are documented above in the section
+[General command line arguments](#General-command-line-arguments). The most important one is the `jsonPath` option, 
+for to specify the import path and file mask for OTA JSON files - this value defaults to `C:/JSON_Import/*.json`.
 
 For to run this application in console mode (headless without any user interface), simply specify a valid 
 Acumen user name (acuUser) and password (acuPassword) as command line parameters (or via one of supported config/INI files).

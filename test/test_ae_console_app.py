@@ -3,10 +3,38 @@ import sys
 import os
 import datetime
 
-from ae_console_app import ConsoleApp, DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, full_stack_trace
+from ae_console_app import ConsoleApp, DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, full_stack_trace, uprint
 
 
-class TestOptions:
+class TestLogFile:
+    def test_log_file_rotation(self):
+        log_file = '../log/test_log_file_rot.log'
+        cae = ConsoleApp('0.0', 'test_log_file_rotation', log_file_def=log_file, log_max_size=.001)
+        old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
+        sys.argv = []
+        assert cae.get_option('logFile')    # get_option() has to be called at least once for to create log file
+        for i in range(12):
+            for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                uprint("TestLogEntry{: >26}{: >26}".format(i, j))
+        # clean up
+        cae._close_log_file()
+        os.remove(log_file)
+        for i in range(9):
+            fn, ext = os.path.splitext(log_file)
+            rot_log_file = fn + "-" + str(i + 1) + ext
+            assert os.path.exists(rot_log_file)
+            os.remove(rot_log_file)
+        sys.argv = old_args
+
+
+class TestConfigOptions:
+    def test_config_default_bool(self):
+        cae = ConsoleApp('0.0', 'test_config_defaults')
+        cfg_val = cae.get_config('not_existing_config_var', default_value=False)
+        assert cfg_val == False
+        cfg_val = cae.get_config('not_existing_config_var2', value_type=bool)
+        assert cfg_val == False
+
     def test_long_option_str_value(self):
         cae = ConsoleApp('0.0', 'test_long_option_str_value')
         old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
@@ -228,7 +256,7 @@ class TestOptions:
             f.write('[Settings]\ntestDatetime = 2012-12-24 7:8:0.0')
         cae = ConsoleApp('0.0', 'test_config_date_str', additional_cfg_files=[file_name])
         assert cae.get_config('testDatetime', value_type=datetime.datetime) \
-               == datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)
+            == datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)
         os.remove(file_name)
 
     def test_config_datetime_eval(self):

@@ -1181,7 +1181,7 @@ class SihotXmlBuilder:
         self.ca.dprint("SihotXmlBuilder.fetch_all_from_acu() got {}, 1st row: {}"
                        .format(self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-    def beg_xml(self, operation_code, add_inner_xml=''):
+    def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
         self._xml = '<?xml version="1.0" encoding="' + self.ca.get_option('xmlEncoding').lower() + \
                     '"?>\n<SIHOT-Document>\n'
         if self.use_kernel_interface:
@@ -1189,10 +1189,13 @@ class SihotXmlBuilder:
             self.add_tag('REQUEST-TYPE', operation_code)
         else:
             self.add_tag('OC', operation_code)
-            try:
-                self.tn = str(int(self.tn) + 1)
-            except OverflowError as _:
-                self.tn = '1'
+            if transaction_number:
+                self.tn = transaction_number
+            else:
+                try:
+                    self.tn = str(int(self.tn) + 1)
+                except OverflowError as _:
+                    self.tn = '1'
             self.add_tag('TN', self.tn)
         self._xml += add_inner_xml
 

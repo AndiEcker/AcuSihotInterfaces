@@ -80,14 +80,15 @@ class TcpServer:
 
         self.server = server
 
-    def run(self):
+    def run(self, display_animation=False):
         try:
+            sleep_time = 0.5 / len(DEBUG_RUNNING_CHARS)
             index = 0
             while True:
-                if self.debug_level:
+                if display_animation:
                     index = (index + 1) % len(DEBUG_RUNNING_CHARS)
                     uprint('Server is running ' + DEBUG_RUNNING_CHARS[index], end='\r', flush=True)
-                    time.sleep(0.5 / len(DEBUG_RUNNING_CHARS))
+                time.sleep(sleep_time)
         except Exception as ex:
             uprint('Server killed with exception: ', ex)
         self.server.shutdown()
