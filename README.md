@@ -199,8 +199,8 @@ The default value for `dateFrom` is yesterday at the same time and for `dateTill
 
 Additionally you have to specify the Acumen server with the `acuDSN` command line option, the Acumen user name and
 password with the `acuUser` and `acuPassword` command line options and finally the path and filename of the Sihot
-SXML log file as command line parameter (e.g. `E:\sihot\log\SP\SXML_ACUMEN@SP.log` directly from tf-sh-sihot1v or
-`\tf-sh-sihot1v\e$\sihot\log\sp\SXML_ACUMEN@SP.log` from the network).
+SXML log file as command line parameter (e.g. `E:\sihot\log\SP\SXML_ACUMEN@SP.log` directly from our Sihot production
+ server or `\\<sihot-server>\e$\sihot\log\sp\SXML_ACUMEN@SP.log` from the network).
 
 After checking the discrepancies you can add the `correctAcumen` command line option for to fix the Acumen
 occupation status. If you want for example to fix the missing occupation changes in our second big outage (between
