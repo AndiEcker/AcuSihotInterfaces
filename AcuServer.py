@@ -3,6 +3,7 @@
     0.2     extended to support SXML interface V9.0 Level 1 of Minibar/Wellness-center.
     0.3     made running-server-animation optional, specify debugLevel/logFile in INI and check/fix Transaction number
             passing/increment - is always duplicated '2' instead the one sent by Sihot (see Track-It closed WO #43242).
+    0.4     added GDS number to alloc_trigger() - available since Sihot build/version 9.0.0.0787.CO.
 """
 from traceback import format_exc
 
@@ -12,7 +13,7 @@ from ae_db import OraDB, DEF_USER, DEF_DSN
 from ae_tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder, SXML_DEF_ENCODING
 
-__version__ = '0.3'
+__version__ = '0.4'
 
 cae = None  # added for to remove Pycharm warning
 
@@ -106,18 +107,18 @@ def oc_client_to_acu(req):
     return xml_response
 
 
-def alloc_trigger(oc, guest_id, room_number, old_room_number, sihot_xml):
-    room_number = room_number.lstrip('0')       # remove leading zero from 3-digit PBC Sihot room number
-    if old_room_number:
-        old_room_number = old_room_number.lstrip('0')
-    # move/check in/out guest from/into room_number
+def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, old_gds_no, sihot_xml):
+    room_no = room_no.lstrip('0')       # remove leading zero from 3-digit PBC Sihot room number
+    if old_room_no:
+        old_room_no = old_room_no.lstrip('0')
+    # move/check in/out guest from/into room_no
     ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
                    debug_level=cae.get_option('debugLevel'))
     err_msg = ora_db.connect()
     extra_info = ''
     if not err_msg:
         ref_var = ora_db.prepare_ref_param(sihot_xml)
-        err_msg = ora_db.call_proc('P_SIHOT_ALLOC', (ref_var, oc, room_number, old_room_number))
+        err_msg = ora_db.call_proc('P_SIHOT_ALLOC', (ref_var, oc, room_no, old_room_no, gds_no, old_gds_no))
         if err_msg:
             ora_db.rollback()
         else:
@@ -127,16 +128,23 @@ def alloc_trigger(oc, guest_id, room_number, old_room_number, sihot_xml):
             if changes:
                 extra_info += ' CHG:' + changes
 
-    ora_db.insert('T_SRSL', {'SRSL_TABLE': 'ARO',
-                             'SRSL_PRIMARY': (old_room_number + '-' if old_room_number else '') + room_number,
-                             'SRSL_ACTION': oc,
-                             'SRSL_STATUS': 'ERR' if err_msg else 'SYNCED',
-                             'SRSL_MESSAGE': err_msg + extra_info if err_msg else extra_info[1:],
-                             'SRSL_LOGREF': guest_id or '-1',
-                             },
-                  commit=True)              # COMMIT
+    db_err = ora_db.insert('T_SRSL', {'SRSL_TABLE': 'ARO',
+                                      'SRSL_PRIMARY': (old_room_no + '-' if old_room_no else '') + room_no,
+                                      'SRSL_ACTION': oc,
+                                      'SRSL_STATUS': 'ERR' if err_msg else 'SYNCED',
+                                      'SRSL_MESSAGE': ((old_gds_no + '+' if old_gds_no else '') + gds_no + '='
+                                                       + (err_msg + extra_info if err_msg else extra_info[1:]))[:1998],
+                                      'SRSL_LOGREF': guest_id or -1,
+                                      },
+                           commit=True)              # COMMIT
+    if db_err:
+        err_msg += "AcuServer.alloc_trigger() db insert error: " + db_err
+        uprint(err_msg)
 
-    ora_db.close()      # commit and close
+    db_err = ora_db.close()      # commit and close
+    if db_err:
+        err_msg += "AcuServer.alloc_trigger() db close error: " + db_err
+        uprint(err_msg)
 
     return err_msg
 
@@ -159,7 +167,7 @@ def create_ack_response(req, ret_code, msg='', status=''):
 def oc_room_change(req):
     notify("####  Room change type {} for guest {} in room {}".format(req.oc, req.gid, req.rn),
            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-    error_msg = alloc_trigger(req.oc, req.gid, req.rn, req.orn, req.get_xml())
+    error_msg = alloc_trigger(req.oc, req.gid, req.rn, req.orn, req.gdsno, req.ogdsno, req.get_xml())
     if error_msg:
         notify("****  oc_room_change() alloc_trigger error=" + error_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
 

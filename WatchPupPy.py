@@ -1,14 +1,16 @@
 """
     0.4     changed command call from check_call() to check_output() for to determine and pass StdOut/StdErr  AND
-            added outer try exception fallback into main loop (for to catch strange/unsuspected errors)
+            added outer try exception fallback into main loop (for to catch strange/unsuspected errors).
     0.5     added new option sendOutput for to allow caller to use either check_call() or check_output().
     0.6     added outage check of T_SRSL/ARO (Sihot-To-Acumen interface), changed run lock reset to be optional.
+    0.7     added process ids to notification emails and stdout.
 """
 import os
 import time
 import datetime
 import subprocess
 from configparser import ConfigParser
+import pprint
 
 from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, \
     full_stack_trace
@@ -16,7 +18,7 @@ from ae_db import OraDB, DEF_USER, DEF_DSN
 from ae_notification import Notification
 from sxmlif import PostMessage, GuestSearch, SXML_DEF_ENCODING
 
-__version__ = '0.6'
+__version__ = '0.7'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 MAX_SRSL_ARO_OUTAGE_HOURS = 9.0
@@ -25,7 +27,9 @@ MAX_SRSL_ARO_OUTAGE_HOURS = 9.0
 cae = ConsoleApp(__version__, "Periodically execute and supervise command")
 cae.add_option('cmdLine', "command [line] to execute", '', 'x')
 cae.add_option('cmdInterval', "command interval in seconds (pass 0 for always running servers)", 3600, 's')  # ==1 hour
-cae.add_option('envChecks', "Number of environment checks per command interval", 4, 'n')
+cae.add_option('envChecks', "Number of environment checks per command interval", 3, 'n')
+cae.add_option('sendOutput',
+               "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
@@ -43,17 +47,15 @@ cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
 cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
 
-cae.add_option('sendOutput',
-               "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
-
 
 if not cae.get_option('cmdLine'):
     uprint('Empty command line - Nothing to do.')
     cae.shutdown()
+
 command_line_args = cae.get_option('cmdLine').split(' ')
 uprint('Command line:', cae.get_option('cmdLine'))
 uprint("Command interval/checks:", cae.get_option('cmdInterval'), cae.get_option('envChecks'))
-check_acumen = cae.get_option('acuUser') and cae.get_option('acuDSN')
+check_acumen = cae.get_option('acuUser') and cae.get_option('acuPassword') and cae.get_option('acuDSN')
 if check_acumen:
     uprint('Checked Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 last_rt_prefix = cae.get_option('acuDSN')[-4:]
@@ -100,6 +102,20 @@ if reset_run_time_lock:
 last_sync = datetime.datetime.now()
 
 
+def user_notification(subject, body):
+    parent_pid = os.getppid()
+    pid = os.getpid()
+    subject += " pid=" + str(parent_pid) + ("/" + str(pid) if pid != parent_pid else "")
+    body = pprint.pformat(body, indent=3, width=120)
+
+    if notification:
+        err_message = notification.send_notification(body, subject=subject)
+        if err_message:
+            uprint(' **** WatchPupPy notification error: {}. Unsent notification body:\n{}.'.format(err_message, body))
+    else:
+        uprint(' **** ' + subject + "\n" + body)
+
+
 def get_timer_corrected():
     """ get timer ticker value (seconds) and reset all timer vars on overflow (which should actually never happen
         with monotonic, but some OS may only support 32 bits - rolling-over after 49.7 days) """
@@ -142,12 +158,8 @@ def reset_last_run_time(interval, force=False):
     except Exception as x:
         msg = "exception: " + str(x)
     if msg:
-        uprint("WatchPupPy.reset_last_run_time():", msg)
-        if notification:
-            err_message = notification.send_notification(msg, subject='WatchPupPy reset last run time warning')
-            if err_message:
-                uprint(' #### WatchPupPy send notification warning: {}. Unsent error message: {}.'
-                       .format(msg, err_message))
+        uprint("WatchPupPy.reset_last_run_time()", msg)
+        user_notification('WatchPupPy reset last run time warning', msg)
 
 
 startup = get_timer_corrected()     # initialize timer and last check/run values
@@ -166,13 +178,7 @@ while True:
         progress.next(processed_id=run_msg, error_msg=err_msg)
         if err_msg:
             err_count += 1
-            if notification:
-                send_err = notification.send_notification(err_msg, subject='WatchPupPy notification')
-                if send_err:
-                    uprint(' ####  WatchPupPy send notification error: {}. Unsent error message: {}.'
-                           .format(send_err, err_msg))
-            else:
-                uprint(' **** ' + err_msg)
+            user_notification('WatchPupPy notification', err_msg)
             if break_on_error or err_msg.startswith(BREAK_PREFIX):
                 break
             err_msg = ''
@@ -258,13 +264,7 @@ while True:
             if newest_sync - last_sync > datetime.timedelta(hours=MAX_SRSL_ARO_OUTAGE_HOURS):
                 warn_msg = "Sihot-To-Acumen/AcuServer does not have new sync entries since {} (more than {} hours)" \
                     .format(last_sync, MAX_SRSL_ARO_OUTAGE_HOURS)
-                if notification:
-                    send_err = notification.send_notification(warn_msg, subject='WatchPupPy warning notification')
-                    if send_err:
-                        uprint(' ####  WatchPupPy warning notification send error: {}. Unsent warning message: {}.'
-                               .format(send_err, err_msg))
-                else:
-                    uprint(warn_msg)
+                user_notification('WatchPupPy warning notification', warn_msg)
             last_sync = newest_sync
 
             ora_db.close()
@@ -328,7 +328,7 @@ while True:
             else:
                 subprocess.check_call(command_line_args, timeout=timeout)
         except subprocess.CalledProcessError as cpe:
-            err_msg = str(run_starts) + '. run returned non-zero exit code:' + str(cpe.returncode)
+            err_msg = str(run_starts) + '. run returned non-zero exit code ' + str(cpe.returncode)
             if cpe.returncode == 4:
                 reset_last_run_time(command_interval)
                 continue  # command not really started, so try directly again - don't reset last_run variable

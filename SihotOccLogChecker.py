@@ -5,7 +5,6 @@
 """
 import datetime
 from traceback import print_exc
-import pprint
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB, DEF_USER, DEF_DSN
@@ -17,9 +16,6 @@ __version__ = '0.1'
 USER_DATE_FORMAT = '%d-%m-%y %H:%M:%S'
 
 startup_date = datetime.datetime.now()
-
-PP_DEF_WIDTH = 120
-pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
 
 cae = ConsoleApp(__version__, "Sihot SXML interface log file checks and optional Acumen room occupation status fixes")
 

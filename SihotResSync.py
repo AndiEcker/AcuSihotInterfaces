@@ -148,6 +148,7 @@ if cae.get_option('clientsFirst'):
         app_env_err += '\n\nSync CD Changes exception: ' + str(ex)
 
 
+sync_errors = []
 if not error_msg:
     try:
         uprint("####  Sync Req/ARU Changes  ####")
@@ -219,7 +220,6 @@ if not error_msg:
                 acumen_req.wipe_gds_errors()        # .. as well as the errors for erroneous bookings (w/ same GDS)
 
             # now do the full run with room allocations (only skipping/excluding HOTMOVE to non-Sihot-hotel)
-            sync_errors = ""
             synced_ids = list()
             progress = Progress(debug_level, start_counter=acumen_req.row_count,
                                 start_msg=" ###  Prepare sending of {total_count} reservations to Sihot",
@@ -229,33 +229,32 @@ if not error_msg:
                            .format(len([_ for _ in acumen_req.rows if _['RUL_SIHOT_HOTEL'] in hotel_ids])),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                 for crow in acumen_req.rows:
-                    res_id = acumen_req.res_id_values(crow)
+                    rid = acumen_req.res_id_values(crow)
                     if crow['RUL_SIHOT_HOTEL'] not in hotel_ids:
-                        synced_ids.append(res_id + "(H)")
+                        synced_ids.append(rid + "(H)")
                         continue        # skip HOTMOVE if new hotel is a non-Sihot-hotel
                     elif crow['RUL_SIHOT_LAST_HOTEL'] not in hotel_ids:
                         crow['RUL_ACTION'] = 'INSERT'
                     error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS)
-                    rid = acumen_req.res_id_values(crow)
                     progress.next(processed_id=rid, error_msg=error_msg)
                     if error_msg:
                         send_notification("Acumen Reservation", rid, acumen_req.res_id_desc(crow, error_msg), crow)
                     error_msg += acumen_req.ora_db.commit()
                     if error_msg:
                         if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
-                            synced_ids.append(res_id + "(C)")
+                            synced_ids.append(rid + "(C)")
                             continue
-                        sync_errors += "\n\n" + error_msg
+                        sync_errors.append(rid + ": " + error_msg)
                         if cae.get_option('breakOnError'):
                             break
                     else:
-                        synced_ids.append(res_id)
+                        synced_ids.append(rid)
             progress.finished(error_msg=error_msg)
             uprint("####  Synced IDs: " + str(synced_ids))
             send_notification("Synced Reservations", str(datetime.datetime.now()),
-                              progress.get_end_message(error_msg=error_msg)
-                              + "\n\n\nSYNCHRONIZED (" + acumen_req.res_id_label() + "): " + str(synced_ids)
-                              + "\n\n\nERRORS:" + sync_errors)
+                              progress.get_end_message()
+                              + "\n\n\nSYNCHRONIZED (" + acumen_req.res_id_label() + "):\n" + str(synced_ids)
+                              + "\n\n\nERRORS (" + acumen_req.res_id_label() + ": ERR):\n\n" + "\n\n".join(sync_errors))
             warnings = acumen_req.get_warnings()
             if notification and warnings:
                 notification.send_notification(warnings, subject="SihotResSync warnings notification",
@@ -277,4 +276,4 @@ if app_env_err:
     uprint("\nAPP ENV ERRORS:\n", app_env_err)
     notification.send_notification(app_env_err, subject='SihotResSync environment error', mail_to=ADMIN_MAIL_TO_LIST)
 
-cae.shutdown(13 if set_opt_err else (12 if error_msg else 0))
+cae.shutdown(13 if set_opt_err else (12 if sync_errors else 0))

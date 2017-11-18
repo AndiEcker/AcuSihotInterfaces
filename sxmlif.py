@@ -840,11 +840,15 @@ class Request(SihotXmlParser):  # request from SIHOT to AcuServer
 class RoomChange(SihotXmlParser):
     def __init__(self, ca):
         super(RoomChange, self).__init__(ca)
-        # add base tags for room number, old room number and guest objid
+        # add base tags for room/GDS number, old room/GDS number and guest objid
         self._base_tags.append('RN')
         self.rn = None  # added for to remove pycharm warning
         self._base_tags.append('ORN')
         self.orn = None
+        self._base_tags.append('GDSNO')
+        self.gdsno = None
+        self._base_tags.append('OGDSNO')
+        self.ogdsno = None
         self._base_tags.append('GID')
         self.gid = None
 

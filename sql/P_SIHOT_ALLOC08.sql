@@ -2,7 +2,9 @@ create or replace procedure LOBBY.SIHOT_ALLOC
                             (pcExtraInfo      IN OUT varchar2,                  -- IN: sihot xml request, OUT: ARO changes
                              pcAction         IN varchar2,                      -- CI=Check-in, CO=Check-out, RM=Room move/Transfer
                              pcApt            IN T_AP.AP_CODE%type,             -- new Acumen apartment number (for 3-digit PBC apartments without leading zero/0)
-                             pcOldApt         IN T_AP.AP_CODE%type := NULL      -- old Acumen apartment number
+                             pcOldApt         IN T_AP.AP_CODE%type := NULL,     -- old Acumen apartment number
+                             pcGdsNo          IN varchar2 := NULL,              -- new GDS number (RU_CODE)
+                             pcOldGdsNo       IN T_AP.AP_CODE%type := NULL      -- old GDS number (RU_CODE)
                             ) 
 IS
   lcCheckOutInfo    varchar2(2000) := '';
@@ -11,18 +13,22 @@ BEGIN
   
   if pcAction in ('CO', 'RM') then
     select f_stragg(to_char(ARO_CODE) || ':' || ARO_APREF || '=' || to_char(ARO_STATUS) || '@' || to_char(ARO_EXP_ARRIVE, 'DD-MM-YY')) into lcCheckOutInfo from T_ARO
-     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - k.SihotRoomChangeMaxDaysDiff and ARO_EXP_DEPART;
+     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - k.SihotRoomChangeMaxDaysDiff and ARO_EXP_DEPART
+       and (nvl(pcOldGdsNo, pcGdsNo) is NULL or exists (select NULL from T_RU where RU_RHREF = ARO_RHREF and RU_STATUS <> 120 and RU_CODE = nvl(pcOldGdsNo, pcGdsNo)));
     update T_ARO set ARO_TIMEOUT = sysdate,
                      ARO_STATUS = case when pcAction = 'RM' then 320 else 390 end
-     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - k.SihotRoomChangeMaxDaysDiff and ARO_EXP_DEPART;
+     where ARO_STATUS in (300, 330) and ARO_APREF = nvl(pcOldApt, pcApt) and trunc(sysdate) between ARO_EXP_DEPART - k.SihotRoomChangeMaxDaysDiff and ARO_EXP_DEPART
+       and (nvl(pcOldGdsNo, pcGdsNo) is NULL or exists (select NULL from T_RU where RU_RHREF = ARO_RHREF and RU_STATUS <> 120 and RU_CODE = nvl(pcOldGdsNo, pcGdsNo)));
   end if;        
   if pcAction in ('CI', 'RM') then
     select f_stragg(to_char(ARO_CODE) || ':' || ARO_APREF || '=' || to_char(ARO_STATUS) || '@' || to_char(ARO_EXP_ARRIVE, 'DD-MM-YY')) into lcCheckInInfo from T_ARO
-     where ARO_STATUS in (150, 190, 200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + k.SihotRoomChangeMaxDaysDiff;
+     where ARO_STATUS in (150, 190, 200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + k.SihotRoomChangeMaxDaysDiff
+       and (pcGdsNo is NULL or exists (select NULL from T_RU where RU_RHREF = ARO_RHREF and RU_STATUS <> 120 and RU_CODE = pcGdsNo));
     update T_ARO set ARO_TIMEIN = sysdate, 
                      ARO_RECD_KEY = sysdate + 1 / (24 * 60),
                      ARO_STATUS = case when pcAction = 'RM' then 330 else 300 end
-     where ARO_STATUS in (150, 190, 200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + k.SihotRoomChangeMaxDaysDiff;
+     where ARO_STATUS in (150, 190, 200, 220) and ARO_APREF = pcApt and trunc(sysdate) between ARO_EXP_ARRIVE and ARO_EXP_ARRIVE + k.SihotRoomChangeMaxDaysDiff
+       and (pcGdsNo is NULL or exists (select NULL from T_RU where RU_RHREF = ARO_RHREF and RU_STATUS <> 120 and RU_CODE = pcGdsNo));
   end if;
   pcExtraInfo := substr(case when lcCheckOutInfo is not NULL then 'CO' || lcCheckOutInfo end || case when lcCheckInInfo is not NULL then 'CI' || lcCheckInInfo end
                         || ' Req' || pcExtraInfo, 1, 1995);
@@ -36,6 +42,7 @@ END
   ae:03-05-17 V05: using k package constant for the maximum days of difference between expected and real arrival/departure (see also P_SIHOT_ALLOC()).
   ae:16-05-17 V06: added Sihot request to pcExtraInfo OUT value for to be added to the T_SRSL.SRSL_MESSAGE column for debugging.
   ae:24-10-17 V07: QuickAndDirtyFix: added status 150 and 190 to valid not-occupied apt statuses (found recently 53 of them all RCIs and the 150 ones only for 2017+ occupancy - STRANGE!!!).
+  ae:18-11-17 V08: added pcGdsNo/pcOldGdsNo parameters (will be rolled out in about two weeks).
 */;
 /
 
