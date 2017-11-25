@@ -5,7 +5,7 @@ import pytest
 from configparser import ConfigParser
 from ae_db import OraDB
 from acu_sf_sh_sys_data import AssSysData
-from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot, AvailCats
+from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot, AvailCatInfo
 from sfif import prepare_connection
 
 
@@ -14,21 +14,25 @@ def console_app_env():
     return ConsoleApp()
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def acu_guest(console_app_env):
     return ClientToSihot(console_app_env)
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def acu_res(console_app_env):
     return ResToSihot(console_app_env)
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def avail_cats(console_app_env):
-    return AvailCats(console_app_env)
+    return AvailCatInfo(console_app_env)
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def db_connected(console_app_env):
     ora_db = OraDB(console_app_env.get_option('acuUser'), console_app_env.get_option('acuPassword'),
@@ -37,31 +41,37 @@ def db_connected(console_app_env):
     return ora_db
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def config_data(console_app_env):
     return AssSysData(console_app_env)
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def config_dict(console_app_env):
     return ConfigDict(console_app_env)
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def cat_rooms(console_app_env):
     return CatRooms(console_app_env)
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def guest_search(console_app_env):
     return GuestSearch(console_app_env)
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def post_message(console_app_env):
     return PostMessage(console_app_env)
 
 
+# noinspection PyShadowingNames
 @pytest.fixture()
 def create_test_guest(console_app_env):
     # prevent duplicate creation of test client
@@ -97,6 +107,7 @@ def create_test_guest(console_app_env):
     return guest
 
 
+# noinspection PyShadowingNames
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
     sf_conn, sf_sandbox = prepare_connection(console_app_env)

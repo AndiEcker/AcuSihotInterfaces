@@ -107,7 +107,7 @@ def oc_client_to_acu(req):
     return xml_response
 
 
-def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, old_gds_no, sihot_xml):
+def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
     room_no = room_no.lstrip('0')       # remove leading zero from 3-digit PBC Sihot room number
     if old_room_no:
         old_room_no = old_room_no.lstrip('0')
@@ -118,7 +118,7 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, old_gds_no, sihot_
     extra_info = ''
     if not err_msg:
         ref_var = ora_db.prepare_ref_param(sihot_xml)
-        err_msg = ora_db.call_proc('P_SIHOT_ALLOC', (ref_var, oc, room_no, old_room_no, gds_no, old_gds_no))
+        err_msg = ora_db.call_proc('P_SIHOT_ALLOC', (ref_var, oc, room_no, old_room_no, gds_no))
         if err_msg:
             ora_db.rollback()
         else:
@@ -132,7 +132,7 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, old_gds_no, sihot_
                                       'SRSL_PRIMARY': (old_room_no + '-' if old_room_no else '') + room_no,
                                       'SRSL_ACTION': oc,
                                       'SRSL_STATUS': 'ERR' if err_msg else 'SYNCED',
-                                      'SRSL_MESSAGE': ((old_gds_no + '+' if old_gds_no else '') + gds_no + '='
+                                      'SRSL_MESSAGE': (gds_no + '='
                                                        + (err_msg + extra_info if err_msg else extra_info[1:]))[:1998],
                                       'SRSL_LOGREF': guest_id or -1,
                                       },
@@ -167,7 +167,7 @@ def create_ack_response(req, ret_code, msg='', status=''):
 def oc_room_change(req):
     notify("####  Room change type {} for guest {} in room {}".format(req.oc, req.gid, req.rn),
            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-    error_msg = alloc_trigger(req.oc, req.gid, req.rn, req.orn, req.gdsno, req.ogdsno, req.get_xml())
+    error_msg = alloc_trigger(req.oc, req.gid, req.rn, req.orn, req.gdsno, req.get_xml())
     if error_msg:
         notify("****  oc_room_change() alloc_trigger error=" + error_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
 

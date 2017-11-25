@@ -1,5 +1,5 @@
 from ae_console_app import ConsoleApp, DEBUG_LEVEL_VERBOSE
-from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceResourceNotFound
+from simple_salesforce import Salesforce, SalesforceResourceNotFound
 
 __version__ = '0.1'
 
@@ -108,8 +108,8 @@ print('SOQL like query:', result)
 result = sb.query_all("SELECT Id FROM External_Ref__c WHERE Reference_No_or_ID__c = '1234-56789'")
 print('SOQL exact query Pepper:', result)
 
-result = sb.query_all("SELECT Id FROM External_Ref__c WHERE Reference_No_or_ID__c = 'abcd-efgh'")
-print('SOQL exact query Testa123:', result)
+result = sb.query_all("SELECT Id FROM External_Ref__c WHERE Reference_No_or_ID__c = 'abc-efg'")
+print('SOQL exact query Test123:', result)
 
 ext_ref = sb.search("FIND {1234\-5678*}")
 print('SOSL like ext ref search:', ext_ref)
@@ -157,10 +157,10 @@ else:
                                      'Name': 'RCI_9'})
     print('Created Ext Ref return1:', ret)
 
-new_no = 'abcd-7890'
+new_no = 'abc-7890'
 test_contact_id = '0039E00000Dla2VQAR'  # (test_contact_id in contacts) fails with 15 character ID == '0039E00000Dla2V'
 result = sb.query_all("SELECT Id, Contact__c FROM External_Ref__c WHERE Reference_No_or_ID__c = '" + new_no + "'")
-print('SOQL querying RCI ref number from Testa:', result)
+print('SOQL querying RCI ref number from Test:', result)
 if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
     ids = [_['Id'] for _ in records]
@@ -169,23 +169,23 @@ if result['done'] and result['totalSize'] > 0:
     print('Ext Ref Contact Ids of last SOQL query:', contacts)
 
     if test_contact_id in contacts:
-        print('  ####  External RCI ref number', new_no, 'already exists for Testa client with ID', test_contact_id)
+        print('  ####  External RCI ref number', new_no, 'already exists for Test client with ID', test_contact_id)
     else:
         ret = sb.External_Ref__c.create({'Contact__c': test_contact_id, 'Reference_No_or_ID__c': new_no,
                                          # 'Type__c': 'RCI',
                                          'Name': 'RCI_88'})
-        print('    Created Ext Ref return2 for Testa:', ret)
+        print('    Created Ext Ref return2 for Test:', ret)
         if ret['success']:
             ret = sb.External_Ref__c.upsert(ret['id'],
                                             {'Name': 'RCI_8'})
-            print('        Upsert Ext Ref return3 for Testa(changed RCI_88 to RCI_8):', ret)
+            print('        Upsert Ext Ref return3 for Test(changed RCI_88 to RCI_8):', ret)
 elif result['done']:
     print('  ####  last SOQL query done but no records found, totalSize=', result['totalSize'])
 else:
     print('  ****  last SOQL query failed to be executed/done completely')
 
-result = sb.query_all("SELECT Id FROM Contact WHERE RCI_Reference__c = 'abcd-9876'")
-print('SOQL querying main RCI ref number (abcd-9876) from Testa:', result)
+result = sb.query_all("SELECT Id FROM Contact WHERE RCI_Reference__c = 'abc-9876'")
+print('SOQL querying main RCI ref number (abc-9876) from Test:', result)
 if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
     ids = [_['Id'] for _ in records]
@@ -222,7 +222,7 @@ result = sb.query_all("SELECT Id, CD_CODE__c, RCI_Reference__c,"
 print('SOQL querying Contact data with main or external RCI Ids', result)
 if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
-    ids = [_['Id'] + '=' + er['Reference_No_or_ID__c'] for _ in records for er in _['External_References__r']['records']]
+    ids = [_['Id'] + '=' + e['Reference_No_or_ID__c'] for _ in records for e in _['External_References__r']['records']]
     print('    Ext Ref Ids of last SOQL query:', ids)
 
 # .. same as above restricted to external RCI refs
@@ -230,13 +230,14 @@ if result['done'] and result['totalSize'] > 0:
 result = sb.query_all("SELECT Id, CD_CODE__c, RCI_Reference__c,"
                       " (SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE 'RCI%')"
                       " FROM Contact"
-                      " WHERE RCI_Reference__c != NULL")
+                      " WHERE RCI_Reference__c != NULL"
                       # SF doesn't allow sub-queries in WHERE clause
                       # " or (SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE 'RCI%') != NULL")
+                      )
 print('SOQL querying Contact data with unique main or external RCI Ids', result)
 if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
-    ids = [_['Id'] + '=' + er['Reference_No_or_ID__c'] for _ in records for er in _['External_References__r']['records']]
+    ids = [_['Id'] + '=' + e['Reference_No_or_ID__c'] for _ in records for e in _['External_References__r']['records']]
     print('    Ext Ref Ids of unique SOQL query:', ids)
 
 

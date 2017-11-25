@@ -23,16 +23,6 @@ MAIN_SECTION_DEF = 'Settings'
 DATE_TIME_ISO = '%Y-%m-%d %H:%M:%S.%f'
 DATE_ISO = '%Y-%m-%d'
 
-# initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
-_ca_instance = None
-
-
-def get_debug_level():
-    if _ca_instance and 'debugLevel' in _ca_instance.config_options:
-        return _ca_instance.config_options['debugLevel'].value
-    return DEBUG_LEVEL_DISABLED
-
-
 # core encoding that will always work independent from destination (console, file system, XMLParser, ...)
 DEF_ENCODING = 'ascii'
 
@@ -51,6 +41,27 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
                               (0xDFFFE, 0xDFFFF), (0xEFFFE, 0xEFFFF),
                               (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
 ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
+
+
+# initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
+_ca_instance = None
+
+
+def _get_debug_level():
+    """ determining the debug level of the console app env instance of the currently running app.
+
+    :return: current debug level.
+    """
+    if _ca_instance and 'debugLevel' in _ca_instance.config_options:
+        return _ca_instance.config_options['debugLevel'].value
+    return DEBUG_LEVEL_DISABLED
+
+
+def round_traditional(val, digits=0):
+    """ needed because python round() is not working always, like e.g. round(0.074, 2) == 0.07 instead of 0.08
+        taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer
+    """
+    return round(val + 10**(-len(str(val)) - 1), digits)
 
 
 def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='ae_console_app.fix_encoding()'):
@@ -76,7 +87,7 @@ def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='
     else:
         try_method = ""
         text = None
-    if try_method and get_debug_level() >= DEBUG_LEVEL_VERBOSE:
+    if try_method and _get_debug_level() >= DEBUG_LEVEL_VERBOSE:
         try:        # first try to put ori_text in error message
             uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
                                   ", " + DEF_ENCODING + " text:\n'" +
@@ -217,7 +228,7 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
     # else:
     #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
     #           sep=sep, end=end, file=file, flush=flush)
-    if get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
+    if _get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
         print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + objects
     else:
         print_objects = objects

@@ -13,18 +13,18 @@ select at_rsref as Rsrt,
       nvl(ro_res_group, 'Other') 
  order by at_rsref, 
         to_char(aro_exp_arrive, 'YYYY'),
-        count(*) desc, nvl(ro_res_group, 'Other')
+        count(*) desc, nvl(ro_res_group, 'Other');
 
 
 
 -- CHANNEL - 12 records
-select distinct RO_RES_GROUP from T_RO where RO_RES_GROUP is not NULL order by RO_RES_GROUP
+select distinct RO_RES_GROUP from T_RO where RO_RES_GROUP is not NULL order by RO_RES_GROUP;
 
 -- NN - 4 records
-select distinct RO_SP_GROUP from T_RO where RO_SP_GROUP is not NULL order by RO_SP_GROUP
+select distinct RO_SP_GROUP from T_RO where RO_SP_GROUP is not NULL order by RO_SP_GROUP;
 
 -- NN2 - 2 records
-select distinct RO_RES_CLASS from T_RO where RO_RES_CLASS is not NULL order by RO_RES_CLASS
+select distinct RO_RES_CLASS from T_RO where RO_RES_CLASS is not NULL order by RO_RES_CLASS;
 
 
 
@@ -51,7 +51,7 @@ group by at_generic
      , case at_group          when '1 BED DLX' then '1 BED DUPLEX'
                               when '2 BED DLX' then '2 BED DUPLEX D'
                               when '3 BED DLX' then '3 BED DUPLEX' else at_group end
-order by at_generic, at_rci_desc_short, at_group
+order by at_generic, at_rci_desc_short, at_group;
 
 
 -- list of our apartment features
@@ -81,17 +81,17 @@ select aft_desc || case when aft_desc = 'Seafront' then '_5'
    and at_rsref in ('BHC', 'PBC')
    and ( aft_desc in ('Seafront', 'High Floor', 'Duplex') or instr(upper(ap_lobby_comment), 'STERL') > 0 )
  group by aft_desc, at_rsref
- order by upper(aft_desc), at_rsref
+ order by upper(aft_desc), at_rsref;
   
 
 
 --- check TK apartment features for to calculate the room price categories
 -- Sea front
-select * from t_ap, t_at where ap_atref = at_code and ap_quality = 5 and at_rsref in ('PBC', 'BHC') and substr(ap_sihot_cat, 3, 1) not in ('S')
+select * from t_ap, t_at where ap_atref = at_code and ap_quality = 5 and at_rsref in ('PBC', 'BHC') and substr(ap_sihot_cat, 3, 1) not in ('S');
 
 -- high floor
 select * from t_ap, t_at where ap_atref = at_code and ap_quality = 6 and at_rsref in ('PBC', 'BHC') --and substr(ap_sihot_cat, 4, 1) not in ('H')
- and not exists (select NULL from t_aft
+ --and not exists (select NULL from t_aft
 
 -- duplex(only BHC) and sterling/refurbished(only PBC )
 select f_stragg(ap_code || '_' || ap_quality)
@@ -387,7 +387,7 @@ select * from t_cd where instr(upper(cd_titl1), 'DR') > 0 and exists (select NUL
 --##############  CLIENT TYPE CLASSIFICATION (ACL_SIHOT_GUEST_TYPE)
 
 select * from t_rs
- where rs_class = 'CONSTRUCT' or or rs_class = 'BUILDING' and rs_group = 'A' order by rs_shortid
+ where rs_class = 'CONSTRUCT' or rs_class = 'BUILDING' and rs_group = 'A' order by rs_shortid
 
 
 select cd_code
@@ -436,4 +436,4 @@ select distinct cr_type from t_cr
 -- check max. number of ext refs (see e.g. E396693=10, E355076=7, E261114=7 or E200548=6)
 select cr_cdref, count(*) from t_cr
  group by cr_cdref
- order by count(*) desc
+ order by count(*) desc)

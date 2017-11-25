@@ -7,7 +7,7 @@ from textwrap import wrap
 from xml.etree.ElementTree import XMLParser, ParseError
 
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
-from ae_console_app import fix_encoding, uprint, DEBUG_LEVEL_VERBOSE
+from ae_console_app import fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, round_traditional
 from ae_tcp import TcpClient
 from ae_db import OraDB, MAX_STRING_LENGTH
 
@@ -847,8 +847,6 @@ class RoomChange(SihotXmlParser):
         self.orn = None
         self._base_tags.append('GDSNO')
         self.gdsno = None
-        self._base_tags.append('OGDSNO')
-        self.ogdsno = None
         self._base_tags.append('GID')
         self.gid = None
 
@@ -876,27 +874,29 @@ class Response(SihotXmlParser):  # response xml parser for kernel or web interfa
         return tag
 
 
-class AvailCatsResponse(Response):
+class AvailCatInfoResponse(Response):
+    """ processing response of CATINFO operation code of the WEB interface """
     def __init__(self, ca):
-        super(AvailCatsResponse, self).__init__(ca)
+        super(AvailCatInfoResponse, self).__init__(ca)
         self._curr_cat = None
         self._curr_day = None
         self.avail_room_cats = dict()
 
     def data(self, data):
-        if super(AvailCatsResponse, self).data(data) is None:
+        if super(AvailCatInfoResponse, self).data(data) is None:
             return None
         if self._curr_tag == 'CAT':
             self.avail_room_cats[data] = dict()
             self._curr_cat = data
         elif self._curr_tag == 'D':
+            self.avail_room_cats[self._curr_cat][data] = dict()
             self._curr_day = data
-        elif self._curr_tag == 'TOTAL':
-            self.avail_room_cats[self._curr_cat][self._curr_day] = int(data)
-        elif self._curr_tag == 'OOO':
-            self.avail_room_cats[self._curr_cat][self._curr_day] -= int(data)
+        elif self._curr_tag in ('TOTAL', 'OOO'):
+            self.avail_room_cats[self._curr_cat][self._curr_day][self._curr_tag] = int(data)
         elif self._curr_tag == 'OCC':
-            self.avail_room_cats[self._curr_cat][self._curr_day] *= (1.0 - float(data) / 100.0)
+            self.avail_room_cats[self._curr_cat][self._curr_day][self._curr_tag] = float(data)
+            day = self.avail_room_cats[self._curr_cat][self._curr_day]
+            day['AVAIL'] = int(round_traditional(day['TOTAL'] * (1.0 - day['OCC'] / 100.0))) - day['OOO']
         return data
 
 
@@ -1331,9 +1331,9 @@ class AcuServer(SihotXmlBuilder):
         return ret
 
 
-class AvailCats(SihotXmlBuilder):
-    def avail_rooms(self, hotel_id='', room_cat='', from_date=datetime.date.today(), to_date=datetime.date.today(),
-                    flags=''):  # SKIP-HIDDEN-ROOM-TYPES'):
+class AvailCatInfo(SihotXmlBuilder):
+    def avail_rooms(self, hotel_id='', room_cat='', from_date=datetime.date.today(), to_date=datetime.date.today()):
+        # flags=''):  # SKIP-HIDDEN-ROOM-TYPES'):
         self.beg_xml(operation_code='CATINFO')
         if hotel_id:
             self.add_tag('ID', hotel_id)
@@ -1341,11 +1341,11 @@ class AvailCats(SihotXmlBuilder):
         self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
         if room_cat:
             self.add_tag('CAT', room_cat)
-        if flags:
-            self.add_tag('FLAGS', flags)
+        # if flags:
+        #     self.add_tag('FLAGS', flags)    # there is no FLAGS element for the CATINFO oc?!?!?
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=AvailCatsResponse(self.ca))
+        err_msg = self.send_to_server(response_parser=AvailCatInfoResponse(self.ca))
 
         return err_msg or self.response.avail_room_cats
 

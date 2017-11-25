@@ -31,9 +31,9 @@ class TestConfigOptions:
     def test_config_default_bool(self):
         cae = ConsoleApp('0.0', 'test_config_defaults')
         cfg_val = cae.get_config('not_existing_config_var', default_value=False)
-        assert cfg_val == False
+        assert cfg_val is False
         cfg_val = cae.get_config('not_existing_config_var2', value_type=bool)
-        assert cfg_val == False
+        assert cfg_val is False
 
     def test_long_option_str_value(self):
         cae = ConsoleApp('0.0', 'test_long_option_str_value')
