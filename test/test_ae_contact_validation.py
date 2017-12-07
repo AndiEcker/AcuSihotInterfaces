@@ -21,14 +21,14 @@ class TestEmailValidator:
     def test_invalid_email_wrong_name_with_spaces(self, console_app_env):
         ev = EmailValidator(base_url=console_app_env.get_config('emailValidatorBaseUrl'),
                             api_key=console_app_env.get_config('emailValidatorApiKey'))
-        err_msg = ev.validate('Andreas Ecker@signallia.com')
+        err_msg = ev.validate('Andreas Ecker@test.com')
         print("Validator error", err_msg)
         assert err_msg
 
     def test_valid_email_of_signallia(self, console_app_env):
         ev = EmailValidator(base_url=console_app_env.get_config('emailValidatorBaseUrl'),
                             api_key=console_app_env.get_config('emailValidatorApiKey'))
-        err_msg = ev.validate('Andreas.Ecker@signallia.com')
+        err_msg = ev.validate('Andreas.Ecker@test.com')
         print("Validator error", err_msg)
         assert not err_msg
 

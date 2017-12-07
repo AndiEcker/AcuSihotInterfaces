@@ -2,7 +2,38 @@ from sfif import correct_email, correct_phone
 from acu_sf_sh_sys_data import EXT_REFS_SEP
 
 
-class TestSfInterface:
+class TestSfFindClient:
+    def test_not_existing_client(self, salesforce_connection):
+        sfi = salesforce_connection
+        result = sfi.find_client(email="test@test.test", phone="0034922777888", first_name="Testy", last_name="Tester")
+        print('Encapsulated APEX REST call result', result)
+        assert 'id' in result
+        assert result['id'] == ''
+        assert 'type' in result
+        assert result['type'] == 'None'
+
+    def test_identify_by_email(self, salesforce_connection):
+        sfi = salesforce_connection
+        sf_id, err, msg = sfi.contact_upsert(fields_dict=dict(firstName="Testy", lastName="Tester",
+                                                              Email="clienthasnoemail@test.com"))
+        print("test_by_invalid_email() sf_id/err/msg:", sf_id, err, msg)
+        assert len(sf_id) == 18
+        assert err == ""
+
+        result = sfi.find_client(email="clienthasnoemail@test.com", first_name="Testy", last_name="Tester")
+        print('Encapsulated APEX REST call result', result)
+
+        # before checking we need first to delete the test client
+        assert sfi.contact_delete(sf_id)
+
+        assert 'id' in result
+        assert len(result['id']) == 18
+        assert result['id'] == sf_id
+        assert 'type' in result
+        assert result['type'] == 'Contact'
+
+
+class TestSfContact:
     sf_id_of_rci_id = dict()
 
     def test_correct_email(self):

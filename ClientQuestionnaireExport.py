@@ -2,7 +2,7 @@
     ClientQuestionnaireExport is a tool for to export all check-outs within a given date range into a CSV file for to
     be sent to a service company for to do the client questionnaires. This tool is replacing the currently
     used Acumen/Oracle procedure SALES.TRIPADVISOR (runs every Tuesday around 11 by an Oracle job, creating the file
-    INTUITION.csv within the folder tf-sh-ora1-acumen/home/oracle/ext_tables).
+    INTUITION.csv within the folder <oracle-server>/home/oracle/ext_tables).
     
     FYI: There is a similar export available within the Sihot.PMS EXE application via the menu entry
     "Export / Export stays for Marketing" (with the checkbox "Email filter" checked) which is exporting a
@@ -39,7 +39,7 @@ cae.add_option('dateFrom', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME els
 cae.add_option('dateTill', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
                " of last check-out to be exported", startup_date, 'T')
 
-# old Acumen script used the following file path: //tf-sh-ora1-acumen/home/oracle/ext_tables/INTUITION.csv
+# old Acumen script used the following file path: //<oracle-server>/home/oracle/ext_tables/INTUITION.csv
 cae.add_option('exportFile', "Full path and name of the CSV file (appending new checkouts if already exits)", '', 'x')
 
 

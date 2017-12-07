@@ -136,7 +136,6 @@ class ConsoleApp:
         cfg.read('../.console_app_env.cfg')
 
         self._options = dict(serverIP=cfg.get('Settings', 'serverIP', fallback='10.103.222.70'),
-                             # serverIP: DEV=10.103.222.71 or TEST=.70 or LIVE='tf-sh-sihot1v.acumen.es'
                              serverPort=cfg.get('Settings', 'serverPort', fallback=14777),
                              serverKernelPort=cfg.get('Settings', 'serverKernelPort', fallback=14772),
                              timeout=369.0, xmlEncoding='utf8',

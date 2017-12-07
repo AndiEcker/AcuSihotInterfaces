@@ -23,6 +23,12 @@ print('Top-level objects describe:', sb.describe())
 
 print('Opportunity metadata:', sb.Opportunity.metadata())
 
+# using APEX REST service
+params = dict(email="test@test.test", phone="0034922777888", firstName="Testy", lastName="Tester")
+result = sb.apexecute('SIHOT', method='GET', data=params)
+print('APEX REST call result', result)
+
+
 # OLD
 print('Account metadata:', sb.Account.metadata())
 print('Contact metadata:', sb.Contact.metadata())

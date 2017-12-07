@@ -93,7 +93,7 @@ BEGIN
      or ( :NEW.RU_FROM_DATE is not null and :OLD.RU_FROM_DATE is null )
      or :NEW.RU_FROM_DATE<>:OLD.RU_FROM_DATE then
     P_INSERT_LOG_ENTRY('UPDATE', 'REQUESTED_UNIT', 'RU_FROM_DATE', :NEW.RU_CODE, :OLD.RU_FROM_DATE, :NEW.RU_FROM_DATE, lcWKCode);
-    lcChanges := lcChanges || chr(13) || 'RU_FROM_DATE (' || :OLD.RU_FROM_DATE || ' >> ' || :NEW.RU_FROM_DATE || ')';
+    lcChanges := lcChanges || chr(13) || 'RU_FROM_DATE (' || to_char(:OLD.RU_FROM_DATE, 'DD-MM-YY') || ' >> ' || to_char(:NEW.RU_FROM_DATE, 'DD-MM-YY') || ')';
   end if;
   if    ( :NEW.RU_DAYS is null and :OLD.RU_DAYS is not null )
      or ( :NEW.RU_DAYS is not null and :OLD.RU_DAYS is null )
@@ -183,5 +183,6 @@ END
   ae:05-08-16 V02: added population of the new RUL_SIHOT* columns and added log for new RU_SIHOT_OBJID column.
   ae:02-10-16 V03: added RU_FLIGHT_AIRPORT column and.
   ae:21-02-17 V04: added pcCaller parameter to call of P_RUL_INSERT().
+  ae:05-12-17 V05: added to_char(, 'DD-MM-YY') for to ensure correct string format of the RU_FROM_DATE value.
 */;
 /

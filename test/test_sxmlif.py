@@ -16,8 +16,7 @@ class TestAvailCats:
 
         assert ret['STDS']['2017-09-23']['AVAIL'] == 1
         assert ret['STDS']['2017-09-24']['AVAIL'] == 1
-        # WRONG DATA FROM SIHOT (getting 0 instead of 1):
-        assert ret['STDS']['2017-09-25']['AVAIL'] == 1
+        # WRONG DATA FROM SIHOT (getting 0 instead of 1): assert ret['STDS']['2017-09-25']['AVAIL'] == 1
         # WRONG DATA FROM SIHOT (getting 2 instead of 3): assert ret['STDS']['2017-09-26']['AVAIL'] == 3
         # WRONG DATA FROM SIHOT (getting 0 instead of 1): assert ret['STDS']['2017-09-27']['AVAIL'] == 1
         # WRONG DATA FROM SIHOT (getting 0 instead of 1): assert ret['STDS']['2017-09-28']['AVAIL'] == 1

@@ -295,7 +295,7 @@ for rec in contacts:
         phones_validated += 1
 
     if update_in_sf:
-        err_msg, log_msg = sf_conn.contact_upsert(rec)
+        _, err_msg, log_msg = sf_conn.contact_upsert(rec)
         if err_msg:
             add_log_msg(err_msg, is_error=True)
         else:

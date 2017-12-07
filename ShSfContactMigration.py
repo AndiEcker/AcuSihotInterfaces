@@ -54,8 +54,8 @@ cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if di
 
 debug_level = cae.get_option('debugLevel')
 
-uprint("Server IP/Web-port:", cae.get_option('serverIP'), cae.get_option('serverPort'))
-uprint("TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+uprint("Sihot Server IP/Web-port:", cae.get_option('serverIP'), cae.get_option('serverPort'))
+uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
 
 date_from = cae.get_option('dateFrom')
 date_till = cae.get_option('dateTill')
@@ -86,7 +86,7 @@ uprint("Invalid email fragments:", invalid_email_fragments)
 restrict_to_valid_emails = cae.get_config('restrictToValidEmails', default_value=True)
 if restrict_to_valid_emails:
     uprint("      Only sending valid email addresses")
-default_email_address = cae.get_config('defaultEmailAddress', default_value='ClientHasNoEmail@signallia.com')
+default_email_address = cae.get_config('defaultEmailAddress', default_value='ClientHasNoEmail@unknown.com')
 # html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>
 msf_beg = cae.get_config('monoSpacedFontBegin', default_value='<pre>')
 msf_end = cae.get_config('monoSpacedFontEnd', default_value='</pre>')
@@ -509,7 +509,7 @@ try:
 
             contacts_to_mig.append(sh_dict)
 
-            sf_id = sf_conn.contact_by_email(email_addr)
+            sf_id = sf_conn.contact_id_by_email(email_addr)
             if sf_id:
                 sf_cd = sf_conn.contact_data_by_id(sf_id, strip_add_info_keys(sh_dict))
                 if sf_conn.error_msg:
@@ -520,7 +520,7 @@ try:
                 sh_dict[AI_SF_CURR_DATA] = sf_cd
                 existing_contact_ids.append(sh_dict)
         elif not restrict_to_valid_emails:
-            # ensure that also clients with clienthasnoemail@s... will be uploaded to Salesforce if email not restricted
+            # ensure that also clients with clienthasnoemail@... will be uploaded to Salesforce if email not restricted
             contacts_to_mig.append(sh_dict)
 
     uprint("####  Migrating contacts to Salesforce")
@@ -537,7 +537,7 @@ try:
                                   .format(res_id, sh_pp_data))
             continue
         sfi = sh_dict[AI_SF_ID]
-        err_msg, log_msg = sf_conn.contact_upsert(sf_send)
+        _, err_msg, log_msg = sf_conn.contact_upsert(sf_send)
         if err_msg:
             send_errors += 1
             notification_add_line(("Error {} in {} of Sihot Res-Id {:12} with match score {:6.3}"

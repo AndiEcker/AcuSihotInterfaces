@@ -43,8 +43,9 @@ def count_res(cae, hotel_ids=None, room_cat_prefix='', day=datetime.date.today()
     :param room_cat_prefix: Optional room category prefix string (leave empty for all room categories or pass e.g.
                             'S' for a accumulation of all the Studios or '1J' for all 1 bedroom junior rooms).
     :param day:             Optional day (leave empty for to get the available rooms for today's date).
-    :param res_max_days:    Optional maximum length of reservation (def=27).
-    :return:
+    :param res_max_days:    Optional maximum length of reservation (def=27 days).
+    :return:                Number of valid reservations of the specified hotel(s) and room category prefix and
+                            with arrivals within the date range day-res_max_days...day.
     """
     if not hotel_ids:
         hotel_ids = AssSysData(cae).get_hotel_ids()     # determine list of IDs of all active/valid Sihot-hotels

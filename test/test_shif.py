@@ -16,7 +16,7 @@ class TestCountRes:
     # def test_count_res_sep14_all_hotels_and_cats(self, console_app_env):
     #     assert count_res(console_app_env, day=datetime.date(2017, 9, 14)) == 906
 
-    # slow - needs 1:30 minutes
+    # quite slow - needs 1:30 minutes
     def test_count_res_sep14_for_bhc_and_all_cats(self, console_app_env):
         assert count_res(console_app_env, hotel_ids=[1], day=datetime.date(2017, 9, 14)) == 273
 
@@ -51,8 +51,7 @@ class TestAvailRoomsSep14:
 
     def test_avail_3bed_for_bhc(self, console_app_env):
         assert avail_rooms(console_app_env, hotel_ids=[1], room_cat_prefix="3", day=datetime.date(2017, 9, 14)) == 1
-        assert avail_rooms(console_app_env, hotel_ids=[1], room_cat_prefix="3", day=datetime.date(2017, 9, 14)) \
-            == avail_rooms(console_app_env, hotel_ids=[1], room_cat_prefix="3BPS", day=datetime.date(2017, 9, 14))
+        assert avail_rooms(console_app_env, hotel_ids=[1], room_cat_prefix="3BPS", day=datetime.date(2017, 9, 14)) == 1
 
 
 class TestAvailRoomsSep15:

@@ -49,7 +49,7 @@ BEGIN
     lcChanges := lcChanges || chr(13) || 'RU_SOURCE (' || :NEW.RU_SOURCE || ')';
   end if;
   if :NEW.RU_FROM_DATE is not null then
-    lcChanges := lcChanges || chr(13) || 'RU_FROM_DATE (' || :NEW.RU_FROM_DATE || ')';
+    lcChanges := lcChanges || chr(13) || 'RU_FROM_DATE (' || to_char(:NEW.RU_FROM_DATE, 'DD-MM-YY') || ')';
   end if;
   if :NEW.RU_DAYS is not null then
     lcChanges := lcChanges || chr(13) || 'RU_DAYS (' || :NEW.RU_DAYS || ')';
@@ -102,6 +102,7 @@ END
   ae:09-09-12 V01: added RU_BOARDREF.
   ae:05-08-16 V02: added population of the new RUL_SIHOT* columns.
   ae:21-02-17 V03: added pcCaller parameter to call of P_RUL_INSERT().
+  ae:05-12-17 V04: added to_char(, 'DD-MM-YY') for to ensure correct string format of the RU_FROM_DATE value.
 */;
 /
 

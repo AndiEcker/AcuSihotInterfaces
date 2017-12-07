@@ -2,7 +2,7 @@
 from copy import deepcopy
 import pprint
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
-from ae_console_app import uprint
+from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 
 # argument values for validate_flag_info() and SfInterface.contacts_to_validate()
 EMAIL_DO_NOT_VALIDATE = ""
@@ -30,8 +30,14 @@ ADDR_ALL = ADDR_NOT_VALIDATED + ',' + ADDR_INVALIDATED + ',' + ADDR_VALID
 CONTACT_REC_TYPE_ID_OWNERS = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
 CONTACT_REC_TYPE_RENTALS = 'Rentals'
 
+# console app debug level (initialized with prepare_connection
+_debug_level = DEBUG_LEVEL_VERBOSE
+
 
 def prepare_connection(cae, print_on_console=True):
+    global _debug_level
+    _debug_level = cae.get_option('debugLevel')
+
     sf_user = cae.get_option('sfUser', default_value=cae.get_config('sfUser'))
     if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
         uprint("sfif.prepare_connection(): skipped because of unspecified credentials")
@@ -44,7 +50,7 @@ def prepare_connection(cae, print_on_console=True):
                                                                            or 'sandbox' in sf_user.lower()))
     sf_client = cae.get_option('sfClientId', default_value=cae.get_config('sfClientId'))
     sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
-    if print_on_console:
+    if print_on_console or _debug_level >= DEBUG_LEVEL_VERBOSE:
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
     return sf_conn, sf_sandbox
@@ -295,7 +301,7 @@ class SfInterface:
                                                                  self.REF_TYPE_EXT)
         return sf_contact_id, dup_contacts
 
-    def contact_by_email(self, email):
+    def contact_id_by_email(self, email):
         soql_query = "SELECT Id FROM Contact WHERE Email = '{}'".format(email)
         res = self._soql_query_all(soql_query)
         if not self.error_msg and res['totalSize'] > 0:
@@ -353,27 +359,41 @@ class SfInterface:
         if not self._ensure_lazy_connect():
             return self.error_msg, ""
 
-        err = msg = ""
+        sf_id = err = msg = ""
         if 'Id' in fields_dict:     # update?
             fd = deepcopy(fields_dict)     # copy to local dict fd for to prevent changing the passed-in dict field_dict
             sf_id = fd['Id']
             fd.pop('Id')
             try:
-                sf_http_code = self._conn.Contact.update(sf_id, fd)
-                msg = "{} updated with {}, status={}".format(sf_id, pprint.pformat(fd, indent=9), sf_http_code)
+                sf_ret = self._conn.Contact.update(sf_id, fd)
+                msg = "{} updated with {}, status={}".format(sf_id, pprint.pformat(fd, indent=9), sf_ret)
             except Exception as ex:
                 err = "Contact update raised exception {}. sent={}".format(ex, pprint.pformat(fd, indent=9))
         else:
             try:
-                sf_http_code = self._conn.Contact.create(fields_dict)
-                msg = "Contact created with {}, status={}".format(pprint.pformat(fields_dict, indent=9), sf_http_code)
+                sf_ret = self._conn.Contact.create(fields_dict)
+                msg = "Contact created with {}, status={}".format(pprint.pformat(fields_dict, indent=9), sf_ret)
+                if sf_ret['success']:
+                    sf_id = sf_ret['id']
             except Exception as ex:
                 err = "Contact creation raised exception {}. sent={}".format(ex, pprint.pformat(fields_dict, indent=9))
 
         if err:
             self.error_msg = err
 
-        return err, msg
+        return sf_id, err, msg
+
+    def contact_delete(self, sf_id):
+        if not self._ensure_lazy_connect():
+            return self.error_msg, ""
+
+        try:
+            sf_ret = self._conn.Contact.delete(sf_id)
+            msg = "Contact {} deleted, status={}".format(sf_id, pprint.pformat(sf_ret, indent=9))
+        except Exception as ex:
+            self.error_msg = "Contact {} deletion raised exception {}".format(sf_id, ex)
+
+        return not self.error_msg
 
     def record_type_id(self, dev_name, obj_type='Contact'):
         rec_type_id = None
@@ -382,3 +402,24 @@ class SfInterface:
         if not self.error_msg and res['totalSize'] > 0:
             rec_type_id = res['records'][0]['Id']
         return rec_type_id
+
+    def find_client(self, email="", phone="", first_name="", last_name=""):
+        if not self._ensure_lazy_connect():
+            return dict(id='', type='')
+
+        changed = False
+        removed = list()
+        email, changed = correct_email(email, changed=changed, removed=removed)
+        if changed and _debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("SfInterface.find_client(): email address changed to {}. Removed chars: {}".format(email, removed))
+
+        changed = False
+        removed = list()
+        phone, changed = correct_phone(phone, changed=changed, removed=removed)
+        if changed and _debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("SfInterface.find_client(): phone number corrected to {}. Removed chars: {}".format(phone, removed))
+
+        service_args = dict(email=email, phone=phone, firstName=first_name, lastName=last_name)
+        result = self._conn.apexecute('SIHOT', method='POST', data=service_args)
+
+        return result
