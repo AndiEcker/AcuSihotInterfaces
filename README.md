@@ -5,20 +5,21 @@ between Sihot.PMS, Acumen and Salesforce.
 
 ## Available Commands
 
-This interface suite project is including the following command line tools:
+This interface suite project is including the following commands/tools - most of them are command line applications,
+apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user interface:
 
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Web, Sxml |
-| [AcuSihotMonitor](#AcuSihotMonitor-Application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| [ClientQuestionnaireExport](#ClientQuestionnaireExport-Application) | Export check-outs from Sihot to CSV file | Web |
+| [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
+| [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
 | SfContactValidator | Salesforce Contact Data Validator | - |
 | ShSfContactMigration | Migrate contactable guests from Sihot to Salesforce | Web |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
-| [SihotOccLogChecker](#SihotOccLogChecker-Application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
-| [SihotResImport](#SihotResImport-Application) | Import Thomas Cook (Scandinavian) R*.txt files into Sihot.PMS | Kernel, Web |
+| [SihotOccLogChecker](#sihotocclogchecker-application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
+| [SihotResImport](#sihotresimport-application) | Import/Update/Cancel reservations from CSV/TXT files in Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
 | WatchPupPy | Periodically execute and supervise command | - |
@@ -209,7 +210,7 @@ occupation status. If you want for example to fix the missing occupation changes
 `-F="2017-10-21 17:54:38.0" -T="2017-10-23 10:20:50.0" -A=1 -u=AECKER -p=password -d=SP.WORLD`
 
 In the last example the short options got used (see the Short Option column in the section
-[General command line arguments](#General-command-line-arguments) above). For a more verbose output you can also
+[General command line arguments](#general-command-line-arguments) above). For a more verbose output you can also
 pass the `debugLevel` command line option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
 with timestamp).
 
@@ -239,13 +240,14 @@ Please note that the value of this setting is restricted by the value of the max
 Combined Console/Kivy Application for to import reservation bookings, changes and cancellations from CSV or JSON files
 into the Sihot system.
 
-Apart from the instruction in the _General Installation Instructions_ section (see above) you also have to create
-an import path folder for each supported import channel (e.g. C:\JSON_Import). The same path name has to be specified
-as command line argument when you start the SihotResImport application (see next paragraph). Please note that the user
-need to have full access (read, write and create folder privileges) within each of these import channel folders. 
+Apart from the instruction in the [General Installation Instructions](#general-installation-instructions)_ section (see
+above) you also have to create an import path folder for each supported import channel (e.g. C:\JSON_Import). The same
+path name has to be specified as command line argument when you start the SihotResImport application (see next 
+paragraph). Please note that the user need to have full access (read, write and create folder privileges) within each 
+of these import channel folders. 
 
 The provided command line options are documented above in the section
-[General command line arguments](#General-command-line-arguments). The most important one is the `jsonPath` option, 
+[General command line arguments](#general-command-line-arguments). The most important one is the `jsonPath` option, 
 for to specify the import path and file mask for OTA JSON files - this value defaults to `C:/JSON_Import/*.json`.
 
 For to run this application in console mode (headless without any user interface), simply specify a valid 
@@ -393,7 +395,8 @@ hotel 1:
 
 #### PBC room category overloads
 
-The `SIHOT_CATS_PBC` lookup class is specifying the following room size/feature mappings to the Sihot room categories in hotel 4:
+The `SIHOT_CATS_PBC` lookup class is specifying the following room size/feature mappings to the Sihot room categories in
+hotel 4:
 
 | Room Size | Requested Apartment Feature | Sihot room category |
 | :---: | --- | :---: |

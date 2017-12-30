@@ -26,5 +26,5 @@ exe = EXE(pyz,
           debug=False,
           strip=False,
           upx=False,
-          console=False,
-          resources=['SihotResImport.kv'])
+          console=True   # has to be True because print statements need a console window - see https://stackoverflow.com/questions/13429924/pyinstaller-packaged-application-works-fine-in-console-mode-crashes-in-window-m
+          )

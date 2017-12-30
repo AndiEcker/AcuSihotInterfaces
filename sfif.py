@@ -387,13 +387,14 @@ class SfInterface:
         if not self._ensure_lazy_connect():
             return self.error_msg, ""
 
+        msg = ""
         try:
             sf_ret = self._conn.Contact.delete(sf_id)
             msg = "Contact {} deleted, status={}".format(sf_id, pprint.pformat(sf_ret, indent=9))
         except Exception as ex:
             self.error_msg = "Contact {} deletion raised exception {}".format(sf_id, ex)
 
-        return not self.error_msg
+        return self.error_msg, msg
 
     def record_type_id(self, dev_name, obj_type='Contact'):
         rec_type_id = None

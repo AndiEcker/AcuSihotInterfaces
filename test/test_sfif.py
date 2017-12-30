@@ -24,7 +24,7 @@ class TestSfFindClient:
         print('Encapsulated APEX REST call result', result)
 
         # before checking we need first to delete the test client
-        assert sfi.contact_delete(sf_id)
+        assert sfi.contact_delete(sf_id)[0]
 
         assert 'id' in result
         assert len(result['id']) == 18

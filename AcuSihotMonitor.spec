@@ -26,4 +26,5 @@ exe = EXE(pyz,
           debug=False,
           strip=False,
           upx=False,
-          console=False )
+          console=True   # has to be True because print statements need a console window
+         )

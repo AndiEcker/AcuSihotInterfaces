@@ -10,12 +10,12 @@
     0.8     15-07-17: refactoring moving contacts and res_inv_data to acu_sf_sh_sys_data.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
 """
-import json
 import sys
 import os
 import shutil
 import glob
 import datetime
+import json
 import csv
 from traceback import format_exc
 
@@ -727,7 +727,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['SH_RES_TYPE'] = '1'
             row['RUL_ACTION'] = ACTION_INSERT
         row['SIHOT_GDSNO'] = RCI_MATCH_AND_BOOK_CODE_PREFIX + curr_cols[RCI_BOOK_REF]
-        row['RH_EXT_BOOK_REF'] = curr_cols[RCI_BOOK_REF]
+        row['RH_EXT_BOOK_REF'] = 'R' + curr_cols[RCI_BOOK_REF]
         row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(curr_cols[RCI_BOOK_DATE][:10], '%Y-%m-%d')
 
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCI_ARR_DATE][:10], '%Y-%m-%d')
@@ -895,7 +895,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['RUL_ACTION'] = ACTION_DELETE if curr_cols[RCIP_BOOK_STATUS] == 'C' else ACTION_INSERT
 
         row['SIHOT_GDSNO'] = RCI_MATCH_AND_BOOK_CODE_PREFIX + curr_cols[RCIP_BOOK_REF]
-        row['RH_EXT_BOOK_REF'] = curr_cols[RCIP_BOOK_REF]
+        row['RH_EXT_BOOK_REF'] = 'RP' + curr_cols[RCIP_BOOK_REF]
         row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_BOOK_DATE][:10], '%Y-%m-%d')
 
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_ARR_DATE][:10], '%Y-%m-%d')
@@ -1443,7 +1443,7 @@ else:
         def build(self):
             cae.dprint("App.build()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.display_files()
-            self.title = "Sihot Reservation Import  V " + __version__
+            self.title = "Sihot Reservation Import  V " + __version__ + " [" + cae.get_option('acuDSN') + "]"
             self.root = Factory.MainWindow()
             return self.root
 
