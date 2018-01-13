@@ -34,7 +34,7 @@ CONTACT_REC_TYPE_RENTALS = 'Rentals'
 _debug_level = DEBUG_LEVEL_VERBOSE
 
 
-def prepare_connection(cae, print_on_console=True):
+def prepare_connection(cae):
     global _debug_level
     _debug_level = cae.get_option('debugLevel')
 
@@ -49,9 +49,10 @@ def prepare_connection(cae, print_on_console=True):
                                                              default_value='test' in sf_user.lower()
                                                                            or 'sandbox' in sf_user.lower()))
     sf_client = cae.get_option('sfClientId', default_value=cae.get_config('sfClientId'))
+
+    uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
+
     sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
-    if print_on_console or _debug_level >= DEBUG_LEVEL_VERBOSE:
-        uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
     return sf_conn, sf_sandbox
 

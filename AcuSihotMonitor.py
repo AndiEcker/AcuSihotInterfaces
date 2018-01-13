@@ -10,7 +10,7 @@ from functools import partial
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from ae_db import OraDB, DEF_USER, DEF_DSN
+from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 from acu_sf_sh_sys_data import AssSysData
 from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, \
     SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
@@ -35,9 +35,9 @@ COLUMN_ATTRIBUTE_SEP = '__'
 
 cae = ConsoleApp(__version__, "Monitor the Acumen and Sihot interfaces and servers",
                  config_eval_vars=dict(date_format=DATE_DISPLAY_FORMAT))
-cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
+cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
+cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
 cae.add_option('serverIP', "IP address of the Sihot interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the Sihot WEB interface", 14777, 'w')

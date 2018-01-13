@@ -14,7 +14,7 @@ import pprint
 
 from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, \
     full_stack_trace
-from ae_db import OraDB, DEF_USER, DEF_DSN
+from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 from ae_notification import Notification
 from sxmlif import PostMessage, GuestSearch, SXML_DEF_ENCODING
 
@@ -31,9 +31,9 @@ cae.add_option('envChecks', "Number of environment checks per command interval",
 cae.add_option('sendOutput',
                "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
+cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
+cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
 cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')

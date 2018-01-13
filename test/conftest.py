@@ -152,6 +152,10 @@ class ConsoleApp:
                              phoneValidatorBaseUrl=cfg.get('Settings', 'phoneValidatorBaseUrl'),
                              phoneValidatorApiKey=cfg.get('Settings', 'phoneValidatorApiKey'),
                              )
+        for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):
+            val = cfg.get('Settings', cfg_key)
+            if val:
+                self._options[cfg_key] = eval(val)
 
     def get_config(self, name, section=None, default_value=None):
         if section == 'SihotRateSegments':

@@ -10,8 +10,10 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user i
 
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
-| AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Web, Sxml |
+| AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
+| AssCacheSync | Initialize, migrate and sync data between Acumen, Sihot, Salesforce and the ass_cache PG database | Web |
+| AssServer | Listening to Sihot interface for to update the ass_cache PG database | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
@@ -73,12 +75,15 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
+| initializeCache | Initialize/Wipe/Recreate postgres cache database (0=No, 1=Yes) | 0 | I | AssCacheSync |
 | jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
+| pgUser | User account name for ass_cache postgres cache database | 'postgres' | U | AssCacheSync |
+| pgPassword | User account password for ass_cache postgres cache database | - | P | AssCacheSync |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfContactValidator |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
 | recordTypesToValidate | Contact record type(s) to be validated | 'Rentals' | R | SfContactValidator |
@@ -91,6 +96,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration, SihotResImport |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
+| syncCache | Synchronize postgres cache database (0=No-only check, 1=Yes) | 0 | S | AssCacheSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |

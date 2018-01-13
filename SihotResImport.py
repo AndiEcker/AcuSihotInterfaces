@@ -21,7 +21,7 @@ from traceback import format_exc
 
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import Notification
-from ae_db import DEF_USER, DEF_DSN
+from ae_db import ACU_DEF_USR, ACU_DEF_DSN
 from acu_sf_sh_sys_data import AssSysData, EXT_REFS_SEP, RCI_MATCH_AND_BOOK_CODE_PREFIX
 from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
@@ -42,9 +42,9 @@ cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
 cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
 cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
+cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
+cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
 cae.add_option('sfUser', "Salesforce account user name", '', 'y')
 cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
@@ -733,11 +733,14 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCI_ARR_DATE][:10], '%Y-%m-%d')
         row['DEP_DATE'] = row['ARR_DATE'] + datetime.timedelta(7)
 
-        rno = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCI_APT_NO]) == 3 else '') + curr_cols[RCI_APT_NO]
+        rno = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCI_APT_NO]) == 3
+               else ('J' if row['RUL_SIHOT_HOTEL'] == 2 and curr_cols[RCI_APT_NO][0] != 'J'
+                     else '')) + curr_cols[RCI_APT_NO]
         rsi = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
         row['RUL_SIHOT_CAT'] = row['SH_PRICE_CAT'] = conf_data.rci_to_sihot_room_cat(row['RUL_SIHOT_HOTEL'], rsi)
         comments.append(rsi + ' (' + rno + ')')
-        row['RUL_SIHOT_ROOM'] = conf_data.allocated_room(rno, row['ARR_DATE'])
+        if curr_cols[RCI_RESORT_ID][0] not in ('a', 'c', 'd'):      # suppress room allocation for CPA reservations
+            row['RUL_SIHOT_ROOM'] = conf_data.allocated_room(rno, row['ARR_DATE'])
 
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
         cl_own_idx = curr_cols[RC_OWN_CLIENTS_IDX] if curr_cols[RC_OWN_CLIENTS_IDX] > -1 else cl_occ_idx
@@ -901,11 +904,14 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_ARR_DATE][:10], '%Y-%m-%d')
         row['DEP_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_DEP_DATE][:10], '%Y-%m-%d')
 
-        rno = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCIP_APT_NO]) == 3 else '') + curr_cols[RCIP_APT_NO]
+        rno = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCIP_APT_NO]) == 3
+               else ('J' if row['RUL_SIHOT_HOTEL'] == 2 and curr_cols[RCIP_APT_NO][0] != 'J'
+                     else '')) + curr_cols[RCIP_APT_NO]
         rsi = 'STUDIO' if curr_cols[RCIP_ROOM_SIZE][0] == 'S' else curr_cols[RCIP_ROOM_SIZE][0] + ' BED'
         row['RUL_SIHOT_CAT'] = row['SH_PRICE_CAT'] = conf_data.rci_to_sihot_room_cat(row['RUL_SIHOT_HOTEL'], rsi)
         comments.append(rsi + ' (' + rno + ')')
-        row['RUL_SIHOT_ROOM'] = conf_data.allocated_room(rno, row['ARR_DATE'])
+        if curr_cols[RCIP_RESORT_ID][0] not in ('a', 'c', 'd'):  # suppress room allocation for CPA reservations
+            row['RUL_SIHOT_ROOM'] = conf_data.allocated_room(rno, row['ARR_DATE'])
 
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
         row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = row['CD_SIHOT_OBJID'] = conf_data.contact_sh_id(cl_occ_idx)
@@ -1124,9 +1130,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 if debug_level >= DEBUG_LEVEL_VERBOSE:
                     log_import("Import line loaded: " + ln, fn, idx)
                 if idx == 0:  # first line is header
-                    if ln == RCI_FILE_HEADER:
+                    if ln[:len(RCI_FILE_HEADER)] == RCI_FILE_HEADER:
                         points_import = False
-                    elif ln == RCIP_FILE_HEADER:
+                    elif ln[:len(RCIP_FILE_HEADER)] == RCIP_FILE_HEADER:
                         points_import = True
                     else:
                         log_error("Skipped import file {} with invalid file header {}".format(fn, ln), fn, idx)

@@ -27,12 +27,12 @@ _GRANTED = 4
 
 
 def _dummy_stub(*args, **kwargs):
-    uprint("****** Unexpected call of acu_sf_sh_sys_data._dummy_stub()", args, kwargs)
+    uprint("******  Unexpected call of acu_sf_sh_sys_data._dummy_stub()", args, kwargs)
 
 
 class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def __init__(self, cae, acu_user=None, acu_password=None,
-                 err_logger=_dummy_stub, warn_logger=_dummy_stub, ctx_no_file=None):
+                 err_logger=_dummy_stub, warn_logger=_dummy_stub, ctx_no_file=''):
         self.cae = cae
         self._err = err_logger
         self._warn = warn_logger
@@ -46,34 +46,41 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self.error_message = ''
 
-        # fetch config data from Acumen
-        db = self.connect_db()
-        if not db:      # logon/connect error
-            return
+        self.hotel_ids = cae.get_config('hotelIds')
+        if self.hotel_ids:      # fetch config data from INI/CFG
+            self.resort_cats = cae.get_config('resortCats')
+            self.ap_cats = cae.get_config('apCats')
+            self.ro_agencies = cae.get_config('roAgencies')
+            self.room_change_max_days_diff = cae.get_config('roomChangeMaxDaysDiff', default_value=3)
+        else:               # fetch config data from Acumen
+            db = self.connect_db()
+            if not db:      # logon/connect error
+                return
 
-        self.hotel_ids = self.load_view(db, 'T_LU', ['LU_NUMBER', 'LU_ID'],
-                                        "LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
+            self.hotel_ids = self.load_view(db, 'T_LU', ['LU_NUMBER', 'LU_ID'],
+                                            "LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
 
-        any_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_ANY'")
-        bhc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHC'")
-        pbc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_PBC'")
-        bhh_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHH'")
-        hmc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_HMC'")
-        self.resort_cats = {'ANY': any_cats, 'BHC': bhc_cats, 'PBC': pbc_cats, 'BHH': bhh_cats, 'HMC': hmc_cats}
+            any_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_ANY'")
+            bhc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHC'")
+            pbc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_PBC'")
+            bhh_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHH'")
+            hmc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_HMC'")
+            self.resort_cats = {'ANY': any_cats, 'BHC': bhc_cats, 'PBC': pbc_cats, 'BHH': bhh_cats, 'HMC': hmc_cats}
 
-        self.ap_cats = self.load_view(db, 'T_AP, T_AT, T_LU', ['AP_CODE', 'AP_SIHOT_CAT'],
-                                      "AP_ATREF = AT_CODE and AT_RSREF = LU_ID"
-                                      " and LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
+            self.ap_cats = self.load_view(db, 'T_AP, T_AT, T_LU', ['AP_CODE', 'AP_SIHOT_CAT'],
+                                          "AP_ATREF = AT_CODE and AT_RSREF = LU_ID"
+                                          " and LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
 
-        self.ro_agencies = self.load_view(db, 'T_RO',
-                                          ['RO_CODE', 'RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC', 'RO_SIHOT_RATE',
-                                           'RO_RES_GROUP', 'RO_SIHOT_RES_GROUP'],
-                                          "RO_SIHOT_AGENCY_OBJID is not NULL")
+            self.ro_agencies = self.load_view(db, 'T_RO',
+                                              ['RO_CODE', 'RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC',
+                                               'RO_SIHOT_RATE', 'RO_RES_GROUP', 'RO_SIHOT_RES_GROUP'],
+                                              "RO_SIHOT_AGENCY_OBJID is not NULL")
 
-        self.room_change_max_days_diff = self.load_view(db, 'dual',
-                                                        ["F_CONST_VALUE_NUM('k.SihotRoomChangeMaxDaysDiff')"], '')[0][0]
+            self.room_change_max_days_diff = self.load_view(db, 'dual',
+                                                            ["F_CONST_VALUE_NUM('k.SihotRoomChangeMaxDaysDiff')"],
+                                                            '')[0][0]
 
-        db.close()
+            db.close()
 
         # open and check Salesforce connection
         self.sales_force, _ = prepare_connection(cae)
@@ -208,7 +215,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     # =================  contacts  =========================================================================
     def fetch_contacts(self):
-        """ Populates global list contacts from Acumen and Salesforce with data lookup, check and merge """
+        """ Populates instance list self.contacts from Acumen and Salesforce with data lookup, check and merge """
 
         def _find_and_merge():  # c_idx, s_rec and a_rec are defined in the for loop in outer method:
             s_acu_id, s_sf_id, s_sh_id, s_ext_refs, s_owner = s_rec
@@ -241,28 +248,28 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 if s_owner != a_owner:
                     self._warn(msg_prefix + "Owner status: Salesforce={}, Acumen={}".format(s_owner, a_owner), ctx)
                 # -- merge
-                contacts[c_idx] = (s_acu_id or a_acu_id, s_sf_id or a_sf_id, s_sh_id or a_sh_id,
-                                   EXT_REFS_SEP.join(s_ext_refs | a_ext_refs), s_owner or a_owner)
+                self.contacts[c_idx] = (s_acu_id or a_acu_id, s_sf_id or a_sf_id, s_sh_id or a_sh_id,
+                                        EXT_REFS_SEP.join(s_ext_refs | a_ext_refs), s_owner or a_owner)
             return match
 
         # establish file lock
-        file_lock = LockFile(self.cae.get_config('CONTACTS_LOCK_FILE'))
+        file_lock = LockFile(self.cae.get_config('CONTACTS_LOCK_FILE', default_value='contacts.lock'))
         err_msg = file_lock.lock()
         if err_msg:
             return err_msg
 
         # check if file exists (or if it is instead the first run or a reset)
-        client_file_name = self.cae.get_config('CONTACTS_DATA_FILE')
-        if os.path.isfile(client_file_name):
-            with open(client_file_name) as f:
-                contacts = eval(f.read())
+        contacts_file_name = self.cae.get_config('CONTACTS_DATA_FILE', default_value='contacts.data')
+        if os.path.isfile(contacts_file_name):
+            with open(contacts_file_name) as f:
+                self.contacts = eval(f.read())
             file_lock.unlock()
             return ""
 
         # fetch from Acumen on first run or after reset (deleted cache files) - after locking cache files
         self._warn("Fetching client data from Acumen (needs some minutes)", self._ctx_no_file + 'FetchClientData',
                    importance=4)
-        contacts = \
+        self.contacts = \
             self.load_view(None, 'V_ACU_CD_DATA',
                            ["CD_CODE", "SIHOT_SF_ID", "CD_SIHOT_OBJID",
                             "trim('" + EXT_REFS_SEP + "' from CD_RCI_REF || '" + EXT_REFS_SEP +
@@ -280,11 +287,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             return self.sales_force.error_msg
         # merging list of tuples (Acu-CD_CODE, Sf-Id, Sihot-Id, ext_refs, is_owner) into contacts
         for s_rec in sf_contacts:
-            for c_idx, a_rec in enumerate(contacts):
+            for c_idx, a_rec in enumerate(self.contacts):
                 if _find_and_merge():
                     break   # sf contact found in acu and merged, so break inner loop for to check next sf contact
             else:   # sf contact not found, so add it to contacts
-                contacts.append(s_rec)
+                self.contacts.append(s_rec)
 
         # check for duplicate and blocked RCI Ids in verbose debug mode
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -293,8 +300,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.check_contacts()
 
         # save fetched data to cache
-        with open(client_file_name, 'w') as f:
-            f.write(repr(contacts))
+        with open(contacts_file_name, 'w') as f:
+            f.write(repr(self.contacts))
 
         file_lock.unlock()
 
@@ -410,7 +417,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     # =================  res_inv_data  =========================================================================
 
     def fetch_res_inv_data(self):
-        inv_file_name = self.cae.get_config('RES_INV_DATA_FILE')
+        inv_file_name = self.cae.get_config('RES_INV_DATA_FILE', default_value='res_inv.data')
         if os.path.isfile(inv_file_name):
             with open(inv_file_name) as f:
                 self.res_inv_data = eval(f.read())
@@ -419,7 +426,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # file not exists (first run or reset)
         self._warn("Fetching reservation inventory from Acumen (needs some minutes)",
                    self._ctx_no_file + 'FetchResInv', importance=4)
-        file_lock = LockFile(self.cae.get_config('RES_INV_LOCK_FILE'))
+        file_lock = LockFile(self.cae.get_config('RES_INV_LOCK_FILE', default_value='res_inv.lock'))
         err_msg = file_lock.lock()
         if err_msg:
             return err_msg

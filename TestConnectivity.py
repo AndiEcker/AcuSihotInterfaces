@@ -1,5 +1,5 @@
 from ae_console_app import ConsoleApp, uprint
-from ae_db import OraDB, DEF_USER, DEF_DSN
+from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 from ae_notification import Notification
 
 __version__ = '0.1'
@@ -10,9 +10,9 @@ cae.add_option('smtpServerUri', "SMTP server URI [user[:pw]@]host[:port]", '', '
 cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
 cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
+cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
+cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
 uprint('SMTP Uri/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))

@@ -5,7 +5,7 @@
 """
 
 from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace
-from ae_db import DEF_USER, DEF_DSN
+from ae_db import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import ClientToSihot, ResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
 
 __version__ = '0.3'
@@ -18,9 +18,9 @@ cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this serv
 cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
 cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
+cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
+cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
 cae.add_option('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
                0, 'q', choices=(0, 1, 2))

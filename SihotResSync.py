@@ -11,7 +11,7 @@ import datetime
 
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import Notification
-from ae_db import DEF_USER, DEF_DSN
+from ae_db import ACU_DEF_USR, ACU_DEF_DSN
 
 from sxmlif import ClientToSihot, ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
@@ -25,9 +25,9 @@ ADMIN_MAIL_TO_LIST = ['ITDevmen@acumen.es']
 
 cae = ConsoleApp(__version__, "Synchronize reservation changes from Acumen/Oracle system to the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
-cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
+cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
+cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
 cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')

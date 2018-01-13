@@ -1,31 +1,27 @@
 """
-    0.1     first beta (only support GUEST-CREATE/-CHANGE of WEB interface 9.0).
-    0.2     extended to support SXML interface V9.0 Level 1 of Minibar/Wellness-center.
-    0.3     made running-server-animation optional, specify debugLevel/logFile in INI and check/fix Transaction number
-            passing/increment - is always duplicated '2' instead the one sent by Sihot (see Track-It closed WO #43242).
-    0.4     added GDS number to alloc_trigger() - available since Sihot build/version 9.0.0.0787.CO.
+    AssServer is listening on the SIHOT SXML interface for to propagate room check-ins/check-outs/move
+    onto the ass_cache postgres database.
+
+    0.1     first beta.
 """
 from traceback import format_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_notification import Notification
-from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 from ae_tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder, SXML_DEF_ENCODING
 
-__version__ = '0.4'
+__version__ = '0.1'
 
 cae = None  # added for to remove Pycharm warning
 
-if __name__ == "__main__":      # for to allow import of client_to_acu() for testing suite
-    cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle")
+if __name__ == "__main__":      # for to allow import of client_to_ass() for testing suite
+    cae = ConsoleApp(__version__, "Listening to Sihot interface for to update the ass_cache PG database")
 
-    cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-    cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-    cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
+    cae.add_option('pgUser', "User account name for ass_cache postgres cache database", 'postgres', 'U')
+    cae.add_option('pgPassword', "User account password for ass_cache postgres cache database", '', 'P')
 
     cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-    # default is 14773 for Acumen and Sihot on 14774
     cae.add_option('serverPort', "IP port of the interface of this server", 11000, 'w')  # 11001 for Sihot
 
     cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
@@ -35,15 +31,15 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
     cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
     cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
 
-    uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-    uprint('Server IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
+    uprint('Postgres Usr:', cae.get_option('pgUser'))
+    uprint('Sihot IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
     uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
     notification = None
     if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
         notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
                                     mail_from=cae.get_option('smtpFrom'),
                                     mail_to=cae.get_option('smtpTo'),
-                                    used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
+                                    used_system=cae.get_option('assDSN') + '/' + cae.get_option('serverIP'),
                                     debug_level=cae.get_option('debugLevel'))
         uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
 
@@ -51,15 +47,15 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
     if cae.get_option('debugLevel') >= minimum_debug_level:
         if notification:
-            notification.send_notification(msg_body=msg, subject='AcuServer notification')
+            notification.send_notification(msg_body=msg, subject='AssServer notification')
         else:
             uprint(msg)
 
 
-def client_to_acu(col_values, ca=None):
+def client_to_ass(col_values, ca=None):
     if not ca:          # only needed for sxmlif testing section
         ca = cae
-    ora_db = OraDB(ca.get_option('acuUser'), ca.get_option('acuPassword'), ca.get_option('acuDSN'),
+    ora_db = OraDB(ca.get_option('assUser'), ca.get_option('assPassword'), ca.get_option('assDSN'),
                    debug_level=ca.get_option('debugLevel'))
     err_msg = ora_db.connect()
     pkey = None
@@ -82,20 +78,20 @@ def client_to_acu(col_values, ca=None):
     if not err_msg:
         err_msg = ora_db.select('T_CD', ['count(*)'], "CD_CODE = '" + pkey + "'")
         if not err_msg:
-            acu_col_values = {k: col_values[k] for k in col_values.keys() if k.startswith('CD_')}
+            ass_col_values = {k: col_values[k] for k in col_values.keys() if k.startswith('CD_')}
             if ora_db.fetch_value() > 0:
-                err_msg = ora_db.update('T_CD', acu_col_values, "CD_CODE = :CD_CODE", bind_vars=dict(CD_CODE=pkey))
+                err_msg = ora_db.update('T_CD', ass_col_values, "CD_CODE = :CD_CODE", bind_vars=dict(CD_CODE=pkey))
             else:
-                err_msg = ora_db.insert('T_CD', acu_col_values)
+                err_msg = ora_db.insert('T_CD', ass_col_values)
     ora_db.close()
     return err_msg, pkey
 
 
-def oc_client_to_acu(req):
-    error_msg, pk = client_to_acu(req.acu_col_values)
-    notify("####  Guest inserted or updated within Acumen with pk=" + pk if not error_msg
-           else "****  Acumen guest data insert/update error: " + error_msg)
-    resp = SihotXmlBuilder(cae, use_kernel_interface=False, col_map=(), connect_to_acu=False)
+def oc_client_to_ass(req):
+    error_msg, pk = client_to_ass(req.ass_col_values)
+    notify("####  Guest inserted or updated within Postgres ass_cache db with pk=" + pk if not error_msg
+           else "****  ass_cache guest data insert/update error: " + error_msg)
+    resp = SihotXmlBuilder(cae)
     resp.beg_xml(operation_code=req.oc)
     resp.add_tag('RC', '1' if error_msg else '0')
     resp.add_tag('MATCHCODE', pk)
@@ -112,7 +108,7 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
     if old_room_no:
         old_room_no = old_room_no.lstrip('0')
     # move/check in/out guest from/into room_no
-    ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
+    ora_db = OraDB(cae.get_option('assUser'), cae.get_option('assPassword'), cae.get_option('assDSN'),
                    debug_level=cae.get_option('debugLevel'))
     err_msg = ora_db.connect()
     extra_info = ''
@@ -138,19 +134,19 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
                                       },
                            commit=True)              # COMMIT
     if db_err:
-        err_msg += "AcuServer.alloc_trigger() db insert error: " + db_err
+        err_msg += "AssServer.alloc_trigger() db insert error: " + db_err
         uprint(err_msg)
 
     db_err = ora_db.close()      # commit and close
     if db_err:
-        err_msg += "AcuServer.alloc_trigger() db close error: " + db_err
+        err_msg += "AssServer.alloc_trigger() db close error: " + db_err
         uprint(err_msg)
 
     return err_msg
 
 
 def create_ack_response(req, ret_code, msg='', status=''):
-    resp = SihotXmlBuilder(cae, use_kernel_interface=False, col_map=(), connect_to_acu=False)
+    resp = SihotXmlBuilder(cae)
     resp.beg_xml(operation_code='ACK', transaction_number=getattr(req, 'tn', '69'))
     resp.add_tag('RC', ret_code)
     if msg:
@@ -185,9 +181,9 @@ def oc_keep_alive(req):
 
 # supported operation codes with related request class and operation code handler/processor
 SUPPORTED_OCS = {
-    #  old guest sync tests Sihot -> Acumen
-    'GUEST-CREATE': {'reqClass': GuestFromSihot, 'ocProcessor': oc_client_to_acu, },
-    'GUEST-CHANGE': {'reqClass': GuestFromSihot, 'ocProcessor': oc_client_to_acu, },
+    #  old guest sync tests Sihot -> Postgres
+    'GUEST-CREATE': {'reqClass': GuestFromSihot, 'ocProcessor': oc_client_to_ass, },
+    'GUEST-CHANGE': {'reqClass': GuestFromSihot, 'ocProcessor': oc_client_to_ass, },
     #  keep alive and other basic SXML interfaces
     'ACK': {'reqClass': Request, 'ocProcessor': oc_keep_alive, },
     'LA': {'reqClass': Request, 'ocProcessor': oc_keep_alive, },
@@ -206,7 +202,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         # hide timeout or dropped connection error if not verbose debug level
         if TIMEOUT_ERR_MSG not in self.error_message or cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
             if notification:
-                notification.send_notification(msg_body=self.error_message, subject="AcuServer handler notification")
+                notification.send_notification(msg_body=self.error_message, subject="AssServer handler notification")
             else:
                 uprint("**** " + self.error_message)
 

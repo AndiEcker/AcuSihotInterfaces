@@ -7,7 +7,7 @@ import datetime
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from ae_db import OraDB, DEF_USER, DEF_DSN
+from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 # from sxmlif import ResSearch, SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
 from ae_notification import Notification
 
@@ -25,9 +25,9 @@ cae.add_option('dateFrom', "Date/time of first checked occupation", startup_date
 cae.add_option('dateTill', "Date/time of last checked occupation", startup_date, 'T')
 cae.add_option('correctAcumen', "Correct room occupation status (check-in/-out) in Acumen (0=No, 1=Yes)", False, 'A')
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", DEF_USER, 'u')
+cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", DEF_DSN, 'd')
+cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 '''
 cae.add_option('serverIP', "IP address of the Sihot interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the Sihot WEB interface", 14777, 'w')

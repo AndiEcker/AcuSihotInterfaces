@@ -6,8 +6,8 @@ from copy import deepcopy
 
 from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 
-DEF_USER = 'SIHOT_INTERFACE'
-DEF_DSN = 'SP.TEST'
+ACU_DEF_USR = 'SIHOT_INTERFACE'
+ACU_DEF_DSN = 'SP.TEST'
 
 MAX_STRING_LENGTH = 2000
 
@@ -19,15 +19,44 @@ def output_type_handler(cursor, name, default_type, size, precision, scale):
     if default_type in (cx_Oracle.STRING, cx_Oracle.FIXED_CHAR):
         return cursor.var(cx_Oracle.NCHAR, size, cursor.arraysize)
 '''
-# workaround with the next statement
+# workaround with the next statement for OraDB
 os.environ["NLS_LANG"] = ".AL32UTF8"
 
 
-class OraDB:
-
-    def __init__(self, usr=DEF_USER, pwd='', dsn=DEF_DSN, debug_level=DEBUG_LEVEL_DISABLED):
+class GenericDB:
+    def __init__(self, usr='', pwd='', debug_level=DEBUG_LEVEL_DISABLED):
         self.usr = usr
         self.pwd = pwd
+        self.debug_level = debug_level
+
+        self.conn = None
+        self.curs = None
+        self.last_err_msg = ""
+
+        self._named_bind_vars = False
+
+    @staticmethod
+    def _prepare_in_clause(where_group_order, bind_vars, additional_col_values=None):
+        if not bind_vars:
+            bv = deepcopy(additional_col_values or dict())
+        else:
+            new_dict = deepcopy(additional_col_values or dict())
+            for key, val in bind_vars.items():
+                if isinstance(val, list):       # expand IN clause bind list variable to separate bind variables
+                    var_list = [key + '_' + str(_) for _ in range(len(val))]
+                    where_group_order = where_group_order.replace(':' + key, ':' + ',:'.join(var_list))
+                    for var_val in zip(var_list, val):
+                        new_dict[var_val[0]] = var_val[1]
+                else:
+                    new_dict[key] = val
+            bv = new_dict
+        return where_group_order, bv
+
+
+class OraDB(GenericDB):
+
+    def __init__(self, usr=ACU_DEF_USR, pwd='', dsn=ACU_DEF_DSN, debug_level=DEBUG_LEVEL_DISABLED):
+        super(OraDB, self).__init__(usr=usr, pwd=pwd, debug_level=debug_level)
         if dsn.count(':') == 1 and dsn.count('/@') == 1:   # old style format == host:port/@SID
             host, rest = dsn.split(':')
             port, service_id = rest.split('/@')
@@ -38,10 +67,6 @@ class OraDB:
             self.dsn = cx_Oracle.makedsn(host=host, port=port, service_name=service_name)
         else:
             self.dsn = dsn                                  # TNS name like SP.DEV
-        self.debug_level = debug_level
-        self.conn = None
-        self.curs = None
-        self.last_err_msg = ""
 
     def connect(self):
         self.last_err_msg = ''
@@ -62,23 +87,6 @@ class OraDB:
             except Exception as ex:
                 self.last_err_msg = "oraDB-connect cursors " + self.usr + "@" + self.dsn + " error: " + str(ex)
         return self.last_err_msg
-
-    @staticmethod
-    def _prepare_in_clause(where_group_order, bind_vars, additional_col_values=None):
-        if not bind_vars:
-            bv = deepcopy(additional_col_values or dict())
-        else:
-            new_dict = deepcopy(additional_col_values or dict())
-            for key, val in bind_vars.items():
-                if isinstance(val, list):       # expand IN clause bind list variable to separate bind variables
-                    var_list = [key + '_' + str(_) for _ in range(len(val))]
-                    where_group_order = where_group_order.replace(':' + key, ':' + ',:'.join(var_list))
-                    for var_val in zip(var_list, val):
-                        new_dict[var_val[0]] = var_val[1]
-                else:
-                    new_dict[key] = val
-            bv = new_dict
-        return where_group_order, bv
 
     def select(self, from_join, cols=None, where_group_order='', bind_vars=None, hints=''):
         self.last_err_msg = ""
