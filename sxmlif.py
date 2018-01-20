@@ -9,7 +9,7 @@ from xml.etree.ElementTree import XMLParser, ParseError
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, round_traditional
 from ae_tcp import TcpClient
-from ae_db import OraDB, MAX_STRING_LENGTH
+from ae_db import OraDB
 
 # data actions
 ACTION_DELETE = 'DELETE'
@@ -1290,7 +1290,7 @@ class SihotXmlBuilder:
                                    'SRSL_PRIMARY': str(primary)[:12],
                                    'SRSL_ACTION': action[:15],
                                    'SRSL_STATUS': status[:12],
-                                   'SRSL_MESSAGE': message[:MAX_STRING_LENGTH - 1],
+                                   'SRSL_MESSAGE': message[:1998],
                                    'SRSL_LOGREF': logref,  # NUMBER(10)
                                    },
                                   commit=commit)

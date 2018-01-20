@@ -57,7 +57,7 @@ uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option
 uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
 
 
-config_data = None      # public Data() instance for Acumen config/data fetches
+config_data = None      # public Data() instance for config/data fetches
 
 """ KIVY IMPORTS - done here for (1) prevent PyCharm import inspection warning and (2) remove command line options """
 if True:        # added for to hide PyCharm inspection warning "module level import not at top of file"
@@ -273,7 +273,7 @@ def sih_test_notification():
 
 
 def cfg_agency_match_codes():
-    agencies = config_data.load_view(None, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_MC is not NULL")
+    agencies = config_data.ro_agencies
     ret = ""
     for agency in agencies:
         ret += ", " + agency[0] + "=" + config_data.get_ro_agency_matchcode(agency[0])
@@ -281,7 +281,7 @@ def cfg_agency_match_codes():
 
 
 def cfg_agency_obj_ids():
-    agencies = config_data.load_view(None, 'T_RO', ['RO_CODE'], "RO_SIHOT_AGENCY_OBJID is not NULL")
+    agencies = config_data.ro_agencies
     ret = ""
     for agency in agencies:
         ret += ", " + agency[0] + "=" + str(config_data.get_ro_agency_objid(agency[0]))
@@ -462,7 +462,7 @@ class AcuSihotMonitorApp(App):
     @staticmethod
     def init_config_data(user_name, user_pass):
         global config_data
-        config_data = AssSysData(cae, user_name, user_pass)
+        config_data = AssSysData(cae, acu_user=user_name, acu_password=user_pass)
         if config_data.error_message:
             pu = Popup(title='Logon Error', content=Label(text=config_data.error_message), size_hint=(.9, .3))
             pu.open()

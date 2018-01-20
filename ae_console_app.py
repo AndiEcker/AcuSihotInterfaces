@@ -276,12 +276,15 @@ class ConsoleApp:
             :var  _ca_instance          module variable referencing this (singleton) instance.
         """
         global _ca_instance
+        _ca_instance = self
+
         self._parsed_args = None
         self._log_file_obj = None       # has to be initialized before _ca_instance, else uprint() will throw exception
         self._num_log_backups = num_log_backups
         self._log_max_size = log_max_size
+
+        self.startup_beg = datetime.datetime.now()
         self.config_options = dict()
-        _ca_instance = self
 
         self.config_eval_vars = config_eval_vars or dict()
 
@@ -293,7 +296,7 @@ class ConsoleApp:
         self._app_name = os.path.splitext(app_fnam)[0]
         self._app_version = app_version
 
-        uprint(self._app_name, " V", app_version, "  Startup", datetime.datetime.now(), app_desc)
+        uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
         uprint("####  Initialization......  ####")
 
         # compile list of cfg/ini files - the last file overwrites previously loaded variable values
@@ -384,7 +387,8 @@ class ConsoleApp:
             except Exception as ex:
                 uprint("****  ConsoleApp._parse_args(): enable logging exception=", ex)
 
-        uprint(self._app_name, " V", self._app_version, "  Args  parsed", datetime.datetime.now())
+        self.startup_end = datetime.datetime.now()
+        uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
         uprint("####  Startup finished....  ####")
 
         # finished argument parsing - now print chosen option values to the console

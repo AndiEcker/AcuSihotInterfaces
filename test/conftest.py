@@ -139,8 +139,8 @@ class ConsoleApp:
                              serverPort=cfg.get('Settings', 'serverPort', fallback=14777),
                              serverKernelPort=cfg.get('Settings', 'serverKernelPort', fallback=14772),
                              timeout=369.0, xmlEncoding='utf8',
-                             acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
                              acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
+                             acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
                              debugLevel=cfg.getint('Settings', 'debugLevel', fallback=2),  # 2==DEBUG_LEVEL_VERBOSE
                              warningFragments='',
                              sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
@@ -151,6 +151,8 @@ class ConsoleApp:
                              emailValidatorApiKey=cfg.get('Settings', 'emailValidatorApiKey'),
                              phoneValidatorBaseUrl=cfg.get('Settings', 'phoneValidatorBaseUrl'),
                              phoneValidatorApiKey=cfg.get('Settings', 'phoneValidatorApiKey'),
+                             pgUser='postgres', pgPassword=cfg.get('Settings', 'pgPassword'),
+                             pgDSN=cfg.get('Settings', 'pgDSN', fallback='test'),
                              )
         for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):
             val = cfg.get('Settings', cfg_key)

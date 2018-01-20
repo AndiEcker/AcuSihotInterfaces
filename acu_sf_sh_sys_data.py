@@ -31,7 +31,7 @@ def _dummy_stub(*args, **kwargs):
 
 
 class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
-    def __init__(self, cae, acu_user=None, acu_password=None,
+    def __init__(self, cae, ass_user=None, ass_password=None, acu_user=None, acu_password=None,
                  err_logger=_dummy_stub, warn_logger=_dummy_stub, ctx_no_file=''):
         self.cae = cae
         self._err = err_logger
@@ -41,6 +41,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.acu_user = acu_user or cae.get_option('acuUser')
         self.acu_password = acu_password or cae.get_option('acuPassword')
         self.acu_dsn = cae.get_option('acuDSN')
+
+        self.ass_user = ass_user or cae.get_option('pgUser')
+        self.ass_password = ass_password or cae.get_option('pgPassword')
+        self.ass_dsn = cae.get_option('pgDSN')
 
         self.debug_level = cae.get_option('debugLevel')
 
@@ -53,7 +57,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.ro_agencies = cae.get_config('roAgencies')
             self.room_change_max_days_diff = cae.get_config('roomChangeMaxDaysDiff', default_value=3)
         else:               # fetch config data from Acumen
-            db = self.connect_db()
+            db = self.connect_acu_db()
             if not db:      # logon/connect error
                 return
 
@@ -102,7 +106,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # --- res_inv_data is caching banking/swap/grant info
         self.res_inv_data = list()
 
-    def connect_db(self):
+    def connect_acu_db(self):
         db = OraDB(usr=self.acu_user, pwd=self.acu_password, dsn=self.acu_dsn)
         self.error_message = db.connect()
         if self.error_message:
@@ -110,12 +114,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             return None
         return db
 
-    def load_view(self, db_opt, view, cols, where, bind_vars=None):
+    def load_view(self, db_opt, view, cols, where="", bind_vars=None):
         if db_opt:      # use existing db connection if passed by caller
             db = db_opt
             self.error_message = ""
         else:
-            db = self.connect_db()
+            db = self.connect_acu_db()
         if not self.error_message:
             self.error_message = db.select(view, cols, where, bind_vars)
         if self.error_message:
@@ -213,7 +217,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         diff = arr_date - week_1_begin
         return year, 1 + int(diff.days / 7)
 
-    # =================  contacts  =========================================================================
+    # =================  product types, contacts and external refs  ==================================================
+
     def fetch_contacts(self):
         """ Populates instance list self.contacts from Acumen and Salesforce with data lookup, check and merge """
 
@@ -252,10 +257,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                         EXT_REFS_SEP.join(s_ext_refs | a_ext_refs), s_owner or a_owner)
             return match
 
+        self.error_message = ""
+
         # establish file lock
         file_lock = LockFile(self.cae.get_config('CONTACTS_LOCK_FILE', default_value='contacts.lock'))
         err_msg = file_lock.lock()
         if err_msg:
+            self.error_message = err_msg
             return err_msg
 
         # check if file exists (or if it is instead the first run or a reset)
@@ -269,22 +277,26 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # fetch from Acumen on first run or after reset (deleted cache files) - after locking cache files
         self._warn("Fetching client data from Acumen (needs some minutes)", self._ctx_no_file + 'FetchClientData',
                    importance=4)
-        self.contacts = \
-            self.load_view(None, 'V_ACU_CD_DATA',
+        c = self.load_view(None, 'V_ACU_CD_DATA',
                            ["CD_CODE", "SIHOT_SF_ID", "CD_SIHOT_OBJID",
                             "trim('" + EXT_REFS_SEP + "' from CD_RCI_REF || '" + EXT_REFS_SEP +
                             "' || replace(replace(EXT_REFS, 'RCIP=', ''), 'RCI=', '')) as EXT_REFS",
-                            "case when instr(SIHOT_GUEST_TYPE, 'O') > 0 or instr(SIHOT_GUEST_TYPE, 'I') > 0"
-                            " or instr(SIHOT_GUEST_TYPE, 'K') > 0 then 1 else 0 end as IS_OWNER",
+                            # "case when instr(SIHOT_GUEST_TYPE, 'O') > 0 or instr(SIHOT_GUEST_TYPE, 'I') > 0"
+                            # " or instr(SIHOT_GUEST_TYPE, 'K') > 0 then 1 else 0 end as IS_OWNER"
+                            "SIHOT_GUEST_TYPE",
                             ],
                            # found also SPX/TRC prefixes for RCI refs/ids in EXT_REFS/T_CR
                            "CD_SIHOT_OBJID is not NULL or CD_RCI_REF is not NULL or instr(EXT_REFS, 'RCI') > 0"
                            " or instr(EXT_REFS, 'SF=') > 0 or SIHOT_SF_ID is not NULL")
+        if not c:
+            return self.error_message
+        self.contacts = c
 
         # fetch from Salesforce all contacts/clients with main/external RCI Ids for to merge them into contacts
         sf_contacts = self.sales_force.contacts_with_rci_id(EXT_REFS_SEP)
         if self.sales_force.error_msg:
-            return self.sales_force.error_msg
+            self.error_message = self.sales_force.error_msg
+            return self.error_message
         # merging list of tuples (Acu-CD_CODE, Sf-Id, Sihot-Id, ext_refs, is_owner) into contacts
         for s_rec in sf_contacts:
             for c_idx, a_rec in enumerate(self.contacts):
@@ -308,10 +320,45 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         return ""
 
     def save_contacts(self):
+        self.error_message = ""
+
+        for co in self.contacts:
+            if self.ass_db.insert('contacts',
+                                  dict(co_sf_contact_id=co[_SF_ID], co_sh_guest_id=co[_SH_ID],
+                                       co_sh_match_code=co[_ACU_ID]),
+                                  commit=True, returning_column='co_pk'):
+                self.error_message = self.ass_db.last_err_msg
+                return self.error_message
+            co_pk = self.ass_db.fetch_value()
+
+            ers = self.load_view(None, 'T_CR', ['CR_TYPE', 'CR_REF'], "CR_CDREF = :co_pk", dict(co_pk=co_pk))
+            if not ers:
+                return self.error_message
+            for er in ers:
+                if self.ass_db.insert('external_refs', dict(er_co_fk=co_pk, er_type=er[0], er_id=er[1]), commit=True):
+                    self.error_message = self.ass_db.last_err_msg
+                    return self.error_message
+
+            for pt in [_ for _ in co[_IS_OWNER] or list() if _.isupper()]:
+                co_prs = self.load_view(None, 'V_OWNED_WEEKS INNER JOIN T_RS ON AT_RSREF = RS_CODE',
+                                        ['DW_WKREF', 'AT_RSREF'],
+                                        "DW_OWREF = :acu_id and RS_SIHOT_GUEST_TYPE = :pt_group",
+                                        dict(acu_id=co[_ACU_ID], pt_group=pt))
+                if not co_prs:
+                    return self.error_message
+                for cp in co_prs:
+                    if self.ass_db.insert('products', dict(pr_pk=cp[0], pr_pt_fk=cp[1]), commit=True):
+                        self.error_message = self.ass_db.last_err_msg
+                        return self.error_message
+                    if self.ass_db.insert('contact_products', dict(cp_co_fk=co_pk, cp_pr_fk=cp[0]), commit=True):
+                        self.error_message = self.ass_db.last_err_msg
+                        return self.error_message
+
         # establish file lock
         file_lock = LockFile(self.cae.get_config('CONTACTS_LOCK_FILE'))
         err_msg = file_lock.lock()
         if err_msg:
+            self.error_message = err_msg
             return err_msg
 
         with open(self.cae.get_config('CONTACTS_DATA_FILE'), 'w') as f:
@@ -437,6 +484,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                             'AOWN_SWAPPED_WITH', 'AOWN_GRANTED_TO'],
                                            "AOWN_YEAR >= to_char(sysdate, 'YYYY')"
                                            " and AOWN_RSREF in ('BHC', 'BHH', 'HMC', 'PBC')")
+        if not self.res_inv_data:
+            return self.error_message
+
         with open(inv_file_name, 'w') as f:
             f.write(repr(self.res_inv_data))
 

@@ -82,8 +82,9 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
-| pgUser | User account name for ass_cache postgres cache database | 'postgres' | U | AssCacheSync |
-| pgPassword | User account password for ass_cache postgres cache database | - | P | AssCacheSync |
+| pgUser | User account name for the postgres database | 'postgres' | U | AssCacheSync |
+| pgPassword | User account password for the postgres database | - | P | AssCacheSync |
+| pgDSN | Database name of the postgres database | ass_cache | N | AssCacheSync |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfContactValidator |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
 | recordTypesToValidate | Contact record type(s) to be validated | 'Rentals' | R | SfContactValidator |
