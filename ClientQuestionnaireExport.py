@@ -16,7 +16,7 @@ import re
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import ResSearch, SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
+from sxmlif import ResSearch, SXML_DEF_ENCODING
 
 __version__ = '0.1'
 
@@ -74,13 +74,13 @@ uprint("File caption:", file_caption)
 file_columns = cae.get_config('fileColumns',
                               default_value=['<unique_id>', 'ARR', 'DEP',
                                              LIST_MARKER_PREFIX + 'NAME2', LIST_MARKER_PREFIX + 'NAME',
-                                             LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'EMAIL',
-                                             LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'CITY',
-                                             LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'COUNTRY',
+                                             LIST_MARKER_PREFIX + 'EMAIL',
+                                             LIST_MARKER_PREFIX + 'CITY',
+                                             LIST_MARKER_PREFIX + 'COUNTRY',
                                              '<hotel_id_to_name(hotel_id)>',
                                              '<hotel_id_to_location_id(hotel_id)>',  # '<"xx-0000-xx">',
                                              '<check_out.month>', '<check_out.year>',
-                                             LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'LANG',
+                                             LIST_MARKER_PREFIX + 'LANG',
                                              ])
 uprint("File columns:", file_columns)
 
@@ -92,7 +92,7 @@ elif date_from >= date_till:
     cae.shutdown(18)
 
 
-def get_col_val(row, col_nam, arri=-1):
+def elem_value(row, col_nam, arri=-1):
     """ get the column value from the row_dict variable, using arr_index in case of """
     is_list = col_nam.startswith(LIST_MARKER_PREFIX)
     if is_list:
@@ -111,9 +111,9 @@ def get_col_val(row, col_nam, arri=-1):
 
 
 def get_hotel_and_res_id(row):
-    h_id = get_col_val(row, PARSE_ONLY_TAG_PREFIX + 'RES-HOTEL')
-    r_num = get_col_val(row, PARSE_ONLY_TAG_PREFIX + 'RES-NR')
-    s_num = get_col_val(row, PARSE_ONLY_TAG_PREFIX + 'SUB-NR')
+    h_id = elem_value(row, 'RES-HOTEL')
+    r_num = elem_value(row, 'RES-NR')
+    s_num = elem_value(row, 'SUB-NR')
     if not h_id or not hotel_id_to_name(h_id) or not hotel_id_to_location_id(h_id) or not r_num:
         cae.dprint("  ##  Skipping reservation with invalid hotel-id/RES-NR/SUB-NR", h_id, r_num, s_num,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -127,7 +127,7 @@ def get_date_range(row):
         d_str = row['ARR']['elemVal']
         t_str = row['ARR-TIME']['elemVal']
         checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
-        dt_key = PARSE_ONLY_TAG_PREFIX + 'DEP-TIME'
+        dt_key = 'DEP-TIME'
         if dt_key in row and 'elemVal' in row[dt_key] and row[dt_key]['elemVal']:
             d_str = row['DEP']['elemVal']
             t_str = row[dt_key]['elemVal']
@@ -165,14 +165,13 @@ def email_is_valid(email):
 
 def valid_email_indexes(row):
     indexes = list()
-    if PARSE_ONLY_TAG_PREFIX + 'EMAIL' in row:
-        if 'elemListVal' in row[PARSE_ONLY_TAG_PREFIX + 'EMAIL']:
-            for idx, email in enumerate(row[PARSE_ONLY_TAG_PREFIX + 'EMAIL']['elemListVal']):
+    if 'EMAIL' in row:
+        if 'elemListVal' in row['EMAIL']:
+            for idx, email in enumerate(row['EMAIL']['elemListVal']):
                 if email_is_valid(email):
                     indexes.append(idx)
-        if not indexes and 'elemVal' in row[PARSE_ONLY_TAG_PREFIX + 'EMAIL'] \
-                and email_is_valid(row[PARSE_ONLY_TAG_PREFIX + 'EMAIL']['elemVal']):
-            row[PARSE_ONLY_TAG_PREFIX + 'EMAIL']['elemListVal'] = [row[PARSE_ONLY_TAG_PREFIX + 'EMAIL']['elemVal']]
+        if not indexes and 'elemVal' in row['EMAIL'] and email_is_valid(row['EMAIL']['elemVal']):
+            row['EMAIL']['elemListVal'] = [row['EMAIL']['elemVal']]
             indexes.append(0)
     return indexes
 
@@ -217,7 +216,7 @@ try:
                     if unique_id in unique_ids:
                         uprint("  **  Detected duplicate guest/client with unique-id=", unique_id)
                     unique_ids.append(unique_id)
-                    res_type = get_col_val(row_dict, 'RT', arr_index)
+                    res_type = elem_value(row_dict, 'RT', arr_index)
                     if res_type in ('S', 'N'):
                         cae.dprint("  ##  Skipping because of reservation type", res_type, 'unique-id=', unique_id,
                                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -233,7 +232,7 @@ try:
                                 c_val = ex
                                 cae.dprint(" ###  Invalid column expression", c_nam, "; exception:", str(ex))
                         else:
-                            c_val = get_col_val(row_dict, c_nam, arr_index)
+                            c_val = elem_value(row_dict, c_nam, arr_index)
                         if first_col:
                             first_col = False
                         else:

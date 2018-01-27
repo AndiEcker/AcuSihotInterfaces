@@ -285,16 +285,16 @@ class SfInterface:
             dup_contacts = list()
         if which_ref in (self.REF_TYPE_MAIN, self.REF_TYPE_ALL):
             soql_query = "SELECT Id FROM Contact WHERE RCI_Reference__c = '{}'".format(imp_rci_ref)
-            col_name = 'Id'
+            fld_name = 'Id'
         else:   # which_ref == REF_TYPE_EXT
             soql_query = "SELECT Contact__c FROM External_Ref__c WHERE Reference_No_or_ID__c = '{}'".format(imp_rci_ref)
-            col_name = 'Contact__c'
+            fld_name = 'Contact__c'
         res = self._soql_query_all(soql_query)
         if not self.error_msg and res['totalSize'] > 0:
             if not sf_contact_id:
-                sf_contact_id = res['records'][0][col_name]
+                sf_contact_id = res['records'][0][fld_name]
             if res['totalSize'] > 1:
-                new_contacts = [_[col_name] for _ in res['records']]
+                new_contacts = [_[fld_name] for _ in res['records']]
                 dup_contacts = list(set([_ for _ in new_contacts + dup_contacts if _ != sf_contact_id]))
 
         if which_ref == self.REF_TYPE_ALL:

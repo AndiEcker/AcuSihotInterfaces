@@ -151,7 +151,8 @@ class ConsoleApp:
                              emailValidatorApiKey=cfg.get('Settings', 'emailValidatorApiKey'),
                              phoneValidatorBaseUrl=cfg.get('Settings', 'phoneValidatorBaseUrl'),
                              phoneValidatorApiKey=cfg.get('Settings', 'phoneValidatorApiKey'),
-                             pgUser='postgres', pgPassword=cfg.get('Settings', 'pgPassword'),
+                             pgUser=cfg.get('Settings', 'pgUser'), pgPassword=cfg.get('Settings', 'pgPassword'),
+                             pgRootUsr=cfg.get('Settings', 'pgRootUsr'), pgRootPwd=cfg.get('Settings', 'pgRootPwd'),
                              pgDSN=cfg.get('Settings', 'pgDSN', fallback='test'),
                              )
         for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):

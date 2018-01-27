@@ -54,7 +54,7 @@ else:
 
     uprint('####  Sending ...........  ####')
 
-    sxb = SihotXmlBuilder(cae, use_kernel_interface=True, col_map=(), connect_to_acu=False)
+    sxb = SihotXmlBuilder(cae, use_kernel_interface=True, elem_col_map=(), connect_to_acu=False)
     sxb.xml = xml
     err_msg = sxb.send_to_server()
 

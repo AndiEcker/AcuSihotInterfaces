@@ -12,7 +12,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user i
 | :--- | :--- | :---: |
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| AssCacheSync | Initialize, migrate and sync data between Acumen, Sihot, Salesforce and the ass_cache PG database | Web |
+| AssCacheSync | Initialize, migrate and sync data between Acumen, Sihot, Salesforce and the ass_cache PG cache | Web |
 | AssServer | Listening to Sihot interface for to update the ass_cache PG database | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
@@ -97,7 +97,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration, SihotResImport |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| syncCache | Synchronize postgres cache database (0=No-only check, 1=Yes) | 0 | S | AssCacheSync |
+| syncCache | Synchronize ass_cache database from (ac=Acumen, sh=Sihot, sf=Salesforce) | - | S | AssCacheSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
@@ -105,6 +105,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | timeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
+| verifyCache | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) | - | V | AssCacheSync |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 | xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 
@@ -170,11 +171,11 @@ Allows to specify/change the header/caption of the exported CSV file. The defaul
 Allows to specify/change the content of the data row columns exported CSV file. The default value is
 `['<unique_id>', 'ARR', 'DEP',
   LIST_MARKER_PREFIX + 'NAME2', LIST_MARKER_PREFIX + 'NAME',
-  LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'EMAIL', LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'CITY',
-  LIST_MARKER_PREFIX + PARSE_ONLY_TAG_PREFIX + 'COUNTRY', '<hotel_id_to_name(hotel_id)>',
+  LIST_MARKER_PREFIX + 'EMAIL', LIST_MARKER_PREFIX + 'CITY',
+  LIST_MARKER_PREFIX + 'COUNTRY', '<hotel_id_to_name(hotel_id)>',
   '<hotel_id_to_location_id(hotel_id)>',  # '<"xx-0000-xx">',
   '<check_out.month>', '<check_out.year>',
-  PARSE_ONLY_TAG_PREFIX + 'LANG',
+  'LANG',
   ]`.
 
 

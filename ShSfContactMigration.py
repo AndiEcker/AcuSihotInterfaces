@@ -11,8 +11,7 @@ import pprint
 from copy import deepcopy
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import PARSE_ONLY_TAG_PREFIX
-from shif import ResBulkFetcher, get_date_range, get_col_val, get_hotel_and_res_id
+from shif import ResBulkFetcher, get_date_range, elem_value, get_hotel_and_res_id
 from sfif import prepare_connection, CONTACT_REC_TYPE_RENTALS, correct_email, correct_phone
 from ae_notification import Notification
 
@@ -165,18 +164,18 @@ def name_is_valid(name):
 def valid_name_indexes(shd):
     indexes = list()
     if 'NAME' in shd and 'NAME2' in shd:
-        col_def1 = shd['NAME']
-        col_def2 = shd['NAME2']
-        if 'elemListVal' in col_def1 and 'elemListVal' in col_def2:
-            for idx, name in enumerate(col_def1['elemListVal']):
-                if len(col_def2['elemListVal']) > idx:
-                    name2 = col_def2['elemListVal'][idx]
+        elem_def1 = shd['NAME']
+        elem_def2 = shd['NAME2']
+        if 'elemListVal' in elem_def1 and 'elemListVal' in elem_def2:
+            for idx, name in enumerate(elem_def1['elemListVal']):
+                if len(elem_def2['elemListVal']) > idx:
+                    name2 = elem_def2['elemListVal'][idx]
                     if name and name_is_valid(name) and name2 and name_is_valid(name2):
                         indexes.append(idx)
-        if not indexes and 'elemVal' in col_def1 and col_def1['elemVal'] and name_is_valid(col_def1['elemVal']) \
-                and 'elemVal' in col_def2 and col_def2['elemVal'] and name_is_valid(col_def2['elemVal']):
-            col_def1['elemListVal'] = [col_def1['elemVal']]
-            col_def2['elemListVal'] = [col_def2['elemVal']]
+        if not indexes and 'elemVal' in elem_def1 and elem_def1['elemVal'] and name_is_valid(elem_def1['elemVal']) \
+                and 'elemVal' in elem_def2 and elem_def2['elemVal'] and name_is_valid(elem_def2['elemVal']):
+            elem_def1['elemListVal'] = [elem_def1['elemVal']]
+            elem_def2['elemListVal'] = [elem_def2['elemVal']]
             indexes.append(0)
     return indexes
 
@@ -195,14 +194,14 @@ def email_is_valid(email):
 
 def valid_email_indexes(shd):
     indexes = list()
-    if PARSE_ONLY_TAG_PREFIX + 'EMAIL' in shd:
-        col_def = shd[PARSE_ONLY_TAG_PREFIX + 'EMAIL']
-        if 'elemListVal' in col_def:
-            for idx, email in enumerate(col_def['elemListVal']):
+    if 'EMAIL' in shd:
+        elem_def = shd['EMAIL']
+        if 'elemListVal' in elem_def:
+            for idx, email in enumerate(elem_def['elemListVal']):
                 if email and email_is_valid(email):
                     indexes.append(idx)
-        if not indexes and 'elemVal' in col_def and col_def['elemVal'] and email_is_valid(col_def['elemVal']):
-            col_def['elemListVal'] = [col_def['elemVal']]
+        if not indexes and 'elemVal' in elem_def and elem_def['elemVal'] and email_is_valid(elem_def['elemVal']):
+            elem_def['elemListVal'] = [elem_def['elemVal']]
             indexes.append(0)
     return indexes
 
@@ -232,11 +231,11 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
 
     sfd['RecordType.DeveloperName'] = CONTACT_REC_TYPE_RENTALS
     # FirstName or LastName or Name (combined field - not works with UPDATE/CREATE) or Full_Name__c (Formula)
-    sfd['FirstName'] = fnam     # get_col_val(shd, 'NAME2', arri)
+    sfd['FirstName'] = fnam     # elem_value(shd, 'NAME2', arri)
     sfd['LastName'] = snam
-    sfd['Birthdate'] = get_col_val(shd, 'DOB', arri)
+    sfd['Birthdate'] = elem_value(shd, 'DOB', arri)
     # Language (Picklist) or Spoken_Languages__c (Picklist, multi-select) ?!?!?
-    lc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'LANG', arri)
+    lc_iso2 = elem_value(shd, 'LANG', arri)
     sfd['Language__c'] = cae.get_config(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
     # Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000) or LeadSource (Picklist)
     # .. or Source__c (Picklist) or HERE_HOW__c (Picklist) ?!?!?
@@ -244,28 +243,28 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
     sfd['Email'] = email if email_is_valid(email) else default_email_address
     # HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
     phone_changes = list()
-    sfd['HomePhone'], phone_changed = correct_phone(get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'PHONE', arri),
+    sfd['HomePhone'], phone_changed = correct_phone(elem_value(shd, 'PHONE', arri),
                                                     changed=False, removed=phone_changes)
     if phone_changed:
         ext_sf_dict(sfd, "HomePhone corrected, removed 'index:char'=" + str(phone_changes))
     # Mobile phone number is not provided by Sihot WEB RES-SEARCH
-    # sfd['MobilePhone'] = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'MOBIL', arri)
+    # sfd['MobilePhone'] = elem_value(shd, 'MOBIL', arri)
     # Address_1__c or MailingStreet
-    sfd['MailingStreet'] = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'STREET', arri)
+    sfd['MailingStreet'] = elem_value(shd, 'STREET', arri)
     # MailingCity or City (Text, 50) or Address_2__c (Text, 80)
-    sfd['MailingCity'] = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'CITY', arri)
+    sfd['MailingCity'] = elem_value(shd, 'CITY', arri)
     # Country__c/code (Picklist) or Address_3__c (Text, 100) or MailingCountry
     # .. and remap, e.g. Great Britain need to be UK not GB (ISO2).
     # .. Also remove extra characters, because ES has sometimes suffix w/ two numbers
-    cc_iso2 = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'COUNTRY', arri, default_value="")[:2]
+    cc_iso2 = elem_value(shd, 'COUNTRY', arri, default_value="")[:2]
     sfd['Country__c'] = cae.get_config(cc_iso2, 'CountryCodes', default_value=cc_iso2)
     # Booking__c (Long Text Area, 32768) or use field Previous_Arrival_Info__c (Text, 100) ?!?!?
     sfd['Previous_Arrival_Info__c'] = (""
-                                       + " Arr=" + get_col_val(shd, 'ARR', arri, default_value='')
-                                       + " Dep=" + get_col_val(shd, 'DEP', arri, default_value='')
+                                       + " Arr=" + elem_value(shd, 'ARR', arri, default_value='')
+                                       + " Dep=" + elem_value(shd, 'DEP', arri, default_value='')
                                        + " Hotel=" + str(hot_id)
-                                       + " Room=" + get_col_val(shd, 'RN', arri, default_value='')
-                                       + " GdsNo=" + get_col_val(shd, 'GDSNO', arri, default_value='')
+                                       + " Room=" + elem_value(shd, 'RN', arri, default_value='')
+                                       + " GdsNo=" + elem_value(shd, 'GDSNO', arri, default_value='')
                                        + " ResId=" + sh_rl_id
                                        ).strip()
 
@@ -287,8 +286,8 @@ def layout_message(sfd, cols):
         else:
             sfv = sf_curr_data[col]
         if shv or sfv:
-            col_label = (col[:-3] if col[-3:] == '__c' else ("Record Type" if col == rtd else col)).replace("_", " ")
-            txt += form_str.format(col_label, str(shv))
+            field_label = (col[:-3] if col[-3:] == '__c' else ("Record Type" if col == rtd else col)).replace("_", " ")
+            txt += form_str.format(field_label, str(shv))
             if sfv:
                 txt += " (SF={})".format(sfv)
             txt += "\n"
@@ -315,17 +314,15 @@ try:
         if not arr_indexes:
             add_log_msg("Skipping res-id {} with invalid/empty {}: {}"
                         .format(res_id, "email address" if restrict_to_valid_emails else "surname",
-                                get_col_val(row_dict,
-                                            PARSE_ONLY_TAG_PREFIX + 'EMAIL' if restrict_to_valid_emails else 'NAME',
-                                            verbose=True)))
+                                elem_value(row_dict, 'EMAIL' if restrict_to_valid_emails else 'NAME', verbose=True)))
             continue
         for arr_index in arr_indexes:
             mail_changes = list()
-            email_addr, mail_changed = correct_email(get_col_val(row_dict, PARSE_ONLY_TAG_PREFIX + 'EMAIL', arr_index),
+            email_addr, mail_changed = correct_email(elem_value(row_dict, 'EMAIL', arr_index),
                                                      changed=False, removed=mail_changes)
-            surname = get_col_val(row_dict, 'NAME', arr_index)
-            forename = get_col_val(row_dict, 'NAME2', arr_index)
-            mkt_src = get_col_val(row_dict, PARSE_ONLY_TAG_PREFIX + 'MARKETCODE', arr_index)
+            surname = elem_value(row_dict, 'NAME', arr_index)
+            forename = elem_value(row_dict, 'NAME2', arr_index)
+            mkt_src = elem_value(row_dict, 'MARKETCODE', arr_index)
             sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email_addr, surname, forename, mkt_src, hotel_id)
 
             if mail_changed:
@@ -341,7 +338,7 @@ try:
                 ext_sf_dict(sf_dict, "arrival {} not between {} and {}".format(check_in, rbf.date_from, rbf.date_till))
             if mkt_src not in rbf.allowed_mkt_src:
                 ext_sf_dict(sf_dict, "disallowed market source {}".format(mkt_src))
-            res_type = get_col_val(row_dict, 'RT', arr_index)
+            res_type = elem_value(row_dict, 'RT', arr_index)
             if res_type in ('S', 'N', '', None):
                 ext_sf_dict(sf_dict, "invalid/cancel/no-show reservation type {}".format(res_type))
             if not email_addr:
@@ -352,10 +349,10 @@ try:
                 ext_sf_dict(sf_dict, "missing/invalid forename {}".format(forename))
             if not mkt_src:
                 ext_sf_dict(sf_dict, "missing market source")
-            res_group = get_col_val(row_dict, 'CHANNEL', verbose=True)
+            res_group = elem_value(row_dict, 'CHANNEL', verbose=True)
             if res_group != 'RS':
                 ext_sf_dict(sf_dict, "empty/invalid res. group/channel {} (market-source={})"
-                            .format(res_group, get_col_val(row_dict, PARSE_ONLY_TAG_PREFIX + 'MARKETCODE')),
+                            .format(res_group, elem_value(row_dict, 'MARKETCODE')),
                             skip_it=False)  # only warn on missing channel, so no: skip_it = True
 
             if sf_dict[AI_SCORE] >= 0.0:

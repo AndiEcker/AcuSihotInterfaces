@@ -3,7 +3,7 @@ import datetime
 import time
 from traceback import print_exc
 
-from sxmlif import AvailCatInfo, ResSearch, SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
+from sxmlif import AvailCatInfo, ResSearch, SXML_DEF_ENCODING, ELEM_PATH_SEP, elem_path_values
 from acu_sf_sh_sys_data import AssSysData
 from ae_console_app import uprint, DATE_ISO, DEBUG_LEVEL_VERBOSE
 
@@ -85,47 +85,60 @@ def count_res(cae, hotel_ids=None, room_cat_prefix='', day=datetime.date.today()
     return count
 
 
-def get_col_val(shd, col_nam, arri=-1, verbose=False, default_value=None):
-    """ get the column value from the row_dict variable, using arr_index in case of multiple values """
-    if col_nam not in shd and PARSE_ONLY_TAG_PREFIX + col_nam not in shd:
-        col_val = ELEM_MISSING if verbose else default_value
-    else:
-        col_def = shd[col_nam if col_nam in shd else (PARSE_ONLY_TAG_PREFIX + col_nam)]
-        if 'elemListVal' in col_def and len(col_def['elemListVal']) > arri:
-            col_val = [_ for _ in col_def['elemListVal'] if _] if arri == -1 else ""
-            if not col_val:
-                col_val = col_def['elemListVal'][arri]
-        else:
-            col_val = ""
-        if not col_val and 'elemVal' in col_def and col_def['elemVal']:
-            col_val = col_def['elemVal']
-        if not col_val:
-            col_val = ELEM_EMPTY if verbose else default_value
+def elem_path_join(elem_names):
+    return ELEM_PATH_SEP.join(elem_names)
 
-    return col_val
+
+def elem_value(shd, elem_name_or_path, arri=-1, verbose=False, default_value=None):
+    """ get the xml element value from the row_dict variable, using arr_index in case of multiple values """
+    is_path = ELEM_PATH_SEP in elem_name_or_path
+    elem_nam = elem_name_or_path.rsplit(ELEM_PATH_SEP, 1)[1] if is_path else elem_name_or_path
+
+    elem_val = None
+    if elem_nam not in shd:
+        elem_val = ELEM_MISSING if verbose else default_value
+    elif is_path:
+        val_arr = elem_path_values(shd, elem_name_or_path)
+        if 0 <= arri < len(val_arr):
+            elem_val = val_arr[arri]
+    else:
+        elem_def = shd[elem_nam]
+        if 'elemListVal' in elem_def and len(elem_def['elemListVal']) > arri:
+            elem_val = [_ for _ in elem_def['elemListVal'] if _] if arri == -1 else ""
+            if not elem_val:
+                elem_val = elem_def['elemListVal'][arri]
+        else:
+            elem_val = ""
+        if not elem_val and 'elemVal' in elem_def and elem_def['elemVal']:
+            elem_val = elem_def['elemVal']
+
+    if not elem_val:
+        elem_val = ELEM_EMPTY if verbose else default_value
+
+    return elem_val
 
 
 def get_hotel_and_res_id(shd):
-    h_id = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'RES-HOTEL')
-    r_num = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'RES-NR')
-    s_num = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'SUB-NR')
+    h_id = elem_value(shd, 'RES-HOTEL')
+    r_num = elem_value(shd, 'RES-NR')
+    s_num = elem_value(shd, 'SUB-NR')
     if not h_id or not r_num:
         return None, None
     return h_id, r_num + ("/" + s_num if s_num else "") + "@" + h_id
 
 
 def get_pax_count(shd):
-    return int(get_col_val(shd, 'NOPAX')) + int(get_col_val(shd, 'NOCHILDS'))
+    return int(elem_value(shd, 'NOPAX')) + int(elem_value(shd, 'NOCHILDS'))
 
 
-def get_res_obj_id(shd):
-    return get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'OBJID')
+def get_gds_no(shd):
+    return elem_value(shd, 'GDSNO')
 
 
 def get_apt_wk_yr(shd, cae, arri=-1):
-    arr = datetime.datetime.strptime(get_col_val(shd, 'ARR'), SIHOT_DATE_FORMAT)
+    arr = datetime.datetime.strptime(elem_value(shd, 'ARR'), SIHOT_DATE_FORMAT)
     year, wk = AssSysData(cae).rc_arr_to_year_week(arr)
-    apt = get_col_val(shd, 'RN', arri=arri)
+    apt = elem_value(shd, 'RN', arri=arri)
     return apt, wk, year
 
 
@@ -135,7 +148,7 @@ def get_date_range(shd):
         d_str = shd['ARR']['elemVal']
         t_str = shd['ARR-TIME']['elemVal']
         checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
-        dt_key = PARSE_ONLY_TAG_PREFIX + 'DEP-TIME'
+        dt_key = 'DEP-TIME'
         if dt_key in shd and 'elemVal' in shd[dt_key] and shd[dt_key]['elemVal']:
             d_str = shd['DEP']['elemVal']
             t_str = shd[dt_key]['elemVal']
@@ -227,8 +240,8 @@ class ResBulkFetcher:
                " and -pause in seconds between fetches", self.sh_fetch_pause_seconds)
         uprint("Search flags:", self.search_flags)
         uprint("Search scope:", self.search_scope)
-        uprint("Allowed Market Sources:", self.allowed_mkt_src)
-        uprint("Allowed Market Groups/Channels:", self.allowed_mkt_grp)
+        uprint("Allowed Market Sources:", self.allowed_mkt_src or "ALL")
+        uprint("Allowed Market Groups/Channels:", self.allowed_mkt_grp or "ALL")
 
     def date_range_str(self):
         from_date = self.date_from.strftime(SIHOT_DATE_FORMAT)
@@ -255,23 +268,28 @@ class ResBulkFetcher:
                 uprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
                        .format(len(chunk_rows), chunk_beg, chunk_end, self.search_flags, self.search_scope))
                 for res in chunk_rows:
+                    errors = list()
                     check_in, check_out = get_date_range(res)
                     if not check_in or not check_out:
-                        uprint("incomplete check-in={} check-out={}".format(check_in, check_out))
+                        errors.append("incomplete check-in={} check-out={}".format(check_in, check_out))
                     if not (self.date_from <= check_in <= self.date_till):
-                        uprint("arrival {} not between {} and {}".format(check_in, self.date_from, self.date_till))
-                    mkt_src = get_col_val(res, PARSE_ONLY_TAG_PREFIX + 'MARKETCODE')
-                    if mkt_src not in self.allowed_mkt_src:
-                        uprint("disallowed market source {}".format(mkt_src))
-                    mkt_group = get_col_val(res, 'CHANNEL', verbose=True)
-                    if mkt_group not in self.allowed_mkt_grp:
-                        uprint("disallowed market group/channel {}".format(mkt_group))
+                        errors.append("arrival {} not between {} and {}"
+                                      .format(check_in, self.date_from, self.date_till))
+                    mkt_src = elem_value(res, 'MARKETCODE')
+                    if self.allowed_mkt_src and mkt_src not in self.allowed_mkt_src:
+                        errors.append("disallowed market source {}".format(mkt_src))
+                    mkt_group = elem_value(res, 'CHANNEL')
+                    if self.allowed_mkt_grp and mkt_group not in self.allowed_mkt_grp:
+                        errors.append("disallowed market group/channel {}".format(mkt_group))
+                    if errors:
+                        uprint(errors)
+                        cae.shutdown(327)
 
                 self.all_rows.extend(chunk_rows)
                 time.sleep(self.sh_fetch_pause_seconds)
         except Exception as ex:
             uprint(" ***  Sihot interface reservation fetch exception:", str(ex))
             print_exc()
-            cae.shutdown(327)
+            cae.shutdown(330)
 
         return self.all_rows

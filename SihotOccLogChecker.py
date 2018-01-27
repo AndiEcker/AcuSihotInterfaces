@@ -8,7 +8,6 @@ from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
-# from sxmlif import ResSearch, SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
 from ae_notification import Notification
 
 __version__ = '0.1'
@@ -155,95 +154,6 @@ def notification_add_line(msg, is_error=False):
     global notification_lines
     add_log_msg(msg, is_error=is_error)
     notification_lines.append(msg)
-
-
-'''
-ELEM_MISSING = "(missing)"
-ELEM_EMPTY = "(empty)"
-
-def get_col_val(shd, col_nam, arri=-1, verbose=False, default_value=None):
-    """ get the column value from the row_dict variable, using arr_index in case of multiple values """
-    if col_nam not in shd:
-        col_val = ELEM_MISSING if verbose else default_value
-    else:
-        col_def = shd[col_nam]
-        if 'elemListVal' in col_def and len(col_def['elemListVal']) > arri:
-            col_val = [_ for _ in col_def['elemListVal'] if _] if arri == -1 else ""
-            if not col_val:
-                col_val = col_def['elemListVal'][arri]
-        else:
-            col_val = ""
-        if not col_val and 'elemVal' in col_def and col_def['elemVal']:
-            col_val = col_def['elemVal']
-        if not col_val:
-            col_val = ELEM_EMPTY if verbose else default_value
-
-    return col_val
-
-
-def get_hotel_and_res_id(shd):
-    h_id = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'RES-HOTEL')
-    r_num = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'RES-NR')
-    s_num = get_col_val(shd, PARSE_ONLY_TAG_PREFIX + 'SUB-NR')
-    if not h_id or not r_num:
-        return None, None
-    return h_id, r_num + ("/" + s_num if s_num else "") + "@" + h_id
-
-
-def get_date_range(shd):
-    """ determines the check-in/-out values (of type: datetime if SIHOT_PROVIDES_CHECKOUT_TIME else date) """
-    if SIHOT_PROVIDES_CHECKOUT_TIME:
-        d_str = shd['ARR']['elemVal']
-        t_str = shd['ARR-TIME']['elemVal']
-        checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, USER_DATE_FORMAT)
-        dt_key = PARSE_ONLY_TAG_PREFIX + 'DEP-TIME'
-        if dt_key in shd and 'elemVal' in shd[dt_key] and shd[dt_key]['elemVal']:
-            d_str = shd['DEP']['elemVal']
-            t_str = shd[dt_key]['elemVal']
-            checked_out = datetime.datetime.strptime(d_str + ' ' + t_str, USER_DATE_FORMAT)
-        else:
-            checked_out = None
-    else:
-        checked_in = datetime.datetime.strptime(shd['ARR']['elemVal'], USER_DATE_FORMAT).date()
-        checked_out = datetime.datetime.strptime(shd['DEP']['elemVal'], USER_DATE_FORMAT).date()
-    return checked_in, checked_out
-
-
-def name_is_valid(name):
-    if name:
-        name = name.lower()
-    return name not in ("adult 1", "adult 2", "adult 3", "adult 4", "adult 5", "adult 6",
-                        "child 1", "child 1", "child 2", "child 4", "no name", "not specified", "", None)
-
-
-def valid_name_indexes(shd):
-    indexes = list()
-    if 'NAME' in shd and 'NAME2' in shd:
-        col_def1 = shd['NAME']
-        col_def2 = shd['NAME2']
-        if 'elemListVal' in col_def1 and 'elemListVal' in col_def2:
-            for idx, name in enumerate(col_def1['elemListVal']):
-                if len(col_def2['elemListVal']) > idx:
-                    name2 = col_def2['elemListVal'][idx]
-                    if name and name_is_valid(name) and name2 and name_is_valid(name2):
-                        indexes.append(idx)
-        if not indexes and 'elemVal' in col_def1 and col_def1['elemVal'] and name_is_valid(col_def1['elemVal']) \
-                and 'elemVal' in col_def2 and col_def2['elemVal'] and name_is_valid(col_def2['elemVal']):
-            col_def1['elemListVal'] = [col_def1['elemVal']]
-            col_def2['elemListVal'] = [col_def2['elemVal']]
-            indexes.append(0)
-    return indexes
-
-
-def date_range_chunks():
-    one_day = datetime.timedelta(days=1)
-    add_days = datetime.timedelta(days=sh_fetch_max_days) - one_day
-    chunk_till = date_from - one_day
-    while chunk_till < date_till:
-        chunk_from = chunk_till + one_day
-        chunk_till = min(chunk_from + add_days, date_till)
-        yield chunk_from, chunk_till
-'''
 
 
 def get_log_time_stamp(log_line):

@@ -455,7 +455,7 @@ class TestGuestFromSihot:
         assert xml_parser.error_level == '0'
         assert xml_parser.error_text == ''
 
-    def test_col_map(self, console_app_env):
+    def test_elem_map(self, console_app_env):
         xml_parser = GuestFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.elem_col_map['MATCHCODE']['elemVal'] == 'test2'
@@ -628,7 +628,7 @@ class TestResFromSihot:
 class TestSihotXmlBuilder:
     def test_create_xml(self, console_app_env):
         xml_builder = SihotXmlBuilder(console_app_env,
-                                      use_kernel_interface=USE_KERNEL_FOR_CLIENTS_DEF, col_map=MAP_CLIENT_DEF)
+                                      use_kernel_interface=USE_KERNEL_FOR_CLIENTS_DEF, elem_col_map=MAP_CLIENT_DEF)
         xml_builder.beg_xml('TEST_OC')
         xml_builder.add_tag('EMPTY')
         xml_builder.add_tag('DEEP', xml_builder.new_tag('DEEPER', 'value'))

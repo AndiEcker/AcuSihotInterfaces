@@ -44,13 +44,12 @@ SIHOT_AFF_COMPANY = 6
 # special error message prefixes
 ERR_MESSAGE_PREFIX_CONTINUE = 'CONTINUE:'
 
-# elemName prefix for column mappings that are parsed (*Parsed classes) but are not included into XML (*Builder classes)
-PARSE_ONLY_TAG_PREFIX = '_'
-
 # ensure client modes (used by ResToSihot.send_row_to_sihot())
 ECM_ENSURE_WITH_ERRORS = 0
 ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
+
+ELEM_PATH_SEP = '.'
 
 
 #  HELPER METHODS  ###################################
@@ -76,6 +75,24 @@ def convert2date(xml_string):
     return datetime.datetime.strptime(xml_string, '%Y-%m-%d')
 
 
+def elem_path_values(elem_col_map, elem_path_suffix):
+    """
+    determine list of data values from the passed elem_col_map (extended by ColMapXmlParser) of all element paths
+    ending with the passed elem_path_suffix string value.
+    :param elem_col_map:        element column map dict in the form {elem_name: map entry} where each map_entry is also
+                                a dict that got extended with other entries e.g. elemVal/elemListVal/elemPathValues/...
+    :param elem_path_suffix:    element path (either full path or suffix, e.g. SIHOT-Document.ARESLIST.RESERVATION.ARR)
+    :return:                    merged list of all parsed data in col map with passed element path suffix
+    """
+    ret_list = list()
+    for elem_map in elem_col_map.values():
+        if 'elemPathValues' in elem_map:
+            for path_key, path_list in elem_map['elemPathValues'].items():
+                if path_key.endswith(elem_path_suffix):
+                    ret_list.extend(path_list)
+    return ret_list
+
+
 #  ELEMENT-COLUMN-MAPS  #################################
 
 # used as WEB interface template for GuestFromSihot.elem_col_map instance and as read-only constant by ClientToSihot
@@ -83,23 +100,23 @@ def convert2date(xml_string):
 MAP_WEB_CLIENT = \
     (
         {'elemName': 'MATCHCODE', 'colName': 'CD_CODE'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_MATCHCODE', 'colName': 'CD_CODE2'},
+        {'elemName': 'P2_MATCHCODE', 'colName': 'CD_CODE2', 'buildExclude': True},
         {'elemName': 'PWD', 'colName': 'CD_PASSWORD'},
         {'elemName': 'ADDRESS', 'colName': 'SIHOT_SALUTATION1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_ADDRESS', 'colName': 'SIHOT_SALUTATION2'},
+        {'elemName': 'P2_ADDRESS', 'colName': 'SIHOT_SALUTATION2', 'buildExclude': True},
         {'elemName': 'TITLE', 'colName': 'SIHOT_TITLE1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_TITLE', 'colName': 'SIHOT_TITLE2'},
+        {'elemName': 'P2_TITLE', 'colName': 'SIHOT_TITLE2', 'buildExclude': True},
         {'elemName': 'GUESTTYPE', 'colName': 'SIHOT_GUESTTYPE1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_GUESTTYPE', 'colName': 'SIHOT_GUESTTYPE2'},
+        {'elemName': 'P2_GUESTTYPE', 'colName': 'SIHOT_GUESTTYPE2', 'buildExclude': True},
         {'elemName': 'PERS-TYPE', 'colName': 'SH_PTYPE',
          'colValFromAcu': "'1A'"},
         {'elemName': 'NAME', 'colName': 'CD_SNAM1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_NAME', 'colName': 'CD_SNAM2'},
+        {'elemName': 'P2_NAME', 'colName': 'CD_SNAM2', 'buildExclude': True},
         {'elemName': 'NAME2', 'colName': 'CD_FNAM1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_NAME2', 'colName': 'CD_FNAM2'},
+        {'elemName': 'P2_NAME2', 'colName': 'CD_FNAM2', 'buildExclude': True},
         {'elemName': 'DOB', 'colName': 'CD_DOB1',
          'valToAcuConverter': convert2date},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_DOB', 'colName': 'CD_DOB2',
+        {'elemName': 'P2_DOB', 'colName': 'CD_DOB2', 'buildExclude': True,
          'valToAcuConverter': convert2date},
         {'elemName': 'STREET', 'colName': 'CD_ADD11'},
         {'elemName': 'POBOX', 'colName': 'CD_ADD12',
@@ -116,10 +133,10 @@ MAP_WEB_CLIENT = \
         {'elemName': 'EMAIL2', 'colName': 'CD_SIGNUP_EMAIL'},
         {'elemName': 'MOBIL1', 'colName': 'CD_MOBILE1'},
         {'elemName': 'MOBIL2', 'colName': 'CD_LAST_SMS_TEL'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CDLREF', 'colName': 'CDL_CODE'},
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'OBJID', 'colName': 'CD_SIHOT_OBJID'},
+        {'elemName': 'CDLREF', 'colName': 'CDL_CODE', 'buildExclude': True},
+        # {'elemName': 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
+        # {'elemName': 'PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
+        {'elemName': 'OBJID', 'colName': 'CD_SIHOT_OBJID', 'buildExclude': True},
         # {'elemName': 'COMMENT', 'colName' : 'CD_'}
     )
 
@@ -127,10 +144,10 @@ MAP_WEB_CLIENT = \
 MAP_KERNEL_CLIENT = \
     (
         {'elemName': 'OBJID', 'colName': 'CD_SIHOT_OBJID', 'elemHideInActions': ACTION_INSERT},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_OBJID', 'colName': 'CD_SIHOT_OBJID2',
+        {'elemName': 'P2_OBJID', 'colName': 'CD_SIHOT_OBJID2', 'buildExclude': True,
          'elemHideInActions': ACTION_INSERT},
         {'elemName': 'MATCHCODE', 'colName': 'CD_CODE'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_MATCHCODE', 'colName': 'CD_CODE2'},
+        {'elemName': 'P2_MATCHCODE', 'colName': 'CD_CODE2', 'buildExclude': True},
         {'elemName': 'GUEST-NR', 'colName': 'SH_GUEST_NO',
          'colValFromAcu': "''",
          'elemHideIf': "'SH_GUEST_NO' not in c or not c['SH_GUEST_NO']"},   # for GUEST-SEARCH only
@@ -138,15 +155,15 @@ MAP_KERNEL_CLIENT = \
          'colValFromAcu': "''",
          'elemHideIf': "'SH_FLAGS' not in c or not c['SH_FLAGS']"},         # for GUEST-SEARCH only
         {'elemName': 'T-SALUTATION', 'colName': 'SIHOT_SALUTATION1'},  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-SALUTATION', 'colName': 'SIHOT_SALUTATION2'},
+        {'elemName': 'P2_T-SALUTATION', 'colName': 'SIHOT_SALUTATION2', 'buildExclude': True},
         {'elemName': 'T-TITLE', 'colName': 'SIHOT_TITLE1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-TITLE', 'colName': 'SIHOT_TITLE2'},
+        {'elemName': 'P2_T-TITLE', 'colName': 'SIHOT_TITLE2', 'buildExclude': True},
         {'elemName': 'T-GUEST', 'colName': 'SIHOT_GUESTTYPE1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-GUEST', 'colName': 'SIHOT_GUESTTYPE2'},
+        {'elemName': 'P2_T-GUEST', 'colName': 'SIHOT_GUESTTYPE2', 'buildExclude': True},
         {'elemName': 'NAME-1', 'colName': 'CD_SNAM1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_NAME-1', 'colName': 'CD_SNAM2'},
+        {'elemName': 'P2_NAME-1', 'colName': 'CD_SNAM2', 'buildExclude': True},
         {'elemName': 'NAME-2', 'colName': 'CD_FNAM1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_NAME-2', 'colName': 'CD_FNAM2'},
+        {'elemName': 'P2_NAME-2', 'colName': 'CD_FNAM2', 'buildExclude': True},
         {'elemName': 'STREET', 'colName': 'CD_ADD11'},
         {'elemName': 'PO-BOX', 'colName': 'CD_ADD12',
          'colValFromAcu': "nvl(CD_ADD12, CD_ADD13)"},
@@ -177,11 +194,11 @@ MAP_KERNEL_CLIENT = \
          'colValFromAcu': "'1A'"},
         {'elemName': 'D-BIRTHDAY', 'colName': 'CD_DOB1',
          'valToAcuConverter': convert2date},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_D-BIRTHDAY', 'colName': 'CD_DOB2',
+        {'elemName': 'P2_D-BIRTHDAY', 'colName': 'CD_DOB2', 'buildExclude': True,
          'valToAcuConverter': convert2date},
         # 27-09-17: removed b4 migration of BHH/HMC because CD_INDUSTRY1/2 needs first grouping into 3-alphanumeric code
-        # {'elemName': 'T-PROFESSION', 'colName': 'CD_INDUSTRY1'},
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'P2_T-PROFESSION', 'colName': 'CD_INDUSTRY2'},
+        # {'elemName': 'T-PROFESSION', 'colName': 'CD_INDUSTRY1', 'buildExclude': True},
+        # {'elemName': 'P2_T-PROFESSION', 'colName': 'CD_INDUSTRY2', 'buildExclude': True},
         {'elemName': 'INTERNET-PASSWORD', 'colName': 'CD_PASSWORD'},
         {'elemName': 'MATCH-ADM', 'colName': 'CD_RCI_REF'},
         {'elemName': 'MATCH-SM', 'colName': 'SIHOT_SF_ID'},
@@ -290,10 +307,10 @@ MAP_KERNEL_CLIENT = \
          'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
         {'elemName': '/L-EXTIDS',
          'elemHideInActions': ACTION_SEARCH},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'EXT_REFS', 'colName': 'EXT_REFS'},  # only for elemHideIf expressions
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CDLREF', 'colName': 'CDL_CODE'},
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
+        {'elemName': 'EXT_REFS', 'colName': 'EXT_REFS', 'buildExclude': True},  # only for elemHideIf expressions
+        {'elemName': 'CDLREF', 'colName': 'CDL_CODE', 'buildExclude': True},
+        # {'elemName': 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500, 'buildExclude': True},
+        # {'elemName': 'PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0, 'buildExclude': True},
     )
 
 # Reservation interface mappings
@@ -423,7 +440,7 @@ MAP_WEB_RES = \
          'elemHideIf': "'RO_SIHOT_RES_GROUP' not in c"},
         # {'elemName': 'NN2', 'colName': 'RO_RES_CLASS'},  # other option using Mkt-CM_NAME (see Q_SIHOT_SETUP#L244)
         {'elemName': 'EXT-REFERENCE', 'colName': 'SH_EXT_REF', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'RU_FLIGHT_NO' not in c",
+         'elemHideIf': "'RU_FLIGHT_NO' not in c",   # see also currently unused PICKUP-COMMENT-ARRIVAL element
          'colValFromAcu': "trim(RU_FLIGHT_NO || ' ' || RU_FLIGHT_PICKUP || ' ' || RU_FLIGHT_AIRPORT)"},
         {'elemName': 'ARR-TIME', 'colName': 'RU_FLIGHT_LANDS', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'RU_FLIGHT_LANDS' not in c"},
@@ -677,37 +694,37 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'SH_CHILD4_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'ACTION', 'colName': 'RUL_ACTION'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'RU_STATUS'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RULREF', 'colName': 'RUL_CODE'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RUL_PRIMARY', 'colName': 'RUL_PRIMARY'},
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'RU_OBJID', 'colName': 'RU_SIHOT_OBJID'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RU_OBJID', 'colName': 'RUL_SIHOT_OBJID'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RU_FLIGHT_PICKUP', 'colName': 'RU_FLIGHT_PICKUP'},
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'RO_AGENCY_OBJID', 'colName': 'RO_SIHOT_AGENCY_OBJID'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'OC_CODE', 'colName': 'OC_CODE'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'OC_OBJID', 'colName': 'OC_SIHOT_OBJID'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES_GROUP', 'colName': 'RO_RES_GROUP'},  # needed for elemHideIf
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES_OCC', 'colName': 'RUL_SIHOT_RATE'},  # needed for res_id_values
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CHANGES', 'colName': 'RUL_CHANGES'},  # needed for error notifications
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'LAST_HOTEL', 'colName': 'RUL_SIHOT_LAST_HOTEL'},  # needed for HOTMOVE
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'LAST_CAT', 'colName': 'RUL_SIHOT_LAST_CAT'},  # needed for HOTMOVE
-        # column mappings needed only for parsing XML responses (using PARSE_ONLY_TAG_PREFIX)
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES-HOTEL'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RES-NR'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'SUB-NR'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'OBJID'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'EMAIL'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'PHONE'},
+        {'elemName': 'ACTION', 'colName': 'RUL_ACTION', 'buildExclude': True},
+        {'elemName': 'STATUS', 'colName': 'RU_STATUS', 'buildExclude': True},
+        {'elemName': 'RULREF', 'colName': 'RUL_CODE', 'buildExclude': True},
+        {'elemName': 'RUL_PRIMARY', 'colName': 'RUL_PRIMARY', 'buildExclude': True},
+        # {'elemName': 'RU_OBJID', 'colName': 'RU_SIHOT_OBJID', 'buildExclude': True},
+        {'elemName': 'RU_OBJID', 'colName': 'RUL_SIHOT_OBJID', 'buildExclude': True},
+        {'elemName': 'RU_FLIGHT_PICKUP', 'colName': 'RU_FLIGHT_PICKUP', 'buildExclude': True},
+        # {'elemName': 'RO_AGENCY_OBJID', 'colName': 'RO_SIHOT_AGENCY_OBJID', 'buildExclude': True},
+        {'elemName': 'OC_CODE', 'colName': 'OC_CODE', 'buildExclude': True},
+        {'elemName': 'OC_OBJID', 'colName': 'OC_SIHOT_OBJID', 'buildExclude': True},
+        {'elemName': 'RES_GROUP', 'colName': 'RO_RES_GROUP', 'buildExclude': True},  # needed for elemHideIf
+        {'elemName': 'RES_OCC', 'colName': 'RUL_SIHOT_RATE', 'buildExclude': True},  # needed for res_id_values
+        {'elemName': 'CHANGES', 'colName': 'RUL_CHANGES', 'buildExclude': True},  # needed for error notifications
+        {'elemName': 'LAST_HOTEL', 'colName': 'RUL_SIHOT_LAST_HOTEL', 'buildExclude': True},  # needed for HOTMOVE
+        {'elemName': 'LAST_CAT', 'colName': 'RUL_SIHOT_LAST_CAT', 'buildExclude': True},  # needed for HOTMOVE
+        # column mappings needed only for parsing XML responses (using 'buildExclude': True)
+        {'elemName': 'RES-HOTEL', 'buildExclude': True},
+        {'elemName': 'RES-NR', 'buildExclude': True},
+        {'elemName': 'SUB-NR', 'buildExclude': True},
+        {'elemName': 'OBJID', 'buildExclude': True},
+        {'elemName': 'EMAIL', 'buildExclude': True},
+        {'elemName': 'PHONE', 'buildExclude': True},
         # PHONE1, MOBIL1 and EMAIL1 are only available in RES person scope/section but not in RES-SEARCH OC
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'PHONE1'},
-        # {'elemName': PARSE_ONLY_TAG_PREFIX + 'MOBIL1'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'DEP-TIME'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'COUNTRY'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CITY'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'STREET'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'LANG'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'MARKETCODE'},     # RES-SEARCH has no MARKETCODE-NO element/tag
+        # {'elemName': 'PHONE1', 'buildExclude': True},
+        # {'elemName': 'MOBIL1', 'buildExclude': True},
+        {'elemName': 'DEP-TIME', 'buildExclude': True},
+        {'elemName': 'COUNTRY', 'buildExclude': True},
+        {'elemName': 'CITY', 'buildExclude': True},
+        {'elemName': 'STREET', 'buildExclude': True},
+        {'elemName': 'LANG', 'buildExclude': True},
+        {'elemName': 'MARKETCODE', 'buildExclude': True},     # RES-SEARCH has no MARKETCODE-NO element/tag
         {'elemName': '/RESERVATION'},
         {'elemName': '/ARESLIST'},
     )
@@ -735,10 +752,10 @@ MAP_KERNEL_RES = \
         {'elemName': 'GDS-NR', 'colName': 'SH_GDSNO',  # EXT-REFERENCE or VOUCHERNUMBER are not mandatory
          'colValFromAcu': "'RU__' || RUL_PRIMARY"},
         {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'ACTION', 'colName': 'RUL_ACTION'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'STATUS', 'colName': 'RU_STATUS', 'colValFromAcu': "nvl(RU_STATUS, 120)"},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'RULREF', 'colName': 'RUL_CODE'},
-        {'elemName': PARSE_ONLY_TAG_PREFIX + 'CDREF', 'colName': 'CD_CODE'},
+        {'elemName': 'ACTION', 'colName': 'RUL_ACTION', 'buildExclude': True},
+        {'elemName': 'STATUS', 'colName': 'RU_STATUS', 'colValFromAcu': "nvl(RU_STATUS, 120)", 'buildExclude': True},
+        {'elemName': 'RULREF', 'colName': 'RUL_CODE', 'buildExclude': True},
+        {'elemName': 'CDREF', 'colName': 'CD_CODE', 'buildExclude': True},
     )
 
 # default values for used interfaces (see email from Sascha Scheer from 28 Jul 2016 13:48 with answers from JBerger):
@@ -757,6 +774,7 @@ class SihotXmlParser:  # XMLParser interface
         self._base_tags = ['ERROR-LEVEL', 'ERROR-TEXT', 'ID', 'MSG', 'OC', 'ORG', 'RC', 'TN', 'VER']
         self._curr_tag = ''
         self._curr_attr = ''
+        self._elem_path = list()    # element path implemented as list stack
 
         # main xml elements/items
         self.oc = ''
@@ -795,6 +813,7 @@ class SihotXmlParser:  # XMLParser interface
     def start(self, tag, attrib):  # called for each opening tag
         self._curr_tag = tag
         self._curr_attr = None  # used as flag for a currently parsed base tag (for self.data())
+        self._elem_path.append(tag)
         if tag in self._base_tags:
             self._curr_attr = tag.lower().replace('-', '_')
             setattr(self, self._curr_attr, '')
@@ -804,6 +823,7 @@ class SihotXmlParser:  # XMLParser interface
     def end(self, tag):  # called for each closing tag
         self._curr_tag = ''
         self._curr_attr = ''
+        self._elem_path.pop()
         return tag
 
     def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
@@ -961,7 +981,7 @@ class GuestSearchResponse(Response):
         self.ret_elem_values = dict() if self._return_value_as_key else list()
         self._key_elem_index = 0
         self._in_guest_profile = False
-        self._col_map_parser = ColMapXmlParser(ca, deepcopy(MAP_KERNEL_CLIENT))
+        self._elem_col_map_parser = ColMapXmlParser(ca, deepcopy(MAP_KERNEL_CLIENT))
 
     def parse_xml(self, xml):
         super(GuestSearchResponse, self).parse_xml(xml)
@@ -970,7 +990,7 @@ class GuestSearchResponse(Response):
 
     def start(self, tag, attrib):
         if self._in_guest_profile:
-            self._col_map_parser.start(tag, attrib)
+            self._elem_col_map_parser.start(tag, attrib)
         if super(GuestSearchResponse, self).start(tag, attrib) is None:
             return None  # processed by base class
         if tag == 'GUEST-PROFILE':
@@ -981,7 +1001,7 @@ class GuestSearchResponse(Response):
 
     def data(self, data):
         if self._in_guest_profile:
-            self._col_map_parser.data(data)
+            self._elem_col_map_parser.data(data)
         if super(GuestSearchResponse, self).data(data) is None:
             return None  # processed by base class
         return data
@@ -1001,7 +1021,7 @@ class GuestSearchResponse(Response):
                 else:
                     values = dict()
                     for key in keys:
-                        elem = self._col_map_parser.elem_col_map[key]
+                        elem = self._elem_col_map_parser.elem_col_map[key]
                         elem_val = elem['elemListVal'] if 'elemListVal' in elem \
                             else (elem['elemVal'] if 'elemVal' in elem else None)
                         values[key] = getattr(self, key, elem_val)
@@ -1010,14 +1030,14 @@ class GuestSearchResponse(Response):
                             elem.pop('elemVal')
                     self.ret_elem_values.append(values)
         # for completeness call also SihotXmlParser.end() and ColMapXmlParser.end()
-        return super(GuestSearchResponse, self).end(self._col_map_parser.end(tag))
+        return super(GuestSearchResponse, self).end(self._elem_col_map_parser.end(tag))
 
 
 class ColMapXmlParser(SihotXmlParser):
-    def __init__(self, ca, col_map):
-        # create mapping dict for all valid elements (excluding all starting with an underscore including _P2 elements)
-        self.elem_col_map = {c['elemName']: c for c in deepcopy(col_map)}
-        # if not c['elemName'].startswith(PARSE_ONLY_TAG_PREFIX) and 'colName' in c}
+    def __init__(self, ca, elem_col_map):
+        # create mapping dict for all valid elements
+        self.elem_col_map = {c['elemName']: c for c in deepcopy(elem_col_map)}
+        # if c.get('buildExclude', False) and 'colName' in c
         super(ColMapXmlParser, self).__init__(ca)
 
     # XMLParser interface
@@ -1026,8 +1046,6 @@ class ColMapXmlParser(SihotXmlParser):
         # if super(ColMapXmlParser, self).start(tag, attrib) is None:
         #    return None  # processed by base class
         super(ColMapXmlParser, self).start(tag, attrib)
-        if tag not in self.elem_col_map and PARSE_ONLY_TAG_PREFIX + tag in self.elem_col_map:
-            tag = PARSE_ONLY_TAG_PREFIX + tag
         if tag in self.elem_col_map:
             if 'elemListVal' in self.elem_col_map[tag]:
                 self.elem_col_map[tag]['elemListVal'].append('')
@@ -1035,6 +1053,9 @@ class ColMapXmlParser(SihotXmlParser):
                 li = list([self.elem_col_map[tag]['elemVal'], ''])
                 self.elem_col_map[tag]['elemListVal'] = li
             self.elem_col_map[tag]['elemVal'] = ''
+            self.elem_col_map[tag]['elemPath'] = ELEM_PATH_SEP.join(self._elem_path)
+            if 'elemPathValues' not in self.elem_col_map[tag]:
+                self.elem_col_map[tag]['elemPathValues'] = dict()
             return None
         return tag
 
@@ -1043,8 +1064,6 @@ class ColMapXmlParser(SihotXmlParser):
         #    return None  # already processed by base class
         super(ColMapXmlParser, self).data(data)
         tag = self._curr_tag
-        if tag not in self.elem_col_map and PARSE_ONLY_TAG_PREFIX + tag in self.elem_col_map:
-            tag = PARSE_ONLY_TAG_PREFIX + tag
         if tag in self.elem_col_map:
             self.elem_col_map[tag]['elemVal'] += data
             if 'elemListVal' in self.elem_col_map[tag]:
@@ -1053,10 +1072,24 @@ class ColMapXmlParser(SihotXmlParser):
             return None
         return data
 
+    def end(self, tag):
+        super(ColMapXmlParser, self).end(tag)
+        if tag in self.elem_col_map:
+            ev = self.elem_col_map[tag]['elemVal']
+            ep = self.elem_col_map[tag]['elemPath']  # use instead of self._elem_path (got just wiped by super.end())
+            epv = self.elem_col_map[tag]['elemPathValues']
+            if ep in epv:
+                epv[ep].append(ev)
+            else:
+                epv[ep] = list([ev])
+
+    def elem_path_values(self, elem_path_suffix):
+        return elem_path_values(self.elem_col_map, elem_path_suffix)
+
 
 class GuestFromSihot(ColMapXmlParser):
-    def __init__(self, ca, col_map=MAP_CLIENT_DEF):
-        super(GuestFromSihot, self).__init__(ca, col_map)
+    def __init__(self, ca, elem_col_map=MAP_CLIENT_DEF):
+        super(GuestFromSihot, self).__init__(ca, elem_col_map)
         self.acu_col_values = None  # dict() - initialized in self.end() with acu column names:values
 
     # XMLParser interface
@@ -1078,8 +1111,8 @@ class GuestFromSihot(ColMapXmlParser):
 
 
 class ResFromSihot(ColMapXmlParser):
-    def __init__(self, ca, col_map=MAP_RES_DEF):
-        super(ResFromSihot, self).__init__(ca, col_map)
+    def __init__(self, ca, elem_col_map=MAP_RES_DEF):
+        super(ResFromSihot, self).__init__(ca, elem_col_map)
         self.blank_elem_col_map = deepcopy(self.elem_col_map)
         self.res_list = list()
 
@@ -1095,7 +1128,11 @@ class ResFromSihot(ColMapXmlParser):
                         msg.append(self.elem_col_map[k]['elemName'] + '=' + str(self.elem_col_map[k]['elemListVal']))
                     elif 'elemVal' in self.elem_col_map[k]:
                         msg.append(self.elem_col_map[k]['elemName'] + '=' + self.elem_col_map[k]['elemVal'])
-                self.ca.dprint("ResFromSihot.end() reservation parsed:{}".format(",".join(msg)))
+
+                self.ca.dprint("ResFromSihot.end(): reservation parsed:{}".format(",".join(msg)))
+                # this could possibly replace the above for loop including the dprint() call
+                uprint("ResFromSihot.end(): element path values:{}"
+                       .format([c['elemPathValues'] for c in self.elem_col_map.values() if 'elemPathValues' in c]))
             self.res_list.append(deepcopy(self.elem_col_map))
             # reset elemVal and elemListVal for next reservation record in the same response
             self.elem_col_map = deepcopy(self.blank_elem_col_map)
@@ -1104,27 +1141,27 @@ class ResFromSihot(ColMapXmlParser):
 class SihotXmlBuilder:
     tn = '1'
 
-    def __init__(self, ca, col_map=(), use_kernel_interface=False, connect_to_acu=False):
+    def __init__(self, ca, elem_col_map=(), use_kernel_interface=False, connect_to_acu=False):
         super(SihotXmlBuilder, self).__init__()
         self.ca = ca
         self.use_kernel_interface = use_kernel_interface
-        col_map = deepcopy(col_map)
+        elem_col_map = deepcopy(elem_col_map)
         self.sihot_elem_col = [(c['elemName'],
                                 c['colName'] if 'colName' in c else None,
                                 ((' or a in "' + c['elemHideInActions'] + '"' if 'elemHideInActions' in c else '')
                                  + (' or ' + c['elemHideIf'] if 'elemHideIf' in c else ''))[4:],
                                 c['colVal'] if 'colVal' in c else None)
-                               for c in col_map if not c['elemName'].startswith(PARSE_ONLY_TAG_PREFIX)]
-        # self.fix_col_values = {c['colName']: c['colVal'] for c in col_map if 'colName' in c and 'colVal' in c}
+                               for c in elem_col_map if c.get('buildExclude', False)]
+        # self.fix_col_values = {c['colName']: c['colVal'] for c in elem_col_map if 'colName' in c and 'colVal' in c}
         # acu_col_names and acu_col_expres need to be in sync
-        # self.acu_col_names = [c['colName'] for c in col_map if 'colName' in c and 'colVal' not in c]
+        # self.acu_col_names = [c['colName'] for c in elem_col_map if 'colName' in c and 'colVal' not in c]
         # self.acu_col_expres = [c['colValFromAcu'] + " as " + c['colName'] if 'colValFromAcu' in c else c['colName']
-        #                       for c in col_map if 'colName' in c and 'colVal' not in c]
+        #                       for c in elem_col_map if 'colName' in c and 'colVal' not in c]
         # alternative version preventing duplicate column names
         self.fix_col_values = dict()
         self.acu_col_names = list()  # acu_col_names and acu_col_expres need to be in sync
         self.acu_col_expres = list()
-        for c in col_map:
+        for c in elem_col_map:
             if 'colName' in c:
                 if 'colVal' in c:
                     self.fix_col_values[c['colName']] = c['colVal']
@@ -1133,8 +1170,8 @@ class SihotXmlBuilder:
                     self.acu_col_expres.append(c['colValFromAcu'] + " as " + c['colName'] if 'colValFromAcu' in c
                                                else c['colName'])
         # mapping dicts between db column names and xml element names (not works for dup elems like MATCHCODE in RES)
-        self.col_elem = {c['colName']: c['elemName'] for c in col_map if 'colName' in c and 'elemName' in c}
-        self.elem_col = {c['elemName']: c['colName'] for c in col_map if 'colName' in c and 'elemName' in c}
+        self.col_elem = {c['colName']: c['elemName'] for c in elem_col_map if 'colName' in c and 'elemName' in c}
+        self.elem_col = {c['elemName']: c['colName'] for c in elem_col_map if 'colName' in c and 'elemName' in c}
 
         self.response = None
 
@@ -1369,7 +1406,7 @@ class CatRooms(SihotXmlBuilder):
 class ClientToSihot(SihotXmlBuilder):
     def __init__(self, ca, use_kernel_interface=USE_KERNEL_FOR_CLIENTS_DEF, map_client=MAP_CLIENT_DEF,
                  connect_to_acu=True):
-        super(ClientToSihot, self).__init__(ca, col_map=map_client, use_kernel_interface=use_kernel_interface,
+        super(ClientToSihot, self).__init__(ca, elem_col_map=map_client, use_kernel_interface=use_kernel_interface,
                                             connect_to_acu=connect_to_acu)
 
     def _fetch_from_acu(self, view, acu_id=''):
@@ -1441,7 +1478,7 @@ class ClientToSihot(SihotXmlBuilder):
         if not err_msg and 'CD_CODE2' in c_row and c_row['CD_CODE2']:  # check for second contact person
             crow2 = deepcopy(c_row)
             for col_name in c_row.keys():
-                elem_name = PARSE_ONLY_TAG_PREFIX + 'P2_' + self.col_elem[col_name]
+                elem_name = 'P2_' + self.col_elem[col_name]
                 if elem_name in self.elem_col:
                     crow2[col_name] = c_row[self.elem_col[elem_name]]
             err_msg, action_p2 = self._send_person_to_sihot(crow2, c_row['CD_CODE'])
@@ -1494,7 +1531,7 @@ class ConfigDict(SihotXmlBuilder):
 
 class GuestSearch(SihotXmlBuilder):
     def __init__(self, ca):
-        super(GuestSearch, self).__init__(ca, col_map=MAP_KERNEL_CLIENT, use_kernel_interface=True)
+        super(GuestSearch, self).__init__(ca, elem_col_map=MAP_KERNEL_CLIENT, use_kernel_interface=True)
 
     def get_guest(self, obj_id):
         """ return dict with guest data OR None in case of error
@@ -1650,13 +1687,22 @@ class ResSearch(SihotXmlBuilder):
         """
         return err_msg or self.response.res_list
 
+    def elem_path_values(self, elem_path_suffix):
+        """
+        return list of parsed data values where the element path is ending with the passed element path suffix.
+        Has to be called after self.search().
+        :param      elem_path_suffix:    element path suffix.
+        :return:    list of parsed data values.
+        """
+        return elem_path_values(self.response.res_list, elem_path_suffix)
+
 
 class ResToSihot(SihotXmlBuilder):
     def __init__(self, ca,
                  use_kernel_interface=USE_KERNEL_FOR_RES_DEF, use_kernel_for_new_clients=USE_KERNEL_FOR_CLIENTS_DEF,
                  map_res=MAP_RES_DEF, map_client=MAP_CLIENT_DEF,
                  connect_to_acu=True):
-        super(ResToSihot, self).__init__(ca, col_map=map_res, use_kernel_interface=use_kernel_interface,
+        super(ResToSihot, self).__init__(ca, elem_col_map=map_res, use_kernel_interface=use_kernel_interface,
                                          connect_to_acu=connect_to_acu)
         self.use_kernel_for_new_clients = use_kernel_for_new_clients
         self.map_client = map_client

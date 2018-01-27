@@ -5,7 +5,7 @@ from copy import deepcopy
 
 import cx_Oracle
 import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+# from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 
@@ -39,7 +39,7 @@ class GenericDB:
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 uprint("GenericDB: database cursor created.")
         except Exception as ex:
-            self.last_err_msg = "GenericDB-connect cursors " + self.usr + "@" + self.dsn + " error: " + str(ex)
+            self.last_err_msg = "GenericDB._create_cursor() error: " + str(ex)
 
     @staticmethod
     def _prepare_in_clause(sql, bind_vars, additional_col_values=None):
@@ -63,7 +63,7 @@ class GenericDB:
                 new_sql = new_sql.replace(NAMED_BIND_VAR_PREFIX + key, '%(' + key + ')s')
         return new_sql
 
-    def execute_sql(self, sql, commit=False, auto_commit=False, **bind_vars):
+    def execute_sql(self, sql, commit=False, auto_commit=False, bind_vars=None):
         if self.conn or not self.connect():     # lazy connection
             if auto_commit:
                 self.conn.autocommit = True     # or use: self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -78,15 +78,20 @@ class GenericDB:
             sql, bind_vars = self._prepare_in_clause(sql, bind_vars)
             sql = self._adapt_sql(sql, bind_vars)
             try:
-                self.curs.execute(sql, bind_vars)
+                if bind_vars:
+                    self.curs.execute(sql, bind_vars)
+                else:
+                    # if no bind vars then call without for to prevent error "'dict' object does not support indexing"
+                    # .. in scripts with the % char (like e.g. dba_create_audit.sql)
+                    self.curs.execute(sql)
                 if commit:
                     self.conn.commit()
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint("GenericDB-{}-execute_sql({}, {})".format(action, sql, bind_vars))
+                    uprint("GenericDB.execute_sql({}, {}) {}".format(sql, bind_vars, action))
                     uprint(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
 
             except Exception as ex:
-                self.last_err_msg = "GenericDB-{}-execute_sql({}, {}) error: {}".format(action, sql, bind_vars, ex)
+                self.last_err_msg = "GenericDB.execute_sql({}, {}) {} error: {}".format(sql, bind_vars, action, ex)
 
         return self.last_err_msg
 
@@ -96,7 +101,7 @@ class GenericDB:
         if not where_group_order:
             where_group_order = '1=1'
         sql = "SELECT {} {} FROM {} WHERE {}".format(hints, ','.join(cols), from_join, where_group_order)
-        return self.execute_sql(sql, **bind_vars)
+        return self.execute_sql(sql, bind_vars=bind_vars)
 
     def cursor_description(self):
         return self.curs.description if self.curs else None
@@ -114,9 +119,9 @@ class GenericDB:
         try:
             rows = self.curs.fetchall()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("GenericDB fetch_all(), 1st of", len(rows), "rows:", rows[:1])
+                uprint("GenericDB.fetch_all(), 1st of", len(rows), "rows:", rows[:1])
         except Exception as ex:
-            self.last_err_msg = "GenericDB fetch_all() exception: " + str(ex)
+            self.last_err_msg = "GenericDB.fetch_all() exception: " + str(ex)
             uprint(self.last_err_msg)
             rows = None
         return rows or list()
@@ -126,9 +131,9 @@ class GenericDB:
         try:
             val = self.curs.fetchone()[col_idx]
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("GenericDB fetch_value()[{}] value: {}".format(col_idx, val))
+                uprint("GenericDB.fetch_value()[{}] value: {}".format(col_idx, val))
         except Exception as ex:
-            self.last_err_msg = "GenericDB fetch_value()[{}] exception: {}".format(col_idx, ex)
+            self.last_err_msg = "GenericDB.fetch_value()[{}] exception: {}".format(col_idx, ex)
             uprint(self.last_err_msg)
             val = None
         return val
@@ -138,7 +143,7 @@ class GenericDB:
               + ") VALUES (" + ", ".join([NAMED_BIND_VAR_PREFIX + c for c in col_values.keys()]) + ")"
         if returning_column:
             sql += " RETURNING " + returning_column
-        return self.execute_sql(sql, commit=commit, **col_values)
+        return self.execute_sql(sql, commit=commit, bind_vars=col_values)
 
     def update(self, table_name, col_values, where='', commit=False, bind_vars=None):
         new_bind_vars = deepcopy(col_values)
@@ -148,10 +153,42 @@ class GenericDB:
               + " SET " + ", ".join([c + " = " + NAMED_BIND_VAR_PREFIX + c for c in col_values.keys()])
         if where:
             sql += " WHERE " + where
-        return self.execute_sql(sql, commit=commit, **new_bind_vars)
+        return self.execute_sql(sql, commit=commit, bind_vars=new_bind_vars)
 
-    def commit(self):
-        self.last_err_msg = ""
+    def upsert(self, table_name, col_values, chk_values=None, returning_column='', commit=False):
+        """
+        INSERT or UPDATE in table_name the col_values, depending on if record already exists.
+        :param table_name:          name of the database table.
+        :param col_values:          dict of inserted/updated column values with the column name as key.
+        :param chk_values:          dict of column names/values for to check if record already exists.
+                                    If not passed then use first name/value of col_values (has then to be OrderedDict).
+        :param returning_column:    name of column which value will be returned by next fetch_all/fetch_value() call.
+        :param commit:              bool value to specify if commit should be done.
+        :return:                    last error message or "" if no errors occurred.
+        """
+        if not chk_values:
+            chk_values = dict([next(iter(col_values.items()))])     # use first dict item as pkey check value
+        chk_expr = " and ".join([k + " = :" + k for k in chk_values.keys()])
+
+        self.select(table_name, ["count(*)"], chk_expr, chk_values)
+        if not self.last_err_msg:
+            count = self.fetch_value()
+            if not self.last_err_msg:
+                if count == 1:
+                    bind_vars = deepcopy(chk_values).update(col_values)
+                    self.update(table_name, col_values, chk_expr, commit=commit, bind_vars=bind_vars)
+                    if not self.last_err_msg and returning_column:
+                        self.select(table_name, [returning_column], chk_expr, chk_values)
+                elif count == 0:
+                    self.insert(table_name, col_values, commit=commit, returning_column=returning_column)
+                else:
+                    self.last_err_msg = "GenericDB.upsert({}, {}, {}, {}) error: found {} primary key values"\
+                        .format(table_name, col_values, chk_values, returning_column, count)
+        return self.last_err_msg
+
+    def commit(self, reset_last_err_msg=False):
+        if reset_last_err_msg:
+            self.last_err_msg = ""
         try:
             self.conn.commit()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -160,8 +197,9 @@ class GenericDB:
             self.last_err_msg = "GenericDB commit error: " + str(ex)
         return self.last_err_msg
 
-    def rollback(self):
-        self.last_err_msg = ""
+    def rollback(self, reset_last_err_msg=False):
+        if reset_last_err_msg:
+            self.last_err_msg = ""
         try:
             self.conn.rollback()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -273,9 +311,6 @@ class PostgresDB(GenericDB):
         super(PostgresDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, debug_level=debug_level)
         # for "named" PEP-0249 sql will be adapted to fit postgres driver "pyformat" sql bind-var/parameter syntax
         self._param_style = 'pyformat'
-
-    def create_db(self, name):
-        return self.execute_sql("CREATE DATABASE " + name + ";", auto_commit=True)  # " LC_COLLATE 'C'")
 
     def connect(self):
         self.last_err_msg = ''

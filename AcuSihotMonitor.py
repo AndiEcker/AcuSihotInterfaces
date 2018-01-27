@@ -12,8 +12,7 @@ from traceback import print_exc
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 from acu_sf_sh_sys_data import AssSysData
-from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, \
-    SXML_DEF_ENCODING, PARSE_ONLY_TAG_PREFIX
+from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, SXML_DEF_ENCODING
 
 __version__ = '0.4'
 
@@ -221,11 +220,11 @@ def _sih_check_all_res(crow, rd, row_err, err_sep):
 
 def sih_reservation_search(data_dict):
     list_marker_prefix = '*'
-    result_columns = [PARSE_ONLY_TAG_PREFIX + 'RES-HOTEL__03', 'GDSNO__09',
-                      PARSE_ONLY_TAG_PREFIX + 'RES-NR__06',
-                      PARSE_ONLY_TAG_PREFIX + 'SUB-NR__03',
+    result_columns = ['RES-HOTEL__03', 'GDSNO__09',
+                      'RES-NR__06',
+                      'SUB-NR__03',
                       list_marker_prefix + 'MATCHCODE__15', list_marker_prefix + 'NAME__21',
-                      'ARR__09', 'DEP__09', 'RN__06', PARSE_ONLY_TAG_PREFIX + 'OBJID__06']
+                      'ARR__09', 'DEP__09', 'RN__06', 'OBJID__06']
     rs = ResSearch(cae)
     # available filters: hotel_id, from_date, to_date, matchcode, name, gdsno, flags, scope
     filters = {k[:-len(FILTER_CRITERIA_SUFFIX)]: v for k, v in data_dict.items() if k.endswith(FILTER_CRITERIA_SUFFIX)}
@@ -247,21 +246,19 @@ def sih_reservation_search(data_dict):
                 if COLUMN_ATTRIBUTE_SEP in c:
                     c = c.split(COLUMN_ATTRIBUTE_SEP)[0]
                 if c not in row:
-                    col_val = '(undef.)'
+                    elem_val = '(undef.)'
                 elif is_list and 'elemListVal' in row[c]:
-                    col_val = str(row[c]['elemListVal'])
+                    elem_val = str(row[c]['elemListVal'])
                 elif 'elemVal' in row[c]:
-                    col_val = row[c]['elemVal']
+                    elem_val = row[c]['elemVal']
                 else:
-                    col_val = '(missing)'
-                col_values.append(col_val)
+                    elem_val = '(missing)'
+                col_values.append(elem_val)
             results.append(col_values)
         column_names = list()
         for c in result_columns:
             if c.startswith(list_marker_prefix):
                 c = c[len(list_marker_prefix):]
-            if c.startswith(PARSE_ONLY_TAG_PREFIX):
-                c = c[len(PARSE_ONLY_TAG_PREFIX):]
             column_names.append(c)
         results = (results, tuple(column_names))
 

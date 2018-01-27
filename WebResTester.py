@@ -62,7 +62,7 @@ else:
     with open('test/WebResTester.req', 'r') as f:
         xml = f.read()
 
-    sxb = SihotXmlBuilder(cae, use_kernel_interface=False, col_map=(), connect_to_acu=False)
+    sxb = SihotXmlBuilder(cae, use_kernel_interface=False, elem_col_map=(), connect_to_acu=False)
     sxb.xml = xml
 
     uprint('####  Sending ...........  ####')
