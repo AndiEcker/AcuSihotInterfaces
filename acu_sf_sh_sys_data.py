@@ -323,9 +323,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.error_message = ""
 
         for co in self.contacts:
-            if self.ass_db.insert('contacts',
-                                  dict(co_sf_contact_id=co[_SF_ID], co_sh_guest_id=co[_SH_ID],
-                                       co_sh_match_code=co[_ACU_ID]),
+            if self.ass_db.insert('contacts', dict(co_sf_id=co[_SF_ID], co_sh_id=co[_SH_ID], co_ac_id=co[_ACU_ID]),
                                   commit=True, returning_column='co_pk'):
                 self.error_message = self.ass_db.last_err_msg
                 return self.error_message

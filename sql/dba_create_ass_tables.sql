@@ -2,9 +2,11 @@
 CREATE TABLE contacts
 (
   co_pk                   SERIAL PRIMARY KEY,
-  co_sf_contact_id        VARCHAR(18),
-  co_sh_guest_id          VARCHAR(15),
-  co_sh_match_code        VARCHAR(18)
+  co_ac_id                VARCHAR(12),      -- 83 acumen clients having acu_id + 'D1' + 'P2', e.g. G022570D1P2,
+                                            -- .. E127673D1P2, Z000020D1P2, I127633D1P2, but also refs like MAINTENANC
+  co_sf_id                VARCHAR(18),
+  co_sh_id                VARCHAR(15),
+  UNIQUE (co_ac_id, co_sf_id, co_sh_id)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('contacts');
@@ -14,7 +16,8 @@ CREATE TABLE external_refs
 (
   er_co_fk                INTEGER NOT NULL REFERENCES contacts(co_pk),
   er_type                 VARCHAR(6) NOT NULL,
-  er_id                   VARCHAR(18) NOT NULL
+  er_id                   VARCHAR(18) NOT NULL,
+  UNIQUE (er_co_fk, er_type, er_id)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('external_refs');

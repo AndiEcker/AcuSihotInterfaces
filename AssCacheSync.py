@@ -28,10 +28,12 @@ sh_rbf = ResBulkFetcher(cae)
 sh_rbf.add_options()
 
 cae.add_option('initializeCache', "Initialize/Wipe/Recreate ass_cache database (0=No, 1=Yes)", 0, 'I')
-cae.add_option('syncCache', "Synchronize ass_cache database from (ac=Acumen, sh=Sihot, sf=Salesforce)", '', 'S',
-               choices=('ac', 'sh', 'sf'))
-cae.add_option('verifyCache', "Verify/Check ass_cache against (ac=Acumen, sh=Sihot, sf=Salesforce)", '', 'V',
-               choices=('ac', 'sh', 'sf'))
+cae.add_option('syncCache', "Synchronize from (ac=Acumen, sh=Sihot, sf=Salesforce)"
+                            " including (A=all, P=Product, R=Reservations)", '', 'S',
+               choices=('acA', 'acP', 'acC', 'acR', 'shA', 'shR', 'sfA'))
+cae.add_option('verifyCache', "Verify/Check against (ac=Acumen, sh=Sihot, sf=Salesforce)"
+                              " including (A=all, P=Product, R=Reservations)", '', 'V',
+               choices=('acA', 'acP', 'acC', 'acR', 'shA', 'shR', 'sfA'))
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", '', 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
@@ -60,12 +62,18 @@ acm_sync = cae.get_option('syncCache')
 acm_veri = cae.get_option('verifyCache')
 uprint("Mode/Actions: ",
        "initialize" if acm_init else "",
-       "sync from Acumen" if acm_sync == 'ac' else "",
-       "sync from Sihot" if acm_sync == 'sh' else "",
-       "sync from Salesforce" if acm_sync == 'sf' else "",
-       "verify against Acumen" if acm_veri == 'ac' else "",
-       "verify against Sihot" if acm_veri == 'sh' else "",
-       "verify against Salesforce" if acm_veri == 'sf' else "")
+       "sync from Acumen" if acm_sync[:2] == 'ac' else "",
+       "sync from Sihot" if acm_sync[:2] == 'sh' else "",
+       "sync from Salesforce" if acm_sync[:2] == 'sf' else "",
+       "including" + (" Products" if acm_sync[2:] in 'AP' else "")
+       + (" Contacts" if acm_sync[2:] in 'AC' else "")
+       + (" Reservations" if acm_sync[2:] in 'AR' else "") if acm_sync else "",
+       "verify against Acumen" if acm_veri[:2] == 'ac' else "",
+       "verify against Sihot" if acm_veri[:2] == 'sh' else "",
+       "verify against Salesforce" if acm_veri[:2] == 'sf' else "",
+       "including" + (" Products" if acm_veri[2:] in 'AP' else "")
+       + (" Contacts" if acm_veri[2:] in 'AC' else "")
+       + (" Reservations" if acm_veri[2:] in 'AR' else "") if acm_veri else "")
 
 sh_rbf.load_config()
 sh_rbf.print_config()
@@ -222,10 +230,11 @@ def ac_migrate_contacts():
     if a_2 is None:
         return conf_data.error_message
     a_c += a_2
+    a_c.sort(key=lambda _: _[0])
 
     # migrate to ass_cache including additional external IDs and owned products
-    for cont in a_c:
-        col_values = dict(co_sf_contact_id=cont[2], co_sh_guest_id=cont[1], co_sh_match_code=cont[0])
+    for idx, cont in enumerate(a_c):
+        col_values = dict(co_sf_id=cont[2], co_sh_id=cont[1], co_ac_id=cont[0])
         if ass_db.upsert('contacts', col_values, chk_values=col_values, returning_column='co_pk'):
             break
         co_pk = ass_db.fetch_value()
@@ -233,6 +242,8 @@ def ac_migrate_contacts():
         ers = conf_data.load_view(None, 'T_CR', ['CR_TYPE', 'CR_REF'], "CR_CDREF = :acu_id", dict(acu_id=cont[0]))
         if ers is None:
             break
+        if cont[3]:
+            ers.insert(0, 'RCI', cont[3])
         for er in ers:
             col_values = dict(er_co_fk=co_pk, er_type=er[0], er_id=er[1])
             if ass_db.upsert('external_refs', col_values, chk_values=col_values):
@@ -254,6 +265,9 @@ def ac_migrate_contacts():
         if ass_db.last_err_msg:
             break
 
+        if idx + 1 % 1000 == 0:
+            ass_db.commit()
+
     if ass_db.last_err_msg:
         ass_db.rollback()
         return ass_db.last_err_msg
@@ -272,7 +286,7 @@ def ac_migrate_res_inv():
                               ["case when AOWN_RSREF = 'PBC' and length(AOWN_APREF) = 3 then '0' end || AOWN_WKREF",
                                "(select LU_NUMBER from T_LU where LU_CLASS = 'SIHOT_HOTEL' and LU_ID = AOWN_RSREF)",
                                'AOWN_YEAR', 'AOWN_ROREF', 'AOWN_SWAPPED_WITH', 'AOWN_GRANTED_TO',
-                               'nvl(DW_POINTS, WK_POINTS)'],
+                               'nvl(POINTS, WK_POINTS)'],
                               "AOWN_YEAR >= to_char(sysdate, 'YYYY') and AOWN_RSREF in ('BHC', 'BHH', 'HMC', 'PBC')")
     if r_i is None:
         return conf_data.error_message
@@ -298,13 +312,13 @@ def ac_migrate_res_data():
     for crow in acumen_req.rows:
         # determine orderer and occupants
         g_mc = crow['OC_CODE']
-        if ass_db.select('contacts', ['co_pk'], "co_sh_match_code = :g_mc", dict(g_mc=g_mc)):
+        if ass_db.select('contacts', ['co_pk'], "co_ac_id = :g_mc", dict(g_mc=g_mc)):
             ass_db.rollback()
             return ass_db.last_err_msg
         ord_co_pk = ass_db.fetch_value()
         if not ord_co_pk:
             g_id = crow['OC_SIHOT_OBJID']
-            if ass_db.select('contacts', ['co_pk'], "co_sh_guest_id = :g_id", dict(g_id=g_id)):
+            if ass_db.select('contacts', ['co_pk'], "co_sh_id = :g_id", dict(g_id=g_id)):
                 ass_db.rollback()
                 return ass_db.last_err_msg
             ord_co_pk = ass_db.fetch_value()
@@ -324,7 +338,7 @@ def ac_migrate_res_data():
                                   "CD_CODE = :g_mc", dict(gds_no=gds_no))
         if a_c is None:
             return conf_data.error_message
-        if ass_db.select('contacts', ['co_pk'], "co_sh_match_code = :g_mc", dict(g_mc=g_mc)):
+        if ass_db.select('contacts', ['co_pk'], "co_ac_id = :g_mc", dict(g_mc=g_mc)):
             ass_db.rollback()
             return ass_db.last_err_msg
         occ_co_pk = ass_db.fetch_value()
@@ -347,7 +361,7 @@ def ac_migrate_res_data():
             ass_db.rollback()
             return ass_db.last_err_msg
 
-        if ass_db.select('contacts', ['co_pk'], "co_sh_match_code = :g_mc", dict(g_mc=g_mc + 'P2')):
+        if ass_db.select('contacts', ['co_pk'], "co_ac_id = :g_mc", dict(g_mc=g_mc + 'P2')):
             ass_db.rollback()
             return ass_db.last_err_msg
         occ_co_pk = ass_db.fetch_value()
@@ -410,13 +424,13 @@ def sh_migrate_res_data():
     rbf_groups = sh_rbf.fetch_all()
     for rg in rbf_groups:
         g_mc = elem_value(rg, elem_path_join(['RESCHANNELLIST', 'RESCHANNEL', 'MATCHCODE']), arri=0)
-        if ass_db.select('contacts', ['co_pk'], "co_sh_match_code = :g_mc", dict(g_mc=g_mc)):
+        if ass_db.select('contacts', ['co_pk'], "co_ac_id = :g_mc", dict(g_mc=g_mc)):
             ass_db.rollback()
             return ass_db.last_err_msg
         ord_co_pk = ass_db.fetch_value()
         if not ord_co_pk:
             g_id = elem_value(rg, elem_path_join(['RESCHANNELLIST', 'RESCHANNEL', 'OBJID']), arri=0)
-            if ass_db.select('contacts', ['co_pk'], "co_sh_guest_id = :g_id", dict(g_id=g_id)):
+            if ass_db.select('contacts', ['co_pk'], "co_sh_id = :g_id", dict(g_id=g_id)):
                 ass_db.rollback()
                 return ass_db.last_err_msg
             ord_co_pk = ass_db.fetch_value()
@@ -426,7 +440,7 @@ def sh_migrate_res_data():
             g_mc = elem_value(rg, elem_path_join(['PERSON', 'MATCHCODE']), arri=arri)
             occ_co_pk = None
             if g_mc:
-                if ass_db.select('contacts', ['co_pk'], "co_sh_match_code = :g_mc", dict(g_mc=g_mc)):
+                if ass_db.select('contacts', ['co_pk'], "co_ac_id = :g_mc", dict(g_mc=g_mc)):
                     ass_db.rollback()
                     return ass_db.last_err_msg
                 occ_co_pk = ass_db.fetch_value()
@@ -501,38 +515,75 @@ def sh_migrate_res_data():
 
 if acm_sync:
     log_warning("Starting data synchronization/migration", 'syncCache', importance=4)
-if acm_sync == 'ac':
-    err = ac_migrate_product_types()
-    if err:
-        log_error(err, 'syncCacheAcuProductTypes', importance=3, exit_code=111)
-    err = ac_migrate_contacts()
-    if err:
-        log_error(err, 'syncCacheAcuContacts', importance=3, exit_code=114)
-    err = ac_migrate_res_inv()  # load reservation inventory data
-    if err:
-        log_error(err, 'syncCacheAcuResInv', importance=3, exit_code=117)
-    err = ac_migrate_res_data()
-    if err:
-        log_error(err, 'syncCacheAcuResData', importance=3, exit_code=120)
+if acm_sync[:2] == 'ac':
+    if acm_sync[2:] in 'AP':
+        err = ac_migrate_product_types()
+        if err:
+            log_error(err, 'syncCacheAcuProductTypes', importance=3, exit_code=111)
+    if acm_sync[2:] in 'AC':
+        err = ac_migrate_contacts()
+        if err:
+            log_error(err, 'syncCacheAcuContacts', importance=3, exit_code=114)
+    if acm_sync[2:] in 'AR':
+        err = ac_migrate_res_inv()  # load reservation inventory data
+        if err:
+            log_error(err, 'syncCacheAcuResInv', importance=3, exit_code=117)
+        err = ac_migrate_res_data()
+        if err:
+            log_error(err, 'syncCacheAcuResData', importance=3, exit_code=120)
 
-elif acm_sync == 'sh':
-    err = sh_migrate_res_data()
-    if err:
-        log_error(err, 'syncCacheShResData', importance=3, exit_code=132)
+elif acm_sync[:2] == 'sh':
+    if acm_sync[2:] in 'AR':
+        err = sh_migrate_res_data()
+        if err:
+            log_error(err, 'syncCacheShResData', importance=3, exit_code=132)
 
-elif acm_sync == 'sf':
+elif acm_sync[:2] == 'sf':
     log_error("Salesforce synchronization not implemented", 'syncCacheSf', importance=3, exit_code=135)
+
+
+def ac_check_contacts():
+    if not ass_db.select('contacts'):
+        return ass_db.last_err_msg
+    contacts = ass_db.fetch_all()
+
+    ca = conf_data.load_view(None, 'T_CD', ["CD_CODE",
+                                            "to_char(CD_SIHOT_OBJID)", "CD_SF_ID1",
+                                            "to_char(CD_SIHOT_OBJID2)", "CD_SF_ID2"],
+                             "substr(CD_CODE, 1, 1) <> 'A'"
+                             )
+    if ca is None:
+        return conf_data.error_message
+    cad = dict((_[0], _[1:]) for _ in ca)
+
+    dis = list()
+    for co in contacts:
+        if not co[3]:
+            dis.append("Ass Cache Contact without Acumen client reference: {}".format(co))
+        else:
+            main_aci, offset = (co[3][:-2], 2) if co[3].endswith('P2') else (co[3], 0)
+            if main_aci in cad:
+                cat = cad[main_aci][offset:]
+                if co[1] != cat[0]:     # co_sh_id
+                    dis.append("{} - Sihot guest object ID differs: ass={} acu={}".format(co[3], co[1], cat[0]))
+                if co[2] != cat[1]:     # co_sf_id
+                    dis.append("{} - Salesforce contact ID differs: ass={} acu={}".format(co[3], co[2], cat[1]))
+            else:
+                dis.append("Acumen client references {} not found in Acumen system".format(co[3]))
 
 
 if acm_veri:
     log_warning("Starting data check/verification", 'veriCache', importance=3)
-if acm_veri == 'ac':
-    log_error("Acumen verification not implemented", 'veriCacheAc', importance=3, exit_code=150)
+if acm_veri[:2] == 'ac':
+    if acm_sync[2:] in 'AC':
+        err = ac_check_contacts()
+        if err:
+            log_error(err, 'veriCacheAcContacts', importance=3, exit_code=300)
 
-elif acm_veri == 'sh':
+elif acm_veri[:2] == 'sh':
     log_error("Sihot verification not implemented", 'veriCacheSh', importance=3, exit_code=171)
 
-elif acm_veri == 'sf':
+elif acm_veri[:2] == 'sf':
     log_error("Salesforce verification not implemented", 'syncCacheSf', importance=3, exit_code=192)
 
 
