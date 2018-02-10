@@ -2,32 +2,46 @@
 import sys
 import os
 import datetime
+from argparse import ArgumentError
+import pytest
 
 from ae_console_app import ConsoleApp, DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, full_stack_trace, uprint
 
 
-class TestLogFile:
-    def test_log_file_rotation(self):
-        log_file = '../log/test_log_file_rot.log'
-        cae = ConsoleApp('0.0', 'test_log_file_rotation', log_file_def=log_file, log_max_size=.001)
+class TestConfigOptions:
+    def test_multiple_option_single_char(self):
+        cae = ConsoleApp('0.0', 'test_multiple_option')
         old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
-        sys.argv = []
-        assert cae.get_option('logFile')    # get_option() has to be called at least once for to create log file
-        for i in range(12):
-            for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
-                uprint("TestLogEntry{: >26}{: >26}".format(i, j))
-        # clean up
-        cae._close_log_file()
-        os.remove(log_file)
-        for i in range(9):
-            fn, ext = os.path.splitext(log_file)
-            rot_log_file = fn + "-" + str(i + 1) + ext
-            assert os.path.exists(rot_log_file)
-            os.remove(rot_log_file)
+        sys.argv = ['test', "-Z=a", "-Z=1"]
+        cae.add_option('testMultipleOption', 'test multiple option', [], 'Z', multiple=True)
+        assert cae.get_option('testMultipleOption') == ['a', '1']
         sys.argv = old_args
 
+    def test_multiple_option_multi_char(self):
+        cae = ConsoleApp('0.0', 'test_multiple_option_multi_char')
+        old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
+        sys.argv = ['test', "-Z=abc", "-Z=123"]
+        cae.add_option('testMultipleOption', 'test multiple option', [], short_opt='Z', multiple=True)
+        assert cae.get_option('testMultipleOption') == ['abc', '123']
+        sys.argv = old_args
 
-class TestConfigOptions:
+    def test_multiple_option_single_char_with_choices(self):
+        cae = ConsoleApp('0.0', 'test_multiple_option_with_choices')
+        old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
+        sys.argv = ['test', "-Z=a", "-Z=1"]
+        cae.add_option('testAppOptChoices', 'test multiple choices', [], 'Z', choices=['a', '1'], multiple=True)
+        assert cae.get_option('testAppOptChoices') == ['a', '1']
+        sys.argv = old_args
+
+    def test_multiple_option_single_char_with_invalid_choices(self):
+        cae = ConsoleApp('0.0', 'test_multiple_option_with_choices')
+        old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
+        sys.argv = ['test', "-Z=x", "-Z=9"]
+        cae.add_option('testAppOptChoices', 'test multiple choices', [], 'Z', choices=['a', '1'], multiple=True)
+        with pytest.raises(ArgumentError):
+            cae.get_option('testAppOptChoices')     # == ['x', '9'] but choices is ['a', '1']
+        sys.argv = old_args
+
     def test_config_default_bool(self):
         cae = ConsoleApp('0.0', 'test_config_defaults')
         cfg_val = cae.get_config('not_existing_config_var', default_value=False)
@@ -382,6 +396,27 @@ class TestConfigOptions:
         assert cae.get_option('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
         sys.argv = old_args
         os.remove(file_name)
+
+
+class TestLogFile:
+    def test_log_file_rotation(self):
+        log_file = '../log/test_log_file_rot.log'
+        cae = ConsoleApp('0.0', 'test_log_file_rotation', log_file_def=log_file, log_max_size=.001)
+        old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
+        sys.argv = []
+        assert cae.get_option('logFile')    # get_option() has to be called at least once for to create log file
+        for i in range(12):
+            for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                uprint("TestLogEntry{: >26}{: >26}".format(i, j))
+        # clean up
+        cae._close_log_file()
+        os.remove(log_file)
+        for i in range(9):
+            fn, ext = os.path.splitext(log_file)
+            rot_log_file = fn + "-" + str(i + 1) + ext
+            assert os.path.exists(rot_log_file)
+            os.remove(rot_log_file)
+        sys.argv = old_args
 
 
 class TestIllegalXmlChars:

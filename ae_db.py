@@ -308,6 +308,13 @@ class OraDB(GenericDB):
 
 class PostgresDB(GenericDB):
     def __init__(self, usr, pwd, dsn, debug_level=DEBUG_LEVEL_DISABLED):
+        """
+        create instance of postgres database object
+        :param usr:         user name
+        :param pwd:         user password
+        :param dsn:         database name and optionally host address (separated with a @ character)
+        :param debug_level: debug level
+        """
         super(PostgresDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, debug_level=debug_level)
         # for "named" PEP-0249 sql will be adapted to fit postgres driver "pyformat" sql bind-var/parameter syntax
         self._param_style = 'pyformat'
@@ -315,7 +322,12 @@ class PostgresDB(GenericDB):
     def connect(self):
         self.last_err_msg = ''
         try:
-            self.conn = psycopg2.connect(user=self.usr, password=self.pwd, dbname=self.dsn)
+            connection_params = dict(user=self.usr, password=self.pwd)
+            if '@' in self.dsn:
+                connection_params['dbname'], connection_params['host'] = self.dsn.split('@')
+            else:
+                connection_params['dbname'] = self.dsn
+            self.conn = psycopg2.connect(**connection_params)
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 uprint("PostgresDB: connected to postgres database {} via api/server {}/{} with encoding {}"
                        .format(self.dsn, psycopg2.apilevel, self.conn.server_version, self.conn.encoding))

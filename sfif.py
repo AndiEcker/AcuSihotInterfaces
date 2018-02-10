@@ -309,6 +309,13 @@ class SfInterface:
             return res['records'][0]['Id']
         return None
 
+    def contact_ac_id(self, sf_contact_id):
+        ac_id = None
+        res = self._soql_query_all("SELECT CD_CODE__c FROM Contact WHERE Id = '{}'".format(sf_contact_id))
+        if not self.error_msg and res['totalSize'] > 0:
+            ac_id = res['records'][0]['CD_CODE__c']
+        return ac_id
+
     def contact_sh_id(self, sf_contact_id):
         sh_id = None
         res = self._soql_query_all("SELECT Sihot_Guest_Object_Id__c FROM Contact WHERE Id = '{}'".format(sf_contact_id))

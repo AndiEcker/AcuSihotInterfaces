@@ -7,8 +7,8 @@ from sxmlif import AvailCatInfo, ResSearch, SXML_DEF_ENCODING, ELEM_PATH_SEP, el
 from acu_sf_sh_sys_data import AssSysData
 from ae_console_app import uprint, DATE_ISO, DEBUG_LEVEL_VERBOSE
 
-SIHOT_PROVIDES_CHECKOUT_TIME = False  # currently there is no real checkout time available in Sihot
-SIHOT_DATE_FORMAT = '%Y-%m-%d %H:%M:%S' if SIHOT_PROVIDES_CHECKOUT_TIME else '%Y-%m-%d'
+SH_PROVIDES_CHECKOUT_TIME = False  # currently there is no real checkout time available in Sihot
+SH_DATE_FORMAT = '%Y-%m-%d %H:%M:%S' if SH_PROVIDES_CHECKOUT_TIME else '%Y-%m-%d'
 
 ELEM_MISSING = "(missing)"
 ELEM_EMPTY = "(empty)"
@@ -86,11 +86,26 @@ def count_res(cae, hotel_ids=None, room_cat_prefix='', day=datetime.date.today()
 
 
 def elem_path_join(elem_names):
+    """
+    convert list of element names to element path.
+    :param elem_names:  list of element names.
+    :return:            element path.
+    """
     return ELEM_PATH_SEP.join(elem_names)
 
 
 def elem_value(shd, elem_name_or_path, arri=-1, verbose=False, default_value=None):
-    """ get the xml element value from the row_dict variable, using arr_index in case of multiple values """
+    """
+    get the xml element value from the shd row_dict variable, using array index (arri) in case of multiple values
+    :param shd:                 dict of sihot data row with the element names as the dict keys.
+    :param elem_name_or_path:   either single element name, element path or list object of path element names.
+    :param arri:                index of element array value (starting with 0).
+    :param verbose:             pass True to get ELEM_EMPTY/ELEM_MISSING pseudo values instead of default_value value.
+    :param default_value:       default element value.
+    :return:                    element value.
+    """
+    if isinstance(elem_name_or_path, list):
+        elem_name_or_path = elem_path_join(elem_name_or_path)
     is_path = ELEM_PATH_SEP in elem_name_or_path
     elem_nam = elem_name_or_path.rsplit(ELEM_PATH_SEP, 1)[1] if is_path else elem_name_or_path
 
@@ -136,28 +151,28 @@ def get_gds_no(shd):
 
 
 def get_apt_wk_yr(shd, cae, arri=-1):
-    arr = datetime.datetime.strptime(elem_value(shd, 'ARR'), SIHOT_DATE_FORMAT)
+    arr = datetime.datetime.strptime(elem_value(shd, 'ARR'), SH_DATE_FORMAT)
     year, wk = AssSysData(cae).rc_arr_to_year_week(arr)
     apt = elem_value(shd, 'RN', arri=arri)
     return apt, wk, year
 
 
 def get_date_range(shd):
-    """ determines the check-in/-out values (of type: datetime if SIHOT_PROVIDES_CHECKOUT_TIME else date) """
-    if SIHOT_PROVIDES_CHECKOUT_TIME:
+    """ determines the check-in/-out values (of type: datetime if SH_PROVIDES_CHECKOUT_TIME else date) """
+    if SH_PROVIDES_CHECKOUT_TIME:
         d_str = shd['ARR']['elemVal']
         t_str = shd['ARR-TIME']['elemVal']
-        checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
+        checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, SH_DATE_FORMAT)
         dt_key = 'DEP-TIME'
         if dt_key in shd and 'elemVal' in shd[dt_key] and shd[dt_key]['elemVal']:
             d_str = shd['DEP']['elemVal']
             t_str = shd[dt_key]['elemVal']
-            checked_out = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
+            checked_out = datetime.datetime.strptime(d_str + ' ' + t_str, SH_DATE_FORMAT)
         else:
             checked_out = None
     else:
-        checked_in = datetime.datetime.strptime(shd['ARR']['elemVal'], SIHOT_DATE_FORMAT).date()
-        checked_out = datetime.datetime.strptime(shd['DEP']['elemVal'], SIHOT_DATE_FORMAT).date()
+        checked_in = datetime.datetime.strptime(shd['ARR']['elemVal'], SH_DATE_FORMAT).date()
+        checked_out = datetime.datetime.strptime(shd['DEP']['elemVal'], SH_DATE_FORMAT).date()
     return checked_in, checked_out
 
 
@@ -175,7 +190,7 @@ class ResBulkFetcher:
     def __init__(self, cae, allow_future_arrivals=True):
         self.cae = cae
         self.allow_future_arrivals = allow_future_arrivals
-        self.startup_date = cae.startup_beg if SIHOT_PROVIDES_CHECKOUT_TIME else cae.startup_beg.date()
+        self.startup_date = cae.startup_beg if SH_PROVIDES_CHECKOUT_TIME else cae.startup_beg.date()
 
         self.debug_level = None
         self.date_from = None
@@ -198,9 +213,9 @@ class ResBulkFetcher:
         cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
         cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 
-        cae.add_option('dateFrom', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
+        cae.add_option('dateFrom', "Date" + ("/time" if SH_PROVIDES_CHECKOUT_TIME else "") +
                        " of first arrival", self.startup_date - datetime.timedelta(days=1), 'F')
-        cae.add_option('dateTill', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
+        cae.add_option('dateTill', "Date" + ("/time" if SH_PROVIDES_CHECKOUT_TIME else "") +
                        " of last arrival", self.startup_date - datetime.timedelta(days=1), 'T')
 
     def load_config(self):
@@ -234,8 +249,8 @@ class ResBulkFetcher:
         cae = self.cae
         uprint("Sihot Server IP/Web-port:", cae.get_option('serverIP'), cae.get_option('serverPort'))
         uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
-        uprint("Date range including check-ins from", self.date_from.strftime(SIHOT_DATE_FORMAT),
-               'and till/before', self.date_till.strftime(SIHOT_DATE_FORMAT))
+        uprint("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
+               'and till/before', self.date_till.strftime(SH_DATE_FORMAT))
         uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.sh_fetch_max_days,
                " and -pause in seconds between fetches", self.sh_fetch_pause_seconds)
         uprint("Search flags:", self.search_flags)
@@ -244,9 +259,9 @@ class ResBulkFetcher:
         uprint("Allowed Market Groups/Channels:", self.allowed_mkt_grp or "ALL")
 
     def date_range_str(self):
-        from_date = self.date_from.strftime(SIHOT_DATE_FORMAT)
+        from_date = self.date_from.strftime(SH_DATE_FORMAT)
         return "ON " + from_date if self.date_till != self.date_from else \
-            ("BETWEEN" + from_date + " AND " + self.date_till.strftime(SIHOT_DATE_FORMAT))
+            ("BETWEEN" + from_date + " AND " + self.date_till.strftime(SH_DATE_FORMAT))
 
     def fetch_all(self):
         cae = self.cae

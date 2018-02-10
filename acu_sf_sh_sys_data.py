@@ -1,29 +1,42 @@
-import os
 import datetime
 
-from ae_lockfile import LockFile
-from ae_db import OraDB
+from ae_db import OraDB, PostgresDB
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 
 from sfif import prepare_connection
 
-# init constants and load constant config settings
+# external reference separator and types (also used as Sihot Matchcode/GDS prefix)
 EXT_REFS_SEP = ','
-RCI_MATCH_AND_BOOK_CODE_PREFIX = 'rci'
+EXT_REF_TYPE_RCI = 'RCI'
+EXT_REF_TYPE_RCIP = 'RCIP'
 
-# tuple indexes for AssSysData.contacts list
-_ACU_ID = 0
+
+def ext_ref_type_sql():
+    """
+    :return: SQL column expression merging wrongly classified Acumen external ref types holding RCI member IDs.
+    """
+    # return "decode(CR_TYPE, '" + EXT_REF_TYPE_RCIP + "', '" + EXT_REF_TYPE_RCI + "', 'SPX', '"
+    #  + EXT_REF_TYPE_RCI + "', CR_TYPE)"
+    return "CASE WHEN CR_TYPE in ('" + EXT_REF_TYPE_RCIP + "', 'SPX') then '" + EXT_REF_TYPE_RCI + "' else CR_TYPE end"
+
+
+# tuple indexes for Contacts data list (AssSysData.contacts)
+_AC_ID = 0
 _SF_ID = 1
 _SH_ID = 2
 _EXT_REFS = 3
 _IS_OWNER = 4
 
-# tuple indexes for Reservation Inventory data (AssSysData.res_inv_data
-_WKREF = 0
-_YEAR = 1
-_ROREF = 2
-_SWAPPED = 3
-_GRANTED = 4
+# tuple indexes for Reservation Inventory data (ass_cache.res_inventories/AssSysData.res_inv_data)
+_RI_PK = 0
+_WKREF = 1
+_HOTEL_ID = 2
+_YEAR = 3
+_ROREF = 4
+_SWAPPED = 5
+_GRANTED = 6
+_POINTS = 7
+_COMMENT = 8
 
 
 def _dummy_stub(*args, **kwargs):
@@ -101,20 +114,28 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # --- contacts is caching contact data like external references/Ids, owner status ...
         self.contacts = list()
-        self.contacts_changed = False
+        self.contacts_changed = list()      # list indexes of changed records within self.contacts
 
         # --- res_inv_data is caching banking/swap/grant info
         self.res_inv_data = list()
 
     def connect_acu_db(self):
-        db = OraDB(usr=self.acu_user, pwd=self.acu_password, dsn=self.acu_dsn)
+        db = OraDB(usr=self.acu_user, pwd=self.acu_password, dsn=self.acu_dsn, debug_level=self.debug_level)
         self.error_message = db.connect()
         if self.error_message:
             print(self.error_message)
             return None
         return db
 
-    def load_view(self, db_opt, view, cols, where="", bind_vars=None):
+    def connect_ass_db(self):
+        db = PostgresDB(usr=self.ass_user, pwd=self.ass_password, dsn=self.ass_dsn, debug_level=self.debug_level)
+        self.error_message = db.connect()
+        if self.error_message:
+            print(self.error_message)
+            return None
+        return db
+
+    def load_view(self, db_opt, view, cols=None, where="", bind_vars=None):
         if db_opt:      # use existing db connection if passed by caller
             db = db_opt
             self.error_message = ""
@@ -257,25 +278,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                         EXT_REFS_SEP.join(s_ext_refs | a_ext_refs), s_owner or a_owner)
             return match
 
-        self.error_message = ""
-
-        # establish file lock
-        file_lock = LockFile(self.cae.get_config('CONTACTS_LOCK_FILE', default_value='contacts.lock'))
-        err_msg = file_lock.lock()
-        if err_msg:
-            self.error_message = err_msg
-            return err_msg
-
-        # check if file exists (or if it is instead the first run or a reset)
-        contacts_file_name = self.cae.get_config('CONTACTS_DATA_FILE', default_value='contacts.data')
-        if os.path.isfile(contacts_file_name):
-            with open(contacts_file_name) as f:
-                self.contacts = eval(f.read())
-            file_lock.unlock()
-            return ""
-
         # fetch from Acumen on first run or after reset (deleted cache files) - after locking cache files
-        self._warn("Fetching client data from Acumen (needs some minutes)", self._ctx_no_file + 'FetchClientData',
+        self.error_message = ""
+        self._warn("Fetching client data from AssCache (needs some minutes)", self._ctx_no_file + 'FetchClientData',
                    importance=4)
         c = self.load_view(None, 'V_ACU_CD_DATA',
                            ["CD_CODE", "SIHOT_SF_ID", "CD_SIHOT_OBJID",
@@ -286,7 +291,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                             "SIHOT_GUEST_TYPE",
                             ],
                            # found also SPX/TRC prefixes for RCI refs/ids in EXT_REFS/T_CR
-                           "CD_SIHOT_OBJID is not NULL or CD_RCI_REF is not NULL or instr(EXT_REFS, 'RCI') > 0"
+                           "CD_SIHOT_OBJID is not NULL or CD_RCI_REF is not NULL"
+                           " or instr(EXT_REFS, '" + EXT_REF_TYPE_RCI + "') > 0"
                            " or instr(EXT_REFS, 'SF=') > 0 or SIHOT_SF_ID is not NULL")
         if not c:
             return self.error_message
@@ -311,60 +317,61 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                        self._ctx_no_file + 'CheckClientsData', importance=3)
             self.check_contacts()
 
-        # save fetched data to cache
-        with open(contacts_file_name, 'w') as f:
-            f.write(repr(self.contacts))
-
-        file_lock.unlock()
-
         return ""
+
+    def save_contact(self, ass_db, ac_id, sf_id, sh_id, rci_main_id=None, acu_db=None, ext_refs=None, commit=False):
+        """
+        save/upsert contact data into AssCache database.
+        :param ass_db:      AssCache database handle.
+        :param ac_id:       Acumen client reference.
+        :param sf_id:       Salesforce contact/personal-account id.
+        :param sh_id:       Sihot guest object id.
+        :param rci_main_id: Main RCI member ID (from Acumen CD_RCI_REF column).
+        :param acu_db:      Acumen database for to fetch external references (def=NONE will skip the fetch).
+        :param ext_refs:    List of external reference tuples (type, id) to save - used instead of acu_db.
+        :param commit:      Boolean flag if AssCache data changes should be committed (def=False).
+        :return:            Primary Key of upserted AssCache contact record or None on error (see self.error_message).
+        """
+        col_values = dict(co_ac_id=ac_id, co_sf_id=sf_id, co_sh_id=sh_id)
+        if ass_db.upsert('contacts', col_values, chk_values=col_values, returning_column='co_pk', commit=commit):
+            self.error_message = ass_db.last_err_msg
+            return None
+        co_pk = ass_db.fetch_value()
+
+        if acu_db:
+            ers = self.load_view(acu_db, 'T_CR', ["DISTINCT " + ext_ref_type_sql(), "CR_REF"],
+                                 "CR_CDREF = :ac_id", dict(ac_id=ac_id))
+            if ers is None:
+                return None
+        else:
+            ers = ext_refs or list()
+        if ers or rci_main_id:
+            if rci_main_id:
+                ers.insert(0, (EXT_REF_TYPE_RCI, rci_main_id))
+            for er in ers:
+                col_values = dict(er_co_fk=co_pk, er_type=er[0], er_id=er[1])
+                if ass_db.upsert('external_refs', col_values, chk_values=col_values, commit=commit):
+                    break
+            if ass_db.last_err_msg:
+                self.error_message = ass_db.last_err_msg
+                return None
+
+        return co_pk
 
     def save_contacts(self):
         self.error_message = ""
+        ass_db = self.connect_ass_db()
+        if ass_db is None:
+            return self.error_message
 
-        for co in self.contacts:
-            if self.ass_db.insert('contacts', dict(co_sf_id=co[_SF_ID], co_sh_id=co[_SH_ID], co_ac_id=co[_ACU_ID]),
-                                  commit=True, returning_column='co_pk'):
-                self.error_message = self.ass_db.last_err_msg
+        for idx in self.contacts_changed:
+            co = self.contacts[idx]
+            co_pk = self.save_contact(ass_db, co[_AC_ID], co[_SF_ID], co[_SH_ID],
+                                      ext_refs=co[_EXT_REFS].split(EXT_REFS_SEP))
+            if co_pk is None:
                 return self.error_message
-            co_pk = self.ass_db.fetch_value()
 
-            ers = self.load_view(None, 'T_CR', ['CR_TYPE', 'CR_REF'], "CR_CDREF = :co_pk", dict(co_pk=co_pk))
-            if not ers:
-                return self.error_message
-            for er in ers:
-                if self.ass_db.insert('external_refs', dict(er_co_fk=co_pk, er_type=er[0], er_id=er[1]), commit=True):
-                    self.error_message = self.ass_db.last_err_msg
-                    return self.error_message
-
-            for pt in [_ for _ in co[_IS_OWNER] or list() if _.isupper()]:
-                co_prs = self.load_view(None, 'V_OWNED_WEEKS INNER JOIN T_RS ON AT_RSREF = RS_CODE',
-                                        ['DW_WKREF', 'AT_RSREF'],
-                                        "DW_OWREF = :acu_id and RS_SIHOT_GUEST_TYPE = :pt_group",
-                                        dict(acu_id=co[_ACU_ID], pt_group=pt))
-                if not co_prs:
-                    return self.error_message
-                for cp in co_prs:
-                    if self.ass_db.insert('products', dict(pr_pk=cp[0], pr_pt_fk=cp[1]), commit=True):
-                        self.error_message = self.ass_db.last_err_msg
-                        return self.error_message
-                    if self.ass_db.insert('contact_products', dict(cp_co_fk=co_pk, cp_pr_fk=cp[0]), commit=True):
-                        self.error_message = self.ass_db.last_err_msg
-                        return self.error_message
-
-        # establish file lock
-        file_lock = LockFile(self.cae.get_config('CONTACTS_LOCK_FILE'))
-        err_msg = file_lock.lock()
-        if err_msg:
-            self.error_message = err_msg
-            return err_msg
-
-        with open(self.cae.get_config('CONTACTS_DATA_FILE'), 'w') as f:
-            f.write(repr(self.contacts))
-
-        file_lock.unlock()
-
-        return ""
+        return ass_db.commit()
 
     def check_contacts(self):
         resort_codes = self.cae.get_config('ClientRefsResortCodes').split(EXT_REFS_SEP)
@@ -374,22 +381,22 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 for rci_id in c_rec[_EXT_REFS].split(EXT_REFS_SEP):
                     if rci_id not in found_ids:
                         found_ids[rci_id] = [c_rec]
-                    elif [_ for _ in found_ids[rci_id] if _[_ACU_ID] != c_rec[_ACU_ID]]:
+                    elif [_ for _ in found_ids[rci_id] if _[_AC_ID] != c_rec[_AC_ID]]:
                         found_ids[rci_id].append(c_rec)
-                    if c_rec[_ACU_ID]:
-                        if rci_id in self.client_refs_add_exclude and c_rec[_ACU_ID] not in resort_codes:
-                            self._warn("Resort RCI ID {} found in client {}".format(rci_id, c_rec[_ACU_ID]),
+                    if c_rec[_AC_ID]:
+                        if rci_id in self.client_refs_add_exclude and c_rec[_AC_ID] not in resort_codes:
+                            self._warn("Resort RCI ID {} found in client {}".format(rci_id, c_rec[_AC_ID]),
                                        self._ctx_no_file + 'CheckClientsDataResortId')
-                        elif c_rec[_ACU_ID] in resort_codes and rci_id not in self.client_refs_add_exclude:
-                            self._warn("Resort {} is missing RCI ID {}".format(c_rec[_ACU_ID], rci_id),
+                        elif c_rec[_AC_ID] in resort_codes and rci_id not in self.client_refs_add_exclude:
+                            self._warn("Resort {} is missing RCI ID {}".format(c_rec[_AC_ID], rci_id),
                                        self._ctx_no_file + 'CheckClientsDataResortId')
         # prepare found duplicate ids, prevent duplicate printouts and re-order for to separate RCI refs from others
         dup_ids = list()
         for ref, recs in found_ids.items():
             if len(recs) > 1:
                 dup_ids.append("Duplicate external {} ref {} found in clients: {}"
-                               .format(ref.split('=')[0] if '=' in ref else 'RCI',
-                                       repr(ref), ';'.join([_[_ACU_ID] for _ in recs])))
+                               .format(ref.split('=')[0] if '=' in ref else EXT_REF_TYPE_RCI,
+                                       repr(ref), ';'.join([_[_AC_ID] for _ in recs])))
         for dup in sorted(dup_ids):
             self._warn(dup, self._ctx_no_file + 'CheckClientsDataExtRefDuplicates')
 
@@ -401,25 +408,30 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if ext_refs and imp_rci_ref in ext_refs.split(EXT_REFS_SEP):
                 break
         else:
-            sf_contact_id, dup_contacts = self.sales_force.contact_by_rci_id(imp_rci_ref)
+            sf_id, dup_contacts = self.sales_force.contact_by_rci_id(imp_rci_ref)
             if self.sales_force.error_msg:
                 self._err("get_contact_index() Salesforce connect/fetch error " + self.sales_force.error_msg,
                           file_name, line_num, importance=3)
             if len(dup_contacts) > 0:
                 self._err("Found duplicate Salesforce client(s) with main or external RCI ID {}. Used client {}, dup={}"
-                          .format(imp_rci_ref, sf_contact_id, dup_contacts), file_name, line_num)
-            if sf_contact_id:
-                sh_guest_id = self.sales_force.contact_sh_id(sf_contact_id)
+                          .format(imp_rci_ref, sf_id, dup_contacts), file_name, line_num)
+            if sf_id:
+                ac_id = self.sales_force.contact_ac_id(sf_id)
                 if self.sales_force.error_msg:
-                    self._err("get_contact_index() sihot id fetch error " + self.sales_force.error_msg,
+                    self._err("get_contact_index() Acumen id fetch error " + self.sales_force.error_msg,
+                              file_name, line_num,
+                              importance=3)
+                sh_id = self.sales_force.contact_sh_id(sf_id)
+                if self.sales_force.error_msg:
+                    self._err("get_contact_index() Sihot id fetch error " + self.sales_force.error_msg,
                               file_name, line_num,
                               importance=3)
             else:
-                sh_guest_id = None
-            client = (RCI_MATCH_AND_BOOK_CODE_PREFIX + imp_rci_ref, sf_contact_id, sh_guest_id, imp_rci_ref, 0)
-            self.contacts.append(client)
+                ac_id = None    # EXT_REF_TYPE_RCI + imp_rci_ref
+                sh_id = None
+            self.contacts.append((ac_id, sf_id, sh_id, imp_rci_ref, 0))
             list_idx = len(self.contacts) - 1
-            self.contacts_changed = True
+            self.contacts_changed.append(list_idx)
         return list_idx
 
     def mkt_seg_grp(self, c_idx, is_guest, file_name, line_num):
@@ -444,14 +456,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if c_rec[_SH_ID]:
                 self._warn("Sihot guest object id changed from {} to {} for Salesforce contact {}"
                            .format(c_rec[_SH_ID], sh_id, c_rec[_SF_ID]))
-            self.contacts[c_idx] = (c_rec[_ACU_ID], c_rec[_SF_ID], sh_id, c_rec[_EXT_REFS], c_rec[_IS_OWNER])
-            self.contacts_changed = True
+            self.contacts[c_idx] = (c_rec[_AC_ID], c_rec[_SF_ID], sh_id, c_rec[_EXT_REFS], c_rec[_IS_OWNER])
+            self.contacts_changed.append(c_idx)
 
     def sent_contacts(self):
         return [i for i, _ in enumerate(self.contacts) if _[_SH_ID]]
 
     def contact_acu_id(self, index):
-        return self.contacts[index][_ACU_ID]
+        return self.contacts[index][_AC_ID]
 
     def contact_sh_id(self, index):
         return self.contacts[index][_SH_ID]
@@ -462,33 +474,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     # =================  res_inv_data  =========================================================================
 
     def fetch_res_inv_data(self):
-        inv_file_name = self.cae.get_config('RES_INV_DATA_FILE', default_value='res_inv.data')
-        if os.path.isfile(inv_file_name):
-            with open(inv_file_name) as f:
-                self.res_inv_data = eval(f.read())
-                return ""
-
-        # file not exists (first run or reset)
-        self._warn("Fetching reservation inventory from Acumen (needs some minutes)",
+        self._warn("Fetching reservation inventory from AssCache (needs some minutes)",
                    self._ctx_no_file + 'FetchResInv', importance=4)
-        file_lock = LockFile(self.cae.get_config('RES_INV_LOCK_FILE', default_value='res_inv.lock'))
-        err_msg = file_lock.lock()
-        if err_msg:
-            return err_msg
-
-        # fetch from Acumen on first run or after reset (deleted cache files) - after locking cache files
-        self.res_inv_data = self.load_view(None, 'T_AOWN_VIEW',
-                                           ['AOWN_WKREF', 'AOWN_YEAR', 'AOWN_ROREF',  # 'AOWN_RSREF',
-                                            'AOWN_SWAPPED_WITH', 'AOWN_GRANTED_TO'],
-                                           "AOWN_YEAR >= to_char(sysdate, 'YYYY')"
-                                           " and AOWN_RSREF in ('BHC', 'BHH', 'HMC', 'PBC')")
+        self.error_message = ""
+        ass_db = self.connect_ass_db()
+        if ass_db is None:
+            return self.error_message
+        self.res_inv_data = self.load_view(ass_db, 'res_inventories')
         if not self.res_inv_data:
             return self.error_message
-
-        with open(inv_file_name, 'w') as f:
-            f.write(repr(self.res_inv_data))
-
-        file_lock.unlock()
 
         return ""
 

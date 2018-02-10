@@ -22,7 +22,7 @@ from traceback import format_exc
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import Notification
 from ae_db import ACU_DEF_USR, ACU_DEF_DSN
-from acu_sf_sh_sys_data import AssSysData, EXT_REFS_SEP, RCI_MATCH_AND_BOOK_CODE_PREFIX
+from acu_sf_sh_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI
 from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
@@ -550,7 +550,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             if '=' in ext_ref:
                 er_type, er_ref = ext_ref.split('=')
             else:
-                er_type = 'RCI'
+                er_type = EXT_REF_TYPE_RCI
                 er_ref = ext_ref
             er_type += str(i + 1)
             c_row['EXT_REF_TYPE' + str(i + 1)] = er_type
@@ -726,7 +726,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         else:
             row['SH_RES_TYPE'] = '1'
             row['RUL_ACTION'] = ACTION_INSERT
-        row['SIHOT_GDSNO'] = RCI_MATCH_AND_BOOK_CODE_PREFIX + curr_cols[RCI_BOOK_REF]
+        row['SIHOT_GDSNO'] = EXT_REF_TYPE_RCI + curr_cols[RCI_BOOK_REF]
         row['RH_EXT_BOOK_REF'] = 'R' + curr_cols[RCI_BOOK_REF]
         row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(curr_cols[RCI_BOOK_DATE][:10], '%Y-%m-%d')
 
@@ -864,7 +864,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['CD_SNAM1'] = curr_cols[RCIP_GUEST_SURNAME]
             row['CD_FNAM1'] = curr_cols[RCIP_GUEST_FORENAME]
         else:
-            row['CD_CODE'] = RCI_MATCH_AND_BOOK_CODE_PREFIX + rci_ref
+            row['CD_CODE'] = EXT_REF_TYPE_RCI + rci_ref
             row['CD_SNAM1'] = curr_cols[RCIP_CLIENT_SURNAME]
             row['CD_FNAM1'] = curr_cols[RCIP_CLIENT_FORENAME]
         row['CD_ADD11'] = curr_cols[RCIP_GUEST_ADDR1]
@@ -897,7 +897,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['SH_RES_TYPE'] = 'S' if curr_cols[RCIP_BOOK_STATUS] == 'C' else '1'
         row['RUL_ACTION'] = ACTION_DELETE if curr_cols[RCIP_BOOK_STATUS] == 'C' else ACTION_INSERT
 
-        row['SIHOT_GDSNO'] = RCI_MATCH_AND_BOOK_CODE_PREFIX + curr_cols[RCIP_BOOK_REF]
+        row['SIHOT_GDSNO'] = EXT_REF_TYPE_RCI + curr_cols[RCIP_BOOK_REF]
         row['RH_EXT_BOOK_REF'] = 'RP' + curr_cols[RCIP_BOOK_REF]
         row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_BOOK_DATE][:10], '%Y-%m-%d')
 

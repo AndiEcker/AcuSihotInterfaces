@@ -122,7 +122,7 @@ def get_hotel_and_res_id(row):
 
 
 def get_date_range(row):
-    """ determines the check-in/-out values (of type: datetime if SIHOT_PROVIDES_CHECKOUT_TIME else date) """
+    """ determines the check-in/-out values (of type: datetime if SH_PROVIDES_CHECKOUT_TIME else date) """
     if SIHOT_PROVIDES_CHECKOUT_TIME:
         d_str = row['ARR']['elemVal']
         t_str = row['ARR-TIME']['elemVal']

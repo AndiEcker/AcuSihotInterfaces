@@ -1,6 +1,6 @@
 from ae_console_app import ConsoleApp, uprint
 from ae_db import PostgresDB
-from acu_sf_sh_sys_data import AssSysData
+from acu_sf_sh_sys_data import AssSysData, EXT_REF_TYPE_RCI
 
 
 __version__ = '0.1'
@@ -49,8 +49,7 @@ def log_warning(msg, ctx, importance=2):
 
 
 # logon to and prepare Acumen, Salesforce, Sihot and config data env
-conf_data = AssSysData(cae, acu_user=acu_user, acu_password=acu_password, ass_user=pg_user, ass_password=pg_pw,
-                       err_logger=log_error, warn_logger=log_warning)
+conf_data = AssSysData(cae, err_logger=log_error, warn_logger=log_warning)
 if conf_data.error_message:
     log_error(conf_data.error_message, 'AcuUserLogOn', importance=4, exit_code=9)
     cae.shutdown(exit_code=33)
@@ -78,7 +77,7 @@ for cont in a_c:
         break
     co_pk = ass_db.fetch_value()
 
-    col_values = dict(er_co_fk=co_pk, er_type='RCI', er_id=cont[1])
+    col_values = dict(er_co_fk=co_pk, er_type=EXT_REF_TYPE_RCI, er_id=cont[1])
     if ass_db.insert('external_refs', col_values, commit=True):
         break
 

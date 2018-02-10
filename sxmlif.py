@@ -11,6 +11,9 @@ from ae_console_app import fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, round_trad
 from ae_tcp import TcpClient
 from ae_db import OraDB
 
+# second couple Acumen ID suffix
+AC_ID_2ND_COUPLE_SUFFIX = 'P2'
+
 # data actions
 ACTION_DELETE = 'DELETE'
 ACTION_INSERT = 'INSERT'
@@ -1620,9 +1623,9 @@ class GuestSearch(SihotXmlBuilder):
         s = '\n   ...'
         if key_elem_value in ret_elem_values:
             ret = ret_elem_values[key_elem_value]
-        elif key_elem_value + 'P2' in ret_elem_values:
-            ret = ret_elem_values[key_elem_value + 'P2'] + s + "Only found OBJID of 2nd person matchcode: "
-        elif key_elem_value[-2:] == 'P2' and key_elem_value[:-2] in ret_elem_values:
+        elif key_elem_value + AC_ID_2ND_COUPLE_SUFFIX in ret_elem_values:
+            ret = ret_elem_values[key_elem_value + AC_ID_2ND_COUPLE_SUFFIX] + s + "Only found OBJID of 2nd person: "
+        elif key_elem_value[-2:] == AC_ID_2ND_COUPLE_SUFFIX and key_elem_value[:-2] in ret_elem_values:
             ret = ret_elem_values[key_elem_value[:-2]] + s + "Only found OBJID of 1st person matchcode: "
         else:
             ret = s + "OBJID of matchcode {} not found!!!".format(key_elem_value)

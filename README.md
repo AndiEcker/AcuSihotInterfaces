@@ -12,7 +12,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user i
 | :--- | :--- | :---: |
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| AssCacheSync | Initialize, migrate and sync data between Acumen, Sihot, Salesforce and the ass_cache PG cache | Web |
+| AssCacheSync | Initialize, sync and/or verify AssCache from/against Acumen, Sihot and Salesforce | Web |
 | AssServer | Listening to Sihot interface for to update the ass_cache PG database | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
@@ -97,7 +97,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration, SihotResImport |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| syncCache | Synchronize ass_cache database from (ac=Acumen, sh=Sihot, sf=Salesforce) | - | S | AssCacheSync |
+| syncCache | Synchronize ass_cache database from (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Contacts, P=Product, R=Reservations) | - | S | AssCacheSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
@@ -105,7 +105,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | timeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| verifyCache | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) | - | V | AssCacheSync |
+| verifyCache | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Contacts, P=Product, R=Reservations) | - | V | AssCacheSync |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 | xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 

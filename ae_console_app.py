@@ -7,7 +7,7 @@ import inspect
 import pprint
 
 from configparser import ConfigParser
-from argparse import ArgumentParser
+from argparse import ArgumentParser, ArgumentError
 
 # supported debugging levels
 DEBUG_LEVEL_DISABLED = 0
@@ -162,9 +162,13 @@ class Setting:
             self._type = type(value)
         self._value = value
 
+    def append_value(self, value):
+        self.value.append(value)
+        return self.value
+
     def convert_value(self, value):
         self.value = value
-        return self.value
+        return self.value       # using self.value instead of value to call getter for evaluation/type-correction
 
     @staticmethod
     def _eval_str(str_val):
@@ -285,6 +289,7 @@ class ConsoleApp:
 
         self.startup_beg = datetime.datetime.now()
         self.config_options = dict()
+        self.config_choices = dict()
 
         self.config_eval_vars = config_eval_vars or dict()
 
@@ -338,7 +343,7 @@ class ConsoleApp:
                         choices=debug_levels.keys())
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
 
-    def add_option(self, name, desc, value, short_opt=None, choices=None):
+    def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
         """ defining and adding an new option for this app as INI/CFG var and as command line argument.
 
             The name and desc arguments are strings that are specifying the name and short description of the option
@@ -362,8 +367,13 @@ class ConsoleApp:
         setting = Setting(name=name, value=value)
         cfg_val = self._get_config_val(name, default_value=value)
         setting.value = cfg_val
-        self._arg_parser.add_argument('-' + short_opt, '--' + name, help=desc, default=cfg_val,
-                                      type=setting.convert_value, choices=choices, metavar=name)
+        kwargs = dict(help=desc, default=cfg_val, type=setting.convert_value, choices=choices, metavar=name)
+        if multiple:
+            kwargs['type'] = setting.append_value
+            if choices:
+                kwargs['choices'] = None    # for multiple options this instance need to check the choices
+                self.config_choices[name] = choices
+        self._arg_parser.add_argument('-' + short_opt, '--' + name, **kwargs)
         self.config_options[name] = setting
 
     def add_parameter(self, *args, **kwargs):
@@ -378,6 +388,11 @@ class ConsoleApp:
 
         for name in self.config_options.keys():
             self.config_options[name].value = getattr(self._parsed_args, name)
+            if name in self.config_choices:
+                for given_value in self.config_options[name].value:
+                    allowed_values = self.config_choices[name]
+                    if given_value not in allowed_values:
+                        raise ArgumentError(None, "Wrong {} option value; allowed are {}".format(name, allowed_values))
 
         log_file = self.config_options['logFile'].value
         if log_file:  # enable logging
