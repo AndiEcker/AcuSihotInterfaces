@@ -382,7 +382,7 @@ class ConsoleApp:
     def _parse_args(self):
         """ this should only get called once and only after all the options have been added with self.add_option().
             self.add_option() sets the determined config file value as the default value and then following call of
-            .. _arg_parser.parse_args() overwrites it with command line argument value if given
+            .. _arg_parser.parse_args() overwrites it with command line argument value if given.
         """
         self._parsed_args = self._arg_parser.parse_args()
 

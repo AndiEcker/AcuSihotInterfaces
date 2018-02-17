@@ -271,7 +271,7 @@ class SfInterface:
                 if c['External_References__r']:
                     ext_refs.extend([_['Reference_No_or_ID__c'] for _ in c['External_References__r']['records']])
                 if ext_refs:
-                    contact_tuples.append((c['CD_CODE__c'], c['Id'], c['Sihot_Guest_Object_Id__c'],
+                    contact_tuples.append((None, c['CD_CODE__c'], c['Id'], c['Sihot_Guest_Object_Id__c'],
                                           ext_refs_sep.join(ext_refs),
                                           1 if c['RecordType']['Id'] == CONTACT_REC_TYPE_ID_OWNERS else 0))
         return contact_tuples
@@ -309,6 +309,13 @@ class SfInterface:
             return res['records'][0]['Id']
         return None
 
+    def contact_ass_id(self, sf_contact_id):
+        ass_id = None
+        res = self._soql_query_all("SELECT AssCache_Contact_Id__c FROM Contact WHERE Id = '{}'".format(sf_contact_id))
+        if not self.error_msg and res['totalSize'] > 0:
+            ass_id = res['records'][0]['AssCache_Contact_Id__c']
+        return ass_id
+
     def contact_ac_id(self, sf_contact_id):
         ac_id = None
         res = self._soql_query_all("SELECT CD_CODE__c FROM Contact WHERE Id = '{}'".format(sf_contact_id))
@@ -330,6 +337,15 @@ class SfInterface:
         if not self.error_msg and res['totalSize'] > 0:
             sf_dict = res['records'][0]
         return sf_dict
+
+    def contact_ext_refs(self, sf_contact_id):
+        ext_refs = list()
+        res = self._soql_query_all("SELECT Name, Reference_No_or_ID__c FROM External_References__r"
+                                   " WHERE Contact__c = '{}'".format(sf_contact_id))
+        if not self.error_msg and res['totalSize'] > 0:
+            for c in res['records']:  # list of External_References__r OrderedDicts
+                ext_refs.append((c['Name'], c['Reference_No_or_ID__c']))
+        return ext_refs
 
     def contacts_to_validate(self, rec_type_dev_names=None, additional_filter='',
                              email_validation=EMAIL_NOT_VALIDATED,

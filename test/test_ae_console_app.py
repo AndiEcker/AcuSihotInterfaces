@@ -13,27 +13,36 @@ class TestConfigOptions:
         cae = ConsoleApp('0.0', 'test_multiple_option')
         old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
         sys.argv = ['test', "-Z=a", "-Z=1"]
-        cae.add_option('testMultipleOption', 'test multiple option', [], 'Z', multiple=True)
-        assert cae.get_option('testMultipleOption') == ['a', '1']
+        cae.add_option('testMultipleOptionSC', 'test multiple option', [], 'Z', multiple=True)
+        assert cae.get_option('testMultipleOptionSC') == ['a', '1']
         sys.argv = old_args
 
     def test_multiple_option_multi_char(self):
         cae = ConsoleApp('0.0', 'test_multiple_option_multi_char')
         old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
         sys.argv = ['test', "-Z=abc", "-Z=123"]
-        cae.add_option('testMultipleOption', 'test multiple option', [], short_opt='Z', multiple=True)
-        assert cae.get_option('testMultipleOption') == ['abc', '123']
+        cae.add_option('testMultipleOptionMC', 'test multiple option', [], short_opt='Z', multiple=True)
+        assert cae.get_option('testMultipleOptionMC') == ['abc', '123']
+        sys.argv = old_args
+
+    def test_multiple_option_multi_values_fail(self):
+        cae = ConsoleApp('0.0', 'test_multiple_option_multi_val')
+        old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
+        sys.argv = ['test', "-Z", "abc", "123"]
+        cae.add_option('testMultipleOptionMV', 'test multiple option', [], short_opt='Z', multiple=True)
+        with pytest.raises(SystemExit):
+            cae.get_option('testMultipleOptionMV')
         sys.argv = old_args
 
     def test_multiple_option_single_char_with_choices(self):
         cae = ConsoleApp('0.0', 'test_multiple_option_with_choices')
         old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
         sys.argv = ['test', "-Z=a", "-Z=1"]
-        cae.add_option('testAppOptChoices', 'test multiple choices', [], 'Z', choices=['a', '1'], multiple=True)
-        assert cae.get_option('testAppOptChoices') == ['a', '1']
+        cae.add_option('testAppOptChoicesSCWC', 'test multiple choices', [], 'Z', choices=['a', '1'], multiple=True)
+        assert cae.get_option('testAppOptChoicesSCWC') == ['a', '1']
         sys.argv = old_args
 
-    def test_multiple_option_single_char_with_invalid_choices(self):
+    def test_multiple_option_single_char_fail_with_invalid_choices(self):
         cae = ConsoleApp('0.0', 'test_multiple_option_with_choices')
         old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
         sys.argv = ['test', "-Z=x", "-Z=9"]

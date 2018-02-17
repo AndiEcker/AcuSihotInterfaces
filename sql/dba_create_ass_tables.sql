@@ -158,3 +158,14 @@ CREATE TABLE res_group_contacts
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_group_contacts');
+
+
+-- VIEWS
+-- view for AssSysDate.fetch_contacts() extending contacts table with external refs and pt_group aggregates
+CREATE OR REPLACE VIEW v_contacts_refs_owns AS
+  SELECT co_pk, co_ac_id, co_sf_id, co_sh_id
+       , (select string_agg(er_type || '=' || er_id, ',') FROM external_refs WHERE er_co_fk = co_pk) as ext_refs
+       , (select string_agg(pt_group, '') FROM contact_products INNER JOIN products ON cp_pr_fk = pr_pk INNER JOIN product_types ON pr_pt_fk = pt_pk WHERE cp_co_fk = co_pk) as owns
+    FROM contacts;
+
+COMMENT ON VIEW v_contacts_refs_owns IS 'contacts extended by external_refs and owned pt_group(s) aggregates';

@@ -196,7 +196,7 @@ try:
             for row_dict in all_rows:
                 hotel_id, res_id = get_hotel_and_res_id(row_dict)
                 if not hotel_id or not res_id:
-                    # skip error already logged within get_hotel_and_res_id()
+                    # skip error already logged within hotel_and_res_id()
                     continue
                 check_in, check_out = get_date_range(row_dict)
                 if not check_in or not check_out:

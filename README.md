@@ -106,12 +106,17 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
 | verifyCache | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Contacts, P=Product, R=Reservations) | - | V | AssCacheSync |
+| verifyFilters | Filter to restrict the checked data (C=contact-, P=product-, R=reservation-filter) | - | W | AssCacheSync |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 | xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 
-Currently all the 26 ascii lower case letters are used for the command line argument short options.
-Some like 'm' are used in different command line applications. 
-The following lower case letters could be used more easily than others (for to prevent duplicates/conflicts) for future/upcoming command line options with less conflicts: | l | m | n | q.
+Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are
+hard-coded by python (like e.g. the -h switch for to show the help screen). The upper case character options -D and -L
+are hard-coded by the ae_console_app module. Some options like -m are used and interpreted differently in several
+command line applications.
+
+The following lower case letters could be used more easily as short options than others (for to prevent duplicates/conflicts)
+for future/upcoming command line options with less conflicts: | l | m | n | q |.
 
 
 ### AcuSihotMonitor Application

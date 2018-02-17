@@ -826,7 +826,8 @@ class SihotXmlParser:  # XMLParser interface
     def end(self, tag):  # called for each closing tag
         self._curr_tag = ''
         self._curr_attr = ''
-        self._elem_path.pop()
+        if self._elem_path:     # Q&D Fix for TestGuestSearch for to prevent pop() on empty _elem_path list
+            self._elem_path.pop()
         return tag
 
     def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
@@ -1154,7 +1155,7 @@ class SihotXmlBuilder:
                                 ((' or a in "' + c['elemHideInActions'] + '"' if 'elemHideInActions' in c else '')
                                  + (' or ' + c['elemHideIf'] if 'elemHideIf' in c else ''))[4:],
                                 c['colVal'] if 'colVal' in c else None)
-                               for c in elem_col_map if c.get('buildExclude', False)]
+                               for c in elem_col_map if not c.get('buildExclude', False)]
         # self.fix_col_values = {c['colName']: c['colVal'] for c in elem_col_map if 'colName' in c and 'colVal' in c}
         # acu_col_names and acu_col_expres need to be in sync
         # self.acu_col_names = [c['colName'] for c in elem_col_map if 'colName' in c and 'colVal' not in c]

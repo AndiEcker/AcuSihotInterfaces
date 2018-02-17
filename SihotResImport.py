@@ -655,19 +655,19 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = False
             cid = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
-            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.get_contact_index(cid, file_name, line_num)
+            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.co_idx_by_rci_id(cid, file_name, line_num)
             cid = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
             # sometimes resort is the "owner", e.g. 2429-55555/2429-99928 for HMC - in Sihot we are not hiding resort
             # if cid in client_refs_add_exclude:
             #     curr_cols[RC_OWN_CLIENTS_IDX] = -1
             # else:
-            curr_cols[RC_OWN_CLIENTS_IDX] = conf_data.get_contact_index(cid, file_name, line_num)
+            curr_cols[RC_OWN_CLIENTS_IDX] = conf_data.co_idx_by_rci_id(cid, file_name, line_num)
 
         return curr_cols, err_msg
 
     def rci_line_to_occ_client_row(curr_cols):
         row = dict()
-        row['CD_CODE'] = conf_data.contact_acu_id(curr_cols[RC_OCC_CLIENTS_IDX])
+        row['CD_CODE'] = conf_data.co_ac_id_by_idx(curr_cols[RC_OCC_CLIENTS_IDX])
         row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
         row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
         row['CD_ADD11'] = curr_cols[RCI_GUEST_ADDR1]
@@ -678,7 +678,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['CD_CITY'] = curr_cols[RCI_GUEST_CITY]
         row['CD_EMAIL'] = curr_cols[RCI_GUEST_EMAIL]
         row['CD_HTEL1'] = curr_cols[RCI_GUEST_PHONE]
-        ext_refs = conf_data.contact_ext_refs([curr_cols[RC_OCC_CLIENTS_IDX]])
+        ext_refs = conf_data.co_ext_refs_by_idx([curr_cols[RC_OCC_CLIENTS_IDX]])
         if ext_refs:
             row['CD_RCI_REF'] = ext_refs[0]  # first ref coming from Acu.CD_RCI_REF and put into Sihot MATCH-ADM element
 
@@ -690,7 +690,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
     def rci_line_to_own_client_row(curr_cols):
         row = dict()
-        row['CD_CODE'] = conf_data.contact_acu_id(curr_cols[RC_OWN_CLIENTS_IDX])
+        row['CD_CODE'] = conf_data.co_ac_id_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
         row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
         row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
         row['CD_ADD11'] = curr_cols[RCI_GUEST_ADDR1]
@@ -701,7 +701,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['CD_CITY'] = curr_cols[RCI_GUEST_CITY]
         row['CD_EMAIL'] = curr_cols[RCI_GUEST_EMAIL]
         row['CD_HTEL1'] = curr_cols[RCI_GUEST_PHONE]
-        ext_refs = conf_data.contact_ext_refs(curr_cols[RC_OWN_CLIENTS_IDX])
+        ext_refs = conf_data.co_ext_refs_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
         if ext_refs:
             row['CD_RCI_REF'] = ext_refs[0]  # first ref coming from Acu.CD_RCI_REF and put into Sihot MATCH-ADM element
         # constant values - needed for to be accepted by the Sihot Kernel interface
@@ -745,8 +745,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
         cl_own_idx = curr_cols[RC_OWN_CLIENTS_IDX] if curr_cols[RC_OWN_CLIENTS_IDX] > -1 else cl_occ_idx
         own_rci_ref = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
-        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.contact_sh_id(cl_own_idx)
-        row['SH_MC'] = row['OC_CODE'] = conf_data.contact_acu_id(cl_own_idx)
+        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.co_sh_id_by_idx(cl_own_idx)
+        row['SH_MC'] = row['OC_CODE'] = conf_data.co_ac_id_by_idx(cl_own_idx)
 
         is_guest = curr_cols[RCI_IS_GUEST] == 'Y'
         if is_guest:                                # guest bookings doesn't provide RCI client Id
@@ -762,8 +762,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['SH_ADULT1_NAME'] = curr_cols[RCI_GUEST_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCI_GUEST_FORENAME]
         else:
-            row['CD_SIHOT_OBJID'] = conf_data.contact_sh_id(cl_occ_idx)
-            row['CD_CODE'] = conf_data.contact_acu_id(cl_occ_idx)
+            row['CD_SIHOT_OBJID'] = conf_data.co_sh_id_by_idx(cl_occ_idx)
+            row['CD_CODE'] = conf_data.co_ac_id_by_idx(cl_occ_idx)
             # has to be populated after send to Sihot: row['CD_SIHOT_OBJID'] = client_row['CD_SIHOT_OBJID']
             row['SH_ADULT1_NAME'] = curr_cols[RCI_CLIENT_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCI_CLIENT_FORENAME]
@@ -851,7 +851,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = True
             cid = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
-            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.get_contact_index(cid, file_name, line_num)
+            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.co_idx_by_rci_id(cid, file_name, line_num)
             curr_cols[RC_OWN_CLIENTS_IDX] = -1  # does not exists for points but needed for generic client send check
         return curr_cols, err_msg
 
@@ -914,8 +914,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['RUL_SIHOT_ROOM'] = conf_data.allocated_room(rno, row['ARR_DATE'])
 
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
-        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = row['CD_SIHOT_OBJID'] = conf_data.contact_sh_id(cl_occ_idx)
-        row['SH_MC'] = row['OC_CODE'] = row['CD_CODE'] = conf_data.contact_acu_id(cl_occ_idx)
+        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = row['CD_SIHOT_OBJID'] = conf_data.co_sh_id_by_idx(cl_occ_idx)
+        row['SH_MC'] = row['OC_CODE'] = row['CD_CODE'] = conf_data.co_ac_id_by_idx(cl_occ_idx)
 
         is_guest = curr_cols[RCIP_IS_GUEST] == 'Y'
         if is_guest:
@@ -1193,7 +1193,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                                 log_import(which_client + "/client {} skip"
                                            .format(conf_data.contacts[clients_idx]), fn, idx)
                             continue
-                        rc_complete_client_row_with_ext_refs(client_row, conf_data.contact_ext_refs(clients_idx))
+                        rc_complete_client_row_with_ext_refs(client_row, conf_data.co_ext_refs_by_idx(clients_idx))
                         try:
                             error_msg = client_send.send_client_to_sihot(client_row)
                             if not error_msg:

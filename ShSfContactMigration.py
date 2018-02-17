@@ -11,7 +11,7 @@ import pprint
 from copy import deepcopy
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from shif import ResBulkFetcher, get_date_range, elem_value, get_hotel_and_res_id
+from shif import ResBulkFetcher, date_range, elem_value, hotel_and_res_id
 from sfif import prepare_connection, CONTACT_REC_TYPE_RENTALS, correct_email, correct_phone
 from ae_notification import Notification
 
@@ -308,7 +308,7 @@ found_emails = list()
 valid_contacts = list()
 try:
     for row_dict in all_rows:
-        hotel_id, res_id = get_hotel_and_res_id(row_dict)
+        hotel_id, res_id = hotel_and_res_id(row_dict)
 
         arr_indexes = valid_email_indexes(row_dict) if restrict_to_valid_emails else valid_name_indexes(row_dict)
         if not arr_indexes:
@@ -331,7 +331,7 @@ try:
                 ext_sf_dict(sf_dict, "invalid hotel-id {}".format(hotel_id))
             if not res_id:
                 ext_sf_dict(sf_dict, "missing res-id")
-            check_in, check_out = get_date_range(row_dict)
+            check_in, check_out = date_range(row_dict)
             if not check_in or not check_out:
                 ext_sf_dict(sf_dict, "incomplete check-in={} check-out={}".format(check_in, check_out))
             if not (rbf.date_from <= check_in <= rbf.date_till):

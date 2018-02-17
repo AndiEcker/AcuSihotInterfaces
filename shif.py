@@ -3,7 +3,7 @@ import datetime
 import time
 from traceback import print_exc
 
-from sxmlif import AvailCatInfo, ResSearch, SXML_DEF_ENCODING, ELEM_PATH_SEP, elem_path_values
+from sxmlif import AvailCatInfo, GuestSearch, ResSearch, SXML_DEF_ENCODING, ELEM_PATH_SEP, elem_path_values
 from acu_sf_sh_sys_data import AssSysData
 from ae_console_app import uprint, DATE_ISO, DEBUG_LEVEL_VERBOSE
 
@@ -85,6 +85,12 @@ def count_res(cae, hotel_ids=None, room_cat_prefix='', day=datetime.date.today()
     return count
 
 
+def guest_data(cae, obj_id):
+    guest_search = GuestSearch(cae)
+    ret = guest_search.get_guest(obj_id)
+    return ret
+
+
 def elem_path_join(elem_names):
     """
     convert list of element names to element path.
@@ -133,7 +139,7 @@ def elem_value(shd, elem_name_or_path, arri=-1, verbose=False, default_value=Non
     return elem_val
 
 
-def get_hotel_and_res_id(shd):
+def hotel_and_res_id(shd):
     h_id = elem_value(shd, 'RES-HOTEL')
     r_num = elem_value(shd, 'RES-NR')
     s_num = elem_value(shd, 'SUB-NR')
@@ -142,22 +148,22 @@ def get_hotel_and_res_id(shd):
     return h_id, r_num + ("/" + s_num if s_num else "") + "@" + h_id
 
 
-def get_pax_count(shd):
+def pax_count(shd):
     return int(elem_value(shd, 'NOPAX')) + int(elem_value(shd, 'NOCHILDS'))
 
 
-def get_gds_no(shd):
+def gds_no(shd):
     return elem_value(shd, 'GDSNO')
 
 
-def get_apt_wk_yr(shd, cae, arri=-1):
+def apt_wk_yr(shd, cae, arri=-1):
     arr = datetime.datetime.strptime(elem_value(shd, 'ARR'), SH_DATE_FORMAT)
     year, wk = AssSysData(cae).rc_arr_to_year_week(arr)
     apt = elem_value(shd, 'RN', arri=arri)
     return apt, wk, year
 
 
-def get_date_range(shd):
+def date_range(shd):
     """ determines the check-in/-out values (of type: datetime if SH_PROVIDES_CHECKOUT_TIME else date) """
     if SH_PROVIDES_CHECKOUT_TIME:
         d_str = shd['ARR']['elemVal']
@@ -184,6 +190,34 @@ def date_range_chunks(date_from, date_till, fetch_max_days):
         chunk_from = chunk_till + one_day
         chunk_till = min(chunk_from + add_days, date_till)
         yield chunk_from, chunk_till
+
+
+class GuestBulkFetcher:
+    """
+    WIP/NotUsed/NoTests: the problem is with GUEST-SEARCH is that there is no way to bulk fetch all guests
+    because the search criteria is not providing range search for to split in slices. Fetching all 600k clients
+    is resulting in a timeout error after 30 minutes (the Sihot interface 'timeout' option value)
+    """
+    def __init__(self, cae):
+        self.cae = cae
+
+        self.all_rows = None
+
+    def fetch_all(self):
+        cae = self.cae
+        self.all_rows = list()
+        try:
+            guest_search = GuestSearch(cae)
+            search_criteria = dict(SH_FLAGS='FIND-ALSO-DELETED-GUESTS', SORT='GUEST-NR')
+            search_criteria['MAX-ELEMENTS'] = 600000
+            # MATCH-SM (holding the Salesforce/SF contact ID) is not available in Kernel GUEST-SEARCH (only GUEST-GET)
+            self.all_rows = guest_search.search_guests(search_criteria, ['MATCHCODE', 'OBJID', 'MATCH-SM'])
+        except Exception as ex:
+            uprint(" ***  Sihot interface guest bulk fetch exception:", str(ex))
+            print_exc()
+            cae.shutdown(2130)
+
+        return self.all_rows
 
 
 class ResBulkFetcher:
@@ -227,11 +261,11 @@ class ResBulkFetcher:
         if self.date_from > self.date_till:
             uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
                    .format(self.date_from, self.date_till))
-            cae.shutdown(318)
+            cae.shutdown(3318)
         elif not self.allow_future_arrivals and self.date_till > self.startup_date:
             uprint("Future arrivals cannot be migrated - dateTill({}) has to be before {}.".format(self.date_till,
                                                                                                    self.startup_date))
-            cae.shutdown(319)
+            cae.shutdown(3319)
 
         # fetch given date range in chunks for to prevent timeouts and Sihot server blocking issues
         self.sh_fetch_max_days = min(max(1, cae.get_config('shFetchMaxDays', default_value=7)), 31)
@@ -276,15 +310,15 @@ class ResBulkFetcher:
                                                scope=self.search_scope)
                 if chunk_rows and isinstance(chunk_rows, str):
                     uprint(" ***  Sihot.PMS reservation search error:", chunk_rows)
-                    cae.shutdown(321)
+                    cae.shutdown(3321)
                 elif not chunk_rows or not isinstance(chunk_rows, list):
                     uprint(" ***  Unspecified Sihot.PMS reservation search error")
-                    cae.shutdown(324)
+                    cae.shutdown(3324)
                 uprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
                        .format(len(chunk_rows), chunk_beg, chunk_end, self.search_flags, self.search_scope))
                 for res in chunk_rows:
                     errors = list()
-                    check_in, check_out = get_date_range(res)
+                    check_in, check_out = date_range(res)
                     if not check_in or not check_out:
                         errors.append("incomplete check-in={} check-out={}".format(check_in, check_out))
                     if not (self.date_from <= check_in <= self.date_till):
@@ -298,13 +332,13 @@ class ResBulkFetcher:
                         errors.append("disallowed market group/channel {}".format(mkt_group))
                     if errors:
                         uprint(errors)
-                        cae.shutdown(327)
+                        cae.shutdown(3327)
 
                 self.all_rows.extend(chunk_rows)
                 time.sleep(self.sh_fetch_pause_seconds)
         except Exception as ex:
             uprint(" ***  Sihot interface reservation fetch exception:", str(ex))
             print_exc()
-            cae.shutdown(330)
+            cae.shutdown(3330)
 
         return self.all_rows

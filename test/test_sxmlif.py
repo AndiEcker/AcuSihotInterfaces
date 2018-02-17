@@ -1078,11 +1078,12 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             rows = acu_res.rows
-            assert len(rows) == 2
+            assert len(rows) == 4
             for row in rows:
-                assert row['RUL_SIHOT_HOTEL'] in (1, 4)
+                assert row['RUL_SIHOT_HOTEL'] in (1, 3, 4)
                 error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
-                assert 'has Check-Ins' in error_msg or 'This reservation has been settled already!' in error_msg
+                assert (not error_msg
+                        or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
 
     def test_external_rental2(self, acu_res):
         error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="CD_CODE = 'E588450'")

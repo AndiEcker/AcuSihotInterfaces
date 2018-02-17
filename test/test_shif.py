@@ -1,5 +1,20 @@
 import datetime
-from shif import avail_rooms, count_res
+from shif import avail_rooms, count_res, guest_data
+
+
+class TestGuestRefs:
+    def test_guest_refs_2443(self, console_app_env):
+        data = guest_data(console_app_env, 2443)
+        assert data
+        assert data['OBJID'] == '2443'
+        assert data['MATCHCODE'] == 'G425796'
+
+    def test_guest_refs_260362(self, console_app_env):
+        data = guest_data(console_app_env, 260362)
+        assert data
+        assert data['OBJID'] == '260362'
+        assert data['MATCHCODE'] == 'G635189'
+        assert data['MATCH-SM'] == '00Qw000001BBl13EAD'
 
 
 class TestCountRes:
@@ -18,12 +33,12 @@ class TestCountRes:
 
     # quite slow - needs 1:30 minutes
     def test_count_res_sep14_for_bhc_and_all_cats(self, console_app_env):
-        assert count_res(console_app_env, hotel_ids=[1], day=datetime.date(2017, 9, 14)) == 273
+        assert count_res(console_app_env, hotel_ids=[1], day=datetime.date(2017, 9, 14)) == 207  # 273 before Feb2018
 
 
 class TestAvailRoomsSep14:
     def test_avail_rooms_for_all_hotels_and_cats(self, console_app_env):
-        assert avail_rooms(console_app_env, day=datetime.date(2017, 9, 14)) == 165
+        assert avail_rooms(console_app_env, day=datetime.date(2017, 9, 14)) == 164  # 165 before Feb2018
 
     def test_avail_rooms_for_bhc_and_all_cats(self, console_app_env):
         assert avail_rooms(console_app_env, hotel_ids=[1], day=datetime.date(2017, 9, 14)) == 21
@@ -56,7 +71,7 @@ class TestAvailRoomsSep14:
 
 class TestAvailRoomsSep15:
     def test_avail_rooms_for_all_hotels_and_cats(self, console_app_env):
-        assert avail_rooms(console_app_env, day=datetime.date(2017, 9, 15)) == 99
+        assert avail_rooms(console_app_env, day=datetime.date(2017, 9, 15)) == 98  # 99 before Feb2018
 
     def test_avail_rooms_for_bhc_and_all_cats(self, console_app_env):
         assert avail_rooms(console_app_env, hotel_ids=[1], day=datetime.date(2017, 9, 15)) == 21
