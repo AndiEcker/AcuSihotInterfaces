@@ -4,7 +4,7 @@ import pytest
 
 from configparser import ConfigParser
 from ae_db import OraDB
-from acu_sf_sh_sys_data import AssSysData
+from ass_sys_data import AssSysData
 from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot, AvailCatInfo
 from sfif import prepare_connection
 

@@ -1,4 +1,6 @@
--- client contact
+------ TABLE STRUCTURES
+---- CLIENT DATA
+-- client contact ids on external systems
 CREATE TABLE contacts
 (
   co_pk                   SERIAL PRIMARY KEY,
@@ -49,19 +51,45 @@ CREATE TABLE contact_products
 -- noinspection SqlResolve
 SELECT audit.audit_table('contact_products');
 
+
+
+---- HOTEL AND ROOM CONFIGURATION - currently defined/configured in .console_app_env.cfg
+-- hotels
+CREATE TABLE hotels
+(
+  ho_pk                   VARCHAR(3) PRIMARY KEY,
+  ho_ac_id                VARCHAR(3) NOT NULL,
+  UNIQUE (ho_ac_id)
+);
+-- noinspection SqlResolve
+SELECT audit.audit_table('hotels');
+
+INSERT INTO hotels VALUES ('1', 'BHC');
+INSERT INTO hotels VALUES ('2', 'BHH');
+INSERT INTO hotels VALUES ('3', 'HMC');
+INSERT INTO hotels VALUES ('4', 'PBC');
+--INSERT INTO hotels VALUES ('999', 'ANY');
+COMMIT;
+
+
+-- still missing: categories, hotel_categories, room_categories)
+
+
+
+---- RESERVATION ENVIRONMENT
 -- reservation inventory
 CREATE TABLE res_inventories
 (
   ri_pk                   SERIAL PRIMARY KEY,
   ri_pr_fk                VARCHAR(12) NOT NULL REFERENCES products(pr_pk),
-  ri_hotel_id             VARCHAR(3) NOT NULL,
+  ri_ho_fk                VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),
   ri_usage_year           INTEGER NOT NULL,
   ri_inv_type             VARCHAR(3) NOT NULL,
   ri_swapped_product_id   VARCHAR(12),
   ri_granted_to           VARCHAR(3),
   ri_used_points          VARCHAR(9),           -- 'i' prefixed if individual owner points value
   ri_usage_comment        VARCHAR(33),          -- for Esther/Nancy Status Entitlement Usage spreadsheet column
-  UNIQUE (ri_hotel_id, ri_pr_fk, ri_usage_year)
+  UNIQUE (ri_ho_fk, ri_pr_fk, ri_usage_year)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_inventories');
@@ -97,11 +125,13 @@ SELECT audit.audit_table('res_inventories');
 */
 CREATE TABLE res_groups
 (
-  rgr_pk                  INTEGER PRIMARY KEY NOT NULL,   -- SIHOT reservation GDSNO (OBJID not available in RES-SEARCH)
+  rgr_pk                  SERIAL PRIMARY KEY,
+  rgr_ho_fk               VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),   -- SIHOT hotel id (e.g. '1'==BHC, ...)
+  rgr_gds_no              VARCHAR(24),              -- SIHOT reservation GDSNO (OBJID not available in RES-SEARCH)
+  rgr_sh_res_id           VARCHAR(18),              -- SIHOT reservation id (number / sub-number)
   rgr_order_co_fk         INTEGER NOT NULL REFERENCES contacts(co_pk),
   rgr_used_ri_fk          INTEGER REFERENCES res_inventories(ri_pk),
   rgr_rci_deposit_ri_fk   INTEGER REFERENCES res_inventories(ri_pk),
-  rgr_sh_res_id           VARCHAR(18),                    -- SIHOT reservation number / sub-number
   rgr_arrival             DATE NOT NULL,
   rgr_departure           DATE NOT NULL,
   rgr_status              VARCHAR(3) NOT NULL,
@@ -109,7 +139,6 @@ CREATE TABLE res_groups
   rgr_children            INTEGER NOT NULL DEFAULT 0,
   rgr_mkt_segment         VARCHAR(3) NOT NULL,
   rgr_mkt_group           VARCHAR(3) NOT NULL,
-  rgr_hotel_id            VARCHAR(3) NOT NULL,
   rgr_room_cat_id         VARCHAR(6) NOT NULL,
   rgr_sh_rate             VARCHAR(3),
   rgr_payment_inst        VARCHAR(3),
@@ -122,7 +151,9 @@ CREATE TABLE res_groups
   rgr_created_by          VARCHAR(18) NOT NULL DEFAULT user,
   rgr_created_when        TIMESTAMP NOT NULL DEFAULT current_timestamp,
   rgr_last_change         TIMESTAMP NOT NULL DEFAULT current_timestamp,
-  rgr_last_sync           TIMESTAMP
+  rgr_last_sync           TIMESTAMP,
+  UNIQUE (rgr_ho_fk, rgr_gds_no),
+  UNIQUE (rgr_ho_fk, rgr_sh_res_id)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_groups');
@@ -138,7 +169,9 @@ CREATE TRIGGER rgr_modified_trigger BEFORE UPDATE ON res_groups FOR EACH ROW EXE
 
 CREATE TABLE res_group_contacts
 (
-  rgc_rgr_fk              INTEGER NOT NULL,
+  rgc_rgr_fk              INTEGER NOT NULL REFERENCES res_groups(rgr_pk),
+  rgc_room_seq            INTEGER NOT NULL DEFAULT 0,
+  rgc_pers_seq            INTEGER NOT NULL DEFAULT 0,
   rgc_surname             VARCHAR(42) NOT NULL,
   rgc_firstname           VARCHAR(42) NOT NULL,
   rgc_email               VARCHAR(42),
@@ -150,22 +183,24 @@ CREATE TABLE res_group_contacts
   rgc_flight_arr_time     TIME,             -- ETA
   rgc_flight_dep_comment  VARCHAR(42),
   rgc_flight_dep_time     TIME,
-  rgc_room_seq            INTEGER NOT NULL DEFAULT 0,
-  rgc_pers_seq            INTEGER NOT NULL DEFAULT 0,
   rgc_pers_type           VARCHAR(3) NOT NULL DEFAULT '1A',
   rgc_sh_pack             VARCHAR(3),
-  rgc_room_id             VARCHAR(6)
+  rgc_room_id             VARCHAR(6),
+  UNIQUE (rgc_rgr_fk, rgc_room_seq, rgc_pers_seq)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_group_contacts');
 
 
--- VIEWS
--- view for AssSysDate.fetch_contacts() extending contacts table with external refs and pt_group aggregates
+------ VIEWS
+---- CONTACT VIEWS
+-- view for AssSysDate.co_fetch_all() extending contacts table with external refs and pt_group aggregates
 CREATE OR REPLACE VIEW v_contacts_refs_owns AS
   SELECT co_pk, co_ac_id, co_sf_id, co_sh_id
        , (select string_agg(er_type || '=' || er_id, ',') FROM external_refs WHERE er_co_fk = co_pk) as ext_refs
-       , (select string_agg(pt_group, '') FROM contact_products INNER JOIN products ON cp_pr_fk = pr_pk INNER JOIN product_types ON pr_pt_fk = pt_pk WHERE cp_co_fk = co_pk) as owns
+       , (select string_agg(pt_group, '') FROM contact_products
+          INNER JOIN products ON cp_pr_fk = pr_pk INNER JOIN product_types ON pr_pt_fk = pt_pk
+          WHERE cp_co_fk = co_pk) as owns
     FROM contacts;
 
 COMMENT ON VIEW v_contacts_refs_owns IS 'contacts extended by external_refs and owned pt_group(s) aggregates';

@@ -10,11 +10,11 @@ from collections import OrderedDict
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
+from sxmlif import ResToSihot, AC_ID_2ND_COUPLE_SUFFIX
 from shif import ResBulkFetcher, elem_value, pax_count, gds_no, apt_wk_yr, elem_path_join, guest_data, SH_DATE_FORMAT
 from sfif import prepare_connection
-from acu_sf_sh_sys_data import AssSysData, ext_ref_type_sql, EXT_REF_TYPE_RCI, EXT_REFS_SEP
+from ass_sys_data import AssSysData, ext_ref_type_sql, EXT_REF_TYPE_RCI, EXT_REFS_SEP
 from ae_notification import Notification
-from sxmlif import ResToSihot, AC_ID_2ND_COUPLE_SUFFIX
 
 __version__ = '0.1'
 
@@ -197,10 +197,10 @@ if conf_data.error_message:
     log_error(conf_data.error_message, 'AssSysDataInit', importance=4, exit_code=9)
 
 # logon to and prepare ass_cache database and optional to Acumen database
-ass_db = conf_data.connect_ass_db()
+ass_db = conf_data.ass_db
 if conf_data.error_message:
     log_error(conf_data.error_message, 'AssUserLogOn', importance=4, exit_code=12, dbs=[ass_db])
-acu_db = conf_data.connect_acu_db() if [_ for _ in acm_syncs + acm_veris if _[:2] == 'ac'] else None
+acu_db = conf_data.acu_db if [_ for _ in acm_syncs + acm_veris if _[:2] == 'ac'] else None
 if conf_data.error_message:
     log_error(conf_data.error_message, 'AcuUserLogOn', importance=4, exit_code=15, dbs=[ass_db, acu_db])
 
@@ -226,8 +226,7 @@ def ac_migrate_contacts():
 
     # migrate to ass_cache including additional external refs/IDs (fetched from Acumen)
     for idx, ac_co in enumerate(ac_cos):
-        co_pk = conf_data.save_contact(ac_co[0], ac_co[1], ac_co[2], ext_refs=[(EXT_REF_TYPE_RCI, ac_co[3])],
-                                       ass_db=ass_db, acu_db=acu_db)
+        co_pk = conf_data.co_save(ac_co[0], ac_co[1], ac_co[2], ext_refs=[(EXT_REF_TYPE_RCI, ac_co[3])])
         if co_pk is None:
             break
         if idx + 1 % 1000 == 0:
@@ -245,12 +244,12 @@ def ac_migrate_contacts():
 
 def ac_migrate_products():
     log_warning("Acumen product types synchronization/migration", 'syncCacheAcuProductTypes', importance=3)
-    products = conf_data.load_view(acu_db, 'T_RS', ['RS_CODE', 'RS_SIHOT_GUEST_TYPE', 'RS_NAME'],
-                                   "RS_CLASS = 'CONSTRUCT' or RS_SIHOT_GUEST_TYPE is not NULL")
-    if products is None:
+    pts = conf_data.load_view(acu_db, 'T_RS', ['RS_CODE', 'RS_SIHOT_GUEST_TYPE', 'RS_NAME'],
+                              "RS_CLASS = 'CONSTRUCT' or RS_SIHOT_GUEST_TYPE is not NULL")
+    if pts is None:
         return conf_data.error_message
-    for pr in products:
-        if ass_db.upsert('product_types', OrderedDict([('pt_pk', pr[0]), ('pt_group', pr[1]), ('pt_name', pr[2])])):
+    for pt in pts:
+        if ass_db.upsert('product_types', OrderedDict([('pt_pk', pt[0]), ('pt_group', pt[1]), ('pt_name', pt[2])])):
             ass_db.rollback()
             return ass_db.last_err_msg
 
@@ -265,12 +264,12 @@ def ac_migrate_products():
         if ass_db.upsert('products', OrderedDict([('pr_pk', pr[0]), ('pr_pt_fk', pr[1])])):
             break
 
-    prs = conf_data.load_view(acu_db, 'V_OWNED_WEEKS INNER JOIN T_RS ON AT_RSREF = RS_CODE',
+    cps = conf_data.load_view(acu_db, 'V_OWNED_WEEKS INNER JOIN T_RS ON AT_RSREF = RS_CODE',
                               ['DW_WKREF', 'AT_RSREF', 'DW_OWREF'],
                               "substr(DW_OWREF, 1, 1) <> 'A' and RS_SIHOT_GUEST_TYPE is not NULL")
-    if prs is None:
+    if cps is None:
         return conf_data.error_message
-    for cp in prs:
+    for cp in cps:
         co_pk = conf_data.co_ass_id_by_ac_id(cp[2])
         if co_pk is None:
             break
@@ -298,7 +297,7 @@ def ac_migrate_res_inv():
         return conf_data.error_message
     for inv in invs:
         if ass_db.upsert('res_inventories',
-                         dict(ri_pr_fk=inv[0], ri_hotel_id=inv[1], ri_usage_year=inv[2], ri_inv_type=inv[3],
+                         dict(ri_pr_fk=inv[0], ri_ho_fk=inv[1], ri_usage_year=inv[2], ri_inv_type=inv[3],
                               ri_swapped_product_id=inv[4], ri_granted_to=inv[5], ri_used_points=inv[6]),
                          chk_values=dict(ri_pr_fk=inv[0], ri_usage_year=inv[2])):
             ass_db.rollback()
@@ -326,14 +325,56 @@ def ac_migrate_res_data():
             error_msg = ""
 
         # determine used reservation inventory
-        year, week = conf_data.rc_arr_to_year_week(crow['ARR_DATE'])
+        year, week = conf_data.rci_arr_to_year_week(crow['ARR_DATE'])
         apt_wk = "{}-{:0>2}".format(crow['RUL_SIHOT_ROOM'], week)
-        if ass_db.select('res_inventories', ['ri_pk'], "ri_pk = :aw and ri_usage_year = :y", dict(aw=apt_wk, y=year)):
+        if ass_db.select('res_inventories', ['ri_pk'], "ri_pk = :aw AND ri_usage_year = :y", dict(aw=apt_wk, y=year)):
             error_msg = ass_db.last_err_msg
             break
         ri_pk = ass_db.fetch_value()
 
         gds = crow['SIHOT_GDSNO']
+
+        # complete res data with check-in/-out time...
+        ac_res = conf_data.load_view(acu_db,
+                                     "T_ARO INNER JOIN T_RU ON ARO_RHREF = RU_RHREF and ARO_EXP_ARRIVE = RU_FROM_DATE",
+                                     ['ARO_TIMEIN', 'ARO_TIMEOUT'],
+                                     "ARO_STATUS <> 120 and RU_STATUS <> 120 and RU_CODE = :gds_no",
+                                     dict(gds_no=gds))
+        if ac_res is None:
+            error_msg = conf_data.error_message
+            break
+        elif not ac_res:
+            ac_res = (None, None)
+        crow['TIMEIN'], crow['TIMEOUT'] = ac_res
+
+        chk_values = dict(rgr_ho_fk=crow['RUL_SIHOT_HOTEL'], rgr_gds_no=gds)
+        upd_values = chk_values.copy()
+        upd_values.update(rgr_order_co_fk=ord_co_pk,
+                          rgr_used_ri_fk=ri_pk,
+                          rgr_arrival=crow['ARR_DATE'],
+                          rgr_departure=crow['DEP_DATE'],
+                          rgr_status=crow['SIHOT_RES_TYPE'],
+                          rgr_adults=crow['RU_ADULTS'],
+                          rgr_children=crow['RU_CHILDREN'],
+                          rgr_mkt_segment=crow['SIHOT_MKT_SEG'],
+                          rgr_mkt_group=crow['RO_SIHOT_RES_GROUP'],
+                          rgr_room_cat_id=crow['RUL_SIHOT_CAT'],
+                          rgr_sh_rate=crow['RUL_SIHOT_RATE'],
+                          rgr_ext_book_id=crow['RH_EXT_BOOK_REF'],
+                          rgr_ext_book_day=crow['RH_EXT_BOOK_DATE'],
+                          rgr_comment=crow['SIHOT_NOTE'],
+                          rgr_long_comment=crow['SIHOT_TEC_NOTE'],
+                          rgr_time_in=ac_res[0],
+                          rgr_time_out=ac_res[1],
+                          rgr_created_by=pg_user,
+                          rgr_created_when=cae.startup_beg,
+                          rgr_last_change=cae.startup_beg,
+                          rgr_last_sync=cae.startup_beg
+                          )
+        if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
+            error_msg = ass_db.last_err_msg
+            break
+        rgr_pk = ass_db.fetch_value()
 
         # determine occupant(s)
         mc = crow['CD_CODE']
@@ -348,7 +389,7 @@ def ac_migrate_res_data():
             error_msg = conf_data.error_message
             break
 
-        chk_values = dict(rgc_rgr_fk=gds, rgc_room_seq=0, rgc_pers_seq=0)
+        chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=0, rgc_pers_seq=0)
         upd_values = chk_values.copy()
         upd_values.update(rgc_surname=ac_cos['CD_SNAM1'],
                           rgc_firstname=ac_cos['CD_FNAM1'],
@@ -374,52 +415,8 @@ def ac_migrate_res_data():
         upd_values['rgc_surname'] = ac_cos['CD_SNAM2']
         upd_values['rgc_occup_co_fk'] = occ_co_pk
         upd_values['rgc_dob'] = ac_cos['CD_DOB2']
-        upd_values['rgc_pers_seq'] = 1
-        chk_values['rgc_pers_seq'] = 1
+        upd_values['rgc_pers_seq'] = chk_values['rgc_pers_seq'] = 1
         if ass_db.upsert('res_group_contacts', upd_values, chk_values=chk_values):
-            error_msg = ass_db.last_err_msg
-            break
-
-        # complete with check-in/-out time...
-        ac_res = conf_data.load_view(acu_db,
-                                     "T_ARO INNER JOIN T_RU ON ARO_RHREF = RU_RHREF and ARO_EXP_ARRIVE = RU_FROM_DATE",
-                                     ['ARO_TIMEIN', 'ARO_TIMEOUT'],
-                                     "ARO_STATUS <> 120 and RU_STATUS <> 120 and RU_CODE = :gds_no",
-                                     dict(gds_no=gds))
-        if ac_res is None:
-            error_msg = conf_data.error_message
-            break
-        elif not ac_res:
-            ac_res = (None, None)
-        crow['TIMEIN'], crow['TIMEOUT'] = ac_res
-
-        chk_values = dict(rgr_pk=gds)
-        upd_values = chk_values.copy()
-        upd_values.update(rgr_order_co_fk=ord_co_pk,
-                          rgr_used_ri_fk=ri_pk,
-                          rgr_arrival=crow['ARR_DATE'],
-                          rgr_departure=crow['DEP_DATE'],
-                          rgr_status=crow['SIHOT_RES_TYPE'],
-                          rgr_adults=crow['RU_ADULTS'],
-                          rgr_children=crow['RU_CHILDREN'],
-                          rgr_mkt_segment=crow['SIHOT_MKT_SEG'],
-                          rgr_mkt_group=crow['RO_SIHOT_RES_GROUP'],
-                          rgr_hotel_id=crow['RUL_SIHOT_HOTEL'],
-                          rgr_room_cat_id=crow['RUL_SIHOT_CAT'],
-                          rgr_sh_rate=crow['RUL_SIHOT_RATE'],
-                          rgr_ext_book_id=crow['RH_EXT_BOOK_REF'],
-                          rgr_ext_book_day=crow['RH_EXT_BOOK_DATE'],
-                          rgr_comment=crow['SIHOT_NOTE'],
-                          rgr_long_comment=crow['SIHOT_TEC_NOTE'],
-                          rgr_time_in=ac_res[0],
-                          rgr_time_out=ac_res[1],
-                          rgr_created_by=pg_user,
-                          rgr_created_when=cae.startup_beg,
-                          rgr_last_change=cae.startup_beg,
-                          rgr_last_sync=cae.startup_beg
-                          )
-
-        if ass_db.upsert('res_groups', upd_values, chk_values=chk_values):
             error_msg = ass_db.last_err_msg
             break
 
@@ -431,18 +428,58 @@ def sh_migrate_res_data():
     rbf_groups = sh_rbf.fetch_all()
     error_msg = ""
     for rg in rbf_groups:
-        mc = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'MATCHCODE'], arri=0)
+        mc = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'MATCHCODE'])
         ord_co_pk = conf_data.co_ass_id_by_ac_id(mc)
         if ord_co_pk is None:
             error_msg = conf_data.error_message
-            sh_id = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID'], arri=0)
+            sh_id = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID'])
             ord_co_pk = conf_data.co_ass_id_by_sh_id(sh_id)
             if ord_co_pk is None:
                 error_msg += conf_data.error_message
                 break
             error_msg = ""
 
+        apt, wk, year = apt_wk_yr(rg, cae)
+        apt_wk = "{}-{:0>2}".format(apt, wk)
+        if ass_db.select('res_inventories', ['ri_pk'], "ri_pk = :aw and ri_usage_year = :y", dict(aw=apt_wk, y=year)):
+            error_msg = ass_db.last_err_msg
+            break
+        ri_pk = ass_db.fetch_value()
+
         gds = gds_no(rg)
+        chk_values = dict(rgr_ho_fk=elem_value(rg, 'RES-HOTEL'))  # hotelID returned by RES-SEARCH (missing ID elem)
+        if gds:
+            chk_values.update(rgr_gds_no=gds)
+        else:
+            chk_values.update(rgr_sh_res_id=elem_value(rg, 'RES-NR') + '/' + elem_value(rg, 'SUB-NR'))
+        upd_values = chk_values.copy()
+        upd_values\
+            .update(rgr_order_co_fk=ord_co_pk,
+                    rgr_used_ri_fk=ri_pk,
+                    rgr_arrival=datetime.datetime.strptime(elem_value(rg, ['RESERVATION', 'ARR']), SH_DATE_FORMAT),
+                    rgr_departure=datetime.datetime.strptime(elem_value(rg, ['RESERVATION', 'DEP']), SH_DATE_FORMAT),
+                    rgr_status=elem_value(rg, 'RT'),
+                    rgr_adults=elem_value(rg, 'NOPAX'),
+                    rgr_children=elem_value(rg, 'NOCHILDS'),
+                    rgr_mkt_segment=elem_value(rg, 'MARKETCODE'),
+                    rgr_mkt_group=elem_value(rg, 'CHANNEL'),
+                    rgr_room_cat_id=elem_value(rg, elem_path_join(['RESERVATION', 'CAT'])),
+                    rgr_sh_rate=elem_value(rg, 'RATE-SEGMENT'),
+                    rgr_payment_inst=elem_value(rg, 'PAYMENT-INST'),
+                    rgr_ext_book_id=elem_value(rg, elem_path_join(['RESERVATION', 'VOUCHERNUMBER'])),
+                    rgr_ext_book_day=elem_value(rg, 'SALES-DATE'),
+                    rgr_comment=elem_value(rg, elem_path_join(['RESERVATION', 'COMMENT'])),
+                    rgr_long_comment=elem_value(rg, 'TEC-COMMENT'),
+                    rgr_created_by=pg_user,
+                    rgr_created_when=cae.startup_beg,
+                    rgr_last_change=cae.startup_beg,
+                    rgr_last_sync=cae.startup_beg
+                    )
+        if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
+            error_msg = ass_db.last_err_msg
+            break
+        rgr_pk = ass_db.fetch_value()
+
         for arri in range(pax_count(rg)):
             mc = elem_value(rg, ['PERSON', 'MATCHCODE'], arri=arri)
             occ_co_pk = None
@@ -453,7 +490,7 @@ def sh_migrate_res_data():
                     break
             room_seq = int(elem_value(rg, ['PERSON', 'ROOM-SEQ'], arri=arri))
             pers_seq = int(elem_value(rg, ['PERSON', 'ROOM-PERS-SEQ'], arri=arri))
-            chk_values = dict(rgc_rgr_fk=gds, rgc_room_seq=room_seq, rgc_pers_seq=pers_seq)
+            chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=room_seq, rgc_pers_seq=pers_seq)
             upd_values = chk_values.copy()
             upd_values\
                 .update(rgc_surname=elem_value(rg, ['PERSON', 'NAME'], arri=arri),
@@ -475,43 +512,6 @@ def sh_migrate_res_data():
             if ass_db.upsert('res_group_contacts', upd_values, chk_values=chk_values):
                 error_msg = ass_db.last_err_msg
                 break
-
-        apt, wk, year = apt_wk_yr(rg, cae)
-        apt_wk = "{}-{:0>2}".format(apt, wk)
-        if ass_db.select('res_inventories', ['ri_pk'], "ri_pk = :aw and ri_usage_year = :y", dict(aw=apt_wk, y=year)):
-            error_msg = ass_db.last_err_msg
-            break
-        ri_pk = ass_db.fetch_value()
-
-        chk_values = dict(rgr_pk=gds)
-        upd_values = chk_values.copy()
-        upd_values\
-            .update(rgr_order_co_fk=ord_co_pk,
-                    rgr_used_ri_fk=ri_pk,
-                    rgr_sh_gds_id=gds,
-                    rgr_sh_res_id=elem_value(rg, 'RES-NR') + '/' + elem_value(rg, 'SUB-NR'),
-                    rgr_arrival=datetime.datetime.strptime(elem_value(rg, ['RESERVATION', 'ARR']), SH_DATE_FORMAT),
-                    rgr_departure=datetime.datetime.strptime(elem_value(rg, ['RESERVATION', 'DEP']), SH_DATE_FORMAT),
-                    rgr_status=elem_value(rg, 'RT'),
-                    rgr_adults=elem_value(rg, 'NOPAX'),
-                    rgr_children=elem_value(rg, 'NOCHILDS'),
-                    rgr_mkt_segment=elem_value(rg, 'MARKETCODE'),
-                    rgr_mkt_group=elem_value(rg, 'CHANNEL'),
-                    rgr_hotel_id=elem_value(rg, 'RES-HOTEL'),  # hotel ID returned by RES-SEARCH (missing ID elem)
-                    rgr_room_cat_id=elem_value(rg, elem_path_join(['RESERVATION', 'CAT'])),
-                    rgr_sh_rate=elem_value(rg, 'RATE-SEGMENT'),
-                    rgr_ext_book_id=elem_value(rg, elem_path_join(['RESERVATION', 'VOUCHERNUMBER'])),
-                    rgr_ext_book_day=elem_value(rg, 'SALES-DATE'),
-                    rgr_comment=elem_value(rg, elem_path_join(['RESERVATION', 'COMMENT'])),
-                    rgr_long_comment=elem_value(rg, 'TEC-COMMENT'),
-                    rgr_created_by=pg_user,
-                    rgr_created_when=cae.startup_beg,
-                    rgr_last_change=cae.startup_beg,
-                    rgr_last_sync=cae.startup_beg
-                    )
-        if ass_db.upsert('res_groups', upd_values, chk_values=chk_values):
-            error_msg = ass_db.last_err_msg
-            break
 
     return ass_db.rollback() if error_msg else ass_db.commit()
 
@@ -579,7 +579,7 @@ def ac_check_contacts():
             continue
         if ac_id not in ac_co_dict:
             log_warning("{} - Acumen client id duplicates found in AssCache; records={}"
-                        .format(ac_id, [_ for _ in conf_data.contacts if _[3] == ac_id]), ctx)
+                        .format(ac_id, conf_data.co_list_by_ac_id(ac_id)), ctx)
             continue
         ac_co = ac_co_dict.pop(ac_id)
 
@@ -685,9 +685,13 @@ def sf_check_contacts():
 
 if acm_veris:
     log_warning("Preparing data check/verification", 'veriCache', importance=4)
-    err = conf_data.fetch_contacts(where_group_order=acm_veri_filters['C'] if 'C' in acm_veri_filters else "")
+    # fetch all contacts from AssCache
+    err = conf_data.co_fetch_all(where_group_order=acm_veri_filters['C'] if 'C' in acm_veri_filters else "")
     if err:
         log_error("Contact cache load error: " + err, 'veriCache', importance=3, exit_code=300, dbs=[ass_db,  acu_db])
+    # verify AssCache contact integrity
+    if [_ for _ in acm_veris if _[2:] == 'C']:
+        conf_data.co_check_ext_refs()
 for acm_veri in acm_veris:
     if acm_veri[:2] == 'ac':
         if acm_veri[2:] == 'C':

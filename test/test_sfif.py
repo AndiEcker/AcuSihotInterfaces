@@ -1,5 +1,5 @@
 from sfif import correct_email, correct_phone
-from acu_sf_sh_sys_data import EXT_REFS_SEP
+from ass_sys_data import EXT_REFS_SEP
 
 
 class TestSfFindClient:

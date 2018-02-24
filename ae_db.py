@@ -182,7 +182,7 @@ class GenericDB:
                 elif count == 0:
                     self.insert(table_name, col_values, commit=commit, returning_column=returning_column)
                 else:
-                    self.last_err_msg = "GenericDB.upsert({}, {}, {}, {}) error: found {} primary key values"\
+                    self.last_err_msg = "GenericDB.upsert({}, {}, {}, {}) error: found {} duplicate primary key values"\
                         .format(table_name, col_values, chk_values, returning_column, count)
         return self.last_err_msg
 

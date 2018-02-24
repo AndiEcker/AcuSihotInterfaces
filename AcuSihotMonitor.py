@@ -11,7 +11,7 @@ from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
-from acu_sf_sh_sys_data import AssSysData
+from ass_sys_data import AssSysData
 from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, SXML_DEF_ENCODING
 
 __version__ = '0.4'
@@ -293,8 +293,8 @@ def cfg_room_cat_discrepancies(data_dict, app_inst):
     column_names.append("Discrepancies__69")
     discrepancies = list()
     sihot_cat_apts = dict()
-    for hotel_id in config_data.get_hotel_ids(data_dict['resort_criteria']):
-        hotel_cat_apts = app_inst.cat_rooms.get_cat_rooms(hotel_id=str(hotel_id))
+    for hotel_id in config_data.ho_id_list(data_dict['resort_criteria']):
+        hotel_cat_apts = app_inst.cat_rooms.get_cat_rooms(hotel_id=hotel_id)
         for cat, apts in hotel_cat_apts.items():
             prev_apts = sihot_cat_apts.get(cat, list())
             sihot_cat_apts[cat] = prev_apts + apts

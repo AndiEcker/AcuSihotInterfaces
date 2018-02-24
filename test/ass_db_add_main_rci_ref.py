@@ -1,6 +1,6 @@
 from ae_console_app import ConsoleApp, uprint
 from ae_db import PostgresDB
-from acu_sf_sh_sys_data import AssSysData, EXT_REF_TYPE_RCI
+from ass_sys_data import AssSysData, EXT_REF_TYPE_RCI
 
 
 __version__ = '0.1'

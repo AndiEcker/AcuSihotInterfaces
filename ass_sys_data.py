@@ -20,7 +20,7 @@ def ext_ref_type_sql():
     return "CASE WHEN CR_TYPE in ('" + EXT_REF_TYPE_RCIP + "', 'SPX') then '" + EXT_REF_TYPE_RCI + "' else CR_TYPE end"
 
 
-# tuple indexes for Contacts data list (AssSysData.contacts)
+# tuple indexes for Contacts data list (ass_cache.contacts/AssSysData.contacts)
 _ASS_ID = 0
 _AC_ID = 1
 _SF_ID = 2
@@ -41,7 +41,7 @@ _COMMENT = 8
 
 
 def _dummy_stub(*args, **kwargs):
-    uprint("******  Unexpected call of acu_sf_sh_sys_data._dummy_stub()", args, kwargs)
+    uprint("******  Unexpected call of ass_sys_data._dummy_stub()", args, kwargs)
 
 
 class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
@@ -52,19 +52,22 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self._warn = warn_logger
         self._ctx_no_file = ctx_no_file
         
-        self.acu_db = None  # lazy connection
-        self.acu_user = acu_user or cae.get_option('acuUser')
-        self.acu_password = acu_password or cae.get_option('acuPassword')
-        self.acu_dsn = cae.get_option('acuDSN')
+        self.error_message = ""
+        self.debug_level = cae.get_option('debugLevel')
 
         self.ass_db = None  # lazy connection
         self.ass_user = ass_user or cae.get_option('pgUser')
         self.ass_password = ass_password or cae.get_option('pgPassword')
         self.ass_dsn = cae.get_option('pgDSN')
+        if self.ass_user and self.ass_password and self.ass_dsn:
+            self.connect_ass_db()
 
-        self.debug_level = cae.get_option('debugLevel')
-
-        self.error_message = ''
+        self.acu_db = None  # lazy connection
+        self.acu_user = acu_user or cae.get_option('acuUser')
+        self.acu_password = acu_password or cae.get_option('acuPassword')
+        self.acu_dsn = cae.get_option('acuDSN')
+        if self.acu_user and self.acu_password and self.acu_dsn:
+            self.connect_acu_db()
 
         self.hotel_ids = cae.get_config('hotelIds')
         if self.hotel_ids:      # fetch config data from INI/CFG
@@ -73,11 +76,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.ro_agencies = cae.get_config('roAgencies')
             self.room_change_max_days_diff = cae.get_config('roomChangeMaxDaysDiff', default_value=3)
         else:               # fetch config data from Acumen
-            db = self.connect_acu_db()
+            db = self.acu_db
             if not db:      # logon/connect error
+                self.error_message = "Missing credentials for to open Acumen database"
+                cae.dprint(self.error_message)
                 return
 
-            self.hotel_ids = self.load_view(db, 'T_LU', ['LU_NUMBER', 'LU_ID'],
+            self.hotel_ids = self.load_view(db, 'T_LU', ['to_char(LU_NUMBER)', 'LU_ID'],
                                             "LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1")
 
             any_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_ANY'")
@@ -85,6 +90,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             pbc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_PBC'")
             bhh_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_BHH'")
             hmc_cats = self.load_view(db, 'T_LU', ['LU_ID', 'LU_CHAR'], "LU_CLASS = 'SIHOT_CATS_HMC'")
+            # self.hotel_cats = {'999': any_cats, '1': bhc_cats, '4': pbc_cats, '2': bhh_cats, '3': hmc_cats}
             self.resort_cats = {'ANY': any_cats, 'BHC': bhc_cats, 'PBC': pbc_cats, 'BHH': bhh_cats, 'HMC': hmc_cats}
 
             self.ap_cats = self.load_view(db, 'T_AP, T_AT, T_LU', ['AP_CODE', 'AP_SIHOT_CAT'],
@@ -147,7 +153,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             db = db_opt
             self.error_message = ""
         else:
-            db = self.connect_acu_db()
+            db = self.acu_db
         if not self.error_message:
             self.error_message = db.select(view, cols, where, bind_vars)
         if self.error_message:
@@ -159,25 +165,18 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             db.close()
         return ret
 
-    def get_ro_agency_objid(self, ro_code):
-        return next((cols[1] for cols in self.ro_agencies if cols[0] == ro_code), None)
+    # ############################  hotel/resort data helpers  ##################################################
 
-    def get_ro_agency_matchcode(self, ro_code):
-        return next((cols[2] for cols in self.ro_agencies if cols[0] == ro_code), None)
-
-    def get_ro_sihot_mkt_seg(self, ro_code):
-        sihot_mkt_seg = next((cols[3] for cols in self.ro_agencies if cols[0] == ro_code), None)
-        return sihot_mkt_seg or ro_code
-
-    def get_ro_res_group(self, ro_code):
-        return next((cols[4] for cols in self.ro_agencies if cols[0] == ro_code), None)
-
-    def get_size_cat(self, rs_code, ap_size, ap_feats=None, allow_any=True):
+    def cat_by_size(self, rs_or_ho_id, ap_size, ap_feats=None, allow_any=True):
         found = None
         if ap_feats:  # optional list of apartment feature ids (AFT_CODEs)
             var = 2 ** len(ap_feats)  # all possible ordered variations of apt features
             ap_feats = [str(ft) for ft in sorted(ap_feats)]
-        for resort in [rs_code] + (['ANY'] if rs_code != 'ANY' and allow_any else list()):
+        if rs_or_ho_id in self.resort_cats:
+            rs_list = [rs_or_ho_id]
+        else:
+            rs_list = [_[1] for _ in self.hotel_ids if _[0] == rs_or_ho_id]
+        for resort in rs_list + (['ANY'] if rs_or_ho_id not in ('ANY', '999') and allow_any else list()):
             view = self.resort_cats[resort]
             if not view:
                 continue
@@ -200,178 +199,60 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return found
 
-    def get_room_cat(self, room_no):
+    def cat_by_room(self, room_no):
+        if room_no:
+            room_no = room_no.lstrip('0')  # remove leading zero from 3-digit PBC Sihot room number (if given)
         return next((cols[1] for cols in self.ap_cats if cols[0] == room_no), None)
 
-    def get_hotel_ids(self, acu_rs_codes=None):
+    def ho_id_list(self, acu_rs_codes=None):
         if acu_rs_codes is None:
-            hot_id_list = [cols[0] for cols in self.hotel_ids]
+            hotel_id_list = [cols[0] for cols in self.hotel_ids]
         else:
-            hot_id_list = [cols[0] for cols in self.hotel_ids if cols[1] in acu_rs_codes]
-        return hot_id_list
+            hotel_id_list = [cols[0] for cols in self.hotel_ids if cols[1] in acu_rs_codes]
+        return hotel_id_list
 
-    # =================  helpers  =========================================================================
+    # ############################  contact data helpers  #########################################################
 
-    def hotel_acu_to_sihot(self, rs_code):
-        sh_hotel_id = 0
-        for sh_hotel_id, acu_rs_code in self.hotel_ids:
-            if acu_rs_code == rs_code:
-                break
-        return sh_hotel_id
-
-    def hotel_sihot_to_acu(self, hotel_id):
-        acu_rs_code = ''
-        for sh_hotel_id, acu_rs_code in self.hotel_ids:
-            if sh_hotel_id == hotel_id:
-                break
-        return acu_rs_code
-
-    def rci_to_sihot_hotel_id(self, rc_resort_id):
-        return self.cae.get_config(rc_resort_id, 'RcResortIds', default_value=-369)     # pass default for int type ret
-
-    def rci_to_sihot_room_cat(self, sh_hotel_id, room_size):
-        return self.get_size_cat(self.hotel_sihot_to_acu(sh_hotel_id), room_size)
-
-    def rc_arr_to_year_week(self, arr_date):
-        year = arr_date.year
-        week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
-        next_year_week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year + 1), 'RcWeeks'), '%Y-%m-%d')
-        if arr_date < week_1_begin:
-            year -= 1
-            week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
-        elif arr_date > next_year_week_1_begin:
-            year += 1
-            week_1_begin = next_year_week_1_begin
-        diff = arr_date - week_1_begin
-        return year, 1 + int(diff.days / 7)
-
-    # =================  product types, contacts and external refs  ==================================================
-
-    def old_fetch_contacts(self):
-        """ Populates instance list self.contacts from Acumen and Salesforce with data lookup, check and merge """
-
-        def _find_and_merge():  # c_idx, s_rec and a_rec are defined in the for loop in outer method:
-            s_ass_id, s_acu_id, s_sf_id, s_sh_id, s_ext_refs, s_owner = s_rec
-            a_ass_id, a_acu_id, a_sf_id, a_sh_id, a_ext_refs, a_owner = a_rec
-
-            s_ext_refs = set(s_ext_refs.split(EXT_REFS_SEP)) if s_ext_refs else set()
-            a_ext_refs = set(a_ext_refs.split(EXT_REFS_SEP)) if a_ext_refs else set()
-
-            match = None
-            if s_sf_id and s_sf_id == a_sf_id:
-                match = 'SF=' + s_sf_id
-            elif s_acu_id and s_acu_id == a_acu_id:
-                match = 'ACU=' + s_acu_id
-            elif s_sh_id and s_sh_id == a_sh_id:
-                match = 'SH=' + s_sh_id
-            elif s_ext_refs & a_ext_refs:  # check for matching RCI references/Ids via set intersection
-                match = 'RCI=' + EXT_REFS_SEP.join(s_ext_refs & a_ext_refs)
-
-            if match:
-                msg_prefix = "SihotResImport.._find_and_merge(): Acumen/Salesforce discrepancy for " + match + " on "
-                ctx = self._ctx_no_file + 'MergeClientData'
-                if s_acu_id and a_acu_id and s_acu_id != a_acu_id:
-                    self._warn(msg_prefix + "Acumen ID: Salesforce={}, Acumen={}".format(s_acu_id, a_acu_id), ctx)
-                if s_sf_id and a_sf_id and s_sf_id != a_sf_id:
-                    self._warn(msg_prefix + "Salesforce ID: Salesforce={}, Acumen={}".format(s_sf_id, a_sf_id), ctx)
-                if s_sh_id and a_sh_id and s_sh_id != a_sh_id:
-                    self._warn(msg_prefix + "Sihot ID: Salesforce={}, Acumen={}".format(s_sh_id, a_sh_id), ctx)
-                if s_ext_refs <= a_ext_refs:  # (s_ext_refs and a_ext_refs and s_ext_refs <= a_ext_refs) or a_ext_refs:
-                    self._warn(msg_prefix + "missing RCI IDs in Salesforce={}, Acumen={}".format(s_sh_id, a_sh_id), ctx)
-                if s_owner != a_owner:
-                    self._warn(msg_prefix + "Owner status: Salesforce={}, Acumen={}".format(s_owner, a_owner), ctx)
-                # -- merge
-                self.contacts[c_idx] = (None, s_acu_id or a_acu_id, s_sf_id or a_sf_id, s_sh_id or a_sh_id,
-                                        EXT_REFS_SEP.join(s_ext_refs | a_ext_refs), s_owner or a_owner)
-            return match
-
-        # fetch from Acumen on first run or after reset (deleted cache files) - after locking cache files
-        self.error_message = ""
-        self._warn("Fetching client data from AssCache (needs some minutes)", self._ctx_no_file + 'FetchClientData',
-                   importance=4)
-        c = self.load_view(None, 'V_ACU_CD_DATA',
-                           ["NULL", "CD_CODE", "SIHOT_SF_ID", "CD_SIHOT_OBJID",
-                            "trim('" + EXT_REFS_SEP + "' from CD_RCI_REF || '" + EXT_REFS_SEP +
-                            "' || replace(replace(EXT_REFS, 'RCIP=', ''), 'RCI=', '')) as EXT_REFS",
-                            # "case when instr(SIHOT_GUEST_TYPE, 'O') > 0 or instr(SIHOT_GUEST_TYPE, 'I') > 0"
-                            # " or instr(SIHOT_GUEST_TYPE, 'K') > 0 then 1 else 0 end as IS_OWNER"
-                            "SIHOT_GUEST_TYPE",
-                            ],
-                           # found also SPX/TRC prefixes for RCI refs/ids in EXT_REFS/T_CR
-                           "CD_SIHOT_OBJID is not NULL or CD_RCI_REF is not NULL"
-                           " or instr(EXT_REFS, '" + EXT_REF_TYPE_RCI + "') > 0"
-                           " or instr(EXT_REFS, 'SF=') > 0 or SIHOT_SF_ID is not NULL")
-        if not c:
-            return self.error_message
-        self.contacts = c
-
-        # fetch from Salesforce all contacts/clients with main/external RCI Ids for to merge them into contacts
-        sf_contacts = self.sales_force.contacts_with_rci_id(EXT_REFS_SEP)
-        if self.sales_force.error_msg:
-            self.error_message = self.sales_force.error_msg
-            return self.error_message
-        # merging list of tuples (Acu-CD_CODE, Sf-Id, Sihot-Id, ext_refs, is_owner) into contacts
-        for s_rec in sf_contacts:
-            for c_idx, a_rec in enumerate(self.contacts):
-                if _find_and_merge():
-                    break   # sf contact found in acu and merged, so break inner loop for to check next sf contact
-            else:   # sf contact not found, so add it to contacts
-                self.contacts.append(s_rec)
-
-        # check for duplicate and blocked RCI Ids in verbose debug mode
-        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            self._warn('Checking clients data for duplicates and resort IDs',
-                       self._ctx_no_file + 'CheckClientsData', importance=3)
-            self.check_contacts()
-
-        return ""
-
-    def fetch_contacts(self, where_group_order=""):
+    def co_fetch_all(self, where_group_order=""):
         if self.ass_db.select('v_contacts_refs_owns', where_group_order=where_group_order):
             return self.ass_db.last_err_msg
 
         self.contacts = self.ass_db.fetch_all()
-        return ""
+        return self.ass_db.last_err_msg
 
-    def save_contact(self, ac_id, sf_id, sh_id, ext_refs=None, ass_idx=None, ass_db=None, acu_db=None, commit=False):
+    def co_save(self, ac_id, sf_id, sh_id, ext_refs=None, ass_idx=None, commit=False):
         """
         save/upsert contact data into AssCache database.
+
         :param ac_id:       Acumen client reference.
         :param sf_id:       Salesforce contact/personal-account id.
         :param sh_id:       Sihot guest object id.
         :param ext_refs:    List of external reference tuples (type, id) to save - used instead of acu_db.
         :param ass_idx:     self.contacts list index of contact record.
-        :param ass_db:      AssCache database handle (def=None will connect to AssCache automatically).
-        :param acu_db:      Acumen database for to fetch external references (def=NONE will skip the fetch).
         :param commit:      Boolean flag if AssCache data changes should be committed (def=False).
         :return:            Primary Key of upserted AssCache contact record or None on error (see self.error_message).
         """
-        if not ass_db:
-            ass_db = self.connect_ass_db()
-            if ass_db is None:
-                return None
-
         col_values = dict(co_ac_id=ac_id, co_sf_id=sf_id, co_sh_id=sh_id)
-        if ass_db.upsert('contacts', col_values, chk_values=col_values, returning_column='co_pk', commit=commit):
-            self.error_message = ass_db.last_err_msg
+        if self.ass_db.upsert('contacts', col_values, chk_values=col_values, returning_column='co_pk', commit=commit):
+            self.error_message = self.ass_db.last_err_msg
             return None
-        co_pk = ass_db.fetch_value()
+        co_pk = self.ass_db.fetch_value()
 
-        if acu_db:
-            ers = self.load_view(acu_db, 'T_CR', ["DISTINCT " + ext_ref_type_sql(), "CR_REF"],
+        if self.acu_db and ac_id:
+            ers = self.load_view(self.acu_db, 'T_CR', ["DISTINCT " + ext_ref_type_sql(), "CR_REF"],
                                  "CR_CDREF = :ac_id", dict(ac_id=ac_id))
             if ers is None:
                 return None
             if ext_refs:
                 ers += ext_refs
         else:
-            ers = ext_refs or list()
+            ers = ext_refs
         for er in ers:
             col_values = dict(er_co_fk=co_pk, er_type=er[0], er_id=er[1])
-            if ass_db.upsert('external_refs', col_values, chk_values=col_values, commit=commit):
+            if self.ass_db.upsert('external_refs', col_values, chk_values=col_values, commit=commit):
                 break
-        if ass_db.last_err_msg:
-            self.error_message = ass_db.last_err_msg
+        if self.ass_db.last_err_msg:
+            self.error_message = self.ass_db.last_err_msg
             return None
 
         if not ass_idx:
@@ -383,22 +264,17 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return co_pk
 
-    def save_contacts(self):
-        self.error_message = ""
-        ass_db = self.connect_ass_db()
-        if ass_db is None:
-            return self.error_message
-
+    def co_flush(self):
         for idx in self.contacts_changed:
             co = self.contacts[idx]
-            co_pk = self.save_contact(co[_AC_ID], co[_SF_ID], co[_SH_ID], ext_refs=co[_EXT_REFS].split(EXT_REFS_SEP),
-                                      ass_idx=idx, ass_db=ass_db)
+            co_pk = self.co_save(co[_AC_ID], co[_SF_ID], co[_SH_ID], ext_refs=co[_EXT_REFS].split(EXT_REFS_SEP),
+                                 ass_idx=idx)
             if co_pk is None:
                 return self.error_message
 
-        return ass_db.commit()
+        return self.ass_db.commit()
 
-    def check_contacts(self):
+    def co_check_ext_refs(self):
         resort_codes = self.cae.get_config('ClientRefsResortCodes').split(EXT_REFS_SEP)
         found_ids = dict()
         for c_rec in self.contacts:
@@ -424,35 +300,6 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                        repr(ref), ';'.join([_[_AC_ID] for _ in recs])))
         for dup in sorted(dup_ids):
             self._warn(dup, self._ctx_no_file + 'CheckClientsDataExtRefDuplicates')
-
-    def mkt_seg_grp(self, c_idx, is_guest, file_name, line_num):
-        """ determine seg=RE RG RI RL  and  grp=RCI External, RCI Guest, RCI Internal, RCI External """
-        if self.contacts[c_idx][_IS_OWNER]:
-            key = 'Internal'
-        else:  # not an owner/internal, so will be either Guest or External
-            key = 'Guest' if is_guest else 'External'
-        seg, desc, grp = self.cae.get_config(key, 'RcMktSegments').split(',')
-        if file_name[:3].upper() == 'RL_':
-            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                self._warn("Reclassified booking from " + seg + "/" + grp + " into RL/RCI External",
-                           file_name, line_num, importance=1)
-            # seg, grp = 'RL', 'RCI External'
-            seg, desc, grp = self.cae.get_config('Leads', 'RcMktSegments').split(',')
-        return seg, grp
-
-    def complete_contacts_with_sh_id(self, c_idx, sh_id):
-        """ complete contacts with imported data and sihot objid """
-        c_rec = self.contacts[c_idx]
-        if not c_rec[_SH_ID] or c_rec[_SH_ID] != sh_id:
-            if c_rec[_SH_ID]:
-                self._warn("Sihot guest object id changed from {} to {} for Salesforce contact {}"
-                           .format(c_rec[_SH_ID], sh_id, c_rec[_SF_ID]))
-            self.contacts[c_idx] = (c_rec[_ASS_ID], c_rec[_AC_ID], c_rec[_SF_ID], sh_id, c_rec[_EXT_REFS],
-                                    c_rec[_IS_OWNER])
-            self.contacts_changed.append(c_idx)
-
-    def sent_contacts(self):
-        return [i for i, _ in enumerate(self.contacts) if _[_SH_ID]]
 
     def co_ass_id_by_idx(self, index):
         return self.contacts[index][_ASS_ID]
@@ -550,26 +397,103 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.contacts_changed.append(list_idx)
         return list_idx
 
+    def co_complete_with_sh_id(self, c_idx, sh_id):
+        """ complete contacts with imported data and sihot objid """
+        c_rec = self.contacts[c_idx]
+        if not c_rec[_SH_ID] or c_rec[_SH_ID] != sh_id:
+            if c_rec[_SH_ID]:
+                self._warn("Sihot guest object id changed from {} to {} for Salesforce contact {}"
+                           .format(c_rec[_SH_ID], sh_id, c_rec[_SF_ID]))
+            self.contacts[c_idx] = (c_rec[_ASS_ID], c_rec[_AC_ID], c_rec[_SF_ID], sh_id, c_rec[_EXT_REFS],
+                                    c_rec[_IS_OWNER])
+            self.contacts_changed.append(c_idx)
+
+    def co_sent_to_sihot(self):
+        return [i for i, _ in enumerate(self.contacts) if _[_SH_ID]]
+
+    def co_list_by_ac_id(self, ac_id):
+        return [_ for _ in self.contacts if _[_AC_ID] == ac_id]
+
     # =================  res_inv_data  =========================================================================
 
-    def fetch_res_inv_data(self):
+    def ri_fetch_all(self):
         self._warn("Fetching reservation inventory from AssCache (needs some minutes)",
                    self._ctx_no_file + 'FetchResInv', importance=4)
-        self.error_message = ""
-        ass_db = self.connect_ass_db()
-        if ass_db is None:
-            return self.error_message
-        self.res_inv_data = self.load_view(ass_db, 'res_inventories')
+        self.res_inv_data = self.load_view(self.ass_db, 'res_inventories')
         if not self.res_inv_data:
             return self.error_message
 
         return ""
 
-    def allocated_room(self, room_no, arr_date):
-        year, week = self.rc_arr_to_year_week(arr_date)
+    def ri_allocated_room(self, room_no, arr_date):
+        year, week = self.rci_arr_to_year_week(arr_date)
         for r_rec in self.res_inv_data:
             if r_rec[_WKREF] == room_no.lstrip('0') + '-' + ('0' + str(week))[:2] and r_rec[_YEAR] == year:
                 if r_rec[_GRANTED] == 'HR' or not r_rec[_SWAPPED] \
                         or r_rec[_ROREF] in ('RW', 'RX', 'rW'):
                     return room_no
         return ''
+
+    # =================  reservation bookings  ===================================================================
+
+    def rgr_update(self, sh_hotel_id, upd_col_values, sh_gds_no=None, sh_res_id=None, commit=False):
+        if not sh_gds_no and not sh_res_id:
+            return "rgr_update({}, {}): Missing reservation id (gds|res-no)".format(sh_hotel_id, upd_col_values)
+        where_vars = dict(ho_id=sh_hotel_id)
+        if sh_gds_no:
+            where_expr = "rgr_gds_no = :res_id"
+            where_vars.update(res_id=sh_gds_no)
+        else:
+            where_expr = "rgr_sh_res_id = :res_id"
+            where_vars.update(res_id=sh_res_id)
+        self.error_message = self.ass_db.update('res_groups', upd_col_values, "rgr_ho_fk = :ho_id AND " + where_expr,
+                                                bind_vars=where_vars, commit=commit)
+        return self.error_message
+
+    # =================  RCI data conversion  ==================================================
+
+    def rci_to_sihot_hotel_id(self, rc_resort_id):
+        return self.cae.get_config(rc_resort_id, 'RcResortIds', default_value=-369)     # pass default for int type ret
+
+    def rci_arr_to_year_week(self, arr_date):
+        year = arr_date.year
+        week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
+        next_year_week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year + 1), 'RcWeeks'), '%Y-%m-%d')
+        if arr_date < week_1_begin:
+            year -= 1
+            week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
+        elif arr_date > next_year_week_1_begin:
+            year += 1
+            week_1_begin = next_year_week_1_begin
+        diff = arr_date - week_1_begin
+        return year, 1 + int(diff.days / 7)
+
+    def rci_ro_group(self, c_idx, is_guest, file_name, line_num):
+        """ determine seg=RE RG RI RL  and  grp=RCI External, RCI Guest, RCI Internal, RCI External """
+        if self.contacts[c_idx][_IS_OWNER]:
+            key = 'Internal'
+        else:  # not an owner/internal, so will be either Guest or External
+            key = 'Guest' if is_guest else 'External'
+        seg, desc, grp = self.cae.get_config(key, 'RcMktSegments').split(',')
+        if file_name[:3].upper() == 'RL_':
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                self._warn("Reclassified booking from " + seg + "/" + grp + " into RL/RCI External",
+                           file_name, line_num, importance=1)
+            # seg, grp = 'RL', 'RCI External'
+            seg, desc, grp = self.cae.get_config('Leads', 'RcMktSegments').split(',')
+        return seg, grp
+
+    # ##########################  market segment helpers  #####################################################
+
+    def ro_agency_objid(self, ro_code):
+        return next((cols[1] for cols in self.ro_agencies if cols[0] == ro_code), None)
+
+    def ro_agency_matchcode(self, ro_code):
+        return next((cols[2] for cols in self.ro_agencies if cols[0] == ro_code), None)
+
+    def ro_sihot_mkt_seg(self, ro_code):
+        sihot_mkt_seg = next((cols[3] for cols in self.ro_agencies if cols[0] == ro_code), None)
+        return sihot_mkt_seg or ro_code
+
+    def ro_res_group(self, ro_code):
+        return next((cols[4] for cols in self.ro_agencies if cols[0] == ro_code), None)

@@ -69,9 +69,9 @@ class TestTourOps:
         assert ret == obj_id                                # == '27'
 
     def test_config_data_get_thomas_cook_agency(self, guest_search, config_data):
-        mc = config_data.get_ro_agency_matchcode('TK')
+        mc = config_data.ro_agency_matchcode('TK')
         obj_id = guest_search.get_objid_by_matchcode(mc)
-        objid = str(config_data.get_ro_agency_objid('TK'))
+        objid = str(config_data.ro_agency_objid('TK'))
         assert obj_id == objid
 
     def test_get_thomas_cook_by_surname(self, guest_search):
@@ -258,91 +258,91 @@ class TestSystem:
 
 class TestRoomCat:
     def test_room_cat_bhc_studio(self, config_data):
-        assert config_data.get_room_cat('E102') == 'STDP'
-        assert config_data.get_room_cat('A103') == 'STDO'
-        assert config_data.get_room_cat('F206') == 'STDS'
+        assert config_data.cat_by_room('E102') == 'STDP'
+        assert config_data.cat_by_room('A103') == 'STDO'
+        assert config_data.cat_by_room('F206') == 'STDS'
 
     def test_room_cat_bhc_1bed(self, config_data):
-        assert config_data.get_room_cat('A102') == '1JNR'
-        assert config_data.get_room_cat('A119') == '1JNR'   # '1JNS'
-        assert config_data.get_room_cat('E404') == '1DSS'
+        assert config_data.cat_by_room('A102') == '1JNR'
+        assert config_data.cat_by_room('A119') == '1JNR'   # '1JNS'
+        assert config_data.cat_by_room('E404') == '1DSS'
 
     def test_room_cat_bhc_2bed(self, config_data):
-        assert config_data.get_room_cat('H101') == '2BSU'
-        assert config_data.get_room_cat('H202') == '2BSH'
-        assert config_data.get_room_cat('H112') == '2BSP'
+        assert config_data.cat_by_room('H101') == '2BSU'
+        assert config_data.cat_by_room('H202') == '2BSH'
+        assert config_data.cat_by_room('H112') == '2BSP'
 
     def test_room_cat_pbc_studio(self, config_data):
-        assert config_data.get_room_cat('211') == 'STDP'
-        assert config_data.get_room_cat('511') == 'STDS'
-        assert config_data.get_room_cat('911') == 'STDH'
+        assert config_data.cat_by_room('211') == 'STDP'
+        assert config_data.cat_by_room('511') == 'STDS'
+        assert config_data.cat_by_room('911') == 'STDH'
 
     def test_room_cat_pbc_1bed(self, config_data):
-        assert config_data.get_room_cat('126') == '1JNP'
-        assert config_data.get_room_cat('535') == '1STS'
-        assert config_data.get_room_cat('922') == '1JNH'
+        assert config_data.cat_by_room('126') == '1JNP'
+        assert config_data.cat_by_room('535') == '1STS'
+        assert config_data.cat_by_room('922') == '1JNH'
 
     def test_room_cat_pbc_2bed(self, config_data):
-        assert config_data.get_room_cat('334') == '2BSP'
-        assert config_data.get_room_cat('401') == '2STS'    # '22SB'
-        assert config_data.get_room_cat('925') == '2BSH'
-        assert config_data.get_room_cat('924') == '2STS'
+        assert config_data.cat_by_room('334') == '2BSP'
+        assert config_data.cat_by_room('401') == '2STS'    # '22SB'
+        assert config_data.cat_by_room('925') == '2BSH'
+        assert config_data.cat_by_room('924') == '2STS'
 
     def test_room_size_bhc_studio(self, config_data):
-        assert config_data.get_size_cat('BHC', 'STUDIO') == 'STDO'
-        assert config_data.get_size_cat('BHC', 'STUDIO', [752, 781, 748]) == 'STDO'
-        assert config_data.get_size_cat('BHC', 'STUDIO', [757, 781, 748]) == 'STDS'
-        assert config_data.get_size_cat('BHC', 'STUDIO', [757, 781, 748], allow_any=False) == 'STDS'
-        assert config_data.get_size_cat('BHC', 'STUDIO', [752, 781, 748], allow_any=False) is None
+        assert config_data.cat_by_size('1', 'STUDIO') == 'STDO'
+        assert config_data.cat_by_size('1', 'STUDIO', [752, 781, 748]) == 'STDO'
+        assert config_data.cat_by_size('1', 'STUDIO', [757, 781, 748]) == 'STDS'
+        assert config_data.cat_by_size('1', 'STUDIO', [757, 781, 748], allow_any=False) == 'STDS'
+        assert config_data.cat_by_size('1', 'STUDIO', [752, 781, 748], allow_any=False) is None
 
     def test_room_size_bhc_1bed(self, config_data):
-        assert config_data.get_size_cat('BHC', '1 BED') == '1JNR'
-        assert config_data.get_size_cat('BHC', '1 BED', [752, 781, 748]) == '1DSS'
-        assert config_data.get_size_cat('BHC', '1 BED', [757, 781, 748]) == '1JNS'
+        assert config_data.cat_by_size('1', '1 BED') == '1JNR'
+        assert config_data.cat_by_size('1', '1 BED', [752, 781, 748]) == '1DSS'
+        assert config_data.cat_by_size('1', '1 BED', [757, 781, 748]) == '1JNS'
 
     def test_room_size_bhc_2bed(self, config_data):
-        assert config_data.get_size_cat('BHC', '2 BED') == '2BSU'
-        assert config_data.get_size_cat('BHC', '2 BED', [752, 781, 748]) == '2DPU'
-        assert config_data.get_size_cat('BHC', '2 BED', [757, 781, 748]) == '2BSH'
+        assert config_data.cat_by_size('1', '2 BED') == '2BSU'
+        assert config_data.cat_by_size('1', '2 BED', [752, 781, 748]) == '2DPU'
+        assert config_data.cat_by_size('1', '2 BED', [757, 781, 748]) == '2BSH'
 
     def test_room_size_pbc_studio(self, config_data):
-        assert config_data.get_size_cat('PBC', 'STUDIO') == 'STDP'
-        assert config_data.get_size_cat('PBC', 'STUDIO', [752, 781, 748]) == 'STDB'
-        assert config_data.get_size_cat('PBC', 'STUDIO', [757, 748]) == 'STDH'
-        assert config_data.get_size_cat('PBC', 'STUDIO', [757, 781, 748], allow_any=False) == 'STDB'
-        assert config_data.get_size_cat('PBC', 'STUDIO', [752, 757, 748]) == 'STDH'
-        assert config_data.get_size_cat('PBC', 'STUDIO', [752, 757, 781, 748], allow_any=False) == 'STDB'
+        assert config_data.cat_by_size('4', 'STUDIO') == 'STDP'
+        assert config_data.cat_by_size('4', 'STUDIO', [752, 781, 748]) == 'STDB'
+        assert config_data.cat_by_size('4', 'STUDIO', [757, 748]) == 'STDH'
+        assert config_data.cat_by_size('4', 'STUDIO', [757, 781, 748], allow_any=False) == 'STDB'
+        assert config_data.cat_by_size('4', 'STUDIO', [752, 757, 748]) == 'STDH'
+        assert config_data.cat_by_size('4', 'STUDIO', [752, 757, 781, 748], allow_any=False) == 'STDB'
 
     def test_room_size_pbc_1bed(self, config_data):
-        assert config_data.get_size_cat('PBC', '1 BED') == '1JNP'
-        assert config_data.get_size_cat('PBC', '1 BED', [752, 781, 748]) == '1JNB'  # Sterling
-        assert config_data.get_size_cat('PBC', '1 BED', [757, 781]) == '1JNB'
+        assert config_data.cat_by_size('4', '1 BED') == '1JNP'
+        assert config_data.cat_by_size('4', '1 BED', [752, 781, 748]) == '1JNB'  # Sterling
+        assert config_data.cat_by_size('4', '1 BED', [757, 781]) == '1JNB'
 
     def test_room_size_pbc_2bed(self, config_data):
-        assert config_data.get_size_cat('PBC', '2 BED') == '2BSP'
-        assert config_data.get_size_cat('PBC', '2 BED', [752, 781, 748]) == '22SB'
-        assert config_data.get_size_cat('PBC', '2 BED', [757, 781, 748]) == '22SB'
+        assert config_data.cat_by_size('4', '2 BED') == '2BSP'
+        assert config_data.cat_by_size('4', '2 BED', [752, 781, 748]) == '22SB'
+        assert config_data.cat_by_size('4', '2 BED', [757, 781, 748]) == '22SB'
 
     # following two tests added from TC contract setup - see Fabian's email from 21-11-2016 14:56
     def test_room_size_fabian_setup_bhc(self, config_data):
-        assert config_data.get_size_cat('BHC', 'STUDIO') == 'STDO'
-        assert config_data.get_size_cat('BHC', 'STUDIO', [757]) == 'STDS'
+        assert config_data.cat_by_size('1', 'STUDIO') == 'STDO'
+        assert config_data.cat_by_size('1', 'STUDIO', [757]) == 'STDS'
 
-        assert config_data.get_size_cat('BHC', '1 BED') == '1JNR'
-        assert config_data.get_size_cat('BHC', '1 BED', [752]) == '1DSS'
-        assert config_data.get_size_cat('BHC', '1 BED', [757]) == '1JNS'
+        assert config_data.cat_by_size('1', '1 BED') == '1JNR'
+        assert config_data.cat_by_size('1', '1 BED', [752]) == '1DSS'
+        assert config_data.cat_by_size('1', '1 BED', [757]) == '1JNS'
 
-        assert config_data.get_size_cat('BHC', '2 BED') == '2BSU'
-        assert config_data.get_size_cat('BHC', '2 BED', [752]) == '2DPU'
+        assert config_data.cat_by_size('1', '2 BED') == '2BSU'
+        assert config_data.cat_by_size('1', '2 BED', [752]) == '2DPU'
 
     def test_room_size_fabian_setup_pbc(self, config_data):
-        assert config_data.get_size_cat('PBC', 'STUDIO') == 'STDP'
-        assert config_data.get_size_cat('PBC', 'STUDIO', [757]) == 'STDH'
-        assert config_data.get_size_cat('PBC', 'STUDIO', [781]) == 'STDB'  # Seafront
+        assert config_data.cat_by_size('4', 'STUDIO') == 'STDP'
+        assert config_data.cat_by_size('4', 'STUDIO', [757]) == 'STDH'
+        assert config_data.cat_by_size('4', 'STUDIO', [781]) == 'STDB'  # Seafront
 
-        assert config_data.get_size_cat('PBC', '1 BED') == '1JNP'
-        assert config_data.get_size_cat('PBC', '1 BED', [757]) == '1JNH'
-        assert config_data.get_size_cat('PBC', '1 BED', [748]) == '1STS'
+        assert config_data.cat_by_size('4', '1 BED') == '1JNP'
+        assert config_data.cat_by_size('4', '1 BED', [757]) == '1JNH'
+        assert config_data.cat_by_size('4', '1 BED', [748]) == '1STS'
 
-        assert config_data.get_size_cat('PBC', '2 BED') == '2BSP'
-        assert config_data.get_size_cat('PBC', '2 BED', [757]) == '2BSH'
+        assert config_data.cat_by_size('4', '2 BED') == '2BSP'
+        assert config_data.cat_by_size('4', '2 BED', [757]) == '2BSH'

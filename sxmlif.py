@@ -331,6 +331,7 @@ MAP_WEB_RES = \
         {'elemName': 'ID', 'colName': 'RUL_SIHOT_HOTEL'},  # or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
         {'elemName': 'ARESLIST/'},
         {'elemName': 'RESERVATION/'},
+        # ### main reservation info: orderer, status, external booking references, room/price category, ...
         # MATCHCODE, NAME, COMPANY and GUEST-ID are mutually exclusive
         # MATCHCODE/GUEST-ID needed for DELETE action for to prevent Sihot error:
         # .. "Could not find a key identifier for the client (name, matchcode, ...)"
@@ -363,7 +364,8 @@ MAP_WEB_RES = \
          'colValFromAcu': "F_SIHOT_CAT('RU' || RU_CODE)"},
         # {'elemName': 'PCAT', 'colName': 'SIHOT_CAT',
         #  'colValFromAcu': "'1TIC'"},
-        {'elemName': 'ALLOTMENT-NO', 'colName': 'SIHOT_ALLOTMENT_NO', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
+        {'elemName': 'ALLOTMENT-EXT-NO', 'colName': 'SIHOT_ALLOTMENT_NO', 'colVal': '',
+         # removed while renaming ALLOTMENT-NO to ALLOTMENT-EXT-NO: 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c"},
         {'elemName': 'PAYMENT-INST', 'colName': 'SIHOT_PAYMENT_INST', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'SIHOT_PAYMENT_INST' not in c"},
@@ -388,12 +390,23 @@ MAP_WEB_RES = \
         # {'elemName': 'R', 'colName': 'RO_SIHOT_RATE', 'colValFromAcu': "nvl(RO_SIHOT_RATE, RUL_SIHOT_RATE)"},
         # {'elemName': 'ISDEFAULT', 'colVal': 'N'},
         # {'elemName': '/RATE'},
+        # ### Reservation Channels - used for assignment of reservation to a allotment or to board payment
         {'elemName': 'RESCHANNELLIST/',
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:5] not in ('Owner', 'Promo')"},
+                       " or c['RO_RES_GROUP'][:4] not in ('Owne', 'Prom', 'RCI ')"},
         {'elemName': 'RESCHANNEL/',
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:5] not in ('Owner', 'Promo')"},
+                       " or c['RO_RES_GROUP'][:4] not in ('Owne', 'Prom', 'RCI ')"},
+        # needed for to add RCI booking to RCI allotment
+        {'elemName': 'IDX', 'colVal': 1,
+         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
+                       " or c['RO_RES_GROUP'][:4] not in ('RCI ')"},
+        {'elemName': 'MATCHCODE', 'colVal': 'RCI',
+         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
+                       " or c['RO_RES_GROUP'][:4] not in ('RCI ')"},
+        {'elemName': 'ISPRICEOWNER', 'colVal': 1,
+         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
+                       " or c['RO_RES_GROUP'][:4] not in ('RCI ')"},
         # needed for marketing fly buys for board payment bookings
         {'elemName': 'IDX', 'colVal': 1,
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
@@ -416,10 +429,11 @@ MAP_WEB_RES = \
                        " or c['RO_RES_GROUP'] not in ('Owner')"},
         {'elemName': '/RESCHANNEL',
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:5] not in ('Owner', 'Promo')"},
+                       " or c['RO_RES_GROUP'][:4] not in ('Owne', 'Prom', 'RCI ')"},
         {'elemName': '/RESCHANNELLIST',
          'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:5] not in ('Owner', 'Promo')"},
+                       " or c['RO_RES_GROUP'][:4] not in ('Owne', 'Prom', 'RCI ')"},
+        # ### GENERAL RESERVATION DATA: arrival/departure, pax, market sources, comments
         {'elemName': 'ARR', 'colName': 'ARR_DATE',
          'colValFromAcu': "case when ARR_DATE is not NULL then ARR_DATE when RUL_ACTION <> 'UPDATE' then"
                           " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
@@ -451,6 +465,7 @@ MAP_WEB_RES = \
          'elemHideIf': "'RU_FLIGHT_LANDS' not in c or not c['RU_FLIGHT_PICKUP']"},
         {'elemName': 'PICKUP-TYPE-ARRIVAL', 'colVal': 1,  # 1=car, 2=van
          'elemHideIf': "'RU_FLIGHT_PICKUP' not in c or not c['RU_FLIGHT_PICKUP']"},
+        # ### PERSON/occupant details
         {'elemName': 'PERS-TYPE-LIST/'},
         {'elemName': 'PERS-TYPE/'},
         {'elemName': 'TYPE', 'colVal': '1A'},
@@ -697,6 +712,7 @@ MAP_WEB_RES = \
          'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'SH_CHILD4_DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "c['RU_CHILDREN'] <= 3"},
+        # ### EXTRA PARSING FIELDS (for to interpret reservation coming from the WEB interface)
         {'elemName': 'ACTION', 'colName': 'RUL_ACTION', 'buildExclude': True},
         {'elemName': 'STATUS', 'colName': 'RU_STATUS', 'buildExclude': True},
         {'elemName': 'RULREF', 'colName': 'RUL_CODE', 'buildExclude': True},
@@ -865,12 +881,20 @@ class RoomChange(SihotXmlParser):
     def __init__(self, ca):
         super(RoomChange, self).__init__(ca)
         # add base tags for room/GDS number, old room/GDS number and guest objid
+        self._base_tags.append('HN')
+        self.hn = None  # added for to remove pycharm warning
         self._base_tags.append('RN')
-        self.rn = None  # added for to remove pycharm warning
+        self.rn = None
         self._base_tags.append('ORN')
         self.orn = None
         self._base_tags.append('GDSNO')
         self.gdsno = None
+        self._base_tags.append('RES-NR')
+        self.res_nr = None
+        self._base_tags.append('SUB-NR')
+        self.sub_nr = None
+        self._base_tags.append('OSUB-NR')
+        self.osub_nr = None
         self._base_tags.append('GID')
         self.gid = None
 

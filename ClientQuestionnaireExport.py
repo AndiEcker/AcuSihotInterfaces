@@ -110,7 +110,7 @@ def elem_value(row, col_nam, arri=-1):
     return col_val
 
 
-def get_hotel_and_res_id(row):
+def get_hotel_and_res_id(row):  # see also shif.py/hotel_and_res_id()
     h_id = elem_value(row, 'RES-HOTEL')
     r_num = elem_value(row, 'RES-NR')
     s_num = elem_value(row, 'SUB-NR')
@@ -118,7 +118,7 @@ def get_hotel_and_res_id(row):
         cae.dprint("  ##  Skipping reservation with invalid hotel-id/RES-NR/SUB-NR", h_id, r_num, s_num,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         return None, None
-    return h_id, h_id + '/' + r_num + ('-' + s_num if s_num else '')
+    return h_id, r_num + ('/' + s_num if s_num else '') + '@' + h_id
 
 
 def get_date_range(row):
@@ -212,7 +212,7 @@ try:
                     cae.dprint(" ###  Skipping checkout with invalid/empty email address; res-id=", res_id)
                     continue
                 for arr_index in arr_indexes:
-                    unique_id = res_id + ('@' + str(arr_index) if arr_index >= 0 else '')
+                    unique_id = res_id + ('#' + str(arr_index) if arr_index >= 0 else '')
                     if unique_id in unique_ids:
                         uprint("  **  Detected duplicate guest/client with unique-id=", unique_id)
                     unique_ids.append(unique_id)

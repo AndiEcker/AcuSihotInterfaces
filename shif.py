@@ -4,11 +4,13 @@ import time
 from traceback import print_exc
 
 from sxmlif import AvailCatInfo, GuestSearch, ResSearch, SXML_DEF_ENCODING, ELEM_PATH_SEP, elem_path_values
-from acu_sf_sh_sys_data import AssSysData
+from ass_sys_data import AssSysData
 from ae_console_app import uprint, DATE_ISO, DEBUG_LEVEL_VERBOSE
 
 SH_PROVIDES_CHECKOUT_TIME = False  # currently there is no real checkout time available in Sihot
 SH_DATE_FORMAT = '%Y-%m-%d %H:%M:%S' if SH_PROVIDES_CHECKOUT_TIME else '%Y-%m-%d'
+
+SH_RES_SUB_SEP = '/'
 
 ELEM_MISSING = "(missing)"
 ELEM_EMPTY = "(empty)"
@@ -26,16 +28,16 @@ def avail_rooms(cae, hotel_ids=None, room_cat_prefix='', day=datetime.date.today
     :return:                Number of available rooms (negative on overbooking).
     """
     if not hotel_ids:
-        # hotel_ids = [1, 2, 3, 4, 999]
-        hotel_ids = AssSysData(cae).get_hotel_ids()     # determine list of IDs of all active/valid Sihot-hotels
+        # hotel_ids = ['1', '2', '3', '4', '999']
+        hotel_ids = AssSysData(cae).ho_id_list()     # determine list of IDs of all active/valid Sihot-hotels
     day_str = datetime.date.strftime(day, DATE_ISO)
     cat_info = AvailCatInfo(cae)
     rooms = 0
     for hotel_id in hotel_ids:
-        if hotel_id == 999:     # unfortunately currently there is no avail data for this pseudo hotel
-            rooms -= count_res(cae, hotel_ids=[999], room_cat_prefix=room_cat_prefix, day=day)
+        if hotel_id == '999':     # unfortunately currently there is no avail data for this pseudo hotel
+            rooms -= count_res(cae, hotel_ids=['999'], room_cat_prefix=room_cat_prefix, day=day)
         else:
-            ret = cat_info.avail_rooms(hotel_id=str(hotel_id), from_date=day, to_date=day)
+            ret = cat_info.avail_rooms(hotel_id=hotel_id, from_date=day, to_date=day)
             for cat_id, cat_data in ret.items():
                 if cat_id.startswith(room_cat_prefix):  # True for all room cats if room_cat_prefix is empty string
                     rooms += ret[cat_id][day_str]['AVAIL']
@@ -56,13 +58,13 @@ def count_res(cae, hotel_ids=None, room_cat_prefix='', day=datetime.date.today()
                             with arrivals within the date range day-res_max_days...day.
     """
     if not hotel_ids:
-        hotel_ids = AssSysData(cae).get_hotel_ids()     # determine list of IDs of all active/valid Sihot-hotels
+        hotel_ids = AssSysData(cae).ho_id_list()     # determine list of IDs of all active/valid Sihot-hotels
     res_len_max_timedelta = datetime.timedelta(days=res_max_days)
     debug_level = cae.get_option('debugLevel')
     count = 0
     res_search = ResSearch(cae)
     for hotel_id in hotel_ids:
-        all_rows = res_search.search(hotel_id=str(hotel_id), from_date=day - res_len_max_timedelta, to_date=day)
+        all_rows = res_search.search(hotel_id=hotel_id, from_date=day - res_len_max_timedelta, to_date=day)
         if all_rows and isinstance(all_rows, list):
             for row_dict in all_rows:
                 res_type = row_dict['RT']['elemVal']
@@ -100,11 +102,12 @@ def elem_path_join(elem_names):
     return ELEM_PATH_SEP.join(elem_names)
 
 
-def elem_value(shd, elem_name_or_path, arri=-1, verbose=False, default_value=None):
+def elem_value(shd, elem_name_or_path, arri=0, verbose=False, default_value=None):
     """
     get the xml element value from the shd row_dict variable, using array index (arri) in case of multiple values
+
     :param shd:                 dict of sihot data row with the element names as the dict keys.
-    :param elem_name_or_path:   either single element name, element path or list object of path element names.
+    :param elem_name_or_path:   either single element name (str), element path (str) or list of path element names.
     :param arri:                index of element array value (starting with 0).
     :param verbose:             pass True to get ELEM_EMPTY/ELEM_MISSING pseudo values instead of default_value value.
     :param default_value:       default element value.
@@ -125,9 +128,7 @@ def elem_value(shd, elem_name_or_path, arri=-1, verbose=False, default_value=Non
     else:
         elem_def = shd[elem_nam]
         if 'elemListVal' in elem_def and len(elem_def['elemListVal']) > arri:
-            elem_val = [_ for _ in elem_def['elemListVal'] if _] if arri == -1 else ""
-            if not elem_val:
-                elem_val = elem_def['elemListVal'][arri]
+            elem_val = elem_def['elemListVal'][arri]
         else:
             elem_val = ""
         if not elem_val and 'elemVal' in elem_def and elem_def['elemVal']:
@@ -140,25 +141,35 @@ def elem_value(shd, elem_name_or_path, arri=-1, verbose=False, default_value=Non
 
 
 def hotel_and_res_id(shd):
-    h_id = elem_value(shd, 'RES-HOTEL')
-    r_num = elem_value(shd, 'RES-NR')
-    s_num = elem_value(shd, 'SUB-NR')
-    if not h_id or not r_num:
+    ho_id = elem_value(shd, 'RES-HOTEL')
+    res_nr = elem_value(shd, 'RES-NR')
+    sub_nr = elem_value(shd, 'SUB-NR')
+    if not ho_id or not res_nr:
         return None, None
-    return h_id, r_num + ("/" + s_num if s_num else "") + "@" + h_id
+    return ho_id, res_nr + (SH_RES_SUB_SEP + sub_nr if sub_nr else "") + '@' + ho_id
 
 
 def pax_count(shd):
-    return int(elem_value(shd, 'NOPAX')) + int(elem_value(shd, 'NOCHILDS'))
+    adults = elem_value(shd, 'NOPAX')
+    if not adults:
+        adults = 0
+    else:
+        adults = int(adults)
+    children = elem_value(shd, 'NOCHILDS')
+    if not children:
+        children = 0
+    else:
+        children = int(children)
+    return adults + children
 
 
 def gds_no(shd):
     return elem_value(shd, 'GDSNO')
 
 
-def apt_wk_yr(shd, cae, arri=-1):
+def apt_wk_yr(shd, cae, arri=0):
     arr = datetime.datetime.strptime(elem_value(shd, 'ARR'), SH_DATE_FORMAT)
-    year, wk = AssSysData(cae).rc_arr_to_year_week(arr)
+    year, wk = AssSysData(cae).rci_arr_to_year_week(arr)
     apt = elem_value(shd, 'RN', arri=arri)
     return apt, wk, year
 

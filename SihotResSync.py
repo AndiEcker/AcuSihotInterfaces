@@ -17,7 +17,7 @@ from sxmlif import ClientToSihot, ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_UPDATE, ACTION_DELETE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
-from acu_sf_sh_sys_data import AssSysData
+from ass_sys_data import AssSysData
 
 __version__ = '0.7'
 
@@ -154,7 +154,7 @@ if not error_msg:
         uprint("####  Sync Req/ARU Changes  ####")
 
         config_data = AssSysData(cae)
-        hotel_ids = config_data.get_hotel_ids()     # determine active/valid Sihot-hotels
+        hotel_ids = config_data.ho_id_list()     # determine active/valid Sihot-hotels
         acumen_req = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
                                 map_res=cae.get_option('mapRes'),
                                 use_kernel_for_new_clients=cae.get_option('useKernelForClient'),
@@ -188,7 +188,7 @@ if not error_msg:
 
             # 2nd pre-run for hotel movements (HOTMOVE) - for to delete/cancel booking in last/old hotel
             room_rows = [dict(r) for r in acumen_req.rows if r['RUL_SIHOT_HOTEL'] != r['RUL_SIHOT_LAST_HOTEL']
-                         and r['RUL_SIHOT_LAST_HOTEL'] in hotel_ids
+                         and str(r['RUL_SIHOT_LAST_HOTEL']) in hotel_ids
                          and r['RUL_ACTION'] == ACTION_UPDATE]
             if not migration_mode and room_rows:
                 cae.dprint(" ###  hotel movement pre-run has {} rows".format(len(room_rows)),
@@ -197,7 +197,7 @@ if not error_msg:
                                     start_msg=" ###  Prepare sending of {total_count} hotel movements to Sihot",
                                     nothing_to_do_msg=" ***  SihotResSync: hotel movement fetch returning no rows")
                 for crow in room_rows:
-                    new_hotel = crow['RUL_SIHOT_HOTEL']
+                    new_hotel = str(crow['RUL_SIHOT_HOTEL'])
                     crow['RUL_SIHOT_HOTEL'] = crow['RUL_SIHOT_LAST_HOTEL']
                     crow['RUL_SIHOT_CAT'] = crow['RUL_SIHOT_LAST_CAT']
                     crow['RUL_ACTION'] = 'DELETE'
@@ -226,14 +226,14 @@ if not error_msg:
                                 nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no rows")
             if acumen_req.rows:
                 cae.dprint(" ###  full/main run has {} rows"
-                           .format(len([_ for _ in acumen_req.rows if _['RUL_SIHOT_HOTEL'] in hotel_ids])),
+                           .format(len([_ for _ in acumen_req.rows if str(_['RUL_SIHOT_HOTEL']) in hotel_ids])),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                 for crow in acumen_req.rows:
                     rid = acumen_req.res_id_values(crow)
-                    if crow['RUL_SIHOT_HOTEL'] not in hotel_ids:
+                    if str(crow['RUL_SIHOT_HOTEL']) not in hotel_ids:
                         synced_ids.append(rid + "(H)")
                         continue        # skip HOTMOVE if new hotel is a non-Sihot-hotel
-                    elif crow['RUL_SIHOT_LAST_HOTEL'] not in hotel_ids:
+                    elif str(crow['RUL_SIHOT_LAST_HOTEL']) not in hotel_ids:
                         crow['RUL_ACTION'] = 'INSERT'
                     error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS)
                     progress.next(processed_id=rid, error_msg=error_msg)
