@@ -6,6 +6,7 @@
     0.5     changed SihotResSync.ini and SyncLIVE.cmd for to specify log and debug level in ini + small refactorings.
     0.6     added sync_summary and synced_ids and (in sxmlif.py) skipping of follow-up changes after/of erroneous res.
     0.7     23-09-17 added migrationMode and syncDateRange command line option.
+    0.8     01-03-18 extended to allow allotments (RCI) configured by SihotMktSegExceptions.cfg.
 """
 import datetime
 
@@ -19,7 +20,7 @@ from sxmlif import ClientToSihot, ResToSihot, \
     ACTION_UPDATE, ACTION_DELETE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
 from ass_sys_data import AssSysData
 
-__version__ = '0.7'
+__version__ = '0.8'
 
 ADMIN_MAIL_TO_LIST = ['ITDevmen@acumen.es']
 

@@ -28,7 +28,14 @@ class TestEmailValidator:
     def test_valid_email_of_signallia(self, console_app_env):
         ev = EmailValidator(base_url=console_app_env.get_config('emailValidatorBaseUrl'),
                             api_key=console_app_env.get_config('emailValidatorApiKey'))
-        err_msg = ev.validate('Andreas.Ecker@test.com')
+        err_msg = ev.validate('Andreas.Ecker@signallia.com')
+        print("Validator error", err_msg)
+        assert not err_msg
+
+    def test_valid_email_of_google(self, console_app_env):
+        ev = EmailValidator(base_url=console_app_env.get_config('emailValidatorBaseUrl'),
+                            api_key=console_app_env.get_config('emailValidatorApiKey'))
+        err_msg = ev.validate('aecker2@gmail.com')
         print("Validator error", err_msg)
         assert not err_msg
 
