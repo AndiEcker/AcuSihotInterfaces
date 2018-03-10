@@ -127,20 +127,21 @@ CREATE TABLE res_groups
 (
   rgr_pk                  SERIAL PRIMARY KEY,
   rgr_ho_fk               VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),   -- SIHOT hotel id (e.g. '1'==BHC, ...)
-  rgr_gds_no              VARCHAR(24),              -- SIHOT reservation GDSNO (OBJID not available in RES-SEARCH)
-  rgr_sh_res_id           VARCHAR(18),              -- SIHOT reservation id (number / sub-number)
-  rgr_order_co_fk         INTEGER NOT NULL REFERENCES contacts(co_pk),
+  rgr_gds_no              VARCHAR(24) NOT NULL,     -- SIHOT reservation GDSNO (OBJID not available in RES-SEARCH)
+  rgr_res_id              VARCHAR(18) NOT NULL,     -- SIHOT reservation id (res-number / sub-number)
+  rgr_sub_id              VARCHAR(3) NOT NULL,
+  rgr_order_co_fk         INTEGER REFERENCES contacts(co_pk),
   rgr_used_ri_fk          INTEGER REFERENCES res_inventories(ri_pk),
   rgr_rci_deposit_ri_fk   INTEGER REFERENCES res_inventories(ri_pk),
-  rgr_arrival             DATE NOT NULL,
-  rgr_departure           DATE NOT NULL,
   rgr_status              VARCHAR(3) NOT NULL,
   rgr_adults              INTEGER NOT NULL DEFAULT 2,
   rgr_children            INTEGER NOT NULL DEFAULT 0,
-  rgr_mkt_segment         VARCHAR(3) NOT NULL,
-  rgr_mkt_group           VARCHAR(3) NOT NULL,
-  rgr_room_cat_id         VARCHAR(6) NOT NULL,
-  rgr_sh_rate             VARCHAR(3),
+  rgr_arrival             DATE,
+  rgr_departure           DATE,
+  rgr_mkt_segment         VARCHAR(3),
+  rgr_mkt_group           VARCHAR(3),
+  rgr_room_cat_id         VARCHAR(6),
+  rgr_room_rate           VARCHAR(3),
   rgr_payment_inst        VARCHAR(3),
   rgr_ext_book_id         VARCHAR(21),
   rgr_ext_book_day        DATE,
@@ -150,10 +151,10 @@ CREATE TABLE res_groups
   rgr_time_out            TIMESTAMP,
   rgr_created_by          VARCHAR(18) NOT NULL DEFAULT user,
   rgr_created_when        TIMESTAMP NOT NULL DEFAULT current_timestamp,
-  rgr_last_change         TIMESTAMP NOT NULL DEFAULT current_timestamp,
-  rgr_last_sync           TIMESTAMP,
-  UNIQUE (rgr_ho_fk, rgr_gds_no),
-  UNIQUE (rgr_ho_fk, rgr_sh_res_id)
+  rgr_last_change         TIMESTAMP NOT NULL DEFAULT current_timestamp,   -- upsert of external system (mostly Sihot)
+  rgr_last_sync           TIMESTAMP,                                      -- last sync to Salesforce
+  UNIQUE (rgr_ho_fk, rgr_gds_no, rgr_res_id),
+  CONSTRAINT con_rgr_ensure_pkey CHECK (rgr_gds_no is not null OR rgr_res_id is not null)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_groups');

@@ -91,7 +91,7 @@ uprint("Acumen user/DSN:", acu_user, acu_dsn)
 pg_user = cae.get_option('pgUser')
 pg_pw = cae.get_option('pgPassword')
 pg_dsn = cae.get_option('pgDSN')
-uprint("AssCache DB user@dbname:", pg_user, '@', pg_dsn)
+uprint("AssCache user/dsn:", pg_user, pg_dsn)
 
 sf_conn, sf_sandbox = prepare_connection(cae)
 if not sf_conn:
@@ -159,10 +159,12 @@ def log_warning(msg, ctx, importance=2):
 
 # check for to (re-)create and initialize PG database
 if acm_init:
+    pg_dbname, pg_host = pg_dsn.split('@') if '@' in pg_dsn else (pg_dsn, '')
+    pg_root_dsn = 'postgres' + ('@' + pg_host if '@' in pg_dsn else '')
     log_warning("creating data base {} and user {}".format(pg_dsn, pg_user), 'initializeCache-createDBandUser')
-    pg_db = PostgresDB(usr=cae.get_config('pgRootUsr'), pwd=cae.get_config('pgRootPwd'), dsn='postgres',
+    pg_db = PostgresDB(usr=cae.get_config('pgRootUsr'), pwd=cae.get_config('pgRootPwd'), dsn=pg_root_dsn,
                        debug_level=debug_level)
-    if pg_db.execute_sql("CREATE DATABASE " + pg_dsn + ";", auto_commit=True):  # " LC_COLLATE 'C'"):
+    if pg_db.execute_sql("CREATE DATABASE " + pg_dbname + ";", auto_commit=True):  # " LC_COLLATE 'C'"):
         log_error(pg_db.last_err_msg, 'initializeCache-createDB', exit_code=72)
 
     if pg_db.select('pg_user', ['count(*)'], "usename = :pg_user", dict(pg_user=pg_user)):
@@ -170,7 +172,7 @@ if acm_init:
     if not pg_db.fetch_value():
         if pg_db.execute_sql("CREATE USER " + pg_user + " WITH PASSWORD '" + pg_pw + "';", commit=True):
             log_error(pg_db.last_err_msg, 'initializeCache-createUser', exit_code=84)
-        if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE " + pg_dsn + " to " + pg_user + ";", commit=True):
+        if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE " + pg_dbname + " to " + pg_user + ";", commit=True):
             log_error(pg_db.last_err_msg, 'initializeCache-grantUserConnect', exit_code=87)
     pg_db.close()
 
@@ -191,7 +193,7 @@ if acm_init:
     pg_db.close()
 
 
-# logon to and prepare Acumen, Salesforce, Sihot and config data env
+# logon to and prepare AssCache, Acumen, Salesforce, Sihot and config data env
 conf_data = AssSysData(cae, err_logger=log_error, warn_logger=log_warning)
 if conf_data.error_message:
     log_error(conf_data.error_message, 'AssSysDataInit', importance=4, exit_code=9)
@@ -359,7 +361,7 @@ def ac_migrate_res_data():
                           rgr_mkt_segment=crow['SIHOT_MKT_SEG'],
                           rgr_mkt_group=crow['RO_SIHOT_RES_GROUP'],
                           rgr_room_cat_id=crow['RUL_SIHOT_CAT'],
-                          rgr_sh_rate=crow['RUL_SIHOT_RATE'],
+                          rgr_room_rate=crow['RUL_SIHOT_RATE'],
                           rgr_ext_book_id=crow['RH_EXT_BOOK_REF'],
                           rgr_ext_book_day=crow['RH_EXT_BOOK_DATE'],
                           rgr_comment=crow['SIHOT_NOTE'],
@@ -451,7 +453,7 @@ def sh_migrate_res_data():
         if gds:
             chk_values.update(rgr_gds_no=gds)
         else:
-            chk_values.update(rgr_sh_res_id=elem_value(rg, 'RES-NR') + '/' + elem_value(rg, 'SUB-NR'))
+            chk_values.update(rgr_res_id=elem_value(rg, 'RES-NR'), rgr_sub_id=elem_value(rg, 'SUB-NR'))
         upd_values = chk_values.copy()
         upd_values\
             .update(rgr_order_co_fk=ord_co_pk,
@@ -464,7 +466,7 @@ def sh_migrate_res_data():
                     rgr_mkt_segment=elem_value(rg, 'MARKETCODE'),
                     rgr_mkt_group=elem_value(rg, 'CHANNEL'),
                     rgr_room_cat_id=elem_value(rg, elem_path_join(['RESERVATION', 'CAT'])),
-                    rgr_sh_rate=elem_value(rg, 'RATE-SEGMENT'),
+                    rgr_room_rate=elem_value(rg, 'RATE-SEGMENT'),
                     rgr_payment_inst=elem_value(rg, 'PAYMENT-INST'),
                     rgr_ext_book_id=elem_value(rg, elem_path_join(['RESERVATION', 'VOUCHERNUMBER'])),
                     rgr_ext_book_day=elem_value(rg, 'SALES-DATE'),

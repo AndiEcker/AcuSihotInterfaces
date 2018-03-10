@@ -168,7 +168,7 @@ class GenericDB:
         """
         if not chk_values:
             chk_values = dict([next(iter(col_values.items()))])     # use first dict item as pkey check value
-        chk_expr = " and ".join([k + " = :" + k for k in chk_values.keys()])
+        chk_expr = " AND ".join([k + " = :" + k for k in chk_values.keys()])
 
         self.select(table_name, ["count(*)"], chk_expr, chk_values)
         if not self.last_err_msg:

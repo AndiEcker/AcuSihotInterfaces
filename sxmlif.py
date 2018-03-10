@@ -895,8 +895,66 @@ class RoomChange(SihotXmlParser):
         self.sub_nr = None
         self._base_tags.append('OSUB-NR')
         self.osub_nr = None
-        self._base_tags.append('GID')
+        self._base_tags.append('GID')       # ?!?!? no used
         self.gid = None
+
+
+class ResChange(SihotXmlParser):
+    def __init__(self, ca):
+        super(ResChange, self).__init__(ca)
+        self.rgr_list = list()
+
+    def start(self, tag, attrib):  # called for each opening tag
+        if super(ResChange, self).start(tag, attrib) is None:
+            return None  # processed by base class
+        if tag == 'SIHOT-Reservation':
+            self.rgr_list.append(dict(rgc=list()))
+        elif tag == 'SIHOT-Person':
+            self.rgr_list[-1]['rgc'].append(dict())
+
+    def data(self, data):
+        if super(ResChange, self).data(data) is None:
+            return None  # processed by base class
+        # because data can be sent in chunks on parsing, we first determine the dictionary (di) and the item key (ik)
+        if self._curr_tag == 'HN':
+            di, ik = self.rgr_list[-1], 'rgr_ho_fk'
+        elif self._curr_tag == 'RNO':
+            di, ik = self.rgr_list[-1], 'rgr_res_id'
+        elif self._curr_tag == 'RSNO':
+            di, ik = self.rgr_list[-1], 'rgr_sub_id'
+        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'ARR']:
+            di, ik = self.rgr_list[-1], 'rgr_arrival'
+        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'DEP']:
+            di, ik = self.rgr_list[-1], 'rgr_departure'
+        elif self._curr_tag == 'RT':
+            di, ik = self.rgr_list[-1], 'rgr_status'
+            data = 'S' if data == '3' else data
+        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOPAX']:
+            di, ik = self.rgr_list[-1], 'rgr_adults'
+        elif self._curr_tag == 'MC':
+            di, ik = self.rgr_list[-1], 'rgr_mkt_segment'
+        elif self._curr_tag == 'CAT':
+            di, ik = self.rgr_list[-1], 'rgr_room_cat_id'
+        elif self._curr_tag == 'SN':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_surname'
+        elif self._curr_tag == 'CN':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_firstname'
+        elif self._curr_tag == 'DOB':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_dob'
+        elif self._curr_tag == 'PHONE':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_phone'
+        elif self._curr_tag == 'EMAIL':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_email'
+        elif self._curr_tag == 'RN':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_room_id'
+        else:
+            di, ik = self.rgr_list[-1], 'unused'
+            data = ' ' + ELEM_PATH_SEP.join(self._elem_path) + '+=' + data
+        # .. and then check if we need to add or to extend the dictionary item
+        if ik in di:
+            di[ik] += data
+        else:
+            di[ik] = data
 
 
 class Response(SihotXmlParser):  # response xml parser for kernel or web interfaces
@@ -1218,6 +1276,9 @@ class SihotXmlBuilder:
         self._xml = ''
         self._indent = 0
 
+        # added for to store fetch_from_acu timestamp
+        self._last_fetch = None
+
     def __del__(self):
         if self.acu_connected and self.ora_db:
             self.ora_db.close()
@@ -1241,14 +1302,15 @@ class SihotXmlBuilder:
     # --- database fetching
 
     def fetch_all_from_acu(self):
+        self._last_fetch = datetime.datetime.now()
         self._rows = list()
         plain_rows = self.ora_db.fetch_all()
         for r in plain_rows:
             col_values = self.fix_col_values.copy()
             col_values.update(zip(self.acu_col_names, r))
             self._rows.append(col_values)
-        self.ca.dprint("SihotXmlBuilder.fetch_all_from_acu() got {}, 1st row: {}"
-                       .format(self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.ca.dprint("SihotXmlBuilder.fetch_all_from_acu() at {} got {}, 1st row: {}"
+                       .format(self._last_fetch, self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
         self._xml = '<?xml version="1.0" encoding="' + self.ca.get_option('xmlEncoding').lower() + \
@@ -1350,6 +1412,8 @@ class SihotXmlBuilder:
         self._xml = value
 
     def _add_to_acumen_sync_log(self, table, primary, action, status, message, logref, commit=False):
+        self.ca.dprint('SihotXmlBuilder._add_to_acumen_sync_log() time/now:', self._last_fetch, datetime.datetime.now(),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         return self.ora_db.insert('T_SRSL',
                                   {'SRSL_TABLE': table[:6],
                                    'SRSL_PRIMARY': str(primary)[:12],
@@ -1357,6 +1421,11 @@ class SihotXmlBuilder:
                                    'SRSL_STATUS': status[:12],
                                    'SRSL_MESSAGE': message[:1998],
                                    'SRSL_LOGREF': logref,  # NUMBER(10)
+                                   # before SRSL_DATE was set to SYSDATE by Oracle column default value
+                                   # PLEASE NOTE THAT THIS IS FAILING (see WO #58116) if query is slow and the
+                                   # .. reservation got meanwhile changed again (before calling this method);
+                                   # .. Therefore added the self._last_fetch timestamp explicitly to the SRSL record.
+                                   'SRSL_DATE': self._last_fetch,
                                    },
                                   commit=commit)
 

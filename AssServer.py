@@ -1,6 +1,6 @@
 """
     AssServer is listening on the SIHOT SXML interface for to propagate room check-ins/check-outs/move
-    onto the ass_cache postgres database.
+    and reservation changes onto the ass_cache postgres database.
 
     0.1     first beta.
 """
@@ -10,44 +10,43 @@ from traceback import format_exc
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_notification import Notification
 from ae_tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
-from sxmlif import Request, RoomChange, SihotXmlBuilder, SXML_DEF_ENCODING
+from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, SXML_DEF_ENCODING
 from ass_sys_data import AssSysData
 
 __version__ = '0.1'
 
-cae = None  # added for to remove Pycharm warning
+cae = ConsoleApp(__version__, "Listening to Sihot interface for to update the ass_cache PG database")
 
-if __name__ == "__main__":      # for to allow import of client_to_ass() for testing suite
-    cae = ConsoleApp(__version__, "Listening to Sihot interface for to update the ass_cache PG database")
+cae.add_option('pgUser', "User account name for ass_cache postgres cache database", 'postgres', 'U')
+cae.add_option('pgPassword', "User account password for ass_cache postgres cache database", '', 'P')
+cae.add_option('pgDSN', "Database name of the ass_cache postgres cache database", 'ass_cache', 'N')
 
-    cae.add_option('pgUser', "User account name for ass_cache postgres cache database", 'postgres', 'U')
-    cae.add_option('pgPassword', "User account password for ass_cache postgres cache database", '', 'P')
+cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
+cae.add_option('serverPort', "IP port of the interface of this server", 11000, 'w')
 
-    cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-    cae.add_option('serverPort', "IP port of the interface of this server", 11000, 'w')  # 11001 for Sihot
+cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
+cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
-    cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
-    cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
+cae.add_option('smtpServerUri', "SMTP notification server URI [user[:pw]@]host[:port]", '', 'c')
+cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
+cae.add_option('smtpTo', "List of SMTP Receiver/To addresses", list(), 'r')
 
-    cae.add_option('smtpServerUri', "SMTP notification server URI [user[:pw]@]host[:port]", '', 'c')
-    cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-    cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
-
-    uprint('Postgres Usr:', cae.get_option('pgUser'))
-    uprint('Sihot IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
-    uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
-    notification = None
-    if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-        notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                    mail_from=cae.get_option('smtpFrom'),
-                                    mail_to=cae.get_option('smtpTo'),
-                                    used_system=cae.get_option('assDSN') + '/' + cae.get_option('serverIP'),
-                                    debug_level=cae.get_option('debugLevel'))
-        uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
+debug_level = cae.get_option('debugLevel')
+uprint('AssCache Database/User:', cae.get_option('pgDSN'), cae.get_option('pgUser'))
+uprint('Sihot IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
+uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+notification = None
+if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
+    notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
+                                mail_from=cae.get_option('smtpFrom'),
+                                mail_to=cae.get_option('smtpTo'),
+                                used_system=cae.get_option('pgDSN') + '/' + cae.get_option('serverIP'),
+                                debug_level=debug_level)
+    uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
 
 
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
-    if cae.get_option('debugLevel') >= minimum_debug_level:
+    if debug_level >= minimum_debug_level:
         if notification:
             notification.send_notification(msg_body=msg, subject='AssServer notification')
         else:
@@ -69,12 +68,20 @@ def create_ack_response(req, ret_code, msg='', status=''):
     return resp.xml
 
 
-def alloc_trigger(oc, sh_hotel_id, sh_res_id):
+def oc_keep_alive(req):
+    # process operation codes: Link Alive, Time Sync, Acknowledge
+    response_xml = create_ack_response(req, '0', status='1' if req.oc == 'LA' else '')
+    notify("####  oc_keep_alive() response: " + response_xml)
+    return response_xml
+
+
+def alloc_trigger(oc, sh_hotel_id, sh_res_id, sh_sub_id):
     """ move/check in/out guest from/into room_no
 
     :param oc:              operation code: either 'CI', 'CO', 'CI-RM' or 'CO-RM'
     :param sh_hotel_id:     Sihot hotel id (e.g. '1'==BHC)
-    :param sh_res_id:       Sihot reservation id (res_nr + '/' + sub_nr)
+    :param sh_res_id:       Sihot reservation main id
+    :param sh_sub_id:       Sihot reservation sub id
     :return:                Error message in case of error else empty string
     """
     action_time = datetime.datetime.now()
@@ -89,7 +96,7 @@ def alloc_trigger(oc, sh_hotel_id, sh_res_id):
 
     if not err_msg:
         ass = AssSysData(cae)
-        err_msg = ass.rgr_update(sh_hotel_id, upd_col_values, sh_res_id=sh_res_id, commit=True)
+        err_msg = ass.rgr_upsert(upd_col_values, sh_hotel_id, res_id=sh_res_id, sub_id=sh_sub_id, commit=True)
 
     return err_msg
 
@@ -98,14 +105,14 @@ def oc_room_change(req):
     error_msg = ""
     oc = req.oc
     ho_id = req.hn
-    res_id = req.res_nr + '/' + req.sub_nr
-    notify("####  Room change {} for res {} in room {}. xml={}".format(oc, res_id, req.rn, req.get_xml()))
+    notify("####  Room change {} for res {}/{}@{} in room {}. xml={}"
+           .format(oc, req.res_nr, req.sub_nr, ho_id, req.rn, req.get_xml()))
     if oc == 'RM':
-        error_msg = alloc_trigger('CO-RM', ho_id, req.res_nr + '/' + req.osub_nr)
+        error_msg = alloc_trigger('CO-RM', ho_id, req.res_nr, req.osub_nr)
         oc = 'CI-RM'
 
     if not error_msg:
-        error_msg = alloc_trigger(oc, ho_id, res_id)
+        error_msg = alloc_trigger(oc, ho_id, req.res_nr, req.sub_nr)
 
     if error_msg:
         notify("****  oc_room_change() alloc_trigger error=" + error_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
@@ -115,10 +122,33 @@ def oc_room_change(req):
     return response_xml
 
 
-def oc_keep_alive(req):
-    # process operation codes: Link Alive, Time Sync, Acknowledge
-    response_xml = create_ack_response(req, '0', status='1' if req.oc == 'LA' else '')
-    notify("####  oc_keep_alive() response: " + response_xml)
+def oc_res_change(req):
+    oc = req.oc
+    rgr_list = req.rgr_list
+    ass = AssSysData(cae)
+    for rgr in rgr_list:
+        ho_id = rgr['rgr_ho_fk']
+        res_id = rgr['rgr_res_id']
+        sub_id = rgr['rgr_sub_id']
+        notify("####  Reservation change {} for res {}/{}@{}. data={}".format(oc, res_id, sub_id, ho_id, rgr))
+        rgc_list = rgr.pop('rgc')
+        if ass.rgr_upsert(rgr, ho_id, res_id=res_id, sub_id=sub_id):
+            break
+        rgr_pk = ass.ass_db.fetch_value()
+        for rgc in rgc_list:
+            if ass.rgc_upsert(rgc, rgr_pk):
+                break
+        if ass.error_message:
+            break
+
+    error_msg = ass.error_message
+    if error_msg:
+        ass.ass_db.rollback()
+    else:
+        ass.ass_db.commit()
+
+    response_xml = create_ack_response(req, '1' if error_msg else '0', msg=error_msg)
+    notify("####  oc_res_change() response: " + response_xml)
     return response_xml
 
 
@@ -127,23 +157,25 @@ SUPPORTED_OCS = {
     #  old guest sync tests Sihot -> Postgres
     # 'GUEST-CREATE': {'reqClass': GuestFromSihot, 'ocProcessor': oc_client_to_ass, },
     # 'GUEST-CHANGE': {'reqClass': GuestFromSihot, 'ocProcessor': oc_client_to_ass, },
-    #  keep alive and other basic SXML interfaces
-    'ACK': {'reqClass': Request, 'ocProcessor': oc_keep_alive, },
-    'LA': {'reqClass': Request, 'ocProcessor': oc_keep_alive, },
-    'TS': {'reqClass': Request, 'ocProcessor': oc_keep_alive, },
+    #  keep alive SXML interfaces
+    'ACK': dict(reqClass=Request, ocProcessor=oc_keep_alive),
+    'LA': dict(reqClass=Request, ocProcessor=oc_keep_alive),
+    'TS': dict(reqClass=Request, ocProcessor=oc_keep_alive),
+    #  reservation changes SXML interface
+    'CR': dict(reqClass=ResChange, ocProcessor=oc_res_change),
     #  SXML interface for allocation notification on room-checkin/-out/-move
     # we actually only need Minibar/Wellness System Level I: CI, CO, RM and ACK (see SXML doc page 57)
     # currently not supported: CR=change reservation, PCO=PreCheckOut, GC=Guest Change, PRECHECKIN
-    'CI': {'reqClass': RoomChange, 'ocProcessor': oc_room_change, },
-    'CO': {'reqClass': RoomChange, 'ocProcessor': oc_room_change, },
-    'RM': {'reqClass': RoomChange, 'ocProcessor': oc_room_change, },
+    'CI': dict(reqClass=RoomChange, ocProcessor=oc_room_change),
+    'CO': dict(reqClass=RoomChange, ocProcessor=oc_room_change),
+    'RM': dict(reqClass=RoomChange, ocProcessor=oc_room_change),
 }
 
 
 class SihotRequestXmlHandler(RequestXmlHandler):
     def notify(self):
         # hide timeout or dropped connection error if not verbose debug level
-        if TIMEOUT_ERR_MSG not in self.error_message or cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
+        if TIMEOUT_ERR_MSG not in self.error_message or debug_level >= DEBUG_LEVEL_VERBOSE:
             if notification:
                 notification.send_notification(msg_body=self.error_message, subject="AssServer handler notification")
             else:
@@ -183,9 +215,12 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         return bytes(xml_response, cae.get_option('xmlEncoding'))
 
 
-if __name__ == '__main__':
+try:
     server = TcpServer(cae.get_option('serverIP'), cae.get_option('serverPort'), SihotRequestXmlHandler,
-                       debug_level=cae.get_option('debugLevel'))
+                       debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
+except (OSError, Exception) as tcp_ex:
+    uprint("****  TCP server could not be started. Exception: ", tcp_ex)
+    cae.shutdown(369)
 
-    cae.shutdown()
+cae.shutdown()

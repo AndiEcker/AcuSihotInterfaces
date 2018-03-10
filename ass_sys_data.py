@@ -436,18 +436,28 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     # =================  reservation bookings  ===================================================================
 
-    def rgr_update(self, sh_hotel_id, upd_col_values, sh_gds_no=None, sh_res_id=None, commit=False):
-        if not sh_gds_no and not sh_res_id:
-            return "rgr_update({}, {}): Missing reservation id (gds|res-no)".format(sh_hotel_id, upd_col_values)
-        where_vars = dict(ho_id=sh_hotel_id)
-        if sh_gds_no:
-            where_expr = "rgr_gds_no = :res_id"
-            where_vars.update(res_id=sh_gds_no)
+    def rgr_upsert(self, upd_col_values, ho_id, gds_no=None, res_id=None, sub_id=None, commit=False):
+        if not gds_no and not (res_id and sub_id):
+            return "rgr_upsert({}, {}): Missing reservation id (gds|res-id)".format(ho_id, upd_col_values)
+        where_vars = dict(ho_id=ho_id)
+        if gds_no:
+            where_vars.update(rgr_gds_no=gds_no)
         else:
-            where_expr = "rgr_sh_res_id = :res_id"
-            where_vars.update(res_id=sh_res_id)
-        self.error_message = self.ass_db.update('res_groups', upd_col_values, "rgr_ho_fk = :ho_id AND " + where_expr,
-                                                bind_vars=where_vars, commit=commit)
+            where_vars.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
+        self.error_message = self.ass_db.upsert('res_groups', upd_col_values, where_vars, 'rgr_pk', commit=commit)
+        if not self.error_message and self.ass_db.curs.rowcount != 1:
+            self.error_message = "rgr_upsert({}, {}, {}): Invalid affected row count; expected 1 but got {}"\
+                .format(upd_col_values, ho_id, where_vars, self.ass_db.curs.rowcount)
+
+        return self.error_message
+
+    def rgc_upsert(self, upd_col_values, rgr_pk, commit=False):
+        where_vars = dict(rgc_rgr_fk=rgr_pk)
+        self.error_message = self.ass_db.upsert('res_group_contacts', upd_col_values, where_vars, commit=commit)
+        if not self.error_message and self.ass_db.curs.rowcount != 1:
+            self.error_message = "rgc_upsert({}, {}): Invalid affected row count; expected 1 but got {}"\
+                .format(upd_col_values, rgr_pk, self.ass_db.curs.rowcount)
+
         return self.error_message
 
     # =================  RCI data conversion  ==================================================

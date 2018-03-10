@@ -13,7 +13,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user i
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
 | AssCacheSync | Initialize, sync and/or verify AssCache from/against Acumen, Sihot and Salesforce | Web |
-| AssServer | Listening to Sihot interface for to update the ass_cache PG database | Sxml, Web |
+| AssServer | Listening to Sihot interface for to synchronize reservation changes onto the ass_cache PG database | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
@@ -352,24 +352,24 @@ The `SIHOT_HOTELS` lookup class is mapping the Acumen hotel IDs (3 characters st
 numeric Sihot Hotel Ids (stored in `LU_NUMBER`). Additionally this lookup class is used for to configure the currently
 active hotels in the Sihot system (initially only ANY/999, BHC/1 and PBC/4):
 
-| Acumen Hotel Code | Resort Name | Currently Active (1=yes, 0=no) | Sihot Hotel Id |
+| Acumen Hotel Code | Resort Name | Currently Active (Y=yes, n=no) | Sihot Hotel Id |
 | :---: | :--- | :---:  | :---: |
-| ANY | Pseudo hotel for unspecified resort bookings in Tenerife | 1 | 999 |
-| ARF | Angler's Reef | 0 | 101 |
-| BHC | Beverly Hills Club  / The Suites At Beverly Hills | 1 | 1 |
-| BHH | Beverly Hills Heights | 0 | 2 |
-| DBD | Dorrabay | 0 | 102 |
-| GSA | Golden Sands | 0 | 103 |
-| HMC | Hollywood Mirage Club | 0 | 3 |
-| KGR | Kentisbury Grange | 0 | 104 |
-| LVI | Luna Villas | 0 | 105 |
-| PBC | Palm Beach Club | 1 | 4 |
-| PLA | Platinum Sports Cruisers | 0 | 106 |
-| PMA | Paramount | 0 | 107 |
-| PMY | The Palmyra | 0 | 108 |
-| PSF | Podere San Filippo | 0 | 109 |
-| RHF | Rhinefield Apartments | 0 | 110 |
-| CPS | CP Suites in BHC | 0 | 199 |
+| ANY | Pseudo hotel for unspecified resort bookings in Tenerife | Y | 999 |
+| ARF | Angler's Reef | n | 101 |
+| BHC | Beverly Hills Club  / The Suites At Beverly Hills | Y | 1 |
+| BHH | Beverly Hills Heights | Y | 2 |
+| DBD | Dorrabay | n | 102 |
+| GSA | Golden Sands | n | 103 |
+| HMC | Hollywood Mirage Club | Y | 3 |
+| KGR | Kentisbury Grange | n | 104 |
+| LVI | Luna Villas | n | 105 |
+| PBC | Palm Beach Club | Y | 4 |
+| PLA | Platinum Sports Cruisers | n | 106 |
+| PMA | Paramount | n | 107 |
+| PMY | The Palmyra | n | 108 |
+| PSF | Podere San Filippo | n | 109 |
+| RHF | Rhinefield Apartments | n | 110 |
+| CPS | CP Suites in BHC | n | 199 |
 
 
 ### Room Categories
@@ -378,6 +378,7 @@ The Acumen reservation requests are mainly classified by the room size and reque
 Sihot.PMS room categories are need to be setup for to include room size and features.
 
 There are several lookup classes with the lookup class name prefix `SIHOT_CATS_` within the Acumen/Oracle lookup table
+(or alternatively meanwhile also in the `ResortCats` section of the *.CFG/*.INI configuration files of this suite)
 for to map/transform the Acumen unit sizes and optionally also requested apartment features into Sihot room categories.
 These mappings can be setup for each hotel individually and the pseudo hotel ANY can be used as fallback for all real
 hotels. Therefore the ANY hotel need to specify at least one mapping/transformation for all available Acumen room/unit
@@ -400,10 +401,59 @@ hotel 1:
 
 | Room Size | Requested Apartment Feature | Sihot room category |
 | :---: | --- | :---: |
+| HOTEL | - | HOTU |
 | STUDIO | High Floor/757 | STDS |
 | 1 BED | Duplex/752 | 1DSS |
 | 1 BED | High Floor/757 | 1JNS |
-| 2 BED | Duplex/752 | 2DPU |
+| 2 BED | - or Duplex/752 | 2DPU |
+| 2 BED | High Floor/757 | 2BSH |
+
+
+#### BHH room category overloads
+
+The `SIHOT_CATS_BHH` lookup class is specifying the following room size/feature mappings to the Sihot room categories in
+hotel 2:
+
+| Room Size | Requested Apartment Feature | Sihot room category |
+| :---: | --- | :---: |
+| 1 BED | - | 1JNP |
+| 1 BED | Duplex/752 | 1DDP
+| 1 BED | High Floor/757 |  1DDS |
+| 1 BED | Sea View/Front/781 |  1JNS|
+| 2 BED | - | 2BSP |
+| 2 BED | Sterling/748 | 2BSS |
+| 2 BED | Duplex/752 | 2DDP |
+| 2 BED | High Floor/757 | 2DDP |
+| 2 BED | Sea View/Front/781 | 2DDS |
+| 3 BED | Duplex/752 | 3BPS |
+| 3 BED | High Floor/757 | 3BPS |
+
+
+#### HMC room category overloads
+
+The `SIHOT_CATS_HMC` lookup class is specifying the following room size/feature mappings to the Sihot room categories in
+hotel 3:
+
+| Room Size | Requested Apartment Feature | Sihot room category |
+| :---: | --- | :---: |
+| STUDIO | High Floor/757 | STDS |
+| STUDIO | Sea View/Front/781 | STDS |
+| 1 BED | - | 1JNP
+| 1 BED | Duplex/752 | 1DDS |
+| 1 BED | High Floor/757 | 1JNS |
+| 1 BED | Sea View/Front/781 | 1DDS |
+| 2 BED | - | 2BSP |
+| 2 BED | Sterling/748 | 2BSS |
+| 2 BED | Duplex/752 | 2DDO |
+| 2 BED | High Floor/757 | 2BSS |
+| 2 BED | Sea View/Front/781 | 2DDS |
+| 3 BED | - | 3DDS |
+| 3 BED | Duplex/752 | 3DDS |
+| 3 BED | High Floor/757 | 3DDS |
+| 3 BED | Sea View/Front/781 | 3DDS |
+| 4 BED | - | 4BPS |
+| 4 BED | Duplex/752 | 4BPS |
+| 4 BED | High Foor/757 | 4BPS |
 
 
 #### PBC room category overloads
@@ -417,11 +467,15 @@ hotel 4:
 | STUDIO | High Floor/757 | STDH |
 | STUDIO | Sea View/Front/781 | STDB |
 | 1 BED | - | 1JNP |
-| 1 BED | High Floor/757 | 1JNH |
 | 1 BED | Sterling/748 | 1STS |
+| 1 BED | High Floor/757 | 1JNH |
+| 1 BED | Sea View/Front/781 | 1JNB |
 | 2 BED | - | 2BSP |
 | 2 BED | High Floor/757 | 2BSH |
+| 2 BED | Sea View/Front/781 | 22SB |
 | 3 BED | - | 3BPB |
+| 3 BED | High Floor/757 | 3BPB |
+| 3 BED | Sea View/Front/781 | 3BPB |
 
 
 #### Room specific overloads
@@ -595,17 +649,35 @@ now specified within the new config file SihotMktSegExceptions.cfg.
 The default values of each command line argument can be set within one of the configurations files. If the values are
 not specified in the app configuration file then the option default/fallback values will be searched within the base
 config file: first in the app name section then in the default main section. More information on the several supported
-configuration files and values you find in the module/package `console_app`.
+configuration files and values you find in the module/package `ae_console_app`.
 
 The following configuration values are not available as command line argument options (can only be specified within a
 configuration file):
             
 | Section Name | Key/Option Name | Description |
 | --- | --- | --- |
-| Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as
-warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr`
-or `smtpTo`).
-
+| Settings | addressValidatorBaseUrl | Base URL for address validation web service |
+| Settings | addressValidatorSearchUrl | Search URL for address validation web service |
+| Settings | addressValidatorFetchUrl | Fetch URL for address validation web service |
+| Settings | addressValidatorApiKey | address validation web service API key |
+| Settings | apCats | Room category overloads for single hotel rooms |
+| Settings | emailValidatorBaseUrl | Base URL for email validation web service |
+| Settings | emailValidatorApiKey | email validation web service API key |
+| Settings | hotelIds | Mapping of Sihot/Acumen hotel ids |
+| Settings | pgRootUsr | Root user account name for AssCache database |
+| Settings | pgRootPwd | Root user account name for AssCache database |
+| Settings | phoneValidatorBaseUrl | Base URL for phone number validation web service |
+| Settings | phoneValidatorApiKey | phone number validation web service API key |
+| Settings | resortCats | Room category defaults and apartment feature overloads for all hotels/resorts |
+| Settings | roAgencies | Agency Sihot/Acumen object Ids and market segment groupings |
+| Settings | roomChangeMaxDaysDiff | Number of days a check-in/-out/room-move can differ from the expected arrival/departure date |
+| Settings | shAdultPersTypes | List of Sihot adult person type categories, e.g. ['1A', '5A'] |
+| Settings | shChildPersTypes | List of Sihot children person type categories, e.g. ['2A', '2B', '2C', '6A', '6B', '6C'] |
+| Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr` or `smtpTo`).
+| SihotAllotments | <marketSegmentCode>[_<hotel_id>] | Allotment/contract number for each market segment (and hotel id) |
+| SihotPaymentInstructions | <marketSegmentCode> | Sihot Payment Instruction code for each market segment | 
+| SihotRateSegments | <marketSegmentCode> | Sihot Rate Segment code for each market segment |
+| SihotResTypes | <marketSegmentCode> | Sihot Reservation Type overload code for each market segment |
 
 
 ## System Synchronization
