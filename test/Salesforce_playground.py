@@ -1,16 +1,13 @@
 from ae_console_app import ConsoleApp, DEBUG_LEVEL_VERBOSE
 from simple_salesforce import Salesforce, SalesforceResourceNotFound
+from sfif import add_sf_options
 
 __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE,
                  additional_cfg_files=['../.console_app_env.cfg'])
 
-cae.add_option('sfUser', "Salesforce account user name", '', 'y')
-cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
-cae.add_option('sfToken', "Salesforce account token string", '', 'o')
-cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'c')
-cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+add_sf_options(cae)
 
 sf_user = cae.get_option('sfUser')
 sf_pw = cae.get_option('sfPassword')

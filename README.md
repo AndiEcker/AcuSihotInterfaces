@@ -59,7 +59,6 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| additionalContactFilter | Additional WHERE filter clause for Contact SOQL query | W | SfContactValidator |
 | addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfContactValidator |
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
@@ -73,6 +72,8 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfContactValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
+| filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | W | SfContactValidator |
+| filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfContactValidator |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
 | initializeCache | Initialize/Wipe/Recreate postgres cache database (0=No, 1=Yes) | 0 | I | AssCacheSync |
@@ -87,7 +88,6 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | pgDSN | Database name of the postgres database | ass_cache | N | AssCacheSync |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfContactValidator |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
-| recordTypesToValidate | Contact record type(s) to be validated | 'Rentals' | R | SfContactValidator |
 | serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |

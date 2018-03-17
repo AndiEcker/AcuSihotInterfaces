@@ -20,13 +20,14 @@ import csv
 from traceback import format_exc
 
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
-from ae_notification import Notification
+from ae_notification import add_notification_options, init_notification
 from ae_db import ACU_DEF_USR, ACU_DEF_DSN
 from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI
 from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot, ECM_DO_NOT_SEND_CLIENT
+from sfif import add_sf_options
 
 __version__ = '0.9'
 
@@ -37,20 +38,13 @@ cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas
 cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'Y')
 cae.add_option('jsonPath', "Import path and file mask for OTA JSON files", 'C:/JSON_Import/*.json', 'j')
 
-cae.add_option('smtpServerUri', "SMTP error notification server URI [user[:pw]@]host[:port]", '', 'c')
-cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
+add_notification_options(cae)
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
-cae.add_option('sfUser', "Salesforce account user name", '', 'y')
-cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
-cae.add_option('sfToken', "Salesforce account token string", '', 'o')
-cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'C')
-cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+add_sf_options(cae)
 
 cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
 cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')
@@ -69,16 +63,8 @@ cae.add_option('breakOnError', "Abort importation if an error occurs (0=No, 1=Ye
 debug_level = cae.get_option('debugLevel')
 
 uprint("Import path/file-mask for OTA-JSON/RCI:", cae.get_option('jsonPath'), cae.get_option('rciPath'))
-notification = None
-if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-    notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                mail_from=cae.get_option('smtpFrom'),
-                                mail_to=cae.get_option('smtpTo'),
-                                used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
-                                debug_level=debug_level)
-    uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
-    if cae.get_option('warningsMailToAddr'):
-        uprint("Warnings SMTP receiver address:", cae.get_option('warningsMailToAddr'))
+notification, warning_notification_emails = init_notification(cae, cae.get_option('acuDSN')
+                                                              + '/' + cae.get_option('serverIP'))
 
 uprint("Acumen DSN:", cae.get_option('acuDSN'))
 uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('serverIP'), cae.get_option('serverPort'),
@@ -1350,7 +1336,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             log_import("Sending warnings: " + warnings, NO_FILE_PREFIX_CHAR + 'SendResWarnings')
         if notification:
             notification.send_notification(warnings, subject="SihotResImport warnings notification",
-                                           mail_to=cae.get_option('warningsMailToAddr'))
+                                           mail_to=warning_notification_emails)
 
     log_import("Pass Import Files to user/server logs", NO_FILE_PREFIX_CHAR + 'MoveImportFiles', importance=4)
     for sfn in tci_files + bkc_files + rci_files + jso_files:

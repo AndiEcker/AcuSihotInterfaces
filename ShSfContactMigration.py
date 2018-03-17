@@ -1,8 +1,10 @@
 """
-    ShSfContactMigration is a tool for to migrate every Sihot rental guest with valid contact data as a Contact
-    object into the Salesforce system.
+    ShSfContactMigration is a tool for to migrate every Sihot rental guest with valid contact data as a SF Contact,
+    Lead or Account (PersonAccount) object into the Salesforce system.
 
     0.1     first beta.
+    0.2     refactored for to upload to SF as Account/Lead (before: Contact) all yesterday arrivals (before: only
+            Rentals), implemented email/phone validation options and adapted for new SF instance.
 """
 import re
 from traceback import print_exc
@@ -11,69 +13,52 @@ import pprint
 from copy import deepcopy
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
+from ae_contact_validation import add_validation_options, init_validation, CONTACT_REC_TYPE_RENTALS
+from ae_notification import add_notification_options, init_notification
 from shif import ResBulkFetcher, date_range, elem_value, hotel_and_res_id
-from sfif import prepare_connection, CONTACT_REC_TYPE_RENTALS, correct_email, correct_phone
-from ae_notification import Notification
+from sfif import add_sf_options, prepare_connection, correct_email, correct_phone
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 mail_re = re.compile('[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+\.[a-zA-Z]{2,4}$')
 
 PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
 
+
 cae = ConsoleApp(__version__, "Migrate contactable guests from Sihot to Salesforce")
 
 rbf = ResBulkFetcher(cae, allow_future_arrivals=False)
 rbf.add_options()
 
-cae.add_option('sfUser', "Salesforce account user name", '', 'y')
-cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
-cae.add_option('sfToken', "Salesforce account token string", '', 'o')
-cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'C')
-cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+add_validation_options(cae)
+add_sf_options(cae)
+add_notification_options(cae)
 
-cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
-cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
-
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
 
 debug_level = cae.get_option('debugLevel')
 
 rbf.load_config()
 rbf.print_config()
 
-invalid_email_fragments = cae.get_config('InvalidEmailFragments', default_value=list())
-uprint("Invalid email fragments:", invalid_email_fragments)
-restrict_to_valid_emails = cae.get_config('restrictToValidEmails', default_value=True)
-if restrict_to_valid_emails:
-    uprint("      Only sending valid email addresses")
-default_email_address = cae.get_config('defaultEmailAddress', default_value='ClientHasNoEmail@unknown.com')
-# html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>
-msf_beg = cae.get_config('monoSpacedFontBegin', default_value='<pre>')
-msf_end = cae.get_config('monoSpacedFontEnd', default_value='</pre>')
-
-ignore_case_fields = cae.get_config('ignoreCaseFields', default_value=['Email'])
-changeable_contact_fields = cae.get_config('changeableContactFields', default_value=['Email'])
+email_validation, email_validator, \
+    phone_validation, phone_validator, \
+    addr_validation, addr_validator, \
+    filter_sf_clients, filter_sf_rec_types, filter_email, \
+    default_email_address, invalid_email_fragments, ignore_case_fields, changeable_fields = init_validation(cae)
 
 sf_conn, sf_sandbox = prepare_connection(cae)
 if not sf_conn:
     uprint("Salesforce account connection could not be established - please check your account data and credentials")
     cae.shutdown(20)
 
-notification = warning_notification_emails = None
-if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-    notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                mail_from=cae.get_option('smtpFrom'),
-                                mail_to=cae.get_option('smtpTo'),
-                                used_system=cae.get_option('serverIP') + '/Salesforce ' + ("sandbox" if sf_sandbox
-                                                                                           else "production"),
-                                debug_level=cae.get_option('debugLevel'))
-    uprint("SMTP Uri/From/To:", cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
-    warning_notification_emails = cae.get_option('warningsMailToAddr')
-    if warning_notification_emails:
-        uprint("Warnings SMTP receiver address(es):", warning_notification_emails)
+notification, warning_notification_emails = init_notification(cae, cae.get_option('serverIP') + '/Salesforce '
+                                                              + ("sandbox" if sf_sandbox else "production"))
+
+# html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>
+msf_beg = cae.get_config('monoSpacedFontBegin', default_value='<pre>')
+msf_end = cae.get_config('monoSpacedFontEnd', default_value='</pre>')
+
 
 ADD_INFO_PREFIX = '+'
 AI_SH_RES_ID = ADD_INFO_PREFIX + 'res_id'
@@ -123,7 +108,7 @@ def strip_add_info_from_sf_data(sfd, strip_populated_sf_fields=False, record_typ
             send_key = key
             send_val = sfd.get(key, "")
         # check if sihot field data (sfd) has to be included into sfs (send to Salesforce or displayed in log)
-        if sfc and key in sfc and sfc[key] and (key not in changeable_contact_fields
+        if sfc and key in sfc and sfc[key] and (key not in changeable_fields
                                                 or (sf_has_valid_email and key == 'Email')):
             sh_val = sfd.get(key, "")
             sf_val = sfc[key]
@@ -180,12 +165,12 @@ def valid_name_indexes(shd):
     return indexes
 
 
-def email_is_valid(email):
-    if email:
-        email = email.lower()
-        if mail_re.match(email):
+def email_is_valid(email_addr):
+    if email_addr:
+        email_addr = email_addr.lower()
+        if mail_re.match(email_addr):
             for frag in invalid_email_fragments:
-                if frag in email:
+                if frag in email_addr:
                     break  # email is invalid/filtered-out
             else:
                 return True
@@ -197,8 +182,8 @@ def valid_email_indexes(shd):
     if 'EMAIL' in shd:
         elem_def = shd['EMAIL']
         if 'elemListVal' in elem_def:
-            for idx, email in enumerate(elem_def['elemListVal']):
-                if email and email_is_valid(email):
+            for idx, email_addr in enumerate(elem_def['elemListVal']):
+                if email_addr and email_is_valid(email_addr):
                     indexes.append(idx)
         if not indexes and 'elemVal' in elem_def and elem_def['elemVal'] and email_is_valid(elem_def['elemVal']):
             elem_def['elemListVal'] = [elem_def['elemVal']]
@@ -218,7 +203,7 @@ def score_match_name_to_email(sfd):
             + len([_ for _ in mail_name if _ in pers_name]) / len(mail_name)
 
 
-def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
+def prepare_mig_data(shd, arri, sh_res_id, email_addr, phone_no, snam, fnam, src, hot_id):
     """ mig MARKETCODE, LANG, NAME, NAME2, EMAIL, PHONE, COUNTRY, CITY, STREET, GDSNO, RES-HOTEL, RN, ARR, DEP """
     sh_rl_id = sh_res_id + '=' + str(arri + 1)  # rooming list id
     sfd = dict()
@@ -234,39 +219,35 @@ def prepare_mig_data(shd, arri, sh_res_id, email, snam, fnam, src, hot_id):
     sfd['FirstName'] = fnam     # elem_value(shd, 'NAME2', arri)
     sfd['LastName'] = snam
     sfd['Birthdate'] = elem_value(shd, 'DOB', arri)
-    # Language (Picklist) or Spoken_Languages__c (Picklist, multi-select) ?!?!?
+    # Language__c (Picklist) or Spoken_Languages__c (Picklist, multi-select) ?!?!?
     lc_iso2 = elem_value(shd, 'LANG', arri)
-    sfd['Language__c'] = cae.get_config(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
+    sfd['Language'] = cae.get_config(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
     # Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000) or LeadSource (Picklist)
     # .. or Source__c (Picklist) or HERE_HOW__c (Picklist) ?!?!?
     sfd['Description'] = "Market Source=" + str(src)
-    sfd['Email'] = email if email_is_valid(email) else default_email_address
-    # HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
-    phone_changes = list()
-    sfd['HomePhone'], phone_changed = correct_phone(elem_value(shd, 'PHONE', arri),
-                                                    changed=False, removed=phone_changes)
-    if phone_changed:
-        ext_sf_dict(sfd, "HomePhone corrected, removed 'index:char'=" + str(phone_changes))
+    sfd['Email'] = email_addr if email_is_valid(email_addr) else default_email_address
+    # Phone or HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
+    sfd['Phone'] = phone_no
     # Mobile phone number is not provided by Sihot WEB RES-SEARCH
     # sfd['MobilePhone'] = elem_value(shd, 'MOBIL', arri)
-    # Address_1__c or MailingStreet
-    sfd['MailingStreet'] = elem_value(shd, 'STREET', arri)
-    # MailingCity or City (Text, 50) or Address_2__c (Text, 80)
-    sfd['MailingCity'] = elem_value(shd, 'CITY', arri)
-    # Country__c/code (Picklist) or Address_3__c (Text, 100) or MailingCountry
+    # Address_1__c or Address.Street or MailingStreet
+    sfd['Street'] = elem_value(shd, 'STREET', arri)
+    # MailingCity or City (Text, 50) or Address.City or Address_2__c (Text, 80)
+    sfd['City'] = elem_value(shd, 'CITY', arri)
+    # Country__c/code (Picklist) or Address.Country or Address_3__c (Text, 100) or MailingCountry
     # .. and remap, e.g. Great Britain need to be UK not GB (ISO2).
     # .. Also remove extra characters, because ES has sometimes suffix w/ two numbers
     cc_iso2 = elem_value(shd, 'COUNTRY', arri, default_value="")[:2]
-    sfd['Country__c'] = cae.get_config(cc_iso2, 'CountryCodes', default_value=cc_iso2)
+    sfd['Country'] = cae.get_config(cc_iso2, 'CountryCodes', default_value=cc_iso2)
     # Booking__c (Long Text Area, 32768) or use field Previous_Arrival_Info__c (Text, 100) ?!?!?
-    sfd['Previous_Arrival_Info__c'] = (""
-                                       + " Arr=" + elem_value(shd, 'ARR', arri, default_value='')
-                                       + " Dep=" + elem_value(shd, 'DEP', arri, default_value='')
-                                       + " Hotel=" + str(hot_id)
-                                       + " Room=" + elem_value(shd, 'RN', arri, default_value='')
-                                       + " GdsNo=" + elem_value(shd, 'GDSNO', arri, default_value='')
-                                       + " ResId=" + sh_rl_id
-                                       ).strip()
+    sfd['ArrivalInfo'] = (""
+                          + " Arr=" + elem_value(shd, 'ARR', arri, default_value='')
+                          + " Dep=" + elem_value(shd, 'DEP', arri, default_value='')
+                          + " Hotel=" + str(hot_id)
+                          + " Room=" + elem_value(shd, 'RN', arri, default_value='')
+                          + " GdsNo=" + elem_value(shd, 'GDSNO', arri, default_value='')
+                          + " ResId=" + sh_rl_id
+                          ).strip()
 
     return sfd
 
@@ -305,28 +286,42 @@ all_rows = rbf.fetch_all()
 # collect all the emails found in this export run (for to skip duplicates)
 uprint("####  Evaluate reservations fetched from Sihot")
 found_emails = list()
-valid_contacts = list()
+found_phones = list()
+valid_clients = list()
 try:
     for row_dict in all_rows:
         hotel_id, res_id = hotel_and_res_id(row_dict)
 
-        arr_indexes = valid_email_indexes(row_dict) if restrict_to_valid_emails else valid_name_indexes(row_dict)
+        arr_indexes = valid_email_indexes(row_dict) if filter_email[:5] == 'valid' else valid_name_indexes(row_dict)
         if not arr_indexes:
             add_log_msg("Skipping res-id {} with invalid/empty {}: {}"
-                        .format(res_id, "email address" if restrict_to_valid_emails else "surname",
-                                elem_value(row_dict, 'EMAIL' if restrict_to_valid_emails else 'NAME', verbose=True)))
+                        .format(res_id, "email address" if filter_email[:5] == 'valid' else "surname",
+                                elem_value(row_dict, 'EMAIL' if filter_email[:5] == 'valid' else 'NAME', verbose=True)))
             continue
         for arr_index in arr_indexes:
             mail_changes = list()
-            email_addr, mail_changed = correct_email(elem_value(row_dict, 'EMAIL', arr_index),
-                                                     changed=False, removed=mail_changes)
+            email, mail_changed = correct_email(elem_value(row_dict, 'EMAIL', arr_index),
+                                                changed=False, removed=mail_changes)
+            phone_changes = list()
+            phone, phone_changed = correct_phone(elem_value(row_dict, 'PHONE', arr_index),
+                                                 changed=False, removed=phone_changes)
             surname = elem_value(row_dict, 'NAME', arr_index)
             forename = elem_value(row_dict, 'NAME2', arr_index)
             mkt_src = elem_value(row_dict, 'MARKETCODE', arr_index)
-            sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email_addr, surname, forename, mkt_src, hotel_id)
+            sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email, phone, surname, forename, mkt_src, hotel_id)
 
             if mail_changed:
-                ext_sf_dict(sf_dict, "email corrected, removed 'index:char'=" + str(mail_changes))
+                ext_sf_dict(sf_dict, "email corrected, removed 'index:char'=" + str(mail_changes), skip_it=False)
+            if email_validator and email:
+                err_msg = email_validator.validate(email)
+                if err_msg:
+                    ext_sf_dict(sf_dict, "email {} invalid, err={}".format(email, err_msg))
+            if phone_changed:
+                ext_sf_dict(sf_dict, "phone corrected, removed 'index:char'=" + str(phone_changes), skip_it=False)
+            if phone_validator and phone:
+                err_msg = phone_validator.validate(phone, country_code=elem_value(row_dict, 'COUNTRY', arr_index))
+                if err_msg:
+                    ext_sf_dict(sf_dict, "phone {} invalid, err={}".format(phone, err_msg), skip_it=False)
             if not hotel_id or hotel_id == '999':
                 ext_sf_dict(sf_dict, "invalid hotel-id {}".format(hotel_id))
             if not res_id:
@@ -341,8 +336,8 @@ try:
             res_type = elem_value(row_dict, 'RT', arr_index)
             if res_type in ('S', 'N', '', None):
                 ext_sf_dict(sf_dict, "invalid/cancel/no-show reservation type {}".format(res_type))
-            if not email_addr:
-                ext_sf_dict(sf_dict, "missing email address", skip_it=restrict_to_valid_emails)
+            if not email:
+                ext_sf_dict(sf_dict, "missing email address", skip_it=filter_email[:5] == 'valid')
             if not name_is_valid(surname):
                 ext_sf_dict(sf_dict, "missing/invalid surname {}".format(surname))
             if not name_is_valid(forename):
@@ -357,79 +352,91 @@ try:
 
             if sf_dict[AI_SCORE] >= 0.0:
                 score_match_name_to_email(sf_dict)
-                valid_contacts.append(sf_dict)
+                valid_clients.append(sf_dict)
 
     uprint("####  Ordering filtered contacts")
-    valid_contacts.sort(key=lambda d: d[AI_SH_RES_ID] + '{:06.3}'.format(d[AI_SCORE]),
-                        reverse=True)
+    valid_clients.sort(key=lambda d: d[AI_SH_RES_ID] + '{:06.3}'.format(d[AI_SCORE]),
+                       reverse=True)
     uprint("####  Detecting reservation-id/email duplicates and fetch current Salesforce contact data (if available)")
     notification_lines.append("####  Validate and compare Sihot and Salesforce contact data")
-    dup_res = 0
-    dup_emails = 0
+    dup_res = dup_emails = dup_phones = 0
     rooming_list_ids = list()
-    existing_contact_ids = list()
-    contacts_to_mig = list()
-    for sf_dict in valid_contacts:
+    existing_client_ids = list()
+    clients_to_mig = list()
+    for sf_dict in valid_clients:
         rl_id = sf_dict[AI_SH_RL_ID]
         if rl_id in rooming_list_ids:
             add_log_msg("Res-id {:12} is duplicated; data={}".format(rl_id, pretty_print.pformat(sf_dict)))
             dup_res += 1
             continue
         rooming_list_ids.append(rl_id)
-        email_addr = sf_dict['Email']
-        if email_is_valid(email_addr):
-            if email_addr in found_emails:
+
+        email = sf_dict['Email']
+        if email_is_valid(email):
+            if email in found_emails:
                 add_log_msg("Res-id {:12} with duplicate email address {}; data={}"
-                            .format(rl_id, email_addr, pretty_print.pformat(sf_dict)))
+                            .format(rl_id, email, pretty_print.pformat(sf_dict)))
                 dup_emails += 1
                 continue
-            found_emails.append(email_addr)
-
-            contacts_to_mig.append(sf_dict)
-
-            sf_id = sf_conn.contact_id_by_email(email_addr)
-            if sf_id:
-                sf_cd = sf_conn.contact_data_by_id(sf_id, strip_add_info_keys(sf_dict))
-                if sf_conn.error_msg:
-                    notification_add_line("SF-FETCH-DATA-ERROR: '{}' of contact ID {}".format(sf_conn.error_msg, sf_id),
-                                          is_error=True)
-                    continue
-                sf_dict[AI_SF_ID] = sf_id
-                sf_dict[AI_SF_CURR_DATA] = sf_cd
-                existing_contact_ids.append(sf_dict)
-        elif not restrict_to_valid_emails:
+            found_emails.append(email)
+        elif filter_email[:5] == 'valid':
             # ensure that also clients with clienthasnoemail@... will be uploaded to Salesforce if email not restricted
-            contacts_to_mig.append(sf_dict)
+            continue
+
+        phone = sf_dict['Phone']
+        if phone in found_phones:
+            add_log_msg("Res-id {:12} with duplicate phone number {}; data={}"
+                        .format(rl_id, phone, pretty_print.pformat(sf_dict)))
+            dup_phones += 1
+            continue
+        found_phones.append(phone)
+
+        clients_to_mig.append(sf_dict)
 
     uprint("####  Migrating contacts to Salesforce")
     notification_lines.append("####  Migrating Sihot guest data to Salesforce")
     rec_type_id = sf_conn.record_type_id(CONTACT_REC_TYPE_RENTALS)
-    contacts_migrated = list()
+    clients_migrated = list()
     send_errors = 0
-    for sf_dict in contacts_to_mig:
+    for sf_dict in clients_to_mig:
         res_id = sf_dict[AI_SH_RL_ID]
         sh_pp_data = pretty_print.pformat(sf_dict)
+
+        sf_id, sf_obj = sf_conn.find_client(sf_dict['Email'], sf_dict['Phone'], sf_dict['FirstName'],
+                                            sf_dict['LastName'])
+        if not sf_id:
+            sf_id = sf_conn.client_id_by_email(sf_dict['Email'])
+            if sf_id:
+                sf_obj = 'Contact'
+        if sf_id:
+            sf_dict[AI_SF_ID] = sf_id
+            existing_client_ids.append(sf_dict)
+            sf_dict[AI_SF_CURR_DATA] = sf_conn.client_data_by_id(sf_id, strip_add_info_keys(sf_dict), sf_obj)
+            if sf_conn.error_msg:
+                notification_add_line("SF-FETCH-DATA-ERROR: '{}' of contact ID {}".format(sf_conn.error_msg, sf_id),
+                                      is_error=True)
+
         sf_send = strip_add_info_from_sf_data(sf_dict, strip_populated_sf_fields=True, record_type_id=rec_type_id)
         if not sf_send:
             notification_add_line("Skipped Sihot Res-Id {:12} to be sent because of empty/unchanged Sihot guest data={}"
                                   .format(res_id, sh_pp_data))
             continue
-        sfi = sf_dict[AI_SF_ID]
-        _, err_msg, log_msg = sf_conn.contact_upsert(sf_send)
+
+        _, err_msg, log_msg = sf_conn.client_upsert(sf_send, sf_obj)
         if err_msg:
             send_errors += 1
             notification_add_line(("Error {} in {} of Sihot Res-Id {:12} with match score {:6.3}"
                                    " to Salesforce; sent data={}"
                                    + (" full data={full_data}" if debug_level >= DEBUG_LEVEL_VERBOSE else ""))
-                                  .format(err_msg, "updating Contact " + sfi if sfi else "migrating",
+                                  .format(err_msg, "updating Contact " + sf_id if sf_id else "migrating",
                                           res_id, sf_dict[AI_SCORE], pretty_print.pformat(sf_send),
                                           full_data=sh_pp_data),
                                   is_error=True)
         else:
-            contacts_migrated.append(sf_dict)
+            clients_migrated.append(sf_dict)
         if log_msg:
             notification_add_line("Migrated Sihot Res-Id {:12} {} with match score {:6.3} to Salesforce; data={}, {}"
-                                  .format(res_id, "updated Contact " + sfi if sfi else "migrated",
+                                  .format(res_id, "updated Contact " + sf_id if sf_id else "migrated",
                                           sf_dict[AI_SCORE], sh_pp_data, log_msg))
 
     uprint(" ###  Sihot-Salesforce data mismatches (not updated in Salesforce) - UPSERT warnings:")
@@ -439,16 +446,17 @@ try:
     uprint()
     uprint("####  Migration Summary")
     uprint()
-    valid_contact_count = len(valid_contacts)
-    mig_contact_count = valid_contact_count - dup_res - dup_emails - send_errors
-    assert len(contacts_migrated) == mig_contact_count
-    notification_add_line("Duplicate {}/{} res-ids/emails and {} upload errors out of valid {} Sihot guests/clients"
-                          .format(dup_res, dup_emails, send_errors, valid_contact_count))
+    valid_contact_count = len(valid_clients)
+    mig_contact_count = valid_contact_count - dup_res - dup_emails - dup_phones - send_errors
+    assert len(clients_migrated) == mig_contact_count
+    notification_add_line("Duplicate {}/{}/{} res-ids/emails/phones and {} upload errors out of {} Sihot guests/clients"
+                          .format(dup_res, dup_emails, dup_phones, send_errors, valid_contact_count))
     uprint("Found {} unique emails: {}".format(len(found_emails), found_emails))
+    uprint("Found {} unique phone numbers: {}".format(len(found_phones), found_phones))
     uprint("Skipped {} duplicates of loaded reservation-rooming-ids: {}".format(dup_res, rooming_list_ids))
     uprint()
-    uprint(" ###  Comparision of {} existing Sf contacts".format(len(existing_contact_ids)))
-    for sf_dict in existing_contact_ids:
+    uprint(" ###  Comparision of {} existing Sf contacts".format(len(existing_client_ids)))
+    for sf_dict in existing_client_ids:
         ec = deepcopy(sf_dict)
         uprint("  ##  Sf-Id", ec[AI_SF_ID])
         uprint("      SF:", pprint.pformat(ec[AI_SF_CURR_DATA], indent=9, width=PP_DEF_WIDTH))
@@ -460,10 +468,9 @@ try:
     contacts_notifications = list()
     contacts_notifications.append("####  {} MIGRATED CONTACTS ARRIVED {}:\n\n"
                                   .format(mig_contact_count, rbf.date_range_str()))
-    layout_fields = ['RecordType.DeveloperName', 'FirstName', 'LastName', 'Birthdate', 'Email', 'HomePhone',
-                     'MailingStreet', 'MailingCity', 'Country__c',
-                     'Language__c', 'Description', 'Previous_Arrival_Info__c']
-    for sf_dict in contacts_migrated:
+    layout_fields = ['RecordType.DeveloperName', 'FirstName', 'LastName', 'Birthdate', 'Email', 'Phone',
+                     'Street', 'City', 'Country', 'Language', 'Description', 'ArrivalInfo']
+    for sf_dict in clients_migrated:
         contact_layout = layout_message(sf_dict, layout_fields)
         uprint(contact_layout)
         # add as one monospaced font block with including \n to prevent double \n\n

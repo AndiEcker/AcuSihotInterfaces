@@ -12,6 +12,30 @@ TSL_ENC_PORT = 587
 TSL_ENC_SERVICE_NAME = 'smtpTLS'
 
 
+def add_notification_options(cae):
+    cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
+    cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
+    cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
+    # separate warnings email is optional for some applications (e.g. AcuServer)
+    cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
+
+
+def init_notification(cae, system_name=''):
+    notification = warning_notification_emails = None
+    if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
+        notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
+                                    mail_from=cae.get_option('smtpFrom'),
+                                    mail_to=cae.get_option('smtpTo'),
+                                    used_system=system_name or cae.app_name(),
+                                    debug_level=cae.get_option('debugLevel'))
+        uprint("SMTP Uri/From/To:", cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'),
+               cae.get_option('smtpTo'))
+        warning_notification_emails = cae.get_option('warningsMailToAddr')
+        if warning_notification_emails:
+            uprint("Warnings SMTP receiver address(es):", warning_notification_emails)
+    return notification, warning_notification_emails
+
+
 class Notification:
     def __init__(self, smtp_server_uri, mail_from, mail_to, local_mail_host='', used_system='', mail_body_footer='',
                  debug_level=DEBUG_LEVEL_DISABLED):

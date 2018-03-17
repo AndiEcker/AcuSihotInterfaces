@@ -5,34 +5,33 @@ from ass_sys_data import EXT_REFS_SEP
 class TestSfFindClient:
     def test_not_existing_client(self, salesforce_connection):
         sfi = salesforce_connection
-        result = sfi.find_client(email="test@test.test", phone="0034922777888", first_name="Testy", last_name="Tester")
-        print('Encapsulated APEX REST call result', result)
-        assert 'id' in result
-        assert result['id'] == ''
-        assert 'type' in result
-        assert not result['type'] or result['type'] == 'None'   # '' or 'None'
+        sf_id, sf_obj = sfi.find_client(email="tst@tst.tst", phone="0034922777888",
+                                        first_name="Testy", last_name="Tester")
+        print('Encapsulated APEX REST call result', sf_id, sf_obj)
+        assert not sf_id     # ... is None or ... == ''
+        # before refactoring of SF Apex class: assert not obj or obj == 'None'   # '' or 'None'
+        assert sf_obj == 'Lead'
 
     def test_identify_by_email(self, salesforce_connection):
         sfi = salesforce_connection
-        sf_id, err, msg = sfi.contact_upsert(fields_dict=dict(firstName="Testy", lastName="Tester",
-                                                              Email="clienthasnoemail@test.com"))
+        sf_id, err, msg = sfi.client_upsert(fields_dict=dict(FirstName="Testy", LastName="Tester",
+                                                             Email="testyTester@test.com"),
+                                            sf_obj='Account')
         print("test_by_invalid_email() sf_id/err/msg:", sf_id, err, msg)
         assert len(sf_id) == 18
         assert err == ""
 
-        result = sfi.find_client(email="clienthasnoemail@test.com", first_name="Testy", last_name="Tester")
-        print('Encapsulated APEX REST call result', result)
+        sf_found_id, sf_obj = sfi.find_client(email="testyTester@test.com", first_name="Testy", last_name="Tester")
+        print('Encapsulated APEX REST call result', sf_found_id, sf_obj)
 
         # before checking we need first to delete the test client
-        err_msg, log_msg = sfi.contact_delete(sf_id)
-        print("Error/Log messages:", err_msg, log_msg)
+        err_msg, log_msg = sfi.client_delete(sf_id, 'Account')
+        print("Error/Log messages:", err_msg, '/', log_msg)
         assert not err_msg
 
-        assert 'id' in result
-        assert len(result['id']) == 18
-        assert result['id'] == sf_id
-        assert 'type' in result
-        assert result['type'] == 'Contact'
+        assert len(sf_found_id) == 18
+        assert sf_found_id == sf_id
+        assert sf_obj == 'Account'
 
 
 class TestSfContact:
@@ -182,9 +181,9 @@ class TestSfContact:
         assert correct_phone(' 44 5566/7788', False, r) == ('4455667788', True)
         assert r == ["0: ", "3: ", "8:/"]
 
-    def NOT_FINISHED_test_all_contacts(self, salesforce_connection):
+    def __not_finished__test_all_contacts(self, salesforce_connection):
         assert salesforce_connection.error_msg == ""
-        contacts = salesforce_connection.contacts_with_rci_id(EXT_REFS_SEP)
+        contacts = salesforce_connection.clients_with_rci_id(EXT_REFS_SEP)
         print("Found contacts:", contacts)
         print("Error message:", salesforce_connection.error_msg)
         assert salesforce_connection.error_msg == ""
@@ -203,7 +202,7 @@ class TestSfContact:
         # now check if the contact can be found by the rci_id
         print(repr(self.sf_id_of_rci_id))
         for rci_id in self.sf_id_of_rci_id:
-            sf_id, duplicates = salesforce_connection.contact_by_rci_id(rci_id)
+            sf_id, duplicates = salesforce_connection.client_by_rci_id(rci_id)
             # print(rci_id, sf_id, duplicates)
             assert sf_id == self.sf_id_of_rci_id[rci_id]
             assert isinstance(duplicates, list)

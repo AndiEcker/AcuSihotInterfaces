@@ -8,7 +8,7 @@
 from traceback import format_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
-from ae_notification import Notification
+from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 from ae_tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder, SXML_DEF_ENCODING
@@ -31,21 +31,12 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
     cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
     cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
-    cae.add_option('smtpServerUri', "SMTP notification server URI [user[:pw]@]host[:port]", '', 'c')
-    cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-    cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
+    add_notification_options(cae)
 
     uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
     uprint('Server IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
     uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
-    notification = None
-    if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-        notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                    mail_from=cae.get_option('smtpFrom'),
-                                    mail_to=cae.get_option('smtpTo'),
-                                    used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
-                                    debug_level=cae.get_option('debugLevel'))
-        uprint('SMTP/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
+    notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'))
 
 
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
@@ -200,6 +191,9 @@ SUPPORTED_OCS = {
     'RM': {'reqClass': RoomChange, 'ocProcessor': oc_room_change, },
 }
 
+# operation codes that will not be processed (no notification will be sent to user, only ACK will be send back to Sihot)
+IGNORED_OCS = ['CR']
+
 
 class SihotRequestXmlHandler(RequestXmlHandler):
     def notify(self):
@@ -227,8 +221,11 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
         oc = req.get_operation_code()
         if not oc or oc not in SUPPORTED_OCS:
-            msg = "****  SihotRequestXmlHandler.handle_xml(): empty or unsupported operation code '" + oc + "'!"
-            notify(msg)
+            if oc in IGNORED_OCS:
+                msg = "(ignored)"
+            else:
+                msg = "****  SihotRequestXmlHandler.handle_xml(): empty or unsupported operation code '" + oc + "'!"
+                notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED)
             xml_response = create_ack_response(req, '99', msg)
         else:
             try:

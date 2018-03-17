@@ -8,7 +8,7 @@ from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
-from ae_notification import Notification
+from ae_notification import add_notification_options, init_notification
 
 __version__ = '0.1'
 
@@ -33,11 +33,8 @@ cae.add_option('serverPort', "IP port of the Sihot WEB interface", 14777, 'w')
 cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
 cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 '''
-cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
-cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
 
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
+add_notification_options(cae)
 
 
 debug_level = cae.get_option('debugLevel')
@@ -98,17 +95,8 @@ search_scope = cae.get_config('ResSearchScope', default_value='NOORDERER;NORATES
 uprint("Search scope:", search_scope)
 '''
 
-notification = warning_notification_emails = None
-if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-    notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                mail_from=cae.get_option('smtpFrom'),
-                                mail_to=cae.get_option('smtpTo'),
-                                used_system=sys_id,
-                                debug_level=cae.get_option('debugLevel'))
-    uprint("SMTP Uri/From/To:", cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
-    warning_notification_emails = cae.get_option('warningsMailToAddr')
-    if warning_notification_emails:
-        uprint("Warnings SMTP receiver address(es):", warning_notification_emails)
+notification, warning_notification_emails = init_notification(cae, sys_id)
+
 
 log_items = list()              # processing log entries
 log_errors = list()             # processing errors

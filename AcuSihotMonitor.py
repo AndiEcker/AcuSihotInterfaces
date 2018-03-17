@@ -13,6 +13,7 @@ from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 from ass_sys_data import AssSysData
 from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, SXML_DEF_ENCODING
+from sfif import add_sf_options
 
 __version__ = '0.4'
 
@@ -44,11 +45,7 @@ cae.add_option('serverKernelPort', "IP port of the Sihot KERNEL interface", 1477
 cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 69.3)
 cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 
-cae.add_option('sfUser', "Salesforce account user name", '', 'y')
-cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
-cae.add_option('sfToken', "Salesforce account token string", '', 'o')
-cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'C')
-cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+add_sf_options(cae)
 
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),

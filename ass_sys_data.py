@@ -365,7 +365,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if ext_refs and imp_rci_ref in ext_refs.split(EXT_REFS_SEP):
                 break
         else:
-            sf_id, dup_contacts = self.sales_force.contact_by_rci_id(imp_rci_ref)
+            sf_id, dup_contacts = self.sales_force.client_by_rci_id(imp_rci_ref)
             if self.sales_force.error_msg:
                 self._err("co_idx_by_rci_id() Salesforce connect/fetch error " + self.sales_force.error_msg,
                           file_name, line_num, importance=3)

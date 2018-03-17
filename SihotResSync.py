@@ -12,7 +12,7 @@
 import datetime
 
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
-from ae_notification import Notification
+from ae_notification import add_notification_options, init_notification
 from ae_db import ACU_DEF_USR, ACU_DEF_DSN
 
 from sxmlif import ClientToSihot, ResToSihot, \
@@ -49,11 +49,7 @@ cae.add_option('clientsFirst', "Migrate first the clients then the reservations 
                0, 'q', choices=(0, 1, 2))
 cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b', choices=(0, 1))
 
-cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
-cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
-
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
+add_notification_options(cae)
 
 cae.add_option('migrationMode', "Skip room swap and hotel movement requests (0=No, 1=Yes)", 0, 'M', choices=(0, 1))
 sync_date_ranges = dict(H='historical', M='present and 1 month in future', P='present and all future', F='future only',
@@ -79,16 +75,8 @@ uprint('Last unfinished run (-1=all finished):  ', cae.get_config(last_rt_prefix
 uprint('Migrate Clients First/Separate:',
        ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
 uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
-notification = None
-if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-    notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                mail_from=cae.get_option('smtpFrom'),
-                                mail_to=cae.get_option('smtpTo'),
-                                used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
-                                debug_level=debug_level)
-    uprint('SMTP Uri/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
-    if cae.get_option('warningsMailToAddr'):
-        uprint('Warnings SMTP receiver address:', cae.get_option('warningsMailToAddr'))
+notification, warning_notification_emails = init_notification(cae, cae.get_option('acuDSN')
+                                                              + '/' + cae.get_option('serverIP'))
 if cae.get_config('warningFragments'):
     uprint('Warning Fragments:', cae.get_config('warningFragments'))
 migration_mode = cae.get_option('migrationMode')

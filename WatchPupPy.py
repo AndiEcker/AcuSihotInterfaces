@@ -15,7 +15,7 @@ import pprint
 from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, \
     full_stack_trace
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
-from ae_notification import Notification
+from ae_notification import add_notification_options, init_notification
 from sxmlif import PostMessage, GuestSearch, SXML_DEF_ENCODING
 
 __version__ = '0.7'
@@ -43,9 +43,7 @@ cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING
 
 cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b')
 
-cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
-cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
+add_notification_options(cae)
 
 
 if not cae.get_option('cmdLine'):
@@ -67,20 +65,9 @@ if check_sihot_web or check_sihot_kernel:
     uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
 break_on_error = cae.get_option('breakOnError')
 uprint('Break on error:', 'Yes' if break_on_error else 'No')
-notification = None
-send_output = 0
-if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-    mail_body = 'Executing: ' + cae.get_option('cmdLine')
-    notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                mail_from=cae.get_option('smtpFrom'),
-                                mail_to=cae.get_option('smtpTo'),
-                                used_system=cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'),
-                                mail_body_footer=mail_body,
-                                debug_level=cae.get_option('debugLevel'))
-    uprint('SMTP Uri/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
-    if cae.get_option('sendOutput'):
-        send_output = 1
-uprint('Send Output (subprocess call method: 1=check_output, 0=check_call)', cae.get_option('sendOutput'))
+notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'))
+send_output = 1 if notification and cae.get_option('sendOutput') else 0
+uprint('Send Output (subprocess call method: 1=check_output, 0=check_call)', send_output)
 
 
 command_interval = cae.get_option('cmdInterval')  # in seconds

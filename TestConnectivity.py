@@ -1,28 +1,21 @@
 from ae_console_app import ConsoleApp, uprint
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
-from ae_notification import Notification
+from ae_notification import add_notification_options, init_notification
 
 __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Test connectivity to SMTP and Acumen/Oracle servers")
 
-cae.add_option('smtpServerUri', "SMTP server URI [user[:pw]@]host[:port]", '', 'c')
-cae.add_option('smtpFrom', "SMTP Sender/From address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP Receiver/To addresses", list(), 'r')
-
 cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
+add_notification_options(cae)
 
 uprint('SMTP Uri/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 
 
-notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                            mail_from=cae.get_option('smtpFrom'),
-                            mail_to=cae.get_option('smtpTo'),
-                            used_system='TestConnectivity',
-                            debug_level=2)
+notification, _ = init_notification(cae, 'TestConnectivity')
 
 notification.send_notification('test message from Sihot server')
 

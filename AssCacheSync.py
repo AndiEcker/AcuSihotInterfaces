@@ -12,9 +12,9 @@ from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
 from sxmlif import ResToSihot, AC_ID_2ND_COUPLE_SUFFIX
 from shif import ResBulkFetcher, elem_value, pax_count, gds_no, apt_wk_yr, elem_path_join, guest_data, SH_DATE_FORMAT
-from sfif import prepare_connection
+from sfif import add_sf_options, prepare_connection
 from ass_sys_data import AssSysData, ext_ref_type_sql, EXT_REF_TYPE_RCI, EXT_REFS_SEP
-from ae_notification import Notification
+from ae_notification import add_notification_options, init_notification
 
 __version__ = '0.1'
 
@@ -43,22 +43,15 @@ cae.add_option('acuUser', "User name of Acumen/Oracle system", '', 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", '', 'd')
 
-cae.add_option('sfUser', "Salesforce account user name", '', 'y')
-cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
-cae.add_option('sfToken', "Salesforce account token string", '', 'o')
-cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'C')
-cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+add_sf_options(cae)
 
 sh_rbf = ResBulkFetcher(cae)
 sh_rbf.add_options()
 # .. and for GuestBulkFetcher we need also the kernel interface port of Sihot
 cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
 
-cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
-cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
+add_notification_options(cae)
 
-cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
 
 debug_level = cae.get_option('debugLevel')
 
@@ -98,18 +91,9 @@ if not sf_conn:
     uprint("Salesforce account connection could not be established - please check your account data and credentials")
     cae.shutdown(20)
 
-notification = warning_notification_emails = None
-if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-    notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                mail_from=cae.get_option('smtpFrom'),
-                                mail_to=cae.get_option('smtpTo'),
-                                used_system="{}/{}/{}".format(acu_dsn, cae.get_option('serverIP'),
-                                                              "SBox" if sf_sandbox else "Prod"),
-                                debug_level=cae.get_option('debugLevel'))
-    uprint("SMTP Uri/From/To:", cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))
-    warning_notification_emails = cae.get_option('warningsMailToAddr')
-    if warning_notification_emails:
-        uprint("Warnings SMTP receiver address(es):", warning_notification_emails)
+notification, warning_notification_emails = init_notification(cae,
+                                                              "{}/{}/{}".format(acu_dsn, cae.get_option('serverIP'),
+                                                                                "SBox" if sf_sandbox else "Prod"))
 
 
 def send_notification(exit_code=0):
@@ -658,20 +642,20 @@ def sf_check_contacts():
                 log_warning("{} - AssCache contact record without Salesforce ID: {}".format(ass_id, as_co), ctx)
             continue
 
-        sf_ass_id = sf_conn.contact_ass_id(sf_id)
+        sf_ass_id = sf_conn.client_ass_id(sf_id)
         if ass_id != sf_ass_id:
             log_warning("{} - AssCache contact PKey mismatch. ass={}, sf={}".format(ass_id, ac_id, sf_ass_id), ctx)
 
-        sf_ac_id = sf_conn.contact_ac_id(sf_id)
+        sf_ac_id = sf_conn.client_ac_id(sf_id)
         if (ac_id or sf_ac_id) and ac_id != sf_ac_id:
             log_warning("{} - Acumen client reference mismatch. ass={}, sf={}".format(ass_id, ac_id, sf_ac_id), ctx)
 
-        sf_sh_id = sf_conn.contact_sh_id(sf_id)
+        sf_sh_id = sf_conn.client_sh_id(sf_id)
         if (sh_id or sf_sh_id) and sh_id != sf_sh_id:
             log_warning("{} - Salesforce contact ID mismatch. ass={} sf={}".format(ass_id, sh_id, sf_sh_id), ctx)
 
         ext_refs = [tuple(_.split('=')) for _ in ext_refs.split(EXT_REFS_SEP)] if ext_refs else list()
-        sf_ext_refs = sf_conn.contact_ext_refs(sf_id)
+        sf_ext_refs = sf_conn.client_ext_refs(sf_id)
         for er in ext_refs:
             if er not in sf_ext_refs:
                 log_warning("{} - AssCache external reference {} missing in Salesforce".format(ass_id, er), ctx)
