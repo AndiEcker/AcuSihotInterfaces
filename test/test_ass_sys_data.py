@@ -41,10 +41,10 @@ class TestHotelData:
         assert '999' not in config_data.ho_id_list(acu_rs_codes=['xxx'])
 
 
-class TestContactHelpers:
-    def test_co_fetch_all(self, config_data):
-        assert config_data.co_fetch_all() == ""
-        assert len(config_data.contacts)
+class TestClientHelpers:
+    def test_cl_fetch_all(self, config_data):
+        assert config_data.cl_fetch_all() == ""
+        assert len(config_data.clients) >= 0
 
 
 class TestRciHelpers:

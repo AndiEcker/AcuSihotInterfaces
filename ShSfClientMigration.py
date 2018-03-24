@@ -1,10 +1,11 @@
 """
-    ShSfContactMigration is a tool for to migrate every Sihot rental guest with valid contact data as a SF Contact,
+    ShSfClientMigration is a tool for to migrate Sihot guests with valid client data to Salesforce as a
     Lead or Account (PersonAccount) object into the Salesforce system.
 
     0.1     first beta.
-    0.2     refactored for to upload to SF as Account/Lead (before: Contact) all yesterday arrivals (before: only
-            Rentals), implemented email/phone validation options and adapted for new SF instance.
+    0.2     refactored for to upload to SF as Account/Lead all yesterday arrivals (before: only
+            Rentals), implemented email/phone validation options and adapted for new SF instance, also renamed
+            module from ShSfContactMigration to ShSfClientMigration.
 """
 import re
 from traceback import print_exc
@@ -13,7 +14,7 @@ import pprint
 from copy import deepcopy
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from ae_contact_validation import add_validation_options, init_validation, CONTACT_REC_TYPE_RENTALS
+from ae_client_validation import add_validation_options, init_validation
 from ae_notification import add_notification_options, init_notification
 from shif import ResBulkFetcher, date_range, elem_value, hotel_and_res_id
 from sfif import add_sf_options, prepare_connection, correct_email, correct_phone
@@ -26,7 +27,7 @@ PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
 
 
-cae = ConsoleApp(__version__, "Migrate contactable guests from Sihot to Salesforce")
+cae = ConsoleApp(__version__, "Migrate guests and reservation bookings from Sihot to Salesforce")
 
 rbf = ResBulkFetcher(cae, allow_future_arrivals=False)
 rbf.add_options()
@@ -52,7 +53,7 @@ if not sf_conn:
     uprint("Salesforce account connection could not be established - please check your account data and credentials")
     cae.shutdown(20)
 
-notification, warning_notification_emails = init_notification(cae, cae.get_option('serverIP') + '/Salesforce '
+notification, warning_notification_emails = init_notification(cae, cae.get_option('shServerIP') + '/Salesforce '
                                                               + ("sandbox" if sf_sandbox else "production"))
 
 # html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>
@@ -93,34 +94,36 @@ def strip_add_info_keys(sfd):
     return [_ for _ in sfd.keys() if not _.startswith(ADD_INFO_PREFIX)]
 
 
-def strip_add_info_from_sf_data(sfd, strip_populated_sf_fields=False, record_type_id=None):
+def strip_add_info_from_sf_data(sfd, check_data=False, record_type_id=None, obj_type='Client'):
     sfs = dict()
-    sfc = sfd[AI_SF_CURR_DATA] if strip_populated_sf_fields else None
-    sf_has_valid_email = (sfc and sfc['Email'] and email_is_valid(sfc['Email']))
+    sfc = sfd[AI_SF_CURR_DATA] if check_data else None
+    sf_has_valid_email = (sfc and 'Email' in sfc and sfc['Email'] and email_is_valid(sfc['Email']))
     sid = sfd[AI_SF_ID] or sfd[AI_SH_RL_ID]
 
     for key in strip_add_info_keys(sfd):
         # tweak sending key and value
-        if key == 'RecordType.DeveloperName':
+        if key != 'RecordType.DeveloperName':
+            send_key = key
+            send_val = sfd.get(key, "")
+        elif record_type_id:
             send_key = 'RecordTypeId'
             send_val = record_type_id
         else:
-            send_key = key
-            send_val = sfd.get(key, "")
+            continue     # don't include record type into the send fields if no record type id given
         # check if sihot field data (sfd) has to be included into sfs (send to Salesforce or displayed in log)
         if sfc and key in sfc and sfc[key] and (key not in changeable_fields
                                                 or (sf_has_valid_email and key == 'Email')):
             sh_val = sfd.get(key, "")
             sf_val = sfc[key]
             if sh_val != sf_val:
-                cae.dprint("Contact {}: prevented change of field {} to '{}' (from '{}')"
-                           .format(sid, key, sh_val, sf_val))
+                cae.dprint("{} {}: prevented change of field {} to '{}' (from '{}')"
+                           .format(obj_type, sid, key, sh_val, sf_val))
             if key in ignore_case_fields:
                 sh_val = sh_val.lower()
                 sf_val = sf_val.lower()
             if sh_val != sf_val:
-                ups_warnings.append("Contact {}: field {} has different value in Sihot '{}' then in Salesforce '{}'"
-                                    .format(sid, key, sh_val, sf_val))
+                ups_warnings.append("{} {}: field {} has different value in Sihot '{}' then in Salesforce '{}'"
+                                    .format(obj_type, sid, key, sh_val, sf_val))
             continue
 
         sfs[send_key] = send_val    # pass field value to returned dictionary
@@ -214,7 +217,7 @@ def prepare_mig_data(shd, arri, sh_res_id, email_addr, phone_no, snam, fnam, src
     sfd[AI_SF_ID] = None  # populate later with data from Salesforce
     sfd[AI_SF_CURR_DATA] = None
 
-    sfd['RecordType.DeveloperName'] = CONTACT_REC_TYPE_RENTALS
+    sfd['RecordType.DeveloperName'] = None  # will be populated after client search against SF
     # FirstName or LastName or Name (combined field - not works with UPDATE/CREATE) or Full_Name__c (Formula)
     sfd['FirstName'] = fnam     # elem_value(shd, 'NAME2', arri)
     sfd['LastName'] = snam
@@ -222,19 +225,19 @@ def prepare_mig_data(shd, arri, sh_res_id, email_addr, phone_no, snam, fnam, src
     # Language__c (Picklist) or Spoken_Languages__c (Picklist, multi-select) ?!?!?
     lc_iso2 = elem_value(shd, 'LANG', arri)
     sfd['Language'] = cae.get_config(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
-    # Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000) or LeadSource (Picklist)
-    # .. or Source__c (Picklist) or HERE_HOW__c (Picklist) ?!?!?
-    sfd['Description'] = "Market Source=" + str(src)
+    # Market_Source__c or Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000)
+    # .. or LeadSource (Picklist) or Source__c (Picklist) or HERE_HOW__c (Picklist) or Marketing_Source__c (Lead) ?!?!?
+    sfd['MarketSource'] = str(src)
     sfd['Email'] = email_addr if email_is_valid(email_addr) else default_email_address
     # Phone or HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
     sfd['Phone'] = phone_no
     # Mobile phone number is not provided by Sihot WEB RES-SEARCH
     # sfd['MobilePhone'] = elem_value(shd, 'MOBIL', arri)
-    # Address_1__c or Address.Street or MailingStreet
+    # Address_1__c or AddressStreet or MailingStreet
     sfd['Street'] = elem_value(shd, 'STREET', arri)
-    # MailingCity or City (Text, 50) or Address.City or Address_2__c (Text, 80)
+    # MailingCity or City (Text, 50) or AddressCity or Address_2__c (Text, 80)
     sfd['City'] = elem_value(shd, 'CITY', arri)
-    # Country__c/code (Picklist) or Address.Country or Address_3__c (Text, 100) or MailingCountry
+    # Country__c/code (Picklist) or AddressCountry or Address_3__c (Text, 100) or MailingCountry
     # .. and remap, e.g. Great Britain need to be UK not GB (ISO2).
     # .. Also remove extra characters, because ES has sometimes suffix w/ two numbers
     cc_iso2 = elem_value(shd, 'COUNTRY', arri, default_value="")[:2]
@@ -261,11 +264,11 @@ def layout_message(sfd, cols):
         sf_curr_data = sfd[AI_SF_CURR_DATA]
         if not sf_curr_data:
             sfv = None
-        elif col == rtd:
-            sfv = sf_curr_data['RecordType']['DeveloperName'] \
-                  + ", Contact Id=" + sf_curr_data['attributes']['url'].split('/')[-1]
+        elif col == rtd and 'RecordType' in sf_curr_data:
+            sfv = sf_curr_data['RecordType'].get('DeveloperName') \
+                  + ", Id=" + sf_curr_data['attributes']['url'].split('/')[-1]
         else:
-            sfv = sf_curr_data[col]
+            sfv = sf_curr_data.get(col)
         if shv or sfv:
             field_label = (col[:-3] if col[-3:] == '__c' else ("Record Type" if col == rtd else col)).replace("_", " ")
             txt += form_str.format(field_label, str(shv))
@@ -310,6 +313,9 @@ try:
             mkt_src = elem_value(row_dict, 'MARKETCODE', arr_index)
             sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email, phone, surname, forename, mkt_src, hotel_id)
 
+            res_type = elem_value(row_dict, 'RT', arr_index)
+            mkt_group = elem_value(row_dict, 'CHANNEL', arr_index)
+
             if mail_changed:
                 ext_sf_dict(sf_dict, "email corrected, removed 'index:char'=" + str(mail_changes), skip_it=False)
             if email_validator and email:
@@ -331,9 +337,6 @@ try:
                 ext_sf_dict(sf_dict, "incomplete check-in={} check-out={}".format(check_in, check_out))
             if not (rbf.date_from <= check_in <= rbf.date_till):
                 ext_sf_dict(sf_dict, "arrival {} not between {} and {}".format(check_in, rbf.date_from, rbf.date_till))
-            if mkt_src not in rbf.allowed_mkt_src:
-                ext_sf_dict(sf_dict, "disallowed market source {}".format(mkt_src))
-            res_type = elem_value(row_dict, 'RT', arr_index)
             if res_type in ('S', 'N', '', None):
                 ext_sf_dict(sf_dict, "invalid/cancel/no-show reservation type {}".format(res_type))
             if not email:
@@ -344,21 +347,22 @@ try:
                 ext_sf_dict(sf_dict, "missing/invalid forename {}".format(forename))
             if not mkt_src:
                 ext_sf_dict(sf_dict, "missing market source")
-            res_group = elem_value(row_dict, 'CHANNEL', verbose=True)
-            if res_group != 'RS':
+            elif rbf.allowed_mkt_src and mkt_src not in rbf.allowed_mkt_src:
+                ext_sf_dict(sf_dict, "disallowed market source {}".format(mkt_src))
+            if rbf.allowed_mkt_grp and mkt_group not in rbf.allowed_mkt_grp:
                 ext_sf_dict(sf_dict, "empty/invalid res. group/channel {} (market-source={})"
-                            .format(res_group, elem_value(row_dict, 'MARKETCODE')),
+                            .format(mkt_group, elem_value(row_dict, 'MARKETCODE')),
                             skip_it=False)  # only warn on missing channel, so no: skip_it = True
 
             if sf_dict[AI_SCORE] >= 0.0:
                 score_match_name_to_email(sf_dict)
                 valid_clients.append(sf_dict)
 
-    uprint("####  Ordering filtered contacts")
+    uprint("####  Ordering filtered clients")
     valid_clients.sort(key=lambda d: d[AI_SH_RES_ID] + '{:06.3}'.format(d[AI_SCORE]),
                        reverse=True)
-    uprint("####  Detecting reservation-id/email duplicates and fetch current Salesforce contact data (if available)")
-    notification_lines.append("####  Validate and compare Sihot and Salesforce contact data")
+    uprint("####  Detecting reservation-id/email duplicates and fetch current Salesforce client data (if available)")
+    notification_lines.append("####  Validate and compare Sihot and Salesforce client data")
     dup_res = dup_emails = dup_phones = 0
     rooming_list_ids = list()
     existing_client_ids = list()
@@ -393,9 +397,8 @@ try:
 
         clients_to_mig.append(sf_dict)
 
-    uprint("####  Migrating contacts to Salesforce")
+    uprint("####  Migrating clients to Salesforce")
     notification_lines.append("####  Migrating Sihot guest data to Salesforce")
-    rec_type_id = sf_conn.record_type_id(CONTACT_REC_TYPE_RENTALS)
     clients_migrated = list()
     send_errors = 0
     for sf_dict in clients_to_mig:
@@ -404,58 +407,58 @@ try:
 
         sf_id, sf_obj = sf_conn.find_client(sf_dict['Email'], sf_dict['Phone'], sf_dict['FirstName'],
                                             sf_dict['LastName'])
-        if not sf_id:
-            sf_id = sf_conn.client_id_by_email(sf_dict['Email'])
-            if sf_id:
-                sf_obj = 'Contact'
+        if not sf_id and sf_obj and sf_dict['Email']:
+            sf_id = sf_conn.client_id_by_email(sf_dict['Email'], sf_obj=sf_obj)
         if sf_id:
             sf_dict[AI_SF_ID] = sf_id
             existing_client_ids.append(sf_dict)
             sf_dict[AI_SF_CURR_DATA] = sf_conn.client_data_by_id(sf_id, strip_add_info_keys(sf_dict), sf_obj)
             if sf_conn.error_msg:
-                notification_add_line("SF-FETCH-DATA-ERROR: '{}' of contact ID {}".format(sf_conn.error_msg, sf_id),
+                notification_add_line("SF-FETCH-DATA-ERROR: '{}' of {} ID {}".format(sf_conn.error_msg, sf_obj, sf_id),
                                       is_error=True)
 
-        sf_send = strip_add_info_from_sf_data(sf_dict, strip_populated_sf_fields=True, record_type_id=rec_type_id)
+        rec_type_id = sf_conn.record_type_id(sf_obj=sf_obj)
+        sf_send = strip_add_info_from_sf_data(sf_dict, check_data=True, record_type_id=rec_type_id, obj_type=sf_obj)
         if not sf_send:
             notification_add_line("Skipped Sihot Res-Id {:12} to be sent because of empty/unchanged Sihot guest data={}"
                                   .format(res_id, sh_pp_data))
             continue
 
-        _, err_msg, log_msg = sf_conn.client_upsert(sf_send, sf_obj)
+        new_sf_id, err_msg, log_msg = sf_conn.client_upsert(sf_send, sf_obj)
         if err_msg:
             send_errors += 1
-            notification_add_line(("Error {} in {} of Sihot Res-Id {:12} with match score {:6.3}"
+            notification_add_line(("Error {} in {} {} of Sihot Res-Id {:12} with match score {:6.3}"
                                    " to Salesforce; sent data={}"
                                    + (" full data={full_data}" if debug_level >= DEBUG_LEVEL_VERBOSE else ""))
-                                  .format(err_msg, "updating Contact " + sf_id if sf_id else "migrating",
+                                  .format(err_msg, "updating " + sf_id if sf_id else "migrating", sf_obj,
                                           res_id, sf_dict[AI_SCORE], pretty_print.pformat(sf_send),
                                           full_data=sh_pp_data),
                                   is_error=True)
         else:
             clients_migrated.append(sf_dict)
         if log_msg:
-            notification_add_line("Migrated Sihot Res-Id {:12} {} with match score {:6.3} to Salesforce; data={}, {}"
-                                  .format(res_id, "updated Contact " + sf_id if sf_id else "migrated",
+            notification_add_line("{} Sihot Res-Id {:12} for {} {} with match score {:6.3} to Salesforce; data={}, {}"
+                                  .format("Updated " if sf_id else "Migrated", res_id, sf_obj, new_sf_id or sf_id,
                                           sf_dict[AI_SCORE], sh_pp_data, log_msg))
 
-    uprint(" ###  Sihot-Salesforce data mismatches (not updated in Salesforce) - UPSERT warnings:")
-    for upsert_msg in ups_warnings:
-        uprint("   #  ", upsert_msg)
+    if ups_warnings:
+        uprint(" ###  Sihot-Salesforce data mismatches (not updated in Salesforce) - UPSERT warnings:")
+        for upsert_msg in ups_warnings:
+            uprint("   #  ", upsert_msg)
 
     uprint()
     uprint("####  Migration Summary")
     uprint()
-    valid_contact_count = len(valid_clients)
-    mig_contact_count = valid_contact_count - dup_res - dup_emails - dup_phones - send_errors
-    assert len(clients_migrated) == mig_contact_count
+    valid_client_count = len(valid_clients)
+    mig_client_count = valid_client_count - dup_res - dup_emails - dup_phones - send_errors
+    assert len(clients_migrated) == mig_client_count
     notification_add_line("Duplicate {}/{}/{} res-ids/emails/phones and {} upload errors out of {} Sihot guests/clients"
-                          .format(dup_res, dup_emails, dup_phones, send_errors, valid_contact_count))
+                          .format(dup_res, dup_emails, dup_phones, send_errors, valid_client_count))
     uprint("Found {} unique emails: {}".format(len(found_emails), found_emails))
     uprint("Found {} unique phone numbers: {}".format(len(found_phones), found_phones))
     uprint("Skipped {} duplicates of loaded reservation-rooming-ids: {}".format(dup_res, rooming_list_ids))
     uprint()
-    uprint(" ###  Comparision of {} existing Sf contacts".format(len(existing_client_ids)))
+    uprint(" ###  Comparision of {} existing Sf clients".format(len(existing_client_ids)))
     for sf_dict in existing_client_ids:
         ec = deepcopy(sf_dict)
         uprint("  ##  Sf-Id", ec[AI_SF_ID])
@@ -464,25 +467,25 @@ try:
         uprint("      SH:", pprint.pformat(ec, indent=9, width=PP_DEF_WIDTH))
 
     uprint()
-    uprint("####  ", mig_contact_count, "Contacts migrated:")
-    contacts_notifications = list()
-    contacts_notifications.append("####  {} MIGRATED CONTACTS ARRIVED {}:\n\n"
-                                  .format(mig_contact_count, rbf.date_range_str()))
+    uprint("####  ", mig_client_count, "Clients migrated:")
+    clients_notifications = list()
+    clients_notifications.append("####  {} MIGRATED CLIENTS ARRIVED {}:\n\n"
+                                 .format(mig_client_count, rbf.date_range_str()))
     layout_fields = ['RecordType.DeveloperName', 'FirstName', 'LastName', 'Birthdate', 'Email', 'Phone',
-                     'Street', 'City', 'Country', 'Language', 'Description', 'ArrivalInfo']
+                     'Street', 'City', 'Country', 'Language', 'MarketSource', 'ArrivalInfo']
     for sf_dict in clients_migrated:
-        contact_layout = layout_message(sf_dict, layout_fields)
-        uprint(contact_layout)
+        client_layout = layout_message(sf_dict, layout_fields)
+        uprint(client_layout)
         # add as one monospaced font block with including \n to prevent double \n\n
-        contacts_notifications.append(msf_beg + contact_layout + msf_end)
-    notification_lines = contacts_notifications + ["\n\n####  FULL PROTOCOL:\n"] + notification_lines
+        clients_notifications.append(msf_beg + client_layout + msf_end)
+    notification_lines = clients_notifications + ["\n\n####  FULL PROTOCOL:\n"] + notification_lines
 
 except Exception as ex:
     notification_add_line("Migration interrupted by exception: {}".format(ex), is_error=True)
     print_exc()
 
 if notification:
-    subject = "Sihot Salesforce Contact Migration protocol" + (" (sandbox/test system)" if sf_sandbox else "")
+    subject = "Sihot Salesforce Client Migration protocol" + (" (sandbox/test system)" if sf_sandbox else "")
     mail_body = "\n\n".join(notification_lines)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
@@ -491,7 +494,7 @@ if notification:
     if warning_notification_emails and (ups_warnings or log_errors):
         mail_body = "MIGRATION WARNINGS:\n\n" + ("\n\n".join(ups_warnings) if ups_warnings else "NONE") \
                     + "\n\nERRORS:\n\n" + ("\n\n".join(log_errors) if log_errors else "NONE")
-        subject = "Sihot Salesforce Contact Migration errors/discrepancies" + (" (sandbox)" if sf_sandbox else "")
+        subject = "Sihot Salesforce Client Migration errors/discrepancies" + (" (sandbox)" if sf_sandbox else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
             uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))

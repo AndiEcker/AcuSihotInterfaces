@@ -28,10 +28,10 @@ cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 '''
-cae.add_option('serverIP', "IP address of the Sihot interface server", 'localhost', 'i')
-cae.add_option('serverPort', "IP port of the Sihot WEB interface", 14777, 'w')
-cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
-cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
+cae.add_option('shServerIP', "IP address of the Sihot interface server", 'localhost', 'i')
+cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
+cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
+cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 '''
 
 add_notification_options(cae)
@@ -49,9 +49,9 @@ ac_id = cae.get_option('acuDSN')
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), ac_id)
 sys_id = ac_id
 '''
-sh_id = cae.get_option('serverIP')
-uprint("Server IP/Web-port:", sh_id, cae.get_option('serverPort'))
-uprint("TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+sh_id = cae.get_option('shServerIP')
+uprint("Server IP/Web-port:", sh_id, cae.get_option('shServerPort'))
+uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
 sys_id = ac_id + ("/" + sh_id if sh_id else "")
 '''
 

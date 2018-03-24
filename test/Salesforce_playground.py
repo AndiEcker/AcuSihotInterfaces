@@ -22,7 +22,7 @@ print('Opportunity metadata:', sb.Opportunity.metadata())
 
 # using APEX REST service
 params = dict(email="test@test.test", phone="0034922777888", firstName="Testy", lastName="Tester")
-result = sb.apexecute('SIHOT', method='GET', data=params)
+result = sb.apexecute('clientsearch', method='POST', data=params)
 print('APEX REST call result', result)
 
 
@@ -37,13 +37,13 @@ print('External_Ref describe:', sb.External_Ref__c.describe())
 result = sb.query_all("SELECT Id, Email FROM Contact WHERE LastName = 'Pepper'")
 print('SOQL query:', result)
 
-contact = sb.search("FIND {Pepper}")
-print('SOSL search:', contact)
+client = sb.search("FIND {Pepper}")
+print('SOSL search:', client)
 
-contact_id = contact['searchRecords'][0]['Id']
-print('Contact Id:', contact_id)
+client_id = client['searchRecords'][0]['Id']
+print('Contact Id:', client_id)
 
-c_data = sb.Contact.get(contact_id)
+c_data = sb.Contact.get(client_id)
 print('Contact data:', c_data)
 
 c_with_rci = sb.search("FIND {1234\-56789}")
@@ -64,11 +64,11 @@ else:
     print('Contact data fetched via RCI ref. custom field:', c_data2)
 
 try:
-    c_data3 = sb.External_Ref__c.get(contact_id)
+    c_data3 = sb.External_Ref__c.get(client_id)
 except SalesforceResourceNotFound as ex:
     print('  ****  Reference_Ref__c custom object is not fetch-able  ****  ', ex)
 else:
-    print("External Ref data fetched via contact_id", c_data3)
+    print("External Ref data fetched via client_id", c_data3)
 
 try:
     c_data2 = sb.Contact.get_by_custom_id('Reference_No_or_ID__c', '1234\-56789')
@@ -133,18 +133,18 @@ ext_ref_id = [_['Id'] for _ in ext_ref['searchRecords'] if _['attributes']['type
 ext_ref_data = sb.External_Ref__c.get(ext_ref_id)
 print('Ext Ref Data:', ext_ref_data)
 
-ext_ref_contact = ext_ref_data['Contact__c']
-contact_data = sb.Contact.get(ext_ref_contact)
-print('Contact data fetched via RCI ref:', contact_data)
+ext_ref_client = ext_ref_data['Contact__c']
+client_data = sb.Contact.get(ext_ref_client)
+print('Contact data fetched via RCI ref:', client_data)
 
-result = sb.query_all("SELECT Id FROM External_Ref__c WHERE Contact__c = '" + ext_ref_contact + "'")
+result = sb.query_all("SELECT Id FROM External_Ref__c WHERE Contact__c = '" + ext_ref_client + "'")
 print('SOQL query fetching all external ref IDs from Pepper:', result)
 
 records = result['records']  # list of OrderedDict with Id item/key
 rec_ids = [_['Id'] for _ in records]
 print('Ext Ref Ids of last SOQL query:', rec_ids)
 
-result = sb.query_all("SELECT Reference_No_or_ID__c FROM External_Ref__c WHERE Contact__c = '" + ext_ref_contact + "'")
+result = sb.query_all("SELECT Reference_No_or_ID__c FROM External_Ref__c WHERE Contact__c = '" + ext_ref_client + "'")
 print('SOQL query fetching all external ref numbers from Pepper:', result)
 
 records = result['records']  # list of OrderedDict with external ref no
@@ -153,28 +153,28 @@ print('Ext Ref numbers of last SOQL query:', rec_nos)
 
 new_no = '1234-8902'
 if new_no in rec_nos:
-    print('  ####  External ref no ', new_no, 'already created for Pepper with ID', ext_ref_contact)
+    print('  ####  External ref no ', new_no, 'already created for Pepper with ID', ext_ref_client)
 else:
-    ret = sb.External_Ref__c.create({'Contact__c': ext_ref_contact, 'Reference_No_or_ID__c': new_no,
+    ret = sb.External_Ref__c.create({'Contact__c': ext_ref_client, 'Reference_No_or_ID__c': new_no,
                                      # 'Type__c': 'RCI',
                                      'Name': 'RCI_9'})
     print('Created Ext Ref return1:', ret)
 
 new_no = 'abc-7890'
-test_contact_id = '0039E00000Dla2VQAR'  # (test_contact_id in contacts) fails with 15 character ID == '0039E00000Dla2V'
+test_client_id = '0039E00000Dla2VQAR'  # (test_client_id in clients) fails with 15 character ID == '0039E00000Dla2V'
 result = sb.query_all("SELECT Id, Contact__c FROM External_Ref__c WHERE Reference_No_or_ID__c = '" + new_no + "'")
 print('SOQL querying RCI ref number from Test:', result)
 if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
     ids = [_['Id'] for _ in records]
     print('Ext Ref Ids of last SOQL query:', ids)
-    contacts = [_['Contact__c'] for _ in records]
-    print('Ext Ref Contact Ids of last SOQL query:', contacts)
+    clients = [_['Contact__c'] for _ in records]
+    print('Ext Ref Contact Ids of last SOQL query:', clients)
 
-    if test_contact_id in contacts:
-        print('  ####  External RCI ref number', new_no, 'already exists for Test client with ID', test_contact_id)
+    if test_client_id in clients:
+        print('  ####  External RCI ref number', new_no, 'already exists for Test client with ID', test_client_id)
     else:
-        ret = sb.External_Ref__c.create({'Contact__c': test_contact_id, 'Reference_No_or_ID__c': new_no,
+        ret = sb.External_Ref__c.create({'Contact__c': test_client_id, 'Reference_No_or_ID__c': new_no,
                                          # 'Type__c': 'RCI',
                                          'Name': 'RCI_88'})
         print('    Created Ext Ref return2 for Test:', ret)
@@ -198,15 +198,15 @@ result = sb.query_all("SELECT Contact__c, Id FROM External_Ref__c WHERE Name LIK
 print("SOQL querying Contact Ids with external RCI Ids", result)
 if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
-    contacts = [_['Contact__c'] + '=' + _['Id'] for _ in records]
-    print('    Ext Ref Contact Ids with RCI Id of last SOQL query:', contacts)
+    clients = [_['Contact__c'] + '=' + _['Id'] for _ in records]
+    print('    Ext Ref Contact Ids with RCI Id of last SOQL query:', clients)
 
 result = sb.query_all("SELECT Contact__c FROM External_Ref__c WHERE Name LIKE 'RCI%' GROUP BY Contact__c")
 print("SOQL querying distinct Contact Ids with external RCI Ids", result)
 if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
-    contacts = [_['Contact__c'] for _ in records]
-    print('    Ext Ref Contact Ids of last SOQL query:', contacts)
+    clients = [_['Contact__c'] for _ in records]
+    print('    Ext Ref Contact Ids of last SOQL query:', clients)
 
 result = sb.query_all("SELECT Id FROM Contact WHERE RCI_Reference__c != NULL")
 print('SOQL querying Contact Ids with main RCI Ids', result)
@@ -244,12 +244,12 @@ if result['done'] and result['totalSize'] > 0:
     print('    Ext Ref Ids of unique SOQL query:', ids)
 
 
-# SOQL query to include record type of contact
+# SOQL query to include record type of client
 result = sb.query_all("SELECT Id, Name, RecordType.DeveloperName FROM Contact WHERE LastName = 'Pepper'")
 if result['done'] and result['totalSize'] > 0:
     records = result['records']
     rec_type = records[0]['RecordType']['DeveloperName']
-    print("Fetch contact data with RecordType", rec_type, records)
+    print("Fetch client data with RecordType", rec_type, records)
 
 # check create/update/delete of Contact object
 result = sb.query_all("Select Id From RecordType Where SobjectType = 'Contact' and DeveloperName = 'Rentals'")

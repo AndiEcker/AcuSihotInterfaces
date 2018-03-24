@@ -35,11 +35,11 @@ cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
-cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')
-cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
-cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
-cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
+cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
+cae.add_option('shServerPort', "IP port of the WEB interface of this server", 14777, 'w')
+cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
+cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
+cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b')
 
@@ -57,15 +57,15 @@ check_acumen = cae.get_option('acuUser') and cae.get_option('acuPassword') and c
 if check_acumen:
     uprint('Checked Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
 last_rt_prefix = cae.get_option('acuDSN')[-4:]
-check_sihot_web = cae.get_option('serverIP') and cae.get_option('serverPort')
-check_sihot_kernel = cae.get_option('serverIP') and cae.get_option('serverKernelPort')
+check_sihot_web = cae.get_option('shServerIP') and cae.get_option('shServerPort')
+check_sihot_kernel = cae.get_option('shServerIP') and cae.get_option('shServerKernelPort')
 if check_sihot_web or check_sihot_kernel:
-    uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
-           cae.get_option('serverKernelPort'))
-    uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+    uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
+           cae.get_option('shServerKernelPort'))
+    uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
 break_on_error = cae.get_option('breakOnError')
 uprint('Break on error:', 'Yes' if break_on_error else 'No')
-notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'))
+notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
 send_output = 1 if notification and cae.get_option('sendOutput') else 0
 uprint('Send Output (subprocess call method: 1=check_output, 0=check_call)', send_output)
 

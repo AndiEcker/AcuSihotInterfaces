@@ -39,18 +39,18 @@ cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
-cae.add_option('serverIP', "IP address of the Sihot interface server", 'localhost', 'i')
-cae.add_option('serverPort', "IP port of the Sihot WEB interface", 14777, 'w')
-cae.add_option('serverKernelPort', "IP port of the Sihot KERNEL interface", 14772, 'k')
-cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 69.3)
-cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
+cae.add_option('shServerIP', "IP address of the Sihot interface server", 'localhost', 'i')
+cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
+cae.add_option('shServerKernelPort', "IP port of the Sihot KERNEL interface", 14772, 'k')
+cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 69.3, 't')
+cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 
 add_sf_options(cae)
 
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
-       cae.get_option('serverKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
+       cae.get_option('shServerKernelPort'))
+uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
 
 
 config_data = None      # public Data() instance for config/data fetches
@@ -68,6 +68,7 @@ if True:        # added for to hide PyCharm inspection warning "module level imp
     from kivy.uix.textinput import TextInput
     from kivy.uix.actionbar import ActionButton, ActionGroup, ActionView
     from kivy.uix.popup import Popup
+    # noinspection PyProtectedMember
     from kivy.lang.builder import Factory
     from kivy.properties import BooleanProperty, NumericProperty, StringProperty, DictProperty, ObjectProperty
     from kivy.clock import Clock
@@ -112,10 +113,10 @@ def run_check(check_name, data_dict, app_inst):
 
 def _ass_test_method(method):
     global cae
-    old_val = cae.get_option('serverPort')
-    cae.set_option('serverPort', 11000, save_to_config=False)
+    old_val = cae.get_option('shClientPort')
+    cae.set_option('shClientPort', 11000, save_to_config=False)
     ret = method()
-    cae.set_option('serverPort', old_val, save_to_config=False)
+    cae.set_option('shClientPort', old_val, save_to_config=False)
     return ret
 
 

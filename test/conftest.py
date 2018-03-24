@@ -135,18 +135,9 @@ class ConsoleApp:
         cfg.optionxform = str   # for case-sensitive config vars
         cfg.read('../.console_app_env.cfg')
 
-        self._options = dict(serverIP=cfg.get('Settings', 'serverIP', fallback='10.103.222.70'),
-                             serverPort=cfg.get('Settings', 'serverPort', fallback=14777),
-                             serverKernelPort=cfg.get('Settings', 'serverKernelPort', fallback=14772),
-                             timeout=369.0, xmlEncoding='utf8',
-                             acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
+        self._options = dict(acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
                              acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
                              debugLevel=cfg.getint('Settings', 'debugLevel', fallback=2),  # 2==DEBUG_LEVEL_VERBOSE
-                             warningFragments='',
-                             sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
-                             sfToken=cfg.get('Settings', 'sfToken'),
-                             sfClientId=cfg.get('Settings', 'sfClientId', fallback='AcuSihotInterfaces_TEST'),
-                             sfIsSandbox=cfg.get('Settings', 'sfIsSandbox', fallback=True),
                              emailValidatorBaseUrl=cfg.get('Settings', 'emailValidatorBaseUrl'),
                              emailValidatorApiKey=cfg.get('Settings', 'emailValidatorApiKey'),
                              phoneValidatorBaseUrl=cfg.get('Settings', 'phoneValidatorBaseUrl'),
@@ -154,6 +145,16 @@ class ConsoleApp:
                              pgUser=cfg.get('Settings', 'pgUser'), pgPassword=cfg.get('Settings', 'pgPassword'),
                              pgRootUsr=cfg.get('Settings', 'pgRootUsr'), pgRootPwd=cfg.get('Settings', 'pgRootPwd'),
                              pgDSN=cfg.get('Settings', 'pgDSN', fallback='test'),
+                             sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
+                             sfToken=cfg.get('Settings', 'sfToken'),
+                             sfClientId=cfg.get('Settings', 'sfClientId', fallback='AcuSihotInterfaces_TEST'),
+                             sfIsSandbox=cfg.get('Settings', 'sfIsSandbox', fallback=True),
+                             shClientPort=cfg.get('Settings', 'shClientPort', fallback=12000),
+                             shServerIP=cfg.get('Settings', 'shServerIP', fallback='10.103.222.70'),
+                             shServerPort=cfg.get('Settings', 'shServerPort', fallback=14777),
+                             shServerKernelPort=cfg.get('Settings', 'shServerKernelPort', fallback=14772),
+                             shTimeout=369.0, shXmlEncoding='utf8',
+                             warningFragments='',
                              )
         for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):
             val = cfg.get('Settings', cfg_key)

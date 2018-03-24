@@ -31,12 +31,12 @@ cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
-cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')
-cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
+cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
+cae.add_option('shServerPort', "IP port of the WEB interface of this server", 14777, 'w')
+cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
 
-cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
-cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
+cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
+cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('useKernelForClient', "Used interface for clients (0=web, 1=kernel)", USE_KERNEL_FOR_CLIENTS_DEF, 'g',
                choices=(0, 1))
@@ -65,9 +65,9 @@ cae.add_option('syncDateRange', "Restrict sync. of res. to: "
 
 debug_level = cae.get_option('debugLevel')
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('serverIP'), cae.get_option('serverPort'),
-       cae.get_option('serverKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
+       cae.get_option('shServerKernelPort'))
+uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
 uprint('Use Kernel for clients:', 'Yes' if cae.get_option('useKernelForClient') else 'No (WEB)')
 uprint('Use Kernel for reservations:', 'Yes' if cae.get_option('useKernelForRes') else 'No (WEB)')
 last_rt_prefix = cae.get_option('acuDSN')[-4:]
@@ -76,7 +76,7 @@ uprint('Migrate Clients First/Separate:',
        ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
 uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
 notification, warning_notification_emails = init_notification(cae, cae.get_option('acuDSN')
-                                                              + '/' + cae.get_option('serverIP'))
+                                                              + '/' + cae.get_option('shServerIP'))
 if cae.get_config('warningFragments'):
     uprint('Warning Fragments:', cae.get_config('warningFragments'))
 migration_mode = cae.get_option('migrationMode')

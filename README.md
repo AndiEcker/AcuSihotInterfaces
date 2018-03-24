@@ -13,12 +13,12 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user i
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
 | AssCacheSync | Initialize, sync and/or verify AssCache from/against Acumen, Sihot and Salesforce | Web |
-| AssServer | Listening to Sihot interface for to synchronize reservation changes onto the ass_cache PG database | Sxml, Web |
+| AssServer | Listening to Sihot SXML interface for to synchronize reservation changes onto the ass_cache PG database | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
-| SfContactValidator | Salesforce Contact Data Validator | - |
-| ShSfContactMigration | Migrate contactable guests from Sihot to Salesforce | Web |
+| SfClientValidator | Salesforce Client Data Validator | - |
+| ShSfClientMigration | Migrate guests from Sihot to Salesforce | Web |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
 | [SihotOccLogChecker](#sihotocclogchecker-application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
 | [SihotResImport](#sihotresimport-application) | Import/Update/Cancel reservations from CSV/TXT files in Sihot.PMS | Kernel, Web |
@@ -56,24 +56,24 @@ are case-sensitive. The following table is listing them sorted by the option nam
 
 | Option | Description | Default | Short option | Commands |
 | --- | --- | --- | --- | --- |
-| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfContactValidator |
+| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfClientValidator |
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
 | correctAcumen | Correct/Fix Acumen data (0=No, 1=Yes) | 0 | A | SihotOccLogChecker |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
 | cmdInterval | Command interval in seconds | 3600 | s | WatchPupPy |
-| dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfContactMigration, SihotOccLogChecker |
-| dateTill | End date/time of date range | (depends on command) | T | ClientQuestionnaireExport, ShSfContactMigration, SihotOccLogChecker |
+| dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
+| dateTill | End date/time of date range | (depends on command) | T | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
-| emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfContactValidator |
+| emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfClientValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
-| filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | W | SfContactValidator |
-| filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfContactValidator |
+| filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | W | SfClientValidator |
+| filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfClientValidator |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
 | initializeCache | Initialize/Wipe/Recreate postgres cache database (0=No, 1=Yes) | 0 | I | AssCacheSync |
@@ -83,32 +83,33 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
-| pgUser | User account name for the postgres database | 'postgres' | U | AssCacheSync |
-| pgPassword | User account password for the postgres database | - | P | AssCacheSync |
-| pgDSN | Database name of the postgres database | ass_cache | N | AssCacheSync |
-| phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfContactValidator |
+| pgUser | User account name for the postgres database | 'postgres' | U | AssCacheSync, AssServer |
+| pgPassword | User account password for the postgres database | - | P | AssCacheSync, AssServer |
+| pgDSN | Database name of the postgres database | ass_cache | N | AssCacheSync, AssServer |
+| phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfClientValidator |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
-| serverIP | IP address of the interface server | localhost | i | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| serverPort | IP port of the WEB/Sxml interface of this server | 14777 | w | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| serverKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| sfClientId | Salesforce client/application name/id | SignalliaSfInterface/cae.app_name() | C | SfContactValidator, ShSfContactMigration, SihotResImport |
-| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | SfContactValidator, ShSfContactMigration, SihotResImport |
-| sfPassword | Salesforce user account password | - | a | SfContactValidator, ShSfContactMigration, SihotResImport |
-| sfToken | Salesforce user account token | - | o | SfContactValidator, ShSfContactMigration, SihotResImport |
-| sfUser | Salesforce account user name | - | y | SfContactValidator, ShSfContactMigration, SihotResImport |
+| sfClientId | Salesforce client/application name/id | SignalliaSfInterface/cae.app_name() | C | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfPassword | Salesforce user account password | - | a | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfToken | Salesforce user account token | - | o | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfUser | Salesforce account user name | - | y | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
+| shClientPort | IP port of the Sxml interface of this server | 11000 (AcuServer) or 12000 (AssServer) | w | AcuServer, AssServer |
+| shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, AssCacheSync, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shTimeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| syncCache | Synchronize ass_cache database from (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Contacts, P=Product, R=Reservations) | - | S | AssCacheSync |
-| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| syncCache | Synchronize ass_cache database from (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Clients, P=Products, R=Reservations) | - | S | AssCacheSync |
+| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpFrom | SMTP Sender/From address | - | f | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
-| timeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| verifyCache | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Contacts, P=Product, R=Reservations) | - | V | AssCacheSync |
-| verifyFilters | Filter to restrict the checked data (C=contact-, P=product-, R=reservation-filter) | - | W | AssCacheSync |
-| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SfContactValidator, ShSfContactMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
-| xmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, ClientQuestionnaireExport, KernelGuestTester, ShSfContactMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| verifyCache | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Clients, P=Products, R=Reservations) | - | V | AssCacheSync |
+| verifyFilters | Filter to restrict the checked data (C=client-, P=product-, R=reservation-filter) | - | W | AssCacheSync |
+| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are
 hard-coded by python (like e.g. the -h switch for to show the help screen). The upper case character options -D and -L
@@ -266,9 +267,9 @@ for to specify the import path and file mask for OTA JSON files - this value def
 For to run this application in console mode (headless without any user interface), simply specify a valid 
 Acumen user name (acuUser) and password (acuPassword) as command line parameters (or via one of supported config/INI files).
 
-There are four command line parameters specifying the used Sihot server (production or test): `serverIP` is the DNS name
-or IP address of the SIHOT interface server, `serverPort` is the IP port of the used WEB interface and optionally
-you can specify via `timeout` the timeout value in seconds for TCP/IP connections (default=69.3) and via `xmlEncoding`
+There are four command line parameters specifying the used Sihot server (production or test): `shServerIP` is the DNS name
+or IP address of the SIHOT interface server, `shServerPort` is the IP port of the used WEB interface and optionally
+you can specify via `timeout` the timeout value in seconds for TCP/IP connections (default=69.3) and via `shXmlEncoding`
 the charset encoding used for the xml data (default='cp1252').
 
 Meanwhile and for to check the client data against our Salesforce system this application needs also a user account for
@@ -453,7 +454,7 @@ hotel 3:
 | 3 BED | Sea View/Front/781 | 3DDS |
 | 4 BED | - | 4BPS |
 | 4 BED | Duplex/752 | 4BPS |
-| 4 BED | High Foor/757 | 4BPS |
+| 4 BED | High Floor/757 | 4BPS |
 
 
 #### PBC room category overloads

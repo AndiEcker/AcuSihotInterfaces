@@ -21,19 +21,19 @@ cae.add_option('pgUser', "User account name for ass_cache postgres cache databas
 cae.add_option('pgPassword', "User account password for ass_cache postgres cache database", '', 'P')
 cae.add_option('pgDSN', "Database name of the ass_cache postgres cache database", 'ass_cache', 'N')
 
-cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('serverPort', "IP port of the interface of this server", 11000, 'w')
+cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
+cae.add_option('shClientPort', "IP port of the interface of this server", 12000, 'w')
 
-cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
-cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
+cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
+cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
 add_notification_options(cae)
 
 debug_level = cae.get_option('debugLevel')
 uprint('AssCache Database/User:', cae.get_option('pgDSN'), cae.get_option('pgUser'))
-uprint('Sihot IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
-notification, _ = init_notification(cae, cae.get_option('pgDSN') + '/' + cae.get_option('serverIP'))
+uprint('Sihot IP/port:', cae.get_option('shServerIP'), cae.get_option('shClientPort'))
+uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+notification, _ = init_notification(cae, cae.get_option('pgDSN') + '/' + cae.get_option('shServerIP'))
 
 
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
@@ -126,9 +126,16 @@ def oc_res_change(req):
         if ass.rgr_upsert(rgr, ho_id, res_id=res_id, sub_id=sub_id):
             break
         rgr_pk = ass.ass_db.fetch_value()
+        room_seq = pers_seq = 0
+        room_no = rgc_list[0]['rgc_room_id']
         for rgc in rgc_list:
-            if ass.rgc_upsert(rgc, rgr_pk):
+            if ass.rgc_upsert(rgc, rgr_pk, room_seq, pers_seq):
                 break
+            if rgc['rgc_room_id'] != room_no:
+                room_seq += 1
+                pers_seq = 0
+            else:
+                pers_seq += 1
         if ass.error_message:
             break
 
@@ -177,7 +184,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
-        xml_request = str(xml_from_client, encoding=cae.get_option('xmlEncoding'))
+        xml_request = str(xml_from_client, encoding=cae.get_option('shXmlEncoding'))
         notify("SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'")
         req = Request(cae)
         req.parse_xml(xml_request)
@@ -209,11 +216,11 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                 notify(msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
                 xml_response = create_ack_response(req, '969', msg)
 
-        return bytes(xml_response, cae.get_option('xmlEncoding'))
+        return bytes(xml_response, cae.get_option('shXmlEncoding'))
 
 
 try:
-    server = TcpServer(cae.get_option('serverIP'), cae.get_option('serverPort'), SihotRequestXmlHandler,
+    server = TcpServer(cae.get_option('shServerIP'), cae.get_option('shClientPort'), SihotRequestXmlHandler,
                        debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 except (OSError, Exception) as tcp_ex:

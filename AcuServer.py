@@ -24,19 +24,19 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
     cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
     cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
-    cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
+    cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
     # default is 14773 for Acumen and Sihot on 14774
-    cae.add_option('serverPort', "IP port of the interface of this server", 11000, 'w')  # 11001 for Sihot
+    cae.add_option('shClientPort', "IP port of the interface of this server", 11000, 'w')  # 11001 for Sihot
 
-    cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
-    cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
+    cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
+    cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
     add_notification_options(cae)
 
     uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-    uprint('Server IP/port:', cae.get_option('serverIP'), cae.get_option('serverPort'))
-    uprint('TCP Timeout/XML Encoding:', cae.get_option('timeout'), cae.get_option('xmlEncoding'))
-    notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('serverIP'))
+    uprint('Server IP/port:', cae.get_option('shServerIP'), cae.get_option('shClientPort'))
+    uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+    notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
 
 
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
@@ -206,7 +206,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
-        xml_request = str(xml_from_client, encoding=cae.get_option('xmlEncoding'))
+        xml_request = str(xml_from_client, encoding=cae.get_option('shXmlEncoding'))
         notify("SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'",
                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         req = Request(cae)
@@ -239,11 +239,11 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                 notify(msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
                 xml_response = create_ack_response(req, '969', msg)
 
-        return bytes(xml_response, cae.get_option('xmlEncoding'))
+        return bytes(xml_response, cae.get_option('shXmlEncoding'))
 
 
 if __name__ == '__main__':
-    server = TcpServer(cae.get_option('serverIP'), cae.get_option('serverPort'), SihotRequestXmlHandler,
+    server = TcpServer(cae.get_option('shServerIP'), cae.get_option('shClientPort'), SihotRequestXmlHandler,
                        debug_level=cae.get_option('debugLevel'))
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 

@@ -1,19 +1,21 @@
 """
-    SfContactValidator is a tool for to validate email address, phone numbers and post address of Salesforce Contacts
+    SfClientValidator is a tool for to validate email address, phone numbers and post address of Salesforce clients
 
     0.1     first beta.
-    0.2     refactored for to use validation also in ShSfContactMigration.py.
+    0.2     refactored for to use validation also in ShSfClientMigration.py and renamed from SfContactValidator to
+            SfClientValidator.
 """
 import pprint
 
 from ae_console_app import ConsoleApp, uprint
 from ae_notification import add_notification_options, init_notification
 from sfif import add_sf_options, prepare_connection, correct_email, correct_phone
-from ae_contact_validation import (add_validation_options, init_validation, EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED)
+from ae_client_validation import (add_validation_options, init_validation, clients_to_validate,
+                                  EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED)
 
 __version__ = '0.2'
 
-cae = ConsoleApp(__version__, "Salesforce Contact Data Validator")
+cae = ConsoleApp(__version__, "Salesforce Client Data Validator")
 
 add_validation_options(cae, email_def=EMAIL_NOT_VALIDATED, phone_def=PHONE_NOT_VALIDATED)
 add_sf_options(cae)
@@ -48,17 +50,18 @@ def add_log_msg(msg, is_error=False, importance=2):
     uprint(msg)
 
 
-# fetch rental Contacts migrated with ShSfContactMigration app for to validate email address and phone numbers
-contacts = sf_conn.contacts_to_validate(filter_sf_clients=filter_sf_clients,
-                                        filter_sf_rec_types=filter_sf_rec_types,
-                                        email_validation=email_validation,
-                                        phone_validation=phone_validation,
-                                        addr_validation=addr_validation)
-add_log_msg("Validating {} contacts".format(len(contacts)), importance=4)
-emails_validated = phones_validated = addresses_validated = contacts_updated = 0
+# fetch rental clients migrated with ShSfClientMigration app for to validate email address and phone numbers
+clients = clients_to_validate(sf_conn,
+                              filter_sf_clients=filter_sf_clients,
+                              filter_sf_rec_types=filter_sf_rec_types,
+                              email_validation=email_validation,
+                              phone_validation=phone_validation,
+                              addr_validation=addr_validation)
+add_log_msg("Validating {} clients".format(len(clients)), importance=4)
+emails_validated = phones_validated = addresses_validated = clients_updated = 0
 skipped_email_ids = dict()
-for rec in contacts:
-    cae.dprint("Checking Contact for needed validation", rec)
+for rec in clients:
+    cae.dprint("Checking Client for needed validation", rec)
     update_in_sf = False
     if email_validator and 'Email' in rec and rec['Email'] \
             and eval("rec['CD_email_valid__c'] in (" + email_validation.replace('NULL', 'None') + ",)"):
@@ -94,7 +97,7 @@ for rec in contacts:
         phone_changes = list()
         rec['Phone'], phone_changed = correct_phone(rec['Phone'], changed=False, removed=phone_changes)
         if phone_changed:
-            add_log_msg("{Id} phone {HomePhone} corrected; removed 'index:char'={chg}"
+            add_log_msg("{Id} phone {Phone} corrected; removed 'index:char'={chg}"
                         .format(chg=phone_changes, **rec))
             update_in_sf = True
         corr = dict()
@@ -102,19 +105,19 @@ for rec in contacts:
         validation_flag = rec['CD_Htel_valid__c']
         if err_msg:
             validation_flag = '0'
-            add_log_msg("{Id} phone {HomePhone} is invalid. Reason={err_msg}"
+            add_log_msg("{Id} phone {Phone} is invalid. Reason={err_msg}"
                         .format(err_msg=err_msg, **rec), is_error=True)
         else:
             validation_flag = '1'
-            add_log_msg("{Id} phone {HomePhone} is valid.".format(**rec))
+            add_log_msg("{Id} phone {Phone} is valid.".format(**rec))
             if 'formatinternational' in corr and corr['formatinternational']:
                 if rec['Phone'] != corr['formatinternational']:
-                    add_log_msg("{Id} phone {HomePhone} correcting to {formatinternational}".format(**rec, **corr))
+                    add_log_msg("{Id} phone {Phone} correcting to {formatinternational}".format(**rec, **corr))
                     rec['Phone'] = corr['formatinternational']
                     update_in_sf = True
             elif 'formatnational' in corr and corr['formatnational']:
                 if rec['Phone'] != corr['formatnational']:
-                    add_log_msg("{Id} phone {HomePhone} correcting to {formatnational}".format(**rec, **corr))
+                    add_log_msg("{Id} phone {Phone} correcting to {formatnational}".format(**rec, **corr))
                     rec['Phone'] = corr['formatnational']
                     update_in_sf = True
             if 'countrycode' in corr and corr['countrycode']:
@@ -206,13 +209,13 @@ for rec in contacts:
         if err_msg:
             add_log_msg(err_msg, is_error=True)
         else:
-            contacts_updated += 1
+            clients_updated += 1
         if log_msg:
             add_log_msg(log_msg)
 
 
-add_log_msg("Updated {} of {} contacts having {} errors while validating emails={}, phones={}, addresses={}"
-            .format(contacts_updated, len(contacts), len(log_errors), emails_validated, phones_validated,
+add_log_msg("Updated {} of {} clients having {} errors while validating emails={}, phones={}, addresses={}"
+            .format(clients_updated, len(clients), len(log_errors), emails_validated, phones_validated,
                     addresses_validated),
             importance=4)
 
@@ -222,7 +225,7 @@ if skipped_email_ids:
                     .format(len(id_list), frag, pprint.pformat(id_list, indent=9, compact=True)))
 
 if notification:
-    subject = "Salesforce Contact Validation protocol" + (" (sandbox/test system)" if sf_sandbox else "")
+    subject = "Salesforce Client Validation protocol" + (" (sandbox/test system)" if sf_sandbox else "")
     mail_body = "\n\n".join(log_items)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
@@ -230,7 +233,7 @@ if notification:
         cae.shutdown(36)
     if warning_notification_emails and log_errors:
         mail_body = "\n\n".join(log_errors)
-        subject = "Salesforce Contact Validation errors/discrepancies" + (" (sandbox)" if sf_sandbox else "")
+        subject = "Salesforce Client Validation errors/discrepancies" + (" (sandbox)" if sf_sandbox else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
             uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))

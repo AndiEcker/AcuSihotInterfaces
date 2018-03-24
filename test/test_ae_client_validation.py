@@ -1,4 +1,4 @@
-from ae_contact_validation import EmailValidator, PhoneValidator
+from ae_client_validation import EmailValidator, PhoneValidator
 
 
 class TestEmailValidator:

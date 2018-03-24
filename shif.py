@@ -207,7 +207,7 @@ class GuestBulkFetcher:
     """
     WIP/NotUsed/NoTests: the problem is with GUEST-SEARCH is that there is no way to bulk fetch all guests
     because the search criteria is not providing range search for to split in slices. Fetching all 600k clients
-    is resulting in a timeout error after 30 minutes (the Sihot interface 'timeout' option value)
+    is resulting in a timeout error after 30 minutes (the Sihot interface 'shTimeout' option value)
     """
     def __init__(self, cae):
         self.cae = cae
@@ -221,7 +221,7 @@ class GuestBulkFetcher:
             guest_search = GuestSearch(cae)
             search_criteria = dict(SH_FLAGS='FIND-ALSO-DELETED-GUESTS', SORT='GUEST-NR')
             search_criteria['MAX-ELEMENTS'] = 600000
-            # MATCH-SM (holding the Salesforce/SF contact ID) is not available in Kernel GUEST-SEARCH (only GUEST-GET)
+            # MATCH-SM (holding the Salesforce/SF client ID) is not available in Kernel GUEST-SEARCH (only GUEST-GET)
             self.all_rows = guest_search.search_guests(search_criteria, ['MATCHCODE', 'OBJID', 'MATCH-SM'])
         except Exception as ex:
             uprint(" ***  Sihot interface guest bulk fetch exception:", str(ex))
@@ -253,10 +253,10 @@ class ResBulkFetcher:
 
     def add_options(self):
         cae = self.cae
-        cae.add_option('serverIP', "IP address of the Sihot interface server", 'localhost', 'i')
-        cae.add_option('serverPort', "IP port of the Sihot WEB interface", 14777, 'w')
-        cae.add_option('timeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
-        cae.add_option('xmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
+        cae.add_option('shServerIP', "IP address of the Sihot interface server", 'localhost', 'i')
+        cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
+        cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
+        cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 
         cae.add_option('dateFrom', "Date" + ("/time" if SH_PROVIDES_CHECKOUT_TIME else "") +
                        " of first arrival", self.startup_date - datetime.timedelta(days=1), 'F')
@@ -292,8 +292,8 @@ class ResBulkFetcher:
 
     def print_config(self):
         cae = self.cae
-        uprint("Sihot Server IP/Web-port:", cae.get_option('serverIP'), cae.get_option('serverPort'))
-        uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+        uprint("Sihot Server IP/Web-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
+        uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
         uprint("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
                'and till/before', self.date_till.strftime(SH_DATE_FORMAT))
         uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.sh_fetch_max_days,
@@ -327,25 +327,28 @@ class ResBulkFetcher:
                     cae.shutdown(3324)
                 uprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
                        .format(len(chunk_rows), chunk_beg, chunk_end, self.search_flags, self.search_scope))
+                valid_rows = list()
                 for res in chunk_rows:
-                    errors = list()
+                    reasons = list()
                     check_in, check_out = date_range(res)
                     if not check_in or not check_out:
-                        errors.append("incomplete check-in={} check-out={}".format(check_in, check_out))
+                        reasons.append("incomplete check-in={} check-out={}".format(check_in, check_out))
                     if not (self.date_from <= check_in <= self.date_till):
-                        errors.append("arrival {} not between {} and {}"
-                                      .format(check_in, self.date_from, self.date_till))
+                        reasons.append("arrival {} not between {} and {}"
+                                       .format(check_in, self.date_from, self.date_till))
                     mkt_src = elem_value(res, 'MARKETCODE')
                     if self.allowed_mkt_src and mkt_src not in self.allowed_mkt_src:
-                        errors.append("disallowed market source {}".format(mkt_src))
+                        reasons.append("disallowed market source {}".format(mkt_src))
                     mkt_group = elem_value(res, 'CHANNEL')
                     if self.allowed_mkt_grp and mkt_group not in self.allowed_mkt_grp:
-                        errors.append("disallowed market group/channel {}".format(mkt_group))
-                    if errors:
-                        uprint(errors)
-                        cae.shutdown(3327)
+                        reasons.append("disallowed market group/channel {}".format(mkt_group))
+                    if reasons:
+                        self.cae.dprint("  ##  Skipped Sihot reservation:", res, " reason(s):", reasons,
+                                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                        continue
+                    valid_rows.append(res)
 
-                self.all_rows.extend(chunk_rows)
+                self.all_rows.extend(valid_rows)
                 time.sleep(self.sh_fetch_pause_seconds)
         except Exception as ex:
             uprint(" ***  Sihot interface reservation fetch exception:", str(ex))

@@ -1,25 +1,25 @@
 ------ TABLE STRUCTURES
 ---- CLIENT DATA
--- client contact ids on external systems
-CREATE TABLE contacts
+-- client client ids on external systems
+CREATE TABLE clients
 (
-  co_pk                   SERIAL PRIMARY KEY,
-  co_ac_id                VARCHAR(12),      -- 83 acumen clients having acu_id + 'D1' + 'P2', e.g. G022570D1P2,
+  cl_pk                   SERIAL PRIMARY KEY,
+  cl_ac_id                VARCHAR(12),      -- 83 acumen clients having acu_id + 'D1' + 'P2', e.g. G022570D1P2,
                                             -- .. E127673D1P2, Z000020D1P2, I127633D1P2, but also refs like MAINTENANC
-  co_sf_id                VARCHAR(18),
-  co_sh_id                VARCHAR(15),
-  UNIQUE (co_ac_id, co_sf_id, co_sh_id)
+  cl_sf_id                VARCHAR(18),
+  cl_sh_id                VARCHAR(15),
+  UNIQUE (cl_ac_id, cl_sf_id, cl_sh_id)
 );
 -- noinspection SqlResolve
-SELECT audit.audit_table('contacts');
+SELECT audit.audit_table('clients');
 
--- client contact external references (initially mainly used for to store multiple RCI Ids for each contact)
+-- client client external references (initially mainly used for to store multiple RCI Ids for each client)
 CREATE TABLE external_refs
 (
-  er_co_fk                INTEGER NOT NULL REFERENCES contacts(co_pk),
+  er_cl_fk                INTEGER NOT NULL REFERENCES clients(cl_pk),
   er_type                 VARCHAR(6) NOT NULL,
   er_id                   VARCHAR(18) NOT NULL,
-  UNIQUE (er_co_fk, er_type, er_id)
+  UNIQUE (er_cl_fk, er_type, er_id)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('external_refs');
@@ -42,14 +42,14 @@ CREATE TABLE products
 -- noinspection SqlResolve
 SELECT audit.audit_table('products');
 
-CREATE TABLE contact_products
+CREATE TABLE client_products
 (
-  cp_co_fk                INTEGER NOT NULL REFERENCES contacts(co_pk),
+  cp_cl_fk                INTEGER NOT NULL REFERENCES clients(cl_pk),
   cp_pr_fk                VARCHAR(12) NOT NULL REFERENCES products(pr_pk),
-  PRIMARY KEY (cp_co_fk, cp_pr_fk)
+  PRIMARY KEY (cp_cl_fk, cp_pr_fk)
 );
 -- noinspection SqlResolve
-SELECT audit.audit_table('contact_products');
+SELECT audit.audit_table('client_products');
 
 
 
@@ -95,7 +95,7 @@ CREATE TABLE res_inventories
 SELECT audit.audit_table('res_inventories');
 
 -- reservations
-/* .. columns not included from V_ACU_RES_DATA/_UNSYNCED or indirectly included via contacts table
+/* .. columns not included from V_ACU_RES_DATA/_UNSYNCED or indirectly included via clients table
     RU_SOURCE	15	VARCHAR2 (1 Byte)	Y
     RO_RES_GROUP	17	VARCHAR2 (40 Byte)	Y
     RO_RES_CLASS	18	VARCHAR2 (12 Byte)	Y
@@ -127,10 +127,10 @@ CREATE TABLE res_groups
 (
   rgr_pk                  SERIAL PRIMARY KEY,
   rgr_ho_fk               VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),   -- SIHOT hotel id (e.g. '1'==BHC, ...)
-  rgr_gds_no              VARCHAR(24) NOT NULL,     -- SIHOT reservation GDSNO (OBJID not available in RES-SEARCH)
   rgr_res_id              VARCHAR(18) NOT NULL,     -- SIHOT reservation id (res-number / sub-number)
   rgr_sub_id              VARCHAR(3) NOT NULL,
-  rgr_order_co_fk         INTEGER REFERENCES contacts(co_pk),
+  rgr_gds_no              VARCHAR(24),              -- opt. SIHOT reservation GDSNO (OBJID not available in RES-SEARCH)
+  rgr_order_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgr_used_ri_fk          INTEGER REFERENCES res_inventories(ri_pk),
   rgr_rci_deposit_ri_fk   INTEGER REFERENCES res_inventories(ri_pk),
   rgr_status              VARCHAR(3) NOT NULL,
@@ -153,8 +153,7 @@ CREATE TABLE res_groups
   rgr_created_when        TIMESTAMP NOT NULL DEFAULT current_timestamp,
   rgr_last_change         TIMESTAMP NOT NULL DEFAULT current_timestamp,   -- upsert of external system (mostly Sihot)
   rgr_last_sync           TIMESTAMP,                                      -- last sync to Salesforce
-  UNIQUE (rgr_ho_fk, rgr_gds_no, rgr_res_id),
-  CONSTRAINT con_rgr_ensure_pkey CHECK (rgr_gds_no is not null OR rgr_res_id is not null)
+  UNIQUE (rgr_ho_fk, rgr_res_id, rgr_sub_id)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_groups');
@@ -168,7 +167,7 @@ END;
 $$ language 'plpgsql';
 CREATE TRIGGER rgr_modified_trigger BEFORE UPDATE ON res_groups FOR EACH ROW EXECUTE PROCEDURE rgr_modified();
 
-CREATE TABLE res_group_contacts
+CREATE TABLE res_group_clients
 (
   rgc_rgr_fk              INTEGER NOT NULL REFERENCES res_groups(rgr_pk),
   rgc_room_seq            INTEGER NOT NULL DEFAULT 0,
@@ -179,7 +178,7 @@ CREATE TABLE res_group_contacts
   rgc_phone               VARCHAR(42),
   rgc_dob                 DATE,
   rgc_auto_generated      VARCHAR(1) NOT NULL DEFAULT '1',
-  rgc_occup_co_fk         INTEGER REFERENCES contacts(co_pk),  -- referencing Sihot guest as Salesforce contact
+  rgc_occup_cl_fk         INTEGER REFERENCES clients(cl_pk),  -- referencing Sihot guest as Salesforce client
   rgc_flight_arr_comment  VARCHAR(42),      -- arrival airport, airline and flight number
   rgc_flight_arr_time     TIME,             -- ETA
   rgc_flight_dep_comment  VARCHAR(42),
@@ -190,18 +189,18 @@ CREATE TABLE res_group_contacts
   UNIQUE (rgc_rgr_fk, rgc_room_seq, rgc_pers_seq)
 );
 -- noinspection SqlResolve
-SELECT audit.audit_table('res_group_contacts');
+SELECT audit.audit_table('res_group_clients');
 
 
 ------ VIEWS
----- CONTACT VIEWS
--- view for AssSysDate.co_fetch_all() extending contacts table with external refs and pt_group aggregates
-CREATE OR REPLACE VIEW v_contacts_refs_owns AS
-  SELECT co_pk, co_ac_id, co_sf_id, co_sh_id
-       , (select string_agg(er_type || '=' || er_id, ',') FROM external_refs WHERE er_co_fk = co_pk) as ext_refs
-       , (select string_agg(pt_group, '') FROM contact_products
+---- CLIENT VIEWS
+-- view for AssSysDate.cl_fetch_all() extending clients table with external refs and pt_group aggregates
+CREATE OR REPLACE VIEW v_clients_refs_owns AS
+  SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id
+       , (select string_agg(er_type || '=' || er_id, ',') FROM external_refs WHERE er_cl_fk = cl_pk) as ext_refs
+       , (select string_agg(pt_group, '') FROM client_products
           INNER JOIN products ON cp_pr_fk = pr_pk INNER JOIN product_types ON pr_pt_fk = pt_pk
-          WHERE cp_co_fk = co_pk) as owns
-    FROM contacts;
+          WHERE cp_cl_fk = cl_pk) as owns
+    FROM clients;
 
-COMMENT ON VIEW v_contacts_refs_owns IS 'contacts extended by external_refs and owned pt_group(s) aggregates';
+COMMENT ON VIEW v_clients_refs_owns IS 'clients extended by external_refs and owned pt_group(s) aggregates';

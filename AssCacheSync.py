@@ -25,19 +25,20 @@ cae = ConsoleApp(__version__, "Initialize, sync and/or verify AssCache from/agai
 
 cae.add_option('initializeCache', "Initialize/Wipe/Recreate ass_cache database (0=No, 1=Yes)", 0, 'I')
 sync_veri_choices = ('acC', 'acP', 'acR', 'shC', 'shR', 'sfC', 'sfP', 'sfR')
-cae.add_option('syncCache', "Synchronize from (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Contacts, P=Products, "
-                            "R=Reservations), e.g. shC is synchronizing contacts from Sihot",
+cae.add_option('syncCache', "Synchronize from (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Clients, P=Products, "
+                            "R=Reservations), e.g. shC is synchronizing clients from Sihot",
                [], 'S', choices=sync_veri_choices, multiple=True)
-cae.add_option('verifyCache', "Verify/Check against (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Contacts, "
+cae.add_option('verifyCache', "Verify/Check against (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Clients, "
                               "P=Products, R=Reservations), e.g. acR is checking reservations against Acumen",
                [], 'V', choices=sync_veri_choices, multiple=True)
-cae.add_option('verifyFilters', "Filter to restrict the checked data (C=contact-, P=product-, R=reservation-filter), "
-                                "e.g. {'C':\\\"co_ac_id='E123456'\\\"} checks only the contact with Acumen ID E123456",
+
+cae.add_option('verifyFilters', "Filter to restrict the checked data (C=client-, P=product-, R=reservation-filter), "
+                                "e.g. {'C':\\\"cl_ac_id='E123456'\\\"} checks only the client with Acumen ID E123456",
                {}, 'W')
 
 cae.add_option('pgUser', "User account name for the postgres cache database", '', 'U')
 cae.add_option('pgPassword', "User account password for the postgres cache database", '', 'P')
-cae.add_option('pgDSN', "Database name of the postgres cache database", 'ass_cache', 'N')
+cae.add_option('pgDSN', "Database (and optional host) name of cache database (dbName[@host])", 'ass_cache', 'N')
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", '', 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
@@ -48,7 +49,7 @@ add_sf_options(cae)
 sh_rbf = ResBulkFetcher(cae)
 sh_rbf.add_options()
 # .. and for GuestBulkFetcher we need also the kernel interface port of Sihot
-cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
+cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
 
 add_notification_options(cae)
 
@@ -56,7 +57,7 @@ add_notification_options(cae)
 debug_level = cae.get_option('debugLevel')
 
 systems = dict(ac='Acumen', sh='Sihot', sf='Salesforce')
-types = dict(C='Contacts', P='Products', R='Reservations')
+types = dict(C='Clients', P='Products', R='Reservations')
 acm_init = cae.get_option('initializeCache')
 acm_syncs = cae.get_option('syncCache')
 acm_veris = cae.get_option('verifyCache')
@@ -67,6 +68,10 @@ for acm_sync in acm_syncs:
     actions.append("Synchronize/Migrate " + types[acm_sync[2:]] + " from " + systems[acm_sync[:2]])
 for acm_veri in acm_veris:
     actions.append("Verify/Check " + types[acm_veri[2:]] + " against " + systems[acm_veri[:2]])
+if not actions:
+    uprint("\nNo Action option specified (using command line options initializeCache, syncCache and/or verifyCache)\n")
+    cae.show_help()
+    cae.shutdown()
 uprint("Actions: " + '\n         '.join(actions))
 acm_veri_filters = cae.get_option('verifyFilters')
 if acm_veri_filters:
@@ -74,7 +79,7 @@ if acm_veri_filters:
 
 x = sh_rbf.load_config()
 sh_rbf.print_config()
-uprint("Sihot Kernel-port:", cae.get_option('serverKernelPort'))
+uprint("Sihot Kernel-port:", cae.get_option('shServerKernelPort'))
 
 acu_user = cae.get_option('acuUser')
 acu_password = cae.get_option('acuPassword')
@@ -92,7 +97,7 @@ if not sf_conn:
     cae.shutdown(20)
 
 notification, warning_notification_emails = init_notification(cae,
-                                                              "{}/{}/{}".format(acu_dsn, cae.get_option('serverIP'),
+                                                              "{}/{}/{}".format(acu_dsn, cae.get_option('shServerIP'),
                                                                                 "SBox" if sf_sandbox else "Prod"))
 
 
@@ -191,11 +196,11 @@ if conf_data.error_message:
     log_error(conf_data.error_message, 'AcuUserLogOn', importance=4, exit_code=15, dbs=[ass_db, acu_db])
 
 
-def ac_migrate_contacts():
-    """ migrate contacts from Acumen and Salesforce into ass_cache/postgres """
+def ac_migrate_clients():
+    """ migrate clients from Acumen and Salesforce into ass_cache/postgres """
 
-    # fetch all couple-contacts from Acumen
-    log_warning("Fetching couple contact data from Acumen (needs some minutes)", 'FetchAcuCoupleContacts', importance=3)
+    # fetch all couple-clients from Acumen
+    log_warning("Fetching couple client data from Acumen (needs some minutes)", 'FetchAcuCoupleClients', importance=3)
     ac_cos = conf_data.load_view(acu_db, 'T_CD',
                                  ["CD_CODE", "CD_SF_ID1", "to_char(CD_SIHOT_OBJID)", "CD_RCI_REF"],
                                  "substr(CD_CODE, 1, 1) <> 'A' and CD_SNAM1 is not NULL and CD_FNAM1 is not NULL")
@@ -212,8 +217,8 @@ def ac_migrate_contacts():
 
     # migrate to ass_cache including additional external refs/IDs (fetched from Acumen)
     for idx, ac_co in enumerate(ac_cos):
-        co_pk = conf_data.co_save(ac_co[0], ac_co[1], ac_co[2], ext_refs=[(EXT_REF_TYPE_RCI, ac_co[3])])
-        if co_pk is None:
+        cl_pk = conf_data.cl_save(ac_co[0], ac_co[1], ac_co[2], ext_refs=[(EXT_REF_TYPE_RCI, ac_co[3])])
+        if cl_pk is None:
             break
         if idx + 1 % 1000 == 0:
             ass_db.commit()
@@ -256,11 +261,11 @@ def ac_migrate_products():
     if cps is None:
         return conf_data.error_message
     for cp in cps:
-        co_pk = conf_data.co_ass_id_by_ac_id(cp[2])
-        if co_pk is None:
+        cl_pk = conf_data.cl_ass_id_by_ac_id(cp[2])
+        if cl_pk is None:
             break
-        col_values = dict(cp_co_fk=co_pk, cp_pr_fk=cp[0])
-        if ass_db.upsert('contact_products', col_values, chk_values=col_values):
+        col_values = dict(cp_cl_fk=cl_pk, cp_pr_fk=cp[0])
+        if ass_db.upsert('client_products', col_values, chk_values=col_values):
             break
 
     if ass_db.last_err_msg:
@@ -301,11 +306,11 @@ def ac_migrate_res_data():
         return error_msg
     for crow in acumen_req.rows:
         # determine orderer
-        ord_co_pk = conf_data.co_ass_id_by_ac_id(crow['OC_CODE'])
-        if ord_co_pk is None:
+        ord_cl_pk = conf_data.cl_ass_id_by_ac_id(crow['OC_CODE'])
+        if ord_cl_pk is None:
             error_msg = conf_data.error_message
-            ord_co_pk = conf_data.co_ass_id_by_sh_id(crow['OC_SIHOT_OBJID'])
-            if ord_co_pk is None:
+            ord_cl_pk = conf_data.cl_ass_id_by_sh_id(crow['OC_SIHOT_OBJID'])
+            if ord_cl_pk is None:
                 error_msg += conf_data.error_message
                 break
             error_msg = ""
@@ -335,7 +340,7 @@ def ac_migrate_res_data():
 
         chk_values = dict(rgr_ho_fk=crow['RUL_SIHOT_HOTEL'], rgr_gds_no=gds)
         upd_values = chk_values.copy()
-        upd_values.update(rgr_order_co_fk=ord_co_pk,
+        upd_values.update(rgr_order_cl_fk=ord_cl_pk,
                           rgr_used_ri_fk=ri_pk,
                           rgr_arrival=crow['ARR_DATE'],
                           rgr_departure=crow['DEP_DATE'],
@@ -370,8 +375,8 @@ def ac_migrate_res_data():
         if ac_cos is None:
             error_msg = conf_data.error_message
             break
-        occ_co_pk = conf_data.co_ass_id_by_ac_id(mc)
-        if occ_co_pk is None:
+        occ_cl_pk = conf_data.cl_ass_id_by_ac_id(mc)
+        if occ_cl_pk is None:
             error_msg = conf_data.error_message
             break
 
@@ -380,7 +385,7 @@ def ac_migrate_res_data():
         upd_values.update(rgc_surname=ac_cos['CD_SNAM1'],
                           rgc_firstname=ac_cos['CD_FNAM1'],
                           rgc_auto_generated='0',
-                          rgc_occup_co_fk=occ_co_pk,
+                          rgc_occup_cl_fk=occ_cl_pk,
                           rgc_flight_arr_comment=crow['RU_FLIGHT_AIRPORT'] + " No=" + crow['RU_FLIGHT_NO'],
                           rgc_flight_arr_time=crow['RU_FLIGHT_LANDS'],
                           # occupation data
@@ -389,20 +394,20 @@ def ac_migrate_res_data():
                           rgc_room_id=crow['RUL_SIHOT_ROOM'],
                           rgc_dob=ac_cos['CD_DOB1']
                           )
-        if ass_db.upsert('res_group_contacts', upd_values, chk_values=chk_values):
+        if ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
             error_msg = ass_db.last_err_msg
             break
-        # .. add 2nd couple to occupants/res_group_contacts
-        occ_co_pk = conf_data.co_ass_id_by_ac_id(mc + AC_ID_2ND_COUPLE_SUFFIX)
-        if occ_co_pk is None:
+        # .. add 2nd couple to occupants/res_group_clients
+        occ_cl_pk = conf_data.cl_ass_id_by_ac_id(mc + AC_ID_2ND_COUPLE_SUFFIX)
+        if occ_cl_pk is None:
             error_msg = conf_data.error_message
             break
         upd_values['rgc_surname'] = ac_cos['CD_SNAM2']
         upd_values['rgc_surname'] = ac_cos['CD_SNAM2']
-        upd_values['rgc_occup_co_fk'] = occ_co_pk
+        upd_values['rgc_occup_cl_fk'] = occ_cl_pk
         upd_values['rgc_dob'] = ac_cos['CD_DOB2']
         upd_values['rgc_pers_seq'] = chk_values['rgc_pers_seq'] = 1
-        if ass_db.upsert('res_group_contacts', upd_values, chk_values=chk_values):
+        if ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
             error_msg = ass_db.last_err_msg
             break
 
@@ -415,12 +420,12 @@ def sh_migrate_res_data():
     error_msg = ""
     for rg in rbf_groups:
         mc = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'MATCHCODE'])
-        ord_co_pk = conf_data.co_ass_id_by_ac_id(mc)
-        if ord_co_pk is None:
+        ord_cl_pk = conf_data.cl_ass_id_by_ac_id(mc)
+        if ord_cl_pk is None:
             error_msg = conf_data.error_message
             sh_id = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID'])
-            ord_co_pk = conf_data.co_ass_id_by_sh_id(sh_id)
-            if ord_co_pk is None:
+            ord_cl_pk = conf_data.cl_ass_id_by_sh_id(sh_id)
+            if ord_cl_pk is None:
                 error_msg += conf_data.error_message
                 break
             error_msg = ""
@@ -440,7 +445,7 @@ def sh_migrate_res_data():
             chk_values.update(rgr_res_id=elem_value(rg, 'RES-NR'), rgr_sub_id=elem_value(rg, 'SUB-NR'))
         upd_values = chk_values.copy()
         upd_values\
-            .update(rgr_order_co_fk=ord_co_pk,
+            .update(rgr_order_cl_fk=ord_cl_pk,
                     rgr_used_ri_fk=ri_pk,
                     rgr_arrival=datetime.datetime.strptime(elem_value(rg, ['RESERVATION', 'ARR']), SH_DATE_FORMAT),
                     rgr_departure=datetime.datetime.strptime(elem_value(rg, ['RESERVATION', 'DEP']), SH_DATE_FORMAT),
@@ -468,10 +473,10 @@ def sh_migrate_res_data():
 
         for arri in range(pax_count(rg)):
             mc = elem_value(rg, ['PERSON', 'MATCHCODE'], arri=arri)
-            occ_co_pk = None
+            occ_cl_pk = None
             if mc:
-                occ_co_pk = conf_data.co_ass_id_by_ac_id(mc)
-                if occ_co_pk is None:
+                occ_cl_pk = conf_data.cl_ass_id_by_ac_id(mc)
+                if occ_cl_pk is None:
                     error_msg = conf_data.error_message
                     break
             room_seq = int(elem_value(rg, ['PERSON', 'ROOM-SEQ'], arri=arri))
@@ -482,7 +487,7 @@ def sh_migrate_res_data():
                 .update(rgc_surname=elem_value(rg, ['PERSON', 'NAME'], arri=arri),
                         rgc_firstname=elem_value(rg, ['PERSON', 'NAME2'], arri=arri),
                         rgc_auto_generated=elem_value(rg, ['PERSON', 'AUTO-GENERATED'], arri=arri),
-                        rgc_occup_co_fk=occ_co_pk,
+                        rgc_occup_cl_fk=occ_cl_pk,
                         # Sihot offers also PICKUP-TYPE-ARRIVAL(1=car, 2=van), we now use PICKUP-TIME-ARRIVAL
                         # .. instead of ARR-TIME for the flight arr/dep (pg converts str into time object/value)
                         rgc_flight_arr_comment=elem_value(rg, ['PERSON', 'PICKUP-COMMENT-ARRIVAL']),
@@ -495,7 +500,7 @@ def sh_migrate_res_data():
                         rgc_room_id=elem_value(rg, ['PERSON', 'RN'], arri=arri),
                         rgc_dob=datetime.datetime.strptime(elem_value(rg, ['PERSON', 'DOB'], arri=arri), SH_DATE_FORMAT)
                         )
-            if ass_db.upsert('res_group_contacts', upd_values, chk_values=chk_values):
+            if ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
                 error_msg = ass_db.last_err_msg
                 break
 
@@ -507,9 +512,9 @@ if acm_syncs:
 for acm_sync in acm_syncs:
     if acm_sync[:2] == 'ac':
         if acm_sync[2:] == 'C':
-            err = ac_migrate_contacts()
+            err = ac_migrate_clients()
             if err:
-                log_error(err, 'syncCacheAcuContacts', importance=3, exit_code=111, dbs=[ass_db,  acu_db])
+                log_error(err, 'syncCacheAcuClients', importance=3, exit_code=111, dbs=[ass_db,  acu_db])
         if acm_sync[2:] == 'P':
             err = ac_migrate_products()
             if err:
@@ -532,7 +537,7 @@ for acm_sync in acm_syncs:
         log_error("Salesforce sync not implemented", 'syncCacheSf', importance=3, exit_code=135, dbs=[ass_db,  acu_db])
 
 
-def ac_check_contacts():
+def ac_check_clients():
     ac_cos = conf_data.load_view(acu_db, 'T_CD',
                                  ["CD_CODE",
                                   "CD_SF_ID1", "to_char(CD_SIHOT_OBJID)", "CD_SF_ID2", "to_char(CD_SIHOT_OBJID2)",
@@ -540,36 +545,36 @@ def ac_check_contacts():
                                  "substr(CD_CODE, 1, 1) <> 'A'")
     if ac_cos is None:
         return conf_data.error_message
-    ac_co_dict = dict((_[0], _[1:]) for _ in ac_cos)
-    ac_co_ori_dict = ac_co_dict.copy()
+    ac_cl_dict = dict((_[0], _[1:]) for _ in ac_cos)
+    ac_cl_ori_dict = ac_cl_dict.copy()
 
     ctx = 'acChkCo'
     cnt = len(warn_log)
-    for as_co in conf_data.contacts:
+    for as_co in conf_data.clients:
         ass_id, ac_id, sf_id, sh_id, ext_refs, _ = as_co
         if not ac_id:
-            log_warning("{} - AssCache contact record without Acumen client reference: {}".format(ass_id, as_co), ctx)
+            log_warning("{} - AssCache client record without Acumen client reference: {}".format(ass_id, as_co), ctx)
             continue
 
         ac_id, offset = (ac_id[:-2], 2) if ac_id.endswith(AC_ID_2ND_COUPLE_SUFFIX) else (ac_id, 0)
-        if ac_id not in ac_co_ori_dict:
+        if ac_id not in ac_cl_ori_dict:
             log_warning("{} - Acumen client reference {} not found in Acumen system".format(ass_id, ac_id), ctx)
             continue
-        aco = ac_co_ori_dict[ac_id][offset:]
-        if sf_id != aco[0]:     # co_sf_id
-            log_warning("{} - Salesforce contact ID differs: ass={} acu={}".format(ass_id, sf_id, aco[0]), ctx)
-        if sh_id != aco[1]:     # co_sh_id
+        aco = ac_cl_ori_dict[ac_id][offset:]
+        if sf_id != aco[0]:     # cl_sf_id
+            log_warning("{} - Salesforce client ID differs: ass={} acu={}".format(ass_id, sf_id, aco[0]), ctx)
+        if sh_id != aco[1]:     # cl_sh_id
             log_warning("{} - Sihot guest object ID differs: ass={} acu={}".format(ass_id, sh_id, aco[1]), ctx)
 
-        if offset:              # no need to check again for 2nd contact/couple of Acumen contact
+        if offset:              # no need to check again for 2nd client/couple of Acumen client
             continue
-        if ac_id not in ac_co_dict:
+        if ac_id not in ac_cl_dict:
             log_warning("{} - Acumen client id duplicates found in AssCache; records={}"
-                        .format(ac_id, conf_data.co_list_by_ac_id(ac_id)), ctx)
+                        .format(ac_id, conf_data.cl_list_by_ac_id(ac_id)), ctx)
             continue
-        ac_co = ac_co_dict.pop(ac_id)
+        ac_co = ac_cl_dict.pop(ac_id)
 
-        # if ass_db.select('external_refs', ['er_type', 'er_id'], "er_co_fk = :co_pk", dict(co_pk=ass_id)):
+        # if ass_db.select('external_refs', ['er_type', 'er_id'], "er_cl_fk = :cl_pk", dict(cl_pk=ass_id)):
         #     return ass_db.last_err_msg
         # as_ers = ass_db.fetch_all()
         as_ers = [tuple(_.split('=')) for _ in ext_refs.split(EXT_REFS_SEP)] if ext_refs else list()
@@ -591,7 +596,7 @@ def ac_check_contacts():
                 log_warning("{} - External Ref {}={} missing in AssCache".format(ass_id, ac_er[0], ac_er[1]), ctx)
 
     no_name = 0
-    for ac_id, ac_co in ac_co_dict.items():
+    for ac_id, ac_co in ac_cl_dict.items():
         if ac_co[5]:
             log_warning("Acumen client {} missing in AssCache: {}".format(ac_id, ac_co), ctx)
         else:
@@ -605,14 +610,14 @@ def ac_check_contacts():
     return ""
 
 
-def sh_check_contacts():
+def sh_check_clients():
     ctx = 'shChkCo'
     cnt = len(warn_log)
-    for as_co in conf_data.contacts:
+    for as_co in conf_data.clients:
         ass_id, ac_id, sf_id, sh_id, _, _ = as_co
         if not sh_id:
             if debug_level >= DEBUG_LEVEL_VERBOSE:
-                log_warning("{} - AssCache contact record without Sihot guest object ID: {}".format(ass_id, as_co), ctx)
+                log_warning("{} - AssCache client record without Sihot guest object ID: {}".format(ass_id, as_co), ctx)
             continue
 
         shd = guest_data(cae, sh_id)
@@ -624,7 +629,7 @@ def sh_check_contacts():
             log_warning("{} - Acumen client reference mismatch. ass={}, sh={}".format(ass_id, ac_id, shd['MATCHCODE']),
                         ctx)
         if (sf_id or shd['MATCH-SM']) and sf_id != shd['MATCH-SM']:
-            log_warning("{} - Salesforce contact ID mismatch. ass={} sh={}".format(ass_id, sf_id, shd['MATCH-SM']), ctx)
+            log_warning("{} - Salesforce client ID mismatch. ass={} sh={}".format(ass_id, sf_id, shd['MATCH-SM']), ctx)
 
     log_warning("No Sihot discrepancies found" if len(warn_log) == cnt else "Number of Sihot discrepancies: {}"
                 .format(len(warn_log) - cnt), ctx, importance=3)
@@ -632,19 +637,19 @@ def sh_check_contacts():
     return ""
 
 
-def sf_check_contacts():
+def sf_check_clients():
     ctx = 'sfChkCo'
     cnt = len(warn_log)
-    for as_co in conf_data.contacts:
+    for as_co in conf_data.clients:
         ass_id, ac_id, sf_id, sh_id, ext_refs, _ = as_co
         if not sf_id:
             if debug_level >= DEBUG_LEVEL_VERBOSE:
-                log_warning("{} - AssCache contact record without Salesforce ID: {}".format(ass_id, as_co), ctx)
+                log_warning("{} - AssCache client record without Salesforce ID: {}".format(ass_id, as_co), ctx)
             continue
 
         sf_ass_id = sf_conn.client_ass_id(sf_id)
         if ass_id != sf_ass_id:
-            log_warning("{} - AssCache contact PKey mismatch. ass={}, sf={}".format(ass_id, ac_id, sf_ass_id), ctx)
+            log_warning("{} - AssCache client PKey mismatch. ass={}, sf={}".format(ass_id, ac_id, sf_ass_id), ctx)
 
         sf_ac_id = sf_conn.client_ac_id(sf_id)
         if (ac_id or sf_ac_id) and ac_id != sf_ac_id:
@@ -652,7 +657,7 @@ def sf_check_contacts():
 
         sf_sh_id = sf_conn.client_sh_id(sf_id)
         if (sh_id or sf_sh_id) and sh_id != sf_sh_id:
-            log_warning("{} - Salesforce contact ID mismatch. ass={} sf={}".format(ass_id, sh_id, sf_sh_id), ctx)
+            log_warning("{} - Salesforce client ID mismatch. ass={} sf={}".format(ass_id, sh_id, sf_sh_id), ctx)
 
         ext_refs = [tuple(_.split('=')) for _ in ext_refs.split(EXT_REFS_SEP)] if ext_refs else list()
         sf_ext_refs = sf_conn.client_ext_refs(sf_id)
@@ -671,19 +676,19 @@ def sf_check_contacts():
 
 if acm_veris:
     log_warning("Preparing data check/verification", 'veriCache', importance=4)
-    # fetch all contacts from AssCache
-    err = conf_data.co_fetch_all(where_group_order=acm_veri_filters['C'] if 'C' in acm_veri_filters else "")
+    # fetch all clients from AssCache
+    err = conf_data.cl_fetch_all(where_group_order=acm_veri_filters['C'] if 'C' in acm_veri_filters else "")
     if err:
-        log_error("Contact cache load error: " + err, 'veriCache', importance=3, exit_code=300, dbs=[ass_db,  acu_db])
-    # verify AssCache contact integrity
+        log_error("Client cache load error: " + err, 'veriCache', importance=3, exit_code=300, dbs=[ass_db,  acu_db])
+    # verify AssCache client integrity
     if [_ for _ in acm_veris if _[2:] == 'C']:
-        conf_data.co_check_ext_refs()
+        conf_data.cl_check_ext_refs()
 for acm_veri in acm_veris:
     if acm_veri[:2] == 'ac':
         if acm_veri[2:] == 'C':
-            err = ac_check_contacts()
+            err = ac_check_clients()
             if err:
-                log_error(err, 'veriCacheAcContacts', importance=3, exit_code=303, dbs=[ass_db,  acu_db])
+                log_error(err, 'veriCacheAcClients', importance=3, exit_code=303, dbs=[ass_db,  acu_db])
         elif acm_veri[2:] == 'P':
             log_error("Acumen Product Verification not implemented", 'veriCacheAcProd', importance=3, exit_code=330,
                       dbs=[ass_db,  acu_db])
@@ -693,17 +698,17 @@ for acm_veri in acm_veris:
 
     elif acm_veri[:2] == 'sh':
         if acm_veri[2:] == 'C':
-            err = sh_check_contacts()
+            err = sh_check_clients()
             if err:
-                log_error(err, 'veriCacheShContacts', importance=3, exit_code=402, dbs=[ass_db,  acu_db])
+                log_error(err, 'veriCacheShClients', importance=3, exit_code=402, dbs=[ass_db,  acu_db])
         else:
             log_error("Sihot veri. not implemented", 'veriCacheSh', importance=3, exit_code=495, dbs=[ass_db,  acu_db])
 
     elif acm_veri[:2] == 'sf':
         if acm_veri[2:] == 'C':
-            err = sf_check_contacts()
+            err = sf_check_clients()
             if err:
-                log_error(err, 'veriCacheSfContacts', importance=3, exit_code=501, dbs=[ass_db,  acu_db])
+                log_error(err, 'veriCacheSfClients', importance=3, exit_code=501, dbs=[ass_db,  acu_db])
         else:
             log_error("Salesforce verification not implemented", 'veriCacheSf', importance=3, exit_code=591,
                       dbs=[ass_db,  acu_db])
@@ -711,5 +716,6 @@ for acm_veri in acm_veris:
 
 if acu_db:
     acu_db.close()
-ass_db.close()
+if ass_db:
+    ass_db.close()
 cae.shutdown(send_notification(42 if error_log else 0))

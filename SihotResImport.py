@@ -7,7 +7,7 @@
     0.5     removed Booking.com imports and added RCI booking imports (using Acumen reservation inventory data).
     0.6     31-03-17: removed hyphen and sub-booking-id from GDSNO and dup-exec/-startup lock (lastRt).
     0.7     30-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
-    0.8     15-07-17: refactoring moving contacts and res_inv_data to ass_sys_data.py.
+    0.8     15-07-17: refactoring moving clients and res_inv_data to ass_sys_data.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
 """
 import sys
@@ -46,12 +46,12 @@ cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system"
 
 add_sf_options(cae)
 
-cae.add_option('serverIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('serverPort', "IP port of the WEB interface of this server", 14777, 'w')
-cae.add_option('serverKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
+cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
+cae.add_option('shServerPort', "IP port of the WEB interface of this server", 14777, 'w')
+cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
 
-cae.add_option('timeout', "Timeout value for TCP/IP connections", 69.3)
-cae.add_option('xmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
+cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
+cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
 
 cae.add_option('useKernelForClient', "Used interface for clients (0=web, 1=kernel)", USE_KERNEL_FOR_CLIENTS_DEF, 'g')
 cae.add_option('mapClient', "Guest/Client mapping of xml to db items", MAP_CLIENT_DEF, 'm')
@@ -64,12 +64,12 @@ debug_level = cae.get_option('debugLevel')
 
 uprint("Import path/file-mask for OTA-JSON/RCI:", cae.get_option('jsonPath'), cae.get_option('rciPath'))
 notification, warning_notification_emails = init_notification(cae, cae.get_option('acuDSN')
-                                                              + '/' + cae.get_option('serverIP'))
+                                                              + '/' + cae.get_option('shServerIP'))
 
 uprint("Acumen DSN:", cae.get_option('acuDSN'))
-uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('serverIP'), cae.get_option('serverPort'),
-       cae.get_option('serverKernelPort'))
-uprint("TCP Timeout/XML Encoding:", cae.get_option('timeout'), cae.get_option('xmlEncoding'))
+uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'),
+       cae.get_option('shServerKernelPort'))
+uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
 uprint("Use Kernel for clients:", "Yes" if cae.get_option('useKernelForClient') else "No (WEB)")
 uprint("Use Kernel for reservations:", "Yes" if cae.get_option('useKernelForRes') else "No (WEB)")
 uprint("Break on error:", "Yes" if cae.get_option('breakOnError') else "No")
@@ -641,19 +641,19 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = False
             cid = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
-            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.co_idx_by_rci_id(cid, file_name, line_num)
+            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, file_name, line_num)
             cid = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
             # sometimes resort is the "owner", e.g. 2429-55555/2429-99928 for HMC - in Sihot we are not hiding resort
             # if cid in client_refs_add_exclude:
             #     curr_cols[RC_OWN_CLIENTS_IDX] = -1
             # else:
-            curr_cols[RC_OWN_CLIENTS_IDX] = conf_data.co_idx_by_rci_id(cid, file_name, line_num)
+            curr_cols[RC_OWN_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, file_name, line_num)
 
         return curr_cols, err_msg
 
     def rci_line_to_occ_client_row(curr_cols):
         row = dict()
-        row['CD_CODE'] = conf_data.co_ac_id_by_idx(curr_cols[RC_OCC_CLIENTS_IDX])
+        row['CD_CODE'] = conf_data.cl_ac_id_by_idx(curr_cols[RC_OCC_CLIENTS_IDX])
         row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
         row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
         row['CD_ADD11'] = curr_cols[RCI_GUEST_ADDR1]
@@ -664,7 +664,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['CD_CITY'] = curr_cols[RCI_GUEST_CITY]
         row['CD_EMAIL'] = curr_cols[RCI_GUEST_EMAIL]
         row['CD_HTEL1'] = curr_cols[RCI_GUEST_PHONE]
-        ext_refs = conf_data.co_ext_refs_by_idx([curr_cols[RC_OCC_CLIENTS_IDX]])
+        ext_refs = conf_data.cl_ext_refs_by_idx([curr_cols[RC_OCC_CLIENTS_IDX]])
         if ext_refs:
             row['CD_RCI_REF'] = ext_refs[0]  # first ref coming from Acu.CD_RCI_REF and put into Sihot MATCH-ADM element
 
@@ -676,7 +676,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
     def rci_line_to_own_client_row(curr_cols):
         row = dict()
-        row['CD_CODE'] = conf_data.co_ac_id_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
+        row['CD_CODE'] = conf_data.cl_ac_id_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
         row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
         row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
         row['CD_ADD11'] = curr_cols[RCI_GUEST_ADDR1]
@@ -687,7 +687,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['CD_CITY'] = curr_cols[RCI_GUEST_CITY]
         row['CD_EMAIL'] = curr_cols[RCI_GUEST_EMAIL]
         row['CD_HTEL1'] = curr_cols[RCI_GUEST_PHONE]
-        ext_refs = conf_data.co_ext_refs_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
+        ext_refs = conf_data.cl_ext_refs_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
         if ext_refs:
             row['CD_RCI_REF'] = ext_refs[0]  # first ref coming from Acu.CD_RCI_REF and put into Sihot MATCH-ADM element
         # constant values - needed for to be accepted by the Sihot Kernel interface
@@ -731,8 +731,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
         cl_own_idx = curr_cols[RC_OWN_CLIENTS_IDX] if curr_cols[RC_OWN_CLIENTS_IDX] > -1 else cl_occ_idx
         own_rci_ref = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
-        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.co_sh_id_by_idx(cl_own_idx)
-        row['SH_MC'] = row['OC_CODE'] = conf_data.co_ac_id_by_idx(cl_own_idx)
+        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.cl_sh_id_by_idx(cl_own_idx)
+        row['SH_MC'] = row['OC_CODE'] = conf_data.cl_ac_id_by_idx(cl_own_idx)
 
         is_guest = curr_cols[RCI_IS_GUEST] == 'Y'
         if is_guest:                                # guest bookings doesn't provide RCI client Id
@@ -748,8 +748,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['SH_ADULT1_NAME'] = curr_cols[RCI_GUEST_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCI_GUEST_FORENAME]
         else:
-            row['CD_SIHOT_OBJID'] = conf_data.co_sh_id_by_idx(cl_occ_idx)
-            row['CD_CODE'] = conf_data.co_ac_id_by_idx(cl_occ_idx)
+            row['CD_SIHOT_OBJID'] = conf_data.cl_sh_id_by_idx(cl_occ_idx)
+            row['CD_CODE'] = conf_data.cl_ac_id_by_idx(cl_occ_idx)
             # has to be populated after send to Sihot: row['CD_SIHOT_OBJID'] = client_row['CD_SIHOT_OBJID']
             row['SH_ADULT1_NAME'] = curr_cols[RCI_CLIENT_SURNAME]
             row['SH_ADULT1_NAME2'] = curr_cols[RCI_CLIENT_FORENAME]
@@ -837,7 +837,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = True
             cid = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
-            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.co_idx_by_rci_id(cid, file_name, line_num)
+            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, file_name, line_num)
             curr_cols[RC_OWN_CLIENTS_IDX] = -1  # does not exists for points but needed for generic client send check
         return curr_cols, err_msg
 
@@ -900,8 +900,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['RUL_SIHOT_ROOM'] = conf_data.ri_allocated_room(rno, row['ARR_DATE'])
 
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
-        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = row['CD_SIHOT_OBJID'] = conf_data.co_sh_id_by_idx(cl_occ_idx)
-        row['SH_MC'] = row['OC_CODE'] = row['CD_CODE'] = conf_data.co_ac_id_by_idx(cl_occ_idx)
+        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = row['CD_SIHOT_OBJID'] = conf_data.cl_sh_id_by_idx(cl_occ_idx)
+        row['SH_MC'] = row['OC_CODE'] = row['CD_CODE'] = conf_data.cl_ac_id_by_idx(cl_occ_idx)
 
         is_guest = curr_cols[RCIP_IS_GUEST] == 'Y'
         if is_guest:
@@ -1084,7 +1084,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             match_codes = sorted(list(set([_[0] for _ in m1 + m2])))
             cae.set_config('ClientRefsResortCodes', EXT_REFS_SEP.join(match_codes))
 
-        error_msg = conf_data.co_fetch_all()      # load clients data
+        error_msg = conf_data.cl_fetch_all()      # load clients data
         if error_msg:
             log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciClientDataFetch', importance=3)
             return
@@ -1150,8 +1150,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             client_send = ClientToSihot(cae, use_kernel_interface=cae.get_option('useKernelForClient'),
                                         map_client=cae.get_option('mapClient'), connect_to_acu=False)
 
-            # co_sent_to_sihot() detects clients sent already by SihotResSync and duplicate clients in import file
-            sent_clients = conf_data.co_sent_to_sihot()
+            # cl_sent_to_sihot() detects clients sent already by SihotResSync and duplicate clients in import file
+            sent_clients = conf_data.cl_sent_to_sihot()
             for lni, imp_cols in enumerate(imp_rows):
                 fn, idx = imp_cols[RC_FILE_NAME], imp_cols[RC_LINE_NUM]
                 if got_cancelled():
@@ -1177,16 +1177,16 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                         if clients_idx in sent_clients:
                             if debug_level >= DEBUG_LEVEL_VERBOSE:
                                 log_import(which_client + "/client {} skip"
-                                           .format(conf_data.contacts[clients_idx]), fn, idx)
+                                           .format(conf_data.clients[clients_idx]), fn, idx)
                             continue
-                        rc_complete_client_row_with_ext_refs(client_row, conf_data.co_ext_refs_by_idx(clients_idx))
+                        rc_complete_client_row_with_ext_refs(client_row, conf_data.cl_ext_refs_by_idx(clients_idx))
                         try:
                             error_msg = client_send.send_client_to_sihot(client_row)
                             if not error_msg:
                                 if debug_level >= DEBUG_LEVEL_VERBOSE:
                                     log_import("Sent " + which_client + "/client: " + str(client_row), fn, idx)
                                 client_row['CD_SIHOT_OBJID'] = client_send.response.objid
-                                conf_data.co_complete_with_sh_id(clients_idx, client_row['CD_SIHOT_OBJID'])
+                                conf_data.cl_complete_with_sh_id(clients_idx, client_row['CD_SIHOT_OBJID'])
                                 sent_clients.append(clients_idx)
                         except Exception as ex:
                             error_msg = which_client + "/client send exception: {}".format(full_stack_trace(ex))
@@ -1202,8 +1202,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             error_msg = ""
 
         # overwrite clients data if at least one client got changed/extended
-        if conf_data.contacts_changed:
-            conf_data.co_flush()
+        if conf_data.clients_changed:
+            conf_data.cl_flush()
 
         # now parse RCI reservations
         if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
@@ -1411,6 +1411,7 @@ else:
     Config.set('graphics', 'height', '999')
     from kivy.app import App
     from kivy.core.window import Window
+    # noinspection PyProtectedMember
     from kivy.lang.builder import Factory
     from kivy.properties import NumericProperty, StringProperty
     from kivy.uix.textinput import TextInput

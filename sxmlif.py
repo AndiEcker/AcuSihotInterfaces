@@ -834,12 +834,14 @@ class SihotXmlParser:  # XMLParser interface
         self._curr_attr = None  # used as flag for a currently parsed base tag (for self.data())
         self._elem_path.append(tag)
         if tag in self._base_tags:
+            self.ca.dprint("SihotXmlParser.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self._curr_attr = tag.lower().replace('-', '_')
             setattr(self, self._curr_attr, '')
             return None
         return tag
 
     def end(self, tag):  # called for each closing tag
+        self.ca.dprint("SihotXmlParser.end():", self._elem_path, tag, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self._curr_tag = ''
         self._curr_attr = ''
         if self._elem_path:     # Q&D Fix for TestGuestSearch for to prevent pop() on empty _elem_path list
@@ -848,7 +850,7 @@ class SihotXmlParser:  # XMLParser interface
 
     def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
         if self._curr_attr and data.strip():
-            self.ca.dprint("SihotXmlParser.data(): ", self._curr_tag, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.ca.dprint("SihotXmlParser.data(): ", self._elem_path, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             setattr(self, self._curr_attr, getattr(self, self._curr_attr) + data)
             return None
         return data
@@ -902,26 +904,30 @@ class RoomChange(SihotXmlParser):
 class ResChange(SihotXmlParser):
     def __init__(self, ca):
         super(ResChange, self).__init__(ca)
+        self._base_tags.append('HN')        # HN(hotel-id) element is outside of first SIHOT-Reservation block
+        self.hn = None                      # added instance var for to remove pycharm warning
         self.rgr_list = list()
 
     def start(self, tag, attrib):  # called for each opening tag
         if super(ResChange, self).start(tag, attrib) is None:
             return None  # processed by base class
+        self.ca.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         if tag == 'SIHOT-Reservation':
-            self.rgr_list.append(dict(rgc=list()))
+            self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc=list()))
         elif tag == 'SIHOT-Person':
             self.rgr_list[-1]['rgc'].append(dict())
 
     def data(self, data):
         if super(ResChange, self).data(data) is None:
             return None  # processed by base class
+        self.ca.dprint("ResChange.data():", self._elem_path, self.rgr_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         # because data can be sent in chunks on parsing, we first determine the dictionary (di) and the item key (ik)
-        if self._curr_tag == 'HN':
-            di, ik = self.rgr_list[-1], 'rgr_ho_fk'
-        elif self._curr_tag == 'RNO':
+        if self._curr_tag == 'RNO':
             di, ik = self.rgr_list[-1], 'rgr_res_id'
         elif self._curr_tag == 'RSNO':
             di, ik = self.rgr_list[-1], 'rgr_sub_id'
+        elif self._curr_tag == 'GDSNO':
+            di, ik = self.rgr_list[-1], 'rgr_gds_no'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'ARR']:
             di, ik = self.rgr_list[-1], 'rgr_arrival'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'DEP']:
@@ -948,8 +954,8 @@ class ResChange(SihotXmlParser):
         elif self._curr_tag == 'RN':
             di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_room_id'
         else:
-            di, ik = self.rgr_list[-1], 'unused'
-            data = ' ' + ELEM_PATH_SEP.join(self._elem_path) + '+=' + data
+            self.ca.dprint("ResChange.data(): ignoring element ", self._elem_path, "; data chunk=", data)
+            return
         # .. and then check if we need to add or to extend the dictionary item
         if ik in di:
             di[ik] += data
@@ -1313,7 +1319,7 @@ class SihotXmlBuilder:
                        .format(self._last_fetch, self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
-        self._xml = '<?xml version="1.0" encoding="' + self.ca.get_option('xmlEncoding').lower() + \
+        self._xml = '<?xml version="1.0" encoding="' + self.ca.get_option('shXmlEncoding').lower() + \
                     '"?>\n<SIHOT-Document>\n'
         if self.use_kernel_interface:
             self._xml += '<SIHOT-XML-REQUEST>\n'
@@ -1366,10 +1372,10 @@ class SihotXmlBuilder:
         return inner_xml
 
     def send_to_server(self, response_parser=None):
-        sc = TcpClient(self.ca.get_option('serverIP'),
-                       self.ca.get_option('serverKernelPort' if self.use_kernel_interface else 'serverPort'),
-                       timeout=self.ca.get_option('timeout'),
-                       encoding=self.ca.get_option('xmlEncoding'),
+        sc = TcpClient(self.ca.get_option('shServerIP'),
+                       self.ca.get_option('shServerKernelPort' if self.use_kernel_interface else 'shServerPort'),
+                       timeout=self.ca.get_option('shTimeout'),
+                       encoding=self.ca.get_option('shXmlEncoding'),
                        debug_level=self.ca.get_option('debugLevel'))
         self.ca.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}".format(response_parser, self.xml),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -1572,7 +1578,7 @@ class ClientToSihot(SihotXmlBuilder):
         err_msg, action_p1 = self._send_person_to_sihot(c_row)
         couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
         action_p2 = ''
-        if not err_msg and 'CD_CODE2' in c_row and c_row['CD_CODE2']:  # check for second contact person
+        if not err_msg and 'CD_CODE2' in c_row and c_row['CD_CODE2']:  # check for second person
             crow2 = deepcopy(c_row)
             for col_name in c_row.keys():
                 elem_name = 'P2_' + self.col_elem[col_name]

@@ -20,7 +20,7 @@ def ext_ref_type_sql():
     return "CASE WHEN CR_TYPE in ('" + EXT_REF_TYPE_RCIP + "', 'SPX') then '" + EXT_REF_TYPE_RCI + "' else CR_TYPE end"
 
 
-# tuple indexes for Contacts data list (ass_cache.contacts/AssSysData.contacts)
+# tuple indexes for Clients data list (ass_cache.clients/AssSysData.clients)
 _ASS_ID = 0
 _AC_ID = 1
 _SF_ID = 2
@@ -121,9 +121,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self.client_refs_add_exclude = cae.get_config('ClientRefsAddExclude', default_value='').split(EXT_REFS_SEP)
 
-        # --- contacts is caching contact data like external references/Ids, owner status ...
-        self.contacts = list()
-        self.contacts_changed = list()      # list indexes of changed records within self.contacts
+        # --- clients is caching client data like external references/Ids, owner status ...
+        self.clients = list()
+        self.clients_changed = list()      # list indexes of changed records within self.clients
 
         # --- res_inv_data is caching banking/swap/grant info
         self.res_inv_data = list()
@@ -211,32 +211,32 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             hotel_id_list = [cols[0] for cols in self.hotel_ids if cols[1] in acu_rs_codes]
         return hotel_id_list
 
-    # ############################  contact data helpers  #########################################################
+    # ############################  client data helpers  #########################################################
 
-    def co_fetch_all(self, where_group_order=""):
-        if self.ass_db.select('v_contacts_refs_owns', where_group_order=where_group_order):
+    def cl_fetch_all(self, where_group_order=""):
+        if self.ass_db.select('v_clients_refs_owns', where_group_order=where_group_order):
             return self.ass_db.last_err_msg
 
-        self.contacts = self.ass_db.fetch_all()
+        self.clients = self.ass_db.fetch_all()
         return self.ass_db.last_err_msg
 
-    def co_save(self, ac_id, sf_id, sh_id, ext_refs=None, ass_idx=None, commit=False):
+    def cl_save(self, ac_id, sf_id, sh_id, ext_refs=None, ass_idx=None, commit=False):
         """
-        save/upsert contact data into AssCache database.
+        save/upsert client data into AssCache database.
 
         :param ac_id:       Acumen client reference.
-        :param sf_id:       Salesforce contact/personal-account id.
+        :param sf_id:       Salesforce client/personal-account id.
         :param sh_id:       Sihot guest object id.
         :param ext_refs:    List of external reference tuples (type, id) to save - used instead of acu_db.
-        :param ass_idx:     self.contacts list index of contact record.
+        :param ass_idx:     self.clients list index of client record.
         :param commit:      Boolean flag if AssCache data changes should be committed (def=False).
-        :return:            Primary Key of upserted AssCache contact record or None on error (see self.error_message).
+        :return:            Primary Key of upserted AssCache client record or None on error (see self.error_message).
         """
-        col_values = dict(co_ac_id=ac_id, co_sf_id=sf_id, co_sh_id=sh_id)
-        if self.ass_db.upsert('contacts', col_values, chk_values=col_values, returning_column='co_pk', commit=commit):
+        col_values = dict(cl_ac_id=ac_id, cl_sf_id=sf_id, cl_sh_id=sh_id)
+        if self.ass_db.upsert('clients', col_values, chk_values=col_values, returning_column='cl_pk', commit=commit):
             self.error_message = self.ass_db.last_err_msg
             return None
-        co_pk = self.ass_db.fetch_value()
+        cl_pk = self.ass_db.fetch_value()
 
         if self.acu_db and ac_id:
             ers = self.load_view(self.acu_db, 'T_CR', ["DISTINCT " + ext_ref_type_sql(), "CR_REF"],
@@ -248,7 +248,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         else:
             ers = ext_refs
         for er in ers:
-            col_values = dict(er_co_fk=co_pk, er_type=er[0], er_id=er[1])
+            col_values = dict(er_cl_fk=cl_pk, er_type=er[0], er_id=er[1])
             if self.ass_db.upsert('external_refs', col_values, chk_values=col_values, commit=commit):
                 break
         if self.ass_db.last_err_msg:
@@ -256,28 +256,28 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             return None
 
         if not ass_idx:
-            ass_idx = self.co_idx_by_ass_id(co_pk)
+            ass_idx = self.cl_idx_by_ass_id(cl_pk)
             if ass_idx is None:
-                self.contacts.append((co_pk, ac_id, sf_id, sh_id, EXT_REFS_SEP.join(ers), 0))
+                self.clients.append((cl_pk, ac_id, sf_id, sh_id, EXT_REFS_SEP.join(ers), 0))
         else:
-            self.contacts[ass_idx][_ASS_ID] = co_pk
+            self.clients[ass_idx][_ASS_ID] = cl_pk
 
-        return co_pk
+        return cl_pk
 
-    def co_flush(self):
-        for idx in self.contacts_changed:
-            co = self.contacts[idx]
-            co_pk = self.co_save(co[_AC_ID], co[_SF_ID], co[_SH_ID], ext_refs=co[_EXT_REFS].split(EXT_REFS_SEP),
+    def cl_flush(self):
+        for idx in self.clients_changed:
+            co = self.clients[idx]
+            cl_pk = self.cl_save(co[_AC_ID], co[_SF_ID], co[_SH_ID], ext_refs=co[_EXT_REFS].split(EXT_REFS_SEP),
                                  ass_idx=idx)
-            if co_pk is None:
+            if cl_pk is None:
                 return self.error_message
 
         return self.ass_db.commit()
 
-    def co_check_ext_refs(self):
+    def cl_check_ext_refs(self):
         resort_codes = self.cae.get_config('ClientRefsResortCodes').split(EXT_REFS_SEP)
         found_ids = dict()
-        for c_rec in self.contacts:
+        for c_rec in self.clients:
             if c_rec[_EXT_REFS]:
                 for rci_id in c_rec[_EXT_REFS].split(EXT_REFS_SEP):
                     if rci_id not in found_ids:
@@ -301,118 +301,118 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         for dup in sorted(dup_ids):
             self._warn(dup, self._ctx_no_file + 'CheckClientsDataExtRefDuplicates')
 
-    def co_ass_id_by_idx(self, index):
-        return self.contacts[index][_ASS_ID]
+    def cl_ass_id_by_idx(self, index):
+        return self.clients[index][_ASS_ID]
 
-    def co_ass_id_by_ac_id(self, ac_id):
+    def cl_ass_id_by_ac_id(self, ac_id):
         """
         :param ac_id:   Acumen client reference/ID.
-        :return:        AssCache contact primary key.
+        :return:        AssCache client primary key.
         """
         ''' alternatively:
-        if ass_db.select('contacts', ['co_pk'], "co_ac_id = :ac_id", dict(ac_id=ac_id)):
+        if ass_db.select('clients', ['cl_pk'], "cl_ac_id = :ac_id", dict(ac_id=ac_id)):
             break
-        co_pk = ass_db.fetch_value()
+        cl_pk = ass_db.fetch_value()
         '''
-        co_pk = None
-        for co_rec in self.contacts:
-            if co_rec[_AC_ID] == ac_id:
-                co_pk = co_rec[_ASS_ID]
+        cl_pk = None
+        for cl_rec in self.clients:
+            if cl_rec[_AC_ID] == ac_id:
+                cl_pk = cl_rec[_ASS_ID]
                 break
         else:
-            self.error_message = "co_ass_id_by_ac_id(): Acumen client ID {} not found in AssCache".format(ac_id)
-        return co_pk
+            self.error_message = "cl_ass_id_by_ac_id(): Acumen client ID {} not found in AssCache".format(ac_id)
+        return cl_pk
 
-    def co_ass_id_by_sh_id(self, sh_id):
+    def cl_ass_id_by_sh_id(self, sh_id):
         """
         :param sh_id:   Sihot guest object ID.
-        :return:        AssCache contact primary key.
+        :return:        AssCache client primary key.
         """
         ''' alternatively:
-        if ass_db.select('contacts', ['co_pk'], "co_sh_id = :sh_id", dict(sh_id=sh_id)):
+        if ass_db.select('clients', ['cl_pk'], "cl_sh_id = :sh_id", dict(sh_id=sh_id)):
             break
-        co_pk = ass_db.fetch_value()
+        cl_pk = ass_db.fetch_value()
         '''
-        co_pk = None
-        for co_rec in self.contacts:
-            if co_rec[_SH_ID] == sh_id:
-                co_pk = co_rec[_ASS_ID]
+        cl_pk = None
+        for cl_rec in self.clients:
+            if cl_rec[_SH_ID] == sh_id:
+                cl_pk = cl_rec[_ASS_ID]
                 break
         else:
-            self.error_message = "co_ass_id_by_sh_id(): Sihot guest object ID {} not found in AssCache".format(sh_id)
-        return co_pk
+            self.error_message = "cl_ass_id_by_sh_id(): Sihot guest object ID {} not found in AssCache".format(sh_id)
+        return cl_pk
 
-    def co_ac_id_by_idx(self, index):
-        return self.contacts[index][_AC_ID]
+    def cl_ac_id_by_idx(self, index):
+        return self.clients[index][_AC_ID]
 
-    def co_sh_id_by_idx(self, index):
-        return self.contacts[index][_SH_ID]
+    def cl_sh_id_by_idx(self, index):
+        return self.clients[index][_SH_ID]
 
-    def co_ext_refs_by_idx(self, index):
-        return self.contacts[index][_EXT_REFS].split(EXT_REFS_SEP)
+    def cl_ext_refs_by_idx(self, index):
+        return self.clients[index][_EXT_REFS].split(EXT_REFS_SEP)
 
-    def co_idx_by_ass_id(self, ass_id):
-        for list_idx, c_rec in enumerate(self.contacts):
+    def cl_idx_by_ass_id(self, ass_id):
+        for list_idx, c_rec in enumerate(self.clients):
             if c_rec[_ASS_ID] == ass_id:
                 return list_idx
         return None
 
-    def co_idx_by_rci_id(self, imp_rci_ref, file_name, line_num):
-        """ determine list index in cached contacts """
+    def cl_idx_by_rci_id(self, imp_rci_ref, file_name, line_num):
+        """ determine list index in cached clients """
         # check first if client exists
-        for list_idx, c_rec in enumerate(self.contacts):
+        for list_idx, c_rec in enumerate(self.clients):
             ext_refs = c_rec[_EXT_REFS]
             if ext_refs and imp_rci_ref in ext_refs.split(EXT_REFS_SEP):
                 break
         else:
-            sf_id, dup_contacts = self.sales_force.client_by_rci_id(imp_rci_ref)
+            sf_id, dup_clients = self.sales_force.client_by_rci_id(imp_rci_ref)
             if self.sales_force.error_msg:
-                self._err("co_idx_by_rci_id() Salesforce connect/fetch error " + self.sales_force.error_msg,
+                self._err("cl_idx_by_rci_id() Salesforce connect/fetch error " + self.sales_force.error_msg,
                           file_name, line_num, importance=3)
-            if len(dup_contacts) > 0:
+            if len(dup_clients) > 0:
                 self._err("Found duplicate Salesforce client(s) with main or external RCI ID {}. Used client {}, dup={}"
-                          .format(imp_rci_ref, sf_id, dup_contacts), file_name, line_num)
+                          .format(imp_rci_ref, sf_id, dup_clients), file_name, line_num)
             if sf_id:
-                ass_id = self.sales_force.co_ass_id_by_idx(sf_id)
+                ass_id = self.sales_force.cl_ass_id_by_idx(sf_id)
                 if self.sales_force.error_msg:
-                    self._err("co_idx_by_rci_id() AssCache id fetch error " + self.sales_force.error_msg,
+                    self._err("cl_idx_by_rci_id() AssCache id fetch error " + self.sales_force.error_msg,
                               file_name, line_num,
                               importance=3)
-                ac_id = self.sales_force.co_ac_id_by_idx(sf_id)
+                ac_id = self.sales_force.cl_ac_id_by_idx(sf_id)
                 if self.sales_force.error_msg:
-                    self._err("co_idx_by_rci_id() Acumen id fetch error " + self.sales_force.error_msg,
+                    self._err("cl_idx_by_rci_id() Acumen id fetch error " + self.sales_force.error_msg,
                               file_name, line_num,
                               importance=3)
-                sh_id = self.sales_force.co_sh_id_by_idx(sf_id)
+                sh_id = self.sales_force.cl_sh_id_by_idx(sf_id)
                 if self.sales_force.error_msg:
-                    self._err("co_idx_by_rci_id() Sihot id fetch error " + self.sales_force.error_msg,
+                    self._err("cl_idx_by_rci_id() Sihot id fetch error " + self.sales_force.error_msg,
                               file_name, line_num,
                               importance=3)
             else:
                 ass_id = None
                 ac_id = None    # EXT_REF_TYPE_RCI + imp_rci_ref
                 sh_id = None
-            self.contacts.append((ass_id, ac_id, sf_id, sh_id, imp_rci_ref, 0))
-            list_idx = len(self.contacts) - 1
-            self.contacts_changed.append(list_idx)
+            self.clients.append((ass_id, ac_id, sf_id, sh_id, imp_rci_ref, 0))
+            list_idx = len(self.clients) - 1
+            self.clients_changed.append(list_idx)
         return list_idx
 
-    def co_complete_with_sh_id(self, c_idx, sh_id):
-        """ complete contacts with imported data and sihot objid """
-        c_rec = self.contacts[c_idx]
+    def cl_complete_with_sh_id(self, c_idx, sh_id):
+        """ complete clients with imported data and sihot objid """
+        c_rec = self.clients[c_idx]
         if not c_rec[_SH_ID] or c_rec[_SH_ID] != sh_id:
             if c_rec[_SH_ID]:
-                self._warn("Sihot guest object id changed from {} to {} for Salesforce contact {}"
+                self._warn("Sihot guest object id changed from {} to {} for Salesforce client {}"
                            .format(c_rec[_SH_ID], sh_id, c_rec[_SF_ID]))
-            self.contacts[c_idx] = (c_rec[_ASS_ID], c_rec[_AC_ID], c_rec[_SF_ID], sh_id, c_rec[_EXT_REFS],
-                                    c_rec[_IS_OWNER])
-            self.contacts_changed.append(c_idx)
+            self.clients[c_idx] = (c_rec[_ASS_ID], c_rec[_AC_ID], c_rec[_SF_ID], sh_id, c_rec[_EXT_REFS],
+                                   c_rec[_IS_OWNER])
+            self.clients_changed.append(c_idx)
 
-    def co_sent_to_sihot(self):
-        return [i for i, _ in enumerate(self.contacts) if _[_SH_ID]]
+    def cl_sent_to_sihot(self):
+        return [i for i, _ in enumerate(self.clients) if _[_SH_ID]]
 
-    def co_list_by_ac_id(self, ac_id):
-        return [_ for _ in self.contacts if _[_AC_ID] == ac_id]
+    def cl_list_by_ac_id(self, ac_id):
+        return [_ for _ in self.clients if _[_AC_ID] == ac_id]
 
     # =================  res_inv_data  =========================================================================
 
@@ -439,7 +439,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def rgr_upsert(self, upd_col_values, ho_id, gds_no=None, res_id=None, sub_id=None, commit=False):
         if not gds_no and not (res_id and sub_id):
             return "rgr_upsert({}, {}): Missing reservation id (gds|res-id)".format(ho_id, upd_col_values)
-        where_vars = dict(ho_id=ho_id)
+        where_vars = dict(rgr_ho_fk=ho_id)
         if gds_no:
             where_vars.update(rgr_gds_no=gds_no)
         else:
@@ -451,9 +451,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return self.error_message
 
-    def rgc_upsert(self, upd_col_values, rgr_pk, commit=False):
-        where_vars = dict(rgc_rgr_fk=rgr_pk)
-        self.error_message = self.ass_db.upsert('res_group_contacts', upd_col_values, where_vars, commit=commit)
+    def rgc_upsert(self, upd_col_values, rgr_pk, room_seq, pers_seq, commit=False):
+        where_vars = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=room_seq, rgc_pers_seq=pers_seq)
+        upd_col_values.update(where_vars)
+        self.error_message = self.ass_db.upsert('res_group_clients', upd_col_values, where_vars, commit=commit)
         if not self.error_message and self.ass_db.curs.rowcount != 1:
             self.error_message = "rgc_upsert({}, {}): Invalid affected row count; expected 1 but got {}"\
                 .format(upd_col_values, rgr_pk, self.ass_db.curs.rowcount)
@@ -480,7 +481,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     def rci_ro_group(self, c_idx, is_guest, file_name, line_num):
         """ determine seg=RE RG RI RL  and  grp=RCI External, RCI Guest, RCI Internal, RCI External """
-        if self.contacts[c_idx][_IS_OWNER]:
+        if self.clients[c_idx][_IS_OWNER]:
             key = 'Internal'
         else:  # not an owner/internal, so will be either Guest or External
             key = 'Guest' if is_guest else 'External'

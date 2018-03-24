@@ -34,7 +34,7 @@ class TestSfFindClient:
         assert sf_obj == 'Account'
 
 
-class TestSfContact:
+class TestSfClient:
     sf_id_of_rci_id = dict()
 
     def test_correct_email(self):
@@ -181,13 +181,13 @@ class TestSfContact:
         assert correct_phone(' 44 5566/7788', False, r) == ('4455667788', True)
         assert r == ["0: ", "3: ", "8:/"]
 
-    def __not_finished__test_all_contacts(self, salesforce_connection):
+    def __not_finished__test_all_clients(self, salesforce_connection):
         assert salesforce_connection.error_msg == ""
-        contacts = salesforce_connection.clients_with_rci_id(EXT_REFS_SEP)
-        print("Found contacts:", contacts)
+        clients = salesforce_connection.clients_with_rci_id(EXT_REFS_SEP)
+        print("Found clients:", clients)
         print("Error message:", salesforce_connection.error_msg)
         assert salesforce_connection.error_msg == ""
-        for c in contacts:
+        for c in clients:
             print(c)
             assert len(c) == 5  # tuple items: (CD_CODE, Sf_Id, Sihot_Guest_Object_Id, RCI refs, is_owner)
             assert len(c[1]) == 18
@@ -199,7 +199,7 @@ class TestSfContact:
                 assert rci_id not in self.sf_id_of_rci_id.items()
                 self.sf_id_of_rci_id[rci_id] = c[1]
 
-        # now check if the contact can be found by the rci_id
+        # now check if the client can be found by the rci_id
         print(repr(self.sf_id_of_rci_id))
         for rci_id in self.sf_id_of_rci_id:
             sf_id, duplicates = salesforce_connection.client_by_rci_id(rci_id)

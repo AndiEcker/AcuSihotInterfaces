@@ -6,7 +6,7 @@
 --- VERSION 04: speed-up and refactored RUL column initialization and added RO_SIHOT_RES_GROUP/RO_SIHOT_SP_GROUP for to store SIHOT CHANNEL/NN mappings.
 --- VERSION 05: moved update of default values to the end of the script and changed STIC default to more detectable values.
 --- VERSION 06: after room category and project structure refacturing and revising initiated by me, Gary and supported by the help of KP.
---- VERSION 07: changed to map to new TK/tk contracts - created by Fabián (see email from 9-12-2016).
+--- VERSION 07: changed to map to new TK/tk contracts - created by Fabiï¿½n (see email from 9-12-2016).
 --- VERSION 08: performance tuning of the UPDATE statement for to populate the new T_RUL columns.
 --- VERSION 09: more performance tuning and added new procedure P_SIHOT_ALLOC.
  
@@ -29,7 +29,7 @@ exec P_PROC_SET('DBA_SIHOT_RES_SYNC', '2016_V09', 'test');
 
 prompt DATA LOOKUP CHANGES - needed for to populate new columns in following DDL CHANGES section - more DATA CHANGES at the end of this script
 
--- changed according the new setup done by Fabián - see his email from 09/12/2016 11:22
+-- changed according the new setup done by Fabiï¿½n - see his email from 09/12/2016 11:22
 
 prompt add new lookup class for to transform unit size to sihot cat (only ANY fallback need to specify transforms for all Acumen unit sizes: HOTEL/STUDIO..3 BED)
 
@@ -343,7 +343,7 @@ prompt new T_RS column for easier classification of client to guest transfer in 
 
 alter table SALES.RESORTS add (RS_SIHOT_GUEST_TYPE  VARCHAR2(1 BYTE));
 
-comment on column SALES.RESORTS.RS_SIHOT_GUEST_TYPE is 'ID of client type for SIHOT guest/contact classification';
+comment on column SALES.RESORTS.RS_SIHOT_GUEST_TYPE is 'ID of client type for SIHOT guest/client classification';
 
 -- first set all to general owner (mainly for to group less import owner types like e.g. tablet, lifestyle, expirience, explorer)
 update T_RS set RS_SIHOT_GUEST_TYPE = 'O' where RS_CLASS = 'CONSTRUCT'  or  RS_CLASS = 'BUILDING' and RS_GROUP = 'A';

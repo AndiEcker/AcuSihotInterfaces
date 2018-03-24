@@ -73,11 +73,11 @@ if a_c is None:
 
 log_warning("Storing main RCI member id into ass_cache database (needs some minutes)", 'StoreMainRciId', importance=3)
 for cont in a_c:
-    if ass_db.select('contacts', ["co_pk"], "co_ac_id = :co_ac_id", dict(co_ac_id=cont[0])):
+    if ass_db.select('clients', ["cl_pk"], "cl_ac_id = :cl_ac_id", dict(cl_ac_id=cont[0])):
         break
-    co_pk = ass_db.fetch_value()
+    cl_pk = ass_db.fetch_value()
 
-    col_values = dict(er_co_fk=co_pk, er_type=EXT_REF_TYPE_RCI, er_id=cont[1])
+    col_values = dict(er_cl_fk=cl_pk, er_type=EXT_REF_TYPE_RCI, er_id=cont[1])
     if ass_db.insert('external_refs', col_values, commit=True):
         break
 
