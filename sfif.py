@@ -9,6 +9,12 @@ SF_DEF_CLIENT_OBJ = 'Lead'
 # special client record type ids
 CLIENT_REC_TYPE_ID_OWNERS = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
 
+# external reference type=id separator and types (also used as Sihot Matchcode/GDS prefix)
+EXT_REF_TYPE_ID_SEP = '='
+EXT_REF_TYPE_RCI = 'RCI'
+EXT_REF_TYPE_RCIP = 'RCIP'
+
+
 # console app debug level (initialized by prepare_connection())
 _debug_level = DEBUG_LEVEL_VERBOSE
 
@@ -341,12 +347,15 @@ class SfInterface:
                 sf_ret = client_obj.create(sf_dict)
                 msg = "{} created with {}, ret={}".format(sf_obj, pprint.pformat(sf_dict, indent=9), sf_ret)
                 if sf_ret['success']:
-                    sf_id = sf_ret['id']
+                    sf_id = sf_ret['Id']    # ?!?!? was lower-case 'id' (changed 19-04-18)
             except Exception as ex:
                 err = "{} create() exception {}. sent={}".format(sf_obj, ex, pprint.pformat(sf_dict, indent=9))
 
         if err:
             self.error_msg = err
+
+        if sf_id and 'RciId' in fields_dict:
+            ext_ref_id, err, msg = self.ext_ref_upsert(sf_id, fields_dict['RciId'], sf_obj=sf_obj)
 
         return sf_id, err, msg
 
@@ -417,49 +426,81 @@ class SfInterface:
             return res['records'][0]['Id']
         return None
 
-    def client_ass_id(self, sf_client_id, sf_obj=SF_DEF_CLIENT_OBJ):
-        ass_id = None
-        fld_name = sf_name('AssId', sf_obj)
-        soql_query = "SELECT {} FROM {} WHERE Id = '{}'".format(fld_name, sf_obj, sf_client_id)
+    def client_field_data(self, sf_client_id, field_name, sf_obj=SF_DEF_CLIENT_OBJ):
+        data = None
+        sf_fld_name = sf_name(field_name, sf_obj)
+        soql_query = "SELECT {} FROM {} WHERE Id = '{}'".format(sf_fld_name, sf_obj, sf_client_id)
         res = self.soql_query_all(soql_query)
         if not self.error_msg and res['totalSize'] > 0:
-            ass_id = res['records'][0][fld_name]
-        return ass_id
+            data = res['records'][0][sf_fld_name]
+        return data
+
+    def client_ass_id(self, sf_client_id, sf_obj=SF_DEF_CLIENT_OBJ):
+        return self.client_field_data(sf_client_id, 'AssId', sf_obj=sf_obj)
 
     def client_ac_id(self, sf_client_id, sf_obj=SF_DEF_CLIENT_OBJ):
-        ac_id = None
-        fld_name = sf_name('AcId', sf_obj)
-        soql_query = "SELECT {} FROM {} WHERE Id = '{}'".format(fld_name, sf_obj, sf_client_id)
-        res = self.soql_query_all(soql_query)
-        if not self.error_msg and res['totalSize'] > 0:
-            ac_id = res['records'][0][fld_name]
-        return ac_id
+        return self.client_field_data(sf_client_id, 'AcId', sf_obj=sf_obj)
 
     def client_sh_id(self, sf_client_id, sf_obj=SF_DEF_CLIENT_OBJ):
-        sh_id = None
-        fld_name = sf_name('ShId', sf_obj)
-        soql_query = "SELECT {} FROM {} WHERE Id = '{}'".format(fld_name, sf_obj, sf_client_id)
-        res = self.soql_query_all(soql_query)
-        if not self.error_msg and res['totalSize'] > 0:
-            sh_id = res['records'][0][fld_name]
-        return sh_id
+        return self.client_field_data(sf_client_id, 'ShId', sf_obj=sf_obj)
 
-    def client_ext_refs(self, sf_client_id, sf_obj=SF_DEF_CLIENT_OBJ):
+    def client_ext_refs(self, sf_client_id, er_id=None, er_type=EXT_REF_TYPE_RCI, sf_obj=SF_DEF_CLIENT_OBJ):
+        """
+        Return external references of client specified by sf_client_id (and optionally sf_obj).
+
+        :param sf_client_id:    Salesforce Id of client record (Lead, Contact, Account, PersonAccount, ...).
+        :param er_id:           External reference (No or Id).
+        :param er_type:         Type of external reference (e.g. EXT_REF_TYPE_RCI).
+        :param sf_obj:          Salesforce object of the client passed into sf_client_id (Lead, Contact, Account, ...).
+        :return:                If er_id get passed in then: list of tuples of found external ref type and id of client.
+                                Else: list of Salesforce Ids of external references (mostly only one).
+        """
         ext_refs = list()
-        res = self.soql_query_all("SELECT Name, Reference_No_or_ID__c FROM External_References__r"
-                                  " WHERE {}__c = '{}'".format(sf_obj, sf_client_id))
+        soql = "SELECT Id, Name, Reference_No_or_ID__c FROM External_References__r  WHERE {}__c = '{}'"\
+            .format(sf_obj, sf_client_id)
+        if er_id:
+            soql += " AND Reference_No_or_ID__c = '{}' AND Name = '{}'".format(er_id, er_type)
+        res = self.soql_query_all(soql)
         if not self.error_msg and res['totalSize'] > 0:
             for c in res['records']:  # list of External_References__r OrderedDicts
-                ext_refs.append((c['Name'], c['Reference_No_or_ID__c']))
+                ext_refs.append(c['Id'] if er_id else (c['Name'], c['Reference_No_or_ID__c']))
         return ext_refs
 
-    def record_type_id(self, sf_obj=SF_DEF_CLIENT_OBJ):
-        rec_type_id = None
-        res = self.soql_query_all("Select Id From RecordType Where SobjectType = '{}' and DeveloperName = '{}'"
-                                  .format(sf_obj, RECORD_TYPES.get(sf_obj)))
-        if not self.error_msg and res['totalSize'] > 0:
-            rec_type_id = res['records'][0]['Id']
-        return rec_type_id
+    def ext_ref_upsert(self, sf_client_id, er_id, er_type=EXT_REF_TYPE_RCI, sf_obj=SF_DEF_CLIENT_OBJ):
+        if not self._ensure_lazy_connect():
+            return None, self.error_msg, ""
+        er_obj = 'External_References'
+        ext_ref_obj = self.sf_obj(er_obj)
+        if not ext_ref_obj:
+            self.error_msg += " ext_ref_upsert() sf_id={}, er_id={}".format(sf_client_id, er_id)
+            return None, self.error_msg, ""
+
+        sf_dict = dict(Reference_No_or_ID__c=er_id, Name=er_type)
+        sf_dict[sf_obj + '__c'] = sf_client_id
+        sf_er_id = err = msg = ""
+        er_list = self.client_ext_refs(sf_client_id, er_id, er_type, sf_obj=sf_obj)
+        if er_list:     # update?
+            if _debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
+                uprint(" ###  ext_ref_upsert(): {} duplicate external refs found: {}".format(sf_client_id, er_list))
+            sf_er_id = er_list[0]
+            try:
+                sf_ret = ext_ref_obj.update(sf_er_id, sf_dict)
+                msg = "{} {} updated with {} ret={}".format(er_obj, sf_er_id, pprint.pformat(sf_dict, indent=9), sf_ret)
+            except Exception as ex:
+                err = "{} update() raised exception {}. sent={}".format(er_obj, ex, pprint.pformat(sf_dict, indent=9))
+        else:
+            try:
+                sf_ret = ext_ref_obj.create(sf_dict)
+                msg = "{} created with {}, ret={}".format(er_obj, pprint.pformat(sf_dict, indent=9), sf_ret)
+                if sf_ret['success']:
+                    sf_er_id = sf_ret['Id']
+            except Exception as ex:
+                err = "{} create() exception {}. sent={}".format(er_obj, ex, pprint.pformat(sf_dict, indent=9))
+
+        if err:
+            self.error_msg = err
+
+        return sf_er_id, err, msg
 
     def find_client(self, email="", phone="", first_name="", last_name=""):
         if not self._ensure_lazy_connect():
@@ -484,3 +525,11 @@ class SfInterface:
             return '', SF_DEF_CLIENT_OBJ
 
         return result['id'], result['type']
+
+    def record_type_id(self, sf_obj=SF_DEF_CLIENT_OBJ):
+        rec_type_id = None
+        res = self.soql_query_all("Select Id From RecordType Where SobjectType = '{}' and DeveloperName = '{}'"
+                                  .format(sf_obj, RECORD_TYPES.get(sf_obj)))
+        if not self.error_msg and res['totalSize'] > 0:
+            rec_type_id = res['records'][0]['Id']
+        return rec_type_id

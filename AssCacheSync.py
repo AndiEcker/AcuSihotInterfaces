@@ -12,8 +12,8 @@ from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
 from sxmlif import ResToSihot, AC_ID_2ND_COUPLE_SUFFIX
 from shif import ResBulkFetcher, elem_value, pax_count, gds_no, apt_wk_yr, elem_path_join, guest_data, SH_DATE_FORMAT
-from sfif import add_sf_options, prepare_connection
-from ass_sys_data import AssSysData, ext_ref_type_sql, EXT_REF_TYPE_RCI, EXT_REFS_SEP
+from sfif import add_sf_options, prepare_connection, correct_email, correct_phone, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI
+from ass_sys_data import AssSysData, ext_ref_type_sql, EXT_REFS_SEP
 from ae_notification import add_notification_options, init_notification
 
 __version__ = '0.1'
@@ -197,19 +197,22 @@ if conf_data.error_message:
 
 
 def ac_migrate_clients():
-    """ migrate clients from Acumen and Salesforce into ass_cache/postgres """
+    """ migrate clients from Acumen into ass_cache/postgres """
 
     # fetch all couple-clients from Acumen
     log_warning("Fetching couple client data from Acumen (needs some minutes)", 'FetchAcuCoupleClients', importance=3)
     ac_cos = conf_data.load_view(acu_db, 'T_CD',
-                                 ["CD_CODE", "CD_SF_ID1", "to_char(CD_SIHOT_OBJID)", "CD_RCI_REF"],
-                                 "substr(CD_CODE, 1, 1) <> 'A' and CD_SNAM1 is not NULL and CD_FNAM1 is not NULL")
+                                 ["CD_CODE", "CD_SF_ID1", "to_char(CD_SIHOT_OBJID)",
+                                  "CD_FNAM1 || ' ' || CD_SNAM1", "F_EMAIL_CLEANED(CD_EMAIL)",
+                                  "nvl(CD_HTEL1, nvl(CD_MOBILE1, CD_WTEL1 || CD_WEXT1))", "CD_RCI_REF"],
+                                 "substr(CD_CODE, 1, 1) <> 'A' and (CD_SNAM1 is not NULL or CD_FNAM1 is not NULL)")
     if ac_cos is None:
         return conf_data.error_message
     ac_2 = conf_data.load_view(acu_db, 'T_CD',
                                ["CD_CODE || '" + AC_ID_2ND_COUPLE_SUFFIX + "'", "CD_SF_ID2", "to_char(CD_SIHOT_OBJID2)",
-                                "NULL"],
-                               "substr(CD_CODE, 1, 1) <> 'A' and CD_SNAM2 is not NULL and CD_FNAM2 is not NULL")
+                                "CD_FNAM2 || ' ' || CD_SNAM2", "F_EMAIL_CLEANED(CD_EMAIL, 1)",
+                                "NULL", "NULL"],
+                               "substr(CD_CODE, 1, 1) <> 'A' and (CD_SNAM2 is not NULL or CD_FNAM2 is not NULL)")
     if ac_2 is None:
         return conf_data.error_message
     ac_cos += ac_2
@@ -217,10 +220,11 @@ def ac_migrate_clients():
 
     # migrate to ass_cache including additional external refs/IDs (fetched from Acumen)
     for idx, ac_co in enumerate(ac_cos):
-        cl_pk = conf_data.cl_save(ac_co[0], ac_co[1], ac_co[2], ext_refs=[(EXT_REF_TYPE_RCI, ac_co[3])])
+        ext_refs = [(EXT_REF_TYPE_RCI, ac_co[6])] if ac_co[6] else None
+        cl_pk = conf_data.cl_save(ac_co[0], ac_co[1], ac_co[2], ac_co[3], ac_co[4], ac_co[5], ext_refs=ext_refs)
         if cl_pk is None:
             break
-        if idx + 1 % 1000 == 0:
+        if (idx + 1) % 1000 == 0:
             ass_db.commit()
 
     if ass_db.last_err_msg:
@@ -538,52 +542,64 @@ for acm_sync in acm_syncs:
 
 
 def ac_check_clients():
-    ac_cos = conf_data.load_view(acu_db, 'T_CD',
+    ac_cls = conf_data.load_view(acu_db, 'T_CD',
                                  ["CD_CODE",
-                                  "CD_SF_ID1", "to_char(CD_SIHOT_OBJID)", "CD_SF_ID2", "to_char(CD_SIHOT_OBJID2)",
-                                  "CD_RCI_REF", "case when CD_FNAM1 is not NULL and CD_SNAM1 is not NULL then 1 end"],
+                                  "CD_SF_ID1", "to_char(CD_SIHOT_OBJID)", "CD_FNAM1 || ' ' || CD_SNAM1",
+                                  "F_EMAIL_CLEANED(CD_EMAIL)",
+                                  "CD_SF_ID2", "to_char(CD_SIHOT_OBJID2)", "CD_FNAM2 || ' ' || CD_SNAM2",
+                                  "F_EMAIL_CLEANED(CD_EMAIL, 1)",
+                                  "nvl(CD_HTEL1, nvl(CD_MOBILE1, CD_WTEL1 || CD_WEXT1))", "CD_RCI_REF"],
                                  "substr(CD_CODE, 1, 1) <> 'A'")
-    if ac_cos is None:
+    if ac_cls is None:
         return conf_data.error_message
-    ac_cl_dict = dict((_[0], _[1:]) for _ in ac_cos)
+    ac_cl_dict = dict((_[0], _[1:]) for _ in ac_cls)
     ac_cl_ori_dict = ac_cl_dict.copy()
 
-    ctx = 'acChkCo'
+    ctx = 'acChkCl'
     cnt = len(warn_log)
-    for as_co in conf_data.clients:
-        ass_id, ac_id, sf_id, sh_id, ext_refs, _ = as_co
+    for as_cl in conf_data.clients:
+        ass_id, ac_id, sf_id, sh_id, name, email, phone, ext_refs, _ = as_cl
         if not ac_id:
-            log_warning("{} - AssCache client record without Acumen client reference: {}".format(ass_id, as_co), ctx)
+            if debug_level >= DEBUG_LEVEL_VERBOSE:
+                log_warning("{} - AssCache client without Acumen client reference: {}".format(ass_id, as_cl), ctx)
             continue
 
-        ac_id, offset = (ac_id[:-2], 2) if ac_id.endswith(AC_ID_2ND_COUPLE_SUFFIX) else (ac_id, 0)
+        ac_id, offset = (ac_id[:-len(AC_ID_2ND_COUPLE_SUFFIX)], 4) if ac_id.endswith(AC_ID_2ND_COUPLE_SUFFIX) \
+            else (ac_id, 0)
         if ac_id not in ac_cl_ori_dict:
             log_warning("{} - Acumen client reference {} not found in Acumen system".format(ass_id, ac_id), ctx)
             continue
-        aco = ac_cl_ori_dict[ac_id][offset:]
-        if sf_id != aco[0]:     # cl_sf_id
-            log_warning("{} - Salesforce client ID differs: ass={} acu={}".format(ass_id, sf_id, aco[0]), ctx)
-        if sh_id != aco[1]:     # cl_sh_id
-            log_warning("{} - Sihot guest object ID differs: ass={} acu={}".format(ass_id, sh_id, aco[1]), ctx)
+        ac_cl = ac_cl_ori_dict[ac_id][offset:]
+        if sf_id != ac_cl[0]:   # cl_sf_id
+            log_warning("{} - Salesforce client ID differs: ass={} acu={}".format(ass_id, sf_id, ac_cl[0]), ctx)
+        if sh_id != ac_cl[1]:   # cl_sh_id
+            log_warning("{} - Sihot guest object ID differs: ass={} acu={}".format(ass_id, sh_id, ac_cl[1]), ctx)
+        if name != ac_cl[2]:    # cl_name
+            log_warning("{} - Client name differs: ass={} acu={}".format(ass_id, name, ac_cl[2]), ctx)
+        ac_email, _ = correct_email(ac_cl[3])
+        if email != ac_email:   # cl_email
+            log_warning("{} - Client email differs: ass={} acu={}".format(ass_id, email, ac_email), ctx)
 
-        if offset:              # no need to check again for 2nd client/couple of Acumen client
+        if offset:              # further checks not needed for 2nd client/couple of Acumen client
             continue
+
         if ac_id not in ac_cl_dict:
-            log_warning("{} - Acumen client id duplicates found in AssCache; records={}"
+            log_warning("{} - Acumen client reference duplicates found in AssCache; records={}"
                         .format(ac_id, conf_data.cl_list_by_ac_id(ac_id)), ctx)
             continue
-        ac_co = ac_cl_dict.pop(ac_id)
+        ac_cl = ac_cl_dict.pop(ac_id)
 
-        # if ass_db.select('external_refs', ['er_type', 'er_id'], "er_cl_fk = :cl_pk", dict(cl_pk=ass_id)):
-        #     return ass_db.last_err_msg
-        # as_ers = ass_db.fetch_all()
-        as_ers = [tuple(_.split('=')) for _ in ext_refs.split(EXT_REFS_SEP)] if ext_refs else list()
+        ac_phone, _ = correct_phone(ac_cl[8])
+        if phone != ac_phone:   # cl_phone
+            log_warning("{} - Client phone differs: ass={} acu={}".format(ass_id, phone, ac_phone), ctx)
+
+        as_ers = [tuple(_.split(EXT_REF_TYPE_ID_SEP)) for _ in ext_refs.split(EXT_REFS_SEP)] if ext_refs else list()
         ac_ers = conf_data.load_view(acu_db, 'T_CR', ["DISTINCT " + ext_ref_type_sql(), "CR_REF"],
                                      "CR_CDREF = :ac", dict(ac=ac_id))
         if ac_ers is None:
             return conf_data.error_message
-        if ac_co[4]:           # if CD_RCI_REF is populated and no dup then add it to the external refs list
-            main_rci_ref = (EXT_REF_TYPE_RCI, ac_co[4])
+        if ac_cl[9]:           # if CD_RCI_REF is populated and no dup then add it to the external refs list
+            main_rci_ref = (EXT_REF_TYPE_RCI, ac_cl[9])
             if main_rci_ref not in ac_ers:
                 ac_ers.append(main_rci_ref)
         if len(as_ers) != len(ac_ers):
@@ -595,14 +611,9 @@ def ac_check_clients():
             if not [_ for _ in as_ers if _ == ac_er]:
                 log_warning("{} - External Ref {}={} missing in AssCache".format(ass_id, ac_er[0], ac_er[1]), ctx)
 
-    no_name = 0
-    for ac_id, ac_co in ac_cl_dict.items():
-        if ac_co[5]:
-            log_warning("Acumen client {} missing in AssCache: {}".format(ac_id, ac_co), ctx)
-        else:
-            no_name += 1
-    if no_name:
-        log_warning("Found {} clients in Acumen with empty first or second name".format(no_name), ctx, importance=1)
+    # finally log clients that are in Acumen but missing in AssCache
+    for ac_id, ac_cl in ac_cl_dict.items():
+        log_warning("Acumen client {} missing in AssCache: {}".format(ac_id, ac_cl), ctx)
 
     log_warning("No Acumen discrepancies found" if len(warn_log) == cnt else "Number of Acumen discrepancies: {}"
                 .format(len(warn_log) - cnt), ctx, importance=3)
@@ -611,10 +622,10 @@ def ac_check_clients():
 
 
 def sh_check_clients():
-    ctx = 'shChkCo'
+    ctx = 'shChkCl'
     cnt = len(warn_log)
     for as_co in conf_data.clients:
-        ass_id, ac_id, sf_id, sh_id, _, _ = as_co
+        ass_id, ac_id, sf_id, sh_id, name, email, phone, _, _ = as_co
         if not sh_id:
             if debug_level >= DEBUG_LEVEL_VERBOSE:
                 log_warning("{} - AssCache client record without Sihot guest object ID: {}".format(ass_id, as_co), ctx)
@@ -630,6 +641,16 @@ def sh_check_clients():
                         ctx)
         if (sf_id or shd['MATCH-SM']) and sf_id != shd['MATCH-SM']:
             log_warning("{} - Salesforce client ID mismatch. ass={} sh={}".format(ass_id, sf_id, shd['MATCH-SM']), ctx)
+        sh_name = shd['NAME-2'] + ' ' + shd['NAME-1']
+        if name != sh_name:
+            log_warning("{} - Client name differs: ass={} sh={}".format(ass_id, name, sh_name), ctx)
+        sh_email, _ = correct_email(shd['EMAIL-1'])
+        if email != sh_email:
+            log_warning("{} - Client email differs: ass={} sh={}".format(ass_id, email, sh_email), ctx)
+        sh_phone1, _ = correct_phone(shd['PHONE-1'])
+        sh_phone2, _ = correct_phone(shd['MOBIL-1'])
+        if phone != sh_phone1 and phone != sh_phone2:
+            log_warning("{} - Client phone differs: ass={} sh={}".format(ass_id, email, sh_phone1 or sh_phone2), ctx)
 
     log_warning("No Sihot discrepancies found" if len(warn_log) == cnt else "Number of Sihot discrepancies: {}"
                 .format(len(warn_log) - cnt), ctx, importance=3)
@@ -638,10 +659,10 @@ def sh_check_clients():
 
 
 def sf_check_clients():
-    ctx = 'sfChkCo'
+    ctx = 'sfChkCl'
     cnt = len(warn_log)
     for as_co in conf_data.clients:
-        ass_id, ac_id, sf_id, sh_id, ext_refs, _ = as_co
+        ass_id, ac_id, sf_id, sh_id, name, email, phone, ext_refs, _ = as_co
         if not sf_id:
             if debug_level >= DEBUG_LEVEL_VERBOSE:
                 log_warning("{} - AssCache client record without Salesforce ID: {}".format(ass_id, as_co), ctx)
@@ -659,7 +680,19 @@ def sf_check_clients():
         if (sh_id or sf_sh_id) and sh_id != sf_sh_id:
             log_warning("{} - Salesforce client ID mismatch. ass={} sf={}".format(ass_id, sh_id, sf_sh_id), ctx)
 
-        ext_refs = [tuple(_.split('=')) for _ in ext_refs.split(EXT_REFS_SEP)] if ext_refs else list()
+        sf_name = sf_conn.client_field_data(sf_id, 'FirstName') + ' ' + sf_conn.client_field_data(sf_id, 'LastName')
+        if name != sf_name:
+            log_warning("{} - Salesforce client name mismatch. ass={} sf={}".format(ass_id, name, sf_name), ctx)
+
+        sf_email = sf_conn.client_field_data(sf_id, 'Email')
+        if email != sf_email:
+            log_warning("{} - Salesforce client email mismatch. ass={} sf={}".format(ass_id, email, sf_email), ctx)
+
+        sf_phone = sf_conn.client_field_data(sf_id, 'Phone')
+        if phone != sf_phone:
+            log_warning("{} - Salesforce client phone mismatch. ass={} sf={}".format(ass_id, phone, sf_phone), ctx)
+
+        ext_refs = [tuple(_.split(EXT_REF_TYPE_ID_SEP)) for _ in ext_refs.split(EXT_REFS_SEP)] if ext_refs else list()
         sf_ext_refs = sf_conn.client_ext_refs(sf_id)
         for er in ext_refs:
             if er not in sf_ext_refs:

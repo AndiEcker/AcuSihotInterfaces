@@ -22,12 +22,12 @@ from traceback import format_exc
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import add_notification_options, init_notification
 from ae_db import ACU_DEF_USR, ACU_DEF_DSN
-from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI
 from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot, ECM_DO_NOT_SEND_CLIENT
-from sfif import add_sf_options
+from sfif import add_sf_options, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
+from ass_sys_data import AssSysData, EXT_REFS_SEP
 
 __version__ = '0.9'
 
@@ -533,15 +533,15 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         """ complete client row for to send to Sihot as external references (EXT_REFS/EXT_REF_ID1/EXT_REF_TYPE1...) """
         s_ext_refs = list()
         for i, ext_ref in enumerate(ext_refs):
-            if '=' in ext_ref:
-                er_type, er_ref = ext_ref.split('=')
+            if EXT_REF_TYPE_ID_SEP in ext_ref:
+                er_type, er_ref = ext_ref.split(EXT_REF_TYPE_ID_SEP)
             else:
                 er_type = EXT_REF_TYPE_RCI
                 er_ref = ext_ref
             er_type += str(i + 1)
             c_row['EXT_REF_TYPE' + str(i + 1)] = er_type
             c_row['EXT_REF_ID' + str(i + 1)] = er_ref
-            s_ext_refs.append(er_type + '=' + er_ref)
+            s_ext_refs.append(er_type + EXT_REF_TYPE_ID_SEP + er_ref)
         # EXT_REFS xml element is only needed for elemHideIf, data is in EXT_REF_ID<n>/EXT_REF_TYPE<n>
         c_row['EXT_REFS'] = EXT_REFS_SEP.join(s_ext_refs)
 
@@ -641,13 +641,17 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = False
             cid = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
-            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, file_name, line_num)
+            fields_dict = dict(name=curr_cols[RCI_GUEST_FORENAME] + ' ' + curr_cols[RCI_GUEST_SURNAME],
+                               email=curr_cols[RCI_GUEST_EMAIL], phone=curr_cols[RCI_GUEST_PHONE])
+            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
             cid = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
+            fields_dict = dict(name=curr_cols[RCI_CLIENT_FORENAME] + ' ' + curr_cols[RCI_CLIENT_SURNAME],
+                               email=curr_cols[RCI_CLIENT_EMAIL])
             # sometimes resort is the "owner", e.g. 2429-55555/2429-99928 for HMC - in Sihot we are not hiding resort
             # if cid in client_refs_add_exclude:
             #     curr_cols[RC_OWN_CLIENTS_IDX] = -1
             # else:
-            curr_cols[RC_OWN_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, file_name, line_num)
+            curr_cols[RC_OWN_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
 
         return curr_cols, err_msg
 
@@ -837,7 +841,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = True
             cid = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
-            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, file_name, line_num)
+            fields_dict = dict(name=curr_cols[RCIP_GUEST_FORENAME] + ' ' + curr_cols[RCIP_GUEST_SURNAME],
+                               email=curr_cols[RCIP_GUEST_EMAIL], phone=curr_cols[RCIP_GUEST_PHONE])
+            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
             curr_cols[RC_OWN_CLIENTS_IDX] = -1  # does not exists for points but needed for generic client send check
         return curr_cols, err_msg
 
@@ -1167,6 +1173,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 for which_client, clients_idx, func in zip(which_clients, clients_indexes, funcs):
                     if clients_idx == -1:
                         continue
+                    client_row = None       # removing PyCharm warning
                     try:
                         client_row, error_msg = func(imp_cols)
                     except Exception as ex:

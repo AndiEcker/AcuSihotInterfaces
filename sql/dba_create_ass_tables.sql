@@ -8,7 +8,11 @@ CREATE TABLE clients
                                             -- .. E127673D1P2, Z000020D1P2, I127633D1P2, but also refs like MAINTENANC
   cl_sf_id                VARCHAR(18),
   cl_sh_id                VARCHAR(15),
-  UNIQUE (cl_ac_id, cl_sf_id, cl_sh_id)
+  cl_name                 VARCHAR(81),
+  cl_email                VARCHAR(69),
+  cl_phone                VARCHAR(42),
+  UNIQUE (cl_ac_id, cl_sf_id, cl_sh_id),
+  CHECK (cl_ac_id is not NULL or cl_sf_id is not NULL or cl_sh_id is not NULL)
 );
 -- noinspection SqlResolve
 SELECT audit.audit_table('clients');
@@ -195,8 +199,9 @@ SELECT audit.audit_table('res_group_clients');
 ------ VIEWS
 ---- CLIENT VIEWS
 -- view for AssSysDate.cl_fetch_all() extending clients table with external refs and pt_group aggregates
+-- EXT_REF_TYPE_ID_SEP cannot be imported here from ass_sys_data.py, therefore using hard-coded literal '='
 CREATE OR REPLACE VIEW v_clients_refs_owns AS
-  SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id
+  SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id, cl_name, cl_email, cl_phone
        , (select string_agg(er_type || '=' || er_id, ',') FROM external_refs WHERE er_cl_fk = cl_pk) as ext_refs
        , (select string_agg(pt_group, '') FROM client_products
           INNER JOIN products ON cp_pr_fk = pr_pk INNER JOIN product_types ON pr_pt_fk = pt_pk

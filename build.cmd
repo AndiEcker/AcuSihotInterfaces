@@ -3,7 +3,7 @@ set PATH=C:\Python35\;C:\Python35\Scripts;%PATH%
 rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource AcuSihotMonitor.kv AcuSihotMonitor.py
 c:\Python35\Scripts\pyinstaller --onefile AcuServer.py
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue AcuSihotMonitor.spec
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue AssCacheSync.spec
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue AssCacheSync.py
 c:\Python35\Scripts\pyinstaller --onefile AssServer.py
 c:\Python35\Scripts\pyinstaller --onefile ClientQuestionnaireExport.py
 rem c:\Python35\Scripts\pyinstaller --onefile KernelGuestTester.py
