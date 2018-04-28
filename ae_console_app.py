@@ -256,7 +256,7 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 log_file_def='', config_eval_vars=None, additional_cfg_files=None, num_log_backups=9, log_max_size=20):
+                 log_file_def='', config_eval_vars=None, additional_cfg_files=None, log_max_size=20):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version          application version.
             :param app_desc             application description.
@@ -265,7 +265,6 @@ class ConsoleApp:
             :param config_eval_vars     dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
             :param additional_cfg_files list of additional CFG/INI file names (opt. incl. abs/rel. path).
-            :param num_log_backups      maximum number of log file backups.
             :param log_max_size         maximum size in MBytes of a log file.
         """
         """
@@ -274,8 +273,9 @@ class ConsoleApp:
                                         get called after a first call to methods which are initiating the re-fetch of
                                         the args and INI/cfg vars (like e.g. get_option() or dprint()).
             :ivar _log_file_obj         file handle of currently opened log file (opened in self._parse_args()).
-            :ivar _num_log_backups      maximum number of rotating backups of the log file.
             :ivar _log_max_size         maximum size in MBytes of a log file.
+            :ivar _log_file_name        path and file name of the log file.
+            :ivar _log_file_index       index of the current rotation log file backup.
             :ivar config_options        module variable with pre-/user-defined options (dict of Setting instances).
             :var  _ca_instance          module variable referencing this (singleton) instance.
         """
@@ -284,8 +284,9 @@ class ConsoleApp:
 
         self._parsed_args = None
         self._log_file_obj = None       # has to be initialized before _ca_instance, else uprint() will throw exception
-        self._num_log_backups = num_log_backups
         self._log_max_size = log_max_size
+        self._log_file_name = ""
+        self._log_file_index = 0
 
         self.startup_beg = datetime.datetime.now()
         self.config_options = dict()
@@ -397,8 +398,8 @@ class ConsoleApp:
                     if given_value not in allowed_values:
                         raise ArgumentError(None, "Wrong {} option value; allowed are {}".format(name, allowed_values))
 
-        log_file = self.config_options['logFile'].value
-        if log_file:  # enable logging
+        self._log_file_name = self.config_options['logFile'].value
+        if self._log_file_name:  # enable logging
             try:
                 self._close_log_file()
                 self._open_log_file()
@@ -423,8 +424,8 @@ class ConsoleApp:
             if getattr(sys, 'frozen', False):
                 uprint(" "*18, "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*'))
             uprint(" "*18, "main-cfg  =", self._cfg_fnam)
-        if log_file:
-            uprint('Log file:', log_file)
+        if self._log_file_name:
+            uprint('Log file:', self._log_file_name)
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
@@ -512,7 +513,7 @@ class ConsoleApp:
 
     def _open_log_file(self):
         global app_std_out, app_std_err
-        self._log_file_obj = open(self.config_options['logFile'].value, "a")
+        self._log_file_obj = open(self._log_file_name, "w")
         if app_std_out == ori_std_out:      # first call/open-of-log-file?
             app_std_out = sys.stdout = _DuplicateSysOut(self._log_file_obj)
             app_std_err = sys.stderr = _DuplicateSysOut(self._log_file_obj, sys_out=ori_std_err)
@@ -520,17 +521,17 @@ class ConsoleApp:
             app_std_out.log_file = self._log_file_obj
             app_std_err.log_file = self._log_file_obj
 
-    def _backup_log_file(self):
-        if self._log_file_obj:
-            return "log file is still open - you have to call _close_log_file() before"
-        log_file_path, log_file_ext = os.path.splitext(self.config_options['logFile'].value)
-        for i in range(self._num_log_backups - 1, -1, -1):
-            sfn = log_file_path + ("-" + str(i) if i else "") + log_file_ext
-            dfn = log_file_path + "-" + str(i + 1) + log_file_ext
-            if os.path.exists(sfn):
-                if os.path.exists(dfn):
-                    os.remove(dfn)
-                os.rename(sfn, dfn)
+    def _rename_log_file(self):
+        MAX_NUM_LOG_FILES = 99
+
+        self._log_file_index += 1
+
+        index_width = len(str(MAX_NUM_LOG_FILES))
+        file_path, file_ext = os.path.splitext(self._log_file_name)
+        dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=index_width) + file_ext
+        if os.path.exists(dfn):
+            os.remove(dfn)
+        os.rename(self._log_file_name, dfn)
 
     def _close_log_file(self):
         global app_std_out, app_std_err
@@ -545,7 +546,7 @@ class ConsoleApp:
             self._log_file_obj.seek(0, 2)  # due to non-posix-compliant Windows feature
             if self._log_file_obj.tell() >= self._log_max_size * 1024 * 1024:
                 self._close_log_file()
-                self._backup_log_file()
+                self._rename_log_file()
                 self._open_log_file()
 
     def shutdown(self, exit_code=0):
@@ -553,11 +554,13 @@ class ConsoleApp:
             uprint("****  Non-zero exit code:", exit_code)
         uprint('####  Shutdown............  ####')
         if self._log_file_obj:
-            app_std_err.log_file = None  # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
+            app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
             app_std_out.log_file = None
-            sys.stdout = ori_std_out  # set back for to prevent stack overflow/recursion error with kivy logger:
-            sys.stderr = ori_std_err  # .. "Fatal Python error: Cannot recover from stack overflow"
+            sys.stdout = ori_std_out        # set back for to prevent stack overflow/recursion error with kivy logger:
+            sys.stderr = ori_std_err        # .. "Fatal Python error: Cannot recover from stack overflow"
             self._close_log_file()
+            if self._log_file_index:
+                self._rename_log_file()
         sys.exit(exit_code)
 
 

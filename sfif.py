@@ -1,10 +1,17 @@
 # salesforce high level interface
+import string
 import pprint
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 
 # default client salesforce object
-SF_DEF_CLIENT_OBJ = 'Lead'
+DEF_CLIENT_OBJ = 'Lead'
+
+# default search field (used by SfInterface.client_field_data())
+DEF_SEARCH_FIELD = 'Id'
+
+# flag to determine client object from SF ID
+DETERMINE_CLIENT_OBJ = '#Unknown#'
 
 # special client record type ids
 CLIENT_REC_TYPE_ID_OWNERS = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
@@ -33,7 +40,8 @@ FIELD_NAMES = dict(RecordType=dict(Lead='RecordType.DeveloperName', Contact='Rec
                    Phone=dict(),
                    FirstName=dict(),
                    LastName=dict(),
-                   Birthdate=dict(Lead='DOB1__c', Account='KM_DOB__pc'),
+                   Name=dict(),
+                   Birthdate=dict(Lead='DOB1__c', Contact='DOB1__c', Account='KM_DOB__pc'),
                    Street=dict(Contact='MailingStreet', Account='PersonMailingStreet'),
                    City=dict(Contact='MailingCity', Account='PersonMailingCity'),
                    State=dict(Account='PersonMailingState'),
@@ -44,14 +52,46 @@ FIELD_NAMES = dict(RecordType=dict(Lead='RecordType.DeveloperName', Contact='Rec
                                      Account='Marketing_Source__pc'),
                    ArrivalInfo=dict(Lead='Previous_Arrivals__c', Contact='Previous_Arrival_Info__c',
                                     Account='Previous_Arrival_Info__pc'),
-                   AcId=dict(Contact='CD_CODE__c', Account='CD_CODE__pc'),
-                   ShId=dict(Contact='Sihot_Guest_Object_Id__c'),
+                   AssId=dict(Lead='AssCache_Id__c', Contact='AssCache_Id__c', Account='AssCache_Id__c'),
+                   AcId=dict(Lead='Acumen_Client_Reference__c', Contact='CD_CODE__c', Account='CD_CODE__pc'),
+                   SfId=dict(Lead='Id', Contact='Id', Account='Id'),
+                   ShId=dict(Lead='Sihot_Guest_Object_Id__c', Contact='Sihot_Guest_Object_Id__c',
+                             Account='Sihot_Guest_Object_Id__c'),
                    RciId=dict(Contact='RCI_Reference__c', Account='RCI_Reference__pc'),
-                   AssId=dict(Contact='AssCache_Contact_Id__c'),
                    )
 
 # used salesforce record types for newly created Lead/Contact/Account objects
 RECORD_TYPES = dict(Lead='SIHOT_Leads', Contact='Rentals', Account='PersonAccount')
+
+# SF ID prefixes for to determine SF object
+ID_PREFIX_OBJECTS = {'001': 'Account', '003': 'Contact', '00Q': 'Lead'}
+
+
+def obj_from_id(sf_id):
+    return ID_PREFIX_OBJECTS.get(sf_id[:3], DEF_CLIENT_OBJ)
+
+
+def ensure_long_id(sf_id):
+    """
+    ensure that the passed sf_id will be returned as a 18 character Salesforce ID (if passed in as 15 character SF ID).
+
+    :param sf_id:   any valid (15 or 18 character long) SF ID.
+    :return:        18 character SF ID if passed in as 15 or 18 character ID - any other SF ID length returns None.
+    """
+    if len(sf_id) == 18:
+        return sf_id
+    elif len(sf_id) != 15:
+        return None
+
+    char_map = string.ascii_uppercase + "012345"
+    extend = ""
+    for chunk in range(3):
+        bin_str = ""
+        for pos in range(5):
+            bin_str = ("1" if sf_id[chunk * 5 + pos] in string.ascii_uppercase else "0") + bin_str
+        extend += char_map[int(bin_str, 2)]
+
+    return sf_id + extend
 
 
 def sf_name(code_field_name, sf_obj):
@@ -96,7 +136,8 @@ def field_list_from_sf(sf_list, sf_obj):
 def field_dict_from_sf(sf_dict, sf_obj):
     code_dict = dict()
     for sf_field_name, val in sf_dict.items():
-        code_dict[code_name(sf_field_name, sf_obj)] = val
+        if sf_field_name != 'attributes':
+            code_dict[code_name(sf_field_name, sf_obj)] = val
     return code_dict
 
 
@@ -223,15 +264,16 @@ def correct_email(email, changed=False, removed=None):
     return local_part + domain_part, changed
 
 
-def correct_phone(phone, changed=False, removed=None):
+def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
     """ check and correct phone number from a user input (removing all invalid characters including spaces)
 
-    :param phone:       phone number
-    :param changed:     (optional) flag if phone got changed (before calling this function) - will be returned
-                        unchanged if phone did not get corrected.
-    :param removed:     (optional) list declared by caller for to pass back all the removed characters including
-                        the index in the format "<index>:<removed_character(s)>".
-    :return:            tuple of (possibly corrected phone number, flag if phone got changed/corrected)
+    :param phone:           phone number
+    :param changed:         (optional) flag if phone got changed (before calling this function) - will be returned
+                            unchanged if phone did not get corrected.
+    :param removed:         (optional) list declared by caller for to pass back all the removed characters including
+                            the index in the format "<index>:<removed_character(s)>".
+    :param keep_1st_hyphen  (optional, def=False) pass True for to keep at least the first occurring hyphen character.
+    :return:                tuple of (possibly corrected phone number, flag if phone got changed/corrected)
     """
 
     if phone is None:
@@ -245,7 +287,7 @@ def correct_phone(phone, changed=False, removed=None):
     for idx, ch in enumerate(phone):
         if ch.isdigit():
             corr_phone += ch
-        elif ch == '-' and not got_hyphen:
+        elif keep_1st_hyphen and ch == '-' and not got_hyphen:
             got_hyphen = True
             corr_phone += ch
         else:
@@ -316,27 +358,28 @@ class SfInterface:
             self.error_msg = "SfInterface.sf_obj({}) called with invalid salesforce object type".format(sf_obj)
         return client_obj
 
-    def client_data_by_id(self, sf_id, field_names, sf_obj=SF_DEF_CLIENT_OBJ):
-        sf_fields = field_list_to_sf(field_names, sf_obj)
-        res = self.soql_query_all("SELECT {} FROM {} WHERE Id = '{}'".format(", ".join(sf_fields), sf_obj, sf_id))
-        sf_dict = dict()
-        if not self.error_msg and res['totalSize'] > 0:
-            sf_dict = res['records'][0]
-        return sf_dict
-
-    def client_upsert(self, fields_dict, sf_obj=SF_DEF_CLIENT_OBJ):
+    def client_upsert(self, fields_dict, sf_obj=DETERMINE_CLIENT_OBJ):
         if not self._ensure_lazy_connect():
             return None, self.error_msg, ""
 
+        # check if Id passed in (then this method can determine the sf_obj and will do an update not an insert)
+        sf_id, update_client = (fields_dict.pop('Id'), True) if 'Id' in fields_dict else ('', False)
+
+        if sf_obj == DETERMINE_CLIENT_OBJ:
+            if not sf_id:
+                self.error_msg = "SfInterface.client_upsert({}, {}): client object cannot be determined without Id"\
+                    .format(fields_dict, sf_obj)
+                return None, self.error_msg, ""
+            sf_obj = obj_from_id(sf_id)
+
         client_obj = self.sf_obj(sf_obj)
         if not client_obj:
-            self.error_msg += " client_upsert() data={}".format(fields_dict)
+            self.error_msg += "+SfInterface.client_upsert({}, {}): empty client object".format(fields_dict, sf_obj)
             return None, self.error_msg, ""
 
         sf_dict = field_dict_to_sf(fields_dict, sf_obj)
-        sf_id = err = msg = ""
-        if 'Id' in sf_dict:     # update?
-            sf_id = sf_dict.pop('Id')
+        err = msg = ""
+        if update_client:
             try:
                 sf_ret = client_obj.update(sf_id, sf_dict)
                 msg = "{} {} updated with {}, ret={}".format(sf_obj, sf_id, pprint.pformat(sf_dict, indent=9), sf_ret)
@@ -359,9 +402,12 @@ class SfInterface:
 
         return sf_id, err, msg
 
-    def client_delete(self, sf_id, sf_obj=SF_DEF_CLIENT_OBJ):
+    def client_delete(self, sf_id, sf_obj=DETERMINE_CLIENT_OBJ):
         if not self._ensure_lazy_connect():
             return self.error_msg, ""
+
+        if sf_obj == DETERMINE_CLIENT_OBJ:
+            sf_obj = obj_from_id(sf_id)
 
         client_obj = self.sf_obj(sf_obj)
         if not client_obj:
@@ -377,7 +423,7 @@ class SfInterface:
 
         return self.error_msg, msg
 
-    def clients_with_rci_id(self, ext_refs_sep, sf_obj=SF_DEF_CLIENT_OBJ):
+    def clients_with_rci_id(self, ext_refs_sep, sf_obj=DEF_CLIENT_OBJ):
         code_fields = ['Id', 'AcId', 'RciId', 'ShId', 'RecordType.Id',
                        "(SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE 'RCI%')"]
         sf_fields = field_list_to_sf(code_fields, sf_obj)
@@ -398,7 +444,7 @@ class SfInterface:
     REF_TYPE_MAIN = 'main'
     REF_TYPE_EXT = 'external'
 
-    def client_by_rci_id(self, rci_ref, sf_id=None, dup_clients=None, which_ref=REF_TYPE_ALL, sf_obj=SF_DEF_CLIENT_OBJ):
+    def client_by_rci_id(self, rci_ref, sf_id=None, dup_clients=None, which_ref=REF_TYPE_ALL, sf_obj=DEF_CLIENT_OBJ):
         if not dup_clients:
             dup_clients = list()
         if which_ref in (self.REF_TYPE_MAIN, self.REF_TYPE_ALL):
@@ -419,32 +465,80 @@ class SfInterface:
             sf_id, dup_clients = self.client_by_rci_id(rci_ref, sf_id, dup_clients, self.REF_TYPE_EXT)
         return sf_id, dup_clients
 
-    def client_id_by_email(self, email, sf_obj=SF_DEF_CLIENT_OBJ):
-        soql_query = "SELECT Id FROM {} WHERE {} = '{}'".format(sf_obj, sf_name('Email', sf_obj), email)
+    def client_field_data(self, fetch_fields, search_value, search_field=DEF_SEARCH_FIELD, sf_obj=DETERMINE_CLIENT_OBJ,
+                          log_warnings=None):
+        """
+        fetch field data from SF object (identified by sf_obj) and client (identified by search_value/search_field).
+        :param fetch_fields:    either pass single field name (str) or list of field names of value(s) to be returned.
+        :param search_value:    value for to identify client record.
+        :param search_field:    field name used for to identify client record (def='Id'/DEF_SEARCH_FIELD).
+        :param sf_obj:          SF object to be searched (def=determined by the passed ID prefix).
+        :param log_warnings:    pass list for to append warning log entries on re-search on old/redirected SF IDs.
+        :return:                either single field value (if fetch_fields is str) or dict(fld=val) of field values.
+        """
+        if sf_obj == DETERMINE_CLIENT_OBJ:
+            if search_field not in (DEF_SEARCH_FIELD, 'External_Id__c', 'Contact_Ref__c', 'Id_before_convert__c'):
+                uprint("SfInterface.client_field_data({}, {}, {}, {}): client object cannot be determined without Id"
+                       .format(fetch_fields, search_value, search_field, sf_obj))
+                return None
+            sf_obj = obj_from_id(search_value)
+            if not sf_obj:
+                uprint("SfInterface.client_field_data(): {} field value {} is not a valid Lead/Contact/Account SF ID"
+                       .format(search_field, search_value))
+                return None
+
+        ret_dict = isinstance(fetch_fields, list)
+        if ret_dict:
+            select_fields = ", ".join(field_list_to_sf(fetch_fields, sf_obj))
+            fetch_field = None      # only needed for to remove PyCharm warning
+            ret_val = dict()
+        else:
+            select_fields = fetch_field = sf_name(fetch_fields, sf_obj)
+            ret_val = None
+        soql_query = "SELECT {} FROM {} WHERE {} = '{}'"\
+            .format(select_fields, sf_obj, sf_name(search_field, sf_obj), search_value)
         res = self.soql_query_all(soql_query)
         if not self.error_msg and res['totalSize'] > 0:
-            return res['records'][0]['Id']
-        return None
+            ret_val = res['records'][0]
+            if ret_dict:
+                ret_val = field_dict_from_sf(ret_val, sf_obj)
+            else:
+                ret_val = ret_val[fetch_field]
 
-    def client_field_data(self, sf_client_id, field_name, sf_obj=SF_DEF_CLIENT_OBJ):
-        data = None
-        sf_fld_name = sf_name(field_name, sf_obj)
-        soql_query = "SELECT {} FROM {} WHERE Id = '{}'".format(sf_fld_name, sf_obj, sf_client_id)
-        res = self.soql_query_all(soql_query)
-        if not self.error_msg and res['totalSize'] > 0:
-            data = res['records'][0][sf_fld_name]
-        return data
+        # if not found as object ID then re-search recursively old/redirected SF IDs in other indexed/external SF fields
+        if not ret_val and search_field == DEF_SEARCH_FIELD:
+            if log_warnings is None:
+                log_warnings = list()
+            log_warnings.append("{} ID {} not found as direct/main ID in {}s".format(sf_obj, search_value, sf_obj))
+            if sf_obj == 'Lead':
+                # try to find this Lead Id in the Lead field External_Id__c
+                ret_val = self.client_field_data(fetch_fields, search_value, search_field='External_Id__c')
+                if not ret_val:
+                    log_warnings.append("{} ID {} not found in Lead fields External_Id__c".format(sf_obj, search_value))
+            elif sf_obj == 'Contact':
+                # try to find this Contact Id in the Contact fields Contact_Ref__c, Id_before_convert__c
+                ret_val = self.client_field_data(fetch_fields, search_value, search_field='Contact_Ref__c')
+                if not ret_val:
+                    ret_val = self.client_field_data(fetch_fields, search_value, search_field='Id_before_convert__c')
+                    if not ret_val:
+                        log_warnings.append("{} ID {} not found in Contact fields Contact_Ref__c/Id_before_convert__c"
+                                            .format(sf_obj, search_value))
 
-    def client_ass_id(self, sf_client_id, sf_obj=SF_DEF_CLIENT_OBJ):
-        return self.client_field_data(sf_client_id, 'AssId', sf_obj=sf_obj)
+        return ret_val
 
-    def client_ac_id(self, sf_client_id, sf_obj=SF_DEF_CLIENT_OBJ):
-        return self.client_field_data(sf_client_id, 'AcId', sf_obj=sf_obj)
+    def client_ass_id(self, sf_client_id, sf_obj=DETERMINE_CLIENT_OBJ):
+        return self.client_field_data('AssId', sf_client_id, sf_obj=sf_obj)
 
-    def client_sh_id(self, sf_client_id, sf_obj=SF_DEF_CLIENT_OBJ):
-        return self.client_field_data(sf_client_id, 'ShId', sf_obj=sf_obj)
+    def client_ac_id(self, sf_client_id, sf_obj=DETERMINE_CLIENT_OBJ):
+        return self.client_field_data('AcId', sf_client_id, sf_obj=sf_obj)
 
-    def client_ext_refs(self, sf_client_id, er_id=None, er_type=EXT_REF_TYPE_RCI, sf_obj=SF_DEF_CLIENT_OBJ):
+    def client_sh_id(self, sf_client_id, sf_obj=DETERMINE_CLIENT_OBJ):
+        return self.client_field_data('ShId', sf_client_id, sf_obj=sf_obj)
+
+    def client_id_by_email(self, email, sf_obj=DEF_CLIENT_OBJ):
+        return self.client_field_data('Id', email, search_field='Email', sf_obj=sf_obj)
+
+    def client_ext_refs(self, sf_client_id, er_id=None, er_type=EXT_REF_TYPE_RCI, sf_obj=DETERMINE_CLIENT_OBJ):
         """
         Return external references of client specified by sf_client_id (and optionally sf_obj).
 
@@ -455,6 +549,9 @@ class SfInterface:
         :return:                If er_id get passed in then: list of tuples of found external ref type and id of client.
                                 Else: list of Salesforce Ids of external references (mostly only one).
         """
+        if sf_obj == DETERMINE_CLIENT_OBJ:
+            sf_obj = obj_from_id(sf_client_id)
+
         ext_refs = list()
         soql = "SELECT Id, Name, Reference_No_or_ID__c FROM External_References__r  WHERE {}__c = '{}'"\
             .format(sf_obj, sf_client_id)
@@ -466,15 +563,18 @@ class SfInterface:
                 ext_refs.append(c['Id'] if er_id else (c['Name'], c['Reference_No_or_ID__c']))
         return ext_refs
 
-    def ext_ref_upsert(self, sf_client_id, er_id, er_type=EXT_REF_TYPE_RCI, sf_obj=SF_DEF_CLIENT_OBJ):
+    def ext_ref_upsert(self, sf_client_id, er_id, er_type=EXT_REF_TYPE_RCI, sf_obj=DETERMINE_CLIENT_OBJ):
         if not self._ensure_lazy_connect():
             return None, self.error_msg, ""
+
         er_obj = 'External_References'
         ext_ref_obj = self.sf_obj(er_obj)
         if not ext_ref_obj:
             self.error_msg += " ext_ref_upsert() sf_id={}, er_id={}".format(sf_client_id, er_id)
             return None, self.error_msg, ""
 
+        if sf_obj == DETERMINE_CLIENT_OBJ:
+            sf_obj = obj_from_id(sf_client_id)
         sf_dict = dict(Reference_No_or_ID__c=er_id, Name=er_type)
         sf_dict[sf_obj + '__c'] = sf_client_id
         sf_er_id = err = msg = ""
@@ -522,11 +622,11 @@ class SfInterface:
         result = self._conn.apexecute('clientsearch', method='POST', data=service_args)
 
         if 'id' not in result or 'type' not in result:
-            return '', SF_DEF_CLIENT_OBJ
+            return '', DEF_CLIENT_OBJ
 
         return result['id'], result['type']
 
-    def record_type_id(self, sf_obj=SF_DEF_CLIENT_OBJ):
+    def record_type_id(self, sf_obj):
         rec_type_id = None
         res = self.soql_query_all("Select Id From RecordType Where SobjectType = '{}' and DeveloperName = '{}'"
                                   .format(sf_obj, RECORD_TYPES.get(sf_obj)))

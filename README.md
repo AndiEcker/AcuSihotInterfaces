@@ -72,6 +72,8 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfClientValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
+| filterFields | Filter to restrict used fields of (C=clients, P=products, R=reservations) | - | Y | AssCacheSync |
+| filterRecords | Filter to restrict processed (C=client, P=product, R=reservation) records | - | W | AssCacheSync |
 | filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | W | SfClientValidator |
 | filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfClientValidator |
 | help | Show help on all the available command line argument options | - | h | (all) |
@@ -108,7 +110,6 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
 | verifyCache | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Clients, P=Products, R=Reservations) | - | V | AssCacheSync |
-| verifyFilters | Filter to restrict the checked data (C=client-, P=product-, R=reservation-filter) | - | W | AssCacheSync |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are

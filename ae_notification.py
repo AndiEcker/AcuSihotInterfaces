@@ -11,6 +11,8 @@ SSL_ENC_SERVICE_NAME = 'smtps'
 TSL_ENC_PORT = 587
 TSL_ENC_SERVICE_NAME = 'smtpTLS'
 
+MAX_LEN_BODY_IN_LOG = 159       # max number of characters of the send mail body that get passed to the log file
+
 
 def add_notification_options(cae):
     cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
@@ -109,7 +111,7 @@ class Notification:
         if not isinstance(mail_to, list):
             uprint(" **** Notification.send_notification(): invalid email-to address list or expression '" +
                    str(mail_to) + "' - using ITDevmen fallback!")
-            mail_to = ['ITDevmen@acumen.es']
+            mail_to = ['ITDevmen@signallia.com']
         body_style = body_style or 'html' if '</' in msg_body else 'plain'
         if body_style == 'html':
             # using the <pre>...</pre> tags we no longer need replace(' ', '&nbsp;')
@@ -120,7 +122,7 @@ class Notification:
 
         # log error message and try to send it per email
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint(" #### Notification.send_notification(): '" + str(msg_body) + "'" + title_ext)
+            uprint(" #### Notification.send_notification(): '" + msg_body[:MAX_LEN_BODY_IN_LOG] + "'" + title_ext)
         err_msg = ''
         try:
             message = MIMEText(msg_body, _subtype=body_style)

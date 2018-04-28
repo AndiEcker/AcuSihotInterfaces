@@ -171,7 +171,7 @@ BEGIN
              case when lcRulSihotCat is not NULL and instr(lcRulSihotCat, '_') = 0 then lcRulSihotCat else lcSihotCat end,  -- RUL_SIHOT_CAT could still be 'R___'
              case when lnRulSihotHotel is not NULL and lnRulSihotHotel > 0 then lnRulSihotHotel else lnSihotHotel end);     -- RUL_SIHOT_HOTEL could still be -2
   else
-    P_SENDMAIL('Sales.System@silverpoint.com', 'ITDevmen@acumen.es', 'Insert NULL into RUL_PRIMARY',
+    P_SENDMAIL('Sales.System@silverpoint.com', 'ITDevmen@signallia.com', 'Insert NULL into RUL_PRIMARY',
                'Caller=' || pcCaller || ' Usr=' || USER || ' Date=' || sysdate
                || ' Act=' || lcAction || case when pcAction <> lcAction or lcRulAction <> lcAction then '(' || pcAction || case when lcRulAction <> lcAction then '/' || lcRulAction end || ')' end 
                || ' Changes=[' || substr(pcChanges, 2) || '] ProcStack=[' || trim(k.ExecutingMainProc) || '/' || trim(k.ExecutingSubProc) || '/' || trim(k.ExecutingAction) || '] Code=' || pnCode

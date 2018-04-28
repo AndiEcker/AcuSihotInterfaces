@@ -23,7 +23,7 @@ from ass_sys_data import AssSysData
 
 __version__ = '0.9'
 
-ADMIN_MAIL_TO_LIST = ['ITDevmen@acumen.es']
+ADMIN_MAIL_TO_LIST = ['ITDevmen@signallia.com']
 
 cae = ConsoleApp(__version__, "Synchronize reservation changes from Acumen/Oracle system to the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])

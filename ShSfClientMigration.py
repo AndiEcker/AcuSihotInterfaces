@@ -412,7 +412,7 @@ try:
         if sf_id:
             sf_dict[AI_SF_ID] = sf_id
             existing_client_ids.append(sf_dict)
-            sf_dict[AI_SF_CURR_DATA] = sf_conn.client_data_by_id(sf_id, strip_add_info_keys(sf_dict), sf_obj)
+            sf_dict[AI_SF_CURR_DATA] = sf_conn.client_field_data(strip_add_info_keys(sf_dict), sf_id, sf_obj=sf_obj)
             if sf_conn.error_msg:
                 notification_add_line("SF-FETCH-DATA-ERROR: '{}' of {} ID {}".format(sf_conn.error_msg, sf_obj, sf_id),
                                       is_error=True)

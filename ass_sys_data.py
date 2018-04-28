@@ -3,20 +3,15 @@ import datetime
 from ae_db import OraDB, PostgresDB
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 
-from sfif import (prepare_connection, correct_email, correct_phone,
+from sfif import (prepare_connection, correct_email, correct_phone, ensure_long_id,
                   EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_RCIP)
 
 # external references separator
 EXT_REFS_SEP = ','
 
-
-def ext_ref_type_sql():
-    """
-    :return: SQL column expression merging wrongly classified Acumen external ref types holding RCI member IDs.
-    """
-    # return "decode(CR_TYPE, '" + EXT_REF_TYPE_RCIP + "', '" + EXT_REF_TYPE_RCI + "', 'SPX', '"
-    #  + EXT_REF_TYPE_RCI + "', CR_TYPE)"
-    return "CASE WHEN CR_TYPE in ('" + EXT_REF_TYPE_RCIP + "', 'SPX') then '" + EXT_REF_TYPE_RCI + "' else CR_TYPE end"
+# SQL column expression merging wrongly classified Acumen external ref types holding RCI member IDs
+AC_SQL_EXT_REF_TYPE = "CASE WHEN CR_TYPE in ('" + EXT_REF_TYPE_RCIP + "', 'SPX')" \
+    " then '" + EXT_REF_TYPE_RCI + "' else CR_TYPE end"
 
 
 # tuple indexes for Clients data list (ass_cache.clients/AssSysData.clients)
@@ -42,8 +37,9 @@ _POINTS = 7
 _COMMENT = 8
 
 
-def _dummy_stub(*args, **kwargs):
-    uprint("******  Unexpected call of ass_sys_data._dummy_stub()", args, kwargs)
+def _dummy_stub(msg, ctx_file, *args, **kwargs):
+    uprint("******  Unexpected call of ass_sys_data._dummy_stub() with:\n        msg={}, ctx/file={}"
+           .format(msg, ctx_file), args, kwargs)
 
 
 class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
@@ -123,9 +119,20 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self.client_refs_add_exclude = cae.get_config('ClientRefsAddExclude', default_value='').split(',')
 
-        # --- clients is caching client data like external references/Ids, owner status ...
+        # --- self.clients contains client data from AssCache database like external references/Ids, owner status ...
         self.clients = list()
         self.clients_changed = list()      # list indexes of changed records within self.clients
+        # self.clients columns/fields metadata (like fetched with view v_clients_refs_owns)
+        self.client_fields = dict(AssId=dict(Desc="AssCache client PKey", ColIdx=0),
+                                  AcId=dict(Desc="Acumen client reference", ColIdx=1),
+                                  SfId=dict(Desc="Salesforce client Id", ColIdx=2),
+                                  ShId=dict(Desc="Sihot guest ID", ColIdx=3),
+                                  Name=dict(Desc="Client name", ColIdx=4),
+                                  Email=dict(Desc="Client email", ColIdx=5),
+                                  Phone=dict(Desc="Client phone", ColIdx=6),
+                                  ExtRefs=dict(Desc="Client external references", ColIdx=7),
+                                  Products=dict(Desc="Products owned by client", ColIdx=8),
+                                  )
 
         # --- res_inv_data is caching banking/swap/grant info
         self.res_inv_data = list()
@@ -243,6 +250,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if ac_id:
             col_values['cl_ac_id'] = ac_id
         if sf_id:
+            sf_id = ensure_long_id(sf_id)
             col_values['cl_sf_id'] = sf_id
         if sh_id:
             col_values['cl_sh_id'] = sh_id
@@ -263,7 +271,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         cl_pk = self.ass_db.fetch_value()
 
         if self.acu_db and ac_id:
-            ers = self.load_view(self.acu_db, 'T_CR', ["DISTINCT " + ext_ref_type_sql(), "CR_REF"],
+            ers = self.load_view(self.acu_db, 'T_CR', ["DISTINCT " + AC_SQL_EXT_REF_TYPE, "CR_REF"],
                                  "CR_CDREF = :ac_id", dict(ac_id=ac_id))
             if ers is None:
                 return None
