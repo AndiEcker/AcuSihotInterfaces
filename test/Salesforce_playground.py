@@ -1,3 +1,4 @@
+import pprint
 from ae_console_app import ConsoleApp, DEBUG_LEVEL_VERBOSE
 from simple_salesforce import Salesforce, SalesforceResourceNotFound
 from sfif import add_sf_options
@@ -16,20 +17,20 @@ sf_token = cae.get_option('sfToken')
 sb = Salesforce(username=sf_user, password=sf_pw, security_token=sf_token, sandbox=True, client_id='ResImport')
 print('Salesforce object:', sb)
 
-print('Top-level objects describe:', sb.describe())
+print('Top-level objects describe:', pprint.pformat(sb.describe(), indent=3, compact=True))
 
 print('Opportunity metadata:', sb.Opportunity.metadata())
 
-# using APEX REST service
-params = dict(email="test@test.test", phone="0034922777888", firstName="Testy", lastName="Tester")
-result = sb.apexecute('clientsearch', method='POST', data=params)
-print('APEX REST call result', result)
-
-
-# OLD
-print('Account metadata:', sb.Account.metadata())
-print('Contact metadata:', sb.Contact.metadata())
-print('Contact describe:', sb.Contact.describe())
+print('Account metadata:', pprint.pformat(sb.Account.metadata(), indent=3, compact=True))
+print('Contact metadata:', pprint.pformat(sb.Contact.metadata(), indent=3, compact=True))
+describe_txt = pprint.pformat(sb.Account.describe(), indent=3, compact=True)
+with open('describe_account.log', 'w') as f:
+    f.write(describe_txt)
+print('Account describe:', describe_txt)
+describe_txt = pprint.pformat(sb.Contact.describe(), indent=3, compact=True)
+with open('describe_contact.log', 'w') as f:
+    f.write(describe_txt)
+print('Contact describe:', describe_txt)
 
 print('External_Ref metadata:', sb.External_Ref__c.metadata())
 print('External_Ref describe:', sb.External_Ref__c.describe())
@@ -283,3 +284,9 @@ if result['done'] and result['totalSize'] > 0:
         print(rec['Id'], rec['Country__c'],
               rec['HomePhone'], rec['CD_Htel_valid__c'], rec['MobilePhone'], rec['CD_mtel_valid__c'],
               rec['Work_Phone__c'], rec['CD_wtel_valid__c'])
+
+
+# using APEX REST service
+params = dict(email="test@test.test", phone="0034922777888", firstName="Testy", lastName="Tester")
+result = sb.apexecute('clientsearch', method='POST', data=params)
+print('APEX REST call result', result)

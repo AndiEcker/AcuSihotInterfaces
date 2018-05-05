@@ -64,6 +64,7 @@ FIELD_NAMES = dict(RecordType=dict(Lead='RecordType.DeveloperName', Contact='Rec
 RECORD_TYPES = dict(Lead='SIHOT_Leads', Contact='Rentals', Account='PersonAccount')
 
 # SF ID prefixes for to determine SF object
+# TODO: get from Account/Contact/Lead.metadata()['objectDescribe']['keyPrefix']
 ID_PREFIX_OBJECTS = {'001': 'Account', '003': 'Contact', '00Q': 'Lead'}
 
 
@@ -465,19 +466,23 @@ class SfInterface:
             sf_id, dup_clients = self.client_by_rci_id(rci_ref, sf_id, dup_clients, self.REF_TYPE_EXT)
         return sf_id, dup_clients
 
-    def client_field_data(self, fetch_fields, search_value, search_field=DEF_SEARCH_FIELD, sf_obj=DETERMINE_CLIENT_OBJ,
+    def client_field_data(self, fetch_fields, search_value, search_val_deli="'", search_op='=',
+                          search_field=DEF_SEARCH_FIELD, sf_obj=DETERMINE_CLIENT_OBJ,
                           log_warnings=None):
         """
         fetch field data from SF object (identified by sf_obj) and client (identified by search_value/search_field).
         :param fetch_fields:    either pass single field name (str) or list of field names of value(s) to be returned.
         :param search_value:    value for to identify client record.
+        :param search_val_deli: delimiter used for to enclose search value within SOQL query.
+        :param search_op:       search operator (between search_field and search_value).
         :param search_field:    field name used for to identify client record (def='Id'/DEF_SEARCH_FIELD).
         :param sf_obj:          SF object to be searched (def=determined by the passed ID prefix).
         :param log_warnings:    pass list for to append warning log entries on re-search on old/redirected SF IDs.
         :return:                either single field value (if fetch_fields is str) or dict(fld=val) of field values.
         """
         if sf_obj == DETERMINE_CLIENT_OBJ:
-            if search_field not in (DEF_SEARCH_FIELD, 'External_Id__c', 'Contact_Ref__c', 'Id_before_convert__c'):
+            if search_field not in (DEF_SEARCH_FIELD, 'External_Id__c', 'Contact_Ref__c', 'Id_before_convert__c',
+                                    'CSID__c'):
                 uprint("SfInterface.client_field_data({}, {}, {}, {}): client object cannot be determined without Id"
                        .format(fetch_fields, search_value, search_field, sf_obj))
                 return None
@@ -495,8 +500,9 @@ class SfInterface:
         else:
             select_fields = fetch_field = sf_name(fetch_fields, sf_obj)
             ret_val = None
-        soql_query = "SELECT {} FROM {} WHERE {} = '{}'"\
-            .format(select_fields, sf_obj, sf_name(search_field, sf_obj), search_value)
+        soql_query = "SELECT {} FROM {} WHERE {} {} {}{}{}"\
+            .format(select_fields, sf_obj,
+                    sf_name(search_field, sf_obj), search_op, search_val_deli, search_value, search_val_deli)
         res = self.soql_query_all(soql_query)
         if not self.error_msg and res['totalSize'] > 0:
             ret_val = res['records'][0]
@@ -514,7 +520,10 @@ class SfInterface:
                 # try to find this Lead Id in the Lead field External_Id__c
                 ret_val = self.client_field_data(fetch_fields, search_value, search_field='External_Id__c')
                 if not ret_val:
-                    log_warnings.append("{} ID {} not found in Lead fields External_Id__c".format(sf_obj, search_value))
+                    ret_val = self.client_field_data(fetch_fields, search_value, search_field='CSID__c')
+                    if not ret_val:
+                        log_warnings.append("{} ID {} not found in Lead fields External_Id__c/CSID__c"
+                                            .format(sf_obj, search_value))
             elif sf_obj == 'Contact':
                 # try to find this Contact Id in the Contact fields Contact_Ref__c, Id_before_convert__c
                 ret_val = self.client_field_data(fetch_fields, search_value, search_field='Contact_Ref__c')
@@ -524,6 +533,23 @@ class SfInterface:
                         log_warnings.append("{} ID {} not found in Contact fields Contact_Ref__c/Id_before_convert__c"
                                             .format(sf_obj, search_value))
 
+        """ FUTURE ENHANCEMENT 
+            in case a Lead IsConverted to Contact/Account we need to get more up-to-date Contact/Account data.
+            
+            Select Id, ConvertedContactId, ConvertedAccountId, ConvertedDate, 
+                   Phone, Lead.ConvertedContact.Phone, Lead.ConvertedAccount.Phone, 
+                   Email, Lead.ConvertedContact.Email, Lead.ConvertedAccount.PersonEmail, 
+                   Name, Lead.ConvertedContact.Name, Lead.ConvertedAccount.Name 
+              from Lead
+             where IsConverted = true
+        
+        # if found then check if there is a follow-up/converted/parent SF obj with maybe more actual data
+        if ret_val:
+            if sf_obj == 'Lead':
+                chk_val = self.client_field_data(fetch_fields, search_value, sf_obj='Account')
+                if chk_val:
+                    ret_val = chk_val
+        """
         return ret_val
 
     def client_ass_id(self, sf_client_id, sf_obj=DETERMINE_CLIENT_OBJ):

@@ -307,7 +307,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return self.ass_db.commit()
 
-    def cl_check_ext_refs(self):
+    def cl_verify_ext_refs(self):
         resort_codes = self.cae.get_config('ClientRefsResortCodes', default_value='').split(',')
         found_ids = dict()
         for c_rec in self.clients:

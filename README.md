@@ -12,7 +12,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user i
 | :--- | :--- | :---: |
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| AssCacheSync | Initialize, sync and/or verify AssCache from/against Acumen, Sihot and Salesforce | Web |
+| [AssCacheSync](#asscachesync-application) | Initialize, pull, verify or push the AssCache data against Acumen, Sihot and/or Salesforce | Web |
 | AssServer | Listening to Sihot SXML interface for to synchronize reservation changes onto the ass_cache PG database | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
@@ -73,22 +73,24 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
 | filterFields | Filter to restrict used fields of (C=clients, P=products, R=reservations) | - | Y | AssCacheSync |
-| filterRecords | Filter to restrict processed (C=client, P=product, R=reservation) records | - | W | AssCacheSync |
+| filterRecords | Filter to restrict processed (C=client, P=product, R=reservation) records | - | X | AssCacheSync |
 | filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | W | SfClientValidator |
 | filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfClientValidator |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
-| initializeCache | Initialize/Wipe/Recreate postgres cache database (0=No, 1=Yes) | 0 | I | AssCacheSync |
+| init | Initialize/Recreate postgres AssCache database (0=No, 1=Yes) | 0 | I | AssCacheSync |
 | jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
+| matchFields | Specify field(s) used for to match/lookup the associated data record | - | Z | AssCacheSync |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
 | pgUser | User account name for the postgres database | 'postgres' | U | AssCacheSync, AssServer |
 | pgPassword | User account password for the postgres database | - | P | AssCacheSync, AssServer |
 | pgDSN | Database name of the postgres database | ass_cache | N | AssCacheSync, AssServer |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfClientValidator |
+| push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | AssCacheSync |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
 | sfClientId | Salesforce client/application name/id | SignalliaSfInterface/cae.app_name() | C | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
@@ -102,14 +104,14 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | shTimeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| syncCache | Synchronize ass_cache database from (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Clients, P=Products, R=Reservations) | - | S | AssCacheSync |
+| pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | AssCacheSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
 | useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| verifyCache | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) including (C=Clients, P=Products, R=Reservations) | - | V | AssCacheSync |
+| verify | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | AssCacheSync |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are
@@ -125,6 +127,12 @@ for future/upcoming command line options with less conflicts: | l | m | n | q |.
 
 AcuSihotMonitor is a kivy application for Windows, Linux, Mac OS X, Android and iOS and allows to check
 the correct functionality of the Salesforce, Acumen and Sihot servers and interfaces.
+
+
+### AssCacheSync Application
+
+AssCacheSync is a command line tool for to pull, push, verify data between the Postgres database AssCache and the
+Acumen, Salesforce and/or Sihot systems.
 
 
 ### ClientQuestionnaireExport Application
