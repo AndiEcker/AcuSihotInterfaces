@@ -1668,6 +1668,14 @@ class GuestSearch(SihotXmlBuilder):
         ret = self.search_guests(col_values, ['objid'])
         return ret[0] if len(ret) > 0 else None
 
+    def get_objids_by_guest_name(self, name):
+        forename, surname = name.split(' ', maxsplit=1)
+        col_values = {'CD_SNAM1': surname,
+                      'CD_FNAM1': forename,
+                      'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
+                      }
+        return self.search_guests(col_values, ['objid'])
+
     def get_objids_by_guest_names(self, surname, forename):
         col_values = {'CD_SNAM1': surname,
                       'CD_FNAM1': forename,
@@ -1678,6 +1686,12 @@ class GuestSearch(SihotXmlBuilder):
     def get_objids_by_email(self, email):
         col_values = {'CD_EMAIL': email,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
+                      }
+        return self.search_guests(col_values, ['objid'])
+
+    def get_objids_by_matchcode(self, matchcode, exact_matchcode=True):
+        col_values = {'CD_CODE': matchcode,
+                      'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
         return self.search_guests(col_values, ['objid'])
 

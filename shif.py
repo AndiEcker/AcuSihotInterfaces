@@ -203,17 +203,43 @@ def date_range_chunks(date_from, date_till, fetch_max_days):
         yield chunk_from, chunk_till
 
 
-class GuestBulkFetcher:
+class BulkFetcherBase:
+    def __init__(self, cae, add_kernel_port=True):
+        self.cae = cae
+        self.add_kernel_port = add_kernel_port
+        self.debug_level = None
+        self.startup_date = cae.startup_beg if SH_PROVIDES_CHECKOUT_TIME else cae.startup_beg.date()
+        self.all_rows = None
+
+    def add_options(self):
+        cae = self.cae
+        cae.add_option('shServerIP', "IP address of the Sihot interface server", 'localhost', 'i')
+        cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
+        if self.add_kernel_port:
+            # for GuestBulkFetcher we need also the kernel interface port of Sihot
+            cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
+
+        cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
+        cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
+
+    def load_config(self):
+        cae = self.cae
+        self.debug_level = cae.get_option('debugLevel')
+
+    def print_config(self):
+        cae = self.cae
+        uprint("Sihot Server IP/Web-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
+        if self.add_kernel_port:
+            uprint("Sihot Kernel-port:", cae.get_option('shServerKernelPort'))
+        uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+
+
+class GuestBulkFetcher(BulkFetcherBase):
     """
     WIP/NotUsed/NoTests: the problem is with GUEST-SEARCH is that there is no way to bulk fetch all guests
     because the search criteria is not providing range search for to split in slices. Fetching all 600k clients
     is resulting in a timeout error after 30 minutes (the Sihot interface 'shTimeout' option value)
     """
-    def __init__(self, cae):
-        self.cae = cae
-
-        self.all_rows = None
-
     def fetch_all(self):
         cae = self.cae
         self.all_rows = list()
@@ -231,13 +257,12 @@ class GuestBulkFetcher:
         return self.all_rows
 
 
-class ResBulkFetcher:
+class ResBulkFetcher(BulkFetcherBase):
     def __init__(self, cae, allow_future_arrivals=True):
-        self.cae = cae
-        self.allow_future_arrivals = allow_future_arrivals
-        self.startup_date = cae.startup_beg if SH_PROVIDES_CHECKOUT_TIME else cae.startup_beg.date()
+        super(ResBulkFetcher, self).__init__(cae, add_kernel_port=False)
 
-        self.debug_level = None
+        self.allow_future_arrivals = allow_future_arrivals
+
         self.date_from = None
         self.date_till = None
         self.sh_fetch_max_days = None
@@ -249,24 +274,17 @@ class ResBulkFetcher:
 
         self.adult_pers_types = None
 
-        self.all_rows = None
-
     def add_options(self):
-        cae = self.cae
-        cae.add_option('shServerIP', "IP address of the Sihot interface server", 'localhost', 'i')
-        cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
-        cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
-        cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
-
-        cae.add_option('dateFrom', "Date" + ("/time" if SH_PROVIDES_CHECKOUT_TIME else "") +
-                       " of first arrival", self.startup_date - datetime.timedelta(days=1), 'F')
-        cae.add_option('dateTill', "Date" + ("/time" if SH_PROVIDES_CHECKOUT_TIME else "") +
-                       " of last arrival", self.startup_date - datetime.timedelta(days=1), 'T')
+        super(ResBulkFetcher, self).add_options()
+        self.cae.add_option('dateFrom', "Date" + ("/time" if SH_PROVIDES_CHECKOUT_TIME else "") +
+                            " of first arrival", self.startup_date - datetime.timedelta(days=1), 'F')
+        self.cae.add_option('dateTill', "Date" + ("/time" if SH_PROVIDES_CHECKOUT_TIME else "") +
+                            " of last arrival", self.startup_date - datetime.timedelta(days=1), 'T')
 
     def load_config(self):
-        cae = self.cae
-        self.debug_level = cae.get_option('debugLevel')
+        super(ResBulkFetcher, self).load_config()
 
+        cae = self.cae
         self.date_from = cae.get_option('dateFrom')
         self.date_till = cae.get_option('dateTill')
         if self.date_from > self.date_till:
@@ -291,9 +309,8 @@ class ResBulkFetcher:
         self.adult_pers_types = cae.get_config('shAdultPersTypes')
 
     def print_config(self):
-        cae = self.cae
-        uprint("Sihot Server IP/Web-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
-        uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+        super(ResBulkFetcher, self).print_config()
+
         uprint("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
                'and till/before', self.date_till.strftime(SH_DATE_FORMAT))
         uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.sh_fetch_max_days,

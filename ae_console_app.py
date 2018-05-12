@@ -5,6 +5,7 @@ from builtins import chr  # works like unichr() also in Python 2
 import re
 import inspect
 import pprint
+import unicodedata
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError
@@ -114,6 +115,18 @@ def full_stack_trace(ex):
             for line in item[4]:
                 ret += ' '*4 + line.lstrip()
     return ret
+
+
+def to_ascii(unicode_str):
+    """
+    converts unicode string into ascii representation (for fuzzy string comparision); copied from MiniQuark's answer in:
+    https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string
+
+    :param unicode_str:     string to convert
+    :return:                converted string (replaced accents, diacritics, ... into normal ascii characters)
+    """
+    nfkd_form = unicodedata.normalize('NFKD', unicode_str)
+    return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 
 class Setting:
@@ -396,7 +409,8 @@ class ConsoleApp:
                 for given_value in self.config_options[name].value:
                     allowed_values = self.config_choices[name]
                     if given_value not in allowed_values:
-                        raise ArgumentError(None, "Wrong {} option value; allowed are {}".format(name, allowed_values))
+                        raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
+                                            .format(name, given_value, allowed_values))
 
         self._log_file_name = self.config_options['logFile'].value
         if self._log_file_name:  # enable logging

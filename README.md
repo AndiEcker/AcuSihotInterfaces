@@ -85,6 +85,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | matchFields | Specify field(s) used for to match/lookup the associated data record | - | Z | AssCacheSync |
+| matchRecords | Restrict processed (dict keys: C=client, P=product, R=reservation) destination records | - | M | AssCacheSync |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
 | pgUser | User account name for the postgres database | 'postgres' | U | AssCacheSync, AssServer |
 | pgPassword | User account password for the postgres database | - | P | AssCacheSync, AssServer |
@@ -322,7 +323,7 @@ email into the json format is written in C#.NET by Nitesh):
 | SIHOT_TEC_NOTE | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '|CR|' for to separate various comments) |
 | RUL_SIHOT_PACK | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
 | SIHOT_MKT_SEG | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
-| RUL_SIHOT_RATE | String | Sihot Price Rate (mostly same as SIHOT_MKT_SEG) | 'XY', 'TK', 'TC' |
+| SIHOT_RATE_SEGMENT | String | Sihot Price Rate/Segment (mostly same as SIHOT_MKT_SEG, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
 | SIHOT_PAYMENT_INST | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
 | RU_SOURCE | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
 | RO_RES_GROUP | String | Sihot Reservation Channel | 'RS'=Rental SP |
@@ -713,7 +714,7 @@ related Apartment Reservation (`T_ARO`) or board/meal plan change in the Marketi
 | RUL_SIHOT_ROOM | Booked apartment (`AP_CODE` value as Sihot room number - with leading zero for 3-digit PBC room numbers) if associated ARO record exits else NULL |
 | RUL_SIHOT_OBJID | `RU_SIHOT_OBJID` value (for to detect if deleted RU got passed into Sihot.PMS) |
 | RUL_SIHOT_PACK | Booked package/arrangement - overloaded if associated ARO/PRC exists |
-| RUL_SIHOT_RATE | Market segment price rate - used for filtering (also if RU record is deleted) |
+| RUL_SIHOT_RATE | Market segment - used for filtering (also if RU record is deleted) |
 | RUL_SIHOT_LAST_CAT | Previous Unit/Price category - needed for cancellation |
 | RUL_SIHOT_LAST_HOTEL | Previous Hotel Id - needed for cancellation and hotel moves |
 

@@ -26,8 +26,8 @@ from sxmlif import ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
     ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot, ECM_DO_NOT_SEND_CLIENT
-from sfif import add_sf_options, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
-from ass_sys_data import AssSysData, EXT_REFS_SEP
+from sfif import add_sf_options
+from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
 __version__ = '0.9'
 
