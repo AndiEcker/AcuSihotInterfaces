@@ -10,7 +10,7 @@ from traceback import format_exc
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
-from ae_tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
+from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder, SXML_DEF_ENCODING
 
 __version__ = '0.4'
@@ -197,8 +197,8 @@ IGNORED_OCS = ['CR']
 
 class SihotRequestXmlHandler(RequestXmlHandler):
     def notify(self):
-        # hide timeout or dropped connection error if not verbose debug level
-        if TIMEOUT_ERR_MSG not in self.error_message or cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
+        # hide timeout or dropped connection error (Sihot client does not close connection properly)
+        if TCP_CONNECTION_BROKEN_MSG not in self.error_message:
             if notification:
                 notification.send_notification(msg_body=self.error_message, subject="AcuServer handler notification")
             else:

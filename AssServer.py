@@ -9,7 +9,7 @@ from traceback import format_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_notification import add_notification_options, init_notification
-from ae_tcp import RequestXmlHandler, TcpServer, TIMEOUT_ERR_MSG
+from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, SXML_DEF_ENCODING
 from ass_sys_data import AssSysData
 
@@ -118,24 +118,45 @@ def oc_res_change(req):
     rgr_list = req.rgr_list
     ass = AssSysData(cae)
     for rgr in rgr_list:
-        ho_id = rgr['rgr_ho_fk']
-        res_id = rgr['rgr_res_id']
-        sub_id = rgr['rgr_sub_id']
+        ho_id = rgr.get('rgr_ho_fk', '')
+        res_id = rgr.get('rgr_res_id', '')
+        sub_id = rgr.get('rgr_sub_id', '')
         notify("####  Reservation change {} for res {}/{}@{}. data={}".format(oc, res_id, sub_id, ho_id, rgr))
         rgc_list = rgr.pop('rgc')
+        # TODO: identify orderer/client for to populate rgr_order_cl_fk
         if ass.rgr_upsert(rgr, ho_id, res_id=res_id, sub_id=sub_id):
             break
         rgr_pk = ass.ass_db.fetch_value()
-        room_seq = pers_seq = 0
-        room_no = rgc_list[0]['rgc_room_id']
+        room_seq = pers_seq = -1
+        room_no = 'InvalidRoomId'
         for rgc in rgc_list:
-            if ass.rgc_upsert(rgc, rgr_pk, room_seq, pers_seq):
-                break
-            if rgc['rgc_room_id'] != room_no:
+            if rgc.get('rgc_room_id', '') != room_no:
+                room_no = rgc.get('rgc_room_id', '')
                 room_seq += 1
                 pers_seq = 0
             else:
                 pers_seq += 1
+            ac_id = rgc.pop('AcId', '')
+            sh_id = rgc.pop('ShId', '')
+            if ac_id or sh_id:
+                cae.dprint("Occupier matchcode / guest-obj-id:", ac_id, " / ", sh_id)
+                cl_data = dict()
+                if ac_id:
+                    cl_data['AcId'] = ac_id
+                if sh_id:
+                    cl_data['ShId'] = sh_id
+                if rgc.get('rgc_firstname', '') or rgc.get('rgc_surname', ''):
+                    cl_data['Name'] = rgc['rgc_firstname'] + ' ' + rgc['rgc_surname']
+                if rgc.get('rgc_email', ''):
+                    cl_data['Email'] = rgc['rgc_email']
+                if rgc.get('rgc_phone', ''):
+                    cl_data['Phone'] = rgc['rgc_phone']
+                ass_id = ass.cl_save(cl_data, locked_cols=['AcId', 'ShId', 'Name', 'Email', 'Phone'])
+                if not ass_id:
+                    break
+                rgc['rgc_occup_cl_fk'] = ass_id
+            if ass.rgc_upsert(rgc, rgr_pk, room_seq, pers_seq):
+                break
         if ass.error_message:
             break
 
@@ -175,18 +196,20 @@ IGNORED_OCS = []
 
 class SihotRequestXmlHandler(RequestXmlHandler):
     def notify(self):
-        # hide timeout or dropped connection error if not verbose debug level
-        if TIMEOUT_ERR_MSG not in self.error_message or debug_level >= DEBUG_LEVEL_VERBOSE:
+        # hide timeout or dropped connection error (Sihot client does not close connection properly)
+        if TCP_CONNECTION_BROKEN_MSG not in self.error_message:
             if notification:
                 notification.send_notification(msg_body=self.error_message, subject="AssServer handler notification")
             else:
-                uprint("**** " + self.error_message)
+                uprint("****  " + self.error_message)
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
         xml_request = str(xml_from_client, encoding=cae.get_option('shXmlEncoding'))
-        notify("SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'")
+        notify("AssServer.SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'")
+        cae.dprint("AssServer.SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'")
         req = Request(cae)
+        cae.dprint("... created Request class", req, "... now start parsing")
         req.parse_xml(xml_request)
         cae.dprint("OC: ", getattr(req, 'oc', '?'), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         cae.dprint("TN: ", getattr(req, 'tn', '?'), minimum_debug_level=DEBUG_LEVEL_VERBOSE)

@@ -134,8 +134,8 @@ class Notification:
             conn_type = SMTP_SSL if self._mail_port == SSL_ENC_PORT or self._mail_service == SSL_ENC_SERVICE_NAME \
                 else SMTP
             with conn_type(self._mail_host, self._mail_port, local_hostname=self._local_mail_host) as s:
-                if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    s.set_debuglevel(1)
+                # if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                #    s.set_debuglevel(1)
                 s.ehlo()
                 # using s.starttls() could throwing error "STARTTLS extension not supported by server."
                 if self._mail_service == TSL_ENC_SERVICE_NAME:

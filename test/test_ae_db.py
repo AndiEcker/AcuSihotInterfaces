@@ -33,6 +33,10 @@ class TestOraDB:
         assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), "col_int = :yx", commit=True,
                                   bind_vars=dict(yx=1))
 
+    def test_upd_if_empty(self):
+        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), "col_int = :yx", commit=True,
+                                  bind_vars=dict(yx=1), locked_cols=['col_vc'])
+
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'],
                                   where_group_order='col_int >= :xy', bind_vars=dict(xy=0))
@@ -87,6 +91,10 @@ class TestPostgresDB:
     def test_update_time(self):
         assert not test_db.update(test_table, dict(col_ti=UPDATED_TIME), "col_int = :x", commit=True,
                                   bind_vars=dict(x=1))
+
+    def test_upd_if_empty(self):
+        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), "col_int = :yx", commit=True,
+                                  bind_vars=dict(yx=1), locked_cols=['col_vc'])
 
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt', 'col_ti'],

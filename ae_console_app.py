@@ -129,6 +129,18 @@ def to_ascii(unicode_str):
     return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 
+PLACEHOLDER_PREFIX = '<<<'
+PLACEHOLDER_SUFFIX = '>>>'
+
+
+def substitute_placeholders(expr, key_values, value_prefix=""):
+    for key, val in key_values.items():
+        # if not isinstance(val, str):
+        #    val = str(val)
+        expr = expr.replace(PLACEHOLDER_PREFIX + key + PLACEHOLDER_SUFFIX, value_prefix + val)
+    return expr
+
+
 class Setting:
     def __init__(self, name='Unnamed', value=None, value_type=None):
         """ create new Setting instance

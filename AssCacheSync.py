@@ -8,15 +8,15 @@ import datetime
 import pprint
 from collections import OrderedDict
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint, to_ascii, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
 from sxmlif import ResToSihot, AC_ID_2ND_COUPLE_SUFFIX
 from shif import ResBulkFetcher, elem_value, pax_count, gds_no, apt_wk_yr, elem_path_join, guest_data, SH_DATE_FORMAT
 from sfif import add_sf_options, obj_from_id
 from ass_sys_data import (AssSysData, ensure_long_id, correct_email, correct_phone, field_desc, field_clients_idx,
-                          sf_name, field_list_to_sf, field_dict_from_sf, client_fields,
+                          ac_fld_name, sf_fld_name, sh_fld_value, field_list_to_sf, field_dict_from_sf, client_fields,
                           AC_SQL_EXT_REF_TYPE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
-                          SF_DEF_SEARCH_FIELD, SH_DEF_SEARCH_FIELD, sh_value)
+                          SF_DEF_SEARCH_FIELD, SH_DEF_SEARCH_FIELD)
 from ae_notification import add_notification_options, init_notification
 
 __version__ = '0.1'
@@ -32,12 +32,12 @@ opt_choices = ('acC', 'acP', 'acR', 'shC', 'shR', 'sfC', 'sfP', 'sfR')
 cae.add_option('pull', "Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) data"
                        " into AssCache, e.g. shC is pulling Client data from Sihot",
                [], 'S', choices=opt_choices, multiple=True)
-cae.add_option('verify', "Verify/Check AssCache data against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, "
-                         "P=Products, R=Reservations), e.g. acR is verifying AssCache reservations against Acumen",
-               [], 'V', choices=opt_choices, multiple=True)
 cae.add_option('push', "Update (ac=Acumen, sh=Sihot, sf=Salesforce) with (C=Clients, P=Products, R=Reservations) data"
                        "from AssCache, e.g. acC is pushing/fixing Client data within Acumen",
                [], 'W', choices=opt_choices, multiple=True)
+cae.add_option('verify', "Verify/Check AssCache data against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, "
+                         "P=Products, R=Reservations), e.g. acR is verifying AssCache reservations against Acumen",
+               [], 'V', choices=opt_choices, multiple=True)
 
 cae.add_option('filterRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) source records,"
                                 " e.g. {'C':\\\"cl_ac_id='E123456'\\\"} pushes only the client with Acu ID E123456",
@@ -65,6 +65,7 @@ add_sf_options(cae)
 sh_rbf = ResBulkFetcher(cae)
 sh_rbf.add_options()
 
+notification = None             # declare early/here to ensure proper shutdown and display of startup errors on console
 add_notification_options(cae)
 
 
@@ -168,6 +169,42 @@ def log_warning(msg, ctx, importance=2):
     uprint(msg)
 
 
+# check for to (re-)create and initialize PG database - HAS TO BE DONE BEFORE AssSysData init because pg user not exists
+if act_init:
+    pg_dbname, pg_host = pg_dsn.split('@') if '@' in pg_dsn else (pg_dsn, '')
+    pg_root_dsn = 'postgres' + ('@' + pg_host if '@' in pg_dsn else '')
+    log_warning("creating database {} and user {}".format(pg_dsn, pg_user), 'initCreateDBandUser')
+    pg_db = PostgresDB(usr=cae.get_config('pgRootUsr'), pwd=cae.get_config('pgRootPwd'), dsn=pg_root_dsn,
+                       debug_level=_debug_level)
+    if pg_db.execute_sql("CREATE DATABASE " + pg_dbname + ";", auto_commit=True):  # " LC_COLLATE 'C'"):
+        log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72)
+
+    if pg_db.select('pg_user', ['count(*)'], "usename = :pg_user", dict(pg_user=pg_user)):
+        log_error(pg_db.last_err_msg, 'initCheckUser', exit_code=81)
+    if not pg_db.fetch_value():
+        if pg_db.execute_sql("CREATE USER " + pg_user + " WITH PASSWORD '" + pg_pw + "';", commit=True):
+            log_error(pg_db.last_err_msg, 'initCreateUser', exit_code=84)
+        if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE " + pg_dbname + " to " + pg_user + ";", commit=True):
+            log_error(pg_db.last_err_msg, 'initGrantUserConnect', exit_code=87)
+    pg_db.close()
+
+    log_warning("creating tables and audit trigger schema/extension", 'initCreateTableAndAudit')
+    pg_db = PostgresDB(usr=cae.get_config('pgRootUsr'), pwd=cae.get_config('pgRootPwd'), dsn=pg_dsn,
+                       debug_level=_debug_level)
+    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO "
+                         + pg_user + ";"):
+        log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=90)
+    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO " + pg_user + ";"):
+        log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=93)
+    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO " + pg_user + ";"):
+        log_error(pg_db.last_err_msg, 'initGrantUserFunctions', exit_code=96)
+    if pg_db.execute_sql(open("sql/dba_create_audit.sql", "r").read(), commit=True):
+        log_error(pg_db.last_err_msg, 'initCreateAudit', exit_code=99)
+    if pg_db.execute_sql(open("sql/dba_create_ass_tables.sql", "r").read(), commit=True):
+        log_error(pg_db.last_err_msg, 'initCtScript', exit_code=102)
+    pg_db.close()
+
+
 # logon to and prepare AssCache and config data env, optional also connect to Acumen, Salesforce, Sihot
 conf_data = AssSysData(cae, err_logger=log_error, warn_logger=log_warning)
 if conf_data.error_message:
@@ -190,42 +227,6 @@ notification, warning_notification_emails \
                                                "SBox" if conf_data.sf_sandbox else "Prod"))
 if not notification:
     log_warning("Notification is disabled", 'EmailNotificationDisabled')
-
-
-# check for to (re-)create and initialize PG database
-if act_init:
-    pg_dbname, pg_host = pg_dsn.split('@') if '@' in pg_dsn else (pg_dsn, '')
-    pg_root_dsn = 'postgres' + ('@' + pg_host if '@' in pg_dsn else '')
-    log_warning("creating database {} and user {}".format(pg_dsn, pg_user), 'initCreateDBandUser')
-    pg_db = PostgresDB(usr=cae.get_config('pgRootUsr'), pwd=cae.get_config('pgRootPwd'), dsn=pg_root_dsn,
-                       debug_level=_debug_level)
-    if pg_db.execute_sql("CREATE DATABASE " + pg_dbname + ";", auto_commit=True):  # " LC_COLLATE 'C'"):
-        log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72, dbs=[ass_db, acu_db])
-
-    if pg_db.select('pg_user', ['count(*)'], "usename = :pg_user", dict(pg_user=pg_user)):
-        log_error(pg_db.last_err_msg, 'initCheckUser', exit_code=81, dbs=[ass_db, acu_db])
-    if not pg_db.fetch_value():
-        if pg_db.execute_sql("CREATE USER " + pg_user + " WITH PASSWORD '" + pg_pw + "';", commit=True):
-            log_error(pg_db.last_err_msg, 'initCreateUser', exit_code=84, dbs=[ass_db, acu_db])
-        if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE " + pg_dbname + " to " + pg_user + ";", commit=True):
-            log_error(pg_db.last_err_msg, 'initGrantUserConnect', exit_code=87, dbs=[ass_db, acu_db])
-    pg_db.close()
-
-    log_warning("creating tables and audit trigger schema/extension", 'initCreateTableAndAudit')
-    pg_db = PostgresDB(usr=cae.get_config('pgRootUsr'), pwd=cae.get_config('pgRootPwd'), dsn=pg_dsn,
-                       debug_level=_debug_level)
-    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO "
-                         + pg_user + ";"):
-        log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=90, dbs=[ass_db, acu_db])
-    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO " + pg_user + ";"):
-        log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=93, dbs=[ass_db, acu_db])
-    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO " + pg_user + ";"):
-        log_error(pg_db.last_err_msg, 'initGrantUserFunctions', exit_code=96, dbs=[ass_db, acu_db])
-    if pg_db.execute_sql(open("sql/dba_create_audit.sql", "r").read(), commit=True):
-        log_error(pg_db.last_err_msg, 'initCreateAudit', exit_code=99, dbs=[ass_db, acu_db])
-    if pg_db.execute_sql(open("sql/dba_create_ass_tables.sql", "r").read(), commit=True):
-        log_error(pg_db.last_err_msg, 'initCtScript', exit_code=102, dbs=[ass_db, acu_db])
-    pg_db.close()
 
 
 # ACTION HELPERS
@@ -522,7 +523,7 @@ def sf_pull_clients():
             ers = list()
             if c['External_References__r']['records']:
                 ers.extend([(_['Name'], _['Reference_No_or_ID__c']) for _ in c['External_References__r']['records']])
-            rci_id = c[sf_name('RciId', sf_obj)]
+            rci_id = c[sf_fld_name('RciId', sf_obj)]
             if rci_id and not [_ for _ in ers if _[0] == EXT_REF_TYPE_RCI and _[1] == rci_id]:
                 ext_refs.append((EXT_REF_TYPE_RCI, rci_id))
             client_tuples.append((field_dict_from_sf(c, sf_obj), ers))
@@ -597,7 +598,7 @@ def sh_pull_clients():
             continue
 
         if match_field == SH_DEF_SEARCH_FIELD:
-            sh_ids = [match_val]
+            sh_id = match_val
         else:
             sh_ids = conf_data.sh_guest_ids(match_field, match_val)
             if not sh_ids:
@@ -608,35 +609,35 @@ def sh_pull_clients():
                 log_warning("{} - Skipping AssCache client because search via {}={} returned multiple/{} guests: {}"
                             .format(ass_id, match_field, match_val, len(sh_ids), as_cl), ctx, importance=3)
                 continue
-        for sh_id in sh_ids:        # loop runs currently only once (len(sh_ids) == 1)
-            shd = guest_data(cae, sh_id)
-            if not shd:
-                log_warning("{} - AssCache guest object ID {} does not exits in Sihot: {}".format(ass_id, sh_id, as_cl),
-                            ctx, importance=4)
+            sh_id = sh_ids[0]
+        shd = guest_data(cae, sh_id)
+        if not shd:
+            log_warning("{} - AssCache guest object ID {} does not exits in Sihot: {}".format(ass_id, sh_id, as_cl),
+                        ctx, importance=4)
+            continue
+
+        di = "; REC: ass={} sh={}".format(as_cl, shd) if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
+        client_data = dict()
+        for fld_name in client_fld_names:
+            desc = field_desc(fld_name)
+            ass_val = as_cl[field_clients_idx(fld_name)]
+            sh_val = sh_fld_value(shd, fld_name)
+            if not ass_val and not sh_val:
                 continue
+            elif isinstance(sh_val, list):
+                if len(sh_val) > 1:
+                    log_warning("{} - {} has multiple values - pulling/changing only first one. ass={} sh={}{}"
+                                .format(ass_id, desc, ass_val, sh_val, di), ctx, importance=3)
+                sh_val = sh_val[0]
+            client_data[fld_name] = sh_val
+        cl_pk = conf_data.cl_save(client_data, match_fields=[match_field])
+        if cl_pk is None:
+            break
 
-            di = "; REC: ass={} sh={}".format(as_cl, shd) if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
-            client_data = dict()
-            for fld_name in client_fld_names:
-                desc = field_desc(fld_name)
-                ass_val = as_cl[field_clients_idx(fld_name)]
-                sh_val = sh_value(shd, fld_name)
-                if not ass_val and not sh_val:
-                    continue
-                elif isinstance(sh_val, list):
-                    if len(sh_val) > 1:
-                        log_warning("{} - {} has multiple values - pulling/changing only first one. ass={} sh={}{}"
-                                    .format(ass_id, desc, ass_val, sh_val, di), ctx, importance=3)
-                    sh_val = sh_val[0]
-                client_data[fld_name] = sh_val
-            cl_pk = conf_data.cl_save(client_data, match_fields=[match_field])
-            if cl_pk is None:
-                break
-
-            if 'ExtRefs' in filter_fields:
-                pass    # NOT IMPLEMENTED
-            if 'Products' in filter_fields:
-                pass    # not implemented
+        if 'ExtRefs' in filter_fields:
+            pass    # NOT IMPLEMENTED
+        if 'Products' in filter_fields:
+            pass    # not implemented
 
     if ass_db.last_err_msg:
         ass_db.rollback()
@@ -780,6 +781,175 @@ for act_pull in act_pulls:
             log_error("Sihot pull not implemented", 'pullShNotImpl', importance=3, exit_code=168, dbs=[ass_db, acu_db])
 
 
+def ac_push_clients():
+    """
+    push from AssCache to Acumen for to fix there external references, email and phone data.
+    :return: error message or "" in case of no errors.
+    """
+    ctx = 'acPushCl'
+    unsupported_fld_names = ['AssId', 'Name', 'ExtRefs', 'Products']
+    client_fld_names = client_fields(unsupported_fld_names)
+
+    match_fields = act_match_fields.get('C')
+    if match_fields:
+        if len(match_fields) != 1:
+            err_msg = "ac_push_clients(): Acumen client push only allows a single match field"
+            log_warning(err_msg, ctx, importance=4)
+        match_field = match_fields[0]
+        if match_field not in client_fld_names or match_field in unsupported_fld_names:
+            err_msg = "ac_push_clients(): Acumen client push allows one of the match fields {}, not {}"\
+                .format(client_fld_names, match_field)
+            log_warning(err_msg, ctx, importance=4)
+    else:
+        match_field = 'AcId'
+
+    filter_fields = act_field_filters.get('C')
+    if not filter_fields:
+        filter_fields = client_fields(unsupported_fld_names + [match_field])
+    for filter_fld in filter_fields:
+        if filter_fld not in client_fld_names or filter_fld in unsupported_fld_names:
+            err_msg = "ac_push_clients(): Acumen client push uses invalid filter field {}".format(filter_fld)
+            log_error(err_msg, ctx, importance=4)
+            return err_msg
+
+    for as_cl in conf_data.clients:
+        match_val = as_cl[field_clients_idx(match_field)]
+        cols = {ac_fld_name(_): as_cl[field_clients_idx(_)] for _ in filter_fields if ac_fld_name(_)}
+        if acu_db.update("T_CD", cols, where="{} = '{}'".format(ac_fld_name(match_field), match_val)):
+            log_error("ac_push_clients(): Push client Acumen error: " + acu_db.last_err_msg, ctx, importance=4)
+
+    return acu_db.commit()
+
+
+def sf_push_clients():
+    """
+    push from AssCache to Salesforce for to fix there external references, email and phone data.
+    :return: error message or "" in case of no errors.
+    """
+    ctx = 'sfPushCl'
+    unsupported_fld_names = ['ExtRefs', 'Products']
+    client_fld_names = client_fields(unsupported_fld_names)
+
+    match_fields = act_match_fields.get('C')
+    if match_fields:
+        if len(match_fields) != 1:
+            err_msg = "sf_push_clients(): Salesforce client push only allows a single match field"
+            log_warning(err_msg, ctx, importance=4)
+        match_field = match_fields[0]
+        if match_field not in client_fld_names or match_field in unsupported_fld_names:
+            err_msg = "sf_push_clients(): Salesforce client push allows one of the match fields {}, not {}" \
+                .format(client_fld_names, match_field)
+            log_warning(err_msg, ctx, importance=4)
+    else:
+        match_field = SF_DEF_SEARCH_FIELD
+
+    filter_fields = act_field_filters.get('C')
+    if not filter_fields:
+        filter_fields = client_fields(unsupported_fld_names + [match_field])
+    for filter_fld in filter_fields:
+        if filter_fld not in client_fld_names or filter_fld in unsupported_fld_names:
+            err_msg = "sf_push_clients(): Salesforce client push uses invalid filter field {}".format(filter_fld)
+            log_error(err_msg, ctx, importance=4)
+            return err_msg
+
+    if match_field not in filter_fields:
+        filter_fields.append(match_field)       # ensure SF ID for to specify indirectly object type and record
+
+    errors = list()
+    for as_cl in conf_data.clients:
+        cols = {_: as_cl[field_clients_idx(_)] for _ in filter_fields}
+        sf_id, err_msg, msg = conf_data.sf_client_upsert(cols)
+        if err_msg:
+            log_error("sf_push_clients(): Push client Salesforce error: " + err_msg, ctx, importance=4)
+            errors.append(err_msg)
+
+    return "\n".join(errors)
+
+
+def sh_push_clients():
+    """
+    push from AssCache to Sihot for to fix there external references, email and phone data.
+    :return: error message or "" in case of no errors.
+    """
+    ctx = 'shPushCl'
+    unsupported_fld_names = ['ExtRefs', 'Products']
+    client_fld_names = client_fields(unsupported_fld_names)
+
+    match_fields = act_match_fields.get('C')
+    if match_fields:
+        if len(match_fields) != 1:
+            err_msg = "sh_push_clients(): Sihot client push only allows a single match field"
+            log_warning(err_msg, ctx, importance=4)
+        match_field = match_fields[0]
+        if match_field not in client_fld_names or match_field in unsupported_fld_names:
+            err_msg = "sh_push_clients(): Sihot client push allows one of the match fields {}, not {}" \
+                .format(client_fld_names, match_field)
+            log_warning(err_msg, ctx, importance=4)
+    else:
+        match_field = SH_DEF_SEARCH_FIELD
+
+    filter_fields = act_field_filters.get('C')
+    if not filter_fields:
+        filter_fields = client_fields(unsupported_fld_names + [match_field])
+    for filter_fld in filter_fields:
+        if filter_fld not in client_fld_names or filter_fld in unsupported_fld_names:
+            err_msg = "sh_push_clients(): Sihot client push uses invalid filter field {}".format(filter_fld)
+            log_error(err_msg, ctx, importance=4)
+            return err_msg
+
+    if match_field not in filter_fields:
+        filter_fields.append(match_field)       # ensure SF ID for to specify indirectly object type and record
+
+    errors = list()
+    for as_cl in conf_data.clients:
+        cols = {_: as_cl[field_clients_idx(_)] for _ in filter_fields}
+        err_msg = conf_data.sh_client_upsert(cols)
+        if err_msg:
+            log_error("sh_push_clients(): Push client Sihot error: " + err_msg, ctx, importance=4)
+            errors.append(err_msg)
+
+    return "\n".join(errors)
+
+
+if [_ for _ in act_pushes if _[2:] == 'C']:
+    log_warning("Preparing client data push and fix", 'pushClientPrepare', importance=4)
+    # fetch all (filtered) clients from AssCache if not loaded by a previous pull
+    if not conf_data.clients:
+        err = conf_data.cl_fetch_all(where_group_order=act_record_filters.get('C'))
+        if err:
+            log_error("Client cache load error: " + err, 'pushClientPrepErr', importance=3, exit_code=600,
+                      dbs=[ass_db,  acu_db])
+for act_push in act_pushes:
+    if act_push[:2] == 'ac':
+        if act_push[2:] == 'C':
+            err = ac_push_clients()
+            if err:
+                log_error(err, 'pushAcClients', importance=3, exit_code=303, dbs=[ass_db, acu_db])
+        elif act_push[2:] == 'P':
+            log_error("Acumen Product Fix not implemented", 'pushAcProd', importance=3, exit_code=630,
+                      dbs=[ass_db,  acu_db])
+        elif act_push[2:] == 'R':
+            log_error("Acumen Reservation Fix not implemented", 'pushAcRes', importance=3, exit_code=660,
+                      dbs=[ass_db,  acu_db])
+
+    elif act_push[:2] == 'sf':
+        if act_push[2:] == 'C':
+            err = sf_push_clients()
+            if err:
+                log_error(err, 'pushSfClientErr', importance=3, exit_code=801, dbs=[ass_db, acu_db])
+        else:
+            log_error("Salesforce fix not implemented", 'pushSfNotImpl', importance=3, exit_code=891,
+                      dbs=[ass_db,  acu_db])
+
+    elif act_push[:2] == 'sh':
+        if act_push[2:] == 'C':
+            err = sh_push_clients()
+            if err:
+                log_error(err, 'pushShClients', importance=3, exit_code=702, dbs=[ass_db, acu_db])
+        else:
+            log_error("Sihot fix not implemented", 'pushShNotImpl', importance=3, exit_code=795, dbs=[ass_db, acu_db])
+
+
 def ac_verify_clients():
     where = act_record_matches.get('C')
     if where:
@@ -815,11 +985,13 @@ def ac_verify_clients():
             log_warning("{} - Salesforce client ID differs: ass={} acu={}".format(ass_id, sf_id, ac_sf_id), ctx)
         if sh_id and ac_sh_id and sh_id != ac_sh_id:
             log_warning("{} - Sihot guest object ID differs: ass={} acu={}".format(ass_id, sh_id, ac_sh_id), ctx)
-        if name and ac_name and name != ac_name:
+        if name and ac_name and to_ascii(name).lower() != to_ascii(ac_name).lower():
             log_warning("{} - Client name differs: ass={} acu={}".format(ass_id, name, ac_name), ctx)
         ac_email, _ = correct_email(ac_email)
         if email and ac_email and email != ac_email:
             log_warning("{} - Client email differs: ass={} acu={}".format(ass_id, email, ac_email), ctx)
+        elif not conf_data.email_is_valid(ac_email):
+            log_warning("{} - Client email {} contains invalid fragment".format(ass_id, ac_email), ctx)
 
         if not first:              # further checks not needed for 2nd client/couple of Acumen client
             continue
@@ -1002,13 +1174,14 @@ def sh_verify_clients():
             for fld_name in client_fld_names:
                 desc = field_desc(fld_name)
                 ass_val = as_cl[field_clients_idx(fld_name)]
-                sh_val = sh_value(shd, fld_name)
+                sh_val = sh_fld_value(shd, fld_name)
                 if not ass_val and not sh_val:
                     continue
-                elif isinstance(sh_val, list):
-                    if ass_val not in sh_val:
+                if isinstance(sh_val, list):
+                    sh_values = [to_ascii(_).lower() for _ in sh_val]     # always do a fuzzy compare of Sihot values
+                    if to_ascii(ass_val).lower() not in sh_values:
                         log_warning("{} - {} not found. ass={} sh={}{}".format(ass_id, desc, ass_val, sh_val, di), ctx)
-                elif ass_val != sh_val:
+                elif to_ascii(ass_val).lower() != to_ascii(sh_val).lower():
                     log_warning("{} - {} mismatch. ass={} sh={}{}".format(ass_id, desc, ass_val, sh_val, di), ctx)
 
             if 'ExtRefs' in filter_fields:
@@ -1024,10 +1197,11 @@ def sh_verify_clients():
 
 if [_ for _ in act_veris if _[2:] == 'C']:
     log_warning("Preparing client data check/verification", 'veriPrep', importance=4)
-    # fetch all clients from AssCache
-    err = conf_data.cl_fetch_all(where_group_order=act_record_filters.get('C'))
-    if err:
-        log_error("Client cache load error: " + err, 'veriPrepErr', importance=3, exit_code=300, dbs=[ass_db, acu_db])
+    # fetch all (filtered) clients from AssCache if not loaded by a previous pull
+    if not conf_data.clients:
+        err = conf_data.cl_fetch_all(where_group_order=act_record_filters.get('C'))
+        if err:
+            log_error("Clients load error: " + err, 'veriPrepErr', importance=3, exit_code=300, dbs=[ass_db, acu_db])
 for act_veri in act_veris:
     if act_veri[:2] == 'ac':
         if act_veri[2:] == 'C':
@@ -1061,68 +1235,6 @@ for act_veri in act_veris:
 if [_ for _ in act_veris if _[2:] == 'C'] and not act_record_filters.get('C') and not act_record_matches.get('C'):
     # if no record filters set, then also check/verify client external references integrity within the AssCache database
     conf_data.cl_verify_ext_refs()
-
-
-def ac_push_clients():
-    """
-    push from AssCache to Acumen for to fix there external references, email and phone data.
-    :return: error message or "" in case of no errors.
-    """
-    return ""
-
-
-def sf_push_clients():
-    """
-    push from AssCache to Salesforce for to fix there external references, email and phone data.
-    :return: error message or "" in case of no errors.
-    """
-    return ""
-
-
-def sh_push_clients():
-    """
-    push from AssCache to Sihot for to fix there external references, email and phone data.
-    :return: error message or "" in case of no errors.
-    """
-    return ""
-
-
-if [_ for _ in act_pushes if _[2:] == 'C']:
-    log_warning("Preparing client data push and fix", 'pushClientPrepare', importance=4)
-    # fetch all clients from AssCache
-    err = conf_data.cl_fetch_all(where_group_order=act_record_filters.get('C'))
-    if err:
-        log_error("Client cache load error: " + err, 'pushClientPrepErr', importance=3, exit_code=600,
-                  dbs=[ass_db,  acu_db])
-for act_push in act_pushes:
-    if act_push[:2] == 'ac':
-        if act_push[2:] == 'C':
-            err = ac_push_clients()
-            if err:
-                log_error(err, 'pushAcClients', importance=3, exit_code=303, dbs=[ass_db, acu_db])
-        elif act_push[2:] == 'P':
-            log_error("Acumen Product Fix not implemented", 'pushAcProd', importance=3, exit_code=630,
-                      dbs=[ass_db,  acu_db])
-        elif act_push[2:] == 'R':
-            log_error("Acumen Reservation Fix not implemented", 'pushAcRes', importance=3, exit_code=660,
-                      dbs=[ass_db,  acu_db])
-
-    elif act_push[:2] == 'sf':
-        if act_push[2:] == 'C':
-            err = sf_push_clients()
-            if err:
-                log_error(err, 'pushSfClientErr', importance=3, exit_code=801, dbs=[ass_db, acu_db])
-        else:
-            log_error("Salesforce fix not implemented", 'pushSfNotImpl', importance=3, exit_code=891,
-                      dbs=[ass_db,  acu_db])
-
-    elif act_push[:2] == 'sh':
-        if act_push[2:] == 'C':
-            err = sh_push_clients()
-            if err:
-                log_error(err, 'pushShClients', importance=3, exit_code=702, dbs=[ass_db, acu_db])
-        else:
-            log_error("Sihot fix not implemented", 'pushShNotImpl', importance=3, exit_code=795, dbs=[ass_db, acu_db])
 
 
 if acu_db:

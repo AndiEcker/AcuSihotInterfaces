@@ -9,7 +9,7 @@ from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 
 # import time         # needed only for testing
 
-TIMEOUT_ERR_MSG = "RequestXmlHandler.handle(): socket connection broken!"
+TCP_CONNECTION_BROKEN_MSG = "RequestXmlHandler.handle(): socket connection broken!"
 
 TCP_MAXBUFLEN = 8192
 TCP_END_OF_MSG_CHAR = b'\x04'
@@ -38,7 +38,7 @@ class RequestXmlHandler(socketserver.BaseRequestHandler, metaclass=ABCMeta):
             while xml_recv[-1:] != TCP_END_OF_MSG_CHAR:
                 chunk = self.request.recv(TCP_MAXBUFLEN)
                 if not chunk:  # socket connection broken, see https://docs.python.org/3/howto/sockets.html#socket-howto
-                    self.error_message = TIMEOUT_ERR_MSG
+                    self.error_message = TCP_CONNECTION_BROKEN_MSG
                     self.notify()
                     return
                 xml_recv += chunk

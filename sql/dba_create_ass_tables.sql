@@ -178,13 +178,15 @@ CREATE TABLE res_group_clients
   rgc_pers_seq            INTEGER NOT NULL DEFAULT 0,
   rgc_surname             VARCHAR(42) NOT NULL,
   rgc_firstname           VARCHAR(42) NOT NULL,
-  rgc_email               VARCHAR(42),
-  rgc_phone               VARCHAR(42),
+  rgc_email               VARCHAR(69),            -- Sihot values (cashed but not corrected, s.a. cl_email
+  rgc_phone               VARCHAR(42),            -- .. and cl_phone)
+  rgc_language            VARCHAR(3),
+  rgc_country             VARCHAR(3),
   rgc_dob                 DATE,
   rgc_auto_generated      VARCHAR(1) NOT NULL DEFAULT '1',
-  rgc_occup_cl_fk         INTEGER REFERENCES clients(cl_pk),  -- referencing Sihot guest as Salesforce client
-  rgc_flight_arr_comment  VARCHAR(42),      -- arrival airport, airline and flight number
-  rgc_flight_arr_time     TIME,             -- ETA
+  rgc_occup_cl_fk         INTEGER REFERENCES clients(cl_pk),
+  rgc_flight_arr_comment  VARCHAR(42),
+  rgc_flight_arr_time     TIME,
   rgc_flight_dep_comment  VARCHAR(42),
   rgc_flight_dep_time     TIME,
   rgc_pers_type           VARCHAR(3) NOT NULL DEFAULT '1A',
@@ -192,6 +194,10 @@ CREATE TABLE res_group_clients
   rgc_room_id             VARCHAR(6),
   UNIQUE (rgc_rgr_fk, rgc_room_seq, rgc_pers_seq)
 );
+COMMENT ON COLUMN res_group_clients.rgc_language IS 'ISO2 (or ISO3) language code';
+COMMENT ON COLUMN res_group_clients.rgc_country IS 'ISO2 (or ISO3) country code';
+COMMENT ON COLUMN res_group_clients.rgc_auto_generated IS 'occupying Sihot guest and/or Salesforce client';
+COMMENT ON COLUMN res_group_clients.rgc_flight_arr_comment IS 'e.g. arrival airport, airline and flight number';
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_group_clients');
 

@@ -7,7 +7,6 @@
             Rentals), implemented email/phone validation options and adapted for new SF instance, also renamed
             module from ShSfContactMigration to ShSfClientMigration.
 """
-import re
 from traceback import print_exc
 import pprint
 
@@ -22,7 +21,6 @@ from ass_sys_data import correct_email, correct_phone, AssSysData
 
 __version__ = '0.2'
 
-mail_re = re.compile('[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+\.[a-zA-Z]{2,4}$')
 
 PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
@@ -98,7 +96,7 @@ def strip_add_info_keys(sfd):
 def strip_add_info_from_sf_data(sfd, check_data=False, record_type_id=None, obj_type='Client'):
     sfs = dict()
     sfc = sfd[AI_SF_CURR_DATA] if check_data else None
-    sf_has_valid_email = (sfc and 'Email' in sfc and sfc['Email'] and email_is_valid(sfc['Email']))
+    sf_has_valid_email = (sfc and 'Email' in sfc and sfc['Email'] and conf_data.email_is_valid(sfc['Email']))
     sid = sfd[AI_SF_ID] or sfd[AI_SH_RL_ID]
 
     for key in strip_add_info_keys(sfd):
@@ -169,27 +167,16 @@ def valid_name_indexes(shd):
     return indexes
 
 
-def email_is_valid(email_addr):
-    if email_addr:
-        email_addr = email_addr.lower()
-        if mail_re.match(email_addr):
-            for frag in invalid_email_fragments:
-                if frag in email_addr:
-                    break  # email is invalid/filtered-out
-            else:
-                return True
-    return False
-
-
 def valid_email_indexes(shd):
     indexes = list()
     if 'EMAIL' in shd:
         elem_def = shd['EMAIL']
         if 'elemListVal' in elem_def:
             for idx, email_addr in enumerate(elem_def['elemListVal']):
-                if email_addr and email_is_valid(email_addr):
+                if email_addr and conf_data.email_is_valid(email_addr):
                     indexes.append(idx)
-        if not indexes and 'elemVal' in elem_def and elem_def['elemVal'] and email_is_valid(elem_def['elemVal']):
+        if not indexes and 'elemVal' in elem_def and elem_def['elemVal'] \
+                and conf_data.email_is_valid(elem_def['elemVal']):
             elem_def['elemListVal'] = [elem_def['elemVal']]
             indexes.append(0)
     return indexes
@@ -229,7 +216,7 @@ def prepare_mig_data(shd, arri, sh_res_id, email_addr, phone_no, snam, fnam, src
     # Market_Source__c or Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000)
     # .. or LeadSource (Picklist) or Source__c (Picklist) or HERE_HOW__c (Picklist) or Marketing_Source__c (Lead) ?!?!?
     sfd['MarketSource'] = str(src)
-    sfd['Email'] = email_addr if email_is_valid(email_addr) else default_email_address
+    sfd['Email'] = email_addr if conf_data.email_is_valid(email_addr) else default_email_address
     # Phone or HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
     sfd['Phone'] = phone_no
     # Mobile phone number is not provided by Sihot WEB RES-SEARCH
@@ -377,7 +364,7 @@ try:
         rooming_list_ids.append(rl_id)
 
         email = sf_dict['Email']
-        if email_is_valid(email):
+        if conf_data.email_is_valid(email):
             if email in found_emails:
                 add_log_msg("Res-id {:12} with duplicate email address {}; data={}"
                             .format(rl_id, email, pretty_print.pformat(sf_dict)))

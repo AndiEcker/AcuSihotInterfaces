@@ -1,19 +1,19 @@
-# Interfaces between Sihot.PMS, Acumen and Salesforce
+# Interfaces between Acumen, Salesforce and Sihot
 
 >Tools and processes for to migrate and synchronize system configuration, room status, clients and reservations 
 between Sihot.PMS, Acumen and Salesforce.
 
-## Available Commands
+## Available Applications
 
 This interface suite project is including the following commands/tools - most of them are command line applications,
-apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user interface:
+apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user interface:
 
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
 | [AssCacheSync](#asscachesync-application) | Initialize, pull, verify or push the AssCache data against Acumen, Sihot and/or Salesforce | Web |
-| AssServer | Listening to Sihot SXML interface for to synchronize reservation changes onto the ass_cache PG database | Sxml, Web |
+| [AssServer](#assserver-application) | Listening to Sihot SXML interface for to synchronize reservation changes onto the ass_cache PG database | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
@@ -21,7 +21,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a Kivy user i
 | ShSfClientMigration | Migrate guests from Sihot to Salesforce | Web |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
 | [SihotOccLogChecker](#sihotocclogchecker-application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
-| [SihotResImport](#sihotresimport-application) | Import/Update/Cancel reservations from CSV/TXT files in Sihot.PMS | Kernel, Web |
+| [SihotResImport](#sihotresimport-application) | Create/Update/Cancel reservations from CSV/TXT/JSON files within Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
 | WatchPupPy | Periodically execute and supervise command | - |
@@ -91,6 +91,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | pgPassword | User account password for the postgres database | - | P | AssCacheSync, AssServer |
 | pgDSN | Database name of the postgres database | ass_cache | N | AssCacheSync, AssServer |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfClientValidator |
+| pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | AssCacheSync |
 | push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | AssCacheSync |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
 | sfClientId | Salesforce client/application name/id | SignalliaSfInterface/cae.app_name() | C | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
@@ -105,7 +106,6 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | shTimeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | AssCacheSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
@@ -132,8 +132,133 @@ the correct functionality of the Salesforce, Acumen and Sihot servers and interf
 
 ### AssCacheSync Application
 
-AssCacheSync is a command line tool for to pull, push, verify data between the Postgres database AssCache and the
-Acumen, Salesforce and/or Sihot systems.
+AssCacheSync is a command line tool for to synchronize and verify data between our three main systems (Acumen, Salesforce
+and Sihot). The actions performed by this tool get specified by the [command line options --pull, --push and --verify](#action-command-line-options),
+which can be specify multiple times. The [command line options --filterRecords and --filterFields](#filter-command-line-options) allow to filter the
+processed data records and fields. The way how two data records will be associated for to be verified or synchronized
+can be specified with the [command line options --matchFields and --matchRecords](#match-command-line-options).
+
+All command line options can be specified in any order, because AssCacheSync is always first doing all the pull actions.
+After the pull any push actions are performed (if specified/given) and finally the verify actions are processed. So if
+you want to run a verification before any pull/push action then you have to execute AssCacheSync twice (the first run
+with the --verify option and the second run with the pull/push and optionally another verify action).
+ 
+The postgres database AssCache is used for to temporarily store the data pulled from one of our three
+systems (the source system) for to be either verified against or pushed onto another system (the destination system).
+
+#### Supported Data Fields
+
+The following client data fields can be used for to optionally specify the fields that are used within the 
+command line options --filterFields and --matchFields, although not all of them are implemented for all our three systems
+(e.g. Sihot only supports the ShId field for filtering and matching):
+
+| Field Name | Description |
+| --- | --- |
+| AssId | AssCache client primary key |
+| AcId | Acumen client reference |
+| SfId | Salesforce client (lead/contact/account) id |  
+| ShId | Sihot guest object id |
+| Name | Client forename and surname (separated by one space character) |
+| Email | Client main email address |
+| Phone | Client main phone number |
+
+#### Action Command Line Options
+
+Each run of the AssCacheSync tool has to specify at least one (mostly more than one) valid action (which are given with
+the --pull, --push and/or the --verify command line option). Each action value consists of a two character system identifier
+followed by a one character data type identifier. The supported system identifiers are:
+
+| System Identifier | Description |
+| --- | --- |
+| ac | Acumen |
+| sh | Sihot |
+| sf | Salesforce |
+
+The supported data identifiers are:
+
+| Data Identifier | Description |
+| --- | --- |
+| C | Clients |
+| P | Products |
+| R | Reservations |
+
+So for to verify/compare client data (C) between Acumen (ac) and Salesforce (sf) you could use the following
+action command line options:
+
+    `--pull=acC --verify=shC`
+
+This will first pull client data from Acumen and then compare it to the same clients within Salesforce. A similar verify
+run could be done with:
+
+    `--pull=shC --verify=acC`
+
+The difference is that the first verify run will pull (and optionally filter) the clients from the (source) Acumen system and
+then compare the found clients against the (destination) Salesforce system. In contrary the second verify run will pull the clients from
+Salesforce (source) and then compare the found clients with associated clients on the Acumen (destination) system. 
+
+A combination of the --pull and --push command line options allows to synchronize the data between two systems.
+For example for to synchronize client data from Acumen to Salesforce you have to specify the following two action
+command line arguments:
+
+    `--pull=acC --push=sfC`
+
+#### Filter Command Line Options
+
+In most cases you want to restrict the synchronized/verified data from the source system to a small amount of 
+data-records and/or -fields. Not specifying any filters will result in a verification/synchronization run that
+needs more than 3 days only for to process all of our client data records.
+
+The --filterRecords option allows you to specify a filter expression that will reduce the amount of (source) data from the
+system where the data get pulled from (specified by the --pull option). In case of pulling Acumen client data this filter
+expression will be used in the `WHERE` clause of the SQL that is used for to fetch this client data from the Acumen table
+`CLIENT_DETAILS` (T_CD). So the following command line option will pull only Acumen client data with a non-empty email
+address and verify them against Salesforce:
+
+    `--pull=acC --filterRecords="CD_EMAIL is not NULL" --verify=sfC`
+
+Additionally you can restrict the synchronized/verified fields with the --filterFields option. If no --filterFields
+option is specified then AssCacheSync is processing all [data fields](#supported-data-fields) that are supported by
+the system you are pulling from. So for to restrict the last example to only verify the client's email address and
+phone number you have to specify the following command line options:
+
+    `--pull=acC --filterFields=['Email','Phone'] --filterRecords="CD_EMAIL is not NULL" --verify=sfC`
+
+#### Match Command Line Options
+
+The --matchFields and --matchRecord options are used for to restrict the fields and records of the destination system
+(the system pushed-to or verified-against).
+
+Normally the primary key of each system is used for to lookup/associate the matching data record in the destination
+system. But in the case where you cannot rely on the primary key value you can a specify with the 
+command line option --matchFields a different field (or a list of fields) for this lookup/association.
+So e.g. for to compare the client data between Acumen and Salesforce by using the Email and Phone data for to match 
+the client record within Salesforce the following command line options have to be specified:
+
+    `--pull=acC --matchFields=['Email','Phone'] --verify=sfC`
+
+And with the --matchRecords option you can further restrict the processed/synchronized/verified data records on the
+destination system. The following example is verifying the source client data from Sihot against the (destination)
+client data within Acumen, restricted to Acumen client data where the email address and the phone number are not
+empty:  
+
+    `--pull=shC --matchRecords="CD_EMAIL is not NULL and CD_HTEL1 is not NULL" --verify=acC`
+
+
+### AssServer Application
+
+The AssServer is a server application that is providing a web-service that is listening/waiting for our Sihot system
+to connect (as a client) for to propagate/push the following live actions done within Sihot:
+
+* Change of Reservation Data
+* Room Check-Ins
+* Room Check-Outs
+* Room Moves
+
+Any of these Sihot actions will be cashed within the postgres database AssCache and later (after the reservations got
+fully implemented within Salesforce) also be propagated onto our Salesforce system. We could pass these
+notifications directly into the SF system (by-passing AssCache) if SF would be able to act as a server for
+web services, but most likely we need to implement a bridge like AssServer here because the Sihot live/push interfaces 
+are not compatible to any web-service standards (SOAP/WSDL/REST/XML/…).
 
 
 ### ClientQuestionnaireExport Application
@@ -691,17 +816,68 @@ configuration file):
 | SihotResTypes | <marketSegmentCode> | Sihot Reservation Type overload code for each market segment |
 
 
-## System Synchronization
+## System Synchronizations
 
+Because lots of different data (like clients, reservations, reservation inventory, ownerships, sales inventory) need to be
+available redundantly in several of our systems (Acumen, Salesforce and Sihot) we have to ensure that any
+changes of this data in one of the system will be propagated to other systems.
+
+For each type of data there should be defined a master system where the data get changed and validated exclusively, but because
+of the plan to replace Acumen with Salesforce and Sihot some types of data are maintained currently in several systems. Another
+exception is coming from the Reservation department because apart from the synchronization of reservations from Salesforce
+to Sihot they requested to synchronize also to synchronize any changes done within Sihot on the reservation data back to
+Salesforce (see the Owner reservations data type in the table underneath). 
+
+| Type of data | Future Master System -> Synchronized onto | Current Master System(s) -> Synchronized onto |
+| --- | --- | --- |
+| Clients | Salesforce->Sihot | Acumen->Sihot, Salesforce->None, Sihot->None |
+| Rental reservations | Sihot->Salesforce | Sihot->None |
+| Owner reservations | Salesforce->Sihot, Sihot->Salesforce | Acumen->Sihot |
+| Room Occupation | Sihot->Salesforce | Sihot->Acumen |
+| Reservation Inventory | Sihot->Salesforce | Acumen->None |
+| Product ownerships | Salesforce->Sihot | Acumen->None, Salesforce->None |
+| Sales inventory | Salesforce->Sihot | Acumen->None, Salesforce->None |
+
+Whereas the synchronization from/to Acumen and Salesforce can be done in various ways because we even can access the
+internal data structures (Oracle tables and Salesforce objects) directly, our Sihot system is (like most commercial systems)
+only providing an access via several APIs, which are much more restricted than a direct data access.
+
+Sihot is providing the following pull interfaces:
+
+* create/update client/guest (Sihot Kernel Interface)
+* create/update/delete reservation (Sihot Web Interface)
+
+Additionally Sihot is providing the following live/push interfaces (via the Sihot SXML interface):
+
+* Reservation Changes
+* Guest Changes
+* Occupation Changes
+
+The [AssCacheSync application](#asscachesync-application) can be used for to manually synchronize and verify client
+and reservation data between our three systems (Acumen, Salesforce and Sihot).
+
+
+### Synchronization between Acumen and Sihot
+  
 Every client that got created first on the Acumen system and then get migrated as guest record onto the Sihot system
-will by synchronized by the Sihot guest object id. This id will be stored for each pax a our Acumen couple client
-record in the two new columns `CD_SIHOT_OBJID` and `CD_SIHOT_OBJID2`.
+will by associated by the Sihot guest object id. This id will be stored for each pax of our Acumen couple client
+record in the two new columns `CD_SIHOT_OBJID` and `CD_SIHOT_OBJID2`. Client data is currently only synchronized
+from Acumen to Sihot together with the reservation synchronization.
 
-Reservations created first within the Acumen system and then synchronized to Sihot get linked/associated to the Acumen
-Requested Unit record with the new `T_RU` column `RU_SIHOT_OBJID` for to store Sihot reservation record object id.
+The two Acumen/Oracle log tables [Requested Unit Log](#requested-unit-log) and [Synchronization Log](#synchronization-log)
+are used for to detect any changes done in Acumen on the client/reservation data. The SihotResSync application is used
+to periodically pass any reservation changes from Acumen to Sihot.
 
+Reservations for owners and marketing clients get created within the Acumen system and get then synchronized to Sihot.
+The link/association is done via the Sihot reservation record object which is stored within Acumen/Oracle in the
+Requested Unit record (in the `T_RU` column `RU_SIHOT_OBJID`). On any change of the reservation within Acumen the
+reservation request will be synchronized again onto Sihot (together with the client data if changed too).
 
-### Requested Unit Log
+The AcuServer application is passing any room changes (check-ins, check-outs and room-moves) done within Sihot back
+to the Acumen system (for to keep the Acumen Allocation system up-to-date). Any other changes done on reservations
+or clients within Sihot are not synchronized back to Acumen.
+
+#### Requested Unit Log
 
 The following 8 new columns got added to the Acumen Requested Unit Log table (`T_RUL`) for to store also any other
 booking changes of a synchronized reservation that are happening in a associated table like e.g. room change in the
@@ -723,7 +899,7 @@ changes within the latest not synchronized requested unit log entry/record and a
 `T_RU` records for to be propagated onto Sihot.PMS.
 
 
-### Synchronization Log
+#### Synchronization Log
 
 The synchronization process is fully logged within the new `T_SRSL` table providing the following columns:
 
@@ -736,3 +912,11 @@ The synchronization process is fully logged within the new `T_SRSL` table provid
 | SRSL_DATE | Date/Time of the insert into this log table |
 | SRSL_LOGREF | Audit Trail Log Id (for debugging only) - Primary Key of either RUL/Requested Unit Log, AROL/Apartment Reservation Log or LOG/Client Details Log |
 | SRSL_MESSAGE | Final or Error Message/Response of Sihot.PMS (taken from the MSG response xml element) |
+
+
+### Synchronization between Salesforce and Sihot
+
+Recently we also started to implement the [AssServer application](#assserver-application) that will pass any changes of
+reservation data and of room occupations (check-ins, check-outs and room-moves) done within Sihot to Salesforce (and
+optionally also to the AssCache database).
+

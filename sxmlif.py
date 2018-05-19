@@ -932,15 +932,22 @@ class ResChange(SihotXmlParser):
             di, ik = self.rgr_list[-1], 'rgr_arrival'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'DEP']:
             di, ik = self.rgr_list[-1], 'rgr_departure'
-        elif self._curr_tag == 'RT':
+        elif self._curr_tag == 'RT_SIHOT':                  # RT has different values (1=definitive, 2=tentative, 3=cxl)
+            # data = 'S' if data == '3' else data           # .. so using undocumented RT_SIHOT to prevent conversion
             di, ik = self.rgr_list[-1], 'rgr_status'
-            data = 'S' if data == '3' else data
-        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOPAX']:
-            di, ik = self.rgr_list[-1], 'rgr_adults'
         elif self._curr_tag == 'MC':
             di, ik = self.rgr_list[-1], 'rgr_mkt_segment'
         elif self._curr_tag == 'CAT':
             di, ik = self.rgr_list[-1], 'rgr_room_cat_id'
+        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOPAX']:
+            di, ik = self.rgr_list[-1], 'rgr_adults'
+        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOCHILDS']:  # TODO: not provided by CR
+            di, ik = self.rgr_list[-1], 'rgr_children'
+
+        elif self._curr_tag == 'GID':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'ShId'
+        elif self._curr_tag == 'MATCHCODE':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'AcId'
         elif self._curr_tag == 'SN':
             di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_surname'
         elif self._curr_tag == 'CN':
@@ -951,6 +958,10 @@ class ResChange(SihotXmlParser):
             di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_phone'
         elif self._curr_tag == 'EMAIL':
             di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_email'
+        elif self._curr_tag == 'LN':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_language'
+        elif self._curr_tag == 'COUNTRY':
+            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_country'
         elif self._curr_tag == 'RN':
             di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_room_id'
         else:

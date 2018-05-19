@@ -17,6 +17,11 @@ ACU_DEF_USR = 'SIHOT_INTERFACE'
 ACU_DEF_DSN = 'SP.TEST'
 
 
+def _locked_col_expr(col, locked_cols):
+    return "COALESCE(" + col + ", " + NAMED_BIND_VAR_PREFIX + col + ")" if col in locked_cols \
+        else NAMED_BIND_VAR_PREFIX + col
+
+
 class GenericDB:
     def __init__(self, usr, pwd, dsn, debug_level=DEBUG_LEVEL_DISABLED):
         self.usr = usr
@@ -145,17 +150,19 @@ class GenericDB:
             sql += " RETURNING " + returning_column
         return self.execute_sql(sql, commit=commit, bind_vars=col_values)
 
-    def update(self, table_name, col_values, where='', commit=False, bind_vars=None):
+    def update(self, table_name, col_values, where='', commit=False, bind_vars=None, locked_cols=None):
         new_bind_vars = deepcopy(col_values)
         if bind_vars:
             new_bind_vars.update(bind_vars)
+        if locked_cols is None:
+            locked_cols = list()
         sql = "UPDATE " + table_name \
-              + " SET " + ", ".join([c + " = " + NAMED_BIND_VAR_PREFIX + c for c in col_values.keys()])
+              + " SET " + ", ".join([c + " = " + _locked_col_expr(c, locked_cols) for c in col_values.keys()])
         if where:
             sql += " WHERE " + where
         return self.execute_sql(sql, commit=commit, bind_vars=new_bind_vars)
 
-    def upsert(self, table_name, col_values, chk_values=None, returning_column='', commit=False):
+    def upsert(self, table_name, col_values, chk_values=None, returning_column='', commit=False, locked_cols=None):
         """
         INSERT or UPDATE in table_name the col_values, depending on if record already exists.
         :param table_name:          name of the database table.
@@ -164,11 +171,12 @@ class GenericDB:
                                     If not passed then use first name/value of col_values (has then to be OrderedDict).
         :param returning_column:    name of column which value will be returned by next fetch_all/fetch_value() call.
         :param commit:              bool value to specify if commit should be done.
+        :param locked_cols:         list of column names not be overwritten on update of column value is not empty
         :return:                    last error message or "" if no errors occurred.
         """
         if not chk_values:
             chk_values = dict([next(iter(col_values.items()))])     # use first dict item as pkey check value
-        chk_expr = " AND ".join([k + " = :" + k for k in chk_values.keys()])
+        chk_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in chk_values.keys()])
 
         self.select(table_name, ["count(*)"], chk_expr, chk_values)
         if not self.last_err_msg:
@@ -176,7 +184,8 @@ class GenericDB:
             if not self.last_err_msg:
                 if count == 1:
                     bind_vars = deepcopy(chk_values).update(col_values)
-                    self.update(table_name, col_values, chk_expr, commit=commit, bind_vars=bind_vars)
+                    self.update(table_name, col_values, chk_expr, commit=commit, bind_vars=bind_vars,
+                                locked_cols=locked_cols)
                     if not self.last_err_msg and returning_column:
                         self.select(table_name, [returning_column], chk_expr, chk_values)
                 elif count == 0:
