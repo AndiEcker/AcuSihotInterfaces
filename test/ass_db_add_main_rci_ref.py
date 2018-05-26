@@ -10,9 +10,9 @@ cae.add_option('acuUser', "User name of Acumen/Oracle system", '', 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
 cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", '', 'd')
 
-cae.add_option('pgUser', "User account name for the postgres cache database", '', 'U')
-cae.add_option('pgPassword', "User account password for the postgres cache database", '', 'P')
-cae.add_option('pgDSN', "Database name of the postgres cache database", 'ass_cache', 'N')
+cae.add_option('assUser', "User account name for the AssCache/Postgres database", '', 'U')
+cae.add_option('assPassword', "User account password for the AssCache/Postgres database", '', 'P')
+cae.add_option('assDSN', "Name of the AssCache/Postgres database", 'ass_cache', 'N')
 
 debug_level = cae.get_option('debugLevel')
 
@@ -21,9 +21,9 @@ acu_password = cae.get_option('acuPassword')
 acu_dsn = cae.get_option('acuDSN')
 uprint("Acumen user/DSN:", acu_user, acu_dsn)
 
-pg_user = cae.get_option('pgUser')
-pg_pw = cae.get_option('pgPassword')
-pg_dsn = cae.get_option('pgDSN')
+pg_user = cae.get_option('assUser')
+pg_pw = cae.get_option('assPassword')
+pg_dsn = cae.get_option('assDSN')
 uprint("AssCache DB user@dbname:", pg_user, '@', pg_dsn)
 
 
@@ -57,7 +57,7 @@ if conf_data.error_message:
 # logon to and prepare ass_cache database
 ass_db = PostgresDB(usr=pg_user, pwd=pg_pw, dsn=pg_dsn, debug_level=debug_level)
 if ass_db.connect():
-    log_error(ass_db.last_err_msg, 'PgUserLogOn', exit_code=12)
+    log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
     cae.shutdown(exit_code=66)
 
 

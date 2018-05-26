@@ -3,9 +3,13 @@ import pprint
 import re
 
 from ae_db import OraDB, PostgresDB
-from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import GuestSearch, ClientToSihot
-from sfif import prepare_connection, ensure_long_id, obj_from_id, DEF_CLIENT_OBJ, DETERMINE_CLIENT_OBJ
+from ae_console_app import uprint, DATE_ISO, DEBUG_LEVEL_VERBOSE
+from ae_notification import add_notification_options, init_notification
+from acif import add_ac_options
+from sxmlif import AvailCatInfo, GuestSearch, ClientToSihot, ResSearch
+from sfif import add_sf_options, prepare_connection, ensure_long_id, obj_from_id, DEF_CLIENT_OBJ, DETERMINE_CLIENT_OBJ
+from shif import add_sh_options, elem_value, ResBulkFetcher, SH_DATE_FORMAT
+
 
 # special client record type ids
 CLIENT_REC_TYPE_ID_OWNERS = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
@@ -51,6 +55,72 @@ _COMMENT = 8
 # default search fields for external systems (SF e.g. used by AssSysData.sf_client_field_data())
 SF_DEF_SEARCH_FIELD = 'SfId'
 SH_DEF_SEARCH_FIELD = 'ShId'
+
+
+def add_ass_options(cae, add_kernel_port=False, client_port=None, break_on_error=False, bulk_fetcher=None):
+    cae.add_option('assUser', "AssCache/Postgres user account name", '', 'U')
+    cae.add_option('assPassword', "AssCache/Postgres user account password", '', 'P')
+    cae.add_option('assDSN', "AssCache/Postgres database (and host) name (dbName[@host])", 'ass_cache', 'N')
+    add_ac_options(cae)
+    add_sf_options(cae)
+    ass_options = dict()
+    if bulk_fetcher == 'Res':
+        ass_options['ResBulkFetcher'] = ResBulkFetcher(cae)
+        ass_options['ResBulkFetcher'].add_options()
+    else:
+        add_sh_options(cae, add_kernel_port=add_kernel_port, client_port=client_port)
+    if break_on_error:
+        cae.add_option('breakOnError', "Abort processing if error occurs (0=No, 1=Yes)", 0, 'b', choices=(0, 1))
+        ass_options['BreakOnError'] = None
+    add_notification_options(cae)
+
+    return ass_options
+
+
+def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None):
+    """ initialize system data/environment/configuration and print to stdout
+
+    :param cae:             application environment including command line options and config settings.
+    :param ass_options:     ass options dict (returned by add_ass_options()).
+    :param err_logger:      error logger method
+    :param warn_logger:     warning logger method
+    :return:                dict with initialized parts (e.g. AssSysData).
+    """
+    ret_dict = dict()
+
+    ret_dict['AssSysData'] = conf_data = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger)
+    if conf_data.error_message:
+        return ret_dict
+
+    sys_ids = list()
+    if conf_data.ass_db:
+        uprint('AssCache database name and user:', cae.get_option('assDSN'), cae.get_option('assUser'))
+        sys_ids.append(cae.get_option('assDSN'))
+    if conf_data.acu_db:
+        uprint('Acumen database TNS and user:', cae.get_option('acuDSN'), cae.get_option('acuUser'))
+        sys_ids.append(cae.get_option('acuDSN'))
+    if conf_data.sf_conn:
+        uprint("Salesforce " + ("sandbox" if conf_data.sf_sandbox else "production") + " user/client-id:",
+               cae.get_option('sfUser'), cae.get_option('sfClientId'))
+        sys_ids.append("SBox" if conf_data.sf_sandbox else "Prod")
+    if conf_data.sh_conn:
+        uprint('Sihot server IP/port:', cae.get_option('shServerIP'), cae.get_option('shClientPort'))
+        uprint('Sihot TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+        sys_ids.append(cae.get_option('shServerIP'))
+    ret_dict['SysIds'] = sys_ids
+
+    ret_dict['Notification'], ret_dict['WarningEmailAddresses'] = init_notification(cae, '/'.join(sys_ids))
+
+    if 'ResBulkFetcher' in ass_options:
+        ass_options['ResBulkFetcher'].load_config()
+        ass_options['ResBulkFetcher'].print_config()
+
+    if 'BreakOnError' in ass_options:
+        break_on_error = cae.get_option('breakOnError')
+        uprint('Break on error:', 'Yes' if break_on_error else 'No')
+        ret_dict['BreakOnError'] = break_on_error
+
+    return ret_dict
 
 
 # Acumen, Salesforce and Sihot field name re-mappings
@@ -353,19 +423,19 @@ def _dummy_stub(msg, ctx_file, *args, **kwargs):
 
 class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def __init__(self, cae, ass_user=None, ass_password=None, acu_user=None, acu_password=None,
-                 err_logger=_dummy_stub, warn_logger=_dummy_stub, ctx_no_file=''):
+                 err_logger=None, warn_logger=None, ctx_no_file=''):
         self.cae = cae
-        self._err = err_logger
-        self._warn = warn_logger
+        self._err = err_logger or _dummy_stub
+        self._warn = warn_logger or _dummy_stub
         self._ctx_no_file = ctx_no_file
         
         self.error_message = ""
         self.debug_level = cae.get_option('debugLevel')
 
         self.ass_db = None  # lazy connection
-        self.ass_user = ass_user or cae.get_option('pgUser')
-        self.ass_password = ass_password or cae.get_option('pgPassword')
-        self.ass_dsn = cae.get_option('pgDSN')
+        self.ass_user = ass_user or cae.get_option('assUser')
+        self.ass_password = ass_password or cae.get_option('assPassword')
+        self.ass_dsn = cae.get_option('assDSN')
         if self.ass_user and self.ass_password and self.ass_dsn:
             self.connect_ass_db()
 
@@ -376,10 +446,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if self.acu_user and self.acu_password and self.acu_dsn:
             self.connect_acu_db()
 
-        # if user credentials are specified then open/check Salesforce connection
+        # if user credentials are specified then prepare Salesforce connection (non-permanent)
         self.sf_conn, self.sf_sandbox = None, False
         if cae.get_option('sfUser') and cae.get_option('sfPassword') and cae.get_option('sfToken'):
-            self.sf_conn, self.sf_sandbox = prepare_connection(cae)
+            self.sf_conn, self.sf_sandbox = prepare_connection(cae, verbose=False)
             if not self.sf_conn:
                 self.error_message = "AssSysData: SF connection failed - please check account data and credentials"
                 self._err(self.error_message, self._ctx_no_file + 'InitSfConn')
@@ -389,7 +459,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 self._err(self.error_message, self._ctx_no_file + 'InitSfErr')
                 return
 
-        # Sihot does not provide permanent connection; at least prepare GuestSearch instance
+        # Sihot does also not provide permanent connection; at least prepare GuestSearch instance
+        self.sh_conn = True
         self._guest_search = GuestSearch(cae)
 
         # load configuration settings (either from INI file or from Acumen)
@@ -802,14 +873,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     # =================  reservation bookings  ===================================================================
 
-    def rgr_upsert(self, upd_col_values, ho_id, gds_no=None, res_id=None, sub_id=None, commit=False):
+    def rgr_upsert(self, col_values, ho_id, gds_no=None, res_id=None, sub_id=None, commit=False):
         if not gds_no and not (res_id and sub_id):
-            return "rgr_upsert({}, {}): Missing reservation id (gds|res-id)".format(ho_id, upd_col_values)
+            return "rgr_upsert({}, {}): Missing reservation id (gds|res-id)".format(ho_id, col_values)
         where_vars = dict(rgr_ho_fk=ho_id)
-        if gds_no:
-            where_vars.update(rgr_gds_no=gds_no)
-        else:
+        if res_id and sub_id:
             where_vars.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
+        elif gds_no:
+            where_vars.update(rgr_gds_no=gds_no)
+        elif res_id:
+            where_vars.update(rgr_res_id=res_id)
+        upd_col_values = col_values.copy()      # copy dict to prevent changing the dict passed in by the caller
+        upd_col_values.update(where_vars)
+        print("RGR_UPSERT", col_values, upd_col_values)
         self.error_message = self.ass_db.upsert('res_groups', upd_col_values, where_vars, 'rgr_pk', commit=commit)
         if not self.error_message and self.ass_db.curs.rowcount != 1:
             self.error_message = "rgr_upsert({}, {}, {}): Invalid affected row count; expected 1 but got {}"\
@@ -1069,6 +1145,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def sf_client_id_by_email(self, email, sf_obj=DEF_CLIENT_OBJ):
         return self.sf_client_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
 
+    # #######################  SH helpers  ######################################################################
+
+    def sh_apt_wk_yr(self, shd, arri=0):
+        arr = datetime.datetime.strptime(elem_value(shd, 'ARR'), SH_DATE_FORMAT)
+        year, wk = self.rci_arr_to_year_week(arr)
+        apt = elem_value(shd, 'RN', arri=arri)
+        apt_wk = "{}-{:0>2}".format(apt, wk)
+        return apt_wk, year
+
     def sh_client_upsert(self, fields_dict):
         guest = ClientToSihot(self.cae, connect_to_acu=False)
         col_values = dict()
@@ -1087,3 +1172,69 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         elif match_field == 'Email':
             ret = self._guest_search.get_objids_by_email(match_val)
         return ret
+
+    def sh_avail_rooms(self, hotel_ids=None, room_cat_prefix='', day=datetime.date.today()):
+        """ accumulating the number of available rooms in all the hotels specified by the hotel_ids list with the room
+        category matching the first characters of the specified room_cat_prefix string and for a certain day.
+
+        :param hotel_ids:       Optional list of hotel IDs (leave empty for to get the rooms in all hotels accumulated).
+        :param room_cat_prefix: Optional room category prefix string (leave empty for all room categories or pass e.g.
+                                'S' for a accumulation of all the Studios or '1J' for all 1 bedroom junior rooms).
+        :param day:             Optional day (leave empty for to get the available rooms for today's date).
+        :return:                Number of available rooms (negative on overbooking).
+        """
+        if not hotel_ids:
+            # hotel_ids = ['1', '2', '3', '4', '999']
+            hotel_ids = self.ho_id_list()  # determine list of IDs of all active/valid Sihot-hotels
+        day_str = datetime.date.strftime(day, DATE_ISO)
+        cat_info = AvailCatInfo(self.cae)
+        rooms = 0
+        for hotel_id in hotel_ids:
+            if hotel_id == '999':  # unfortunately currently there is no avail data for this pseudo hotel
+                rooms -= self.sh_count_res(hotel_ids=['999'], room_cat_prefix=room_cat_prefix, day=day)
+            else:
+                ret = cat_info.avail_rooms(hotel_id=hotel_id, from_date=day, to_date=day)
+                for cat_id, cat_data in ret.items():
+                    if cat_id.startswith(room_cat_prefix):  # True for all room cats if room_cat_prefix is empty string
+                        rooms += ret[cat_id][day_str]['AVAIL']
+        return rooms
+
+    def sh_count_res(self, hotel_ids=None, room_cat_prefix='', day=datetime.date.today(), res_max_days=27):
+        """ counting uncancelled reservations in all the hotels specified by the hotel_ids list with the room
+        category matching the first characters of the specified room_cat_prefix string and for a certain day.
+
+        :param hotel_ids:       Optional list of hotel IDs (leave empty for to get the rooms in all hotels accumulated).
+        :param room_cat_prefix: Optional room category prefix string (leave empty for all room categories or pass e.g.
+                                'S' for a accumulation of all the Studios or '1J' for all 1 bedroom junior rooms).
+        :param day:             Optional day (leave empty for to get the available rooms for today's date).
+        :param res_max_days:    Optional maximum length of reservation (def=27 days).
+        :return:                Number of valid reservations of the specified hotel(s) and room category prefix and
+                                with arrivals within the date range day-res_max_days...day.
+        """
+        if not hotel_ids:
+            hotel_ids = self.ho_id_list()  # determine list of IDs of all active/valid Sihot-hotels
+        res_len_max_timedelta = datetime.timedelta(days=res_max_days)
+        count = 0
+        res_search = ResSearch(self.cae)
+        for hotel_id in hotel_ids:
+            all_rows = res_search.search(hotel_id=hotel_id, from_date=day - res_len_max_timedelta, to_date=day)
+            if all_rows and isinstance(all_rows, list):
+                for row_dict in all_rows:
+                    res_type = row_dict['RT']['elemVal']
+                    room_cat = row_dict['CAT']['elemVal']
+                    checked_in = datetime.datetime.strptime(row_dict['ARR']['elemVal'], DATE_ISO).date()
+                    checked_out = datetime.datetime.strptime(row_dict['DEP']['elemVal'], DATE_ISO).date()
+                    skip_reasons = []
+                    if res_type == 'S':
+                        skip_reasons.append("cancelled")
+                    if res_type == 'E':
+                        skip_reasons.append("erroneous")
+                    if not room_cat.startswith(room_cat_prefix):
+                        skip_reasons.append("room cat " + room_cat)
+                    if not (checked_in <= day < checked_out):
+                        skip_reasons.append("out of date range " + str(checked_in) + "..." + str(checked_out))
+                    if not skip_reasons:
+                        count += 1
+                    elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                        uprint("AssSysData.sh_count_res(): skipped {} res: {}".format(str(skip_reasons), row_dict))
+        return count

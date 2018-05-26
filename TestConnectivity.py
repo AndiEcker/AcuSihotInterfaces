@@ -1,6 +1,6 @@
 from ae_console_app import ConsoleApp, uprint
-from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
 from ae_notification import add_notification_options, init_notification
+from acif import ACU_DEF_USR, ACU_DEF_DSN
 
 __version__ = '0.1'
 

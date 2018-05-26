@@ -13,10 +13,6 @@ from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 NAMED_BIND_VAR_PREFIX = ':'
 
 
-ACU_DEF_USR = 'SIHOT_INTERFACE'
-ACU_DEF_DSN = 'SP.TEST'
-
-
 def _locked_col_expr(col, locked_cols):
     return "COALESCE(" + col + ", " + NAMED_BIND_VAR_PREFIX + col + ")" if col in locked_cols \
         else NAMED_BIND_VAR_PREFIX + col

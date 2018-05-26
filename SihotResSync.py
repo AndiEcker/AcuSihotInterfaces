@@ -13,8 +13,7 @@ import datetime
 
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from ae_db import ACU_DEF_USR, ACU_DEF_DSN
-
+from acif import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import ClientToSihot, ResToSihot, \
     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
     USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \

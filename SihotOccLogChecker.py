@@ -7,8 +7,9 @@ import datetime
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
+from ae_db import OraDB
 from ae_notification import add_notification_options, init_notification
+from acif import ACU_DEF_USR, ACU_DEF_DSN
 
 __version__ = '0.1'
 

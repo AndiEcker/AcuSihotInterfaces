@@ -12,8 +12,8 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | :--- | :--- | :---: |
 | AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| [AssCacheSync](#asscachesync-application) | Initialize, pull, verify or push the AssCache data against Acumen, Sihot and/or Salesforce | Web |
-| [AssServer](#assserver-application) | Listening to Sihot SXML interface for to synchronize reservation changes onto the ass_cache PG database | Sxml, Web |
+| [AssCacheSync](#asscachesync-application) | Initialize, pull, verify or push AssCache data against Acumen, Salesforce and/or Sihot | Web |
+| [AssServer](#assserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres, Acumen and Salesforce | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
@@ -60,6 +60,9 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfClientValidator |
+| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | AssCacheSync, AssServer |
+| assPassword | User account password for the AssCache/Postgres database | - | P | AssCacheSync, AssServer |
+| assDSN | Database name of the AssCache/Postgres database | ass_cache | N | AssCacheSync, AssServer |
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
@@ -78,7 +81,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfClientValidator |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
-| init | Initialize/Recreate postgres AssCache database (0=No, 1=Yes) | 0 | I | AssCacheSync |
+| init | Initialize/Recreate AssCache/Postgres database (0=No, 1=Yes) | 0 | I | AssCacheSync |
 | jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
@@ -87,9 +90,6 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | matchFields | Specify field(s) used for to match/lookup the associated data record | - | Z | AssCacheSync |
 | matchRecords | Restrict processed (dict keys: C=client, P=product, R=reservation) destination records | - | M | AssCacheSync |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
-| pgUser | User account name for the postgres database | 'postgres' | U | AssCacheSync, AssServer |
-| pgPassword | User account password for the postgres database | - | P | AssCacheSync, AssServer |
-| pgDSN | Database name of the postgres database | ass_cache | N | AssCacheSync, AssServer |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfClientValidator |
 | pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | AssCacheSync |
 | push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | AssCacheSync |
@@ -254,7 +254,7 @@ to connect (as a client) for to propagate/push the following live actions done w
 * Room Check-Outs
 * Room Moves
 
-Any of these Sihot actions will be cashed within the postgres database AssCache and later (after the reservations got
+Any of these Sihot actions will be cashed within the AssCache/Postgres database and later (after the reservations got
 fully implemented within Salesforce) also be propagated onto our Salesforce system. We could pass these
 notifications directly into the SF system (by-passing AssCache) if SF would be able to act as a server for
 web services, but most likely we need to implement a bridge like AssServer here because the Sihot live/push interfaces 
@@ -797,11 +797,11 @@ configuration file):
 | Settings | addressValidatorFetchUrl | Fetch URL for address validation web service |
 | Settings | addressValidatorApiKey | address validation web service API key |
 | Settings | apCats | Room category overloads for single hotel rooms |
+| Settings | assRootUsr | Root user account name for AssCache database |
+| Settings | assRootPwd | Root user account name for AssCache database |
 | Settings | emailValidatorBaseUrl | Base URL for email validation web service |
 | Settings | emailValidatorApiKey | email validation web service API key |
 | Settings | hotelIds | Mapping of Sihot/Acumen hotel ids |
-| Settings | pgRootUsr | Root user account name for AssCache database |
-| Settings | pgRootPwd | Root user account name for AssCache database |
 | Settings | phoneValidatorBaseUrl | Base URL for phone number validation web service |
 | Settings | phoneValidatorApiKey | phone number validation web service API key |
 | Settings | resortCats | Room category defaults and apartment feature overloads for all hotels/resorts |

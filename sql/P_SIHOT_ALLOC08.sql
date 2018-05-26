@@ -41,7 +41,7 @@ END
   ae:03-05-17 V05: using k package constant for the maximum days of difference between expected and real arrival/departure (see also P_SIHOT_ALLOC()).
   ae:16-05-17 V06: added Sihot request to pcExtraInfo OUT value for to be added to the T_SRSL.SRSL_MESSAGE column for debugging.
   ae:24-10-17 V07: QuickAndDirtyFix: added status 150 and 190 to valid not-occupied apt statuses (found recently 53 of them all RCIs and the 150 ones only for 2017+ occupancy - STRANGE!!!).
-  ae:18-11-17 V08: added pcGdsNo parameters (will be rolled out in about two weeks).
+  ae:18-11-17 V08: added pcGdsNo parameters (will be rolled out in about two weeks) - finally rolled out 23-04-2018.
 */;
 /
 

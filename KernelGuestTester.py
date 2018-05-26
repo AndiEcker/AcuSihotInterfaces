@@ -1,5 +1,5 @@
 from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from ae_db import ACU_DEF_USR, ACU_DEF_DSN
+from acif import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import SihotXmlBuilder, ClientToSihot, SXML_DEF_ENCODING
 
 __version__ = '0.1'

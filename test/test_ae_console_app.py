@@ -5,10 +5,28 @@ import datetime
 from argparse import ArgumentError
 import pytest
 
-from ae_console_app import ConsoleApp, DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, full_stack_trace, uprint
+from ae_console_app import ConsoleApp, full_stack_trace, uprint, \
+    DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES
 
 
 class TestConfigOptions:
+    def test_set_config_with_reload(self):
+        file_name = os.path.join(os.getcwd(), 'test_config.ini')
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\ntest_config_var = OtherTestValue')
+        cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
+        val = 'test_value'
+        assert not cae.set_config('test_config_var', val)
+
+        cfg_val = cae.get_config('test_config_var')
+        assert cfg_val != val
+
+        cae.load_config()
+        cfg_val = cae.get_config('test_config_var')
+        assert cfg_val == val
+
+        os.remove(file_name)
+
     def test_multiple_option_single_char(self):
         cae = ConsoleApp('0.0', 'test_multiple_option')
         old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
@@ -414,15 +432,15 @@ class TestLogFile:
         old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
         sys.argv = []
         assert cae.get_option('logFile')    # get_option() has to be called at least once for to create log file
-        for i in range(12):
+        for i in range(MAX_NUM_LOG_FILES):
             for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
                 uprint("TestLogEntry{: >26}{: >26}".format(i, j))
         # clean up
         cae._close_log_file()
         os.remove(log_file)
-        for i in range(9):
+        for i in range(MAX_NUM_LOG_FILES):
             fn, ext = os.path.splitext(log_file)
-            rot_log_file = fn + "-" + str(i + 1) + ext
+            rot_log_file = fn + "-{:0>{index_width}}".format(i+1, index_width=len(str(MAX_NUM_LOG_FILES))) + ext
             assert os.path.exists(rot_log_file)
             os.remove(rot_log_file)
         sys.argv = old_args

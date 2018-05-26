@@ -43,6 +43,7 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
                               (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
 ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
 
+MAX_NUM_LOG_FILES = 99
 
 # initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
 _ca_instance = None
@@ -360,10 +361,11 @@ class ConsoleApp:
         else:   # .. and if there is no INI file at all then create a <APP_NAME>.INI file in the cwd
             self._cfg_fnam = cwd_path_fnam + INI_EXT
 
-        self._cfg_parser = ConfigParser()
-        self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
-        self._cfg_parser.read(config_files)
+        self._cfg_parser = None
+        self._config_files = config_files
+        self.load_config()
 
+        # prepare argument parser
         self._arg_parser = ArgumentParser(description=app_desc)
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
                         choices=debug_levels.keys())
@@ -530,6 +532,11 @@ class ConsoleApp:
                       section + "/" + str(name) + " manually to the value " + str(val)
         return err_msg
 
+    def load_config(self):
+        self._cfg_parser = ConfigParser()
+        self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
+        self._cfg_parser.read(self._config_files)
+
     def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_ENABLED):
         if self.get_option('debugLevel') >= minimum_debug_level:
             uprint(*objects, sep=sep, end=end, file=file)
@@ -548,10 +555,7 @@ class ConsoleApp:
             app_std_err.log_file = self._log_file_obj
 
     def _rename_log_file(self):
-        MAX_NUM_LOG_FILES = 99
-
-        self._log_file_index += 1
-
+        self._log_file_index = 0 if self._log_file_index >= MAX_NUM_LOG_FILES else self._log_file_index + 1
         index_width = len(str(MAX_NUM_LOG_FILES))
         file_path, file_ext = os.path.splitext(self._log_file_name)
         dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=index_width) + file_ext

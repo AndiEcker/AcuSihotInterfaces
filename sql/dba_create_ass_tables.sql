@@ -132,12 +132,12 @@ CREATE TABLE res_groups
   rgr_pk                  SERIAL PRIMARY KEY,
   rgr_ho_fk               VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),   -- SIHOT hotel id (e.g. '1'==BHC, ...)
   rgr_res_id              VARCHAR(18) NOT NULL,     -- SIHOT reservation id (res-number / sub-number)
-  rgr_sub_id              VARCHAR(3) NOT NULL,
+  rgr_sub_id              VARCHAR(3) NOT NULL DEFAULT '1',
   rgr_gds_no              VARCHAR(24),              -- opt. SIHOT reservation GDSNO (OBJID not available in RES-SEARCH)
   rgr_order_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgr_used_ri_fk          INTEGER REFERENCES res_inventories(ri_pk),
   rgr_rci_deposit_ri_fk   INTEGER REFERENCES res_inventories(ri_pk),
-  rgr_status              VARCHAR(3) NOT NULL,
+  rgr_status              VARCHAR(3),
   rgr_adults              INTEGER NOT NULL DEFAULT 2,
   rgr_children            INTEGER NOT NULL DEFAULT 0,
   rgr_arrival             DATE,
@@ -176,20 +176,20 @@ CREATE TABLE res_group_clients
   rgc_rgr_fk              INTEGER NOT NULL REFERENCES res_groups(rgr_pk),
   rgc_room_seq            INTEGER NOT NULL DEFAULT 0,
   rgc_pers_seq            INTEGER NOT NULL DEFAULT 0,
-  rgc_surname             VARCHAR(42) NOT NULL,
-  rgc_firstname           VARCHAR(42) NOT NULL,
+  rgc_surname             VARCHAR(42),
+  rgc_firstname           VARCHAR(42),
   rgc_email               VARCHAR(69),            -- Sihot values (cashed but not corrected, s.a. cl_email
   rgc_phone               VARCHAR(42),            -- .. and cl_phone)
   rgc_language            VARCHAR(3),
   rgc_country             VARCHAR(3),
   rgc_dob                 DATE,
-  rgc_auto_generated      VARCHAR(1) NOT NULL DEFAULT '1',
+  rgc_auto_generated      VARCHAR(1),
   rgc_occup_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgc_flight_arr_comment  VARCHAR(42),
   rgc_flight_arr_time     TIME,
   rgc_flight_dep_comment  VARCHAR(42),
   rgc_flight_dep_time     TIME,
-  rgc_pers_type           VARCHAR(3) NOT NULL DEFAULT '1A',
+  rgc_pers_type           VARCHAR(3),
   rgc_sh_pack             VARCHAR(3),
   rgc_room_id             VARCHAR(6),
   UNIQUE (rgc_rgr_fk, rgc_room_seq, rgc_pers_seq)
@@ -215,3 +215,70 @@ CREATE OR REPLACE VIEW v_clients_refs_owns AS
     FROM clients;
 
 COMMENT ON VIEW v_clients_refs_owns IS 'clients extended by external_refs and owned pt_group(s) aggregates';
+
+-- the query for a view for to show clients with all duplicate external references is too slow (needs more than 24h)
+-- .. therefore providing a separate view for each type of external reference: Acumen, Sf, Sihot, Email, Phone
+CREATE OR REPLACE VIEW v_client_duplicates_ac AS
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+             || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
+             || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
+             || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
+             || CASE WHEN a.cl_phone = b.cl_phone THEN ', Phone=' || a.cl_phone ELSE '' END
+             , 3) AS duplicates
+    FROM clients a INNER JOIN clients b
+        ON a.cl_pk < b.cl_pk AND a.cl_ac_id = b.cl_ac_id;
+
+COMMENT ON VIEW v_client_duplicates_ac IS 'clients with duplicate Acumen client reference';
+
+CREATE OR REPLACE VIEW v_client_duplicates_sf AS
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+             || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
+             || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
+             || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
+             || CASE WHEN a.cl_phone = b.cl_phone THEN ', Phone=' || a.cl_phone ELSE '' END
+             , 3) AS duplicates
+    FROM clients a INNER JOIN clients b
+        ON a.cl_pk < b.cl_pk AND a.cl_sf_id = b.cl_sf_id;
+
+COMMENT ON VIEW v_client_duplicates_sf IS 'clients with duplicate Salesforce ID';
+
+CREATE OR REPLACE VIEW v_client_duplicates_sh AS
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+             || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
+             || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
+             || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
+             || CASE WHEN a.cl_phone = b.cl_phone THEN ', Phone=' || a.cl_phone ELSE '' END
+             , 3) AS duplicates
+    FROM clients a INNER JOIN clients b
+        ON a.cl_pk < b.cl_pk AND a.cl_sh_id = b.cl_sh_id;
+
+COMMENT ON VIEW v_client_duplicates_sh IS 'clients with duplicate Sihot guest object ID';
+
+CREATE OR REPLACE VIEW v_client_duplicates_email AS
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+             || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
+             || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
+             || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
+             || CASE WHEN a.cl_phone = b.cl_phone THEN ', Phone=' || a.cl_phone ELSE '' END
+             , 3) AS duplicates
+    FROM clients a INNER JOIN clients b
+        ON a.cl_pk < b.cl_pk AND a.cl_email = b.cl_email;
+
+COMMENT ON VIEW v_client_duplicates_email IS 'clients with duplicate email address';
+
+CREATE OR REPLACE VIEW v_client_duplicates_phone AS
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+             || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
+             || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
+             || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
+             || CASE WHEN a.cl_phone = b.cl_phone THEN ', Phone=' || a.cl_phone ELSE '' END
+             , 3) AS duplicates
+    FROM clients a INNER JOIN clients b
+        ON a.cl_pk < b.cl_pk AND a.cl_phone = b.cl_phone;
+
+COMMENT ON VIEW v_client_duplicates_phone IS 'clients with duplicate phone number';

@@ -9,9 +9,11 @@ from traceback import format_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_notification import add_notification_options, init_notification
-from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
+from ae_db import OraDB
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
+from acif import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder, SXML_DEF_ENCODING
+from shif import add_sh_options
 
 __version__ = '0.4'
 
@@ -24,12 +26,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
     cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
     cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
-    cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-    # default is 14773 for Acumen and Sihot on 14774
-    cae.add_option('shClientPort', "IP port of the interface of this server", 11000, 'w')  # 11001 for Sihot
-
-    cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
-    cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
+    add_sh_options(cae, client_port=11000)
 
     add_notification_options(cae)
 
@@ -156,7 +153,7 @@ def create_ack_response(req, ret_code, msg='', status=''):
 
 
 def oc_room_change(req):
-    notify("####  Room change type {} for guest {} in room {}".format(req.oc, req.gid, req.rn),
+    notify("####  {} room change for guest {} in room {}".format(req.oc, req.gid, req.rn),
            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
     error_msg = alloc_trigger(req.oc, req.gid, req.rn, req.orn, req.gdsno, req.get_xml())
     if error_msg:

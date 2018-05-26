@@ -32,15 +32,21 @@ select CD_CODE, case when instr(SIHOT_GUEST_TYPE, 'c') > 0 then CD_CODE || 'P2' 
      , (select LG_SIHOT_LANG from T_LG where LG_CODE = CD_LGREF) as SIHOT_LANG
      -- addtional values from other tables
      --, (select f_stragg(distinct CR_TYPE || '=' || CR_REF) from T_CR where CR_CDREF = CD_CODE) as EXT_REFS
-     , (select f_stragg(distinct CR_TYPE || '=' || CR_REF) from (select CR_TYPE, CR_REF, CR_CDREF from T_CR 
+     , (select f_stragg(distinct CR_TYPE || '=' || CR_REF) from (select DISTINCT decode(CR_TYPE, 'RCIP', 'RCI', 'SPX', 'RCI', 'KEYS', 'RCI', CR_TYPE) as CR_TYPE, CR_REF, CR_CDREF from T_CR 
                                                                  union all 
-                                                                 select 'SF', MS_SF_ID, ML_CDREF from T_ML, T_MS where ML_CODE = MS_MLREF and MS_SF_ID is not NULL)
+                                                                 select 'SF', MS_SF_ID, ML_CDREF from T_ML, T_MS where ML_CODE = MS_MLREF and MS_SF_ID is not NULL
+                                                                 union
+                                                                 select 'SF', CD_SF_ID1, CD_CODE from T_CD where CD_SF_ID1 is not NULL
+                                                                 union
+                                                                 select 'SF', CD_SF_ID2, CD_CODE from T_CD where CD_SF_ID2 is not NULL)
                                                           where CR_CDREF = CD_CODE) as EXT_REFS
-     , (select max(MS_SF_ID) from T_ML, T_MS where ML_CODE = MS_MLREF and MS_SF_ID is not NULL and ML_CDREF = CD_CODE) as SIHOT_SF_ID
+     , nvl(CD_SF_ID1, (select max(MS_SF_ID) from T_ML, T_MS where ML_CODE = MS_MLREF and MS_SF_ID is not NULL and ML_CDREF = CD_CODE)) as SIHOT_SF_ID
      , SIHOT_GUEST_TYPE 
   from (select F_SIHOT_GUEST_TYPE(CD_CODE) as SIHOT_GUEST_TYPE, T_CD.* from T_CD)
 /*
   ae:27-08-16 first beta - for SIHOT sync/migration project.
+  ae:08-02-18 merged external ref types RCIP and SPX into RCI - mabye also add TRC, XSL and KEYS - THERE NOT ROLLED OUT YET.
+  ae:26-05-18 added CD_SF_ID1/CD_SF_ID2 into EXT_REFS/SIHOT_SF_ID.
 */
 /
 

@@ -10,10 +10,10 @@ from functools import partial
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
-from ass_sys_data import AssSysData
+from acif import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, SXML_DEF_ENCODING
 from sfif import add_sf_options
+from ass_sys_data import AssSysData
 
 __version__ = '0.4'
 

@@ -3,6 +3,7 @@
     and/or Salesforce.
 
     0.1     first beta.
+    0.2     refactored using add_ass_options() and init_ass_data().
 """
 import datetime
 import pprint
@@ -11,15 +12,15 @@ from collections import OrderedDict
 from ae_console_app import ConsoleApp, uprint, to_ascii, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
 from sxmlif import ResToSihot, AC_ID_2ND_COUPLE_SUFFIX
-from shif import ResBulkFetcher, elem_value, pax_count, gds_no, apt_wk_yr, elem_path_join, guest_data, SH_DATE_FORMAT
-from sfif import add_sf_options, obj_from_id
-from ass_sys_data import (AssSysData, ensure_long_id, correct_email, correct_phone, field_desc, field_clients_idx,
+from shif import elem_value, pax_count, gds_no, elem_path_join, guest_data, SH_DATE_FORMAT
+from sfif import obj_from_id
+from ass_sys_data import (add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone,
+                          field_desc, field_clients_idx,
                           ac_fld_name, sf_fld_name, sh_fld_value, field_list_to_sf, field_dict_from_sf, client_fields,
                           AC_SQL_EXT_REF_TYPE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
                           SF_DEF_SEARCH_FIELD, SH_DEF_SEARCH_FIELD)
-from ae_notification import add_notification_options, init_notification
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
@@ -52,25 +53,11 @@ cae.add_option('matchFields', "Specify (dict keys: C=client, P=product, R=reserv
                               "associated record e.g. {'C':['Phone']} is using Phone for to associate client records",
                {}, 'Z')
 
-cae.add_option('pgUser', "User account name for the postgres cache database", '', 'U')
-cae.add_option('pgPassword', "User account password for the postgres cache database", '', 'P')
-cae.add_option('pgDSN', "Database (and optional host) name of cache database (dbName[@host])", 'ass_cache', 'N')
+ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True, bulk_fetcher='Res')
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", '', 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", '', 'd')
-
-add_sf_options(cae)
-
-sh_rbf = ResBulkFetcher(cae)
-sh_rbf.add_options()
 
 notification = None             # declare early/here to ensure proper shutdown and display of startup errors on console
-add_notification_options(cae)
-
-
 _debug_level = cae.get_option('debugLevel')
-
 
 # ACTIONS, ACTION-FILTERS AND ACTION-MATCHES
 systems = dict(ac='Acumen', sh='Sihot', sf='Salesforce')
@@ -110,23 +97,11 @@ if not isinstance(act_match_fields, dict) or not act_match_fields:
     act_match_fields = {k: act_match_fields or "" for (k, v) in types.items()}
 uprint("User-defined/Processed match fields:", act_match_fields)
 
-sh_rbf.load_config()
-sh_rbf.print_config()
-
-acu_user = cae.get_option('acuUser')
-acu_password = cae.get_option('acuPassword')
-acu_dsn = cae.get_option('acuDSN')
-uprint("Acumen user/DSN:", acu_user, acu_dsn)
-
-pg_user = cae.get_option('pgUser')
-pg_pw = cae.get_option('pgPassword')
-pg_dsn = cae.get_option('pgDSN')
-uprint("AssCache user/dsn:", pg_user, pg_dsn)
-
 
 # LOGGING AND NOTIFICATION HELPERS
 error_log = list()
 warn_log = list()
+notification = notification_warning_emails = None
 
 
 def send_notification(exit_code=0):
@@ -138,11 +113,11 @@ def send_notification(exit_code=0):
             uprint("****  {} send error: {}. mail-body='{}'.".format(subject, send_err, mail_body))
             if not exit_code:
                 exit_code = 36
-        if warning_notification_emails and error_log:
+        if notification_warning_emails and error_log:
             mail_body = "ERRORS:\n\n" + ("\n\n".join(error_log) if error_log else "NONE") \
                 + "\n\nPROTOCOL:\n\n" + ("\n\n".join(warn_log) if warn_log else "NONE")
             subject = "AssCacheSync Errors"
-            send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
+            send_err = notification.send_notification(mail_body, subject=subject, mail_to=notification_warning_emails)
             if send_err:
                 uprint("****  {} warning send error: {}. mail-body='{}'.".format(subject, send_err, mail_body))
                 if not exit_code:
@@ -170,33 +145,36 @@ def log_warning(msg, ctx, importance=2):
 
 
 # check for to (re-)create and initialize PG database - HAS TO BE DONE BEFORE AssSysData init because pg user not exists
+ass_user = cae.get_option('assUser')
+ass_pw = cae.get_option('assPassword')
+ass_dsn = cae.get_option('assDSN')
 if act_init:
-    pg_dbname, pg_host = pg_dsn.split('@') if '@' in pg_dsn else (pg_dsn, '')
-    pg_root_dsn = 'postgres' + ('@' + pg_host if '@' in pg_dsn else '')
-    log_warning("creating database {} and user {}".format(pg_dsn, pg_user), 'initCreateDBandUser')
-    pg_db = PostgresDB(usr=cae.get_config('pgRootUsr'), pwd=cae.get_config('pgRootPwd'), dsn=pg_root_dsn,
+    pg_dbname, pg_host = ass_dsn.split('@') if '@' in ass_dsn else (ass_dsn, '')
+    pg_root_dsn = 'AssCache/Postgres' + ('@' + pg_host if '@' in ass_dsn else '')
+    log_warning("creating database {} and user {}".format(ass_dsn, ass_user), 'initCreateDBandUser')
+    pg_db = PostgresDB(usr=cae.get_config('assRootUsr'), pwd=cae.get_config('assRootPwd'), dsn=pg_root_dsn,
                        debug_level=_debug_level)
     if pg_db.execute_sql("CREATE DATABASE " + pg_dbname + ";", auto_commit=True):  # " LC_COLLATE 'C'"):
         log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72)
 
-    if pg_db.select('pg_user', ['count(*)'], "usename = :pg_user", dict(pg_user=pg_user)):
+    if pg_db.select('pg_user', ['count(*)'], "usename = :ass_user", dict(ass_user=ass_user)):
         log_error(pg_db.last_err_msg, 'initCheckUser', exit_code=81)
     if not pg_db.fetch_value():
-        if pg_db.execute_sql("CREATE USER " + pg_user + " WITH PASSWORD '" + pg_pw + "';", commit=True):
+        if pg_db.execute_sql("CREATE USER " + ass_user + " WITH PASSWORD '" + ass_pw + "';", commit=True):
             log_error(pg_db.last_err_msg, 'initCreateUser', exit_code=84)
-        if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE " + pg_dbname + " to " + pg_user + ";", commit=True):
+        if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE " + pg_dbname + " to " + ass_user + ";", commit=True):
             log_error(pg_db.last_err_msg, 'initGrantUserConnect', exit_code=87)
     pg_db.close()
 
     log_warning("creating tables and audit trigger schema/extension", 'initCreateTableAndAudit')
-    pg_db = PostgresDB(usr=cae.get_config('pgRootUsr'), pwd=cae.get_config('pgRootPwd'), dsn=pg_dsn,
+    pg_db = PostgresDB(usr=cae.get_config('assRootUsr'), pwd=cae.get_config('assRootPwd'), dsn=ass_dsn,
                        debug_level=_debug_level)
     if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO "
-                         + pg_user + ";"):
+                         + ass_user + ";"):
         log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=90)
-    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO " + pg_user + ";"):
+    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO " + ass_user + ";"):
         log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=93)
-    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO " + pg_user + ";"):
+    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO " + ass_user + ";"):
         log_error(pg_db.last_err_msg, 'initGrantUserFunctions', exit_code=96)
     if pg_db.execute_sql(open("sql/dba_create_audit.sql", "r").read(), commit=True):
         log_error(pg_db.last_err_msg, 'initCreateAudit', exit_code=99)
@@ -206,27 +184,14 @@ if act_init:
 
 
 # logon to and prepare AssCache and config data env, optional also connect to Acumen, Salesforce, Sihot
-conf_data = AssSysData(cae, err_logger=log_error, warn_logger=log_warning)
+ass_data = init_ass_data(cae, ass_options)
+conf_data = ass_data['AssSysData']
 if conf_data.error_message:
     log_error(conf_data.error_message, 'AssSysDataInit', importance=4, exit_code=9)
-
-# logon to and prepare ass_cache database and optionally logon to Acumen database and to Salesforce server
 ass_db = conf_data.ass_db
-if not ass_db:
-    log_error("Connecting to AssCache database failed", 'AssUserLogOn', importance=4, exit_code=12)
-
 acu_db = conf_data.acu_db
-if not acu_db and [_ for _ in act_pulls + act_veris + act_pushes if _[:2] == 'ac']:
-    log_error("Connecting to Acumen database failed", 'AcuUserLogOn', importance=4, exit_code=15, dbs=[ass_db])
-
-if not conf_data.sf_conn and [_ for _ in act_pulls + act_veris + act_pushes if _[:2] == 'sf']:
-    log_error("Connecting to Salesforce failed", 'SfUserLogOn', importance=4, exit_code=18, dbs=[ass_db, acu_db])
-
-notification, warning_notification_emails \
-    = init_notification(cae, "{}/{}/{}".format(acu_dsn, cae.get_option('shServerIP'),
-                                               "SBox" if conf_data.sf_sandbox else "Prod"))
-if not notification:
-    log_warning("Notification is disabled", 'EmailNotificationDisabled')
+notification = ass_data['Notification']
+notification_warning_emails = ass_data['WarningEmailAddresses']
 
 
 # ACTION HELPERS
@@ -268,7 +233,7 @@ AC_SQL_MAIN_RCI = "CD_RCI_REF"
 
 
 def ac_pull_clients():
-    """ migrate client data from Acumen into ass_cache/postgres """
+    """ migrate client data from Acumen into AssCache/Postgres """
 
     # fetch all couple-clients from Acumen
     log_warning("Fetching couple client data from Acumen", 'pullAcuCoupleClients', importance=4)
@@ -454,7 +419,7 @@ def ac_pull_res_data():
                           rgr_long_comment=crow['SIHOT_TEC_NOTE'],
                           rgr_time_in=ac_res[0],
                           rgr_time_out=ac_res[1],
-                          rgr_created_by=pg_user,
+                          rgr_created_by=ass_user,
                           rgr_created_when=cae.startup_beg,
                           rgr_last_change=cae.startup_beg,
                           rgr_last_sync=cae.startup_beg
@@ -654,7 +619,7 @@ def sh_pull_res_data():
     if act_record_filters.get('R'):
         log_warning("filterRecords option not implemented for reservation pulls from Sihot", 'pullShResFilterNotImpl',
                     importance=3)
-    rbf_groups = sh_rbf.fetch_all()
+    rbf_groups = ass_options['ResBulkFetcher'].fetch_all()
     error_msg = ""
     for rg in rbf_groups:
         mc = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'MATCHCODE'])
@@ -668,8 +633,7 @@ def sh_pull_res_data():
                 break
             error_msg = ""
 
-        apt, wk, year = apt_wk_yr(rg, cae)
-        apt_wk = "{}-{:0>2}".format(apt, wk)
+        apt_wk, year = conf_data.sh_apt_wk_yr(rg)
         if ass_db.select('res_inventories', ['ri_pk'], "ri_pk = :aw and ri_usage_year = :y", dict(aw=apt_wk, y=year)):
             error_msg = ass_db.last_err_msg
             break
@@ -699,7 +663,7 @@ def sh_pull_res_data():
                     rgr_ext_book_day=elem_value(rg, 'SALES-DATE'),
                     rgr_comment=elem_value(rg, elem_path_join(['RESERVATION', 'COMMENT'])),
                     rgr_long_comment=elem_value(rg, 'TEC-COMMENT'),
-                    rgr_created_by=pg_user,
+                    rgr_created_by=ass_user,
                     rgr_created_when=cae.startup_beg,
                     rgr_last_change=cae.startup_beg,
                     rgr_last_sync=cae.startup_beg

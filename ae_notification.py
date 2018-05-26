@@ -1,12 +1,12 @@
-from smtplib import SMTP, SMTP_SSL, SMTP_PORT, SMTP_SSL_PORT
+from smtplib import SMTP, SMTP_SSL
 from email.mime.text import MIMEText
 
 from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 
 
-DEF_ENC_PORT = SMTP_PORT        # ==25
+DEF_ENC_PORT = 25
 DEF_ENC_SERVICE_NAME = 'smtp'
-SSL_ENC_PORT = SMTP_SSL_PORT    # ==465
+SSL_ENC_PORT = 465
 SSL_ENC_SERVICE_NAME = 'smtps'
 TSL_ENC_PORT = 587
 TSL_ENC_SERVICE_NAME = 'smtpTLS'

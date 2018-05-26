@@ -66,7 +66,7 @@ def add_sf_options(cae):
     cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
 
 
-def prepare_connection(cae):
+def prepare_connection(cae, verbose=True):
     global _debug_level
     _debug_level = cae.get_option('debugLevel')
 
@@ -79,7 +79,8 @@ def prepare_connection(cae):
     sf_sandbox = cae.get_option('sfIsSandbox', default_value='test' in sf_user.lower() or 'sandbox' in sf_user.lower())
     sf_client = cae.get_option('sfClientId')
 
-    uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
+    if verbose:
+        uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
     sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
 

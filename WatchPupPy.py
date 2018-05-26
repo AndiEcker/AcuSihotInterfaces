@@ -4,6 +4,7 @@
     0.5     added new option sendOutput for to allow caller to use either check_call() or check_output().
     0.6     added outage check of T_SRSL/ARO (Sihot-To-Acumen interface), changed run lock reset to be optional.
     0.7     added process ids to notification emails and stdout.
+    0.8     refactored using add_ass_options() and init_ass_data().
 """
 import os
 import time
@@ -14,11 +15,12 @@ import pprint
 
 from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, \
     full_stack_trace
-from ae_db import OraDB, ACU_DEF_USR, ACU_DEF_DSN
-from ae_notification import add_notification_options, init_notification
-from sxmlif import PostMessage, GuestSearch, SXML_DEF_ENCODING
+from ae_db import OraDB
+from sxmlif import PostMessage, GuestSearch
+from ass_sys_data import add_ass_options, init_ass_data
 
-__version__ = '0.7'
+
+__version__ = '0.8'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 MAX_SRSL_ARO_OUTAGE_HOURS = 9.0
@@ -31,20 +33,7 @@ cae.add_option('envChecks', "Number of environment checks per command interval",
 cae.add_option('sendOutput',
                "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
-
-cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('shServerPort', "IP port of the WEB interface of this server", 14777, 'w')
-cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
-cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
-cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
-
-cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b')
-
-add_notification_options(cae)
-
+ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True)
 
 if not cae.get_option('cmdLine'):
     uprint('Empty command line - Nothing to do.')
@@ -53,22 +42,23 @@ if not cae.get_option('cmdLine'):
 command_line_args = cae.get_option('cmdLine').split(' ')
 uprint('Command line:', cae.get_option('cmdLine'))
 uprint("Command interval/checks:", cae.get_option('cmdInterval'), cae.get_option('envChecks'))
-check_acumen = cae.get_option('acuUser') and cae.get_option('acuPassword') and cae.get_option('acuDSN')
-if check_acumen:
-    uprint('Checked Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-last_rt_prefix = cae.get_option('acuDSN')[-4:]
-check_sihot_web = cae.get_option('shServerIP') and cae.get_option('shServerPort')
-check_sihot_kernel = cae.get_option('shServerIP') and cae.get_option('shServerKernelPort')
-if check_sihot_web or check_sihot_kernel:
-    uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-           cae.get_option('shServerKernelPort'))
-    uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
-break_on_error = cae.get_option('breakOnError')
-uprint('Break on error:', 'Yes' if break_on_error else 'No')
-notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
+
+ass_data = init_ass_data(cae, ass_options)
+conf_data = ass_data['AssSysData']
+if conf_data.error_message:
+    uprint("WatchPupPy startup error: ", conf_data.error_message)
+    cae.shutdown(exit_code=9)
+
+check_ass = conf_data.ass_db
+check_acu = conf_data.acu_db
+check_sf = conf_data.sf_conn
+check_sh_web = cae.get_option('shServerIP') and cae.get_option('shServerPort')
+check_sh_kernel = cae.get_option('shServerIP') and cae.get_option('shServerKernelPort')
+
+break_on_error = ass_data['BreakOnError']
+notification = ass_data['Notification']
 send_output = 1 if notification and cae.get_option('sendOutput') else 0
 uprint('Send Output (subprocess call method: 1=check_output, 0=check_call)', send_output)
-
 
 command_interval = cae.get_option('cmdInterval')  # in seconds
 env_checks_per_interval = cae.get_option('envChecks')
@@ -87,12 +77,13 @@ if reset_run_time_lock:
 
 
 last_sync = datetime.datetime.now()
+last_rt_prefix = cae.get_option('acuDSN')[-4:]
 
 
 def user_notification(subject, body):
     parent_pid = os.getppid()
     pid = os.getpid()
-    subject += " pid=" + str(parent_pid) + ("/" + str(pid) if pid != parent_pid else "")
+    subject += " " + command_line_args[0] + " pid=" + str(parent_pid) + ("/" + str(pid) if pid != parent_pid else "")
     body = pprint.pformat(body, indent=3, width=120)
 
     if notification:
@@ -187,8 +178,11 @@ while True:
             get_timer_corrected(), last_check, check_interval),
             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-        # check environment and connections: Acu/Oracle, Sihot servers and interfaces
-        if check_acumen:
+        # check environment and connections: AssCache, Acu/Oracle, Salesforce, Sihot servers and interfaces
+        if check_ass:
+            pass  # TODO
+
+        if check_acu:
             ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
                            debug_level=cae.get_option('debugLevel'))
             err_msg = ora_db.connect()
@@ -261,7 +255,10 @@ while True:
             tc_ag_obj_id = '20'
             tc_ag_mc = 'TCAG'
 
-        if check_sihot_kernel:
+        if check_sf:
+            pass        # TODO
+
+        if check_sh_kernel:
             gi = GuestSearch(cae)
             tc_sc_obj_id2 = gi.get_objid_by_matchcode(tc_sc_mc)
             if tc_sc_obj_id != tc_sc_obj_id2:
@@ -274,12 +271,13 @@ while True:
                     .format(tc_ag_obj_id, tc_ag_obj_id2)
                 continue
 
-        if check_sihot_web:
+        if check_sh_web:
             pm = PostMessage(cae)
             err_msg = pm.post_message("WatchPupPy Sihot WEB check for command {}".format(command_line_args[0]))
             if err_msg:
                 continue
 
+        # check interval / next execution
         last_check = get_timer_corrected()
 
         if last_check + check_interval < last_run + command_interval:

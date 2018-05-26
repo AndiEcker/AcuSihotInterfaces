@@ -357,9 +357,13 @@ MAP_WEB_RES = \
         #  'colValFromAcu': "'2TIC'"},   # mandatory but could be empty (to get PMS fallback-default)
         # RUL_SIHOT_CAT results in error 1011 for tk->TC/TK bookings with room move and room with higher/different room
         # .. cat, therefore use price category as room category for Thomas Cook Bookings.
+        # .. similar problems we experienced when we added the RCI Allotments (here the CAT need to be the default cat)
+        # .. on the 24-05-2018 so finally we replaced the category of the (maybe) allocated room with the cat that
+        # .. get determined from the requested room size
+        # 'colValFromAcu': "case when RUL_SIHOT_RATE in ('TC', 'TK')"
+        #                  " then F_SIHOT_CAT('RU' || RU_CODE) else RUL_SIHOT_CAT end"},
         {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',  # needed for DELETE action
-         'colValFromAcu': "case when RUL_SIHOT_RATE in ('TC', 'TK')"
-                          " then F_SIHOT_CAT('RU' || RU_CODE) else RUL_SIHOT_CAT end"},
+         'colValFromAcu': "F_SIHOT_CAT('RU' || RU_CODE)"},
         {'elemName': 'PCAT', 'colName': 'SH_PRICE_CAT', 'elemHideInActions': ACTION_DELETE,
          'colValFromAcu': "F_SIHOT_CAT('RU' || RU_CODE)"},
         # {'elemName': 'PCAT', 'colName': 'SIHOT_CAT',
@@ -748,7 +752,8 @@ MAP_WEB_RES = \
         {'elemName': '/ARESLIST'},
     )
 
-# .. then the mapping for the KERNEL interface
+# .. then the mapping for the KERNEL interface - TODO: currently not used so maybe remove or refactor for to convert
+# .. OBJID into Res/Sub-numbers
 MAP_KERNEL_RES = \
     (
         {'elemName': 'OBJID', 'colName': 'RU_SIHOT_OBJID', 'elemHideInActions': ACTION_INSERT},
@@ -840,6 +845,13 @@ class SihotXmlParser:  # XMLParser interface
             return None
         return tag
 
+    def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
+        if self._curr_attr and data.strip():
+            self.ca.dprint("SihotXmlParser.data(): ", self._elem_path, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            setattr(self, self._curr_attr, getattr(self, self._curr_attr) + data)
+            return None
+        return data
+
     def end(self, tag):  # called for each closing tag
         self.ca.dprint("SihotXmlParser.end():", self._elem_path, tag, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self._curr_tag = ''
@@ -847,13 +859,6 @@ class SihotXmlParser:  # XMLParser interface
         if self._elem_path:     # Q&D Fix for TestGuestSearch for to prevent pop() on empty _elem_path list
             self._elem_path.pop()
         return tag
-
-    def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
-        if self._curr_attr and data.strip():
-            self.ca.dprint("SihotXmlParser.data(): ", self._elem_path, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            setattr(self, self._curr_attr, getattr(self, self._curr_attr) + data)
-            return None
-        return data
 
     def close(self):  # called when all data has been parsed.
         self._parser.close()
@@ -897,15 +902,15 @@ class RoomChange(SihotXmlParser):
         self.sub_nr = None
         self._base_tags.append('OSUB-NR')
         self.osub_nr = None
-        self._base_tags.append('GID')       # ?!?!? no used
+        self._base_tags.append('GID')       # Sihot guest object id
         self.gid = None
 
 
 class ResChange(SihotXmlParser):
     def __init__(self, ca):
         super(ResChange, self).__init__(ca)
-        self._base_tags.append('HN')        # HN(hotel-id) element is outside of first SIHOT-Reservation block
-        self.hn = None                      # added instance var for to remove pycharm warning
+        self._base_tags.append('HN')    # def hotel ID as base tag, because is outside of 1st SIHOT-Reservation block
+        self.hn = None                  # added instance var for to remove pycharm warning
         self.rgr_list = list()
 
     def start(self, tag, attrib):  # called for each opening tag
@@ -914,14 +919,17 @@ class ResChange(SihotXmlParser):
         self.ca.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         if tag == 'SIHOT-Reservation':
             self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc=list()))
-        elif tag == 'SIHOT-Person':
+        elif tag in ('FIRST-Person', 'SIHOT-Person'):       # FIRST-Person only seen in room change (CI) on first occ
             self.rgr_list[-1]['rgc'].append(dict())
 
     def data(self, data):
         if super(ResChange, self).data(data) is None:
             return None  # processed by base class
         self.ca.dprint("ResChange.data():", self._elem_path, self.rgr_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        # flag for to detect and prevent multiple values
+        append = True
         # because data can be sent in chunks on parsing, we first determine the dictionary (di) and the item key (ik)
+        # rgr/reservation group elements
         if self._curr_tag == 'RNO':
             di, ik = self.rgr_list[-1], 'rgr_res_id'
         elif self._curr_tag == 'RSNO':
@@ -935,8 +943,6 @@ class ResChange(SihotXmlParser):
         elif self._curr_tag == 'RT_SIHOT':                  # RT has different values (1=definitive, 2=tentative, 3=cxl)
             # data = 'S' if data == '3' else data           # .. so using undocumented RT_SIHOT to prevent conversion
             di, ik = self.rgr_list[-1], 'rgr_status'
-        elif self._curr_tag == 'MC':
-            di, ik = self.rgr_list[-1], 'rgr_mkt_segment'
         elif self._curr_tag == 'CAT':
             di, ik = self.rgr_list[-1], 'rgr_room_cat_id'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOPAX']:
@@ -944,7 +950,13 @@ class ResChange(SihotXmlParser):
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOCHILDS']:  # TODO: not provided by CR
             di, ik = self.rgr_list[-1], 'rgr_children'
 
-        elif self._curr_tag == 'GID':
+        # rgr/reservation group elements that are repeated (e.g. for each PAX in SIHOT-Person sections)
+        elif self._curr_tag == 'MC':
+            di, ik = self.rgr_list[-1], 'rgr_mkt_segment'
+            append = ik in di and len(di[ik]) < 2
+
+        # rgc/reservation clients elements
+        elif self._curr_tag == 'GID':                       # Sihot Guest object ID
             di, ik = self.rgr_list[-1]['rgc'][-1], 'ShId'
         elif self._curr_tag == 'MATCHCODE':
             di, ik = self.rgr_list[-1]['rgc'][-1], 'AcId'
@@ -964,14 +976,17 @@ class ResChange(SihotXmlParser):
             di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_country'
         elif self._curr_tag == 'RN':
             di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_room_id'
+
+        # unsupported elements
         else:
             self.ca.dprint("ResChange.data(): ignoring element ", self._elem_path, "; data chunk=", data)
             return
-        # .. and then check if we need to add or to extend the dictionary item
-        if ik in di:
-            di[ik] += data
-        else:
+
+        # add data - after check if we need to add or to extend the dictionary item
+        if ik not in di:
             di[ik] = data
+        elif append:
+            di[ik] += data
 
 
 class Response(SihotXmlParser):  # response xml parser for kernel or web interfaces

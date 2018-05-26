@@ -60,7 +60,7 @@ class TestPostgresDB:
     def test_connect(self, console_app_env):    # test_connect
         global test_db
         cae = console_app_env
-        test_db = PostgresDB(usr=cae.get_option('pgRootUsr'), pwd=cae.get_option('pgRootPwd'), dsn='test',
+        test_db = PostgresDB(usr=cae.get_option('assRootUsr'), pwd=cae.get_option('assRootPwd'), dsn='test',
                              debug_level=cae.get_option('debugLevel'))
         test_db.connect()
         assert not test_db.last_err_msg

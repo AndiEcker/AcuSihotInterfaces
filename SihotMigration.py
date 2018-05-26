@@ -5,7 +5,7 @@
 """
 
 from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace
-from ae_db import ACU_DEF_USR, ACU_DEF_DSN
+from acif import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import ClientToSihot, ResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
 
 __version__ = '0.3'
@@ -37,9 +37,9 @@ cae.add_option('syncDateRange', "Restrict sync. of res. to: "
                choices=sync_date_ranges.keys())
 cae.add_option('includeCxlRes', "Include also cancelled reservations (0=No, 1=Yes)", 1, 'I', choices=(0, 1))
 
-uprint("Server IP/Web-/Kernel-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'),
+uprint("Sihot server IP/Web-/Kernel-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'),
        cae.get_option('shServerKernelPort'))
-uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
 uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
 uprint("Migrate Clients First/Separate:",
        ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])

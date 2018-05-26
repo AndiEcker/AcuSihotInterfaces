@@ -43,8 +43,8 @@ cae.add_option('dateTill', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME els
 cae.add_option('exportFile', "Full path and name of the CSV file (appending new checkouts if already exits)", '', 'x')
 
 
-uprint("Server IP/Web-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
-uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+uprint("Sihot server IP/Web-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
+uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
 export_fnam = cae.get_option('exportFile')
 uprint("Export file:", export_fnam)
 date_from = cae.get_option('dateFrom')
