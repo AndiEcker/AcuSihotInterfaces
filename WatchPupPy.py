@@ -5,6 +5,8 @@
     0.6     added outage check of T_SRSL/ARO (Sihot-To-Acumen interface), changed run lock reset to be optional.
     0.7     added process ids to notification emails and stdout.
     0.8     refactored using add_ass_options() and init_ass_data().
+    0.9     enhanced system checking (merge errors and added checks for AssCache and Salesforce), fixed bug (missing
+            config file write) in reset_last_run_time().
 """
 import os
 import time
@@ -15,83 +17,83 @@ import pprint
 
 from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, \
     full_stack_trace
-from ae_db import OraDB
 from sxmlif import PostMessage, GuestSearch
 from ass_sys_data import add_ass_options, init_ass_data
 
 
-__version__ = '0.8'
+__version__ = '0.9'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
-MAX_SRSL_ARO_OUTAGE_HOURS = 9.0
+MAX_SRSL_OUTAGE_HOURS = 9.0
+DEF_TC_SC_ID = '27'
+DEF_TC_SC_MC = 'TCRENT'
+DEF_TC_AG_ID = '20'
+DEF_TC_AG_MC = 'TCAG'
 
 
 cae = ConsoleApp(__version__, "Periodically execute and supervise command")
+
 cae.add_option('cmdLine', "command [line] to execute", '', 'x')
-cae.add_option('cmdInterval', "command interval in seconds (pass 0 for always running servers)", 3600, 's')  # ==1 hour
+cae.add_option('cmdInterval', "command interval in seconds (pass 0 for always running servers)", 3600, 'l')  # ==1 hour
 cae.add_option('envChecks', "Number of environment checks per command interval", 3, 'n')
 cae.add_option('sendOutput',
                "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
 
 ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True)
 
-if not cae.get_option('cmdLine'):
+cmd_line = cae.get_option('cmdLine')
+if not cmd_line:
     uprint('Empty command line - Nothing to do.')
     cae.shutdown()
-
-command_line_args = cae.get_option('cmdLine').split(' ')
-uprint('Command line:', cae.get_option('cmdLine'))
-uprint("Command interval/checks:", cae.get_option('cmdInterval'), cae.get_option('envChecks'))
-
-ass_data = init_ass_data(cae, ass_options)
-conf_data = ass_data['AssSysData']
-if conf_data.error_message:
-    uprint("WatchPupPy startup error: ", conf_data.error_message)
-    cae.shutdown(exit_code=9)
-
-check_ass = conf_data.ass_db
-check_acu = conf_data.acu_db
-check_sf = conf_data.sf_conn
-check_sh_web = cae.get_option('shServerIP') and cae.get_option('shServerPort')
-check_sh_kernel = cae.get_option('shServerIP') and cae.get_option('shServerKernelPort')
-
-break_on_error = ass_data['BreakOnError']
-notification = ass_data['Notification']
-send_output = 1 if notification and cae.get_option('sendOutput') else 0
-uprint('Send Output (subprocess call method: 1=check_output, 0=check_call)', send_output)
+uprint('Command line:', cmd_line)
+command_line_args = cmd_line.split(' ')
+exe_name = command_line_args[0]
 
 command_interval = cae.get_option('cmdInterval')  # in seconds
 env_checks_per_interval = cae.get_option('envChecks')
-
+uprint("Command interval/checks:", command_interval, env_checks_per_interval)
 if command_interval:
-    # initialize timeout to command_interval min 5% (if 1 hour than to 57 minutes) for (3 min.) error pause & recovering
-    timeout = command_interval - max(command_interval // 20, 1)
+    # init timeout to command_interval-5% (if 1 hour than to 57 minutes, ensure minimum 1 minute for error recovering)
+    timeout = max(command_interval - max(command_interval // 20, 60), 60)
 else:
     timeout = None  # run sub-process without interrupting (only re-start if crashes)
 check_interval = command_interval // env_checks_per_interval
 last_timer = last_run = last_check = None
 
-reset_run_time_lock = cae.get_config('resetRunTimeLock', default_value=False)
-if reset_run_time_lock:
-    uprint("Resetting Run-Time-Lock is activated!")
-
-
 last_sync = datetime.datetime.now()
 last_rt_prefix = cae.get_option('acuDSN')[-4:]
+
+
+ass_data = init_ass_data(cae, ass_options)
+conf_data = ass_data['assSysData']
+if conf_data.error_message:
+    uprint("WatchPupPy startup error: ", conf_data.error_message)
+    cae.shutdown(exit_code=9)
+
+break_on_error = ass_data['breakOnError']
+notification = ass_data['notification']
+send_output = 1 if notification and cae.get_option('sendOutput') else 0
+uprint('Send Output (subprocess call method: 1=check_output, 0=check_call)', send_output)
+
+check_ass = conf_data.ass_user and conf_data.ass_password and conf_data.ass_dsn
+check_acu = conf_data.acu_user and conf_data.acu_password and conf_data.acu_dsn
+check_sf = conf_data.sf_conn
+check_sh_web = cae.get_option('shServerIP') and cae.get_option('shServerPort')
+check_sh_kernel = cae.get_option('shServerIP') and cae.get_option('shServerKernelPort')
 
 
 def user_notification(subject, body):
     parent_pid = os.getppid()
     pid = os.getpid()
-    subject += " " + command_line_args[0] + " pid=" + str(parent_pid) + ("/" + str(pid) if pid != parent_pid else "")
+    subject += " " + exe_name + " pid=" + str(parent_pid) + ("/" + str(pid) if pid != parent_pid else "")
     body = pprint.pformat(body, indent=3, width=120)
 
     if notification:
         err_message = notification.send_notification(body, subject=subject)
         if err_message:
-            uprint(' **** WatchPupPy notification error: {}. Unsent notification body:\n{}.'.format(err_message, body))
+            uprint("****  WatchPupPy notification error: {}. Unsent notification body:\n{}.".format(err_message, body))
     else:
-        uprint(' **** ' + subject + "\n" + body)
+        uprint("****  " + subject + "\n" + body)
 
 
 def get_timer_corrected():
@@ -99,18 +101,16 @@ def get_timer_corrected():
         with monotonic, but some OS may only support 32 bits - rolling-over after 49.7 days) """
     global last_timer, last_run, last_check
     curr_timer = time.monotonic()
-    if last_timer is None or curr_timer < last_timer:
-        last_run = curr_timer - command_interval
+    if last_timer is None or curr_timer < last_timer:   # if app-startup or timer-roll-over
+        last_run = curr_timer - command_interval        # .. then reset to directly do next env-check and cmd-run
         last_check = curr_timer - check_interval
     last_timer = curr_timer
     return curr_timer
 
         
 def reset_last_run_time(interval, force=False):
-    if not reset_run_time_lock:
-        return
     try:
-        cmd_cfg_file_name = os.path.splitext(command_line_args[0])[0] + '.ini'
+        cmd_cfg_file_name = os.path.splitext(exe_name)[0] + '.ini'
         if os.path.isfile(cmd_cfg_file_name):
             cmd_cfg_parser = ConfigParser()
             cmd_cfg_parser.optionxform = str  # or use 'lambda option: option' to have case-sensitive INI/CFG var names
@@ -120,17 +120,20 @@ def reset_last_run_time(interval, force=False):
                 last_start_dt = datetime.datetime.strptime(last_start[1:], DATE_TIME_ISO)
                 interval_delta = datetime.timedelta(seconds=interval)
                 now_dt = datetime.datetime.now()
-                if not force and last_start_dt + interval_delta >= now_dt:
-                    msg = cmd_cfg_file_name + " still locked for " + str(last_start_dt + interval_delta - now_dt)
+                if not force and last_start_dt + interval_delta * 2.5 <= now_dt:
+                    msg = cmd_cfg_file_name + " still locked for " + str(now_dt - last_start_dt + interval_delta * 2.5)
                 else:
                     cmd_cfg_parser.set(MAIN_SECTION_DEF,
                                        last_rt_prefix + 'Rt_kill_' + datetime.datetime.now().strftime('%y%m%d_%H%M%S'),
                                        last_start)
                     cmd_cfg_parser.set(MAIN_SECTION_DEF,
-                                       last_rt_prefix + 'lastRt', '-9')
+                                       last_rt_prefix + 'lastRt', '-999')
+                    with open(cmd_cfg_file_name, 'w') as ini_fp:
+                        cmd_cfg_parser.write(ini_fp)
                     msg = cmd_cfg_file_name + " lock reset. Old value=" + str(last_start)
             else:
-                msg = ""
+                msg = "Found INI file {} but lock entry {} is missing the leading @ character (value={})"\
+                    .format(cmd_cfg_file_name, last_rt_prefix + 'lastRt', last_start)
         else:
             msg = cmd_cfg_file_name + " not found"
     except Exception as x:
@@ -141,147 +144,149 @@ def reset_last_run_time(interval, force=False):
 
 
 startup = get_timer_corrected()     # initialize timer and last check/run values
-cae.dprint("  ###  Startup timer value={}, last check={}, check interval={}, last run={}, run interval={}".format(
+cae.dprint(" ###  Startup timer value={}, last check={}, check interval={}, last run={}, run interval={}".format(
             startup, last_check, check_interval, last_run, command_interval),
            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 progress = Progress(cae.get_option('debugLevel'), total_count=1,
-                    start_msg='Preparing environment checks and first run of {}'.format(command_line_args))
+                    start_msg='Preparing environment checks and first run of {}'.format(exe_name))
 
-err_msg = ''
+errors = list()
 run_starts = run_ends = err_count = 0
+tc_sc_id = tc_sc_mc = tc_ag_id = tc_ag_mc = ''
 while True:
     try:        # outer exception fallback - only for strange/unsuspected errors
         # check for errors/warnings to be send to support
         run_msg = "Preparing {}. run (after {} runs with {} errors)".format(run_starts, run_ends, err_count)
+        err_msg = "\n      ".join(errors)
         progress.next(processed_id=run_msg, error_msg=err_msg)
         if err_msg:
             err_count += 1
-            user_notification('WatchPupPy notification', err_msg)
-            if break_on_error or err_msg.startswith(BREAK_PREFIX):
+            user_notification("WatchPupPy notification", err_msg)
+            if break_on_error or BREAK_PREFIX in err_msg:
                 break
-            err_msg = ''
+            errors = list()
             time.sleep(command_interval / 30)  # wait 120 seconds after each error, for command_interval of 1 hour
 
         # wait for next check_interval, only directly after startup checks on first run
         if get_timer_corrected() < last_check + check_interval:
-            cae.dprint("  ###  Waiting for next check in {} seconds (timer={}, last={}, interval={})".format(
+            cae.dprint(" ###  Waiting for next check in {} seconds (timer={}, last={}, interval={})".format(
                 last_check + check_interval - get_timer_corrected(), get_timer_corrected(), last_check, check_interval),
                 minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         try:
             while get_timer_corrected() < last_check + check_interval:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
         except KeyboardInterrupt:
-            err_msg = BREAK_PREFIX + " while waiting for next check in " \
-                      + str(last_check + check_interval - get_timer_corrected()) + " seconds"
+            errors.append(BREAK_PREFIX + " while waiting for next check in {} seconds"
+                          .format(last_check + check_interval - get_timer_corrected()))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
-        cae.dprint("  ###  Running checks (timer={}, last={}, interval={})".format(
+        cae.dprint(" ###  Running checks (timer={}, last={}, interval={})".format(
             get_timer_corrected(), last_check, check_interval),
             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # check environment and connections: AssCache, Acu/Oracle, Salesforce, Sihot servers and interfaces
         if check_ass:
-            pass  # TODO
+            if not conf_data.ass_db or conf_data.ass_db.select('pg_tables'):
+                conf_data.connect_ass_db(force_reconnect=True)
+            if not conf_data.ass_db:
+                errors.append("AssCache environment check connection error: " + conf_data.error_message)
+            else:
+                ass_db = conf_data.ass_db
+                err_msg = ass_db.select('hotels', ['ho_pk', 'ho_ac_id'])
+                if err_msg:
+                    errors.append("AssCache table hotels selection error: " + err_msg)
 
         if check_acu:
-            ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
-                           debug_level=cae.get_option('debugLevel'))
-            err_msg = ora_db.connect()
-            if err_msg:
-                ora_db.close()
-                err_msg = "Acumen environment check connection error: " + err_msg
-                continue
+            if not conf_data.acu_db or conf_data.acu_db.select('dual', ['sysdate']):
+                conf_data.connect_acu_db(force_reconnect=True)
+            if not conf_data.acu_db:
+                errors.append("Acumen environment check connection error: " + conf_data.error_message)
+            else:
+                ora_db = conf_data.acu_db
+                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
+                if err_msg:
+                    errors.append("Acumen environment T_RO/TK selection error: " + err_msg)
+                else:
+                    rows = ora_db.fetch_all()
+                    if ora_db.last_err_msg:
+                        errors.append("Acumen environment fetch T_RO/TK error: " + ora_db.last_err_msg)
+                    else:
+                        tc_sc_id = str(rows[0][0])  # == DEF_TC_SC_ID
+                        tc_sc_mc = rows[0][1]       # == DEF_TC_SC_MC
 
-            err_msg = ora_db.select('dual', ['sysdate'])
-            if err_msg:
-                ora_db.close()
-                err_msg = "Acumen environment check selection error: " + err_msg
-                continue
+                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
+                if err_msg:
+                    errors.append("Acumen environment T_RO/tk selection error: " + err_msg)
+                else:
+                    rows = ora_db.fetch_all()
+                    if ora_db.last_err_msg:
+                        errors.append("Acumen environment fetch T_RO/tk error: " + ora_db.last_err_msg)
+                    else:
+                        tc_ag_id = str(rows[0][0])  # == DEF_TC_AG_ID
+                        tc_ag_mc = rows[0][1]       # == DEF_TC_AG_MC
 
-            err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
-            if err_msg:
-                ora_db.close()
-                err_msg = "Acumen environment T_RO/TK selection error: " + err_msg
-                continue
-            rows = ora_db.fetch_all()
-            if ora_db.last_err_msg:
-                ora_db.close()
-                err_msg = "Acumen environment fetch T_RO/TK error: " + ora_db.last_err_msg
-                continue
-            tc_sc_obj_id = str(rows[0][0])  # == '27'
-            tc_sc_mc = rows[0][1]  # == 'TCRENT'
+                if not errors and (tc_sc_id != DEF_TC_SC_ID or tc_sc_mc != DEF_TC_SC_MC or
+                                   tc_ag_id != DEF_TC_AG_ID or tc_ag_mc != DEF_TC_AG_MC):
+                    errors.append("Acumen environment check found Thomas Cook configuration errors/discrepancies:"
+                                  " expected {}/{}/{}/{} but got {}/{}/{}/{}."
+                                  .format(DEF_TC_SC_ID, DEF_TC_SC_MC, DEF_TC_AG_ID, DEF_TC_AG_MC,
+                                          tc_sc_id, tc_sc_mc, tc_ag_id, tc_ag_mc))
 
-            err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
-            if err_msg:
-                ora_db.close()
-                err_msg = "Acumen environment T_RO/tk selection error: " + err_msg
-                continue
-            rows = ora_db.fetch_all()
-            if ora_db.last_err_msg:
-                ora_db.close()
-                err_msg = "Acumen environment fetch T_RO/tk error: " + ora_db.last_err_msg
-                continue
-            tc_ag_obj_id = str(rows[0][0])  # == '20'
-            tc_ag_mc = rows[0][1]  # == 'TCAG'
-
-            if tc_sc_obj_id != '27' or tc_sc_mc != 'TCRENT' or tc_ag_obj_id != '20' or tc_ag_mc != 'TCAG':
-                err_msg = ("Acumen environment check found Thomas Cook configuration errors/discrepancies:"
-                           " expected {}/{}/{}/{} but got {}/{}/{}/{}.") \
-                    .format('27', 'TCRENT', '20', 'TCAG', tc_sc_obj_id, tc_sc_mc, tc_ag_obj_id, tc_ag_mc)
-                continue
-
-            err_msg = ora_db.select('T_SRSL', ['MAX(SRSL_DATE)'], "SRSL_TABLE = 'ARO' and SRSL_STATUS = 'SYNCED'")
-            if err_msg:
-                ora_db.close()
-                err_msg = "Acumen environment T_SRSL/ARO selection error: " + err_msg
-                continue
-            rows = ora_db.fetch_all()
-            if ora_db.last_err_msg:
-                ora_db.close()
-                err_msg = "Acumen environment fetch T_SRSL/ARO error: " + ora_db.last_err_msg
-                continue
-            newest_sync = rows[0][0]
-            if newest_sync < last_sync:     # directly after WatchPupPy startup use newest_sync instead of startup-time
-                last_sync, newest_sync = newest_sync, last_sync
-            if newest_sync - last_sync > datetime.timedelta(hours=MAX_SRSL_ARO_OUTAGE_HOURS):
-                warn_msg = "Sihot-To-Acumen/AcuServer does not have new sync entries since {} (more than {} hours)" \
-                    .format(last_sync, MAX_SRSL_ARO_OUTAGE_HOURS)
-                user_notification('WatchPupPy warning notification', warn_msg)
-            last_sync = newest_sync
-
-            ora_db.close()
-        else:
-            tc_sc_obj_id = '27'
-            tc_sc_mc = 'TCRENT'
-            tc_ag_obj_id = '20'
-            tc_ag_mc = 'TCAG'
+                # special Acumen check for AcuServer and for the Acumen-To-Sihot interface
+                if exe_name.startswith('AcuServer') or exe_name.startswith('SihotResSync'):
+                    tbl = 'ARO' if exe_name.startswith('AcuServer') else 'RU'
+                    err_msg = ora_db.select('T_SRSL', ['MAX(SRSL_DATE)'],
+                                            "SRSL_TABLE = '{}' and substr(SRSL_STATUS, 1, 6) = 'SYNCED'".format(tbl))
+                    if err_msg:
+                        errors.append("Acumen environment T_SRSL/{} selection error: {}".format(tbl, err_msg))
+                    else:
+                        rows = ora_db.fetch_all()
+                        if ora_db.last_err_msg:
+                            errors.append("Acumen fetch T_SRSL/{} error: {}".format(tbl, ora_db.last_err_msg))
+                        else:
+                            newest_sync = rows[0][0]
+                            # directly after WatchPupPy startup use newest_sync instead of startup-time
+                            if newest_sync < last_sync:
+                                last_sync, newest_sync = newest_sync, last_sync
+                            if newest_sync - last_sync > datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS):
+                                warn_msg = "No new sync entries since {} (more than {} hours)" \
+                                    .format(last_sync, MAX_SRSL_OUTAGE_HOURS)
+                                user_notification("WatchPupPy warning notification", warn_msg)
+                            last_sync = newest_sync
+        if errors:  # if Acumen has failures: ensure correct values for Sihot Kernel interface check
+            tc_sc_id = DEF_TC_SC_ID
+            tc_sc_mc = DEF_TC_SC_MC
+            tc_ag_id = DEF_TC_AG_ID
+            tc_ag_mc = DEF_TC_AG_MC
 
         if check_sf:
-            pass        # TODO
+            if not conf_data.sf_conn.record_type_id('Contact'):
+                errors.append("Salesforce environment record type fetch error: " + conf_data.sf_conn.error_msg)
 
         if check_sh_kernel:
             gi = GuestSearch(cae)
             tc_sc_obj_id2 = gi.get_objid_by_matchcode(tc_sc_mc)
-            if tc_sc_obj_id != tc_sc_obj_id2:
-                err_msg = 'Sihot kernel check found Thomas Cook Northern matchcode discrepancy: expected={} got={}.' \
-                    .format(tc_sc_obj_id, tc_sc_obj_id2)
-                continue
+            if tc_sc_id != tc_sc_obj_id2:
+                errors.append("Sihot kernel check found Thomas Cook Northern matchcode discrepancy: expected={} got={}."
+                              .format(tc_sc_id, tc_sc_obj_id2))
             tc_ag_obj_id2 = gi.get_objid_by_matchcode(tc_ag_mc)
-            if tc_ag_obj_id != tc_ag_obj_id2:
-                err_msg = 'Sihot kernel check found Thomas Cook AG/U.K. matchcode discrepancy: expected={} got={}.' \
-                    .format(tc_ag_obj_id, tc_ag_obj_id2)
-                continue
+            if tc_ag_id != tc_ag_obj_id2:
+                errors.append("Sihot kernel check found Thomas Cook AG/U.K. matchcode discrepancy: expected={} got={}."
+                              .format(tc_ag_id, tc_ag_obj_id2))
 
         if check_sh_web:
             pm = PostMessage(cae)
-            err_msg = pm.post_message("WatchPupPy Sihot WEB check for command {}".format(command_line_args[0]))
+            err_msg = pm.post_message("WatchPupPy Sihot WEB check for command {}".format(exe_name))
             if err_msg:
-                continue
+                errors.append(err_msg)
+
+        if errors:
+            continue
 
         # check interval / next execution
         last_check = get_timer_corrected()
 
         if last_check + check_interval < last_run + command_interval:
-            cae.dprint("  ###  Timer={}, next check in {}s (last={} interval={}), next run in {}s (last={} interval={})"
+            cae.dprint(" ###  Timer={}, next check in {}s (last={} interval={}), next run in {}s (last={} interval={})"
                        .format(get_timer_corrected(),
                                last_check + check_interval - get_timer_corrected(), last_check, check_interval,
                                last_run + command_interval - get_timer_corrected(), last_run, command_interval),
@@ -290,19 +295,18 @@ while True:
 
         # wait for next command_interval, only directly after startup checks on first run
         if get_timer_corrected() < last_run + command_interval:
-            cae.dprint("  ###  Waiting for next run in {} seconds (timer={}, last={}, interval={})".format(
+            cae.dprint(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={})".format(
                 last_run + command_interval - get_timer_corrected(), get_timer_corrected(), last_run, command_interval),
                 minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         try:
             while get_timer_corrected() < last_run + command_interval:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
         except KeyboardInterrupt:
-            err_msg = BREAK_PREFIX + ' while waiting for next command schedule in ' \
-                      + str(last_run + command_interval - get_timer_corrected()) + ' seconds'
+            errors.append(BREAK_PREFIX + " while waiting for next command schedule in {} seconds"
+                          .format(last_run + command_interval - get_timer_corrected()))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
-        cae.dprint("  ###  Run command (timer={}, last={}, interval={})".format(
-            get_timer_corrected(), last_run, command_interval),
-            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        cae.dprint(" ###  Run command (timer={}, last={}, interval={})"
+                   .format(get_timer_corrected(), last_run, command_interval), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # then run the command
         run_starts += 1
@@ -313,29 +317,38 @@ while True:
             else:
                 subprocess.check_call(command_line_args, timeout=timeout)
         except subprocess.CalledProcessError as cpe:
-            err_msg = str(run_starts) + '. run returned non-zero exit code ' + str(cpe.returncode)
+            err_msg = "{}. run returned non-zero exit code {}".format(run_starts, cpe.returncode)
             if cpe.returncode == 4:
                 reset_last_run_time(command_interval)
-                continue  # command not really started, so try directly again - don't reset last_run variable
             if getattr(cpe, 'output'):      # only available when running command with check_output()/send_output
-                err_msg += '\noutput=' + str(cpe.output)
-        except subprocess.TimeoutExpired as toe:
-            err_msg = str(run_starts) + '. run timed out - current timer=' + str(get_timer_corrected()) \
-                      + ', last_run=' + str(last_run) \
-                      + ', output=' + str(toe.output)
-            reset_last_run_time(command_interval, force=True)
-            continue  # try directly again - don't reset last_run variable
+                err_msg += "\n         output=" + str(cpe.output)
+            errors.append(err_msg)
+            continue        # command not really started, so try directly again - don't reset last_run variable
+        except subprocess.TimeoutExpired as toe:    # sub process killed
+            err_msg = "{}. run timed out - current timer={}, last_run={}"\
+                .format(run_starts, get_timer_corrected(), last_run)
+            if getattr(toe, 'output'):      # only available when running command with check_output()/send_output
+                err_msg += "\n         output=" + str(getattr(toe, 'output'))  # PyCharm says not defined: toe.output
+            errors.append(err_msg)
+            reset_last_run_time(command_interval, force=True)   # force reset of lock in INI file because subproc killed
+            continue        # try directly again - don't reset last_run variable
         except KeyboardInterrupt:
-            err_msg = BREAK_PREFIX + ' while running ' + str(run_starts) + '. command ' + str(command_line_args)
+            errors.append(BREAK_PREFIX + " while running {}. command {}".format(run_starts, exe_name))
+            continue        # jump to begin of loop for to notify user and quit this app
         except Exception as ex:
-            err_msg = str(run_starts) + '. run raised unspecified exception: ' + str(ex)
+            errors.append("{}. run raised unspecified exception: {}\n      {}"
+                          .format(run_starts, ex, full_stack_trace(ex)))
+            continue        # try directly again - don't reset last_run variable
 
         last_run = get_timer_corrected()
+        last_sync = datetime.datetime.now()
         run_ends += 1
+    except KeyboardInterrupt:
+        errors.append(BREAK_PREFIX + " before/after running {}. command {}".format(run_starts, exe_name))
     except Exception as ex:
-        err_msg += '\n\n' + 'WatchPupPy loop exception: ' + full_stack_trace(ex)
+        errors.append("WatchPupPy loop exception: " + full_stack_trace(ex))
 
 progress.finished(error_msg=err_msg)
-uprint(' #### WatchPupPy exit - successfully run', run_ends, 'of', run_starts, 'times the command', command_line_args)
+uprint("####  WatchPupPy exit - successfully run {} of {} times the command {}".format(run_ends, run_starts, exe_name))
 if err_count:
-    uprint(' **** ' + str(err_count) + ' runs failed.')
+    uprint("****  {} runs failed".format(err_count))

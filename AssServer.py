@@ -8,46 +8,59 @@
 import datetime
 from traceback import format_exc
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import (ConsoleApp, uprint, missing_requirements,
+                            DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE)
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
-from ass_sys_data import add_ass_options, init_ass_data
+from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.2'
 
-cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres, Acumen and Salesforce")
+cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres, Acumen and Salesforce",
+                 multi_threading=True)
 ass_options = add_ass_options(cae, client_port=12000)
 
 debug_level = cae.get_option('debugLevel')
 ass_data = init_ass_data(cae, ass_options)
-conf_data = ass_data['AssSysData']
-if conf_data.error_message:
-    uprint("AssServer startup error: ", conf_data.error_message)
+sys_conns = ass_data['assSysData']
+if sys_conns.error_message:
+    uprint("AssServer startup error: ", sys_conns.error_message)
     cae.shutdown(exit_code=9)
-notification = ass_data['Notification']
+mr = missing_requirements(sys_conns, [['ass_db'], ['acu_db'], ['sf_conn'], ['sh_conn']], bool_check=True)
+if mr:
+    uprint("Invalid connection-credentials/-configuration of the external systems:", mr)
+    cae.shutdown(exit_code=12)
+sys_conns = ass_data['assSysData'] = None       # del/free not thread-save sys db connections
+notification = ass_data['notification']
 
 
-def notify(msg, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
-    if debug_level >= minimum_debug_level:
-        if notification:
-            notification.send_notification(msg_body=msg, subject='AssServer notification')
-        else:
-            uprint(msg)
+def log_msg(msg, *args, **kwargs):
+    is_error = kwargs.get('is_error', False)
+    if debug_level < kwargs.get('minimum_debug_level', DEBUG_LEVEL_VERBOSE) and not is_error:
+        return
+    importance = kwargs.get('importance', 2)
+    seps = '\n' * (importance - 2)
+    msg = seps + ' ' * (4 - importance) + ('*' if is_error else '#') * importance + '  ' + msg
+    if args:
+        msg += " (args={})".format(args)
+    uprint(msg)
+    if notification and (is_error or kwargs.get('notify', False)):
+        notification.send_notification(msg_body=msg, subject='AssServer notification')
 
 
-def oc_keep_alive(_):
+def oc_keep_alive(_, __):
     # no request-/error-checks needed on operation codes: LA=Link Alive, TS=Time Sync, ACK=Acknowledge
     return ""
 
 
-def alloc_trigger(oc, sh_hotel_id, sh_res_id, sh_sub_id, asd):
+def cache_room_change(conf_data, oc, sh_hotel_id, sh_res_id, sh_sub_id):
     """ move/check in/out guest from/into room_no
 
+    :param conf_data:       AssSysData instance of current thread.
     :param oc:              operation code: either 'CI', 'CO', 'CI-RM' or 'CO-RM'.
     :param sh_hotel_id:     Sihot hotel id (e.g. '1'==BHC).
     :param sh_res_id:       Sihot reservation main id.
     :param sh_sub_id:       Sihot reservation sub id.
-    :param asd              AssSysDate instance (for to upsert to ass_db).
     :return:                Error message in case of error else empty string.
     """
     action_time = datetime.datetime.now()
@@ -58,53 +71,59 @@ def alloc_trigger(oc, sh_hotel_id, sh_res_id, sh_sub_id, asd):
     elif oc[:2] == 'CO':
         upd_col_values.update(rgr_time_out=action_time)
     else:
-        err_msg = "alloc_trigger({}, {}, {}): Invalid operation code".format(oc, sh_hotel_id, sh_res_id)
+        err_msg = "cache_room_change({}, {}, {}): Invalid operation code".format(oc, sh_hotel_id, sh_res_id)
 
     if not err_msg:
-        err_msg = asd.rgr_upsert(upd_col_values, sh_hotel_id, res_id=sh_res_id, sub_id=sh_sub_id)
+        err_msg = conf_data.rgr_upsert(upd_col_values, chk_values=dict(rgr_ho_fk=sh_hotel_id, rgr_res_id=sh_res_id,
+                                                                       rgr_sub_id=sh_sub_id))
 
     return err_msg
 
 
-def oc_room_change(req):
+def oc_room_change(conf_data, req):
     error_msg = ""
     oc = req.oc
     ho_id = req.hn
-    notify("####  Room change {} for res {}/{}@{} in room {}. xml={}"
-           .format(oc, req.res_nr, req.sub_nr, ho_id, req.rn, req.get_xml()))
+    log_msg("Room change {} for res {}/{}@{} in room {}. xml={}"
+            .format(oc, req.res_nr, req.sub_nr, ho_id, req.rn, req.get_xml()), importance=4)
     if oc == 'RM':
-        error_msg = alloc_trigger('CO-RM', ho_id, req.res_nr, req.osub_nr, conf_data)
+        error_msg = cache_room_change(conf_data, 'CO-RM', ho_id, req.res_nr, req.osub_nr)
         oc = 'CI-RM'
     if not error_msg:
-        error_msg = alloc_trigger(oc, ho_id, req.res_nr, req.sub_nr, conf_data)
+        error_msg = cache_room_change(conf_data, oc, ho_id, req.res_nr, req.sub_nr)
 
     if error_msg:
-        notify("****  oc_room_change() alloc_trigger error=" + error_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
-        error_msg += "\n      " + conf_data.ass_db.rollback()
+        log_msg("oc_room_change(): cache room change error=" + error_msg,
+                minimum_debug_level=DEBUG_LEVEL_DISABLED, importance=3, is_error=True)
+        em = conf_data.ass_db.rollback()
+        if em:
+            error_msg += "\n      " + em
     else:
         error_msg = conf_data.ass_db.commit()
 
     return error_msg
 
 
-def oc_res_change(req):
+def oc_res_change_ass(conf_data, req):
     oc = req.oc
     rgr_list = req.rgr_list
     for rgr in rgr_list:
+        obj_id = rgr.get('rgr_obj_id', '')
         ho_id = rgr.get('rgr_ho_fk', '')
         res_id = rgr.get('rgr_res_id', '')
         sub_id = rgr.get('rgr_sub_id', '')
-        notify("####  Reservation change {} for res {}/{}@{}. data={}".format(oc, res_id, sub_id, ho_id, rgr))
+        log_msg("Reservation change {} to Ass for ShObjID {} and Res/Sub@Hotel {}/{}@{}. data={}"
+                .format(oc, obj_id, res_id, sub_id, ho_id, rgr), importance=4)
         rgc_list = rgr.pop('rgc')
         # TODO: identify orderer/client for to populate rgr_order_cl_fk
-        if conf_data.rgr_upsert(rgr, ho_id, res_id=res_id, sub_id=sub_id):
+        if conf_data.rgr_upsert(rgr):
             break
         rgr_pk = conf_data.ass_db.fetch_value()
         room_seq = pers_seq = -1
-        room_no = 'InvalidRoomId'
+        last_room_no = 'InvalidRoomId'
         for rgc in rgc_list:
-            if rgc.get('rgc_room_id', '') != room_no:
-                room_no = rgc.get('rgc_room_id', '')
+            if rgc.get('rgc_room_id', '') != last_room_no:
+                last_room_no = rgc.get('rgc_room_id', '')
                 room_seq += 1
                 pers_seq = 0
             else:
@@ -128,7 +147,8 @@ def oc_res_change(req):
                 if not ass_id:
                     break
                 rgc['rgc_occup_cl_fk'] = ass_id
-            if conf_data.rgc_upsert(rgc, rgr_pk, room_seq, pers_seq):
+            rgc.update(rgc_rgr_fk=rgr_pk, rgc_room_seq=room_seq, rgc_pers_seq=pers_seq)
+            if conf_data.rgc_upsert(rgc):
                 break
         if conf_data.error_message:
             break
@@ -142,6 +162,38 @@ def oc_res_change(req):
     return error_msg
 
 
+def oc_res_change_sf(conf_data, req):
+    oc = req.oc
+    rgr_list = req.rgr_list
+    for rgr in rgr_list:
+        obj_id = rgr.get('rgr_obj_id', '')
+        res = conf_data.load_view(conf_data.acu_db, 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
+                                  "RU_SIHOT_OBJID = :obj_id", dict(obj_id=obj_id))
+        if not res or not res[0][0]:
+            log_msg("Reservation with Sihot Object ID {} not found in Acumen RU_SIHOT_OBJID/Surveys".format(obj_id))
+            continue
+        sf_opp_id = res[0][0]
+        ho_id = rgr.get('rgr_ho_fk', '')
+        res_id = rgr.get('rgr_res_id', '')
+        sub_id = rgr.get('rgr_sub_id', '')
+        rgc_list = rgr.get('rgc', list([dict()]))
+        log_msg("Reservation change {} to Sf for ShObjID {} and Res/Sub@Hotel {}/{}@{}. room list={}"
+                .format(oc, obj_id, res_id, sub_id, ho_id, rgc_list), importance=4)
+
+        opp_obj = conf_data.sf_conn.sf_obj('Opportunity')
+        fields = dict(Resort__c=conf_data.ho_id_resort(ho_id),
+                      Room_Number__c=rgc_list[0].get('rgc_room_id', ''),
+                      REQ_Acm_Arrival_Date__c=rgr.get('rgr_arrival', ''),
+                      REQ_Acm_Departure_Date__c=rgr.get('rgr_departure', ''))
+        try:
+            ret = opp_obj.update(sf_opp_id, fields)
+            log_msg("Opportunity ID {} updated with {}. ret={}".format(sf_opp_id, fields, ret),
+                    importance=3, minimum_debug_level=DEBUG_LEVEL_ENABLED, notify=True)
+        except Exception as ex:
+            log_msg("Update of Opportunity object {} with ID {} raised exception {}".format(opp_obj, sf_opp_id, ex),
+                    importance=3, is_error=True)
+
+
 # supported operation codes (stored in AssServer.ini) with related request class and operation code handler/processor
 SUPPORTED_OCS = dict()
 # operation codes that will not be processed (no notification will be sent to user, only ACK will be send back to Sihot)
@@ -151,8 +203,8 @@ IGNORED_OCS = []
 def reload_oc_config():
     """ allow to change processing of OCs without the need to restart this server """
     global SUPPORTED_OCS, IGNORED_OCS
-    if not cae:         # added for to hide PyCharm warnings (Unused import)
-        _ = (Request, ResChange, RoomChange)
+    _ = (Request, ResChange, RoomChange)    # added for to hide PyCharm warnings (Unused import)
+    cae.load_config()
     SUPPORTED_OCS = cae.get_config('SUPPORTED_OCS')
     if not SUPPORTED_OCS or not isinstance(SUPPORTED_OCS, dict):
         return "SUPPORTED_OCS is not or wrongly defined in main CFG/INI file"   # cae._cfg_fnam
@@ -163,18 +215,20 @@ def reload_oc_config():
         for slot in slots:
             if not isinstance(slot, dict):
                 return "SUPPORTED_OCS {} slot syntax error - dict expected but got {}".format(oc, slot)
-            if 'reqClass' not in slot or 'ocProcessor' not in slot:
-                return "SUPPORTED_OCS {} slot keys reqClass/ocProcessor missing - dict has only {}".format(oc, slot)
+            if 'reqClass' not in slot or 'ocProcessors' not in slot:
+                return "SUPPORTED_OCS {} slot keys reqClass/ocProcessors missing - dict has only {}".format(oc, slot)
 
             req_class = slot['reqClass']
             if req_class not in module_declarations:
                 return "SUPPORTED_OCS {} slot key reqClass {} is not implemented".format(oc, req_class)
             slot['reqClass'] = module_declarations[req_class]
 
-            oc_processor = slot['ocProcessor']
-            if oc_processor not in module_declarations:
-                return "SUPPORTED_OCS {} slot key ocProcessor {} is not implemented".format(oc, oc_processor)
-            slot['ocProcessor'] = module_declarations[oc_processor]
+            mod_decs = list()
+            for proc in slot['ocProcessors']:
+                if proc not in module_declarations:
+                    return "SUPPORTED_OCS {} slot key ocProcessor {} is not implemented".format(oc, proc)
+                mod_decs.append(module_declarations[proc])
+            slot['ocProcessors'] = mod_decs
 
     IGNORED_OCS = cae.get_config('IGNORED_OCS')
     if not isinstance(IGNORED_OCS, list):
@@ -216,12 +270,12 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             if notification:
                 notification.send_notification(msg_body=self.error_message, subject="AssServer handler notification")
             else:
-                uprint("****  " + self.error_message)
+                log_msg(self.error_message, is_error=True, importance=4)
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
         xml_request = str(xml_from_client, encoding=cae.get_option('shXmlEncoding'))
-        notify("AssServer.SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'")
+        log_msg("AssServer.SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'")
 
         parsed_req = None
         last_err = '0'
@@ -241,15 +295,16 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
         if oc in SUPPORTED_OCS:
             try:
+                sys_connections = AssSysData(cae, err_logger=log_msg, warn_logger=log_msg)
                 for slot in SUPPORTED_OCS[oc]:
                     parsed_req = slot['reqClass'](cae)
                     parsed_req.parse_xml(xml_request)
-                    notify("Before call of {}() with xml request {}".format(slot['ocProcessor'].__name__, xml_request))
-                    msg = slot['ocProcessor'](parsed_req)
-                    if msg:
-                        notify("Error after call of {}(): {}".format(slot['ocProcessor'].__name__, msg))
-                        messages.append(slot['ocProcessor'].__name__ + "() call error: " + msg)
-                        last_err = '96'
+                    for proc in slot['ocProcessors']:
+                        log_msg("Before call of {}() with xml request {}".format(proc.__name__, xml_request))
+                        msg = proc(sys_connections, parsed_req)
+                        if msg:
+                            messages.append(proc.__name__ + "() call error: " + msg)
+                            last_err = '96'
             except Exception as ex:
                 messages.append("SihotRequestXmlHandler.handle_xml() call exception: '{}'\n{}".format(ex, format_exc()))
                 last_err = '99'
@@ -260,13 +315,13 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             last_err = '102'
 
         for msg in messages:
-            if msg[0] != '(':
-                notify(msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
-            elif debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(msg)
+            if msg[0] == '(':
+                log_msg(msg)
+            else:
+                log_msg(msg + " LastError=" + str(last_err), is_error=True, importance=3)
 
         xml_response = ack_response(parsed_req, last_err, "\n      ".join(messages), status='1' if oc == 'LA' else '')
-        notify("####  OC {} processing xml response: {}".format(oc, xml_response))
+        log_msg("####  OC {} processing xml response: {}".format(oc, xml_response))
 
         return bytes(xml_response, cae.get_option('shXmlEncoding'))
 
@@ -276,7 +331,7 @@ try:
                        debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 except (OSError, Exception) as tcp_ex:
-    uprint("****  TCP server could not be started. Exception: ", tcp_ex)
+    log_msg("TCP server could not be started. Exception: ", tcp_ex, is_error=True)
     cae.shutdown(369)
 
 cae.shutdown()

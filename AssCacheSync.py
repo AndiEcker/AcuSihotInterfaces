@@ -79,7 +79,7 @@ if not actions:
     uprint("\nNo Action option specified (using command line options init, pull, push and/or verify)\n")
     cae.show_help()
     cae.shutdown()
-uprint("Actions: " + '\n         '.join(actions))
+uprint("Actions: " + "\n         ".join(actions))
 act_record_filters = cae.get_option('filterRecords')
 if not isinstance(act_record_filters, dict) or not act_record_filters:
     act_record_filters = {k: act_record_filters or "" for (k, v) in types.items()}
@@ -150,7 +150,7 @@ ass_pw = cae.get_option('assPassword')
 ass_dsn = cae.get_option('assDSN')
 if act_init:
     pg_dbname, pg_host = ass_dsn.split('@') if '@' in ass_dsn else (ass_dsn, '')
-    pg_root_dsn = 'AssCache/Postgres' + ('@' + pg_host if '@' in ass_dsn else '')
+    pg_root_dsn = 'postgres' + ('@' + pg_host if '@' in ass_dsn else '')
     log_warning("creating database {} and user {}".format(ass_dsn, ass_user), 'initCreateDBandUser')
     pg_db = PostgresDB(usr=cae.get_config('assRootUsr'), pwd=cae.get_config('assRootPwd'), dsn=pg_root_dsn,
                        debug_level=_debug_level)
@@ -185,13 +185,13 @@ if act_init:
 
 # logon to and prepare AssCache and config data env, optional also connect to Acumen, Salesforce, Sihot
 ass_data = init_ass_data(cae, ass_options)
-conf_data = ass_data['AssSysData']
+conf_data = ass_data['assSysData']
 if conf_data.error_message:
     log_error(conf_data.error_message, 'AssSysDataInit', importance=4, exit_code=9)
 ass_db = conf_data.ass_db
 acu_db = conf_data.acu_db
-notification = ass_data['Notification']
-notification_warning_emails = ass_data['WarningEmailAddresses']
+notification = ass_data['notification']
+notification_warning_emails = ass_data['warningEmailAddresses']
 
 
 # ACTION HELPERS

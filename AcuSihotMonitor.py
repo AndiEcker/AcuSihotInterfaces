@@ -10,10 +10,8 @@ from functools import partial
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from acif import ACU_DEF_USR, ACU_DEF_DSN
-from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch, SXML_DEF_ENCODING
-from sfif import add_sf_options
-from ass_sys_data import AssSysData
+from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch
+from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.4'
 
@@ -35,25 +33,13 @@ COLUMN_ATTRIBUTE_SEP = '__'
 
 cae = ConsoleApp(__version__, "Monitor the Acumen and Sihot interfaces and servers",
                  config_eval_vars=dict(date_format=DATE_DISPLAY_FORMAT))
-cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
 
-cae.add_option('shServerIP', "IP address of the Sihot interface server", 'localhost', 'i')
-cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
-cae.add_option('shServerKernelPort', "IP port of the Sihot KERNEL interface", 14772, 'k')
-cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 69.3, 't')
-cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
+ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True)
 
-add_sf_options(cae)
+# logon to and prepare AssCache and config data env, optional also connect to Acumen, Salesforce, Sihot
+ass_data = init_ass_data(cae, ass_options)
+config_data = ass_data['assSysData']        # public instance for config/data fetches, could be redefined by logon
 
-uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-       cae.get_option('shServerKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
-
-
-config_data = None      # public Data() instance for config/data fetches
 
 """ KIVY IMPORTS - done here for (1) prevent PyCharm import inspection warning and (2) remove command line options """
 if True:        # added for to hide PyCharm inspection warning "module level import not at top of file"
@@ -320,18 +306,10 @@ def cfg_room_cat_discrepancies(data_dict, app_inst):
 """ HELPERS """
 
 
-def connect_db():
-    """ open Oracle database connection """
-    acu_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'),
-                   cae.get_option('acuDSN'), debug_level=cae.get_option('debugLevel'))
-    acu_db.connect()
-    return acu_db
-
-
 def db_fetch(data_dict, from_join_name='from_join'):
     bind_vars = {_[:-len(FILTER_CRITERIA_SUFFIX)]: data_dict[_] for _ in data_dict
                  if _.endswith(FILTER_CRITERIA_SUFFIX)}
-    acu_db = connect_db()
+    acu_db = config_data.acu_db
     err_msg = acu_db.select(from_join=data_dict[from_join_name], cols=data_dict['cols'],
                             where_group_order=data_dict.get('where_group_order'), bind_vars=bind_vars)
     if err_msg:
@@ -669,7 +647,7 @@ class AcuSihotMonitorApp(App):
                 if filter_name + FILTER_SELECTION_SUFFIX in board_dict:
                     filter_selection = board_dict[filter_name + FILTER_SELECTION_SUFFIX]
                     if isinstance(filter_selection, dict) and 'from_join' in filter_selection:
-                        acu_db = connect_db()
+                        acu_db = config_data.acu_db
                         err_msg = acu_db.select(from_join=filter_selection['from_join'],
                                                 cols=filter_selection['cols'],
                                                 where_group_order=filter_selection.get('where_group_order'),

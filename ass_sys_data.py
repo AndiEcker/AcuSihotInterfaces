@@ -65,13 +65,13 @@ def add_ass_options(cae, add_kernel_port=False, client_port=None, break_on_error
     add_sf_options(cae)
     ass_options = dict()
     if bulk_fetcher == 'Res':
-        ass_options['ResBulkFetcher'] = ResBulkFetcher(cae)
-        ass_options['ResBulkFetcher'].add_options()
+        ass_options['resBulkFetcher'] = ResBulkFetcher(cae)
+        ass_options['resBulkFetcher'].add_options()
     else:
         add_sh_options(cae, add_kernel_port=add_kernel_port, client_port=client_port)
     if break_on_error:
         cae.add_option('breakOnError', "Abort processing if error occurs (0=No, 1=Yes)", 0, 'b', choices=(0, 1))
-        ass_options['BreakOnError'] = None
+        ass_options['breakOnError'] = None
     add_notification_options(cae)
 
     return ass_options
@@ -88,7 +88,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None):
     """
     ret_dict = dict()
 
-    ret_dict['AssSysData'] = conf_data = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger)
+    ret_dict['assSysData'] = conf_data = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger)
     if conf_data.error_message:
         return ret_dict
 
@@ -107,18 +107,18 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None):
         uprint('Sihot server IP/port:', cae.get_option('shServerIP'), cae.get_option('shClientPort'))
         uprint('Sihot TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
         sys_ids.append(cae.get_option('shServerIP'))
-    ret_dict['SysIds'] = sys_ids
+    ret_dict['sysIds'] = sys_ids
 
-    ret_dict['Notification'], ret_dict['WarningEmailAddresses'] = init_notification(cae, '/'.join(sys_ids))
+    ret_dict['notification'], ret_dict['warningEmailAddresses'] = init_notification(cae, '/'.join(sys_ids))
 
-    if 'ResBulkFetcher' in ass_options:
-        ass_options['ResBulkFetcher'].load_config()
-        ass_options['ResBulkFetcher'].print_config()
+    if 'resBulkFetcher' in ass_options:
+        ass_options['resBulkFetcher'].load_options()
+        ass_options['resBulkFetcher'].print_options()
 
-    if 'BreakOnError' in ass_options:
+    if 'breakOnError' in ass_options:
         break_on_error = cae.get_option('breakOnError')
         uprint('Break on error:', 'Yes' if break_on_error else 'No')
-        ret_dict['BreakOnError'] = break_on_error
+        ret_dict['breakOnError'] = break_on_error
 
     return ret_dict
 
@@ -508,7 +508,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # load invalid email fragments (ClientHasNoEmail and OTA pseudo email fragments)
         self.invalid_email_fragments = cae.get_config('invalidEmailFragments', default_value=list())
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("Invalid Email Fragments:", self.invalid_email_fragments)
+            uprint("Text fragments for to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
 
         # --- self.clients contains client data from AssCache database like external references/Ids, owner status ...
         self.clients = list()
@@ -516,6 +516,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # --- res_inv_data is caching banking/swap/grant info
         self.res_inv_data = list()
+
+    def __del__(self):
+        # ensure to close of DB connections (execution of auto-commits)
+        if self.acu_db:
+            self.acu_db.close()
+            self.acu_db = None
+        if self.ass_db:
+            self.ass_db.close()
+            self.ass_db = None
 
     def connect_acu_db(self, force_reconnect=False):
         if not self.acu_db or force_reconnect:
@@ -593,6 +602,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if room_no:
             room_no = room_no.lstrip('0')  # remove leading zero from 3-digit PBC Sihot room number (if given)
         return next((cols[1] for cols in self.ap_cats if cols[0] == room_no), None)
+
+    def ho_id_resort(self, ho_id):
+        ac_res_id = None
+        for sh_id, ac_id in self.hotel_ids:
+            if sh_id == ho_id:
+                ac_res_id = ac_id
+                break
+        return ac_res_id
 
     def ho_id_list(self, acu_rs_codes=None):
         if acu_rs_codes is None:
@@ -873,33 +890,63 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     # =================  reservation bookings  ===================================================================
 
-    def rgr_upsert(self, col_values, ho_id, gds_no=None, res_id=None, sub_id=None, commit=False):
-        if not gds_no and not (res_id and sub_id):
-            return "rgr_upsert({}, {}): Missing reservation id (gds|res-id)".format(ho_id, col_values)
-        where_vars = dict(rgr_ho_fk=ho_id)
-        if res_id and sub_id:
-            where_vars.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
-        elif gds_no:
-            where_vars.update(rgr_gds_no=gds_no)
-        elif res_id:
-            where_vars.update(rgr_res_id=res_id)
-        upd_col_values = col_values.copy()      # copy dict to prevent changing the dict passed in by the caller
-        upd_col_values.update(where_vars)
-        print("RGR_UPSERT", col_values, upd_col_values)
-        self.error_message = self.ass_db.upsert('res_groups', upd_col_values, where_vars, 'rgr_pk', commit=commit)
-        if not self.error_message and self.ass_db.curs.rowcount != 1:
-            self.error_message = "rgr_upsert({}, {}, {}): Invalid affected row count; expected 1 but got {}"\
-                .format(upd_col_values, ho_id, where_vars, self.ass_db.curs.rowcount)
+    @staticmethod
+    def rgr_min_chk_values(chk_values):
+        if chk_values.get('obj_id', ''):
+            where_vars = dict(rgr_obj_id=chk_values.get('obj_id', ''))
+        elif chk_values.get('ho_id', '') and chk_values.get('res_id', '') and chk_values.get('sub_id', ''):
+            where_vars = dict(rgr_ho_fk=chk_values['ho_id'], rgr_res_id=chk_values['res_id'],
+                              rgr_sub_id=chk_values['sub_id'])
+        elif chk_values.get('gds_no', ''):
+            where_vars = dict(rgr_gds_no=chk_values['gds_no'])
+        elif chk_values.get('ho_id', '') and chk_values.get('res_id', ''):
+            where_vars = dict(rgr_ho_fk=chk_values['ho_id'], rgr_res_id=chk_values['res_id'])
+        else:   # if not obj_id and not (ho_id and res_id) and not gds_no:
+            where_vars = dict()
+        return where_vars
+
+    def rgr_upsert(self, col_values, chk_values=None, commit=False):
+        """
+        upsert into ass_cache.res_groups
+
+        :param col_values:  dict of column values to be inserted/updated.
+        :param chk_values:  dict of column values for to identify the record to update (or insert if not exists).
+                            Allowed keys: obj_id, ho_id, res_id, sub_id, gds_no.
+        :param commit:      (opt, def=False) pass True to commit.
+        :return:            error message on error else empty string.
+        """
+        if chk_values is None:
+            chk_values = {k: v for k, v in col_values.items()
+                          if k in ('rgr_obj_id', 'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_gds_no')}
+        if chk_values:
+            self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values, 'rgr_pk', commit=commit)
+            if not self.error_message and self.ass_db.curs.rowcount != 1:
+                self.error_message = "rgr_upsert({}, {}): Invalid affected row count; expected 1 but got {}" \
+                    .format(col_values, chk_values, self.ass_db.curs.rowcount)
+        else:
+            self.error_message = "rgr_upsert({}): Missing reservation id (objid|res-id|gds)".format(col_values)
 
         return self.error_message
 
-    def rgc_upsert(self, upd_col_values, rgr_pk, room_seq, pers_seq, commit=False):
-        where_vars = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=room_seq, rgc_pers_seq=pers_seq)
-        upd_col_values.update(where_vars)
-        self.error_message = self.ass_db.upsert('res_group_clients', upd_col_values, where_vars, commit=commit)
-        if not self.error_message and self.ass_db.curs.rowcount != 1:
-            self.error_message = "rgc_upsert({}, {}): Invalid affected row count; expected 1 but got {}"\
-                .format(upd_col_values, rgr_pk, self.ass_db.curs.rowcount)
+    def rgc_upsert(self, col_values, chk_values=None, commit=False):
+        """
+        upsert into ass_cache.res_group_clients
+
+        :param col_values:  dict of column values to be inserted/updated.
+        :param chk_values:  dict of column values for to identify the record to update (or insert if not exists).
+                            Allowed keys: rgc_rgr_fk, rgc_room_seq, rgc_pers_seq.
+        :param commit:      (opt, def=False) pass True to commit.
+        :return:            error message on error else empty string.
+        """
+        if chk_values is None:
+            chk_values = {k: v for k, v in col_values.items() if k in ('rgc_rgr_fk', 'rgc_room_seq', 'rgc_pers_seq')}
+        if chk_values:
+            self.error_message = self.ass_db.upsert('res_group_clients', col_values, chk_values, commit=commit)
+            if not self.error_message and self.ass_db.curs.rowcount != 1:
+                self.error_message = "rgc_upsert({}, {}): Invalid affected row count; expected 1 but got {}"\
+                    .format(col_values, chk_values, self.ass_db.curs.rowcount)
+        else:
+            self.error_message = "rgc_upsert({}): Missing res-client id (rgr_pk,room_seq,pers_seq)".format(col_values)
 
         return self.error_message
 

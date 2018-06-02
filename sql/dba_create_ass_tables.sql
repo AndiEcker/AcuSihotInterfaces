@@ -72,7 +72,7 @@ INSERT INTO hotels VALUES ('1', 'BHC');
 INSERT INTO hotels VALUES ('2', 'BHH');
 INSERT INTO hotels VALUES ('3', 'HMC');
 INSERT INTO hotels VALUES ('4', 'PBC');
---INSERT INTO hotels VALUES ('999', 'ANY');
+INSERT INTO hotels VALUES ('999', 'ANY');
 COMMIT;
 
 
@@ -134,6 +134,7 @@ CREATE TABLE res_groups
   rgr_res_id              VARCHAR(18) NOT NULL,     -- SIHOT reservation id (res-number / sub-number)
   rgr_sub_id              VARCHAR(3) NOT NULL DEFAULT '1',
   rgr_gds_no              VARCHAR(24),              -- opt. SIHOT reservation GDSNO (OBJID not available in RES-SEARCH)
+  rgr_obj_id              VARCHAR(15),              -- SIHOT reservation object ID (only provided by CR SXML message)
   rgr_order_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgr_used_ri_fk          INTEGER REFERENCES res_inventories(ri_pk),
   rgr_rci_deposit_ri_fk   INTEGER REFERENCES res_inventories(ri_pk),

@@ -12,7 +12,7 @@ from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from acif import ACU_DEF_USR, ACU_DEF_DSN
-from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder, SXML_DEF_ENCODING
+from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder
 from shif import add_sh_options
 
 __version__ = '0.4'

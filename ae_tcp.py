@@ -2,6 +2,7 @@ import time
 import socket
 import threading
 import socketserver
+from traceback import format_exc
 
 from abc import ABCMeta, abstractmethod
 
@@ -14,13 +15,13 @@ TCP_CONNECTION_BROKEN_MSG = "RequestXmlHandler.handle(): socket connection broke
 TCP_MAXBUFLEN = 8192
 TCP_END_OF_MSG_CHAR = b'\x04'
 
-DEBUG_RUNNING_CHARS = '|/-\\'
+DEBUG_RUNNING_CHARS = "|/-\\"
 
 
 # server infrastructure
 
 class RequestXmlHandler(socketserver.BaseRequestHandler, metaclass=ABCMeta):
-    error_message = ''
+    error_message = ""
 
     """
     def setup(self):
@@ -30,10 +31,10 @@ class RequestXmlHandler(socketserver.BaseRequestHandler, metaclass=ABCMeta):
     """
 
     def notify(self):
-        uprint('**** ' + self.error_message)
+        uprint("****  " + self.error_message)
 
     def handle(self):
-        xml_recv = b''
+        xml_recv = b""
         try:
             while xml_recv[-1:] != TCP_END_OF_MSG_CHAR:
                 chunk = self.request.recv(TCP_MAXBUFLEN)
@@ -47,7 +48,8 @@ class RequestXmlHandler(socketserver.BaseRequestHandler, metaclass=ABCMeta):
             self.request.sendall(resp)
 
         except Exception as ex:
-            self.error_message = "RequestXmlHandler.handle() exception='" + str(ex) + "' (XML='" + str(xml_recv) + "')"
+            self.error_message = "RequestXmlHandler.handle() exception='" + str(ex) + "' (XML=" + str(xml_recv) + ")"\
+                                 + "\n" + format_exc()
             self.notify()
 
     @abstractmethod
@@ -87,10 +89,12 @@ class TcpServer:
             while True:
                 if display_animation:
                     index = (index + 1) % len(DEBUG_RUNNING_CHARS)
-                    uprint('Server is running ' + DEBUG_RUNNING_CHARS[index], end='\r', flush=True)
+                    uprint("Server is running " + DEBUG_RUNNING_CHARS[index], end="\r", flush=True)
                 time.sleep(sleep_time)
         except Exception as ex:
-            uprint('Server killed with exception: ', ex)
+            uprint("Server killed with exception: ", ex)
+            if self.debug_level:
+                uprint(format_exc())
         self.server.shutdown()
         self.server.server_close()
 
@@ -98,8 +102,8 @@ class TcpServer:
 # client infrastructure
 
 class TcpClient:
-    error_message = ''
-    received_xml = ''
+    error_message = ""
+    received_xml = ""
 
     def __init__(self, server_ip, server_port, timeout=3.6, encoding='utf8', debug_level=DEBUG_LEVEL_DISABLED):
         super(TcpClient, self).__init__()
@@ -110,13 +114,13 @@ class TcpClient:
         self.debug_level = debug_level
 
     def send_to_server(self, xml):
-        self.error_message = ''
-        self.received_xml = ''
+        self.error_message = ""
+        self.received_xml = ""
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint('TcpClient connecting to server ', self.serverIP, ' on port ', self.serverPort,
-                           ' with encoding', self.encoding, ' and timeout', self.timeout)
+                    uprint("TcpClient connecting to server ", self.serverIP, " on port ", self.serverPort,
+                           " with encoding", self.encoding, " and timeout", self.timeout)
                 # adding sock.setblocking(0) is resulting in a BlockingIOError exception
                 sock.settimeout(self.timeout)
                 sock.connect((self.serverIP, self.serverPort))
@@ -124,12 +128,13 @@ class TcpClient:
                 sock.sendall(bs + TCP_END_OF_MSG_CHAR)
                 self.received_xml = self._receive_response(sock)
         except Exception as ex:
-            self.error_message = "TcpClient.send_to_server() exception: " + str(ex) + ' (sent XML=' + xml + ')'
+            self.error_message = "TcpClient.send_to_server() exception: " + str(ex) \
+                                 + (" (sent XML=" + xml + ")" + "\n" + format_exc() if self.debug_level else "")
 
         return self.error_message
 
     def _receive_response(self, sock):
-        xml_recv = b''
+        xml_recv = b""
         try:
             while xml_recv[-1:] != TCP_END_OF_MSG_CHAR:
                 chunk = sock.recv(TCP_MAXBUFLEN)
@@ -142,7 +147,8 @@ class TcpClient:
             xml_recv = xml_recv[:-1]        # remove TCP_END_OF_MSG_CHAR
 
         except Exception as ex:
-            self.error_message = "TcpClient._receive_response() err: " + str(ex) + \
-                                 " (received XML=" + str(xml_recv, self.encoding) + ')'
+            self.error_message = "TcpClient._receive_response() err: " + str(ex) \
+                                 + (" (received XML=" + str(xml_recv, self.encoding) + ")" + "\n" + format_exc()
+                                    if self.debug_level else "")
 
         return str(xml_recv, self.encoding)

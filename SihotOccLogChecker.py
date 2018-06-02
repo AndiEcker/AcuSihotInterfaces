@@ -321,6 +321,7 @@ try:
         first_log_date = None
         for line_no, line_str in enumerate(lines):
             line_str = line_str[:-1]    # remove trailing \n
+            time_stamp = get_log_time_stamp(line_str)
             if op_code:
                 room_no = get_xml_element(line_str, 'RN')
                 if not room_no:     # especially CI has mostly two lines (with RN in the second line)
@@ -339,8 +340,9 @@ try:
                 added_lines = 0
                 continue
 
-            time_stamp = get_log_time_stamp(line_str)
             if not time_stamp:
+                cae.dprint("Empty timestamp in log line, OC={}, line={}".format(op_code, line_str),
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                 continue
             if not first_log_date:
                 first_log_date = time_stamp

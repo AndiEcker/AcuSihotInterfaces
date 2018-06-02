@@ -141,7 +141,9 @@ class SfInterface:
         return response
 
     def sf_obj(self, sf_obj):
-        client_obj = getattr(self._conn, sf_obj)
+        if not self._ensure_lazy_connect():
+            return None
+        client_obj = getattr(self._conn, sf_obj, None)
         if not client_obj:
             self.error_msg = "SfInterface.sf_obj({}) called with invalid salesforce object type".format(sf_obj)
         return client_obj

@@ -17,11 +17,10 @@ ELEM_EMPTY = "(empty)"
 
 def add_sh_options(cae, add_kernel_port=False, client_port=None):
     cae.add_option('shServerIP', "IP address of the Sihot WEB/KERNEL server", 'localhost', 'i')
+    cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
     if client_port:
         # default is 14773 for Acumen and 14774 for the Sihot side (always the next higher port number)
-        cae.add_option('shClientPort', "IP port of SXML interface provided by this server for Sihot", client_port, 'w')
-    else:
-        cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
+        cae.add_option('shClientPort', "IP port of SXML interface provided by this server for Sihot", client_port, 'm')
     if add_kernel_port:
         # e.g. for GuestBulkFetcher we need also the kernel interface port of Sihot
         cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of the Sihot server", 14772, 'k')
@@ -159,11 +158,10 @@ class BulkFetcherBase:
     def add_options(self):
         add_sh_options(self.cae, add_kernel_port=self.add_kernel_port)
 
-    def load_config(self):
-        cae = self.cae
-        self.debug_level = cae.get_option('debugLevel')
+    def load_options(self):
+        self.debug_level = self.cae.get_option('debugLevel')
 
-    def print_config(self):
+    def print_options(self):
         print_sh_options(self.cae, add_kernel_port=self.add_kernel_port)
 
 
@@ -214,8 +212,8 @@ class ResBulkFetcher(BulkFetcherBase):
         self.cae.add_option('dateTill', "Date" + ("/time" if SH_PROVIDES_CHECKOUT_TIME else "") +
                             " of last arrival", self.startup_date - datetime.timedelta(days=1), 'T')
 
-    def load_config(self):
-        super(ResBulkFetcher, self).load_config()
+    def load_options(self):
+        super(ResBulkFetcher, self).load_options()
 
         cae = self.cae
         self.date_from = cae.get_option('dateFrom')
@@ -241,8 +239,8 @@ class ResBulkFetcher(BulkFetcherBase):
 
         self.adult_pers_types = cae.get_config('shAdultPersTypes')
 
-    def print_config(self):
-        super(ResBulkFetcher, self).print_config()
+    def print_options(self):
+        super(ResBulkFetcher, self).print_options()
 
         uprint("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
                'and till/before', self.date_till.strftime(SH_DATE_FORMAT))

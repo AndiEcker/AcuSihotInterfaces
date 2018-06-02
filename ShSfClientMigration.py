@@ -38,8 +38,8 @@ add_notification_options(cae)
 
 _debug_level = cae.get_option('debugLevel')
 
-rbf.load_config()
-rbf.print_config()
+rbf.load_options()
+rbf.print_options()
 
 email_validation, email_validator, \
     phone_validation, phone_validator, \

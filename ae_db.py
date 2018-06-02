@@ -129,14 +129,17 @@ class GenericDB:
 
     def fetch_value(self, col_idx=0):
         self.last_err_msg = ""
+        val = None
         try:
-            val = self.curs.fetchone()[col_idx]
+            values = self.curs.fetchone()
+            if values:
+                val = values[col_idx]
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("GenericDB.fetch_value()[{}] value: {}".format(col_idx, val))
+                uprint("GenericDB.fetch_value() retrieved values: {}[{}]".format(values, col_idx))
         except Exception as ex:
-            self.last_err_msg = "GenericDB.fetch_value()[{}] exception: {}".format(col_idx, ex)
+            self.last_err_msg = "GenericDB.fetch_value()[{}] exception: {}; status message={}"\
+                .format(col_idx, ex, self.curs.statusmessage)
             uprint(self.last_err_msg)
-            val = None
         return val
 
     def insert(self, table_name, col_values, commit=False, returning_column=''):
@@ -175,20 +178,32 @@ class GenericDB:
         chk_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in chk_values.keys()])
 
         self.select(table_name, ["count(*)"], chk_expr, chk_values)
-        if not self.last_err_msg:
+        if self.last_err_msg:
+            self.last_err_msg += "; chk_expr={}; chk_values=".format(chk_expr, chk_values)
+        else:
             count = self.fetch_value()
-            if not self.last_err_msg:
+            if self.last_err_msg:
+                self.last_err_msg += "; chk_expr={}, chk_values=".format(chk_expr, chk_values)
+            else:
                 if count == 1:
-                    bind_vars = deepcopy(chk_values).update(col_values)
+                    bind_vars = deepcopy(chk_values)
+                    bind_vars.update(col_values)
                     self.update(table_name, col_values, chk_expr, commit=commit, bind_vars=bind_vars,
                                 locked_cols=locked_cols)
-                    if not self.last_err_msg and returning_column:
+                    if self.last_err_msg:
+                        self.last_err_msg += "; chk_expr={}, bind_vars={}".format(chk_expr, bind_vars)
+                    elif returning_column:
                         self.select(table_name, [returning_column], chk_expr, chk_values)
                 elif count == 0:
+                    col_values.update(chk_values)
                     self.insert(table_name, col_values, commit=commit, returning_column=returning_column)
-                else:
-                    self.last_err_msg = "GenericDB.upsert({}, {}, {}, {}) error: found {} duplicate primary key values"\
-                        .format(table_name, col_values, chk_values, returning_column, count)
+                    if self.last_err_msg:
+                        self.last_err_msg += "; col_values={}".format(col_values)
+                else:               # count not in (0, 1) or count is None:
+                    msg = "SELECT COUNT(*) returned None" if count is None \
+                        else "found {} duplicate primary key values".format(count)
+                    self.last_err_msg = "GenericDB.upsert({}, {}, {}, {}) error: {}"\
+                        .format(table_name, col_values, chk_values, returning_column, msg)
         return self.last_err_msg
 
     def commit(self, reset_last_err_msg=False):
@@ -248,7 +263,7 @@ class GenericDB:
 
 class OraDB(GenericDB):
 
-    def __init__(self, usr=ACU_DEF_USR, pwd='', dsn=ACU_DEF_DSN, debug_level=DEBUG_LEVEL_DISABLED):
+    def __init__(self, usr='', pwd='', dsn='', debug_level=DEBUG_LEVEL_DISABLED):
         super(OraDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, debug_level=debug_level)
 
         if dsn.count(':') == 1 and dsn.count('/@') == 1:   # old style format == host:port/@SID

@@ -5,7 +5,7 @@ import datetime
 from argparse import ArgumentError
 import pytest
 
-from ae_console_app import ConsoleApp, full_stack_trace, uprint, \
+from ae_console_app import ConsoleApp, full_stack_trace, missing_requirements, uprint, \
     DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES
 
 
@@ -461,3 +461,27 @@ class TestFullStackTrace:
         except ValueError as ex:
             print(full_stack_trace(ex))
             assert full_stack_trace(ex)
+
+
+class TestMissingRequirements:
+    def test_none_obj_with__attributes(self):
+        assert [] == missing_requirements(None, [['__str__']])
+        assert [] == missing_requirements(None, [['__str__', '__name__']])
+        assert [] == missing_requirements(None, [['__str__', '__name__', '__str__']])
+        assert [['__name__']] == missing_requirements(None, [['__name__']])
+        assert [['__name__']] == missing_requirements(None, [['__name__'], ['__doc__'], ['__str__', '__name__']])
+
+    def test_dict_with_bool_check(self):
+        d = dict(i=1, s='test')
+        assert [] == missing_requirements(d, [['i'], ['s']])
+        assert [['x']] == missing_requirements(d, [['i'], ['s'], ['x']])
+        d = dict(i=0, s='')
+        assert [['x']] == missing_requirements(d, [['i'], ['s'], ['x']])
+        assert [['i'], ['s'], ['x']] == missing_requirements(d, [['i'], ['s'], ['x']], bool_check=True)
+        d = dict(d=dict(i=0, s=''))
+        assert [] == missing_requirements(d, [['d', 'i'], ['d', 's']])
+        assert [['d', 'i'], ['d', 's']] == missing_requirements(d, [['d', 'i'], ['d', 's']], bool_check=True)
+
+    def test_attr_dict_mixed(self):
+        d = dict(d=dict(i=0, s=''))
+        assert [] == missing_requirements(d, [['d', 's', '__doc__']])

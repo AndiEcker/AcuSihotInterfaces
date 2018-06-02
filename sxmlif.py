@@ -7,7 +7,7 @@ from textwrap import wrap
 from xml.etree.ElementTree import XMLParser, ParseError
 
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
-from ae_console_app import fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, round_traditional
+from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
 from ae_tcp import TcpClient
 from ae_db import OraDB
 
@@ -363,9 +363,9 @@ MAP_WEB_RES = \
         # 'colValFromAcu': "case when RUL_SIHOT_RATE in ('TC', 'TK')"
         #                  " then F_SIHOT_CAT('RU' || RU_CODE) else RUL_SIHOT_CAT end"},
         {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',  # needed for DELETE action
-         'colValFromAcu': "F_SIHOT_CAT('RU' || RU_CODE)"},
+         'colValFromAcu': "F_SIHOT_CAT('RU' || RUL_PRIMARY)"},
         {'elemName': 'PCAT', 'colName': 'SH_PRICE_CAT', 'elemHideInActions': ACTION_DELETE,
-         'colValFromAcu': "F_SIHOT_CAT('RU' || RU_CODE)"},
+         'colValFromAcu': "F_SIHOT_CAT('RU' || RUL_PRIMARY)"},
         # {'elemName': 'PCAT', 'colName': 'SIHOT_CAT',
         #  'colValFromAcu': "'1TIC'"},
         {'elemName': 'ALLOTMENT-EXT-NO', 'colName': 'SIHOT_ALLOTMENT_NO', 'colVal': '',
@@ -936,6 +936,8 @@ class ResChange(SihotXmlParser):
             di, ik = self.rgr_list[-1], 'rgr_sub_id'
         elif self._curr_tag == 'GDSNO':
             di, ik = self.rgr_list[-1], 'rgr_gds_no'
+        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'OBJID']:   # TODO: not provided by CI/CO/RM
+            di, ik = self.rgr_list[-1], 'rgr_obj_id'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'ARR']:
             di, ik = self.rgr_list[-1], 'rgr_arrival'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'DEP']:
@@ -943,14 +945,15 @@ class ResChange(SihotXmlParser):
         elif self._curr_tag == 'RT_SIHOT':                  # RT has different values (1=definitive, 2=tentative, 3=cxl)
             # data = 'S' if data == '3' else data           # .. so using undocumented RT_SIHOT to prevent conversion
             di, ik = self.rgr_list[-1], 'rgr_status'
-        elif self._curr_tag == 'CAT':
-            di, ik = self.rgr_list[-1], 'rgr_room_cat_id'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOPAX']:
             di, ik = self.rgr_list[-1], 'rgr_adults'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOCHILDS']:  # TODO: not provided by CR
             di, ik = self.rgr_list[-1], 'rgr_children'
 
         # rgr/reservation group elements that are repeated (e.g. for each PAX in SIHOT-Person sections)
+        elif self._curr_tag == 'CAT':
+            di, ik = self.rgr_list[-1], 'rgr_room_cat_id'
+            append = ik in di and len(di[ik]) < 4
         elif self._curr_tag == 'MC':
             di, ik = self.rgr_list[-1], 'rgr_mkt_segment'
             append = ik in di and len(di[ik]) < 2
@@ -979,7 +982,8 @@ class ResChange(SihotXmlParser):
 
         # unsupported elements
         else:
-            self.ca.dprint("ResChange.data(): ignoring element ", self._elem_path, "; data chunk=", data)
+            self.ca.dprint("ResChange.data(): ignoring element ", self._elem_path, "; data chunk=", data,
+                           minimum_debug_level=DEBUG_LEVEL_TIMESTAMPED)
             return
 
         # add data - after check if we need to add or to extend the dictionary item

@@ -8,6 +8,8 @@
     0.7     23-09-17 added migrationMode and syncDateRange command line option.
     0.8     01-03-18 extended to allow allotments (RCI) configured by SihotMktSegExceptions.cfg.
     0.9     08-03-18 bug fix in sxmlif.py: now set SRSL_DATE to start-of-sync-query-fetch instead of end-of-sync).
+    1.0     30-05-18 bug fix in sxmlif.py: now use RUL_PRIMARY instead of RU_CODE in F_SIHOT_CAT/CAT element for
+            to allow sync of deleted RU records.
 """
 import datetime
 
@@ -20,7 +22,7 @@ from sxmlif import ClientToSihot, ResToSihot, \
     ACTION_UPDATE, ACTION_DELETE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
 from ass_sys_data import AssSysData
 
-__version__ = '0.9'
+__version__ = '1.0'
 
 ADMIN_MAIL_TO_LIST = ['ITDevmen@signallia.com']
 

@@ -6,6 +6,7 @@ import re
 import inspect
 import pprint
 import unicodedata
+import threading
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError
@@ -47,6 +48,11 @@ MAX_NUM_LOG_FILES = 99
 
 # initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
 _ca_instance = None
+
+# global Locks for to prevent errors in log file rotation, config reloads and config reads
+log_file_rotation_lock = threading.Lock()
+config_load_lock = threading.Lock()
+config_read_lock = threading.Lock()
 
 
 def _get_debug_level():
@@ -140,6 +146,32 @@ def substitute_placeholders(expr, key_values, value_prefix=""):
         #    val = str(val)
         expr = expr.replace(PLACEHOLDER_PREFIX + key + PLACEHOLDER_SUFFIX, value_prefix + val)
     return expr
+
+
+def missing_requirements(obj, requirements, bool_check=False):
+    """
+    test if obj has the required attribute-/item-hierarchies
+    :param obj:             object to inspect/test
+    :param requirements:    list of requirement items, each item is a list specifying the path to retrieve the
+                            required value. The items of the path list can be a of mix of attribute names and item keys.
+    :param bool_check:      (opt, def=False) additionally check if an existing requirement has non-empty/True value.
+    :return:                list of missing requirements.
+    """
+    missing = list()
+    for req in requirements:
+        val = obj
+        for name_or_key in req:
+            try:
+                val = getattr(val, name_or_key)
+            except (AttributeError, TypeError, IndexError, Exception):  # TypeError if name is not str
+                try:
+                    val = val[name_or_key]
+                except (AttributeError, TypeError, IndexError, Exception):
+                    missing.append(req)
+                    break
+        if bool_check and not val:
+            missing.append(req)
+    return missing
 
 
 class Setting:
@@ -240,28 +272,37 @@ class _DuplicateSysOut:
         return getattr(self.sys_out, attr)
 
 
-def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_def='backslashreplace'):
+def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace'):
     if not file:
         # app_std_out cannot be specified as file argument default because get initialized after import of this module
         # .. within ConsoleApp._open_log_file(). Use ori_std_out for animation prints (see ae_tcp.py/TcpServer.run()).
-        file = ori_std_out if end == '\r' else app_std_out
+        file = ori_std_out if end == "\r" else app_std_out
     enc = file.encoding
 
     # creating new log file and backup of current one if the current one has more than 20 MB in size
     if _ca_instance is not None:
         _ca_instance.log_file_check_rotation()
+        if _ca_instance.multi_threading:
+            # prevent fluttered log file content
+            # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
+            # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
+            if end == "\n":
+                end = ""
+                print_objects = print_objects[:-1] + (str(print_objects[-1]) + '\n',)
+            if sep == " ":
+                sep = ""
+                print_objects = tuple(" " + str(_) for _ in print_objects)
+            print_objects = (" <{: >6}>".format(threading.get_ident()),) + print_objects
 
     # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
     # ..UnicodeEncodeError: 'charmap' codec can't encode character '\x9f' in position 191: character maps to <undefined>
     # if enc == 'UTF-8':
-    #     print(*objects, sep=sep, end=end, file=file, flush=flush)
+    #     print(*print_objects, sep=sep, end=end, file=file, flush=flush)
     # else:
-    #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
+    #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),
     #           sep=sep, end=end, file=file, flush=flush)
     if _get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
-        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + objects
-    else:
-        print_objects = objects
+        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + print_objects
     try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
     while True:
         try:
@@ -282,7 +323,8 @@ def uprint(*objects, sep=' ', end='\n', file=None, flush=False, encode_errors_de
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 log_file_def='', config_eval_vars=None, additional_cfg_files=None, log_max_size=20):
+                 log_file_def='', config_eval_vars=None, additional_cfg_files=None, log_max_size=20,
+                 multi_threading=False):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version          application version.
             :param app_desc             application description.
@@ -292,6 +334,7 @@ class ConsoleApp:
                                         expressions (e.g. AcuSihotMonitor.ini).
             :param additional_cfg_files list of additional CFG/INI file names (opt. incl. abs/rel. path).
             :param log_max_size         maximum size in MBytes of a log file.
+            :param multi_threading      pass True if instance is used in multi-threading app.
         """
         """
             :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
@@ -313,6 +356,7 @@ class ConsoleApp:
         self._log_max_size = log_max_size
         self._log_file_name = ""
         self._log_file_index = 0
+        self.multi_threading = multi_threading
 
         self.startup_beg = datetime.datetime.now()
         self.config_options = dict()
@@ -431,16 +475,13 @@ class ConsoleApp:
             try:
                 self._close_log_file()
                 self._open_log_file()
+                uprint('Log file:', self._log_file_name)
             except Exception as ex:
                 uprint("****  ConsoleApp._parse_args(): enable logging exception=", ex)
 
-        self.startup_end = datetime.datetime.now()
-        uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
-        uprint("####  Startup finished....  ####")
-
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self.config_options['debugLevel'].value
-        if _debug_level:
+        if _debug_level >= DEBUG_LEVEL_ENABLED:
             uprint("Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):", _debug_level)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             uprint("System Environment:")
@@ -452,8 +493,10 @@ class ConsoleApp:
             if getattr(sys, 'frozen', False):
                 uprint(" "*18, "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*'))
             uprint(" "*18, "main-cfg  =", self._cfg_fnam)
-        if self._log_file_name:
-            uprint('Log file:', self._log_file_name)
+
+        self.startup_end = datetime.datetime.now()
+        uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
+        uprint("####  Startup finished....  ####")
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
@@ -491,12 +534,13 @@ class ConsoleApp:
         return val
 
     def get_config(self, name, section=None, default_value=None, cfg_parser=None, value_type=None):
-        if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
-            val = self.config_options[name].value
-        else:
-            s = Setting(name=name, value=default_value, value_type=value_type)  # Setting used only for conversion/eval
-            s.value = self._get_config_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
-            val = s.value
+        with config_read_lock:
+            if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
+                val = self.config_options[name].value
+            else:
+                s = Setting(name=name, value=default_value, value_type=value_type)  # used only for conversion/eval
+                s.value = self._get_config_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
+                val = s.value
         return val
 
     def set_config(self, name, val, cfg_fnam=None, section=None):
@@ -533,9 +577,10 @@ class ConsoleApp:
         return err_msg
 
     def load_config(self):
-        self._cfg_parser = ConfigParser()
-        self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
-        self._cfg_parser.read(self._config_files)
+        with config_load_lock:
+            self._cfg_parser = ConfigParser()
+            self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
+            self._cfg_parser.read(self._config_files)
 
     def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_ENABLED):
         if self.get_option('debugLevel') >= minimum_debug_level:
@@ -573,13 +618,24 @@ class ConsoleApp:
 
     def log_file_check_rotation(self):
         if self._log_file_obj is not None:
+            if self.multi_threading:
+                global log_file_rotation_lock
+                log_file_rotation_lock.acquire()
             self._log_file_obj.seek(0, 2)  # due to non-posix-compliant Windows feature
             if self._log_file_obj.tell() >= self._log_max_size * 1024 * 1024:
                 self._close_log_file()
                 self._rename_log_file()
                 self._open_log_file()
+            if self.multi_threading:
+                log_file_rotation_lock.release()
 
     def shutdown(self, exit_code=0):
+        if self.multi_threading:
+            main_thread = threading.current_thread()
+            for t in threading.enumerate():
+                if t is not main_thread:
+                    uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()))
+                    t.join()
         if exit_code:
             uprint("****  Non-zero exit code:", exit_code)
         uprint('####  Shutdown............  ####')
