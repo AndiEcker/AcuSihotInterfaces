@@ -8,7 +8,8 @@ from ae_notification import add_notification_options, init_notification
 from acif import add_ac_options
 from sxmlif import AvailCatInfo, GuestSearch, ClientToSihot, ResSearch
 from sfif import add_sf_options, prepare_connection, ensure_long_id, obj_from_id, DEF_CLIENT_OBJ, DETERMINE_CLIENT_OBJ
-from shif import add_sh_options, elem_value, ResBulkFetcher, SH_DATE_FORMAT
+from shif import add_sh_options, print_sh_options, elem_value, gds_no_to_obj_id, res_no_to_obj_id, obj_id_to_res_no,\
+    ResBulkFetcher, SH_DATE_FORMAT
 
 
 # special client record type ids
@@ -104,8 +105,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None):
                cae.get_option('sfUser'), cae.get_option('sfClientId'))
         sys_ids.append("SBox" if conf_data.sf_sandbox else "Prod")
     if conf_data.sh_conn:
-        uprint('Sihot server IP/port:', cae.get_option('shServerIP'), cae.get_option('shClientPort'))
-        uprint('Sihot TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+        print_sh_options(cae)
         sys_ids.append(cae.get_option('shServerIP'))
     ret_dict['sysIds'] = sys_ids
 
@@ -133,7 +133,8 @@ FIELD_NAMES = dict(AssId=dict(Desc="AssCache client PKey", AssSysDataClientsIdx=
                              AssDb='cl_ac_id', AcDb='CD_CODE', Lead='Acumen_Client_Reference__c', Contact='CD_CODE__c',
                              Account='CD_CODE__pc', Sihot='MATCHCODE'),
                    SfId=dict(Desc="Salesforce client Id", AssSysDataClientsIdx=_SF_ID,
-                             AssDb='cl_sf_id', AcDb='CD_SF_ID1', Lead='Id', Contact='Id', Account='Id',
+                             AssDb='cl_sf_id', AcDb='CD_SF_ID1',
+                             Lead='id', Contact='id', Account='id',     # was Id but test_sfif.py needs lower case id
                              Sihot='MATCH-SM'),
                    ShId=dict(Desc="Sihot guest ID", AssSysDataClientsIdx=_SH_ID,
                              AssDb='cl_sh_id', AcDb='CD_SIHOT_OBJID', Lead='Sihot_Guest_Object_Id__c',
@@ -518,18 +519,21 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.res_inv_data = list()
 
     def __del__(self):
+        self.close_dbs()
+
+    def close_dbs(self, commit=True):
         # ensure to close of DB connections (execution of auto-commits)
         if self.acu_db:
-            self.acu_db.close()
+            self.acu_db.close(commit=commit)
             self.acu_db = None
         if self.ass_db:
-            self.ass_db.close()
+            self.ass_db.close(commit=commit)
             self.ass_db = None
 
     def connect_acu_db(self, force_reconnect=False):
         if not self.acu_db or force_reconnect:
             self.acu_db = OraDB(usr=self.acu_user, pwd=self.acu_password, dsn=self.acu_dsn,
-                                debug_level=self.debug_level)
+                                app_name=self.cae.app_name(), debug_level=self.debug_level)
             self.error_message = self.acu_db.connect()
             if self.error_message:
                 self._err(self.error_message, self._ctx_no_file + 'ConnAcuDb')
@@ -539,7 +543,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def connect_ass_db(self, force_reconnect=False):
         if not self.ass_db or force_reconnect:
             self.ass_db = PostgresDB(usr=self.ass_user, pwd=self.ass_password, dsn=self.ass_dsn,
-                                     debug_level=self.debug_level)
+                                     app_name=self.cae.app_name(), debug_level=self.debug_level)
             self.error_message = self.ass_db.connect()
             if self.error_message:
                 self._err(self.error_message, self._ctx_no_file + 'ConnAssDb')
@@ -891,19 +895,38 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     # =================  reservation bookings  ===================================================================
 
     @staticmethod
-    def rgr_min_chk_values(chk_values):
-        if chk_values.get('obj_id', ''):
-            where_vars = dict(rgr_obj_id=chk_values.get('obj_id', ''))
-        elif chk_values.get('ho_id', '') and chk_values.get('res_id', '') and chk_values.get('sub_id', ''):
-            where_vars = dict(rgr_ho_fk=chk_values['ho_id'], rgr_res_id=chk_values['res_id'],
-                              rgr_sub_id=chk_values['sub_id'])
-        elif chk_values.get('gds_no', ''):
-            where_vars = dict(rgr_gds_no=chk_values['gds_no'])
-        elif chk_values.get('ho_id', '') and chk_values.get('res_id', ''):
-            where_vars = dict(rgr_ho_fk=chk_values['ho_id'], rgr_res_id=chk_values['res_id'])
+    def rgr_min_chk_values(col_values):
+        if col_values.get('rgr_obj_id'):
+            where_vars = dict(rgr_obj_id=col_values['rgr_obj_id'])
+        elif col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id') and col_values.get('rgr_sub_id'):
+            where_vars = dict(rgr_ho_fk=col_values['rgr_ho_fk'], rgr_res_id=col_values['rgr_res_id'],
+                              rgr_sub_id=col_values['rgr_sub_id'])
+        elif col_values.get('rgr_gds_no'):
+            where_vars = dict(rgr_gds_no=col_values['rgr_gds_no'])
+        elif col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id'):
+            where_vars = dict(rgr_ho_fk=col_values['rgr_ho_fk'], rgr_res_id=col_values['rgr_res_id'], rgr_sub_id='1')
         else:   # if not obj_id and not (ho_id and res_id) and not gds_no:
             where_vars = dict()
         return where_vars
+
+    def rgr_complete_pks(self, col_values):
+        ret = True
+        if not col_values.get('rgr_obj_id'):
+            if col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id') and col_values.get('rgr_sub_id'):
+                col_values['rgr_obj_id'] = res_no_to_obj_id(self.cae, col_values['rgr_ho_fk'], col_values['rgr_res_id'],
+                                                            col_values['rgr_sub_id'])
+            elif col_values.get('rgr_ho_fk') and col_values.get('rgr_gds_no'):
+                col_values['rgr_obj_id'] = gds_no_to_obj_id(self.cae, col_values['rgr_ho_fk'], col_values['rgr_gds_no'])
+            ret = col_values.get('rgr_obj_id')
+        if not col_values.get('rgr_sub_id'):
+            if col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id'):
+                col_values['rgr_sub_id'] = '1'
+            elif col_values.get('rgr_obj_id'):
+                res_ids = obj_id_to_res_no(self.cae, col_values['rgr_obj_id'])
+                if res_ids:
+                    col_values['rgr_ho_fk'], col_values['rgr_res_id'], col_values['rgr_sub_id'] = res_ids
+            ret = col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id') and col_values.get('rgr_sub_id')
+        return ret
 
     def rgr_upsert(self, col_values, chk_values=None, commit=False):
         """
@@ -915,16 +938,24 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param commit:      (opt, def=False) pass True to commit.
         :return:            error message on error else empty string.
         """
-        if chk_values is None:
-            chk_values = {k: v for k, v in col_values.items()
-                          if k in ('rgr_obj_id', 'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_gds_no')}
-        if chk_values:
-            self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values, 'rgr_pk', commit=commit)
-            if not self.error_message and self.ass_db.curs.rowcount != 1:
-                self.error_message = "rgr_upsert({}, {}): Invalid affected row count; expected 1 but got {}" \
-                    .format(col_values, chk_values, self.ass_db.curs.rowcount)
+        for k in ('rgr_obj_id', 'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_gds_no'):
+            if k in col_values and col_values.get(k) in (None, ''):
+                col_values.pop(k)   # remove pk column with empty value
+        if chk_values is not None:
+            col_values.update(chk_values)  # add chk_values to col_values for to be completed (e.g. on missing sub_id)
+        if not self.rgr_complete_pks(col_values):
+            self.error_message = "rgr_upsert({}): Incomplete-able reservation pk (objid|res-id|gds)".format(col_values)
         else:
-            self.error_message = "rgr_upsert({}): Missing reservation id (objid|res-id|gds)".format(col_values)
+            if chk_values is None:
+                chk_values = self.rgr_min_chk_values(col_values)
+            if not chk_values:
+                self.error_message = "rgr_upsert({}, {}): Missing reservation id (objid|res-id|gds)"\
+                    .format(col_values, chk_values)
+            else:
+                self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values, 'rgr_pk', commit=commit)
+                if not self.error_message and self.ass_db.curs.rowcount != 1:
+                    self.error_message = "rgr_upsert({}, {}): Invalid affected row count; expected 1 but got {}" \
+                        .format(col_values, chk_values, self.ass_db.curs.rowcount)
 
         return self.error_message
 

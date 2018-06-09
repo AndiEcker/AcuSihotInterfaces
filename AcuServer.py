@@ -4,6 +4,10 @@
     0.3     made running-server-animation optional, specify debugLevel/logFile in INI and check/fix Transaction number
             passing/increment - is always duplicated '2' instead the one sent by Sihot (see Track-It closed WO #43242).
     0.4     added GDS number to alloc_trigger() - available since Sihot build/version 9.0.0.0787.CO.
+    0.5     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
+
+    TODO:
+    - implement reservation fetch via Sihot WEB interface for better problem/discrepancy checks.
 """
 from traceback import format_exc
 
@@ -15,10 +19,9 @@ from acif import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder
 from shif import add_sh_options
 
-__version__ = '0.4'
+__version__ = '0.5'
 
-cae = None  # added for to remove Pycharm warning
-
+cae = debug_level = None  # added for to remove Pycharm warning
 if __name__ == "__main__":      # for to allow import of client_to_acu() for testing suite
     cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle")
 
@@ -30,6 +33,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 
     add_notification_options(cae)
 
+    debug_level = cae.get_option('debugLevel')
     uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
     uprint('Server IP/port:', cae.get_option('shServerIP'), cae.get_option('shClientPort'))
     uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
@@ -37,7 +41,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 
 
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
-    if cae.get_option('debugLevel') >= minimum_debug_level:
+    if debug_level >= minimum_debug_level:
         if notification:
             notification.send_notification(msg_body=msg, subject='AcuServer notification')
         else:
@@ -45,10 +49,13 @@ def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
 
 
 def client_to_acu(col_values, ca=None):
-    if not ca:          # only needed for sxmlif testing section
+    if ca:              # only needed for sxmlif testing section
+        dl = ca.get_option('debugLevel')
+    else:
+        dl = debug_level
         ca = cae
     ora_db = OraDB(ca.get_option('acuUser'), ca.get_option('acuPassword'), ca.get_option('acuDSN'),
-                   debug_level=ca.get_option('debugLevel'))
+                   app_name=cae.app_name(), debug_level=dl)
     err_msg = ora_db.connect()
     pkey = None
     if not err_msg:
@@ -101,7 +108,7 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
         old_room_no = old_room_no.lstrip('0')
     # move/check in/out guest from/into room_no
     ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
-                   debug_level=cae.get_option('debugLevel'))
+                   app_name=cae.app_name(), debug_level=debug_level)
     err_msg = ora_db.connect()
     extra_info = ''
     if not err_msg:
@@ -110,7 +117,7 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
         if err_msg:
             ora_db.rollback()
         else:
-            if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
+            if debug_level >= DEBUG_LEVEL_VERBOSE:
                 extra_info = ' REQ:' + sihot_xml
             changes = ora_db.get_value(ref_var)
             if changes:
@@ -240,8 +247,8 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
 
 if __name__ == '__main__':
-    server = TcpServer(cae.get_option('shServerIP'), cae.get_option('shClientPort'), SihotRequestXmlHandler,
-                       debug_level=cae.get_option('debugLevel'))
+    ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
+    server = TcpServer(ip_addr, cae.get_option('shClientPort'), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 
     cae.shutdown()

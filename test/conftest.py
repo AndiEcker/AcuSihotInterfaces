@@ -36,7 +36,8 @@ def avail_cats(console_app_env):
 @pytest.fixture()
 def db_connected(console_app_env):
     ora_db = OraDB(console_app_env.get_option('acuUser'), console_app_env.get_option('acuPassword'),
-                   console_app_env.get_option('acuDSN'), debug_level=console_app_env.get_option('debugLevel'))
+                   console_app_env.get_option('acuDSN'), app_name='conftest',
+                   debug_level=console_app_env.get_option('debugLevel'))
     ora_db.connect()
     return ora_db
 

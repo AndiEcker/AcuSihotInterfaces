@@ -76,7 +76,7 @@ def prepare_connection(cae, verbose=True):
         return None, None
     sf_pw = cae.get_option('sfPassword')
     sf_token = cae.get_option('sfToken')
-    sf_sandbox = cae.get_option('sfIsSandbox', default_value='test' in sf_user.lower() or 'sandbox' in sf_user.lower())
+    sf_sandbox = cae.get_option('sfIsSandbox', default_value='test' in sf_user.lower() or 'sdbx' in sf_user.lower())
     sf_client = cae.get_option('sfClientId')
 
     if verbose:

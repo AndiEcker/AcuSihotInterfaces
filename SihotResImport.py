@@ -9,6 +9,9 @@
     0.7     30-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
     0.8     15-07-17: refactoring moving clients and res_inv_data to ass_sys_data.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
+
+    TODO:
+    - use new config sections (for each hotel and ANY) or AssCache instead of Acumen conf_data.
 """
 import sys
 import os

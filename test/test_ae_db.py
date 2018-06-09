@@ -14,7 +14,7 @@ class TestOraDB:
         global test_db
         cae = console_app_env
         test_db = OraDB(usr=cae.get_option('acuUser'), pwd=cae.get_option('acuPassword'), dsn=cae.get_option('acuDSN'),
-                        debug_level=cae.get_option('debugLevel'))
+                        app_name='test_ae_db-ora', debug_level=cae.get_option('debugLevel'))
         assert not test_db.last_err_msg
 
     def test_create_table(self):
@@ -61,7 +61,7 @@ class TestPostgresDB:
         global test_db
         cae = console_app_env
         test_db = PostgresDB(usr=cae.get_option('assRootUsr'), pwd=cae.get_option('assRootPwd'), dsn='test',
-                             debug_level=cae.get_option('debugLevel'))
+                             app_name='test_ae_db-pg', debug_level=cae.get_option('debugLevel'))
         test_db.connect()
         assert not test_db.last_err_msg
 

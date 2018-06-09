@@ -259,7 +259,7 @@ def check_occ_discrepancies(od):
 add_log_msg("Fetching reservations from Acumen", importance=4)
 try:
     ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
-                   debug_level=cae.get_option('debugLevel'))
+                   app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
     err_msg = ora_db.connect()
     if not err_msg:
         err_msg = ora_db.select('T_ARO inner join T_CD on ARO_CDREF = CD_CODE',

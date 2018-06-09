@@ -17,6 +17,8 @@ from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from sxmlif import ResSearch, SXML_DEF_ENCODING
+from shif import add_sh_options, print_sh_options
+
 
 __version__ = '0.1'
 
@@ -29,11 +31,6 @@ startup_date = datetime.datetime.now() if SIHOT_PROVIDES_CHECKOUT_TIME else date
 mail_re = re.compile('[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+\.[a-zA-Z]{2,4}$')
 
 cae = ConsoleApp(__version__, "Export check-outs from Sihot to CSV file")
-cae.add_option('shServerIP', "IP address of the Sihot interface server", 'localhost', 'i')
-cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
-cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 369.6, 't')
-cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
-
 cae.add_option('dateFrom', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
                " of first check-out to be exported", startup_date - datetime.timedelta(days=7), 'F')
 cae.add_option('dateTill', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
@@ -42,15 +39,16 @@ cae.add_option('dateTill', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME els
 # old Acumen script used the following file path: //<oracle-server>/home/oracle/ext_tables/INTUITION.csv
 cae.add_option('exportFile', "Full path and name of the CSV file (appending new checkouts if already exits)", '', 'x')
 
+add_sh_options(cae)
 
-uprint("Sihot server IP/Web-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
-uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+
 export_fnam = cae.get_option('exportFile')
 uprint("Export file:", export_fnam)
 date_from = cae.get_option('dateFrom')
 date_till = cae.get_option('dateTill')
 uprint("Date range including checkouts from", date_from.strftime(SIHOT_DATE_FORMAT),
        'and till/before', date_till.strftime(SIHOT_DATE_FORMAT))
+print_sh_options(cae)
 
 column_separator = cae.get_config('columnSeparator', default_value=',')
 uprint("Column separator character:", column_separator)

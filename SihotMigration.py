@@ -7,16 +7,13 @@
 from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace
 from acif import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import ClientToSihot, ResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
+from shif import add_sh_options, print_sh_options
+
 
 __version__ = '0.3'
 
 cae = ConsoleApp(__version__, "Migrate all guest/reservation data from Acumen/Oracle system to the SiHOT-PMS")
-cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('shServerPort', "IP port of the WEB interface of this server", 14777, 'w')
-cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
-
-cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
-cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
+add_sh_options(cae, add_kernel_port=True)
 
 cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
 cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
@@ -37,9 +34,7 @@ cae.add_option('syncDateRange', "Restrict sync. of res. to: "
                choices=sync_date_ranges.keys())
 cae.add_option('includeCxlRes', "Include also cancelled reservations (0=No, 1=Yes)", 1, 'I', choices=(0, 1))
 
-uprint("Sihot server IP/Web-/Kernel-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-       cae.get_option('shServerKernelPort'))
-uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+print_sh_options(cae)
 uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
 uprint("Migrate Clients First/Separate:",
        ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])

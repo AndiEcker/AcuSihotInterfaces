@@ -752,36 +752,6 @@ MAP_WEB_RES = \
         {'elemName': '/ARESLIST'},
     )
 
-# .. then the mapping for the KERNEL interface - TODO: currently not used so maybe remove or refactor for to convert
-# .. OBJID into Res/Sub-numbers
-MAP_KERNEL_RES = \
-    (
-        {'elemName': 'OBJID', 'colName': 'RU_SIHOT_OBJID', 'elemHideInActions': ACTION_INSERT},
-        {'elemName': 'ORDERER/', 'elemHideInActions': ACTION_UPDATE},
-        {'elemName': 'GUEST-PROFILE/', 'elemHideInActions': ACTION_UPDATE},
-        {'elemName': 'OBJID', 'colName': 'CD_SIHOT_OBJID', 'elemHideInActions': ACTION_UPDATE},
-        {'elemName': '/GUEST-PROFILE', 'elemHideInActions': ACTION_UPDATE},
-        {'elemName': '/ORDERER', 'elemHideInActions': ACTION_UPDATE},
-        {'elemName': 'NR-ROOMS', 'colName': 'SH_NOROOMS', 'colVal': '1'},
-        {'elemName': 'T-CATEGORY', 'colName': 'RUL_SIHOT_CAT'},  # mandatory, could be empty to get PMS fallback-default
-        {'elemName': 'T-RATE', 'colName': 'RUL_SIHOT_RATE', 'colVal': 'OW'},
-        {'elemName': 'ID', 'colName': 'RUL_SIHOT_HOTEL'},  # or use [RES-]HOTEL/IDLIST
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM'},
-        {'elemName': 'D-FROM', 'colName': 'ARR_DATE'},
-        {'elemName': 'D-TO', 'colName': 'DEP_DATE'},
-        {'elemName': 'NR-PERSONS', 'colName': 'SH_PAX',
-         'colValFromAcu': "RU_ADULTS + RU_CHILDREN"},
-        {'elemName': 'NOTE', 'colName': 'SIHOT_TEC_NOTE'},
-        {'elemName': 'T-MARKET-SEGMENT', 'colName': 'RUL_SIHOT_RATE'},
-        {'elemName': 'GDS-NR', 'colName': 'SH_GDSNO',  # EXT-REFERENCE or VOUCHERNUMBER are not mandatory
-         'colValFromAcu': "'RU__' || RUL_PRIMARY"},
-        {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF'},
-        {'elemName': 'ACTION', 'colName': 'RUL_ACTION', 'buildExclude': True},
-        {'elemName': 'STATUS', 'colName': 'RU_STATUS', 'colValFromAcu': "nvl(RU_STATUS, 120)", 'buildExclude': True},
-        {'elemName': 'RULREF', 'colName': 'RUL_CODE', 'buildExclude': True},
-        {'elemName': 'CDREF', 'colName': 'CD_CODE', 'buildExclude': True},
-    )
-
 # default values for used interfaces (see email from Sascha Scheer from 28 Jul 2016 13:48 with answers from JBerger):
 # .. use kernel for clients and web for reservations
 USE_KERNEL_FOR_CLIENTS_DEF = True
@@ -1260,6 +1230,14 @@ class ResFromSihot(ColMapXmlParser):
             self.elem_col_map = deepcopy(self.blank_elem_col_map)
 
 
+class ResKernelResponse(Response):
+    def __init__(self, cae):
+        super(ResKernelResponse, self).__init__(cae)
+        self._base_tags.append('HN')
+        self._base_tags.append('RES-NR')
+        self._base_tags.append('SUB-NR')
+
+
 class SihotXmlBuilder:
     tn = '1'
 
@@ -1300,7 +1278,7 @@ class SihotXmlBuilder:
         self.acu_connected = False
         if connect_to_acu:
             self.ora_db = OraDB(ca.get_option('acuUser'), ca.get_option('acuPassword'), ca.get_option('acuDSN'),
-                                debug_level=ca.get_option('debugLevel'))
+                                app_name=ca.app_name(), debug_level=ca.get_option('debugLevel'))
             err_msg = self.ora_db.connect()
             if err_msg:
                 uprint("SihotXmlBuilder.__init__() db connect error:", err_msg)
@@ -1795,6 +1773,61 @@ class PostMessage(SihotXmlBuilder):
         return ret
 
 
+class ResFetch(SihotXmlBuilder):
+    def fetch_by_gds_no(self, ho_id, gds_no, scope='BASICDATAONLY'):
+        self.beg_xml(operation_code='SS')
+        self.add_tag('ID', ho_id)
+        self.add_tag('GDSNO', gds_no)
+        if scope:
+            self.add_tag('SCOPE', scope)  # e.g. BASICDATAONLY (see 14.3.4 in WEB interface doc)
+        self.end_xml()
+
+        err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
+        # WEB interface return codes (RC): 29==res not found, 1==internal error - see 14.3.5 in WEB interface doc
+
+        return err_msg or self.response.res_list[0]
+
+    def fetch_by_res_id(self, ho_id, res_id, sub_id, scope='BASICDATAONLY'):
+        self.beg_xml(operation_code='SS')
+        self.add_tag('ID', ho_id)
+        self.add_tag('RES-NR', res_id)
+        self.add_tag('SUB-NR', sub_id)
+        if scope:
+            self.add_tag('SCOPE', scope)  # e.g. BASICDATAONLY (see 14.3.4 in WEB interface doc)
+        self.end_xml()
+
+        err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
+        # WEB interface return codes (RC): 29==res not found, 1==internal error - see 14.3.5 in WEB interface doc
+
+        return err_msg or self.response.res_list[0]
+
+
+class ResKernelGet(SihotXmlBuilder):
+    def __init__(self, cae):
+        super(ResKernelGet, self).__init__(cae, use_kernel_interface=True)
+
+    def fetch_res_no(self, obj_id, scope='GET'):
+        """
+        return dict with guest data OR None in case of error
+
+        :param obj_id:  Sihot reservation object id.
+        :param scope:   search scope string (see 7.3.1.2 in Sihot KERNEL interface doc V 9.0)
+        """
+        self.beg_xml(operation_code='RESERVATION-GET')
+        self.add_tag('RESERVATION-PROFILE', self.new_tag('OBJID', obj_id) + self.new_tag('SCOPE', scope))
+        self.end_xml()
+
+        err_msg = self.send_to_server(response_parser=ResKernelResponse(self.ca))
+        if not err_msg and self.response:
+            res_no = (self.response.hn, self.response.res_nr, self.response.sub_nr)
+            self.ca.dprint("ResKernelGet.fetch() obj_id|xml|res_no: ", obj_id, self.xml, res_no,
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        else:
+            res_no = None
+            uprint("ResKernelGet.fetch() obj_id|error: ", obj_id, err_msg)
+        return res_no
+
+
 class ResSearch(SihotXmlBuilder):
     def search(self, hotel_id=None, from_date=datetime.date.today(), to_date=datetime.date.today(),
                matchcode=None, name=None, gdsno=None, flags='', scope=None, guest_id=None):
@@ -1816,6 +1849,7 @@ class ResSearch(SihotXmlBuilder):
         if scope:
             self.add_tag('SCOPE', scope)  # e.g. EXPORTEXTENDEDCOMMENT;FORCECALCDAYPRICE;CALCSUMDAYPRICE
         if guest_id:
+            # TODO: ask Gubse to fix guest_id search/filter option on RES-SEARCH operation of Sihot WEB interface.
             self.add_tag('CENTRAL-GUEST-ID', guest_id)  # this is not filtering nothing (tried GID from Sihot-To-Acu IF)
         self.end_xml()
 

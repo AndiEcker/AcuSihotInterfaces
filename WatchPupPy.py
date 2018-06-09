@@ -7,6 +7,12 @@
     0.8     refactored using add_ass_options() and init_ass_data().
     0.9     enhanced system checking (merge errors and added checks for AssCache and Salesforce), fixed bug (missing
             config file write) in reset_last_run_time().
+    1.0     add check of last T_SRSL for RU (SRSL_TABLE) and fix file path bug and on INI lock reset.
+
+TODO:
+    - investigate and fix bug with freeze if sendOutput option is specified with the value 1/enabled and unsuccessful
+      reset problem (see notification emails from 04-09-17).
+
 """
 import os
 import time
@@ -21,7 +27,7 @@ from sxmlif import PostMessage, GuestSearch
 from ass_sys_data import add_ass_options, init_ass_data
 
 
-__version__ = '0.9'
+__version__ = '1.0'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 MAX_SRSL_OUTAGE_HOURS = 9.0

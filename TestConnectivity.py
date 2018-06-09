@@ -22,7 +22,7 @@ notification.send_notification('test message from Sihot server')
 
 
 ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
-               debug_level=cae.get_option('debugLevel'))
+               app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
 err_msg = ora_db.connect()
 if err_msg:
     uprint(err_msg)

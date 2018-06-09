@@ -1,14 +1,18 @@
 # -*- coding: UTF-8 -*-
 """
-  calendar screen for kivy apps
+    calendar screen for kivy apps
 
-  The application need to provide in the kivy.App class:
-   * a BooleanProperty landscape that is True if the kivy window/app is horizontal
-   * a method date_changed() receiving in the first parameter the selected date value (then *args and **kwargs)
-   * a method screen_size_changed()
+    The application need to provide in the kivy.App class:
+    * a BooleanProperty landscape that is True if the kivy window/app is horizontal
+    * a method date_changed() receiving in the first parameter the selected date value (then *args and **kwargs)
+    * a method screen_size_changed()
 
-  version history:
+    version history:
     0.1:  first alpha
+
+    TODO:
+    - enhance ae_calendar to be use dependency injection instead of hard-coded call back method names.
+
 """
 import datetime
 import calendar

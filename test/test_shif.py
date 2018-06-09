@@ -110,3 +110,15 @@ class TestElemHelpers:
         print(beg, end)
         assert beg == d3 - datetime.timedelta(days=1)
         assert end == d3
+
+
+class TestIdConverters:
+    def test_gds_no_to_obj_id(self, console_app_env):
+        # test res of Z007184 from 26.12.17 until 3.1.2018
+        assert '60544' == gds_no_to_obj_id(console_app_env, '4', '899993')
+
+    def test_obj_id_to_res_no(self, console_app_env):
+        assert ('4', '33220', '1') == obj_id_to_res_no(console_app_env, '60544')
+
+    def test_res_no_to_obj_id(self, console_app_env):
+        assert '60544' == res_no_to_obj_id(console_app_env, '4', '33220', '1')

@@ -3,7 +3,7 @@ import datetime
 import time
 from traceback import print_exc
 
-from sxmlif import GuestSearch, ResSearch, SXML_DEF_ENCODING, ELEM_PATH_SEP, elem_path_values
+from sxmlif import elem_path_values, GuestSearch, ResFetch, ResSearch, ResKernelGet, SXML_DEF_ENCODING, ELEM_PATH_SEP
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 
 SH_PROVIDES_CHECKOUT_TIME = False  # currently there is no real checkout time available in Sihot
@@ -28,13 +28,15 @@ def add_sh_options(cae, add_kernel_port=False, client_port=None):
     cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
 
 
-def print_sh_options(cae, add_kernel_port=False, client_port=None):
+def print_sh_options(cae):
+    uprint("Sihot server IP/WEB-interface-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
+    client_port = cae.get_option('shClientPort')
     if client_port:
-        uprint("Sihot client IP/port for listening:", cae.get_option('shServerIP'), cae.get_option('shClientPort'))
-    else:
-        uprint("Sihot server IP/WEB-interface-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
-    if add_kernel_port:
-        uprint("Sihot server KERNEL-interface-port:", cae.get_option('shServerKernelPort'))
+        ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
+        uprint("Sihot client IP/port for listening:", ip_addr, client_port)
+    kernel_port = cae.get_option('shServerKernelPort')
+    if kernel_port:
+        uprint("Sihot server KERNEL-interface-port:", kernel_port)
     uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
 
 
@@ -97,7 +99,7 @@ def hotel_and_res_id(shd):
     sub_nr = elem_value(shd, 'SUB-NR')
     if not ho_id or not res_nr:
         return None, None
-    return ho_id, res_nr + (SH_RES_SUB_SEP + sub_nr if sub_nr else "") + '@' + ho_id
+    return ho_id, res_nr + (SH_RES_SUB_SEP + sub_nr if sub_nr else '') + '@' + ho_id
 
 
 def pax_count(shd):
@@ -147,6 +149,34 @@ def date_range_chunks(date_from, date_till, fetch_max_days):
         yield chunk_from, chunk_till
 
 
+def gds_no_to_obj_id(cae, hotel_id, gdsno):
+    obj_id = None
+    rfr = ResFetch(cae).fetch_by_gds_no(hotel_id, gdsno)
+    if isinstance(rfr, dict):
+        obj_id = elem_value(rfr, 'OBJID')
+    return obj_id
+
+
+def res_no_to_obj_id(cae, hotel_id, res_id, sub_id):
+    obj_id = None
+    if not sub_id:
+        sub_id = '1'
+    rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
+    if isinstance(rfr, dict):
+        obj_id = elem_value(rfr, 'OBJID')
+    return obj_id
+
+
+def obj_id_to_res_no(cae, obj_id):
+    """
+    using RESERVATION-GET oc from KERNEL interface (see 7.3 in SIHOT KERNEL interface doc).
+    :param cae:         Console App Environment instance.
+    :param obj_id:      Sihot Reservation Object Id.
+    :return:            reservation number as tuple of (hotel_id, res_id, sub_id) or None if not found
+    """
+    return ResKernelGet(cae).fetch_res_no(obj_id)
+
+
 class BulkFetcherBase:
     def __init__(self, cae, add_kernel_port=True):
         self.cae = cae
@@ -162,7 +192,7 @@ class BulkFetcherBase:
         self.debug_level = self.cae.get_option('debugLevel')
 
     def print_options(self):
-        print_sh_options(self.cae, add_kernel_port=self.add_kernel_port)
+        print_sh_options(self.cae)
 
 
 class GuestBulkFetcher(BulkFetcherBase):

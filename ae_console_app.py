@@ -51,7 +51,7 @@ _ca_instance = None
 
 # global Locks for to prevent errors in log file rotation, config reloads and config reads
 log_file_rotation_lock = threading.Lock()
-config_load_lock = threading.Lock()
+config_lock = threading.Lock()
 config_read_lock = threading.Lock()
 
 
@@ -282,16 +282,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     # creating new log file and backup of current one if the current one has more than 20 MB in size
     if _ca_instance is not None:
         _ca_instance.log_file_check_rotation()
-        if _ca_instance.multi_threading:
-            # prevent fluttered log file content
-            # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
-            # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
-            if end == "\n":
-                end = ""
-                print_objects = print_objects[:-1] + (str(print_objects[-1]) + '\n',)
-            if sep == " ":
-                sep = ""
-                print_objects = tuple(" " + str(_) for _ in print_objects)
+        if _ca_instance.multi_threading:            # add thread ident
             print_objects = (" <{: >6}>".format(threading.get_ident()),) + print_objects
 
     # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
@@ -306,8 +297,18 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
     while True:
         try:
-            print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),
-                  sep=sep, end=end, file=file, flush=flush)
+            print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects)
+            if getattr(_ca_instance, 'multi_threading', False):     # multi_threading not exists in ae_db unit tests
+                # prevent fluttered log file content by concatenating print_objects and adding end value
+                # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
+                # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
+                print_one_str = sep.join(print_strings)
+                sep = ""
+                if end:
+                    print_one_str += end
+                    end = ""
+                print_strings = (print_one_str, )
+            print(*print_strings, sep=sep, end=end, file=file, flush=flush)
             break
         except UnicodeEncodeError:
             fixed_objects = list()
@@ -319,6 +320,9 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                 fixed_objects.append(obj)
             print_objects = fixed_objects
         try_counter += 1
+
+
+INI_EXT = '.ini'
 
 
 class ConsoleApp:
@@ -375,8 +379,7 @@ class ConsoleApp:
         uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
         uprint("####  Initialization......  ####")
 
-        # compile list of cfg/ini files - the last file overwrites previously loaded variable values
-        INI_EXT = '.ini'
+        # prepare config parser, first compile list of cfg/ini files - the last one overwrites previously loaded values
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
         app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
         config_files = [os.path.join(app_path, '.console_app_env.cfg'), os.path.join(cwd_path, '.console_app_env.cfg'),
@@ -396,17 +399,12 @@ class ConsoleApp:
                         config_files.append(cfg_fnam)
                     else:
                         uprint("****  Additional config file {} not found!".format(cfg_fnam))
-
-        # last existing INI/CFG file is default config file to write to
-        for cfg_fnam in reversed(config_files):
-            if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
-                self._cfg_fnam = cfg_fnam
-                break
-        else:   # .. and if there is no INI file at all then create a <APP_NAME>.INI file in the cwd
-            self._cfg_fnam = cwd_path_fnam + INI_EXT
-
+        # prepare load of config files (done in load_config()) where last existing INI/CFG file is default config file
+        # .. to write to and if there is no INI file at all then create on demand a <APP_NAME>.INI file in the cwd
         self._cfg_parser = None
         self._config_files = config_files
+        self._main_cfg_fnam = cwd_path_fnam + INI_EXT   # default will be overwritten by load_config()
+        self._main_cfg_mod_time = None                  # initially assume there is no main config file
         self.load_config()
 
         # prepare argument parser
@@ -492,7 +490,7 @@ class ConsoleApp:
             uprint(" "*18, "frozen    =", getattr(sys, 'frozen', False))
             if getattr(sys, 'frozen', False):
                 uprint(" "*18, "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*'))
-            uprint(" "*18, "main-cfg  =", self._cfg_fnam)
+            uprint(" " * 18, "main-cfg  =", self._main_cfg_fnam)
 
         self.startup_end = datetime.datetime.now()
         uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
@@ -529,31 +527,37 @@ class ConsoleApp:
         return getattr(self._parsed_args, name)
 
     def _get_config_val(self, name, section=None, default_value=None, cfg_parser=None):
-        cfg_parser = cfg_parser or self._cfg_parser
-        val = cfg_parser.get(section or MAIN_SECTION_DEF, name, fallback=default_value)
+        global config_lock
+        with config_lock:
+            cfg_parser = cfg_parser or self._cfg_parser
+            val = cfg_parser.get(section or MAIN_SECTION_DEF, name, fallback=default_value)
         return val
 
     def get_config(self, name, section=None, default_value=None, cfg_parser=None, value_type=None):
-        with config_read_lock:
-            if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
-                val = self.config_options[name].value
-            else:
-                s = Setting(name=name, value=default_value, value_type=value_type)  # used only for conversion/eval
-                s.value = self._get_config_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
-                val = s.value
+        if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
+            val = self.config_options[name].value
+        else:
+            s = Setting(name=name, value=default_value, value_type=value_type)  # used only for conversion/eval
+            s.value = self._get_config_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
+            val = s.value
         return val
 
     def set_config(self, name, val, cfg_fnam=None, section=None):
+        global config_lock
         if not cfg_fnam:
-            cfg_fnam = self._cfg_fnam
+            cfg_fnam = self._main_cfg_fnam
         if not section:
             section = MAIN_SECTION_DEF
 
         if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
             self.config_options[name].value = val
 
+        if not os.path.isfile(cfg_fnam):
+            return "****  INI/CFG file " + str(cfg_fnam) + " not found. Please set the ini/cfg variable " \
+                   + section + "/" + str(name) + " manually to the value " + str(val)
+
         err_msg = ''
-        if os.path.isfile(cfg_fnam):
+        with config_lock:
             try:
                 cfg_parser = ConfigParser()     # not using self._cfg_parser for to put INI vars from other files
                 cfg_parser.optionxform = str    # or use 'lambda option: option' to have case sensitive var names
@@ -571,13 +575,20 @@ class ConsoleApp:
                     cfg_parser.write(configfile)
             except Exception as ex:
                 err_msg = "****  ConsoleApp.set_option(" + str(name) + ", " + str(val) + ") exception: " + str(ex)
-        else:
-            err_msg = "****  INI/CFG file " + str(cfg_fnam) + " not found. Please set the ini/cfg variable " + \
-                      section + "/" + str(name) + " manually to the value " + str(val)
         return err_msg
 
+    def config_main_file_modified(self):
+        return self._main_cfg_mod_time and os.path.getmtime(self._main_cfg_fnam) > self._main_cfg_mod_time
+
     def load_config(self):
-        with config_load_lock:
+        global config_lock
+        for cfg_fnam in reversed(self._config_files):
+            if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
+                self._main_cfg_fnam = cfg_fnam
+                self._main_cfg_mod_time = os.path.getmtime(self._main_cfg_fnam)
+                break
+
+        with config_lock:
             self._cfg_parser = ConfigParser()
             self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
             self._cfg_parser.read(self._config_files)
@@ -631,11 +642,12 @@ class ConsoleApp:
 
     def shutdown(self, exit_code=0):
         if self.multi_threading:
-            main_thread = threading.current_thread()
-            for t in threading.enumerate():
-                if t is not main_thread:
-                    uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()))
-                    t.join()
+            with config_lock:
+                main_thread = threading.current_thread()
+                for t in threading.enumerate():
+                    if t is not main_thread:
+                        uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()))
+                        t.join()
         if exit_code:
             uprint("****  Non-zero exit code:", exit_code)
         uprint('####  Shutdown............  ####')
@@ -715,3 +727,62 @@ class Progress:
     def get_end_message(self, error_msg=''):
         return self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
                                     err_counter=self._err_counter, err_msg=error_msg)
+
+
+class NamedLocks:
+    """
+    allow to create named lock(s) within the same app (migrate from https://stackoverflow.com/users/355230/martineau
+    answer in stackoverflow on the question https://stackoverflow.com/questions/37624289/value-based-thread-lock.
+
+    Currently the sys_lock feature is not implemented. Use either ae_lockfile or the github extension portalocker (see
+    https://github.com/WoLpH/portalocker) or the encapsulating extension ilock (https://github.com/symonsoft/ilock).
+    More on system wide named locking: https://stackoverflow.com/questions/6931342/system-wide-mutex-in-python-on-linux.
+    """
+    locks_change_lock = threading.Lock()
+    active_locks = {}
+    active_lock_counters = {}
+
+    def __init__(self, *lock_names, sys_lock=False):
+        self._lock_names = lock_names
+        self._sys_lock = sys_lock
+        _ca_instance.dprint("NamedLocks.__init__", lock_names, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        assert not sys_lock, "sys_lock is currently not implemented"
+
+    def __enter__(self):
+        _ca_instance.dprint("NamedLocks.__enter__", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        for lock_name in self._lock_names:
+            _ca_instance.dprint("NamedLocks.__enter__ b4 acquire ", lock_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.acquire(lock_name)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        _ca_instance.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        for lock_name in self._lock_names:
+            _ca_instance.dprint("NamedLocks.__exit__ b4 release ", lock_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.release(lock_name)
+
+    def acquire(self, lock_name, *args, **kwargs):
+        _ca_instance.dprint("NamedLocks.acquire", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        with self.locks_change_lock:
+            if lock_name in self.active_locks:
+                self.active_lock_counters[lock_name] += 1
+            else:
+                self.active_locks[lock_name] = threading.Lock()
+                self.active_lock_counters[lock_name] = 1
+
+        lock_acquired = self.active_locks[lock_name].acquire(*args, **kwargs)
+        _ca_instance.dprint("NamedLocks.acquire", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+
+        return lock_acquired
+
+    def release(self, lock_name, *args, **kwargs):
+        _ca_instance.dprint("NamedLocks.release", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        with self.locks_change_lock:
+            if self.active_lock_counters[lock_name] == 1:
+                del self.active_lock_counters[lock_name]
+                lock = self.active_locks.pop(lock_name)
+            else:
+                self.active_lock_counters[lock_name] -= 1
+                lock = self.active_locks[lock_name]
+
+        lock.release(*args, **kwargs)
+        _ca_instance.dprint("NamedLocks.release", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)

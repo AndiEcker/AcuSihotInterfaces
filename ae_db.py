@@ -1,3 +1,8 @@
+"""
+    TODO:
+    - update cx_Oracle V5.2.1 to newest (V6.0.2) and test with oracle client 11.2 and then also have to change
+      the clientinfo kwarg in OraDB.connect() to appcontext=app_ctx.
+"""
 import os
 import datetime
 
@@ -7,7 +12,7 @@ import cx_Oracle
 import psycopg2
 # from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import NamedLocks, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 
 
 NAMED_BIND_VAR_PREFIX = ':'
@@ -19,10 +24,13 @@ def _locked_col_expr(col, locked_cols):
 
 
 class GenericDB:
-    def __init__(self, usr, pwd, dsn, debug_level=DEBUG_LEVEL_DISABLED):
+    def __init__(self, usr, pwd, dsn, app_name='ae_db-gen', debug_level=DEBUG_LEVEL_DISABLED):
+        assert usr and pwd, "ae_db.py/GenericDB has empty user name ({}) and/or password".format(usr)
         self.usr = usr
         self.pwd = pwd
+        assert dsn and isinstance(dsn, str), "ae_db.py/GenericDB() has invalid dsn argument {}".format(dsn)
         self.dsn = dsn
+        self._app_name = app_name
         self.debug_level = debug_level
 
         self.conn = None
@@ -38,9 +46,9 @@ class GenericDB:
         try:
             self.curs = self.conn.cursor()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("GenericDB: database cursor created.")
+                uprint(self.dsn + ": database cursor created.")
         except Exception as ex:
-            self.last_err_msg = "GenericDB._create_cursor() error: " + str(ex)
+            self.last_err_msg = self.dsn + "._create_cursor() error: " + str(ex)
 
     @staticmethod
     def _prepare_in_clause(sql, bind_vars, additional_col_values=None):
@@ -88,11 +96,11 @@ class GenericDB:
                 if commit:
                     self.conn.commit()
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint("GenericDB.execute_sql({}, {}) {}".format(sql, bind_vars, action))
+                    uprint(self.dsn + ".execute_sql({}, {}) {}".format(sql, bind_vars, action))
                     uprint(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
 
             except Exception as ex:
-                self.last_err_msg = "GenericDB.execute_sql({}, {}) {} error: {}".format(sql, bind_vars, action, ex)
+                self.last_err_msg = self.dsn + ".execute_sql({}, {}) {} error: {}".format(sql, bind_vars, action, ex)
 
         return self.last_err_msg
 
@@ -120,9 +128,9 @@ class GenericDB:
         try:
             rows = self.curs.fetchall()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("GenericDB.fetch_all(), 1st of", len(rows), "rows:", rows[:1])
+                uprint(self.dsn + ".fetch_all(), 1st of", len(rows), "rows:", rows[:1])
         except Exception as ex:
-            self.last_err_msg = "GenericDB.fetch_all() exception: " + str(ex)
+            self.last_err_msg = self.dsn + ".fetch_all() exception: " + str(ex)
             uprint(self.last_err_msg)
             rows = None
         return rows or list()
@@ -135,9 +143,9 @@ class GenericDB:
             if values:
                 val = values[col_idx]
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("GenericDB.fetch_value() retrieved values: {}[{}]".format(values, col_idx))
+                uprint(self.dsn + ".fetch_value() retrieved values: {}[{}]".format(values, col_idx))
         except Exception as ex:
-            self.last_err_msg = "GenericDB.fetch_value()[{}] exception: {}; status message={}"\
+            self.last_err_msg = self.dsn + ".fetch_value()[{}] exception: {}; status message={}"\
                 .format(col_idx, ex, self.curs.statusmessage)
             uprint(self.last_err_msg)
         return val
@@ -177,33 +185,34 @@ class GenericDB:
             chk_values = dict([next(iter(col_values.items()))])     # use first dict item as pkey check value
         chk_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in chk_values.keys()])
 
-        self.select(table_name, ["count(*)"], chk_expr, chk_values)
-        if self.last_err_msg:
-            self.last_err_msg += "; chk_expr={}; chk_values=".format(chk_expr, chk_values)
-        else:
-            count = self.fetch_value()
+        with NamedLocks(table_name + str(sorted(chk_values.items()))):
+            self.select(table_name, ["count(*)"], chk_expr, chk_values)
             if self.last_err_msg:
-                self.last_err_msg += "; chk_expr={}, chk_values=".format(chk_expr, chk_values)
+                self.last_err_msg += "; chk_expr={}; chk_values=".format(chk_expr, chk_values)
             else:
-                if count == 1:
-                    bind_vars = deepcopy(chk_values)
-                    bind_vars.update(col_values)
-                    self.update(table_name, col_values, chk_expr, commit=commit, bind_vars=bind_vars,
-                                locked_cols=locked_cols)
-                    if self.last_err_msg:
-                        self.last_err_msg += "; chk_expr={}, bind_vars={}".format(chk_expr, bind_vars)
-                    elif returning_column:
-                        self.select(table_name, [returning_column], chk_expr, chk_values)
-                elif count == 0:
-                    col_values.update(chk_values)
-                    self.insert(table_name, col_values, commit=commit, returning_column=returning_column)
-                    if self.last_err_msg:
-                        self.last_err_msg += "; col_values={}".format(col_values)
-                else:               # count not in (0, 1) or count is None:
-                    msg = "SELECT COUNT(*) returned None" if count is None \
-                        else "found {} duplicate primary key values".format(count)
-                    self.last_err_msg = "GenericDB.upsert({}, {}, {}, {}) error: {}"\
-                        .format(table_name, col_values, chk_values, returning_column, msg)
+                count = self.fetch_value()
+                if self.last_err_msg:
+                    self.last_err_msg += "; chk_expr={}, chk_values=".format(chk_expr, chk_values)
+                else:
+                    if count == 1:
+                        bind_vars = deepcopy(chk_values)
+                        bind_vars.update(col_values)
+                        self.update(table_name, col_values, chk_expr, commit=commit, bind_vars=bind_vars,
+                                    locked_cols=locked_cols)
+                        if self.last_err_msg:
+                            self.last_err_msg += "; chk_expr={}, bind_vars={}".format(chk_expr, bind_vars)
+                        elif returning_column:
+                            self.select(table_name, [returning_column], chk_expr, chk_values)
+                    elif count == 0:
+                        col_values.update(chk_values)
+                        self.insert(table_name, col_values, commit=commit, returning_column=returning_column)
+                        if self.last_err_msg:
+                            self.last_err_msg += "; col_values={}".format(col_values)
+                    else:               # count not in (0, 1) or count is None:
+                        msg = "SELECT COUNT(*) returned None" if count is None \
+                            else "found {} duplicate primary key values".format(count)
+                        self.last_err_msg = self.dsn + ".upsert({}, {}, {}, {}) error: {}"\
+                            .format(table_name, col_values, chk_values, returning_column, msg)
         return self.last_err_msg
 
     def commit(self, reset_last_err_msg=False):
@@ -212,9 +221,9 @@ class GenericDB:
         try:
             self.conn.commit()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("GenericDB.commit()")
+                uprint(self.dsn + ".commit()")
         except Exception as ex:
-            self.last_err_msg = "GenericDB commit error: " + str(ex)
+            self.last_err_msg = self.dsn + " commit error: " + str(ex)
         return self.last_err_msg
 
     def rollback(self, reset_last_err_msg=False):
@@ -223,9 +232,9 @@ class GenericDB:
         try:
             self.conn.rollback()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("GenericDB.rollback()")
+                uprint(self.dsn + ".rollback()")
         except Exception as ex:
-            self.last_err_msg = "GenericDB rollback error: " + str(ex)
+            self.last_err_msg = self.dsn + " rollback error: " + str(ex)
         return self.last_err_msg
 
     def get_row_count(self):
@@ -238,7 +247,7 @@ class GenericDB:
             if ret_dict:
                 ret_dict['return'] = ret
         except Exception as ex:
-            self.last_err_msg = "GenericDB call_proc error: " + str(ex)
+            self.last_err_msg = self.dsn + " call_proc error: " + str(ex)
         return self.last_err_msg
 
     def close(self, commit=True):
@@ -251,20 +260,22 @@ class GenericDB:
             try:
                 if self.curs:
                     self.curs.close()
+                    self.curs = None
                     if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                        uprint("GenericDB cursor closed")
+                        uprint(self.dsn + " cursor closed")
                 self.conn.close()
+                self.conn = None
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint("GenericDB connection closed")
+                    uprint(self.dsn + " connection closed")
             except Exception as ex:
-                self.last_err_msg += "GenericDB close error: " + str(ex)
+                self.last_err_msg += self.dsn + " close error: " + str(ex)
         return self.last_err_msg
 
 
 class OraDB(GenericDB):
 
-    def __init__(self, usr='', pwd='', dsn='', debug_level=DEBUG_LEVEL_DISABLED):
-        super(OraDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, debug_level=debug_level)
+    def __init__(self, usr='', pwd='', dsn='', app_name='ae_db-ora', debug_level=DEBUG_LEVEL_DISABLED):
+        super(OraDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, app_name=app_name, debug_level=debug_level)
 
         if dsn.count(':') == 1 and dsn.count('/@') == 1:   # old style format == host:port/@SID
             host, rest = dsn.split(':')
@@ -290,9 +301,13 @@ class OraDB(GenericDB):
 
     def connect(self):
         self.last_err_msg = ''
+        # cx_oracle sys context was using clientinfo kwarg in/up-to V5 - since V6 kwarg renamed to appcontext and now
+        # .. using a list of 3-tuples. So on switch to cx_oracle V6 need to replace clientinfo with appcontext=app_ctx
+        # NAMESPACE = "CLIENTCONTEXT"     # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
+        # app_ctx = [(NAMESPACE, "APP", self._app_name), (NAMESPACE, "LANG", "Python"), (NAMESPACE, "MOD", "ae_db")]
         try:
             # old style: self.conn = cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
-            self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn)
+            self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, clientinfo=self._app_name)
             # self.conn.outputtypehandler = output_type_handler - see also comment in __init__()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 uprint("OraDB: connected to Oracle database {} via client version {}/{} with n-/encoding {}/{}"
@@ -327,7 +342,7 @@ class OraDB(GenericDB):
 
 
 class PostgresDB(GenericDB):
-    def __init__(self, usr, pwd, dsn, debug_level=DEBUG_LEVEL_DISABLED):
+    def __init__(self, usr, pwd, dsn, app_name='ae_db-pg', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of postgres database object
         :param usr:         user name
@@ -335,7 +350,7 @@ class PostgresDB(GenericDB):
         :param dsn:         database name and optionally host address (separated with a @ character)
         :param debug_level: debug level
         """
-        super(PostgresDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, debug_level=debug_level)
+        super(PostgresDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, app_name=app_name, debug_level=debug_level)
         # for "named" PEP-0249 sql will be adapted to fit postgres driver "pyformat" sql bind-var/parameter syntax
         self._param_style = 'pyformat'
 
@@ -347,12 +362,15 @@ class PostgresDB(GenericDB):
                 connection_params['dbname'], connection_params['host'] = self.dsn.split('@')
             else:
                 connection_params['dbname'] = self.dsn
+            if self._app_name:
+                connection_params['application_name'] = self._app_name
+
             self.conn = psycopg2.connect(**connection_params)
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 uprint("PostgresDB: connected to postgres database {} via api/server {}/{} with encoding {}"
                        .format(self.dsn, psycopg2.apilevel, self.conn.server_version, self.conn.encoding))
         except Exception as ex:
-            self.last_err_msg = "PostgresDB-connect " + self.usr + "@" + self.dsn + " error: " + str(ex)
+            self.last_err_msg = "PostgresDB-connect " + self.usr + " on " + self.dsn + " error: " + str(ex)
         else:
             self._create_cursor()
         return self.last_err_msg

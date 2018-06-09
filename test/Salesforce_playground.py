@@ -19,10 +19,10 @@ print('Salesforce object:', sb)
 
 print('Top-level objects describe:', pprint.pformat(sb.describe(), indent=3, compact=True))
 
-print('Opportunity metadata:', sb.Opportunity.metadata())
 
 print('Account metadata:', pprint.pformat(sb.Account.metadata(), indent=3, compact=True))
 print('Contact metadata:', pprint.pformat(sb.Contact.metadata(), indent=3, compact=True))
+print('Opportunity metadata:', pprint.pformat(sb.Opportunity.metadata(), indent=3, compact=True))
 describe_txt = pprint.pformat(sb.Account.describe(), indent=3, compact=True)
 with open('describe_account.log', 'w') as f:
     f.write(describe_txt)
@@ -31,6 +31,10 @@ describe_txt = pprint.pformat(sb.Contact.describe(), indent=3, compact=True)
 with open('describe_contact.log', 'w') as f:
     f.write(describe_txt)
 print('Contact describe:', describe_txt)
+describe_txt = pprint.pformat(sb.Opportunity.describe(), indent=3, compact=True)
+with open('describe_opportunity.log', 'w') as f:
+    f.write(describe_txt)
+print('Opportunity describe:', describe_txt)
 
 print('External_Ref metadata:', sb.External_Ref__c.metadata())
 print('External_Ref describe:', sb.External_Ref__c.describe())

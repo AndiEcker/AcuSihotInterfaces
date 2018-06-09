@@ -3,6 +3,16 @@
     0.2     first release: added "please wait" messages using Clock.schedule_once().
     0.3     ported to Python 3.5 with the option to use the angle backend (via KIVY_GL_BACKEND=angle_sdl2 env var).
     0.4     small refactoring and bug fixes (e.g. show app version in window title, added ErrorItem to kv, ...).
+
+    TODO:
+    - fix problem with "F_KEY_VAL(replace(replace(RUL_CHANGES" in AcuSihotMonitor_Support.ini queries.
+    - add more checks (e.g. Expected Occupancy with previous/next room no.).
+    - implement filter selection list with check boxes.
+    - fix problems with dynamic ActionItems in upstream kivy repo.
+    - Check if current master branch of Pyinstaller is including all needed kivy dependencies (including angle) and if
+      not then fix problems upstream (failing kivy hook and the including of the kv file with pyinstaller for the two
+      kivy apps AcuSihotMonitor and SihotResImport).
+
 """
 import sys
 import datetime

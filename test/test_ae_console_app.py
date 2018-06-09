@@ -5,24 +5,25 @@ import datetime
 from argparse import ArgumentError
 import pytest
 
-from ae_console_app import ConsoleApp, full_stack_trace, missing_requirements, uprint, \
+from ae_console_app import ConsoleApp, NamedLocks, full_stack_trace, missing_requirements, uprint, \
     DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES
 
 
 class TestConfigOptions:
     def test_set_config_with_reload(self):
         file_name = os.path.join(os.getcwd(), 'test_config.ini')
+        var_name = 'test_config_var'
         with open(file_name, 'w') as f:
-            f.write('[Settings]\ntest_config_var = OtherTestValue')
+            f.write('[Settings]\n' + var_name + ' = OtherTestValue')
         cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
         val = 'test_value'
-        assert not cae.set_config('test_config_var', val)
+        assert not cae.set_config(var_name, val)
 
-        cfg_val = cae.get_config('test_config_var')
+        cfg_val = cae.get_config(var_name)
         assert cfg_val != val
 
         cae.load_config()
-        cfg_val = cae.get_config('test_config_var')
+        cfg_val = cae.get_config(var_name)
         assert cfg_val == val
 
         os.remove(file_name)
@@ -485,3 +486,67 @@ class TestMissingRequirements:
     def test_attr_dict_mixed(self):
         d = dict(d=dict(i=0, s=''))
         assert [] == missing_requirements(d, [['d', 's', '__doc__']])
+
+
+class TestNamedLocks:
+    def test_sequential(self):
+        nl = NamedLocks()
+        assert nl.acquire('test', timeout=0.01)
+        nl.release('test')
+        nl2 = NamedLocks()
+        assert nl2.acquire('test', timeout=.01)
+        nl2.release('test')
+
+    def test_locking_with_timeout(self):
+        nl = NamedLocks()
+        assert nl.acquire('test', timeout=0.01)
+        nl2 = NamedLocks()
+        assert not nl2.acquire('test', timeout=.01)
+        nl.release('test')
+        assert nl2.acquire('test', timeout=.01)
+        nl2.release('test')
+
+    def test_non_blocking_args(self):
+        nl = NamedLocks()
+        assert nl.acquire('test')
+        nl2 = NamedLocks()
+        assert nl2.acquire('otherTest')
+        nl2.release('otherTest')
+        assert not nl2.acquire('test', blocking=False)
+        assert not nl2.acquire('test', False)
+        assert not nl2.acquire('test', timeout=.01)
+        nl.release('test')
+        assert nl2.acquire('test', blocking=False)
+        nl2.release('test')
+
+
+class TestConfigMainFileModified:
+    def test_not_modified(self):
+        file_name = os.path.join(os.getcwd(), 'test_config.ini')
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\ntest_config_var = OtherTestValue')
+        cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
+        assert not cae.config_main_file_modified()
+
+    def test_modified(self):
+        file_name = os.path.join(os.getcwd(), 'test_config.ini')
+        var_name = 'test_config_var'
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = OtherTestValue')
+        cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
+        val = 'test_value'
+        assert not cae.set_config(var_name, val)
+
+        assert cae.config_main_file_modified()
+
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val != val   # cfg_val has still old value (OtherTestValue) because parser instance got not reloaded
+        assert cae.config_main_file_modified()
+
+        cae.load_config()
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val == val
+
+        assert not cae.config_main_file_modified()
+
+        os.remove(file_name)
