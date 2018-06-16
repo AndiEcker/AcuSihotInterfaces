@@ -169,7 +169,8 @@ class GenericDB:
             sql += " WHERE " + where
         return self.execute_sql(sql, commit=commit, bind_vars=new_bind_vars)
 
-    def upsert(self, table_name, col_values, chk_values=None, returning_column='', commit=False, locked_cols=None):
+    def upsert(self, table_name, col_values, chk_values=None, returning_column='', commit=False, locked_cols=None,
+               multiple_row_update=True):
         """
         INSERT or UPDATE in table_name the col_values, depending on if record already exists.
         :param table_name:          name of the database table.
@@ -179,6 +180,7 @@ class GenericDB:
         :param returning_column:    name of column which value will be returned by next fetch_all/fetch_value() call.
         :param commit:              bool value to specify if commit should be done.
         :param locked_cols:         list of column names not be overwritten on update of column value is not empty
+        :param multiple_row_update  allow update of multiple records with the same chk_values.
         :return:                    last error message or "" if no errors occurred.
         """
         if not chk_values:
@@ -194,7 +196,7 @@ class GenericDB:
                 if self.last_err_msg:
                     self.last_err_msg += "; chk_expr={}, chk_values=".format(chk_expr, chk_values)
                 else:
-                    if count == 1:
+                    if count == 1 or (multiple_row_update and count > 1):
                         bind_vars = deepcopy(chk_values)
                         bind_vars.update(col_values)
                         self.update(table_name, col_values, chk_expr, commit=commit, bind_vars=bind_vars,
@@ -210,7 +212,7 @@ class GenericDB:
                             self.last_err_msg += "; col_values={}".format(col_values)
                     else:               # count not in (0, 1) or count is None:
                         msg = "SELECT COUNT(*) returned None" if count is None \
-                            else "found {} duplicate primary key values".format(count)
+                            else "skipping update because found {} duplicate check/search values".format(count)
                         self.last_err_msg = self.dsn + ".upsert({}, {}, {}, {}) error: {}"\
                             .format(table_name, col_values, chk_values, returning_column, msg)
         return self.last_err_msg

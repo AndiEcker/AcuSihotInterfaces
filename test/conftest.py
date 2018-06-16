@@ -134,7 +134,7 @@ class ConsoleApp:
         uprint('ConsoleAppMock.__init__', args)
         cfg = ConfigParser()
         cfg.optionxform = str   # for case-sensitive config vars
-        cfg.read('../.console_app_env.cfg')
+        cfg.read(['../.console_app_env.cfg', '../.sys_envTEST.cfg'])
 
         self._options = dict(acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
                              acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
@@ -179,6 +179,10 @@ class ConsoleApp:
         uprint('ConsoleAppMock.set_option', name, val, cfg_fnam, save_to_config)
         self._options[name]['val'] = val
         return ''
+
+    @staticmethod
+    def app_name():
+        return "conftest.ConsoleApp.mock"
 
     def dprint(self, *objects, sep=' ', end='\n', file=sys.stdout, minimum_debug_level=1):  # 1==DEBUG_LEVEL_ENABLED
         if self.get_option('debugLevel') >= minimum_debug_level:

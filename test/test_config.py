@@ -187,6 +187,7 @@ class TestSystem:
                     if ap_code in v:
                         sh_cat += '/' + k
                 err += "\n{} is room category {} in Acumen but {} in Sihot".format(ap_code, ap_sihot_cat, sh_cat[1:])
+        print(err)
         assert not err
 
         for cat, rooms in cat_room_dict.items():
@@ -197,6 +198,7 @@ class TestSystem:
                     found = [r for a, c in rows if r == a and c == cat]
                     if not found:
                         err += "\nroom {} / {} not configured/found in Acumen".format(r, cat)
+        print(err)
         assert not err
 
     def test_cat_rooms_bhh(self, cat_rooms, db_connected):
@@ -284,9 +286,9 @@ class TestRoomCat:
 
     def test_room_cat_pbc_2bed(self, config_data):
         assert config_data.cat_by_room('334') == '2BSP'
-        assert config_data.cat_by_room('401') == '2STS'    # '22SB'
+        assert config_data.cat_by_room('401') == '2WSB'    # '22SB' then 2STS and now 2WSB (June 2018)
         assert config_data.cat_by_room('925') == '2BSH'
-        assert config_data.cat_by_room('924') == '2STS'
+        assert config_data.cat_by_room('924') == '2WSS'
 
     def test_room_size_bhc_studio(self, config_data):
         assert config_data.cat_by_size('1', 'STUDIO') == 'STDO'

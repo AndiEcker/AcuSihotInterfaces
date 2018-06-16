@@ -24,7 +24,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | [SihotResImport](#sihotresimport-application) | Create/Update/Cancel reservations from CSV/TXT/JSON files within Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
-| WatchPupPy | Periodically execute and supervise command | - |
+| [WatchPupPy](#watchpuppy-application) | Supervise always running servers or periodically execute command | Kernel, Web |
 | WebRestTester | Reservation interface testing tool | Web |
 
 
@@ -94,7 +94,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | AssCacheSync |
 | push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | AssCacheSync |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
-| sfClientId | Salesforce client/application name/id | SignalliaSfInterface/cae.app_name() | C | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfClientId | Salesforce client/application name/id defaulting to cae.app_name() | SignalliaSfInterface/cae.app_name() | C | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfPassword | Salesforce user account password | - | a | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfToken | Salesforce user account token | - | o | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
@@ -474,6 +474,23 @@ email into the json format is written in C#.NET by Nitesh):
 | SH_EXT_REF | String | Flight Number (optional) | 'ABC-2345' |
 | SIHOT_ALLOTMENT_NO | Numeric | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
  
+
+### WatchPupPy Application
+
+WatchPupPy is a watchdog tool for to either supervise a always running server or for to execute another application
+periodically.
+
+The command line for the re-start a server or application to supervise has to be specified with `cmdLine` option.
+For always running servers the `cmdInterval` option has to be specified with the value 0 (zero) - else the specified
+value is the period in seconds between two executions of the application/command-line.
+  
+When you are using WatchPupPy for always running servers (specifying 0 value for the cmdInterval option)
+then ensure that you disable Windows Error Reporting to prevent the freeze by the message box showing
+"<APP.EXE> has stopped working" and offering "Check online for a solution and close program":
+- https://www.raymond.cc/blog/disable-program-has-stopped-working-error-dialog-in-windows-server-2008/
+- https://monitormyweb.com/guides/how-to-disable-stopped-working-message-in-windows
+
+
 
 ## System Configurations And Mappings
 

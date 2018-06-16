@@ -77,7 +77,7 @@ def prepare_connection(cae, verbose=True):
     sf_pw = cae.get_option('sfPassword')
     sf_token = cae.get_option('sfToken')
     sf_sandbox = cae.get_option('sfIsSandbox', default_value='test' in sf_user.lower() or 'sdbx' in sf_user.lower())
-    sf_client = cae.get_option('sfClientId')
+    sf_client = cae.get_option('sfClientId', default_value=cae.app_name())
 
     if verbose:
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)

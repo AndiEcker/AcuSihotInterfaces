@@ -102,7 +102,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None):
         sys_ids.append(cae.get_option('acuDSN'))
     if conf_data.sf_conn:
         uprint("Salesforce " + ("sandbox" if conf_data.sf_sandbox else "production") + " user/client-id:",
-               cae.get_option('sfUser'), cae.get_option('sfClientId'))
+               cae.get_option('sfUser'), cae.get_option('sfClientId', default_value=cae.app_name()))
         sys_ids.append("SBox" if conf_data.sf_sandbox else "Prod")
     if conf_data.sh_conn:
         print_sh_options(cae)
@@ -523,12 +523,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     def close_dbs(self, commit=True):
         # ensure to close of DB connections (execution of auto-commits)
+        err_msg = ""
         if self.acu_db:
-            self.acu_db.close(commit=commit)
+            err_msg += self.acu_db.close(commit=commit)
             self.acu_db = None
         if self.ass_db:
-            self.ass_db.close(commit=commit)
-            self.ass_db = None
+            err_msg += self.ass_db.close(commit=commit)
+            self.ass_db = None      # postgres connection keeps open w/o, explicit dereference always good style:)
+        return err_msg
 
     def connect_acu_db(self, force_reconnect=False):
         if not self.acu_db or force_reconnect:
@@ -719,7 +721,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             co = self.clients[idx]
             client_data = dict(AcId=co[_AC_ID], SfId=co[_SF_ID], ShId=co[_SH_ID], Name=co[_NAME], Email=co[_EMAIL],
                                Phone=co[_PHONE])
-            cl_pk = self.cl_save(client_data, ext_refs=co[_EXT_REFS].split(EXT_REFS_SEP), ass_idx=idx)
+            cl_pk = self.cl_save(client_data, ext_refs=co[_EXT_REFS].split(EXT_REFS_SEP), ass_idx=idx, commit=True)
             if cl_pk is None:
                 return self.error_message
 
@@ -896,11 +898,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     @staticmethod
     def rgr_min_chk_values(col_values):
-        if col_values.get('rgr_obj_id'):
-            where_vars = dict(rgr_obj_id=col_values['rgr_obj_id'])
-        elif col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id') and col_values.get('rgr_sub_id'):
+        if col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id') and col_values.get('rgr_sub_id'):
             where_vars = dict(rgr_ho_fk=col_values['rgr_ho_fk'], rgr_res_id=col_values['rgr_res_id'],
                               rgr_sub_id=col_values['rgr_sub_id'])
+        elif col_values.get('rgr_obj_id'):
+            where_vars = dict(rgr_obj_id=col_values['rgr_obj_id'])
         elif col_values.get('rgr_gds_no'):
             where_vars = dict(rgr_gds_no=col_values['rgr_gds_no'])
         elif col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id'):
@@ -919,12 +921,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 col_values['rgr_obj_id'] = gds_no_to_obj_id(self.cae, col_values['rgr_ho_fk'], col_values['rgr_gds_no'])
             ret = col_values.get('rgr_obj_id')
         if not col_values.get('rgr_sub_id'):
-            if col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id'):
-                col_values['rgr_sub_id'] = '1'
-            elif col_values.get('rgr_obj_id'):
+            if col_values.get('rgr_obj_id'):
                 res_ids = obj_id_to_res_no(self.cae, col_values['rgr_obj_id'])
                 if res_ids:
                     col_values['rgr_ho_fk'], col_values['rgr_res_id'], col_values['rgr_sub_id'] = res_ids
+            elif col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id'):
+                col_values['rgr_sub_id'] = '1'
             ret = col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id') and col_values.get('rgr_sub_id')
         return ret
 

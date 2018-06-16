@@ -13,6 +13,14 @@ TODO:
     - investigate and fix bug with freeze if sendOutput option is specified with the value 1/enabled and unsuccessful
       reset problem (see notification emails from 04-09-17).
 
+SERVER RUN SYSTEM CONFIGURATION:
+
+When you are using WatchPupPy for always running servers (specifying 0 value for the cmdInterval option)
+then ensure that you disable Windows Error Reporting to prevent the freeze by the message box showing
+"<APP.EXE> has stopped working" and offering "Check online for a solution and close program":
+- https://www.raymond.cc/blog/disable-program-has-stopped-working-error-dialog-in-windows-server-2008/
+- https://monitormyweb.com/guides/how-to-disable-stopped-working-message-in-windows
+
 """
 import os
 import time
@@ -30,7 +38,7 @@ from ass_sys_data import add_ass_options, init_ass_data
 __version__ = '1.0'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
-MAX_SRSL_OUTAGE_HOURS = 9.0
+MAX_SRSL_OUTAGE_HOURS = 18.0
 DEF_TC_SC_ID = '27'
 DEF_TC_SC_MC = 'TCRENT'
 DEF_TC_AG_ID = '20'
@@ -79,13 +87,25 @@ if conf_data.error_message:
 break_on_error = ass_data['breakOnError']
 notification = ass_data['notification']
 send_output = 1 if notification and cae.get_option('sendOutput') else 0
-uprint('Send Output (subprocess call method: 1=check_output, 0=check_call)', send_output)
+uprint("Send Output (subprocess call method: 1=check_output, 0=check_call)", send_output)
 
+uprint("Active Sys Env Checks:", end=" ")
 check_ass = conf_data.ass_user and conf_data.ass_password and conf_data.ass_dsn
+if check_ass:
+    uprint("Ass", end=" ")
 check_acu = conf_data.acu_user and conf_data.acu_password and conf_data.acu_dsn
+if check_acu:
+    uprint("Acu", end=" ")
 check_sf = conf_data.sf_conn
+if check_sf:
+    uprint("Sf", end=" ")
 check_sh_web = cae.get_option('shServerIP') and cae.get_option('shServerPort')
+if check_sh_web:
+    uprint("ShWeb", end=" ")
 check_sh_kernel = cae.get_option('shServerIP') and cae.get_option('shServerKernelPort')
+if check_sh_kernel:
+    uprint("ShKernel", end=" ")
+uprint("")
 
 
 def user_notification(subject, body):
@@ -254,8 +274,9 @@ while True:
                             if newest_sync < last_sync:
                                 last_sync, newest_sync = newest_sync, last_sync
                             if newest_sync - last_sync > datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS):
-                                warn_msg = "No new sync entries since {} (more than {} hours)" \
-                                    .format(last_sync, MAX_SRSL_OUTAGE_HOURS)
+                                warn_msg = "No {} since {} (more than {} hours)" \
+                                    .format("room occupancy state changes" if tbl == 'ARO' else "reservation syncs",
+                                            last_sync, MAX_SRSL_OUTAGE_HOURS)
                                 user_notification("WatchPupPy warning notification", warn_msg)
                             last_sync = newest_sync
         if errors:  # if Acumen has failures: ensure correct values for Sihot Kernel interface check
@@ -331,8 +352,8 @@ while True:
             errors.append(err_msg)
             continue        # command not really started, so try directly again - don't reset last_run variable
         except subprocess.TimeoutExpired as toe:    # sub process killed
-            err_msg = "{}. run timed out - current timer={}, last_run={}"\
-                .format(run_starts, get_timer_corrected(), last_run)
+            err_msg = "{}. run timed out - interval={}, current timer({})-last_run({})={}"\
+                .format(run_starts, timeout, get_timer_corrected(), last_run, last_run - get_timer_corrected())
             if getattr(toe, 'output'):      # only available when running command with check_output()/send_output
                 err_msg += "\n         output=" + str(getattr(toe, 'output'))  # PyCharm says not defined: toe.output
             errors.append(err_msg)

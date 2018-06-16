@@ -49,6 +49,32 @@ def log_msg(msg, *args, **kwargs):
         notification.send_notification(msg_body=msg, subject='AssServer notification')
 
 
+def proc_context(proc, req):
+    oc = getattr(req, 'extended_oc', None) or getattr(req, 'oc', None)
+    if getattr(req, 'current_rgr', None):           # ResChange
+        rgr = req.current_rgr
+        res_no = rgr.get('rgr_res_id', '')
+        sub_no = rgr.get('rgr_sub_id', '')
+        room_no = ''
+        if getattr(req, 'current_rgc', None):
+            room_no = req.current_rgc.get('rgc_room_id', '?')
+    else:                                           # RoomChange
+        room_no = getattr(req, 'orn', None) if oc == 'CO-RM' else getattr(req, 'rn', None)
+        res_no = getattr(req, 'res_nr', None)
+        sub_no = getattr(req, 'osub_nr', None) if oc == 'CO-RM' else getattr(req, 'sub_nr', None)
+    """
+    if not oc:      # req.oc did not got overwritten by caller
+        oc = getattr(req, 'oc', None)
+    if not getattr(req, 'rgr_list', False):     # if room_no Is None
+        # caller sending RoomChange response (not ResChange response)
+        room_no = getattr(req, 'orn', None) if oc == 'CO-RM' else getattr(req, 'rn', None)
+        res_no = getattr(req, 'res_nr', None)
+        sub_no = getattr(req, 'osub_nr', None) if oc == 'CO-RM' else getattr(req, 'sub_nr', None)
+    """
+    return "{}({}, {}, {}/{}@{})".format(getattr(proc, '__name__', None),
+                                         oc, room_no, res_no, sub_no, getattr(req, 'hn', None))
+
+
 def oc_keep_alive(_, __):
     # no request-/error-checks needed on operation codes: LA=Link Alive, TS=Time Sync, ACK=Acknowledge
     return ""
@@ -76,25 +102,27 @@ def cache_room_change(conf_data, oc, sh_hotel_id, sh_res_id, sh_sub_id):
 
     if not err_msg:
         err_msg = conf_data.rgr_upsert(upd_col_values, chk_values=dict(rgr_ho_fk=sh_hotel_id, rgr_res_id=sh_res_id,
-                                                                       rgr_sub_id=sh_sub_id))
+                                                                       rgr_sub_id=sh_sub_id),
+                                       commit=True)
 
     return err_msg
 
 
 def oc_room_change_ass(conf_data, req):
     error_msg = ""
-    oc = req.oc
+    oc = req.extended_oc = req.oc
     ho_id = req.hn
-    log_msg("AssCache Room change {} for res {}/{}@{} in room {}. xml={}"
-            .format(oc, req.res_nr, req.sub_nr, ho_id, req.rn, req.get_xml()), importance=4)
+    log_msg(proc_context(oc_room_change_ass, req) + ": ass room change xml={}".format(req.get_xml()), importance=4)
     if oc == 'RM':
-        error_msg = cache_room_change(conf_data, 'CO-RM', ho_id, req.res_nr, req.osub_nr)
-        oc = 'CI-RM'
+        oc = req.extended_oc = 'CO-RM'
+        error_msg = cache_room_change(conf_data, oc, ho_id, req.res_nr, req.osub_nr)
+        if not error_msg:
+            oc = req.extended_oc = 'CI-RM'
     if not error_msg:
         error_msg = cache_room_change(conf_data, oc, ho_id, req.res_nr, req.sub_nr)
 
     if error_msg:
-        log_msg("oc_room_change_ass(): cache room change error=" + error_msg,
+        log_msg(proc_context(oc_room_change_ass, req) + " room change error={}".format(error_msg),
                 minimum_debug_level=DEBUG_LEVEL_DISABLED, importance=3, is_error=True)
         em = conf_data.ass_db.rollback()
         if em:
@@ -107,10 +135,9 @@ def oc_room_change_ass(conf_data, req):
 
 def oc_room_change_sf(conf_data, req):
     error_msg = ""
-    oc = req.oc
-    ho_id = req.hn
-    log_msg("MISSING RES OBJECT ID - Sf Room change {} for res {}/{}@{} in room {}. xml={}"
-            .format(oc, req.res_nr, req.sub_nr, ho_id, req.rn, req.get_xml()), importance=4)
+    # oc = req.oc
+    # ho_id = req.hn
+    log_msg(proc_context(oc_room_change_sf, req) + " sf room change xml={}".format(req.get_xml()), importance=4)
 
     print(conf_data)
 
@@ -118,24 +145,23 @@ def oc_room_change_sf(conf_data, req):
 
 
 def oc_res_change_ass(conf_data, req):
-    oc = req.oc
+    # oc = req.oc
     rgr_list = req.rgr_list
     for rgr in rgr_list:
+        req.current_rgr = rgr
         obj_id = rgr.get('rgr_obj_id', '')
-        ho_id = rgr.get('rgr_ho_fk', '')
-        res_id = rgr.get('rgr_res_id', '')
-        sub_id = rgr.get('rgr_sub_id', '')
         # ?!?!?: identify orderer/client for to populate rgr_order_cl_fk
-        log_msg("Reservation change {} to Ass for ShObjID {} and Res/Sub@Hotel {}/{}@{}. data={}"
-                .format(oc, obj_id, res_id, sub_id, ho_id, rgr), importance=4)
+        log_msg(proc_context(oc_res_change_ass, req) + " ass res change for ShObjID {} data={}".format(obj_id, rgr),
+                importance=4)
         rec = rgr.copy()
         rgc_list = rec.pop('rgc')
-        if conf_data.rgr_upsert(rec):
+        if conf_data.rgr_upsert(rec, commit=True):
             break
         rgr_pk = conf_data.ass_db.fetch_value()
         room_seq = pers_seq = -1
         last_room_no = 'InvalidRoomId'
         for rgc in rgc_list:
+            req.current_rgc = rgc
             if rgc.get('rgc_room_id', '') != last_room_no:
                 last_room_no = rgc.get('rgc_room_id', '')
                 room_seq += 1
@@ -145,7 +171,7 @@ def oc_res_change_ass(conf_data, req):
             ac_id = rgc.get('AcId', '')
             sh_id = rgc.get('ShId', '')
             if ac_id or sh_id:
-                cae.dprint("Occupier matchcode / guest-obj-id:", ac_id, " / ", sh_id)
+                log_msg(proc_context(oc_res_change_ass, req) + " found occupier {}/{}".format(sh_id, ac_id))
                 cl_data = dict()
                 if ac_id:
                     cl_data['AcId'] = ac_id
@@ -157,7 +183,7 @@ def oc_res_change_ass(conf_data, req):
                     cl_data['Email'] = rgc['rgc_email']
                 if rgc.get('rgc_phone', ''):
                     cl_data['Phone'] = rgc['rgc_phone']
-                ass_id = conf_data.cl_save(cl_data, locked_cols=['AcId', 'ShId', 'Name', 'Email', 'Phone'])
+                ass_id = conf_data.cl_save(cl_data, locked_cols=['AcId', 'ShId', 'Name', 'Email', 'Phone'], commit=True)
                 if not ass_id:
                     break
                 rgc['rgc_occup_cl_fk'] = ass_id
@@ -166,11 +192,13 @@ def oc_res_change_ass(conf_data, req):
             rec.pop('AcId', '')
             rec.pop('ShId', '')
             rec.update(rgc_rgr_fk=rgr_pk, rgc_room_seq=room_seq, rgc_pers_seq=pers_seq)
-            if conf_data.rgc_upsert(rec):
+            if conf_data.rgc_upsert(rec, commit=True):
                 break
+            req.current_rgc = None
 
         if conf_data.error_message:
             break
+        req.current_rgr = None
 
     error_msg = conf_data.error_message
     if error_msg:
@@ -182,40 +210,50 @@ def oc_res_change_ass(conf_data, req):
 
 
 def oc_res_change_sf(conf_data, req):
-    oc = req.oc
+    # oc = req.oc
     rgr_list = req.rgr_list
     for rgr in rgr_list:
+        req.current_rgr = rgr
         obj_id = rgr.get('rgr_obj_id', '')
+        ho_id = rgr.get('rgr_ho_fk', '')
+
         res = conf_data.load_view(conf_data.acu_db, 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
                                   "RU_SIHOT_OBJID = :obj_id", dict(obj_id=obj_id))
-        if not res or not res[0][0]:
-            log_msg("Reservation with Sihot Object ID {} not found in Acumen RU_SIHOT_OBJID/Surveys; err={}"
-                    .format(obj_id, conf_data.error_message))
+        if not res or not res[0] or not res[0][0]:
+            log_msg(proc_context(oc_res_change_sf, req)
+                    + " Sihot Object ID {} res not found in Acumen; err={}".format(obj_id, conf_data.error_message))
             continue
         sf_opp_id = res[0][0]
-        ho_id = rgr.get('rgr_ho_fk', '')
-        res_id = rgr.get('rgr_res_id', '')
-        sub_id = rgr.get('rgr_sub_id', '')
-        rgc_list = rgr.get('rgc', list([dict()]))
-        log_msg("Reservation change {} to Sf for ShObjID {} and Res/Sub@Hotel {}/{}@{}. room list={}"
-                .format(oc, obj_id, res_id, sub_id, ho_id, rgc_list), importance=4)
+
+        rgc_list = None
+        room_no = '?'
+        if rgr.get('rgc', None):
+            rgc_list = rgr['rgc']
+            if rgc_list:
+                req.current_rgc = rgc_list[0]
+                room_no = req.current_rgc.get('rgc_room_id', '')
+        log_msg(proc_context(oc_res_change_sf, req)
+                + " res change to Sf for ShObjID {} with room list={}".format(obj_id, rgc_list), importance=4)
 
         opp_obj = conf_data.sf_conn.sf_obj('Opportunity')
         if not opp_obj:
-            log_msg("Opportunity object not retrievable; errors={}/{}"
+            log_msg(proc_context(oc_res_change_sf, req) + " Opportunity object not retrievable; errors={}/{}"
                     .format(conf_data.error_message, conf_data.sf_conn.error_msg), is_error=True, importance=3)
             continue
         fields = dict(Resort__c=conf_data.ho_id_resort(ho_id),
-                      Room_Number__c=rgc_list[0].get('rgc_room_id', ''),
+                      Room_Number__c='' if room_no == '?' else room_no,
                       REQ_Acm_Arrival_Date__c=rgr.get('rgr_arrival', ''),
                       REQ_Acm_Departure_Date__c=rgr.get('rgr_departure', ''))
         try:
             ret = opp_obj.update(sf_opp_id, fields)
-            log_msg("Opportunity ID {} updated with {}. ret={}".format(sf_opp_id, fields, ret),
+            log_msg(proc_context(oc_res_change_sf, req)
+                    + " Opportunity ID {} updated with {}. ret={}".format(sf_opp_id, fields, ret),
                     importance=3, minimum_debug_level=DEBUG_LEVEL_ENABLED, notify=True)
         except Exception as ex:
-            log_msg("Update of Opportunity object {} with ID {} and fields {} raised exception {}"
+            log_msg(proc_context(oc_res_change_sf, req)
+                    + " update of Opportunity object {} with ID {} and fields {} raised exception {}"
                     .format(opp_obj, sf_opp_id, fields, ex), importance=3, is_error=True)
+    req.current_rgr = req.current_rgc = None
 
 
 # supported operation codes (stored in AssServer.ini) with related request class and operation code handler/processor
@@ -229,8 +267,8 @@ def reload_oc_config():
     global SUPPORTED_OCS, IGNORED_OCS
     _ = (Request, ResChange, RoomChange)    # added for to hide PyCharm warnings (Unused import)
 
-    # first check if main config file has changed since server startup
-    if not cae.config_main_file_modified():
+    # always reload on server startup, else first check if main config file has changed since server startup
+    if SUPPORTED_OCS and not cae.config_main_file_modified():
         return ""
 
     # main config file has changed - so reload the changed configuration settings
@@ -320,8 +358,9 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
-        xml_request = str(xml_from_client, encoding=cae.get_option('shXmlEncoding'))
-        log_msg("AssServer.SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'")
+        xml_enc = cae.get_option('shXmlEncoding')
+        xml_request = str(xml_from_client, encoding=xml_enc)
+        log_msg("AssServer.handle_xml(): request='{}'".format(xml_request))
 
         # classify request for to also respond on error (e.g. if config_reload/xml_parsing failed)
         oc = operation_code(xml_request)
@@ -350,39 +389,44 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                                              .format(sys_connections.error_message, sys_connections.ass_db)))
                 else:
                     for slot in SUPPORTED_OCS[oc]:
-                        parsed_req = slot['reqClass'](cae)
-                        parsed_req.parse_xml(xml_request)
+                        rq = slot['reqClass'](cae)
+                        rq.parse_xml(xml_request)
+                        if debug_level >= DEBUG_LEVEL_VERBOSE:
+                            err_messages.append((0, "Slot {}:{} parsed xml: {}".format(slot, rq, rq.get_xml())))
                         for proc in slot['ocProcessors']:
-                            err_messages.append((0, "{}(); parsed xml: {}".format(proc.__name__, parsed_req.get_xml())))
                             try:
-                                msg = proc(sys_connections, parsed_req)
+                                msg = proc(sys_connections, rq)
                                 if msg:
-                                    err_messages.append((96, proc.__name__ + "() call error: " + msg))
+                                    err_messages.append((96, proc_context(proc, rq) + " call error: {}".format(msg)))
                             except Exception as ex:
-                                err_messages.append((97, "call exception: '{}'\n{}".format(ex, format_exc())))
+                                err_messages.append((97, proc_context(proc, rq) + " call exception: '{}'\n{}"
+                                                     .format(ex, format_exc())))
             except Exception as ex:
                 err_messages.append((99, "slot exception: '{}'\n{}".format(ex, format_exc())))
             finally:
                 if sys_connections:
-                    sys_connections.close_dbs()
+                    err = sys_connections.close_dbs()
+                    if err:
+                        err_messages.append((101, "database disconnection error: {}".format(err)))
         elif oc in IGNORED_OCS:
-            err_messages.append((0, "(ignored operation-code/OC '{}')".format(oc)))
+            if debug_level >= DEBUG_LEVEL_VERBOSE:
+                err_messages.append((0, "(ignored operation-code/OC '{}')".format(oc)))
         else:
             err_messages.append((102, "empty/invalid operation code '{}'".format(oc)))
 
         last_err = 0
         for err_code, msg in err_messages:
             if err_code:
-                log_msg(msg + " LastError=" + str(err_code), is_error=True, importance=3)
+                log_msg(msg + " Err=" + str(err_code), is_error=True, importance=3)
+                last_err = err_code
             else:
                 log_msg(msg)
-            last_err = err_code
 
-        err_string = "SihotRequestXmlHandler.handle_xml(): " + "\n      +++".join([_[1] for _ in err_messages])
-        xml_response = ack_response(tn, last_err, org=org, msg=err_string, status='1' if oc == 'LA' else '')
-        log_msg("####  OC {} processing xml response: {}".format(oc, xml_response))
+        msg = "AssServer.handle_xml(): " + ("\n    ** ".join([_[1] for _ in err_messages if _[0]]) or "OK")
+        xml_response = ack_response(tn, last_err, org=org, msg=msg, status='1' if oc == 'LA' else '')
+        log_msg("####  OC {} processed; xml response: {}".format(oc, xml_response))
 
-        return bytes(xml_response, cae.get_option('shXmlEncoding'))
+        return bytes(xml_response, xml_enc)
 
 
 try:

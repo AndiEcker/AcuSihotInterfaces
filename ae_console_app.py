@@ -383,6 +383,7 @@ class ConsoleApp:
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
         app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
         config_files = [os.path.join(app_path, '.console_app_env.cfg'), os.path.join(cwd_path, '.console_app_env.cfg'),
+                        os.path.join(app_path, '.sys_env.cfg'), os.path.join(cwd_path, '.sys_env.cfg'),
                         app_path_fnam + '.cfg', app_path_fnam + INI_EXT,
                         cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT,
                         ]

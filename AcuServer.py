@@ -15,7 +15,7 @@ from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL
 from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
-from acif import ACU_DEF_USR, ACU_DEF_DSN
+from acif import add_ac_options
 from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder
 from shif import add_sh_options
 
@@ -23,20 +23,18 @@ __version__ = '0.5'
 
 cae = debug_level = None  # added for to remove Pycharm warning
 if __name__ == "__main__":      # for to allow import of client_to_acu() for testing suite
-    cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle")
+    cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle", multi_threading=True)
 
-    cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-    cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-    cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
+    add_ac_options(cae)
 
     add_sh_options(cae, client_port=11000)
 
     add_notification_options(cae)
 
     debug_level = cae.get_option('debugLevel')
-    uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-    uprint('Server IP/port:', cae.get_option('shServerIP'), cae.get_option('shClientPort'))
-    uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+    uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
+    uprint("Server IP/port:", cae.get_option('shServerIP'), cae.get_option('shClientPort'))
+    uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
     notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
 
 
@@ -55,7 +53,7 @@ def client_to_acu(col_values, ca=None):
         dl = debug_level
         ca = cae
     ora_db = OraDB(ca.get_option('acuUser'), ca.get_option('acuPassword'), ca.get_option('acuDSN'),
-                   app_name=cae.app_name(), debug_level=dl)
+                   app_name=ca.app_name(), debug_level=dl)
     err_msg = ora_db.connect()
     pkey = None
     if not err_msg:
