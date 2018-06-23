@@ -1,14 +1,13 @@
 from ae_console_app import ConsoleApp, uprint
 from ae_db import PostgresDB
+from acif import add_ac_options
 from ass_sys_data import AssSysData, EXT_REF_TYPE_RCI
 
 
 __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Extend ASS_DB with main Acumen RCI member ID")
-cae.add_option('acuUser', "User name of Acumen/Oracle system", '', 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", '', 'd')
+add_ac_options(cae)
 
 cae.add_option('assUser', "User account name for the AssCache/Postgres database", '', 'U')
 cae.add_option('assPassword', "User account password for the AssCache/Postgres database", '', 'P')

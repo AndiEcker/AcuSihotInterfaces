@@ -3,8 +3,11 @@ import datetime
 import time
 from traceback import print_exc
 
-from sxmlif import elem_path_values, GuestSearch, ResFetch, ResSearch, ResKernelGet, SXML_DEF_ENCODING, ELEM_PATH_SEP
-from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
+from sxmlif import (elem_path_values, GuestSearch, ResFetch, ResSearch, ResKernelGet, ResToSihot,
+                    SXML_DEF_ENCODING, ELEM_PATH_SEP,
+                    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF, USE_KERNEL_FOR_RES_DEF, MAP_RES_DEF,
+                    ECM_DO_NOT_SEND_CLIENT, ERR_MESSAGE_PREFIX_CONTINUE)
 
 SH_PROVIDES_CHECKOUT_TIME = False  # currently there is no real checkout time available in Sihot
 SH_DATE_FORMAT = '%Y-%m-%d %H:%M:%S' if SH_PROVIDES_CHECKOUT_TIME else '%Y-%m-%d'
@@ -15,7 +18,7 @@ ELEM_MISSING = "(missing)"
 ELEM_EMPTY = "(empty)"
 
 
-def add_sh_options(cae, add_kernel_port=False, client_port=None):
+def add_sh_options(cae, client_port=None, add_kernel_port=False, add_maps_and_kernel_usage=False):
     cae.add_option('shServerIP', "IP address of the Sihot WEB/KERNEL server", 'localhost', 'i')
     cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
     if client_port:
@@ -26,6 +29,13 @@ def add_sh_options(cae, add_kernel_port=False, client_port=None):
         cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of the Sihot server", 14772, 'k')
     cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
     cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
+    if add_maps_and_kernel_usage:
+        cae.add_option('useKernelForClient', "Used interface for clients (0=web, 1=kernel)", USE_KERNEL_FOR_CLIENTS_DEF,
+                       'g', choices=(0, 1))
+        cae.add_option('mapClient', "Guest/Client mapping of xml to db items", MAP_CLIENT_DEF, 'm')
+        cae.add_option('useKernelForRes', "Used interface for reservations (0=web, 1=kernel)", USE_KERNEL_FOR_RES_DEF,
+                       'z', choices=(0, 1))
+        cae.add_option('mapRes', "Reservation mapping of xml to db items", MAP_RES_DEF, 'n')
 
 
 def print_sh_options(cae):
@@ -334,3 +344,39 @@ class ResBulkFetcher(BulkFetcherBase):
             cae.shutdown(3330)
 
         return self.all_rows
+
+
+class ResSender:
+    def __init__(self, cae):
+        self.cae = cae
+        self.res_sender = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
+                                     map_res=cae.get_option('mapRes'),
+                                     use_kernel_for_new_clients=cae.get_option('useKernelForClient'),
+                                     map_client=cae.get_option('mapClient'),
+                                     connect_to_acu=False)
+        self.debug_level = cae.get_option('debugLevel')
+
+    def send_row(self, crow):
+        msg = ""
+        try:
+            err = self.res_sender.send_row_to_sihot(crow, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
+        except Exception as ex:
+            err = "ResSender.send_row() exception: {}".format(full_stack_trace(ex))
+        if err:
+            if err.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
+                msg = "Ignoring error sending res: " + str(crow)
+                err = ""
+            elif 'setDataRoom not available!' in err:  # was: 'A_Persons::setDataRoom not available!'
+                err = "Apartment {} occupied between {} and {} - created GDS-No {} for manual allocation." \
+                                .format(crow['RUL_SIHOT_ROOM'], crow['ARR_DATE'].strftime('%d-%m-%Y'),
+                                        crow['DEP_DATE'].strftime('%d-%m-%Y'), crow['SIHOT_GDSNO']) \
+                      + (" Original error: " + err if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
+        elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
+            msg = "Sent res: " + str(crow)
+        return err, msg
+
+    def get_res_no(self):
+        return obj_id_to_res_no(self.cae, self.res_sender.response.objid)
+
+    def get_warnings(self):
+        return self.res_sender.get_warnings()

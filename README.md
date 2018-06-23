@@ -429,7 +429,7 @@ email into the json format is written in C#.NET by Nitesh):
 
 | Field Name | Field Type | Description | Example Values |
 | --- | --- | --- | --- |
-| RUL_SIHOT_HOTEL | Numeric | Sihot Hotel Id | 1=PBC, 4=BHC |
+| RUL_SIHOT_HOTEL | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
 | SH_RES_TYPE | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
 | RUL_ACTION | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
 | SIHOT_GDSNO | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
@@ -447,6 +447,7 @@ email into the json format is written in C#.NET by Nitesh):
 | SIHOT_NOTE | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
 | SIHOT_TEC_NOTE | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '|CR|' for to separate various comments) |
 | RUL_SIHOT_PACK | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
+| RUL_SIHOT_RATE | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
 | SIHOT_MKT_SEG | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
 | SIHOT_RATE_SEGMENT | String | Sihot Price Rate/Segment (mostly same as SIHOT_MKT_SEG, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
 | SIHOT_PAYMENT_INST | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |

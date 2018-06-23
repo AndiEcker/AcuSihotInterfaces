@@ -9,6 +9,7 @@
     0.7     30-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
     0.8     15-07-17: refactoring moving clients and res_inv_data to ass_sys_data.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
+    1.0     June-18: refactoring and clean-up
 
     TODO:
     - use new config sections (for each hotel and ANY) or AssCache instead of Acumen conf_data.
@@ -24,15 +25,13 @@ from traceback import format_exc
 
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from acif import ACU_DEF_USR, ACU_DEF_DSN
-from sxmlif import ResToSihot, \
-    SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
-    USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
-    ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, ClientToSihot, ECM_DO_NOT_SEND_CLIENT
+from sxmlif import ClientToSihot, ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
+from acif import add_ac_options
 from sfif import add_sf_options
+from shif import add_sh_options, ResSender
 from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
-__version__ = '0.9'
+__version__ = '1.0'
 
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
@@ -40,27 +39,10 @@ cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas
 # cae.add_option('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
 cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'Y')
 cae.add_option('jsonPath', "Import path and file mask for OTA JSON files", 'C:/JSON_Import/*.json', 'j')
-
 add_notification_options(cae)
-
-cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
-
+add_ac_options(cae)
 add_sf_options(cae)
-
-cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('shServerPort', "IP port of the WEB interface of this server", 14777, 'w')
-cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
-
-cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
-cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
-
-cae.add_option('useKernelForClient', "Used interface for clients (0=web, 1=kernel)", USE_KERNEL_FOR_CLIENTS_DEF, 'g')
-cae.add_option('mapClient', "Guest/Client mapping of xml to db items", MAP_CLIENT_DEF, 'm')
-cae.add_option('useKernelForRes', "Used interface for reservations (0=web, 1=kernel)", USE_KERNEL_FOR_RES_DEF, 'z')
-cae.add_option('mapRes', "Reservation mapping of xml to db items", MAP_RES_DEF, 'n')
-
+add_sh_options(cae, add_kernel_port=True, add_maps_and_kernel_usage=True)
 cae.add_option('breakOnError', "Abort importation if an error occurs (0=No, 1=Yes)", 0, 'b')
 
 debug_level = cae.get_option('debugLevel')
@@ -1296,11 +1278,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         progress = Progress(debug_level, start_counter=len(res_rows),
                             start_msg="Prepare sending of {run_counter} reservation request changes to Sihot",
                             nothing_to_do_msg="No reservations found for to be sent")
-        res_send = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
-                              map_res=cae.get_option('mapRes'),
-                              use_kernel_for_new_clients=cae.get_option('useKernelForClient'),
-                              map_client=cae.get_option('mapClient'),
-                              connect_to_acu=False)
+        res_sender = ResSender(cae)
 
         for res_row_idx, crow in enumerate(res_rows):
             fn, idx = crow['=FILE_NAME'], crow['=LINE_NUM']
@@ -1308,27 +1286,15 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("User cancelled reservation send", fn, idx, importance=4)
                 break
             progress.next(processed_id=str(crow['RH_EXT_BOOK_REF']), error_msg=error_msg)
-            try:
-                error_msg = res_send.send_row_to_sihot(crow, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
-            except Exception as ex:
-                error_msg = "reservation send exception: {}".format(full_stack_trace(ex))
+            error_msg, warning_msg = res_sender.send_row(crow)
+            if warning_msg:
+                log_import(warning_msg, fn, idx)
             if error_msg:
-                if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
-                    log_import("Ignoring error sending res: " + str(crow), fn, idx)
-                    error_msg = ''
-                    continue
-                if 'setDataRoom not available!' in error_msg:  # was: 'A_Persons::setDataRoom not available!'
-                    error_msg = "Apartment {} occupied between {} and {} - created GDS-No {} for manual allocation." \
-                        .format(crow['RUL_SIHOT_ROOM'], crow['ARR_DATE'].strftime('%d-%m-%Y'),
-                                crow['DEP_DATE'].strftime('%d-%m-%Y'), crow['SIHOT_GDSNO']) \
-                        + (" Original error: " + error_msg if debug_level >= DEBUG_LEVEL_VERBOSE else "")
                 log_error(error_msg, fn, idx)
                 if cae.get_option('breakOnError'):
                     break
-            elif debug_level >= DEBUG_LEVEL_VERBOSE:
-                log_import("Sent res: " + str(crow), fn, idx)
 
-        warnings = res_send.get_warnings()
+        warnings = res_sender.get_warnings()
         progress.finished(error_msg=error_msg)
     else:
         warnings = ""

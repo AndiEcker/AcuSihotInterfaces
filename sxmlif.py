@@ -765,7 +765,8 @@ class SihotXmlParser:  # XMLParser interface
     def __init__(self, ca):
         super(SihotXmlParser, self).__init__()
         self._xml = ''
-        self._base_tags = ['ERROR-LEVEL', 'ERROR-TEXT', 'ID', 'MSG', 'OC', 'ORG', 'RC', 'TN', 'VER']
+        self._base_tags = ['ERROR-LEVEL', 'ERROR-TEXT', 'ID', 'MSG', 'OC', 'ORG', 'RC', 'TN', 'VER',
+                           'MATCHCODE', 'OBJID']
         self._curr_tag = ''
         self._curr_attr = ''
         self._elem_path = list()    # element path implemented as list stack
@@ -774,6 +775,8 @@ class SihotXmlParser:  # XMLParser interface
         self.oc = ''
         self.tn = '0'
         self.id = '1'
+        self.matchcode = None
+        self.objid = None
         self.rc = '0'
         self.msg = ''
         self.ver = ''
@@ -812,6 +815,12 @@ class SihotXmlParser:  # XMLParser interface
             self.ca.dprint("SihotXmlParser.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self._curr_attr = tag.lower().replace('-', '_')
             setattr(self, self._curr_attr, '')
+            return None
+        # collect extra info on error response (RC != '0') within the MSG tag field
+        if tag[:4] in ('MSG-', "INDE", "VALU"):
+            self._curr_attr = 'msg'
+            # Q&D: by simply using tag[4:] for to remove MSG- prefix, INDEX will be shown as X= and VALUE as E=
+            setattr(self, self._curr_attr, getattr(self, self._curr_attr, '') + " " + tag[4:] + "=")
             return None
         return tag
 
@@ -884,7 +893,7 @@ class ResChange(SihotXmlParser):
         self.rgr_list = list()
 
     def start(self, tag, attrib):  # called for each opening tag
-        if super(ResChange, self).start(tag, attrib) is None:
+        if super(ResChange, self).start(tag, attrib) is None and tag not in ('MATCHCODE', 'OBJID'):
             return None  # processed by base class
         self.ca.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         if tag == 'SIHOT-Reservation':
@@ -893,7 +902,7 @@ class ResChange(SihotXmlParser):
             self.rgr_list[-1]['rgc'].append(dict())
 
     def data(self, data):
-        if super(ResChange, self).data(data) is None:
+        if super(ResChange, self).data(data) is None and self._curr_tag not in ('MATCHCODE', 'OBJID'):
             return None  # processed by base class
         self.ca.dprint("ResChange.data():", self._elem_path, self.rgr_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         # flag for to detect and prevent multiple values
@@ -963,30 +972,15 @@ class ResChange(SihotXmlParser):
             di[ik] += data
 
 
-class Response(SihotXmlParser):  # response xml parser for kernel or web interfaces
+class ResResponse(SihotXmlParser):  # response xml parser for kernel or web interfaces
     def __init__(self, ca):
-        super(Response, self).__init__(ca)
-        # web and kernel (guest/client) interface response elements
-        self._base_tags.append('MATCHCODE')
-        self.matchcode = None  # added for to remove pycharm warning
-        # reservation interface response elements
-        self._base_tags += ('OBJID', 'GDSNO')  # , 'RESERVATION ACCOUNT-ID')
-        self.objid = None
+        super(ResResponse, self).__init__(ca)
+        # web and kernel (guest/client and reservation) interface response elements
+        self._base_tags.append('GDSNO')
         self.gdsno = None
 
-    def start(self, tag, attrib):  # called for each opening tag
-        if super(Response, self).start(tag, attrib) is None:
-            return None  # processed by base class
-        # collect extra info on error response (RC != '0') within the MSG tag field
-        if tag[:4] in ('MSG-', "INDE", "VALU"):
-            self._curr_attr = 'msg'
-            # Q&D: by simply using tag[4:] for to remove MSG- prefix, INDEX will be shown as X= and VALUE as E=
-            setattr(self, self._curr_attr, getattr(self, self._curr_attr, '') + " " + tag[4:] + "=")
-            return None
-        return tag
 
-
-class AvailCatInfoResponse(Response):
+class AvailCatInfoResponse(SihotXmlParser):
     """ processing response of CATINFO operation code of the WEB interface """
     def __init__(self, ca):
         super(AvailCatInfoResponse, self).__init__(ca)
@@ -1012,10 +1006,10 @@ class AvailCatInfoResponse(Response):
         return data
 
 
-class CatRoomResponse(Response):
+class CatRoomResponse(SihotXmlParser):
     def __init__(self, ca):
         super(CatRoomResponse, self).__init__(ca)
-        # guest/client interface response elements
+        # ALLROOMS response of the WEB interface
         self._base_tags += ('NAME', 'RN')
         self.name = None  # added for to remove pycharm warning
         self.rn = None
@@ -1031,10 +1025,10 @@ class CatRoomResponse(Response):
         return tag
 
 
-class ConfigDictResponse(Response):
+class ConfigDictResponse(SihotXmlParser):
     def __init__(self, ca):
         super(ConfigDictResponse, self).__init__(ca)
-        # guest/client interface response elements
+        # response to GCF operation code of the WEB interface
         self._base_tags += ('KEY', 'VALUE')  # VALUE for key value (remove from additional error info - see 'VALU')
         self.value = None  # added for to remove pycharm warning
         self.key = None
@@ -1048,17 +1042,20 @@ class ConfigDictResponse(Response):
         return tag
 
 
-class GuestSearchResponse(Response):
+class GuestSearchResponse(SihotXmlParser):
     def __init__(self, ca, ret_elem_names=None, key_elem_name=None):
-        """ ret_elem_names is a list of xml element names (or response attributes) to return. If there is only one
-             list element with a leading ':' character then self.ret_elem_values will be a dict with the search value
-             as the key. If ret_elem_names consists of exact one item then ret_elem_values will be a list with the
-             plain return values. If ret_elem_names contains more than one item then self.ret_elem_values will be
-             a dict where the ret_elem_names are used as keys. If the ret_elem_names list is empty (or None) then the
-             returned self.ret_elem_values list of dicts will provide all elements that are returned by the
-             Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
+        """
+        response to the GUEST-GET request oc of the KERNEL interface
 
-            key_elem_name is the element name used for the search (only needed if self._return_value_as_key==True)
+        ret_elem_names is a list of xml element names (or response attributes) to return. If there is only one
+        list element with a leading ':' character then self.ret_elem_values will be a dict with the search value
+        as the key. If ret_elem_names consists of exact one item then ret_elem_values will be a list with the
+        plain return values. If ret_elem_names contains more than one item then self.ret_elem_values will be
+        a dict where the ret_elem_names are used as keys. If the ret_elem_names list is empty (or None) then the
+        returned self.ret_elem_values list of dicts will provide all elements that are returned by the
+        Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
+
+        key_elem_name is the element name used for the search (only needed if self._return_value_as_key==True)
         """
         super(GuestSearchResponse, self).__init__(ca)
         self._base_tags.append('GUEST-NR')
@@ -1230,7 +1227,10 @@ class ResFromSihot(ColMapXmlParser):
             self.elem_col_map = deepcopy(self.blank_elem_col_map)
 
 
-class ResKernelResponse(Response):
+class ResKernelResponse(SihotXmlParser):
+    """
+    response to the RESERVATION-GET oc/request of the KERNEL interface
+    """
     def __init__(self, cae):
         super(ResKernelResponse, self).__init__(cae)
         self._base_tags.append('HN')
@@ -1389,7 +1389,7 @@ class SihotXmlBuilder:
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
-            self.response = response_parser or Response(self.ca)
+            self.response = response_parser or SihotXmlParser(self.ca)
             self.response.parse_xml(sc.received_xml)
             if self.response.server_error() != '0':
                 err_msg = "**** SihotXmlBuilder.send_to_server() server return code " + \
@@ -1443,8 +1443,8 @@ class SihotXmlBuilder:
                                    },
                                   commit=commit)
 
-    def _store_sihot_objid(self, table, pkey, response, col_name_suffix=""):
-        obj_id = response.objid if str(response.objid) else '-' + (pkey[2:] if table == 'CD' else str(pkey))
+    def _store_sihot_objid(self, table, pkey, objid, col_name_suffix=""):
+        obj_id = objid if str(objid) else '-' + (pkey[2:] if table == 'CD' else str(pkey))
         id_col = table + "_SIHOT_OBJID" + col_name_suffix
         pk_col = table + "_CODE"
         return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = :pk", bind_vars=dict(pk=str(pkey)))
@@ -1576,7 +1576,7 @@ class ClientToSihot(SihotXmlBuilder):
             self._prepare_guest_xml(c_row, action=action, col_name_suffix='2' if first_person else '')
             err_msg = self.send_to_server()
         if not err_msg and self.acu_connected and self.response:
-            err_msg = self._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response,
+            err_msg = self._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response.objid,
                                               col_name_suffix="2" if first_person else "")
         return err_msg, action
 
@@ -1969,10 +1969,10 @@ class ResToSihot(SihotXmlBuilder):
     def _send_res_to_sihot(self, crow, commit):
         self._prepare_res_xml(crow)
 
-        err_msg, warn_msg = self._handle_error(crow, self.send_to_server())
+        err_msg, warn_msg = self._handle_error(crow, self.send_to_server(response_parser=ResResponse(self.ca)))
         if self.acu_connected:
             if not err_msg and self.response:
-                err_msg = self._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response)
+                err_msg = self._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response.objid)
             err_msg += self._add_to_acumen_sync_log('RU', crow['RUL_PRIMARY'],
                                                     crow['RUL_ACTION'],
                                                     "ERR" + (self.response.server_error() if self.response else "")

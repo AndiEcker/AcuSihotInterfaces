@@ -9,7 +9,7 @@ from traceback import print_exc
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB
 from ae_notification import add_notification_options, init_notification
-from acif import ACU_DEF_USR, ACU_DEF_DSN
+from acif import add_ac_options
 
 __version__ = '0.1'
 
@@ -25,15 +25,9 @@ cae.add_option('dateFrom', "Date/time of first checked occupation", startup_date
 cae.add_option('dateTill', "Date/time of last checked occupation", startup_date, 'T')
 cae.add_option('correctAcumen', "Correct room occupation status (check-in/-out) in Acumen (0=No, 1=Yes)", False, 'A')
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
-'''
-cae.add_option('shServerIP', "IP address of the Sihot interface server", 'localhost', 'i')
-cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
-cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
-cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
-'''
+add_ac_options(cae)
+
+# add_sh_options(cae)
 
 add_notification_options(cae)
 

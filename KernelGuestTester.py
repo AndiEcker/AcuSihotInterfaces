@@ -1,19 +1,14 @@
 from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from acif import ACU_DEF_USR, ACU_DEF_DSN
 from sxmlif import SihotXmlBuilder, ClientToSihot, SXML_DEF_ENCODING
+from acif import add_ac_options
+from shif import add_sh_options
 
 __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Test SIHOT Kernel guest interface", debug_level_def=DEBUG_LEVEL_VERBOSE)
-cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
+add_sh_options(cae, add_kernel_port=True)
 
-cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
-cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
-
-cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
+add_ac_options(cae)
 
 cae.add_option('client', 'Send unsynced client identified with this matchcode', '')  # C605765')
 

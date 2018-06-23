@@ -15,11 +15,10 @@ import datetime
 
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from acif import ACU_DEF_USR, ACU_DEF_DSN
-from sxmlif import ClientToSihot, ResToSihot, \
-    SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, \
-    USE_KERNEL_FOR_CLIENTS_DEF, USE_KERNEL_FOR_RES_DEF, MAP_CLIENT_DEF, MAP_RES_DEF, \
-    ACTION_UPDATE, ACTION_DELETE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
+from sxmlif import ClientToSihot, ResToSihot, ACTION_UPDATE, ACTION_DELETE, \
+    ERR_MESSAGE_PREFIX_CONTINUE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
+from acif import add_ac_options
+from shif import add_sh_options
 from ass_sys_data import AssSysData
 
 __version__ = '1.0'
@@ -28,30 +27,12 @@ ADMIN_MAIL_TO_LIST = ['ITDevmen@signallia.com']
 
 cae = ConsoleApp(__version__, "Synchronize reservation changes from Acumen/Oracle system to the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
-cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
-
-cae.add_option('shServerIP', "IP address of the SIHOT interface server", 'localhost', 'i')
-cae.add_option('shServerPort', "IP port of the WEB interface of this server", 14777, 'w')
-cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of this server", 14772, 'k')
-
-cae.add_option('shTimeout', "Timeout value for TCP/IP connections", 69.3, 't')
-cae.add_option('shXmlEncoding', "Charset used for the xml data", SXML_DEF_ENCODING, 'e')
-
-cae.add_option('useKernelForClient', "Used interface for clients (0=web, 1=kernel)", USE_KERNEL_FOR_CLIENTS_DEF, 'g',
-               choices=(0, 1))
-cae.add_option('mapClient', "Guest/Client mapping of xml to db items", MAP_CLIENT_DEF, 'm')
-cae.add_option('useKernelForRes', "Used interface for reservations (0=web, 1=kernel)", USE_KERNEL_FOR_RES_DEF, 'z',
-               choices=(0, 1))
-cae.add_option('mapRes', "Reservation mapping of xml to db items", MAP_RES_DEF, 'n')
-
+add_ac_options(cae)
+add_sh_options(cae, add_kernel_port=True, add_maps_and_kernel_usage=True)
+add_notification_options(cae)
 cae.add_option('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
                0, 'q', choices=(0, 1, 2))
 cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b', choices=(0, 1))
-
-add_notification_options(cae)
-
 cae.add_option('migrationMode', "Skip room swap and hotel movement requests (0=No, 1=Yes)", 0, 'M', choices=(0, 1))
 sync_date_ranges = dict(H='historical', M='present and 1 month in future', P='present and all future', F='future only',
                         Y='present, 1 month in future and all for hotels 1, 4 and 999',

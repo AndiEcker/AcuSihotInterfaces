@@ -5,7 +5,7 @@
 """
 
 from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace
-from acif import ACU_DEF_USR, ACU_DEF_DSN
+from acif import add_ac_options
 from sxmlif import ClientToSihot, ResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
 from shif import add_sh_options, print_sh_options
 
@@ -15,9 +15,7 @@ __version__ = '0.3'
 cae = ConsoleApp(__version__, "Migrate all guest/reservation data from Acumen/Oracle system to the SiHOT-PMS")
 add_sh_options(cae, add_kernel_port=True)
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
+add_ac_options(cae)
 
 cae.add_option('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
                0, 'q', choices=(0, 1, 2))
@@ -83,7 +81,7 @@ if cae.get_option('clientsFirst'):
                 if error_msg:
                     error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + ' reservation history fetch error: ' + \
                                 error_msg + '! Data=' + str(crow)
-                if not error_msg:
+                else:
                     error_msg = acu_res_hist.send_rows_to_sihot(commit_per_row=True)
                     if error_msg:
                         error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + \

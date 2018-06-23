@@ -5,7 +5,8 @@ import pytest
 from configparser import ConfigParser
 from ae_db import OraDB
 from ass_sys_data import AssSysData
-from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot, AvailCatInfo
+from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot, AvailCatInfo, \
+    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF, USE_KERNEL_FOR_RES_DEF, MAP_RES_DEF
 from sfif import prepare_connection
 
 
@@ -155,6 +156,8 @@ class ConsoleApp:
                              shServerPort=cfg.get('Settings', 'shServerPort', fallback=14777),
                              shServerKernelPort=cfg.get('Settings', 'shServerKernelPort', fallback=14772),
                              shTimeout=369.0, shXmlEncoding='utf8',
+                             useKernelForClient=USE_KERNEL_FOR_CLIENTS_DEF, mapClient=MAP_CLIENT_DEF,
+                             useKernelForRes=USE_KERNEL_FOR_RES_DEF, mapRes=MAP_RES_DEF,
                              warningFragments='',
                              )
         for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):

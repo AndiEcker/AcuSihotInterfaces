@@ -1,7 +1,7 @@
 import datetime
 # import pytest
 
-from sxmlif import SihotXmlParser, Response, GuestFromSihot, ResFromSihot, SihotXmlBuilder, \
+from sxmlif import SihotXmlParser, ResResponse, GuestFromSihot, ResFromSihot, SihotXmlBuilder, \
     USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF
 
 
@@ -369,7 +369,7 @@ class TestSihotXmlParser:
         assert xml_parser.error_text == ''
 
 
-class TestResponse:
+class TestResResponse:
     SXML_RESPONSE_EXAMPLE = '''<?xml version="1.0" encoding="iso-8859-1"?>
     <SIHOT-Document>
         <SIHOT-Version>
@@ -385,7 +385,7 @@ class TestResponse:
     </SIHOT-Document>'''
 
     def test_attributes(self, console_app_env):
-        xml_parser = Response(console_app_env)
+        xml_parser = ResResponse(console_app_env)
         xml_parser.parse_xml(self.SXML_RESPONSE_EXAMPLE)
         assert xml_parser.oc == 'FAKE_UNKNOWN_OC_MSG'
         assert xml_parser.tn == '135'

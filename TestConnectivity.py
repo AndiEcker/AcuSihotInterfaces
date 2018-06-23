@@ -1,15 +1,13 @@
 from ae_console_app import ConsoleApp, uprint
 from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB
-from acif import ACU_DEF_USR, ACU_DEF_DSN
+from acif import add_ac_options
 
 __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Test connectivity to SMTP and Acumen/Oracle servers")
 
-cae.add_option('acuUser', "User name of Acumen/Oracle system", ACU_DEF_USR, 'u')
-cae.add_option('acuPassword', "User account password on Acumen/Oracle system", '', 'p')
-cae.add_option('acuDSN', "Data source name of the Acumen/Oracle database system", ACU_DEF_DSN, 'd')
+add_ac_options(cae)
 add_notification_options(cae)
 
 uprint('SMTP Uri/From/To:', cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'), cae.get_option('smtpTo'))

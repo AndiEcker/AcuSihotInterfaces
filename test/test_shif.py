@@ -122,3 +122,41 @@ class TestIdConverters:
 
     def test_res_no_to_obj_id(self, console_app_env):
         assert '60544' == res_no_to_obj_id(console_app_env, '4', '33220', '1')
+
+
+class TestResSender:
+    def test_create_minimum_fields(self, console_app_env):
+        ho_id = '3'
+        gdsno = 'TEST-1234567890'
+        today = datetime.datetime.today()
+        wk1 = datetime.timedelta(days=7)
+        cat = 'STDS'
+
+        rs = ResSender(console_app_env)
+        crow = dict(RUL_SIHOT_HOTEL=ho_id, SH_RES_TYPE='1', RUL_ACTION='INSERT',
+                    SIHOT_GDSNO=gdsno, RH_EXT_BOOK_REF='Voucher1234567890',
+                    RH_EXT_BOOK_DATE=today, ARR_DATE=today + wk1, DEP_DATE=today + wk1 + wk1,
+                    RUL_SIHOT_CAT=cat, SH_PRICE_CAT=cat, RUL_SIHOT_ROOM='3220',
+                    SH_OBJID='123456', OC_SIHOT_OBJID='123456', SH_MC='TCRENT', OC_CODE='TCRENT',
+                    SIHOT_NOTE='test short note', SIHOT_TEC_NOTE='test large TEC note',
+                    RUL_SIHOT_PACK='RO',    # room only (no board/meal-plan)
+                    RUL_SIHOT_RATE='TC', SIHOT_MKT_SEG='TC', SIHOT_RATE_SEGMENT='TC',
+                    SIHOT_PAYMENT_INST=1,
+                    RU_SOURCE='A', RO_RES_GROUP='RS',
+                    SH_ROOMS=1, RU_ADULTS=1, RU_CHILDREN=1,
+                    SH_PERS_SEQ1=0, SH_ROOM_SEQ1=0, SH_ADULT1_NAME='Tester', SH_ADULT1_NAME2='TestY',
+                    SH_PERS_SEQ2=1, SH_ROOM_SEQ2=0, SH_ADULT2_NAME='', SH_ADULT2_NAME2='',
+                    SH_PERS_SEQ11=10, SH_ROOM_SEQ11=0, SH_CHILD1_NAME='Tester', SH_CHILD1_NAME2='Chilly',
+                    SH_PERS_SEQ12=11, SH_ROOM_SEQ12=0, SH_CHILD2_NAME='', SH_CHILD2_NAME2='',
+                    SH_EXT_REF='Flight1234',
+                    SIHOT_ALLOTMENT_NO=123456)
+        err, msg = rs.send_row(crow)
+
+        assert not err
+        assert ho_id == rs.res_sender.response.id
+        assert gdsno == rs.res_sender.response.gdsno
+        h, r, s = rs.get_res_no()
+        assert ho_id == h
+        assert r
+        assert s
+        assert '1' == s
