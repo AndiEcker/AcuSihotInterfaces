@@ -356,8 +356,66 @@ class ResSender:
                                      connect_to_acu=False)
         self.debug_level = cae.get_option('debugLevel')
 
+    @staticmethod
+    def complete_res_data(crow):
+        """
+        complete reservation data row (crow) with the default values (specified in row_def underneath), while
+        the following fields are mandatory:
+            RUL_SIHOT_HOTEL, ARR_DATE, DEP_DATE, RUL_SIHOT_CAT, RUL_SIHOT_RATE, OC_CODE, SIHOT_GDSNO.
+
+        :param crow:    reservation data row (dict).
+        :return:        completed reservation data row (new dict).
+
+        These fields will not be completed/changed at all:
+            RUL_SIHOT_ROOM, SIHOT_NOTE, SIHOT_TEC_NOTE, SH_EXT_REF (flight no), SIHOT_ALLOTMENT_NO, RH_EXT_BOOK_REF.
+
+        optional fields:
+            OC_SIHOT_OBJID (alternatively usable instead of matchcode value OC_CODE/SH_MC).
+            SH_ADULT1_NAME and SH_ADULT1_NAME2 (surname and firstname)
+            SH_ADULT2_NAME and SH_ADULT2_NAME2 ( ... )
+        optional auto-populated fields (==default value):
+            SH_MC (==OC_CODE)
+            SH_OBJID (==OC_SIHOT_OBJID)
+            RUL_ACTION (=='INSERT')
+            RH_EXT_BOOK_DATE (==today)
+            SH_PRICE_CAT (==RUL_SIHOT_CAT)
+            RUL_SIHOT_PACK (=='RO')
+            SIHOT_PAYMENT_INST (==1)
+            RU_SOURCE (=='A')
+            SIHOT_MKT_SEG and SIHOT_RATE_SEGMENT (==RUL_SIHOT_RATE)
+            RO_RES_GROUP (=='RS')
+            SH_ROOMS (==1)
+            RU_ADULTS (==2)
+            RU_CHILDREN (==0)
+
+        """
+        row_def = dict(SH_RES_TYPE='1',
+                       SH_MC=crow.get('OC_CODE', ''),
+                       SH_OBJID=crow.get('OC_SIHOT_OBJID', ''),
+                       RUL_ACTION='INSERT',
+                       RH_EXT_BOOK_DATE=datetime.datetime.today(),
+                       SH_PRICE_CAT=crow.get('RUL_SIHOT_CAT', ''),
+                       RUL_SIHOT_PACK='RO',    # room only (no board/meal-plan)
+                       SIHOT_PAYMENT_INST=1,
+                       RU_SOURCE='A',
+                       SIHOT_MKT_SEG=crow.get('RUL_SIHOT_RATE', ''),
+                       SIHOT_RATE_SEGMENT=crow.get('RUL_SIHOT_RATE', ''),
+                       RO_RES_GROUP='RS',
+                       SH_ROOMS=1,
+                       RU_ADULTS=2,
+                       RU_CHILDREN=0,
+                       SH_PERS_SEQ1=0,
+                       SH_ROOM_SEQ1=0,
+                       SH_PERS_SEQ2=1,
+                       SH_ROOM_SEQ2=0,
+                       )
+        row_def.update(crow)
+
+        return row_def
+
     def send_row(self, crow):
         msg = ""
+        crow = self.complete_res_data(crow)
         try:
             err = self.res_sender.send_row_to_sihot(crow, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
         except Exception as ex:

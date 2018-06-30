@@ -33,7 +33,7 @@ rbf.add_options()
 
 add_validation_options(cae)
 add_sf_options(cae)
-add_notification_options(cae)
+add_notification_options(cae, add_warnings=True)
 
 
 _debug_level = cae.get_option('debugLevel')

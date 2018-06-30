@@ -29,7 +29,7 @@ add_ac_options(cae)
 
 # add_sh_options(cae)
 
-add_notification_options(cae)
+add_notification_options(cae, add_warnings=True)
 
 
 debug_level = cae.get_option('debugLevel')

@@ -62,15 +62,7 @@ def proc_context(proc, req):
         room_no = getattr(req, 'orn', None) if oc == 'CO-RM' else getattr(req, 'rn', None)
         res_no = getattr(req, 'res_nr', None)
         sub_no = getattr(req, 'osub_nr', None) if oc == 'CO-RM' else getattr(req, 'sub_nr', None)
-    """
-    if not oc:      # req.oc did not got overwritten by caller
-        oc = getattr(req, 'oc', None)
-    if not getattr(req, 'rgr_list', False):     # if room_no Is None
-        # caller sending RoomChange response (not ResChange response)
-        room_no = getattr(req, 'orn', None) if oc == 'CO-RM' else getattr(req, 'rn', None)
-        res_no = getattr(req, 'res_nr', None)
-        sub_no = getattr(req, 'osub_nr', None) if oc == 'CO-RM' else getattr(req, 'sub_nr', None)
-    """
+
     return "{}({}, {}, {}/{}@{})".format(getattr(proc, '__name__', None),
                                          oc, room_no, res_no, sub_no, getattr(req, 'hn', None))
 

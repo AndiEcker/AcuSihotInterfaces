@@ -29,16 +29,17 @@ import subprocess
 from configparser import ConfigParser
 import pprint
 
-from ae_console_app import ConsoleApp, Progress, uprint, MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, \
-    full_stack_trace
+from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace,\
+    MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 from sxmlif import PostMessage, GuestSearch
-from ass_sys_data import add_ass_options, init_ass_data
+from ass_sys_data import (add_ass_options, init_ass_data,
+                          USED_SYS_ASS_ID, USED_SYS_ACU_ID, USED_SYS_SF_ID, USED_SYS_SHWEB_ID, USED_SYS_SHKERNEL_ID)
 
 
 __version__ = '1.0'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
-MAX_SRSL_OUTAGE_HOURS = 18.0
+MAX_SRSL_OUTAGE_HOURS = 18.0                # maximum time after last sync entry was logged (multiple on TEST system)
 DEF_TC_SC_ID = '27'
 DEF_TC_SC_MC = 'TCRENT'
 DEF_TC_AG_ID = '20'
@@ -78,34 +79,25 @@ last_sync = datetime.datetime.now()
 last_rt_prefix = cae.get_option('acuDSN')[-4:]
 
 
-ass_data = init_ass_data(cae, ass_options)
+ass_data = init_ass_data(cae, ass_options, used_systems_msg_prefix="Active Sys Env Checks")
 conf_data = ass_data['assSysData']
 if conf_data.error_message:
     uprint("WatchPupPy startup error: ", conf_data.error_message)
     cae.shutdown(exit_code=9)
+check_ass = USED_SYS_ASS_ID in conf_data.used_systems
+check_acu = USED_SYS_ACU_ID in conf_data.used_systems
+check_sf = USED_SYS_SF_ID in conf_data.used_systems
+check_sh_web = USED_SYS_SHWEB_ID in conf_data.used_systems
+check_sh_kernel = USED_SYS_SHKERNEL_ID in conf_data.used_systems
 
 break_on_error = ass_data['breakOnError']
 notification = ass_data['notification']
 send_output = 1 if notification and cae.get_option('sendOutput') else 0
 uprint("Send Output (subprocess call method: 1=check_output, 0=check_call)", send_output)
 
-uprint("Active Sys Env Checks:", end=" ")
-check_ass = conf_data.ass_user and conf_data.ass_password and conf_data.ass_dsn
-if check_ass:
-    uprint("Ass", end=" ")
-check_acu = conf_data.acu_user and conf_data.acu_password and conf_data.acu_dsn
-if check_acu:
-    uprint("Acu", end=" ")
-check_sf = conf_data.sf_conn
-if check_sf:
-    uprint("Sf", end=" ")
-check_sh_web = cae.get_option('shServerIP') and cae.get_option('shServerPort')
-if check_sh_web:
-    uprint("ShWeb", end=" ")
-check_sh_kernel = cae.get_option('shServerIP') and cae.get_option('shServerKernelPort')
-if check_sh_kernel:
-    uprint("ShKernel", end=" ")
-uprint("")
+is_test = conf_data.is_test_system()
+max_sync_outage_delta = (exe_name.startswith('AcuServer') or exe_name.startswith('SihotResSync')) \
+                        and datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS * (9 if is_test else 1))
 
 
 def user_notification(subject, body):
@@ -134,7 +126,8 @@ def get_timer_corrected():
     return curr_timer
 
         
-def reset_last_run_time(interval, force=False):
+def reset_last_run_time(force=False):
+    msg = ""
     try:
         cmd_cfg_file_name = os.path.splitext(exe_name)[0] + '.ini'
         if os.path.isfile(cmd_cfg_file_name):
@@ -144,11 +137,9 @@ def reset_last_run_time(interval, force=False):
             last_start = cmd_cfg_parser.get(MAIN_SECTION_DEF, last_rt_prefix + 'lastRt')
             if last_start[0] == '@':
                 last_start_dt = datetime.datetime.strptime(last_start[1:], DATE_TIME_ISO)
-                interval_delta = datetime.timedelta(seconds=interval)
+                interval_delta = datetime.timedelta(seconds=command_interval) * 3
                 now_dt = datetime.datetime.now()
-                if not force and last_start_dt + interval_delta * 2.5 <= now_dt:
-                    msg = cmd_cfg_file_name + " still locked for " + str(now_dt - last_start_dt + interval_delta * 2.5)
-                else:
+                if force or now_dt > last_start_dt + interval_delta:
                     cmd_cfg_parser.set(MAIN_SECTION_DEF,
                                        last_rt_prefix + 'Rt_kill_' + datetime.datetime.now().strftime('%y%m%d_%H%M%S'),
                                        last_start)
@@ -157,22 +148,24 @@ def reset_last_run_time(interval, force=False):
                     with open(cmd_cfg_file_name, 'w') as ini_fp:
                         cmd_cfg_parser.write(ini_fp)
                     msg = cmd_cfg_file_name + " lock reset. Old value=" + str(last_start)
+                else:
+                    msg = cmd_cfg_file_name + " still locked for " + str(last_start_dt + interval_delta - now_dt)
             else:
                 msg = "Found INI file {} but lock entry {} is missing the leading @ character (value={})"\
                     .format(cmd_cfg_file_name, last_rt_prefix + 'lastRt', last_start)
         else:
             msg = cmd_cfg_file_name + " not found"
     except Exception as x:
-        msg = "exception: " + str(x)
+        msg += " exception: " + str(x)
     if msg:
         uprint("WatchPupPy.reset_last_run_time()", msg)
         user_notification('WatchPupPy reset last run time warning', msg)
 
 
 startup = get_timer_corrected()     # initialize timer and last check/run values
-cae.dprint(" ###  Startup timer value={}, last check={}, check interval={}, last run={}, run interval={}".format(
-            startup, last_check, check_interval, last_run, command_interval),
-           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+cae.dprint(" ###  Startup {} timer value={}, last check={}, check interval={}, last run={}, run interval={}"
+           .format("" if is_test else "production", startup, last_check, check_interval, last_run, command_interval),
+           minimum_debug_level=DEBUG_LEVEL_DISABLED if is_test else DEBUG_LEVEL_VERBOSE)
 progress = Progress(cae.get_option('debugLevel'), total_count=1,
                     start_msg='Preparing environment checks and first run of {}'.format(exe_name))
 
@@ -258,7 +251,7 @@ while True:
                                           tc_sc_id, tc_sc_mc, tc_ag_id, tc_ag_mc))
 
                 # special Acumen check for AcuServer and for the Acumen-To-Sihot interface
-                if exe_name.startswith('AcuServer') or exe_name.startswith('SihotResSync'):
+                if max_sync_outage_delta:
                     tbl = 'ARO' if exe_name.startswith('AcuServer') else 'RU'
                     err_msg = ora_db.select('T_SRSL', ['MAX(SRSL_DATE)'],
                                             "SRSL_TABLE = '{}' and substr(SRSL_STATUS, 1, 6) = 'SYNCED'".format(tbl))
@@ -273,10 +266,10 @@ while True:
                             # directly after WatchPupPy startup use newest_sync instead of startup-time
                             if newest_sync < last_sync:
                                 last_sync, newest_sync = newest_sync, last_sync
-                            if newest_sync - last_sync > datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS):
-                                warn_msg = "No {} since {} (more than {} hours)" \
+                            if newest_sync - last_sync > max_sync_outage_delta:
+                                warn_msg = "No {} since {} (longer than {})" \
                                     .format("room occupancy state changes" if tbl == 'ARO' else "reservation syncs",
-                                            last_sync, MAX_SRSL_OUTAGE_HOURS)
+                                            last_sync, max_sync_outage_delta)
                                 user_notification("WatchPupPy warning notification", warn_msg)
                             last_sync = newest_sync
         if errors:  # if Acumen has failures: ensure correct values for Sihot Kernel interface check
@@ -346,7 +339,7 @@ while True:
         except subprocess.CalledProcessError as cpe:
             err_msg = "{}. run returned non-zero exit code {}".format(run_starts, cpe.returncode)
             if cpe.returncode == 4:
-                reset_last_run_time(command_interval)
+                reset_last_run_time()
             if getattr(cpe, 'output'):      # only available when running command with check_output()/send_output
                 err_msg += "\n         output=" + str(cpe.output)
             errors.append(err_msg)
@@ -357,7 +350,7 @@ while True:
             if getattr(toe, 'output'):      # only available when running command with check_output()/send_output
                 err_msg += "\n         output=" + str(getattr(toe, 'output'))  # PyCharm says not defined: toe.output
             errors.append(err_msg)
-            reset_last_run_time(command_interval, force=True)   # force reset of lock in INI file because subproc killed
+            reset_last_run_time(force=True)   # force reset of lock in INI file because subproc killed
             continue        # try directly again - don't reset last_run variable
         except KeyboardInterrupt:
             errors.append(BREAK_PREFIX + " while running {}. command {}".format(run_starts, exe_name))

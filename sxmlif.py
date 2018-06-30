@@ -336,7 +336,7 @@ MAP_WEB_RES = \
         # MATCHCODE/GUEST-ID needed for DELETE action for to prevent Sihot error:
         # .. "Could not find a key identifier for the client (name, matchcode, ...)"
         {'elemName': 'GUEST-ID', 'colName': 'SH_OBJID',
-         'elemHideIf': "not c['OC_SIHOT_OBJID'] and ('CD_SIHOT_OBJID' not in c or not c['CD_SIHOT_OBJID'])",
+         'elemHideIf': "not c.get('OC_SIHOT_OBJID', '') and ('CD_SIHOT_OBJID' not in c or not c['CD_SIHOT_OBJID'])",
          'colValFromAcu': "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))"},
         {'elemName': 'MATCHCODE', 'colName': 'SH_MC',
          'colValFromAcu': "nvl(OC_CODE, CD_CODE)"},
@@ -2061,7 +2061,7 @@ class ResToSihot(SihotXmlBuilder):
     def send_row_to_sihot(self, crow=None, commit=False, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
         if not crow:
             crow = self.cols
-        gds_no = crow['SIHOT_GDSNO']
+        gds_no = crow.get('SIHOT_GDSNO', '')
         if gds_no:
             if gds_no in self._gds_err_rows:    # prevent send of follow-up changes on erroneous bookings (w/ same GDS)
                 old_id = self.res_id_desc(*self._gds_err_rows[gds_no], separator="\n")

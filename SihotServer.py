@@ -9,39 +9,113 @@ and https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_qu
 DISTRIBUTE:
 
 Prerequisites - check values:
-- <ws_url>  URL of web service (endpoint/class/action), e.g. 'https://web1v-tf.signallia.com/res/upsert'
+- URL of web service (endpoint/class/action), e.g. 'https://services.signallia.com/res/upsert'
 
 Salesforce check/prepare:
-- Authorize Endpoint Addresses:
+- Add host URL in Salesforce/Setup/Remote Site Settings for to authorize endpoint addresses:
     see https://trailhead.salesforce.com/modules/
     ./apex_integration_services/units/apex_integration_callouts#apex_integration_callouts_authorizing
-- APEX code template/example: see SihotServerApex.js
+- Implement APEX code template/example: see e.g. SihotServerApex.apex
 
-Web-Service server check/prepare:
-- Setup apache: https://stackoverflow.com/questions/17678037/running-apache-bottle-python?rq=1
+Http-/Web-server check/prepare:
+- Setup apache (done by Davide): https://stackoverflow.com/questions/17678037/running-apache-bottle-python?rq=1
   and https://stackoverflow.com/questions/36901905/deploying-a-bottle-py-app-with-apache-mod-wsgi-on-ubuntu-16-04
 - Alternative setup nginx+uwsgi: https://michael.lustfield.net/nginx/bottle-uwsgi-nginx-quickstart
 
+Web-Service server check/prepare:
+- copy files to distribution sync folder (using build_ws_*.cmd).
+- synchronize sync folder content to http/web server (using e.g. WinSCP or other SFTP client).
+
 """
-
-from bottle import Bottle, request, response, static_file, template, run
-
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from ae_notification import add_notification_options, init_notification
-from shif import add_sh_options, ResSender
 
 __version__ = '0.1'
 
-cae = ConsoleApp(__version__, "Pass requests from Salesforce-CRM onto Sihot-PMS",
-                 additional_cfg_files=['SihotMktSegExceptions.cfg'], multi_threading=True)
-add_sh_options(cae)
-add_notification_options(cae)
+# change working dir so bottle.py will be find by next import statement (also for relative paths and template lookup)
+import os
+import sys
+os.chdir(os.path.dirname(__file__))
+sys.path.append(os.path.dirname(__file__))
+
+from bottle import default_app, request, response, static_file, template, run
+
+from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from shif import ResSender
+from ass_sys_data import add_ass_options, init_ass_data
+
+cae = ConsoleApp(__version__, "Web Service Server", additional_cfg_files=['SihotMktSegExceptions.cfg'],
+                 multi_threading=True)
+ass_options = add_ass_options(cae)
 
 debug_level = cae.get_option('debugLevel')
-notification, _ = init_notification(cae, cae.get_option('shServerIP'))
+ass_data = init_ass_data(cae, ass_options)
+conf_data = ass_data['assSysData']
+notification = ass_data['notification']
+
+# app and application will be used when used as server plug-in in apache/nginx
+app = application = default_app()
 
 
-def add_log_entry(error_msg="", warning_msg="", importance=2):
+# ------  BOTTLE ROUTES  -------------------------------------------
+
+@app.route('/hello/<name>')
+def get_hello(name='world'):
+    return "hello " + name
+
+
+@app.route('/static/<filename>')
+def get_static_static_file(filename):
+    return static_file(filename, root='./static')
+
+
+@app.route('/page/<page_name>')
+def get_page(page_name):       # return a page that has been rendered using a template
+    return template('page', page_name=page_name)
+
+
+@app.route('/avail_rooms')
+def get_avail_rooms():
+    rd = request.json
+    rooms = conf_data.sh_avail_rooms(hotel_ids=rd['hotel_ids'], room_cat_prefix=rd['room_cat_prefix'], day=rd['day'])
+    return str(rooms)
+
+
+@app.route('/res/count')
+def get_res_count():
+    rqi = " ".join([k + "=" + str(v) for k, v in request.query.items()])
+    return "Number of reservations" + (" with " + rqi if len(rqi) else "") \
+           + " is " + str(conf_data.sh_count_res(**request.query))
+
+
+@app.route('/res/get')
+def get_res_data():
+    return conf_data.sh_res_data(**request.query)
+
+
+@app.route('/res/<action>', method='PUSH')
+def push_res(action):
+    if action == 'upsert':
+        body = res_upsert()
+    else:
+        body = "Reservation PUSH with action {} not implemented".format(action)
+        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+    return body
+
+
+@app.route('/res/<action>/<res_id>', method='PUT')
+def put_res(action, res_id):
+    if action == 'upsert':
+        body = res_upsert(res_id)
+    else:
+        body = "Reservation PUT for ID {} with action {} not implemented".format(res_id, action)
+        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+    return body
+
+
+# -----  HELPER METHODS  -------------------------------------------
+
+def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
+    if not error_msg and debug_level < minimum_debug_level:
+        return      # suppress notification - nothing to do/show
     seps = '\n' * (importance - 2)
     msg = seps + ' ' * (4 - importance) + ('*' if error_msg else '#') * importance + '  ' + error_msg
     if warning_msg:
@@ -55,20 +129,21 @@ def add_log_entry(error_msg="", warning_msg="", importance=2):
             uprint(error_msg + "\n      Notification send error: " + notification_err)
 
 
-# app and application will be used when used as server plug-in in apache/nginx
-app = application = Bottle()
+# ------  ROUTE/SERVICE HANDLERS  ----------------------------------
 
 
-@app.route('/res/<action>')
-def res_action(action):       # process reservation action, e.g. upsert
+def res_upsert(res_id=''):
     # web service parameters are available as dict in request.json
-    cae.dprint('res' + ':' + action + ':' + request.json, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-    assert action == 'upsert'
+    res_data = request.json
+    add_log_entry("res_upsert({}): {}".format(res_id, res_data))
+
+    if res_id:      # res_id is passed also within request
+        res_data['RUL_ACTION'] = 'UPDATE'
 
     res_send = ResSender(cae)
-    err, msg = res_send.send_row(request.json)
+    err, msg = res_send.send_row(res_data)
     if err or msg:
-        add_log_entry(error_msg=err, warning_msg=msg, importance=3 if err else 2)
+        add_log_entry(warning_msg=msg, error_msg=err, importance=3 if err else 2)
     if err:
         res_dict = dict(Error=err, Message=msg)
     else:
@@ -78,20 +153,7 @@ def res_action(action):       # process reservation action, e.g. upsert
     return res_dict
 
 
-@app.route('/static/<filename>')
-def static(filename):
-    return static_file(filename, root='./static')
-
-
-@app.route('/')
-def show_index():
-    return 'Hello'
-
-
-@app.route('/page/<page_name>')
-def show_page(page_name):       # return a page that has been rendered using a template
-    return template('page', page_name=page_name)
-
+# ------  DEBUG HELPERS  -------------------------------------------
 
 class StripPathMiddleware(object):      # remove slash from request
     def __init__(self, a):

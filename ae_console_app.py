@@ -484,6 +484,7 @@ class ConsoleApp:
             uprint("Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):", _debug_level)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             uprint("System Environment:")
+            uprint(" "*18, "python ver=", str(sys.version))
             uprint(" "*18, "argv      =", str(sys.argv))
             uprint(" "*18, "executable=", sys.executable)
             uprint(" "*18, "cwd       =", os.getcwd())
@@ -592,7 +593,7 @@ class ConsoleApp:
         with config_lock:
             self._cfg_parser = ConfigParser()
             self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
-            self._cfg_parser.read(self._config_files)
+            self._cfg_parser.read(self._config_files, encoding='utf-8')
 
     def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_ENABLED):
         if self.get_option('debugLevel') >= minimum_debug_level:

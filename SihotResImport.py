@@ -39,7 +39,7 @@ cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas
 # cae.add_option('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
 cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'Y')
 cae.add_option('jsonPath', "Import path and file mask for OTA JSON files", 'C:/JSON_Import/*.json', 'j')
-add_notification_options(cae)
+add_notification_options(cae, add_warnings=True)
 add_ac_options(cae)
 add_sf_options(cae)
 add_sh_options(cae, add_kernel_port=True, add_maps_and_kernel_usage=True)

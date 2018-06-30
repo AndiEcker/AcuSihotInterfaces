@@ -125,7 +125,7 @@ class TestIdConverters:
 
 
 class TestResSender:
-    def test_create_minimum_fields(self, console_app_env):
+    def test_create_all_fields(self, console_app_env):
         ho_id = '3'
         gdsno = 'TEST-1234567890'
         today = datetime.datetime.today()
@@ -137,7 +137,7 @@ class TestResSender:
                     SIHOT_GDSNO=gdsno, RH_EXT_BOOK_REF='Voucher1234567890',
                     RH_EXT_BOOK_DATE=today, ARR_DATE=today + wk1, DEP_DATE=today + wk1 + wk1,
                     RUL_SIHOT_CAT=cat, SH_PRICE_CAT=cat, RUL_SIHOT_ROOM='3220',
-                    SH_OBJID='123456', OC_SIHOT_OBJID='123456', SH_MC='TCRENT', OC_CODE='TCRENT',
+                    SH_OBJID='27', OC_SIHOT_OBJID='27', SH_MC='TCRENT', OC_CODE='TCRENT',
                     SIHOT_NOTE='test short note', SIHOT_TEC_NOTE='test large TEC note',
                     RUL_SIHOT_PACK='RO',    # room only (no board/meal-plan)
                     RUL_SIHOT_RATE='TC', SIHOT_MKT_SEG='TC', SIHOT_RATE_SEGMENT='TC',
@@ -155,6 +155,50 @@ class TestResSender:
         assert not err
         assert ho_id == rs.res_sender.response.id
         assert gdsno == rs.res_sender.response.gdsno
+        h, r, s = rs.get_res_no()
+        assert ho_id == h
+        assert r
+        assert s
+        assert '1' == s
+
+    def test_create_minimum_fields_with_mc(self, console_app_env):
+        ho_id = '1'
+        today = datetime.datetime.today()
+        wk1 = datetime.timedelta(days=7)
+        arr = today + wk1
+        dep = arr + wk1
+        cat = 'STDO'
+        mkt_seg = 'TC'
+
+        rs = ResSender(console_app_env)
+        crow = dict(RUL_SIHOT_HOTEL=ho_id, ARR_DATE=arr, DEP_DATE=dep, RUL_SIHOT_CAT=cat, RUL_SIHOT_RATE=mkt_seg,
+                    OC_CODE='TCRENT', SIHOT_GDSNO='TEST-1234567890')
+        err, msg = rs.send_row(crow)
+
+        assert not err
+        assert ho_id == rs.res_sender.response.id
+        h, r, s = rs.get_res_no()
+        assert ho_id == h
+        assert r
+        assert s
+        assert '1' == s
+
+    def test_create_minimum_fields_with_objid(self, console_app_env):
+        ho_id = '1'
+        today = datetime.datetime.today()
+        wk1 = datetime.timedelta(days=7)
+        arr = today + wk1
+        dep = arr + wk1
+        cat = 'STDO'
+        mkt_seg = 'TC'
+
+        rs = ResSender(console_app_env)
+        crow = dict(RUL_SIHOT_HOTEL=ho_id, ARR_DATE=arr, DEP_DATE=dep, RUL_SIHOT_CAT=cat, RUL_SIHOT_RATE=mkt_seg,
+                    OC_SIHOT_OBJID='27', SIHOT_GDSNO='TEST-1234567890')
+        err, msg = rs.send_row(crow)
+
+        assert not err
+        assert ho_id == rs.res_sender.response.id
         h, r, s = rs.get_res_no()
         assert ho_id == h
         assert r

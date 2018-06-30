@@ -14,12 +14,13 @@ TSL_ENC_SERVICE_NAME = 'smtpTLS'
 MAX_LEN_BODY_IN_LOG = 159       # max number of characters of the send mail body that get passed to the log file
 
 
-def add_notification_options(cae):
+def add_notification_options(cae, add_warnings=False):
     cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
     cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
     cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
-    # separate warnings email is optional for some applications (e.g. AcuServer)
-    cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
+    if add_warnings:
+        # separate warnings email is optional for some applications (e.g. AcuServer)
+        cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
 
 
 def init_notification(cae, system_name=''):

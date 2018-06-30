@@ -1,0 +1,16 @@
+rem reservation interface
+copy .sys_envTEST.cfg dist\ws_res\.sys_env.cfg
+copy .console_app_env.cfg dist\ws_res\
+copy SihotMktSegExceptions.cfg dist\ws_res\
+copy SihotServer.py dist\ws_res\app.wsgi
+copy ae_console_app.py dist\ws_res\
+copy ae_db.py dist\ws_res\
+copy ae_notification.py dist\ws_res\
+copy ae_tcp.py dist\ws_res\
+copy acif.py dist\ws_res\
+copy sfif.py dist\ws_res\
+copy sxmlif.py dist\ws_res\
+copy shif.py dist\ws_res\
+copy ass_sys_data.py dist\ws_res\
+copy C:\Python35\Lib\site-packages\bottle.py dist\ws_res\
+copy C:\Python35\Lib\site-packages\simple_salesforce\*.py dist\ws_res\simple_salesforce\*.*

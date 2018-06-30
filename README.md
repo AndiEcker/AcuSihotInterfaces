@@ -124,6 +124,62 @@ The following lower case letters could be used more easily as short options than
 for future/upcoming command line options with less conflicts: | l | m | n | q |.
 
 
+### Available Reservation Fields
+
+The table underneath is showing all the fields that can be used to specify a reservation created within Sihot. Only the
+fields marked with an asterisk (*) are mandatory, with the exception that if `OC_SIHOT_OBJID` is specified then `OC_CODE`
+can be omitted:
+
+| Field Name | Field Type | Description | Example Values |
+| --- | --- | --- | --- |
+| RUL_SIHOT_HOTEL * | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
+| SIHOT_GDSNO * | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
+| ARR_DATE * | Date | Arrival Date | 28-02-2017 |
+| DEP_DATE * | Date | Departure Date | 07-03-2017 |
+| RUL_SIHOT_CAT * | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
+| SH_PRICE_CAT | String | Paid Sihot Room Category (mostly same as RUL_SIHOT_CAT) | '1STS', '1JNP', '2BSS' |
+| RUL_SIHOT_ROOM | String | Sihot Room Number (optional) | '0426', 'A112' |
+| OC_CODE * | String | Sihot Orderer Matchcode of OTA channel (same as SH_MC) | 'TCRENT' |
+| SH_MC | String | Sihot Orderer Matchcode of OTA channel | 'TCRENT' |
+| OC_SIHOT_OBJID | String | Sihot Orderer Object Id of OTA channel (same as SH_OBJID) | '123456' |
+| SH_OBJID | String | Sihot Orderer Object Id of OTA channel | '123456' |
+| RUL_SIHOT_RATE * | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
+| SIHOT_MKT_SEG | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
+| SIHOT_RATE_SEGMENT | String | Sihot Price Rate/Segment (mostly same as SIHOT_MKT_SEG, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
+| SH_RES_TYPE | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
+| RUL_ACTION | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
+| RH_EXT_BOOK_REF | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
+| RH_EXT_BOOK_DATE | Date | Sihot Reservation Booking Date | 24-12-2016 |
+| RUL_SIHOT_PACK | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
+| RU_SOURCE | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
+| RO_RES_GROUP | String | Sihot Reservation Channel | 'RS'=Rental SP |
+| SIHOT_NOTE | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
+| SIHOT_TEC_NOTE | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '|CR|' for to separate various comments) |
+| SIHOT_PAYMENT_INST | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
+| SIHOT_ALLOTMENT_NO | Numeric | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
+| RU_ADULTS | Numeric | Number of Adults | 1, 2, 4 |
+| RU_CHILDREN | Numeric | Number of Children | 0, 1, 2 |
+| SH_ADULT1_NAME | String | Surname of first adult | 'Smith' | 
+| SH_ADULT1_NAME2 | String | Forename of first adult | 'John' | 
+| SH_PERS_SEQ1 | Numeric | Rooming List Person First Adults Sequence Number | 0 | 
+| SH_ROOM_SEQ1 | Numeric | Rooming List First Adults Room Sequence Number | 0 | 
+| SH_ADULT2_NAME | String | Surname of second adult | 'Miller' | 
+| SH_ADULT2_NAME2 | String | Forename of second adult | 'Joanna' |
+| SH_PERS_SEQ2 | Numeric | Rooming List Person Second Adults Sequence Number | 1 | 
+| SH_ROOM_SEQ2 | Numeric | Rooming List Second Adults Room Sequence Number | 0 | 
+| SH_CHILD1_NAME | String | Surname of first children | 'Smith' | 
+| SH_CHILD1_NAME2 | String | Forename of first children | 'Paul' | 
+| SH_PERS_SEQ11 | Numeric | Rooming List Person First Children Sequence Number | 10 | 
+| SH_ROOM_SEQ11 | Numeric | Rooming List First Children Room Sequence Number | 0 | 
+| SH_CHILD2_NAME | String | Surname of second children | 'Miller' | 
+| SH_CHILD2_NAME2 | String | Forename of second children | 'Debra' |
+| SH_PERS_SEQ12 | Numeric | Rooming List Person Second Children Sequence Number | 11 | 
+| SH_ROOM_SEQ12 | Numeric | Rooming List Second Children Room Sequence Number | 0 |
+| SH_ROOMS | Numeric | Number of Rooms in Rooming List (optional if 1) | 1 | 
+| SH_EXT_REF | String | Flight Number (optional) | 'ABC-2345' |
+
+
+
 ### AcuSihotMonitor Application
 
 AcuSihotMonitor is a kivy application for Windows, Linux, Mac OS X, Android and iOS and allows to check
@@ -423,58 +479,12 @@ if an error occurs in one of the JSON files.
 
 #### JSON field names
 
-The following section is documenting the available json field names for to be populated with the reservation details 
-of each booking coming via email from OTA channels that are not supported by Siteminder (the tool to convert each
-email into the json format is written in C#.NET by Nitesh): 
+Reservation details of each booking coming via email from OTA channels and are not supported/included by Siteminder
+can be imported from a json file (the tool to convert each email into the json format is written in C#.NET by Nitesh).
+The available json field names are documented in the section [Available Reservation Fields](#available-reservation-fields)
+above. 
 
-| Field Name | Field Type | Description | Example Values |
-| --- | --- | --- | --- |
-| RUL_SIHOT_HOTEL | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
-| SH_RES_TYPE | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
-| RUL_ACTION | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
-| SIHOT_GDSNO | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
-| RH_EXT_BOOK_REF | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
-| RH_EXT_BOOK_DATE | Date | Sihot Reservation Booking Date | 24-12-2016 |
-| ARR_DATE | Date | Arrival Date | 28-02-2017 |
-| DEP_DATE | Date | Departure Date | 07-03-2017 |
-| RUL_SIHOT_CAT | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
-| SH_PRICE_CAT | String | Paid Sihot Room Category (mostly same as RUL_SIHOT_CAT) | '1STS', '1JNP', '2BSS' |
-| RUL_SIHOT_ROOM | String | Sihot Room Number (optional) | '0426', 'A112' |
-| SH_OBJID | String | Sihot Orderer Object Id of OTA channel | '123456' |
-| OC_SIHOT_OBJID | String | Sihot Orderer Object Id of OTA channel (same as SH_OBJID) | '123456' |
-| SH_MC | String | Sihot Orderer Matchcode of OTA channel | 'TCRENT' |
-| OC_CODE | String | Sihot Orderer Matchcode of OTA channel (same as SH_MC) | 'TCRENT' |
-| SIHOT_NOTE | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
-| SIHOT_TEC_NOTE | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '|CR|' for to separate various comments) |
-| RUL_SIHOT_PACK | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
-| RUL_SIHOT_RATE | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
-| SIHOT_MKT_SEG | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
-| SIHOT_RATE_SEGMENT | String | Sihot Price Rate/Segment (mostly same as SIHOT_MKT_SEG, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
-| SIHOT_PAYMENT_INST | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
-| RU_SOURCE | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
-| RO_RES_GROUP | String | Sihot Reservation Channel | 'RS'=Rental SP |
-| RU_ADULTS | Numeric | Number of Adults | 1, 2, 4 |
-| RU_CHILDREN | Numeric | Number of Children | 0, 1, 2 |
-| SH_ADULT1_NAME | String | Surname of first adult | 'Smith' | 
-| SH_ADULT1_NAME2 | String | Forename of first adult | 'John' | 
-| SH_PERS_SEQ1 | Numeric | Rooming List Person First Adults Sequence Number | 0 | 
-| SH_ROOM_SEQ1 | Numeric | Rooming List First Adults Room Sequence Number | 0 | 
-| SH_ADULT2_NAME | String | Surname of second adult | 'Miller' | 
-| SH_ADULT2_NAME2 | String | Forename of second adult | 'Joanna' |
-| SH_PERS_SEQ2 | Numeric | Rooming List Person Second Adults Sequence Number | 1 | 
-| SH_ROOM_SEQ2 | Numeric | Rooming List Second Adults Room Sequence Number | 0 | 
-| SH_CHILD1_NAME | String | Surname of first children | 'Smith' | 
-| SH_CHILD1_NAME2 | String | Forename of first children | 'Paul' | 
-| SH_PERS_SEQ11 | Numeric | Rooming List Person First Children Sequence Number | 10 | 
-| SH_ROOM_SEQ11 | Numeric | Rooming List First Children Room Sequence Number | 0 | 
-| SH_CHILD2_NAME | String | Surname of second children | 'Miller' | 
-| SH_CHILD2_NAME2 | String | Forename of second children | 'Debra' |
-| SH_PERS_SEQ12 | Numeric | Rooming List Person Second Children Sequence Number | 11 | 
-| SH_ROOM_SEQ12 | Numeric | Rooming List Second Children Room Sequence Number | 0 |
-| SH_ROOMS | Numeric | Number of Rooms in Rooming List (optional if 1) | 1 | 
-| SH_EXT_REF | String | Flight Number (optional) | 'ABC-2345' |
-| SIHOT_ALLOTMENT_NO | Numeric | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
- 
+
 
 ### WatchPupPy Application
 

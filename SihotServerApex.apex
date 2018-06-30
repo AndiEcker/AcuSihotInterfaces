@@ -5,10 +5,12 @@ gen.writeStartObject();
 gen.writeStringField('ARR_DATE', res_opp.Arrival_Date__c);
 //...     <-- more web service parameters
 gen.writeEndObject();
+
 HttpRequest request = new HttpRequest();
-request.setEndpoint(ws_url);
+request.setEndpoint('https://web1v-tf.signallia.com/res/upsert');
 request.setMethod('PUT');
 request.setBody(gen.getAsString())
+
 // send request to web service server
 Http http = new Http();
 HttpResponse response = http.send(request);

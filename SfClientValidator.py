@@ -20,7 +20,7 @@ cae = ConsoleApp(__version__, "Salesforce Client Data Validator")
 
 add_validation_options(cae, email_def=EMAIL_NOT_VALIDATED, phone_def=PHONE_NOT_VALIDATED)
 add_sf_options(cae)
-add_notification_options(cae)
+add_notification_options(cae, add_warnings=True)
 
 
 email_validation, email_validator, \

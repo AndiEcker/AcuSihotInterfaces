@@ -21,3 +21,7 @@ c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotResSync.py
 c:\Python35\Scripts\pyinstaller --onefile TestConnectivity.py
 c:\Python35\Scripts\pyinstaller --onefile WatchPupPy.py
 rem c:\Python35\Scripts\pyinstaller --onefile WebResTester.py
+
+rem BUILD web service distribution folders
+.\build_ws_test.cmd
+.\build_ws_res.cmd

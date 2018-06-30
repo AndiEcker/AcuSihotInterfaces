@@ -24,11 +24,8 @@ __version__ = '0.5'
 cae = debug_level = None  # added for to remove Pycharm warning
 if __name__ == "__main__":      # for to allow import of client_to_acu() for testing suite
     cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle", multi_threading=True)
-
     add_ac_options(cae)
-
     add_sh_options(cae, client_port=11000)
-
     add_notification_options(cae)
 
     debug_level = cae.get_option('debugLevel')

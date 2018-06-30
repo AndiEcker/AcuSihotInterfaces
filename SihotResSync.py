@@ -29,7 +29,7 @@ cae = ConsoleApp(__version__, "Synchronize reservation changes from Acumen/Oracl
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
 add_ac_options(cae)
 add_sh_options(cae, add_kernel_port=True, add_maps_and_kernel_usage=True)
-add_notification_options(cae)
+add_notification_options(cae, add_warnings=True)
 cae.add_option('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
                0, 'q', choices=(0, 1, 2))
 cae.add_option('breakOnError', "Abort synchronization if an error occurs (0=No, 1=Yes)", 0, 'b', choices=(0, 1))
