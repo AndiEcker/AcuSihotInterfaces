@@ -1,27 +1,31 @@
-set PATH=C:\Python35\;C:\Python35\Scripts;%PATH%
+rem switch to common python build/dist folder for to not pollute the project source folders with build/dist files
+cd ..\_build_dist\AcuSihotInterfaces
 
-rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource AcuSihotMonitor.kv AcuSihotMonitor.py
-c:\Python35\Scripts\pyinstaller --onefile AcuServer.py
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue AcuSihotMonitor.spec
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue AssCacheSync.py
-c:\Python35\Scripts\pyinstaller --onefile AssServer.py
-c:\Python35\Scripts\pyinstaller --onefile ClientQuestionnaireExport.py
-rem c:\Python35\Scripts\pyinstaller --onefile KernelGuestTester.py
-rem c:\Python35\Scripts\pyinstaller --onefile MatchcodeToObjId.py
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ShSfClientMigration.py
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SfClientValidator.py
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotMigration.py
-c:\Python35\Scripts\pyinstaller --onefile SihotOccLogChecker.py
-rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource SihotResImport.kv SihotResImport.py
-rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile SihotResImport.spec
-rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource SihotResImport.kv SihotResImport.py
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotResImport.spec
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotResImport_console.spec
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue SihotResSync.py
-c:\Python35\Scripts\pyinstaller --onefile TestConnectivity.py
-c:\Python35\Scripts\pyinstaller --onefile WatchPupPy.py
-rem c:\Python35\Scripts\pyinstaller --onefile WebResTester.py
+c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\AcuServer.py
+rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource ..\..\AcuSihotInterfaces\AcuSihotMonitor.kv ..\..\AcuSihotInterfaces\AcuSihotMonitor.py
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\AcuSihotMonitor.spec
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\AssCacheSync.py
+c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\AssServer.py
+c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\ClientQuestionnaireExport.py
+rem c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\KernelGuestTester.py
+rem c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\MatchcodeToObjId.py
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\ShSfClientMigration.py
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SfClientValidator.py
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SihotMigration.py
+c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\SihotOccLogChecker.py
+rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource ..\..\AcuSihotInterfaces\SihotResImport.kv ..\..\AcuSihotInterfaces\SihotResImport.py
+rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\SihotResImport.spec
+rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource ..\..\AcuSihotInterfaces\SihotResImport.kv ..\..\AcuSihotInterfaces\SihotResImport.py
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SihotResImport.spec
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SihotResImport_console.spec
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SihotResSync.py
+c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\TestConnectivity.py
+c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\WatchPupPy.py
+rem c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\WebResTester.py
 
-rem BUILD web service distribution folders
+rem switch back to project source folder
+cd ..\..\AcuSihotInterfaces
+
+rem BUILD/copy to web service distribution folders
 .\build_ws_test.cmd
 .\build_ws_res.cmd

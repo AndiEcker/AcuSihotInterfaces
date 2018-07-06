@@ -43,7 +43,7 @@ from shif import ResSender
 from ass_sys_data import add_ass_options, init_ass_data
 
 cae = ConsoleApp(__version__, "Web Service Server", additional_cfg_files=['SihotMktSegExceptions.cfg'],
-                 multi_threading=True)
+                 multi_threading=True, suppress_stdout=True)
 ass_options = add_ass_options(cae)
 
 debug_level = cae.get_option('debugLevel')

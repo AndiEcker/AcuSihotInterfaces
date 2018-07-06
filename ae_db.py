@@ -298,19 +298,24 @@ class OraDB(GenericDB):
             if default_type in (cx_Oracle.STRING, cx_Oracle.FIXED_CHAR):
                 return cursor.var(cx_Oracle.NCHAR, size, cursor.arraysize)
         '''
-        # workaround with the next statement for OraDB
+        # .. luckily, finally found workaround with the next statement for OraDB
         os.environ["NLS_LANG"] = ".AL32UTF8"
 
     def connect(self):
         self.last_err_msg = ''
-        # cx_oracle sys context was using clientinfo kwarg in/up-to V5 - since V6 kwarg renamed to appcontext and now
-        # .. using a list of 3-tuples. So on switch to cx_oracle V6 need to replace clientinfo with appcontext=app_ctx
-        # NAMESPACE = "CLIENTCONTEXT"     # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
-        # app_ctx = [(NAMESPACE, "APP", self._app_name), (NAMESPACE, "LANG", "Python"), (NAMESPACE, "MOD", "ae_db")]
         try:
-            # old style: self.conn = cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
-            self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, clientinfo=self._app_name)
-            # self.conn.outputtypehandler = output_type_handler - see also comment in __init__()
+            # connect old style (using conn str): cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
+            if cx_Oracle.__version__ > '6':
+                # sys context was using clientinfo kwarg in/up-to cx_Oracle V5 - with V6 kwarg renamed to appcontext and
+                # .. now it is using a list of 3-tuples. So since V6 need to replace clientinfo with appcontext=app_ctx
+                NAMESPACE = "CLIENTCONTEXT"  # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
+                app_ctx = [(NAMESPACE, "APP", self._app_name), (NAMESPACE, "LANG", "Python"),
+                           (NAMESPACE, "MOD", "ae_db")]
+                self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, appcontext=app_ctx)
+            else:
+                # sys context old style (until V5 using clientinfo):
+                self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, clientinfo=self._app_name)
+            # self.conn.outputtypehandler = output_type_handler       # see also comment in OraDB.__init__()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 uprint("OraDB: connected to Oracle database {} via client version {}/{} with n-/encoding {}/{}"
                        .format(self.dsn, cx_Oracle.clientversion(), cx_Oracle.apilevel,

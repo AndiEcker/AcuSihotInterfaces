@@ -328,7 +328,7 @@ INI_EXT = '.ini'
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
                  log_file_def='', config_eval_vars=None, additional_cfg_files=None, log_max_size=20,
-                 multi_threading=False):
+                 multi_threading=False, suppress_stdout=False):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version          application version.
             :param app_desc             application description.
@@ -339,6 +339,7 @@ class ConsoleApp:
             :param additional_cfg_files list of additional CFG/INI file names (opt. incl. abs/rel. path).
             :param log_max_size         maximum size in MBytes of a log file.
             :param multi_threading      pass True if instance is used in multi-threading app.
+            :param suppress_stdout      pass True (for wsgi apps) for to prevent any python print outputs to stdout.
         """
         """
             :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
@@ -361,6 +362,7 @@ class ConsoleApp:
         self._log_file_name = ""
         self._log_file_index = 0
         self.multi_threading = multi_threading
+        self.suppress_stdout = suppress_stdout
 
         self.startup_beg = datetime.datetime.now()
         self.config_options = dict()
@@ -376,8 +378,9 @@ class ConsoleApp:
         self._app_name = os.path.splitext(app_fnam)[0]
         self._app_version = app_version
 
-        uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
-        uprint("####  Initialization......  ####")
+        if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
+            uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
+            uprint("####  Initialization......  ####")
 
         # prepare config parser, first compile list of cfg/ini files - the last one overwrites previously loaded values
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
@@ -399,6 +402,7 @@ class ConsoleApp:
                     elif os.path.isfile(cfg_fnam):
                         config_files.append(cfg_fnam)
                     else:
+                        # this is an error, no need to: file=app_std_err if self.suppress_stdout else app_std_out
                         uprint("****  Additional config file {} not found!".format(cfg_fnam))
         # prepare load of config files (done in load_config()) where last existing INI/CFG file is default config file
         # .. to write to and if there is no INI file at all then create on demand a <APP_NAME>.INI file in the cwd
@@ -577,6 +581,7 @@ class ConsoleApp:
                     cfg_parser.write(configfile)
             except Exception as ex:
                 err_msg = "****  ConsoleApp.set_option(" + str(name) + ", " + str(val) + ") exception: " + str(ex)
+
         return err_msg
 
     def config_main_file_modified(self):
@@ -606,7 +611,11 @@ class ConsoleApp:
         global app_std_out, app_std_err
         self._log_file_obj = open(self._log_file_name, "w")
         if app_std_out == ori_std_out:      # first call/open-of-log-file?
-            app_std_out = sys.stdout = _DuplicateSysOut(self._log_file_obj)
+            if self.suppress_stdout:
+                std_out = self._nul_std_out = open(os.devnull, 'w')
+            else:
+                std_out = ori_std_out
+            app_std_out = sys.stdout = _DuplicateSysOut(self._log_file_obj, sys_out=std_out)
             app_std_err = sys.stderr = _DuplicateSysOut(self._log_file_obj, sys_out=ori_std_err)
         else:
             app_std_out.log_file = self._log_file_obj
@@ -652,7 +661,9 @@ class ConsoleApp:
                         t.join()
         if exit_code:
             uprint("****  Non-zero exit code:", exit_code)
+
         uprint('####  Shutdown............  ####')
+
         if self._log_file_obj:
             app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
             app_std_out.log_file = None
@@ -661,6 +672,10 @@ class ConsoleApp:
             self._close_log_file()
             if self._log_file_index:
                 self._rename_log_file()
+
+        if self._nul_std_out and not self._nul_std_out.closed:
+            self._nul_std_out.close()
+
         sys.exit(exit_code)
 
 

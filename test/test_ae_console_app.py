@@ -2,11 +2,12 @@
 import sys
 import os
 import datetime
+import time
 from argparse import ArgumentError
 import pytest
 
 from ae_console_app import ConsoleApp, NamedLocks, full_stack_trace, missing_requirements, uprint, \
-    DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES
+    DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT
 
 
 class TestConfigOptions:
@@ -522,30 +523,37 @@ class TestNamedLocks:
 
 class TestConfigMainFileModified:
     def test_not_modified(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.ini')
+        file_name = os.path.join(os.getcwd(), os.path.splitext(os.path.basename(sys.argv[0]))[0] + INI_EXT)
+        var_name = 'test_config_var'
+        old_var_val = 'OtherTestValue'
         with open(file_name, 'w') as f:
-            f.write('[Settings]\ntest_config_var = OtherTestValue')
-        cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
+            f.write('[Settings]\n' + var_name + ' = ' + old_var_val)
+        cae = ConsoleApp('0.0', 'test_config_modified_after_startup')
         assert not cae.config_main_file_modified()
 
-    def test_modified(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.ini')
-        var_name = 'test_config_var'
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = OtherTestValue')
-        cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
-        val = 'test_value'
-        assert not cae.set_config(var_name, val)
+        os.remove(file_name)
 
+    def test_modified(self):
+        file_name = os.path.join(os.getcwd(), os.path.splitext(os.path.basename(sys.argv[0]))[0] + INI_EXT)
+        var_name = 'test_config_var'
+        old_var_val = 'OtherTestValue'
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = ' + old_var_val)
+        cae = ConsoleApp('0.0', 'test_set_config_with_reload')
+        time.sleep(.300)    # needed because Python is too quick sometimes
+        new_var_val = 'test_value'
+        assert not cae.set_config(var_name, new_var_val)
         assert cae.config_main_file_modified()
 
+        # cfg_val has still old value (OtherTestValue) because parser instance got not reloaded
         cfg_val = cae.get_config(var_name)
-        assert cfg_val != val   # cfg_val has still old value (OtherTestValue) because parser instance got not reloaded
+        assert cfg_val == old_var_val
+        assert cfg_val != new_var_val
         assert cae.config_main_file_modified()
 
         cae.load_config()
         cfg_val = cae.get_config(var_name)
-        assert cfg_val == val
+        assert cfg_val == new_var_val
 
         assert not cae.config_main_file_modified()
 

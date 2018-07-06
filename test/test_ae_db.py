@@ -10,7 +10,7 @@ test_table = None
 
 
 class TestOraDB:
-    def test_connect(self, console_app_env):
+    def test_prepare_connect(self, console_app_env):
         global test_db
         cae = console_app_env
         test_db = OraDB(usr=cae.get_option('acuUser'), pwd=cae.get_option('acuPassword'), dsn=cae.get_option('acuDSN'),

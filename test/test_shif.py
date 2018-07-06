@@ -151,6 +151,10 @@ class TestResSender:
                     SH_EXT_REF='Flight1234',
                     SIHOT_ALLOTMENT_NO=123456)
         err, msg = rs.send_row(crow)
+        if "setDataRoom not available!" in err:     # no error only on first run after TEST replication
+            crow.pop('RUL_SIHOT_ROOM')              # .. so on n. run simply remove room number and then retry
+            rs.res_sender.wipe_gds_errors()         # .. and also remove send locking by wiping GDS errors for this GDS
+            err, msg = rs.send_row(crow)
 
         assert not err
         assert ho_id == rs.res_sender.response.id
@@ -163,6 +167,7 @@ class TestResSender:
 
     def test_create_minimum_fields_with_mc(self, console_app_env):
         ho_id = '1'
+        gdsno = 'TEST-1234567890'
         today = datetime.datetime.today()
         wk1 = datetime.timedelta(days=7)
         arr = today + wk1
@@ -172,11 +177,12 @@ class TestResSender:
 
         rs = ResSender(console_app_env)
         crow = dict(RUL_SIHOT_HOTEL=ho_id, ARR_DATE=arr, DEP_DATE=dep, RUL_SIHOT_CAT=cat, RUL_SIHOT_RATE=mkt_seg,
-                    OC_CODE='TCRENT', SIHOT_GDSNO='TEST-1234567890')
+                    OC_CODE='TCRENT', SIHOT_GDSNO=gdsno)
         err, msg = rs.send_row(crow)
 
         assert not err
         assert ho_id == rs.res_sender.response.id
+        assert gdsno == rs.res_sender.response.gdsno
         h, r, s = rs.get_res_no()
         assert ho_id == h
         assert r
@@ -185,6 +191,7 @@ class TestResSender:
 
     def test_create_minimum_fields_with_objid(self, console_app_env):
         ho_id = '1'
+        gdsno = 'TEST-1234567890'
         today = datetime.datetime.today()
         wk1 = datetime.timedelta(days=7)
         arr = today + wk1
@@ -194,11 +201,12 @@ class TestResSender:
 
         rs = ResSender(console_app_env)
         crow = dict(RUL_SIHOT_HOTEL=ho_id, ARR_DATE=arr, DEP_DATE=dep, RUL_SIHOT_CAT=cat, RUL_SIHOT_RATE=mkt_seg,
-                    OC_SIHOT_OBJID='27', SIHOT_GDSNO='TEST-1234567890')
+                    OC_SIHOT_OBJID='27', SIHOT_GDSNO=gdsno)
         err, msg = rs.send_row(crow)
 
         assert not err
         assert ho_id == rs.res_sender.response.id
+        assert gdsno == rs.res_sender.response.gdsno
         h, r, s = rs.get_res_no()
         assert ho_id == h
         assert r

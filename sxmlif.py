@@ -98,52 +98,8 @@ def elem_path_values(elem_col_map, elem_path_suffix):
 
 #  ELEMENT-COLUMN-MAPS  #################################
 
-# used as WEB interface template for GuestFromSihot.elem_col_map instance and as read-only constant by ClientToSihot
-# missing fields in SiHOT for initials (CD_INIT1/2) and profession (CD_INDUSTRY1/2 - only in WEB9 interface)
-MAP_WEB_CLIENT = \
-    (
-        {'elemName': 'MATCHCODE', 'colName': 'CD_CODE'},
-        {'elemName': 'P2_MATCHCODE', 'colName': 'CD_CODE2', 'buildExclude': True},
-        {'elemName': 'PWD', 'colName': 'CD_PASSWORD'},
-        {'elemName': 'ADDRESS', 'colName': 'SIHOT_SALUTATION1'},
-        {'elemName': 'P2_ADDRESS', 'colName': 'SIHOT_SALUTATION2', 'buildExclude': True},
-        {'elemName': 'TITLE', 'colName': 'SIHOT_TITLE1'},
-        {'elemName': 'P2_TITLE', 'colName': 'SIHOT_TITLE2', 'buildExclude': True},
-        {'elemName': 'GUESTTYPE', 'colName': 'SIHOT_GUESTTYPE1'},
-        {'elemName': 'P2_GUESTTYPE', 'colName': 'SIHOT_GUESTTYPE2', 'buildExclude': True},
-        {'elemName': 'PERS-TYPE', 'colName': 'SH_PTYPE',
-         'colValFromAcu': "'1A'"},
-        {'elemName': 'NAME', 'colName': 'CD_SNAM1'},
-        {'elemName': 'P2_NAME', 'colName': 'CD_SNAM2', 'buildExclude': True},
-        {'elemName': 'NAME2', 'colName': 'CD_FNAM1'},
-        {'elemName': 'P2_NAME2', 'colName': 'CD_FNAM2', 'buildExclude': True},
-        {'elemName': 'DOB', 'colName': 'CD_DOB1',
-         'valToAcuConverter': convert2date},
-        {'elemName': 'P2_DOB', 'colName': 'CD_DOB2', 'buildExclude': True,
-         'valToAcuConverter': convert2date},
-        {'elemName': 'STREET', 'colName': 'CD_ADD11'},
-        {'elemName': 'POBOX', 'colName': 'CD_ADD12',
-         'colValFromAcu': "nvl(CD_ADD12, CD_ADD13)"},
-        {'elemName': 'ZIP', 'colName': 'CD_POSTAL'},
-        {'elemName': 'CITY', 'colName': 'CD_CITY'},
-        {'elemName': 'COUNTRY', 'colName': 'SIHOT_COUNTRY'},
-        {'elemName': 'LANG', 'colName': 'SIHOT_LANG'},
-        {'elemName': 'PHONE1', 'colName': 'CD_HTEL1'},
-        {'elemName': 'PHONE2', 'colName': 'CD_WTEL1'},
-        {'elemName': 'FAX1', 'colName': 'CD_FAX'},
-        {'elemName': 'FAX2', 'colName': 'CD_WEXT1'},
-        {'elemName': 'EMAIL1', 'colName': 'CD_EMAIL'},
-        {'elemName': 'EMAIL2', 'colName': 'CD_SIGNUP_EMAIL'},
-        {'elemName': 'MOBIL1', 'colName': 'CD_MOBILE1'},
-        {'elemName': 'MOBIL2', 'colName': 'CD_LAST_SMS_TEL'},
-        {'elemName': 'CDLREF', 'colName': 'CDL_CODE', 'buildExclude': True},
-        # {'elemName': 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500},
-        # {'elemName': 'PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0},
-        {'elemName': 'OBJID', 'colName': 'CD_SIHOT_OBJID', 'buildExclude': True},
-        # {'elemName': 'COMMENT', 'colName' : 'CD_'}
-    )
-
-# used as KERNEL interface element/column-mapping template by ClientToSihot instance
+# default map for GuestFromSihot.elem_col_map instance and as read-only constant by ClientToSihot using the SIHOT
+# .. KERNEL interface because SiHOT WEB V9 has missing fields: initials (CD_INIT1/2) and profession (CD_INDUSTRY1/2)
 MAP_KERNEL_CLIENT = \
     (
         {'elemName': 'OBJID', 'colName': 'CD_SIHOT_OBJID', 'elemHideInActions': ACTION_INSERT},
@@ -2068,7 +2024,7 @@ class ResToSihot(SihotXmlBuilder):
                 warn_msg = "\n\n" + "Synchronization skipped because GDS number {} had errors in previous send: {}" \
                            + "\nSkipped reservation: {}"
                 self._warning_msgs += warn_msg.format(gds_no, old_id, self.res_id_desc(crow, "", separator="\n"))
-                return ""
+                return self._gds_err_rows[gds_no][1]    # return same error message
 
             err_msg = self._ensure_clients_exist_and_updated(crow, ensure_client_mode)
             if not err_msg:
