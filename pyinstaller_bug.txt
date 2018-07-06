@@ -1,0 +1,71 @@
+Subject: EXE bundled with pyinstaller fails with  ImportError: No module named 'kivy.weakmethod'
+
+
+Kivy: 1.9.2-dev0.13012017.67b9bebd - installed from nightly wheels
+Python: Python 3.4.4 (v3.4.4:737efcadf5a6, Dec 20 2015, 19:28:18) [MSC v.1600 32 bit (Intel)] on win32
+OS: Windows 7 Pro Service Pack 1 64 bit
+Pyinstaller: 3.2.1
+
+
+The error message after running the EXE file:
+
+'''
+[INFO   ] [Logger      ] Record log in C:\Users\aecker.ACUMEN\.kivy\logs\kivy_17-01-27_21.txt
+[INFO   ] [Kivy        ] v1.9.2-dev0.13012017.67b9bebd
+[INFO   ] [Python      ] v3.4.4 (v3.4.4:737efcadf5a6, Dec 20 2015, 19:28:18) [MSC v.1600 32 bit (Intel)]
+ Traceback (most recent call last):
+   File "SihotResImport.py", line 441, in <module>
+     from kivy.app import App
+   File "c:\python34\lib\site-packages\PyInstaller\loader\pyimod03_importers.py", line 389, in load_module
+     exec(bytecode, module.__dict__)
+   File "site-packages\kivy\app.py", line 319, in <module>
+   File "c:\python34\lib\site-packages\PyInstaller\loader\pyimod03_importers.py", line 389, in load_module
+     exec(bytecode, module.__dict__)
+   File "site-packages\kivy\base.py", line 29, in <module>
+   File "c:\python34\lib\site-packages\PyInstaller\loader\pyimod03_importers.py", line 389, in load_module
+     exec(bytecode, module.__dict__)
+   File "site-packages\kivy\clock.py", line 362, in <module>
+   File "c:\python34\lib\site-packages\PyInstaller\loader\pyimod03_importers.py", line 573, in load_module
+     module = loader.load_module(fullname)
+   File "kivy\_clock.pyx", line 9, in init kivy._clock (kivy\_clock.c:13849)
+ ImportError: No module named 'kivy.weakmethod'
+'''
+
+Content of my pyinstaller spec file (Following the instructions on the kivy pyinstaller page: https://kivy.org/docs/guide/packaging-windows.html):
+
+'''
+# -*- mode: python -*-
+from kivy.deps import sdl2, glew
+
+block_cipher = None
+
+print(sdl2.dep_bins + glew.dep_bins)
+
+a = Analysis(['SihotResImport.py'],
+             pathex=['C:\\src\\python\\AcuSihotInterfaces\\SihotResImport'],
+             binaries=None,
+             datas=[('SihotResImport.kv', '.')],
+             hiddenimports=[],
+             hookspath=[],  #'C:\\Python34\\Lib\\site-packages\\kivy\\tools\\packaging\\pyinstaller_hooks'],
+             #hookspath=[],
+             runtime_hooks=[],
+             excludes=[],
+             win_no_prefer_redirects=False,
+             win_private_assemblies=False,
+             cipher=block_cipher)
+pyz = PYZ(a.pure, a.zipped_data,
+             cipher=block_cipher)
+exe = EXE(pyz,
+          a.scripts,
+          a.binaries,
+          a.zipfiles,
+          a.datas,
+          *[Tree(p) for p in (sdl2.dep_bins + glew.dep_bins)],
+          name='SihotResImport',
+          #exclude_binaries=True,
+          debug=True,
+          strip=False,
+          upx=True,
+          console=True )
+'''
+

@@ -1,0 +1,52 @@
+AssServer_180627_104023_085823-24.log - line 60654
+< 16628> SihotXmlParser.parse_xml(): <?xml version="1.0" encoding="ISO-8859-1"?><SIHOT-Document><TN>6635</TN><OC>RM</OC><HN>1</HN><USERID>MGB</USERID><WS>TF-SH-SIHOT1V</WS><RN>C207</RN><PH0>03207</PH0><ORN>H002</ORN><OPH0>08002</OPH0><GID>334771</GID><SF>Y</SF><AN>2018901</AN><PCIID>816683</PCIID><SN>Menendez Perez</SN><CN>David</CN><DEP>2018-07-07T12:00:00</DEP><PAYTV>1</PAYTV><GDSNO>BDC-1678994359</GDSNO><CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID><RES-NR>52772</RES-NR><SUB-NR>1</SUB-NR><ORG>TF-SH-SIHOT1V_CROSSBOWSERVER.EXE_GSTP_TELI_5012_72576200</ORG></SIHOT-Document>
+ 
+Extract from Sihot log file SXML_ASSCACHE@SP.log - lines 3361-3407:
+
+20180628 224130.467 [XML-IF]: onReceive: RM
+: <OC>RM</OC><HN>1</HN><USERID>MGB</USERID><WS>TF-SH-SIHOT1V</WS><RN>C207</RN><PH0>03207</PH0><ORN>H002</ORN><OPH0>08002</OPH0><GID>334771</GID><SF>Y</SF><AN>2018901</AN><PCIID>816683</PCIID><SN>Menendez Perez</SN><CN>David</CN><DEP>2018-07-07T12:00:00</DEP><PAYTV>1</PAYTV><GDSNO>BDC-1678994359</GDSNO><CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID><RES-NR>52772</RES-NR><SUB-NR>1</SUB-NR>
+20180628 224130.467 [XML-IF]: Hotel number = 1 found
+20180628 224130.467 [XML-IF]: connect to [127.0.0.1] on port [12000]
+20180628 224130.467 [XML-IF]: -> [
+<?xml version="1.0" encoding="ISO-8859-1"?><SIHOT-Document><TN>6635</TN><OC>RM</OC><HN>1</HN><USERID>MGB</USERID><WS>TF-SH-SIHOT1V</WS><RN>C207</RN><PH0>03207</PH0><ORN>H002</ORN><OPH0>08002</OPH0><GID>334771</GID><SF>Y</SF><AN>2018901</AN><PCIID>816683</PCIID><SN>Menendez Perez</SN><CN>David</CN><DEP>2018-07-07T12:00:00</DEP><PAYTV>1</PAYTV><GDSNO>BDC-1678994359</GDSNO><CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID><RES-NR>52772</RES-NR><SUB-NR>1</SUB-NR><ORG>TF-SH-SIHOT1V_CROSSBOWSERVER.EXE_GSTP_TELI_5012_72576200</ORG></SIHOT-Document>
+]
+20180628 224130.467 [XML-IF]: add new connection, wait for "<OC>ACK</OC> ", socket = 81635808.
+20180628 224130.467 [XML-IF]: connection added, 2 connections active.
+20180628 224130.514 [XML-IF]: sent1 - reset LAtimeout.
+20180628 224130.530 [XML-IF]: onReceive: RM
+: <OC>RM</OC><HN>1</HN><USERID>MGB</USERID><WS>TF-SH-SIHOT1V</WS><RN>C207</RN><PH0>03207</PH0><ORN>H002</ORN><OPH0>08002</OPH0><GID>347466</GID><SF>Y</SF><AN>2018902</AN><PCIID>816684</PCIID><SN>Garcia Marsa</SN><CN>Almudena</CN><DEP>2018-07-07T12:00:00</DEP><PAYTV>1</PAYTV><GDSNO>BDC-1678994359</GDSNO><CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID><RES-NR>52772</RES-NR><SUB-NR>1</SUB-NR>
+20180628 224130.530 [XML-IF]: Hotel number = 1 found
+20180628 224130.530 [XML-IF]: connect to [127.0.0.1] on port [12000]
+20180628 224130.530 [XML-IF]: -> [
+<?xml version="1.0" encoding="ISO-8859-1"?><SIHOT-Document><TN>6636</TN><OC>RM</OC><HN>1</HN><USERID>MGB</USERID><WS>TF-SH-SIHOT1V</WS><RN>C207</RN><PH0>03207</PH0><ORN>H002</ORN><OPH0>08002</OPH0><GID>347466</GID><SF>Y</SF><AN>2018902</AN><PCIID>816684</PCIID><SN>Garcia Marsa</SN><CN>Almudena</CN><DEP>2018-07-07T12:00:00</DEP><PAYTV>1</PAYTV><GDSNO>BDC-1678994359</GDSNO><CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID><RES-NR>52772</RES-NR><SUB-NR>1</SUB-NR><ORG>TF-SH-SIHOT1V_CROSSBOWSERVER.EXE_GSTP_TELI_5012_72576200</ORG></SIHOT-Document>
+]
+20180628 224130.530 [XML-IF]: add new connection, wait for "<OC>ACK</OC> ", socket = 81652448.
+20180628 224130.530 [XML-IF]: connection added, 3 connections active.
+20180628 224130.576 [XML-IF]: sent1 - reset LAtimeout.
+20180628 224130.592 [XML-IF]: onReceive: RM
+: <OC>RM</OC><HN>1</HN><USERID>MGB</USERID><WS>TF-SH-SIHOT1V</WS><RN>C207</RN><PH0>03207</PH0><ORN>H002</ORN><OPH0>08002</OPH0><GID>347466</GID><SF>Y</SF><AN>2018902</AN><PCIID>816684</PCIID><SN>Garcia Marsa</SN><CN>Almudena</CN><DEP>2018-07-07T12:00:00</DEP><PAYTV>1</PAYTV><GDSNO>BDC-1678994359</GDSNO><CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID><RES-NR>52772</RES-NR><SUB-NR>1</SUB-NR>
+20180628 224130.592 [XML-IF]: Hotel number = 1 found
+20180628 224130.592 [XML-IF]: connect to [127.0.0.1] on port [12000]
+20180628 224130.592 [XML-IF]: -> [
+<?xml version="1.0" encoding="ISO-8859-1"?><SIHOT-Document><TN>6637</TN><OC>RM</OC><HN>1</HN><USERID>MGB</USERID><WS>TF-SH-SIHOT1V</WS><RN>C207</RN><PH0>03207</PH0><ORN>H002</ORN><OPH0>08002</OPH0><GID>347466</GID><SF>Y</SF><AN>2018902</AN><PCIID>816684</PCIID><SN>Garcia Marsa</SN><CN>Almudena</CN><DEP>2018-07-07T12:00:00</DEP><PAYTV>1</PAYTV><GDSNO>BDC-1678994359</GDSNO><CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID><RES-NR>52772</RES-NR><SUB-NR>1</SUB-NR><ORG>TF-SH-SIHOT1V_CROSSBOWSERVER.EXE_GSTP_TELI_5012_72576200</ORG></SIHOT-Document>
+]
+20180628 224130.592 [XML-IF]: add new connection, wait for "<OC>ACK</OC> ", socket = 81598944.
+20180628 224130.592 [XML-IF]: connection added, 4 connections active.
+20180628 224130.655 [XML-IF]: sent1 - reset LAtimeout.
+20180628 224131.795 [XML-IF]: got traffic on client connection 1, socket = 81635808.
+20180628 224131.811 [XML-IF]: <- [<?xml version="1.0" encoding="cp1252"?>
+<SIHOT-Document>
+<OC>ACK</OC><TN>6635</TN><RC>96</RC><MSG>AssServer.handle_xml(): oc_room_change_ass(CO-RM, H002, 52772/None@1) call error: ass_cache@tf-sh-sihot1v.acumen.es.execute_sql(INSERT INTO res_groups (rgr_sub_id, rgr_res_id, rgr_time_out, rgr_ho_fk) VALUES (%(rgr_sub_id)s, %(rgr_res_id)s, %(rgr_time_out)s, %(rgr_ho_fk)s) RETURNING rgr_pk, {'rgr_sub_id': None, 'rgr_time_out': datetime.datetime(2018, 6, 28, 22, 41, 30, 811336), 'rgr_res_id': '52772', 'rgr_ho_fk': '1'}) INSERT error: null value in column "rgr_sub_id" violates not-null constraint
+DETAIL:  Failing row contains (10876, 1, 52772, null, null, null, null, null, null, 2, 0, null, null, null, null, null, null, null, null, null, null, null, null, 2018-06-28 22:41:30.811336, ass_interfaces, 2018-06-28 22:41:30.885747, 2018-06-28 22:41:30.885747, null, null).
+; col_values={'rgr_sub_id': None, 'rgr_res_id': '52772', 'rgr_time_out': datetime.datetime(2018, 6, 28, 22, 41, 30, 811336), 'rgr_ho_fk': '1'}
+      ass_cache@tf-sh-sihot1v.acumen.es.execute_sql(INSERT INTO res_groups (rgr_sub_id, rgr_res_id, rgr_time_out, rgr_ho_fk) VALUES (%(rgr_sub_id)s, %(rgr_res_id)s, %(rgr_time_out)s, %(rgr_ho_fk)s) RETURNING rgr_pk, {'rgr_sub_id': None, 'rgr_time_out': datetime.datetime(2018, 6, 28, 22, 41, 30, 811336), 'rgr_res_id': '52772', 'rgr_ho_fk': '1'}) INSERT error: null value in column "rgr_sub_id" violates not-null constraint
+DETAIL:  Failing row contains (10876, 1, 52772, null, null, null, null, null, null, 2, 0, null, null, null, null, null, null, null, null, null, null, null, null, 2018-06-28 22:41:30.811336, ass_interfaces, 2018-06-28 22:41:30.885747, 2018-06-28 22:41:30.885747, null, null).
+; col_values={'rgr_sub_id': None, 'rgr_res_id': '52772', 'rgr_time_out': datetime.datetime(2018, 6, 28, 22, 41, 30, 811336), 'rgr_ho_fk': '1'}</MSG><ORG>TF-SH-SIHOT1V_CROSSBOWSERVER.EXE_GSTP_TELI_5012_72576200</ORG>
+</SIHOT-Document>] on [81635808]
+20180628 224131.811 [XML-IF]: received - reset LAtimeout.
+20180628 224131.811 [XML-IF]: rc of doRead [1]
+20180628 224131.811 [XML-IF]: doExecute started.
+20180628 224131.811 [XML-IF]: .. analyzed.
+20180628 224131.811 [XML-IF]: got OC ACK and TN.
+20180628 224131.811 [XML-IF]: rc of doExecute [1]
+20180628 224131.826 [XML-IF]: connection 0 removed, 3 connections active.

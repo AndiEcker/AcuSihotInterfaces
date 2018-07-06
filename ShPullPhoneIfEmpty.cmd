@@ -1,0 +1,1 @@
+dist\AssCacheSync.exe -D=1 --pull=shC --filterRecords=(Phone) --matchRecords="{'C':\"cl_phone is NULL\"}" --filterFields=['Phone'] --assDSN=ass_cache@tf-sh-sihot1v.acumen.es -L=log\PullShPhoneIfEmpty.log

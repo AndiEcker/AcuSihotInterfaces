@@ -1,0 +1,14 @@
+Uncompiled:
+    System Environment: argv[0]= C:/src/python/AcuSihotInterfaces/AcuSihotMonitor.py 
+	executable= C:\Python34\python.exe 
+	cwd= C:\src\python\AcuSihotInterfaces 
+	frozen= False 
+	bundle-dir= C:\src\python\AcuSihotInterfaces 
+	main-cfg= C:\src\python\AcuSihotInterfaces\AcuSihotMonitor.ini
+Compiled:
+    System Environment: argv[0]= dist\AcuSihotMonitor.exe 
+	executable= C:\src\python\AcuSihotInterfaces\dist\AcuSihotMonitor.exe 
+	cwd= C:\src\python\AcuSihotInterfaces 
+	frozen= True 
+	bundle-dir= C:\Users\AECKER~1.ACU\AppData\Local\Temp\_MEI70162 
+	main-cfg= C:\src\python\AcuSihotInterfaces\AcuSihotMonitor.ini
