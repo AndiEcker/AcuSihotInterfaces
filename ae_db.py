@@ -128,7 +128,7 @@ class GenericDB:
         try:
             rows = self.curs.fetchall()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".fetch_all(), 1st of", len(rows), "rows:", rows[:1])
+                uprint(self.dsn + ".fetch_all(), 1st of", len(rows), "recs:", rows[:1])
         except Exception as ex:
             self.last_err_msg = self.dsn + ".fetch_all() exception: " + str(ex)
             uprint(self.last_err_msg)

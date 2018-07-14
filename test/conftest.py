@@ -5,8 +5,9 @@ import pytest
 from configparser import ConfigParser
 from ae_db import OraDB
 from ass_sys_data import AssSysData
-from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot, AvailCatInfo, \
-    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF, USE_KERNEL_FOR_RES_DEF, MAP_RES_DEF
+from sxmlif import (PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, AvailCatInfo,
+                    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF, USE_KERNEL_FOR_RES_DEF, MAP_RES_DEF)
+from acif import AcuClientToSihot, AcuResToSihot
 from sfif import prepare_connection
 
 
@@ -18,13 +19,13 @@ def console_app_env():
 # noinspection PyShadowingNames
 @pytest.fixture()
 def acu_guest(console_app_env):
-    return ClientToSihot(console_app_env)
+    return AcuClientToSihot(console_app_env)
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
 def acu_res(console_app_env):
-    return ResToSihot(console_app_env)
+    return AcuResToSihot(console_app_env)
 
 
 # noinspection PyShadowingNames
@@ -86,16 +87,19 @@ def create_test_guest(console_app_env):
     if objid and '\n' not in objid:
         guest = gs
     else:
-        guest = ClientToSihot(console_app_env, connect_to_acu=False)
+        guest = ClientToSihot(console_app_env)
         col_values = dict()
-        for col in guest.acu_col_names:
-            if col == 'CD_CODE':
+        for col_map in guest.elem_col_map:
+            if 'fldName' not in col_map:
+                continue
+            col = col_map['fldName']
+            if col == 'AcId':
                 col_values[col] = mc
-            elif col == 'CD_SNAM1':
+            elif col == 'Surname':
                 col_values[col] = sn
-            elif col == 'CD_FNAM1':
+            elif col == 'Forename':
                 col_values[col] = fn
-            elif col == 'SIHOT_GUESTTYPE1':
+            elif col == 'GuestType':
                 col_values[col] = gt
             else:
                 col_values[col] = None

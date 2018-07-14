@@ -1,5 +1,5 @@
 from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import SihotXmlBuilder, ClientToSihot, SXML_DEF_ENCODING
+from sxmlif import SihotXmlBuilder, AcuClientToSihot, SXML_DEF_ENCODING
 from acif import add_ac_options
 from shif import add_sh_options
 
@@ -23,7 +23,7 @@ if client_code:
 
     uprint('####  Fetching client res  ####')
 
-    acumen_client = ClientToSihot(cae, use_kernel_interface=True)
+    acumen_client = AcuClientToSihot(cae)
     err_msg = acumen_client.fetch_from_acu_by_acu(client_code)
     if not err_msg and not acumen_client.row_count:
         err_msg = acumen_client.fetch_from_acu_by_cd(client_code)
@@ -49,7 +49,7 @@ else:
 
     uprint('####  Sending ...........  ####')
 
-    sxb = SihotXmlBuilder(cae, use_kernel_interface=True, elem_col_map=(), connect_to_acu=False)
+    sxb = SihotXmlBuilder(cae, use_kernel=True, elem_col_map=(), connect_to_acu=False)
     sxb.xml = xml
     err_msg = sxb.send_to_server()
 

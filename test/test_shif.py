@@ -133,26 +133,26 @@ class TestResSender:
         cat = 'STDS'
 
         rs = ResSender(console_app_env)
-        crow = dict(RUL_SIHOT_HOTEL=ho_id, SH_RES_TYPE='1', RUL_ACTION='INSERT',
-                    SIHOT_GDSNO=gdsno, RH_EXT_BOOK_REF='Voucher1234567890',
-                    RH_EXT_BOOK_DATE=today, ARR_DATE=today + wk1, DEP_DATE=today + wk1 + wk1,
-                    RUL_SIHOT_CAT=cat, SH_PRICE_CAT=cat, RUL_SIHOT_ROOM='3220',
-                    SH_OBJID='27', OC_SIHOT_OBJID='27', SH_MC='TCRENT', OC_CODE='TCRENT',
-                    SIHOT_NOTE='test short note', SIHOT_TEC_NOTE='test large TEC note',
-                    RUL_SIHOT_PACK='RO',    # room only (no board/meal-plan)
-                    RUL_SIHOT_RATE='TC', SIHOT_MKT_SEG='TC', SIHOT_RATE_SEGMENT='TC',
-                    SIHOT_PAYMENT_INST=1,
-                    RU_SOURCE='A', RO_RES_GROUP='RS',
-                    SH_ROOMS=1, RU_ADULTS=1, RU_CHILDREN=1,
-                    SH_PERS_SEQ1=0, SH_ROOM_SEQ1=0, SH_ADULT1_NAME='Tester', SH_ADULT1_NAME2='TestY',
-                    SH_PERS_SEQ2=1, SH_ROOM_SEQ2=0, SH_ADULT2_NAME='', SH_ADULT2_NAME2='',
-                    SH_PERS_SEQ11=10, SH_ROOM_SEQ11=0, SH_CHILD1_NAME='Tester', SH_CHILD1_NAME2='Chilly',
-                    SH_PERS_SEQ12=11, SH_ROOM_SEQ12=0, SH_CHILD2_NAME='', SH_CHILD2_NAME2='',
-                    SH_EXT_REF='Flight1234',
-                    SIHOT_ALLOTMENT_NO=123456)
+        crow = dict(ResHotelId=ho_id, ResStatus='1', ResAction='INSERT',
+                    ResGdsNo=gdsno, ResVoucherNo='Voucher1234567890',
+                    ResBooked=today, ResArrival=today + wk1, ResDeparture=today + wk1 + wk1,
+                    ResRoomCat=cat, ResPriceCat=cat, ResRoomNo='3220',
+                    ShId='27', ResOrdererId='27', AcId='TCRENT', ResOrdererMc='TCRENT',
+                    ResNote='test short note', ResLongNote='test large TEC note',
+                    ResBoard='RO',    # room only (no board/meal-plan)
+                    ResMktSegment='TC', SIHOT_MKT_SEG='TC', ResRateSegment='TC',
+                    ResAccount=1,
+                    ResSource='A', ResMktGroup='RS',
+                    ResAdults=1, ResChildren=1,
+                    ResAdult1Surname='Tester', ResAdult1Forename='TestY', ResAdult1DOB=today - 100 * wk1,
+                    ResAdult2Surname='', ResAdult2Forename='',
+                    ResChild1Surname='Tester', ResChild1Forename='Chilly', ResChild1DOB=today - 10 * wk1,
+                    ResChild2Surname='', ResChild2Forename='',
+                    ResFlightNo='Flight1234',
+                    ResAllotmentNo=123456)
         err, msg = rs.send_row(crow)
         if "setDataRoom not available!" in err:     # no error only on first run after TEST replication
-            crow.pop('RUL_SIHOT_ROOM')              # .. so on n. run simply remove room number and then retry
+            crow.pop('ResRoomNo')              # .. so on n. run simply remove room number and then retry
             rs.res_sender.wipe_gds_errors()         # .. and also remove send locking by wiping GDS errors for this GDS
             err, msg = rs.send_row(crow)
 
@@ -176,8 +176,8 @@ class TestResSender:
         mkt_seg = 'TC'
 
         rs = ResSender(console_app_env)
-        crow = dict(RUL_SIHOT_HOTEL=ho_id, ARR_DATE=arr, DEP_DATE=dep, RUL_SIHOT_CAT=cat, RUL_SIHOT_RATE=mkt_seg,
-                    OC_CODE='TCRENT', SIHOT_GDSNO=gdsno)
+        crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
+                    ResOrdererMc='TCRENT', ResGdsNo=gdsno)
         err, msg = rs.send_row(crow)
 
         assert not err
@@ -200,8 +200,8 @@ class TestResSender:
         mkt_seg = 'TC'
 
         rs = ResSender(console_app_env)
-        crow = dict(RUL_SIHOT_HOTEL=ho_id, ARR_DATE=arr, DEP_DATE=dep, RUL_SIHOT_CAT=cat, RUL_SIHOT_RATE=mkt_seg,
-                    OC_SIHOT_OBJID='27', SIHOT_GDSNO=gdsno)
+        crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
+                    ResOrdererId='27', ResGdsNo=gdsno)
         err, msg = rs.send_row(crow)
 
         assert not err

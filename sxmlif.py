@@ -9,16 +9,20 @@ from xml.etree.ElementTree import XMLParser, ParseError
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
 from ae_tcp import TcpClient
-from ae_db import OraDB
-
-# second couple Acumen ID suffix
-AC_ID_2ND_COUPLE_SUFFIX = 'P2'
 
 # data actions
 ACTION_DELETE = 'DELETE'
 ACTION_INSERT = 'INSERT'
 ACTION_UPDATE = 'UPDATE'
 ACTION_SEARCH = 'SEARCH'
+
+# maximum number of external references per client
+EXT_REF_COUNT = 10
+
+# maximum number of named adults and children per reservation is currently restricted
+RES_MAX_ADULTS = 6
+RES_MAX_CHILDREN = 4
+
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
 # .. so we use ISO-8859-15 instead ?!?!? (see
@@ -41,13 +45,10 @@ ACTION_SEARCH = 'SEARCH'
 # .. Y203585/HUN - Name decoded wrongly with ISO
 SXML_DEF_ENCODING = 'cp1252'
 
-# SIHOT GUEST TYPE for investors/owners (affiliated company)
-SIHOT_AFF_COMPANY = 6
-
 # special error message prefixes
 ERR_MESSAGE_PREFIX_CONTINUE = 'CONTINUE:'
 
-# ensure client modes (used by ResToSihot.send_row_to_sihot())
+# ensure client modes (used by AcuResToSihot.send_row_to_sihot())
 ECM_ENSURE_WITH_ERRORS = 0
 ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
@@ -78,17 +79,17 @@ def convert2date(xml_string):
     return datetime.datetime.strptime(xml_string, '%Y-%m-%d')
 
 
-def elem_path_values(elem_col_map, elem_path_suffix):
+def elem_path_values(elem_fld_map, elem_path_suffix):
     """
-    determine list of data values from the passed elem_col_map (extended by ColMapXmlParser) of all element paths
+    determine list of data values from the passed elem_fld_map (extended by FldMapXmlParser) of all element paths
     ending with the passed elem_path_suffix string value.
-    :param elem_col_map:        element column map dict in the form {elem_name: map entry} where each map_entry is also
+    :param elem_fld_map:        element field map dict in the form {elem_name: map entry} where each map_entry is also
                                 a dict that got extended with other entries e.g. elemVal/elemListVal/elemPathValues/...
     :param elem_path_suffix:    element path (either full path or suffix, e.g. SIHOT-Document.ARESLIST.RESERVATION.ARR)
-    :return:                    merged list of all parsed data in col map with passed element path suffix
+    :return:                    merged list of all parsed data in fld map with passed element path suffix
     """
     ret_list = list()
-    for elem_map in elem_col_map.values():
+    for elem_map in elem_fld_map.values():
         if 'elemPathValues' in elem_map:
             for path_key, path_list in elem_map['elemPathValues'].items():
                 if path_key.endswith(elem_path_suffix):
@@ -96,180 +97,143 @@ def elem_path_values(elem_col_map, elem_path_suffix):
     return ret_list
 
 
-#  ELEMENT-COLUMN-MAPS  #################################
+#  ELEMENT-FIELD-MAPS  #################################
 
-# default map for GuestFromSihot.elem_col_map instance and as read-only constant by ClientToSihot using the SIHOT
+# default map for GuestFromSihot.elem_fld_map instance and as read-only constant by AcuClientToSihot using the SIHOT
 # .. KERNEL interface because SiHOT WEB V9 has missing fields: initials (CD_INIT1/2) and profession (CD_INDUSTRY1/2)
 MAP_KERNEL_CLIENT = \
     (
-        {'elemName': 'OBJID', 'colName': 'CD_SIHOT_OBJID', 'elemHideInActions': ACTION_INSERT},
-        {'elemName': 'P2_OBJID', 'colName': 'CD_SIHOT_OBJID2', 'buildExclude': True,
-         'elemHideInActions': ACTION_INSERT},
-        {'elemName': 'MATCHCODE', 'colName': 'CD_CODE'},
-        {'elemName': 'P2_MATCHCODE', 'colName': 'CD_CODE2', 'buildExclude': True},
-        {'elemName': 'GUEST-NR', 'colName': 'SH_GUEST_NO',
-         'colValFromAcu': "''",
-         'elemHideIf': "'SH_GUEST_NO' not in c or not c['SH_GUEST_NO']"},   # for GUEST-SEARCH only
-        {'elemName': 'FLAGS', 'colName': 'SH_FLAGS',
-         'colValFromAcu': "''",
-         'elemHideIf': "'SH_FLAGS' not in c or not c['SH_FLAGS']"},         # for GUEST-SEARCH only
-        {'elemName': 'T-SALUTATION', 'colName': 'SIHOT_SALUTATION1'},  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
-        {'elemName': 'P2_T-SALUTATION', 'colName': 'SIHOT_SALUTATION2', 'buildExclude': True},
-        {'elemName': 'T-TITLE', 'colName': 'SIHOT_TITLE1'},
-        {'elemName': 'P2_T-TITLE', 'colName': 'SIHOT_TITLE2', 'buildExclude': True},
-        {'elemName': 'T-GUEST', 'colName': 'SIHOT_GUESTTYPE1'},
-        {'elemName': 'P2_T-GUEST', 'colName': 'SIHOT_GUESTTYPE2', 'buildExclude': True},
-        {'elemName': 'NAME-1', 'colName': 'CD_SNAM1'},
-        {'elemName': 'P2_NAME-1', 'colName': 'CD_SNAM2', 'buildExclude': True},
-        {'elemName': 'NAME-2', 'colName': 'CD_FNAM1'},
-        {'elemName': 'P2_NAME-2', 'colName': 'CD_FNAM2', 'buildExclude': True},
-        {'elemName': 'STREET', 'colName': 'CD_ADD11'},
-        {'elemName': 'PO-BOX', 'colName': 'CD_ADD12',
-         'colValFromAcu': "nvl(CD_ADD12, CD_ADD13)"},
-        {'elemName': 'ZIP', 'colName': 'CD_POSTAL'},
-        {'elemName': 'CITY', 'colName': 'CD_CITY'},
-        {'elemName': 'T-COUNTRY-CODE', 'colName': 'SIHOT_COUNTRY'},
-        {'elemName': 'T-STATE', 'colName': 'SIHOT_STATE',
-         'colValFromAcu': "''",
-         'elemHideIf': "'SIHOT_STATE' not in c or not c['SIHOT_STATE']"},
-        {'elemName': 'T-LANGUAGE', 'colName': 'SIHOT_LANG'},
-        {'elemName': 'COMMENT', 'colName': 'SH_COMMENT',
-         'colValFromAcu': "SIHOT_GUEST_TYPE || ' ExtRefs=' || EXT_REFS"},
+        {'elemName': 'OBJID', 'fldName': 'ShId', 'elemHideInActions': ACTION_INSERT},
+        {'elemName': 'MATCHCODE', 'fldName': 'AcId'},
+        {'elemName': 'GUEST-NR', 'fldName': 'SH_GUEST_NO',  # only needed for GUEST-SEARCH/get_objid_by_guest_no()
+         'elemHideIf': "'SH_GUEST_NO' not in c or not c['SH_GUEST_NO']"},
+        {'elemName': 'FLAGS', 'fldName': 'SH_FLAGS',        # only needed for GUEST-SEARCH/get_objid_by_guest_no()
+         'elemHideIf': "'SH_FLAGS' not in c or not c['SH_FLAGS']"},
+        {'elemName': 'T-SALUTATION', 'fldName': 'Salutation'},  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
+        {'elemName': 'T-TITLE', 'fldName': 'Title'},
+        {'elemName': 'T-GUEST', 'fldName': 'GuestType'},
+        {'elemName': 'NAME-1', 'fldName': 'Surname'},
+        {'elemName': 'NAME-2', 'fldName': 'Forename'},
+        {'elemName': 'STREET', 'fldName': 'Street'},
+        {'elemName': 'PO-BOX', 'fldName': 'POBox'},
+        {'elemName': 'ZIP', 'fldName': 'Postal'},
+        {'elemName': 'CITY', 'fldName': 'City'},
+        {'elemName': 'T-COUNTRY-CODE', 'fldName': 'Country'},
+        {'elemName': 'T-STATE', 'fldName': 'State',
+         'elemHideIf': "'State' not in c or not c['State']"},
+        {'elemName': 'T-LANGUAGE', 'fldName': 'Language'},
+        {'elemName': 'COMMENT', 'fldName': 'Comment'},
         {'elemName': 'COMMUNICATION/',
          'elemHideInActions': ACTION_SEARCH},
-        {'elemName': 'PHONE-1', 'colName': 'CD_HTEL1'},
-        {'elemName': 'PHONE-2', 'colName': 'CD_WTEL1'},
-        {'elemName': 'FAX-1', 'colName': 'CD_FAX'},
-        {'elemName': 'FAX-2', 'colName': 'CD_WEXT1'},
-        {'elemName': 'EMAIL-1', 'colName': 'CD_EMAIL'},
-        {'elemName': 'EMAIL-2', 'colName': 'CD_SIGNUP_EMAIL'},
-        {'elemName': 'MOBIL-1', 'colName': 'CD_MOBILE1'},
-        {'elemName': 'MOBIL-2', 'colName': 'CD_LAST_SMS_TEL'},
+        {'elemName': 'PHONE-1', 'fldName': 'HomePhone'},
+        {'elemName': 'PHONE-2', 'fldName': 'WorkPhone'},
+        {'elemName': 'FAX-1', 'fldName': 'Fax'},
+        {'elemName': 'EMAIL-1', 'fldName': 'Email'},
+        {'elemName': 'EMAIL-2', 'fldName': 'Email2'},
+        {'elemName': 'MOBIL-1', 'fldName': 'MobilePhone'},
+        {'elemName': 'MOBIL-2', 'fldName': 'MobilePhone2'},
         {'elemName': '/COMMUNICATION',
          'elemHideInActions': ACTION_SEARCH},
         {'elemName': 'ADD-DATA/',
          'elemHideInActions': ACTION_SEARCH},
-        {'elemName': 'T-PERSON-GROUP', 'colName': 'SH_PTYPE',
-         'colValFromAcu': "'1A'"},
-        {'elemName': 'D-BIRTHDAY', 'colName': 'CD_DOB1',
-         'valToAcuConverter': convert2date},
-        {'elemName': 'P2_D-BIRTHDAY', 'colName': 'CD_DOB2', 'buildExclude': True,
+        {'elemName': 'T-PERSON-GROUP', 'fldVal': "1A"},
+        {'elemName': 'D-BIRTHDAY', 'fldName': 'DOB',
          'valToAcuConverter': convert2date},
         # 27-09-17: removed b4 migration of BHH/HMC because CD_INDUSTRY1/2 needs first grouping into 3-alphanumeric code
-        # {'elemName': 'T-PROFESSION', 'colName': 'CD_INDUSTRY1', 'buildExclude': True},
-        # {'elemName': 'P2_T-PROFESSION', 'colName': 'CD_INDUSTRY2', 'buildExclude': True},
-        {'elemName': 'INTERNET-PASSWORD', 'colName': 'CD_PASSWORD'},
-        {'elemName': 'MATCH-ADM', 'colName': 'CD_RCI_REF'},
-        {'elemName': 'MATCH-SM', 'colName': 'SIHOT_SF_ID'},
+        # {'elemName': 'T-PROFESSION', 'fldName': 'CD_INDUSTRY1', 'buildExclude': True},
+        {'elemName': 'INTERNET-PASSWORD', 'fldName': 'Password'},
+        {'elemName': 'MATCH-ADM', 'fldName': 'RCIRef'},
+        {'elemName': 'MATCH-SM', 'fldName': 'SfId'},
         {'elemName': '/ADD-DATA',
          'elemHideInActions': ACTION_SEARCH},
         {'elemName': 'L-EXTIDS/',
          'elemHideInActions': ACTION_SEARCH},
-        {'elemName': 'EXTID/', 'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS']"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE1',
-         'colValFromAcu': "substr(EXT_REFS, 1, instr(EXT_REFS, '=') - 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS']"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID1',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 1), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS']"},
+        {'elemName': 'EXTID/', 
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs']"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType1',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs']"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId1',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs']"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS']"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs']"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE2',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 2), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID2',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 2), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 1"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType2',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 1"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId2',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 1"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 1"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 1"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE3',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 3), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID3',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 3), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 2"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType3',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 2"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId3',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 2"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 2"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 2"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE4',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 4), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID4',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 4), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 3"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType4',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 3"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId4',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 3"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 3"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 3"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE5',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 5), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID5',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 5), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 4"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType5',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 4"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId5',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 4"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 4"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 4"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE6',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 6), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID6',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 6), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 5"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType6',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 5"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId6',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 5"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 5"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 5"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE7',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 7), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID7',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 7), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 6"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType7',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 6"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId7',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 6"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 6"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 6"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE8',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 8), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID8',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 8), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 7"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType8',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 7"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId8',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 7"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 7"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 7"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE9',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 9), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID9',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 9), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 8"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType9',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 8"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId9',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 8"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 8"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 8"},
         {'elemName': 'EXTID/',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
-        {'elemName': 'TYPE', 'colName': 'EXT_REF_TYPE10',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 10), '[^=]+', 1, 1)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
-        {'elemName': 'ID', 'colName': 'EXT_REF_ID10',
-         'colValFromAcu': "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, 10), '[^=]+', 1, 2)",
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 9"},
+        {'elemName': 'TYPE', 'fldName': 'ExtRefType10',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 9"},
+        {'elemName': 'ID', 'fldName': 'ExtRefId10',
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 9"},
         {'elemName': '/EXTID',
-         'elemHideIf': "'EXT_REFS' not in c or not c['EXT_REFS'] or c['EXT_REFS'].count(',') < 9"},
+         'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs'] or c['ExtRefs'].count(',') < 9"},
         {'elemName': '/L-EXTIDS',
          'elemHideInActions': ACTION_SEARCH},
-        {'elemName': 'EXT_REFS', 'colName': 'EXT_REFS', 'buildExclude': True},  # only for elemHideIf expressions
-        {'elemName': 'CDLREF', 'colName': 'CDL_CODE', 'buildExclude': True},
-        # {'elemName': 'STATUS', 'colName': 'CD_STATUS', 'colValToAcu': 500, 'buildExclude': True},
-        # {'elemName': 'PAF_STAT', 'colName': 'CD_PAF_STATUS', 'colValToAcu': 0, 'buildExclude': True},
+        {'elemName': 'EXT_REFS', 'fldName': 'ExtRefs', 'buildExclude': True},  # only for elemHideIf expressions
+        {'elemName': 'CDLREF', 'fldName': 'CDL_CODE', 'buildExclude': True},
+        # {'elemName': 'STATUS', 'fldName': 'CD_STATUS', 'fldValToAcu': 500, 'buildExclude': True},
+        # {'elemName': 'PAF_STAT', 'fldName': 'CD_PAF_STATUS', 'fldValToAcu': 0, 'buildExclude': True},
     )
 
 # Reservation interface mappings
@@ -284,411 +248,381 @@ MAP_KERNEL_CLIENT = \
 """
 MAP_WEB_RES = \
     (
-        {'elemName': 'ID', 'colName': 'RUL_SIHOT_HOTEL'},  # or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
+        {'elemName': 'ID', 'fldName': 'ResHotelId'},  # or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
         {'elemName': 'ARESLIST/'},
         {'elemName': 'RESERVATION/'},
         # ### main reservation info: orderer, status, external booking references, room/price category, ...
         # MATCHCODE, NAME, COMPANY and GUEST-ID are mutually exclusive
         # MATCHCODE/GUEST-ID needed for DELETE action for to prevent Sihot error:
         # .. "Could not find a key identifier for the client (name, matchcode, ...)"
-        {'elemName': 'GUEST-ID', 'colName': 'SH_OBJID',
-         'elemHideIf': "not c.get('OC_SIHOT_OBJID', '') and ('CD_SIHOT_OBJID' not in c or not c['CD_SIHOT_OBJID'])",
-         'colValFromAcu': "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))"},
-        {'elemName': 'MATCHCODE', 'colName': 'SH_MC',
-         'colValFromAcu': "nvl(OC_CODE, CD_CODE)"},
-        {'elemName': 'GDSNO', 'colName': 'SIHOT_GDSNO',
-         'colValFromAcu': "nvl(SIHOT_GDSNO, case when RUL_SIHOT_RATE in ('TC', 'TK') then"
-                          " case when RUL_ACTION <> 'UPDATE' then"
-                          " (select 'TC' || RH_EXT_BOOK_REF from T_RH where"
-                          " RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
-                          " else '(lost)' end"
-                          " else to_char(RUL_PRIMARY) end)"},  # RUL_PRIMARY needed for to delete/cancel res
-        {'elemName': 'VOUCHERNUMBER', 'colName': 'RH_EXT_BOOK_REF', 'elemHideInActions': ACTION_DELETE},
-        {'elemName': 'EXT-KEY', 'colName': 'SIHOT_LINK_GROUP', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'SIHOT_LINK_GROUP' not in c"},
-        {'elemName': 'FLAGS', 'colVal': 'IGNORE-OVERBOOKING'},  # ;NO-FALLBACK-TO-ERRONEOUS'},
-        {'elemName': 'RT', 'colName': 'SH_RES_TYPE',
-         'colValFromAcu': "case when RUL_ACTION = 'DELETE' then 'S' else nvl(SIHOT_RES_TYPE, 'S') end"},
-        # {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT'},  # mandatory but could be empty (to get PMS fallback-default)
-        #  'colValFromAcu': "'2TIC'"},   # mandatory but could be empty (to get PMS fallback-default)
-        # RUL_SIHOT_CAT results in error 1011 for tk->TC/TK bookings with room move and room with higher/different room
+        {'elemName': 'GUEST-ID', 'fldName': 'ResOrdererId',
+         'elemHideIf': "not c.get('ResOrdererId') and not c.get['ShId']"},
+        {'elemName': 'MATCHCODE', 'fldName': 'ResOrdererMc'},
+        {'elemName': 'GDSNO', 'fldName': 'ResGdsNo'},
+        {'elemName': 'VOUCHERNUMBER', 'fldName': 'ResVoucherNo', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'EXT-KEY', 'fldName': 'ResGroupNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "'ResGroupNo' not in c"},
+        {'elemName': 'FLAGS', 'fldVal': 'IGNORE-OVERBOOKING'},  # ;NO-FALLBACK-TO-ERRONEOUS'},
+        {'elemName': 'RT', 'fldName': 'ResStatus'},
+        # ResRoomCat results in error 1011 for tk->TC/TK bookings with room move and room with higher/different room
         # .. cat, therefore use price category as room category for Thomas Cook Bookings.
         # .. similar problems we experienced when we added the RCI Allotments (here the CAT need to be the default cat)
         # .. on the 24-05-2018 so finally we replaced the category of the (maybe) allocated room with the cat that
         # .. get determined from the requested room size
-        # 'colValFromAcu': "case when RUL_SIHOT_RATE in ('TC', 'TK')"
-        #                  " then F_SIHOT_CAT('RU' || RU_CODE) else RUL_SIHOT_CAT end"},
-        {'elemName': 'CAT', 'colName': 'RUL_SIHOT_CAT',  # needed for DELETE action
-         'colValFromAcu': "F_SIHOT_CAT('RU' || RUL_PRIMARY)"},
-        {'elemName': 'PCAT', 'colName': 'SH_PRICE_CAT', 'elemHideInActions': ACTION_DELETE,
-         'colValFromAcu': "F_SIHOT_CAT('RU' || RUL_PRIMARY)"},
-        # {'elemName': 'PCAT', 'colName': 'SIHOT_CAT',
-        #  'colValFromAcu': "'1TIC'"},
-        {'elemName': 'ALLOTMENT-EXT-NO', 'colName': 'SIHOT_ALLOTMENT_NO', 'colVal': '',
-         # removed while renaming ALLOTMENT-NO to ALLOTMENT-EXT-NO: 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c"},
-        {'elemName': 'PAYMENT-INST', 'colName': 'SIHOT_PAYMENT_INST', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'SIHOT_PAYMENT_INST' not in c"},
-        {'elemName': 'SALES-DATE', 'colName': 'RH_EXT_BOOK_DATE', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "not c['RH_EXT_BOOK_DATE']"},
-        {'elemName': 'RATE-SEGMENT', 'colName': 'SIHOT_RATE_SEGMENT', 'colVal': '',
-         'elemHideIf': "'SIHOT_RATE_SEGMENT' not in c"},    # e.g. TK/tk have defined rate segment in SIHOT - see cfg
+        {'elemName': 'CAT', 'fldName': 'ResRoomCat'},  # needed for DELETE action
+        {'elemName': 'PCAT', 'fldName': 'ResPriceCat', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'ALLOTMENT-EXT-NO', 'fldName': 'ResAllotmentNo', 'fldVal': '',
+         # 'elemHideInActions': ACTION_DELETE, removed while renaming ALLOTMENT-NO to ALLOTMENT-EXT-NO
+         'elemHideIf': "'ResAllotmentNo' not in c"},
+        {'elemName': 'PAYMENT-INST', 'fldName': 'ResAccount', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "'ResAccount' not in c"},
+        {'elemName': 'SALES-DATE', 'fldName': 'ResBooked', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "not c['ResBooked']"},
+        {'elemName': 'RATE-SEGMENT', 'fldName': 'ResRateSegment', 'fldVal': '',
+         'elemHideIf': "'ResRateSegment' not in c"},    # e.g. TK/tk have defined rate segment in SIHOT - see cfg
         {'elemName': 'RATE/'},  # package/arrangement has also to be specified in PERSON:
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK'},
-        {'elemName': 'ISDEFAULT', 'colVal': 'Y'},
+        {'elemName': 'R', 'fldName': 'ResBoard'},
+        {'elemName': 'ISDEFAULT', 'fldVal': 'Y'},
         {'elemName': '/RATE'},
         {'elemName': 'RATE/', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('ER')"},
-        {'elemName': 'R', 'colVal': 'GSC', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('ER')"},
-        {'elemName': 'ISDEFAULT', 'colVal': 'N', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('ER')"},
+         'elemHideIf': "c['ResMktSegment'] not in ('ER')"},
+        {'elemName': 'R', 'fldVal': 'GSC', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResMktSegment'] not in ('ER')"},
+        {'elemName': 'ISDEFAULT', 'fldVal': 'N', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResMktSegment'] not in ('ER')"},
         {'elemName': '/RATE', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RUL_SIHOT_RATE'] not in ('ER')"},
+         'elemHideIf': "c['ResMktSegment'] not in ('ER')"},
         # The following fallback rate results in error Package TO not valid for hotel 1
         # {'elemName': 'RATE/'},
-        # {'elemName': 'R', 'colName': 'RO_SIHOT_RATE', 'colValFromAcu': "nvl(RO_SIHOT_RATE, RUL_SIHOT_RATE)"},
-        # {'elemName': 'ISDEFAULT', 'colVal': 'N'},
+        # {'elemName': 'R', 'fldName': 'RO_SIHOT_RATE', 'fldValFromAcu': "nvl(RO_SIHOT_RATE, ResMktSegment)"},
+        # {'elemName': 'ISDEFAULT', 'fldVal': 'N'},
         # {'elemName': '/RATE'},
         # ### Reservation Channels - used for assignment of reservation to a allotment or to board payment
         {'elemName': 'RESCHANNELLIST/',
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:4] not in ('Owne', 'Prom', 'RCI ')"},
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'][:4] not in ('Owne', 'Prom', 'RCI ')"},
         {'elemName': 'RESCHANNEL/',
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:4] not in ('Owne', 'Prom', 'RCI ')"},
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'][:4] not in ('Owne', 'Prom', 'RCI ')"},
         # needed for to add RCI booking to RCI allotment
-        {'elemName': 'IDX', 'colVal': 1,
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:4] not in ('RCI ')"},
-        {'elemName': 'MATCHCODE', 'colVal': 'RCI',
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:4] not in ('RCI ')"},
-        {'elemName': 'ISPRICEOWNER', 'colVal': 1,
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:4] not in ('RCI ')"},
+        {'elemName': 'IDX', 'fldVal': 1,
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'][:4] not in ('RCI ')"},
+        {'elemName': 'MATCHCODE', 'fldVal': 'RCI',
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'][:4] not in ('RCI ')"},
+        {'elemName': 'ISPRICEOWNER', 'fldVal': 1,
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'][:4] not in ('RCI ')"},
         # needed for marketing fly buys for board payment bookings
-        {'elemName': 'IDX', 'colVal': 1,
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'] not in ('Promo')"},
-        {'elemName': 'MATCHCODE', 'colVal': 'MAR01',
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'] not in ('Promo')"},
-        {'elemName': 'ISPRICEOWNER', 'colVal': 1,
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'] not in ('Promo')"},
+        {'elemName': 'IDX', 'fldVal': 1,
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'] not in ('Promo')"},
+        {'elemName': 'MATCHCODE', 'fldVal': 'MAR01',
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'] not in ('Promo')"},
+        {'elemName': 'ISPRICEOWNER', 'fldVal': 1,
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'] not in ('Promo')"},
         # needed for owner bookings for to select/use owner allotment
-        {'elemName': 'IDX', 'colVal': 2,
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'] not in ('Owner')"},
-        {'elemName': 'MATCHCODE', 'colVal': 'TSP',
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'] not in ('Owner')"},
-        {'elemName': 'ISPRICEOWNER', 'colVal': 1,
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'] not in ('Owner')"},
+        {'elemName': 'IDX', 'fldVal': 2,
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'] not in ('Owner')"},
+        {'elemName': 'MATCHCODE', 'fldVal': 'TSP',
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'] not in ('Owner')"},
+        {'elemName': 'ISPRICEOWNER', 'fldVal': 1,
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'] not in ('Owner')"},
         {'elemName': '/RESCHANNEL',
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:4] not in ('Owne', 'Prom', 'RCI ')"},
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'][:4] not in ('Owne', 'Prom', 'RCI ')"},
         {'elemName': '/RESCHANNELLIST',
-         'elemHideIf': "'SIHOT_ALLOTMENT_NO' not in c or not c['SIHOT_ALLOTMENT_NO']"
-                       " or c['RO_RES_GROUP'][:4] not in ('Owne', 'Prom', 'RCI ')"},
+         'elemHideIf': "'ResAllotmentNo' not in c or not c['ResAllotmentNo']"
+                       " or c['ResMktGroup'][:4] not in ('Owne', 'Prom', 'RCI ')"},
         # ### GENERAL RESERVATION DATA: arrival/departure, pax, market sources, comments
-        {'elemName': 'ARR', 'colName': 'ARR_DATE',
-         'colValFromAcu': "case when ARR_DATE is not NULL then ARR_DATE when RUL_ACTION <> 'UPDATE' then"
-                          " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
-                          " 'DD-MM-YY') end"},
-        {'elemName': 'DEP', 'colName': 'DEP_DATE',
-         'colValFromAcu': "case when DEP_DATE is not NULL then DEP_DATE when RUL_ACTION <> 'UPDATE' then"
-                          " to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'),"
-                          " 'DD-MM-YY') + "
-                          "to_number(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_DAYS')) end"},
-        {'elemName': 'NOROOMS', 'colName': 'SH_ROOMS', 'colVal': 1},  # needed for DELETE action
-        {'elemName': 'NOPAX', 'colName': 'RU_ADULTS'},  # needed for DELETE action
-        {'elemName': 'NOCHILDS', 'colName': 'RU_CHILDREN', 'elemHideInActions': ACTION_DELETE},
-        {'elemName': 'TEC-COMMENT', 'colName': 'SIHOT_TEC_NOTE', 'elemHideInActions': ACTION_DELETE},
-        {'elemName': 'COMMENT', 'colName': 'SIHOT_NOTE', 'elemHideInActions': ACTION_DELETE},
-        {'elemName': 'MARKETCODE-NO', 'colName': 'RUL_SIHOT_RATE', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'ARR', 'fldName': 'ResArrival'},
+        {'elemName': 'DEP', 'fldName': 'ResDeparture'},
+        {'elemName': 'NOROOMS', 'fldVal': 1},  # needed for DELETE action
+        {'elemName': 'NOPAX', 'fldName': 'ResAdults'},  # needed for DELETE action
+        {'elemName': 'NOCHILDS', 'fldName': 'ResChildren', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'TEC-COMMENT', 'fldName': 'ResLongNote', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'COMMENT', 'fldName': 'ResNote', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'MARKETCODE-NO', 'fldName': 'ResMktSegment', 'elemHideInActions': ACTION_DELETE},
         # {'elemName': 'MEDIA'},
-        {'elemName': 'SOURCE', 'colName': 'RU_SOURCE', 'elemHideInActions': ACTION_DELETE},
-        {'elemName': 'NN', 'colName': 'RO_SIHOT_SP_GROUP', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'RO_SIHOT_SP_GROUP' not in c"},
-        {'elemName': 'CHANNEL', 'colName': 'RO_SIHOT_RES_GROUP', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'RO_SIHOT_RES_GROUP' not in c"},
-        # {'elemName': 'NN2', 'colName': 'RO_RES_CLASS'},  # other option using Mkt-CM_NAME (see Q_SIHOT_SETUP#L244)
-        {'elemName': 'EXT-REFERENCE', 'colName': 'SH_EXT_REF', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'RU_FLIGHT_NO' not in c",   # see also currently unused PICKUP-COMMENT-ARRIVAL element
-         'colValFromAcu': "trim(RU_FLIGHT_NO || ' ' || RU_FLIGHT_PICKUP || ' ' || RU_FLIGHT_AIRPORT)"},
-        {'elemName': 'ARR-TIME', 'colName': 'RU_FLIGHT_LANDS', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'RU_FLIGHT_LANDS' not in c"},
-        {'elemName': 'PICKUP-TIME-ARRIVAL', 'colName': 'RU_FLIGHT_LANDS', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "'RU_FLIGHT_LANDS' not in c or not c['RU_FLIGHT_PICKUP']"},
-        {'elemName': 'PICKUP-TYPE-ARRIVAL', 'colVal': 1,  # 1=car, 2=van
-         'elemHideIf': "'RU_FLIGHT_PICKUP' not in c or not c['RU_FLIGHT_PICKUP']"},
+        {'elemName': 'SOURCE', 'fldName': 'ResSource', 'elemHideInActions': ACTION_DELETE},
+        {'elemName': 'NN', 'fldName': 'ResMktGroup2', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "'ResMktGroup2' not in c"},
+        {'elemName': 'CHANNEL', 'fldName': 'ResMktGroup', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "'ResMktGroup' not in c"},
+        # {'elemName': 'NN2', 'fldName': 'RO_RES_CLASS'},  # other option using Mkt-CM_NAME (see Q_SIHOT_SETUP#L244)
+        {'elemName': 'EXT-REFERENCE', 'fldName': 'ResFlightNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "'ResFlightNo' not in c"},   # see also currently unused PICKUP-COMMENT-ARRIVAL element
+        {'elemName': 'ARR-TIME', 'fldName': 'ResFlightETA', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "'ResFlightETA' not in c"},
+        {'elemName': 'PICKUP-TIME-ARRIVAL', 'fldName': 'ResFlightETA', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "'ResFlightETA' not in c or not c['ResFlightETA']"},
+        {'elemName': 'PICKUP-TYPE-ARRIVAL', 'fldVal': 1,  # 1=car, 2=van
+         'elemHideIf': "'ResFlightETA' not in c or not c['ResFlightETA']"},
         # ### PERSON/occupant details
         {'elemName': 'PERS-TYPE-LIST/'},
         {'elemName': 'PERS-TYPE/'},
-        {'elemName': 'TYPE', 'colVal': '1A'},
-        {'elemName': 'NO', 'colName': 'RU_ADULTS'},
+        {'elemName': 'TYPE', 'fldVal': '1A'},
+        {'elemName': 'NO', 'fldName': 'ResAdults'},
         {'elemName': '/PERS-TYPE'},
         {'elemName': 'PERS-TYPE/'},
-        {'elemName': 'TYPE', 'colVal': '2B'},
-        {'elemName': 'NO', 'colName': 'RU_CHILDREN'},
+        {'elemName': 'TYPE', 'fldVal': '2B'},
+        {'elemName': 'NO', 'fldName': 'ResChildren'},
         {'elemName': '/PERS-TYPE'},
         {'elemName': '/PERS-TYPE-LIST'},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # First person/adult of reservation
-         'elemHideIf': "c['RU_ADULTS'] <= 0"},
-        {'elemName': 'NAME', 'colName': 'SH_ADULT1_NAME', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'SH_ADULT1_NAME' not in c or not c['SH_ADULT1_NAME']"},
-        {'elemName': 'NAME2', 'colName': 'SH_ADULT1_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'SH_ADULT1_NAME2' not in c or not c['SH_ADULT1_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'SH_ADULT1_NAME' not in c or not c['SH_ADULT1_NAME']"
-                       " or c['SH_ADULT1_NAME'][:5] == 'Adult'"},
-        {'elemName': 'MATCHCODE', 'colName': 'CD_CODE', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'CD_CODE' not in c or c['CD_SIHOT_OBJID']"},
-        {'elemName': 'GUEST-ID', 'colName': 'CD_SIHOT_OBJID', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'CD_SIHOT_OBJID' not in c or not c['CD_SIHOT_OBJID']"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ1', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ1', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0"},
-        {'elemName': 'PERS-TYPE', 'colVal': '1A', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_ADULT1_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0 or 'SH_ADULT1_DOB' not in c"},
+         'elemHideIf': "c['ResAdults'] <= 0"},
+        {'elemName': 'NAME', 'fldName': 'ResAdult1Surname', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0 or 'ResAdult1Surname' not in c or not c['ResAdult1Surname']"},
+        {'elemName': 'NAME2', 'fldName': 'ResAdult1Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0 or 'ResAdult1Forename' not in c or not c['ResAdult1Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0 or 'ResAdult1Surname' not in c or not c['ResAdult1Surname']"
+                       " or c['ResAdult1Surname'][:5] == 'Adult'"},
+        {'elemName': 'MATCHCODE', 'fldName': 'AcId', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0 or 'AcId' not in c or c['ShId']"},
+        {'elemName': 'GUEST-ID', 'fldName': 'ShId', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0 or 'ShId' not in c or not c['ShId']"},
+        {'elemName': 'ROOM-SEQ', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '1A', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResAdult1DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 0 or 'ResAdult1DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 0"},
+         'elemHideIf': "c['ResAdults'] <= 0"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Second adult of client
-         'elemHideIf': "c['RU_ADULTS'] <= 1"},
-        # NAME element needed for clients with only one person but reservation with 2nd pax (RU_ADULTS >= 2):
-        # {'elemName': 'NAME', 'colName': 'SH_ADULT2_NAME', 'colVal': '',
-        # 'elemHideIf': "c['RU_ADULTS'] <= 1 or 'SH_ADULT2_NAME' not in c or not c['SH_ADULT2_NAME']"},
-        {'elemName': 'NAME', 'colName': 'SH_ADULT2_NAME', 'colVal': 'Adult 2', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1 or ('CD_CODE2' in c and c['CD_CODE2'])"},
-        {'elemName': 'NAME2', 'colName': 'SH_ADULT2_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1 or 'SH_ADULT2_NAME2' not in c or not c['SH_ADULT2_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1 or ('CD_CODE2' in c and c['CD_CODE2'])"},
-        {'elemName': 'MATCHCODE', 'colName': 'CD_CODE2', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1 or 'CD_CODE2' not in c or c['CD_SIHOT_OBJID2']"},
-        {'elemName': 'GUEST-ID', 'colName': 'CD_SIHOT_OBJID2', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1 or 'CD_SIHOT_OBJID2' not in c or not c['CD_SIHOT_OBJID2']"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ2', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ2', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1"},
-        {'elemName': 'PERS-TYPE', 'colVal': '1A', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_ADULT2_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1 or 'SH_ADULT2_DOB' not in c"},
+         'elemHideIf': "c['ResAdults'] <= 1"},
+        # NAME element needed for clients with only one person but reservation with 2nd pax (ResAdults >= 2):
+        # {'elemName': 'NAME', 'fldName': 'ResAdult2Surname', 'fldVal': '',
+        # 'elemHideIf': "c['ResAdults'] <= 1 or 'ResAdult2Surname' not in c or not c['ResAdult2Surname']"},
+        {'elemName': 'NAME', 'fldName': 'ResAdult2Surname', 'fldVal': 'Adult 2', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1 or ('AcId2' in c and c['AcId2'])"},
+        {'elemName': 'NAME2', 'fldName': 'ResAdult2Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1 or 'ResAdult2Forename' not in c or not c['ResAdult2Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1 or ('AcId2' in c and c['AcId2'])"},
+        {'elemName': 'MATCHCODE', 'fldName': 'AcId2', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1 or 'AcId2' not in c or c['ShId2']"},
+        {'elemName': 'GUEST-ID', 'fldName': 'ShId2', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1 or 'ShId2' not in c or not c['ShId2']"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '1A', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResAdult2DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 1 or 'ResAdult2DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 1"},
+         'elemHideIf': "c['ResAdults'] <= 1"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 3
-         'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'NAME', 'colName': 'SH_ADULT3_NAME', 'colVal': 'Adult 3', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'NAME2', 'colName': 'SH_ADULT3_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2 or 'SH_ADULT3_NAME2' not in c or not c['SH_ADULT3_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ3', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ3', 'colVal': '2', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'PERS-TYPE', 'colVal': '1A', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_ADULT3_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2 or 'SH_ADULT3_DOB' not in c"},
+         'elemHideIf': "c['ResAdults'] <= 2"},
+        {'elemName': 'NAME', 'fldName': 'ResAdult3Surname', 'fldVal': 'Adult 3', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2"},
+        {'elemName': 'NAME2', 'fldName': 'ResAdult3Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2 or 'ResAdult3Forename' not in c or not c['ResAdult3Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '2', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '1A', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResAdult3DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 2 or 'ResAdult3DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 2"},
+         'elemHideIf': "c['ResAdults'] <= 2"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 4
-         'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'NAME', 'colName': 'SH_ADULT4_NAME', 'colVal': 'Adult 4', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'NAME2', 'colName': 'SH_ADULT4_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3 or 'SH_ADULT4_NAME2' not in c or not c['SH_ADULT4_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ4', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ4', 'colVal': '3', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'PERS-TYPE', 'colVal': '1A', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_ADULT4_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3 or 'SH_ADULT4_DOB' not in c"},
+         'elemHideIf': "c['ResAdults'] <= 3"},
+        {'elemName': 'NAME', 'fldName': 'ResAdult4Surname', 'fldVal': 'Adult 4', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3"},
+        {'elemName': 'NAME2', 'fldName': 'ResAdult4Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3 or 'ResAdult4Forename' not in c or not c['ResAdult4Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '3', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '1A', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResAdult4DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 3 or 'ResAdult4DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 3"},
+         'elemHideIf': "c['ResAdults'] <= 3"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 5
-         'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'NAME', 'colName': 'SH_ADULT5_NAME', 'colVal': 'Adult 5', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'NAME2', 'colName': 'SH_ADULT5_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4 or 'SH_ADULT5_NAME2' not in c or not c['SH_ADULT5_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ5', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ5', 'colVal': '4', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'PERS-TYPE', 'colVal': '1A', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_ADULT5_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4 or 'SH_ADULT5_DOB' not in c"},
+         'elemHideIf': "c['ResAdults'] <= 4"},
+        {'elemName': 'NAME', 'fldName': 'ResAdult5Surname', 'fldVal': 'Adult 5', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4"},
+        {'elemName': 'NAME2', 'fldName': 'ResAdult5Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4 or 'ResAdult5Forename' not in c or not c['ResAdult5Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '4', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '1A', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResAdult5DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 4 or 'ResAdult5DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 4"},
+         'elemHideIf': "c['ResAdults'] <= 4"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Adult 6
-         'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'NAME', 'colName': 'SH_ADULT6_NAME', 'colVal': 'Adult 6', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'NAME2', 'colName': 'SH_ADULT6_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5 or 'SH_ADULT6_NAME2' not in c or not c['SH_ADULT6_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ6', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ6', 'colVal': '5', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'PERS-TYPE', 'colVal': '1A', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_ADULT6_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5 or 'SH_ADULT6_DOB' not in c"},
+         'elemHideIf': "c['ResAdults'] <= 5"},
+        {'elemName': 'NAME', 'fldName': 'ResAdult6Surname', 'fldVal': 'Adult 6', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5"},
+        {'elemName': 'NAME2', 'fldName': 'ResAdult6Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5 or 'ResAdult6Forename' not in c or not c['ResAdult6Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '5', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '1A', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResAdult6DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResAdults'] <= 5 or 'ResAdult6DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_ADULTS'] <= 5"},
+         'elemHideIf': "c['ResAdults'] <= 5"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 1
-         'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'NAME', 'colName': 'SH_CHILD1_NAME', 'colVal': 'Child 1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'NAME2', 'colName': 'SH_CHILD1_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'SH_CHILD1_NAME2' not in c or not c['SH_CHILD1_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ11', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ11', 'colVal': '10', 'elemHideInActions': ACTION_DELETE,
-         # 'colValFromAcu': "to_char(RU_ADULTS + 0)",  # commented out for optimization - RUNNING SEQ not needed
-         'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'PERS-TYPE', 'colVal': '2B', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_CHILD1_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0 or 'SH_CHILD1_DOB' not in c"},
+         'elemHideIf': "c['ResChildren'] <= 0"},
+        {'elemName': 'NAME', 'fldName': 'ResChild1Surname', 'fldVal': 'Child 1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0"},
+        {'elemName': 'NAME2', 'fldName': 'ResChild1Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0 or 'ResChild1Forename' not in c or not c['ResChild1Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '10', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '2B', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResChild1DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 0 or 'ResChild1DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 0"},
+         'elemHideIf': "c['ResChildren'] <= 0"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 2
-         'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'NAME', 'colName': 'SH_CHILD2_NAME', 'colVal': 'Child 2', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'NAME2', 'colName': 'SH_CHILD2_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'SH_CHILD2_NAME2' not in c or not c['SH_CHILD2_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ12', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ12', 'colVal': '11', 'elemHideInActions': ACTION_DELETE,
-         # 'colValFromAcu': "to_char(RU_ADULTS + 1)",
-         'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'PERS-TYPE', 'colVal': '2B', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_CHILD2_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1 or 'SH_CHILD2_DOB' not in c"},
+         'elemHideIf': "c['ResChildren'] <= 1"},
+        {'elemName': 'NAME', 'fldName': 'ResChild2Surname', 'fldVal': 'Child 2', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1"},
+        {'elemName': 'NAME2', 'fldName': 'ResChild2Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1 or 'ResChild2Forename' not in c or not c['ResChild2Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '11', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '2B', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResChild2DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 1 or 'ResChild2DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 1"},
+         'elemHideIf': "c['ResChildren'] <= 1"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 3
-         'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'NAME', 'colName': 'SH_CHILD3_NAME', 'colVal': 'Child 3', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'NAME2', 'colName': 'SH_CHILD3_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'SH_CHILD3_NAME2' not in c or not c['SH_CHILD3_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ13', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ13', 'colVal': '12', 'elemHideInActions': ACTION_DELETE,
-         # 'colValFromAcu': "to_char(RU_ADULTS + 2)",
-         'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'PERS-TYPE', 'colVal': '2B', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_CHILD3_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2 or 'SH_CHILD3_DOB' not in c"},
+         'elemHideIf': "c['ResChildren'] <= 2"},
+        {'elemName': 'NAME', 'fldName': 'ResChild3Surname', 'fldVal': 'Child 3', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2"},
+        {'elemName': 'NAME2', 'fldName': 'ResChild3Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2 or 'ResChild3Forename' not in c or not c['ResChild3Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '12', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '2B', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResChild3DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 2 or 'ResChild3DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 2"},
+         'elemHideIf': "c['ResChildren'] <= 2"},
         {'elemName': 'PERSON/', 'elemHideInActions': ACTION_DELETE,  # Children 4
-         'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'NAME', 'colName': 'SH_CHILD4_NAME', 'colVal': 'Child 4', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'NAME2', 'colName': 'SH_CHILD4_NAME2', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'SH_CHILD4_NAME2' not in c or not c['SH_CHILD4_NAME2']"},
-        {'elemName': 'AUTO-GENERATED', 'colVal': '1', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'ROOM-SEQ', 'colName': 'SH_ROOM_SEQ14', 'colVal': '0', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'ROOM-PERS-SEQ', 'colName': 'SH_PERS_SEQ14', 'colVal': '13', 'elemHideInActions': ACTION_DELETE,
-         # 'colValFromAcu': "to_char(RU_ADULTS + 3)",
-         'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'PERS-TYPE', 'colVal': '2B', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'R', 'colName': 'RUL_SIHOT_PACK', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3"},
-        {'elemName': 'RN', 'colName': 'RUL_SIHOT_ROOM', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'RUL_SIHOT_ROOM' not in c or c['DEP_DATE'] < datetime.datetime.now()"},
-        {'elemName': 'DOB', 'colName': 'SH_CHILD4_DOB', 'colVal': '', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3 or 'SH_CHILD4_DOB' not in c"},
+         'elemHideIf': "c['ResChildren'] <= 3"},
+        {'elemName': 'NAME', 'fldName': 'ResChild4Surname', 'fldVal': 'Child 4', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3"},
+        {'elemName': 'NAME2', 'fldName': 'ResChild4Forename', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3 or 'ResChild4Forename' not in c or not c['ResChild4Forename']"},
+        {'elemName': 'AUTO-GENERATED', 'fldVal': '1', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3"},
+        {'elemName': 'ROOM-SEQ', 'fldVal': '0', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3"},
+        {'elemName': 'ROOM-PERS-SEQ', 'fldVal': '13', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3"},
+        {'elemName': 'PERS-TYPE', 'fldVal': '2B', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3"},
+        {'elemName': 'R', 'fldName': 'ResBoard', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3"},
+        {'elemName': 'RN', 'fldName': 'ResRoomNo', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3 or 'ResRoomNo' not in c or c['ResDeparture'] < datetime.datetime.now()"},
+        {'elemName': 'DOB', 'fldName': 'ResChild4DOB', 'fldVal': '', 'elemHideInActions': ACTION_DELETE,
+         'elemHideIf': "c['ResChildren'] <= 3 or 'ResChild4DOB' not in c"},
         {'elemName': '/PERSON', 'elemHideInActions': ACTION_DELETE,
-         'elemHideIf': "c['RU_CHILDREN'] <= 3"},
+         'elemHideIf': "c['ResChildren'] <= 3"},
         # ### EXTRA PARSING FIELDS (for to interpret reservation coming from the WEB interface)
-        {'elemName': 'ACTION', 'colName': 'RUL_ACTION', 'buildExclude': True},
-        {'elemName': 'STATUS', 'colName': 'RU_STATUS', 'buildExclude': True},
-        {'elemName': 'RULREF', 'colName': 'RUL_CODE', 'buildExclude': True},
-        {'elemName': 'RUL_PRIMARY', 'colName': 'RUL_PRIMARY', 'buildExclude': True},
-        # {'elemName': 'RU_OBJID', 'colName': 'RU_SIHOT_OBJID', 'buildExclude': True},
-        {'elemName': 'RU_OBJID', 'colName': 'RUL_SIHOT_OBJID', 'buildExclude': True},
-        {'elemName': 'RU_FLIGHT_PICKUP', 'colName': 'RU_FLIGHT_PICKUP', 'buildExclude': True},
-        # {'elemName': 'RO_AGENCY_OBJID', 'colName': 'RO_SIHOT_AGENCY_OBJID', 'buildExclude': True},
-        {'elemName': 'OC_CODE', 'colName': 'OC_CODE', 'buildExclude': True},
-        {'elemName': 'OC_OBJID', 'colName': 'OC_SIHOT_OBJID', 'buildExclude': True},
-        {'elemName': 'RES_GROUP', 'colName': 'RO_RES_GROUP', 'buildExclude': True},  # needed for elemHideIf
-        {'elemName': 'RES_OCC', 'colName': 'RUL_SIHOT_RATE', 'buildExclude': True},  # needed for res_id_values
-        {'elemName': 'CHANGES', 'colName': 'RUL_CHANGES', 'buildExclude': True},  # needed for error notifications
-        {'elemName': 'LAST_HOTEL', 'colName': 'RUL_SIHOT_LAST_HOTEL', 'buildExclude': True},  # needed for HOTMOVE
-        {'elemName': 'LAST_CAT', 'colName': 'RUL_SIHOT_LAST_CAT', 'buildExclude': True},  # needed for HOTMOVE
-        # column mappings needed only for parsing XML responses (using 'buildExclude': True)
+        {'elemName': 'ACTION', 'fldName': 'ResAction', 'buildExclude': True},
+        {'elemName': 'STATUS', 'fldName': 'RU_STATUS', 'buildExclude': True},
+        {'elemName': 'RULREF', 'fldName': 'RUL_CODE', 'buildExclude': True},
+        {'elemName': 'RUL_PRIMARY', 'fldName': 'RUL_PRIMARY', 'buildExclude': True},
+        # {'elemName': 'RU_OBJID', 'fldName': 'RU_SIHOT_OBJID', 'buildExclude': True},
+        {'elemName': 'RU_OBJID', 'fldName': 'RUL_SIHOT_OBJID', 'buildExclude': True},
+        # {'elemName': 'RO_AGENCY_OBJID', 'fldName': 'RO_SIHOT_AGENCY_OBJID', 'buildExclude': True},
+        {'elemName': 'OC_CODE', 'fldName': 'ResOrdererMc', 'buildExclude': True},
+        {'elemName': 'OC_OBJID', 'fldName': 'ResOrdererId', 'buildExclude': True},
+        {'elemName': 'RES_GROUP', 'fldName': 'ResMktGroup', 'buildExclude': True},  # needed for elemHideIf
+        {'elemName': 'RES_OCC', 'fldName': 'ResMktSegment', 'buildExclude': True},  # needed for res_id_values
+        {'elemName': 'CHANGES', 'fldName': 'RUL_CHANGES', 'buildExclude': True},  # needed for error notifications
+        {'elemName': 'LAST_HOTEL', 'fldName': 'RUL_SIHOT_LAST_HOTEL', 'buildExclude': True},  # needed for HOTMOVE
+        {'elemName': 'LAST_CAT', 'fldName': 'RUL_SIHOT_LAST_CAT', 'buildExclude': True},  # needed for HOTMOVE
+        # field mappings needed only for parsing XML responses (using 'buildExclude': True)
         {'elemName': 'RES-HOTEL', 'buildExclude': True},
         {'elemName': 'RES-NR', 'buildExclude': True},
         {'elemName': 'SUB-NR', 'buildExclude': True},
@@ -718,7 +652,7 @@ MAP_RES_DEF = MAP_WEB_RES
 
 
 class SihotXmlParser:  # XMLParser interface
-    def __init__(self, ca):
+    def __init__(self, cae):
         super(SihotXmlParser, self).__init__()
         self._xml = ''
         self._base_tags = ['ERROR-LEVEL', 'ERROR-TEXT', 'ID', 'MSG', 'OC', 'ORG', 'RC', 'TN', 'VER',
@@ -738,11 +672,11 @@ class SihotXmlParser:  # XMLParser interface
         self.ver = ''
         self.error_level = '0'  # used by kernel interface instead of RC/MSG
         self.error_text = ''
-        self.ca = ca  # only needed for logging with dprint()
+        self.cae = cae  # only needed for logging with dprint()
         self._parser = None  # reset to XMLParser(target=self) in self.parse_xml() and close in self.close()
 
     def parse_xml(self, xml):
-        self.ca.dprint("SihotXmlParser.parse_xml():", xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("SihotXmlParser.parse_xml():", xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         try_counter = 0
         xml_cleaned = xml
         while True:
@@ -768,7 +702,7 @@ class SihotXmlParser:  # XMLParser interface
         self._curr_attr = None  # used as flag for a currently parsed base tag (for self.data())
         self._elem_path.append(tag)
         if tag in self._base_tags:
-            self.ca.dprint("SihotXmlParser.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("SihotXmlParser.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self._curr_attr = tag.lower().replace('-', '_')
             setattr(self, self._curr_attr, '')
             return None
@@ -782,13 +716,13 @@ class SihotXmlParser:  # XMLParser interface
 
     def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
         if self._curr_attr and data.strip():
-            self.ca.dprint("SihotXmlParser.data(): ", self._elem_path, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("SihotXmlParser.data(): ", self._elem_path, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             setattr(self, self._curr_attr, getattr(self, self._curr_attr) + data)
             return None
         return data
 
     def end(self, tag):  # called for each closing tag
-        self.ca.dprint("SihotXmlParser.end():", self._elem_path, tag, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("SihotXmlParser.end():", self._elem_path, tag, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self._curr_tag = ''
         self._curr_attr = ''
         if self._elem_path:     # Q&D Fix for TestGuestSearch for to prevent pop() on empty _elem_path list
@@ -820,8 +754,8 @@ class Request(SihotXmlParser):  # request from SIHOT to AcuServer
 
 
 class RoomChange(SihotXmlParser):
-    def __init__(self, ca):
-        super(RoomChange, self).__init__(ca)
+    def __init__(self, cae):
+        super(RoomChange, self).__init__(cae)
         # add base tags for room/GDS number, old room/GDS number and guest objid
         self._base_tags.append('HN')
         self.hn = None  # added for to remove pycharm warning
@@ -842,8 +776,8 @@ class RoomChange(SihotXmlParser):
 
 
 class ResChange(SihotXmlParser):
-    def __init__(self, ca):
-        super(ResChange, self).__init__(ca)
+    def __init__(self, cae):
+        super(ResChange, self).__init__(cae)
         self._base_tags.append('HN')    # def hotel ID as base tag, because is outside of 1st SIHOT-Reservation block
         self.hn = None                  # added instance var for to remove pycharm warning
         self.rgr_list = list()
@@ -851,7 +785,7 @@ class ResChange(SihotXmlParser):
     def start(self, tag, attrib):  # called for each opening tag
         if super(ResChange, self).start(tag, attrib) is None and tag not in ('MATCHCODE', 'OBJID'):
             return None  # processed by base class
-        self.ca.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         if tag == 'SIHOT-Reservation':
             self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc=list()))
         elif tag in ('FIRST-Person', 'SIHOT-Person'):       # FIRST-Person only seen in room change (CI) on first occ
@@ -860,7 +794,7 @@ class ResChange(SihotXmlParser):
     def data(self, data):
         if super(ResChange, self).data(data) is None and self._curr_tag not in ('MATCHCODE', 'OBJID'):
             return None  # processed by base class
-        self.ca.dprint("ResChange.data():", self._elem_path, self.rgr_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ResChange.data():", self._elem_path, self.rgr_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         # flag for to detect and prevent multiple values
         append = True
         # because data can be sent in chunks on parsing, we first determine the dictionary (di) and the item key (ik)
@@ -917,8 +851,8 @@ class ResChange(SihotXmlParser):
 
         # unsupported elements
         else:
-            self.ca.dprint("ResChange.data(): ignoring element ", self._elem_path, "; data chunk=", data,
-                           minimum_debug_level=DEBUG_LEVEL_TIMESTAMPED)
+            self.cae.dprint("ResChange.data(): ignoring element ", self._elem_path, "; data chunk=", data,
+                            minimum_debug_level=DEBUG_LEVEL_TIMESTAMPED)
             return
 
         # add data - after check if we need to add or to extend the dictionary item
@@ -929,8 +863,8 @@ class ResChange(SihotXmlParser):
 
 
 class ResResponse(SihotXmlParser):  # response xml parser for kernel or web interfaces
-    def __init__(self, ca):
-        super(ResResponse, self).__init__(ca)
+    def __init__(self, cae):
+        super(ResResponse, self).__init__(cae)
         # web and kernel (guest/client and reservation) interface response elements
         self._base_tags.append('GDSNO')
         self.gdsno = None
@@ -938,8 +872,8 @@ class ResResponse(SihotXmlParser):  # response xml parser for kernel or web inte
 
 class AvailCatInfoResponse(SihotXmlParser):
     """ processing response of CATINFO operation code of the WEB interface """
-    def __init__(self, ca):
-        super(AvailCatInfoResponse, self).__init__(ca)
+    def __init__(self, cae):
+        super(AvailCatInfoResponse, self).__init__(cae)
         self._curr_cat = None
         self._curr_day = None
         self.avail_room_cats = dict()
@@ -963,8 +897,8 @@ class AvailCatInfoResponse(SihotXmlParser):
 
 
 class CatRoomResponse(SihotXmlParser):
-    def __init__(self, ca):
-        super(CatRoomResponse, self).__init__(ca)
+    def __init__(self, cae):
+        super(CatRoomResponse, self).__init__(cae)
         # ALLROOMS response of the WEB interface
         self._base_tags += ('NAME', 'RN')
         self.name = None  # added for to remove pycharm warning
@@ -982,8 +916,8 @@ class CatRoomResponse(SihotXmlParser):
 
 
 class ConfigDictResponse(SihotXmlParser):
-    def __init__(self, ca):
-        super(ConfigDictResponse, self).__init__(ca)
+    def __init__(self, cae):
+        super(ConfigDictResponse, self).__init__(cae)
         # response to GCF operation code of the WEB interface
         self._base_tags += ('KEY', 'VALUE')  # VALUE for key value (remove from additional error info - see 'VALU')
         self.value = None  # added for to remove pycharm warning
@@ -999,7 +933,7 @@ class ConfigDictResponse(SihotXmlParser):
 
 
 class GuestSearchResponse(SihotXmlParser):
-    def __init__(self, ca, ret_elem_names=None, key_elem_name=None):
+    def __init__(self, cae, ret_elem_names=None, key_elem_name=None):
         """
         response to the GUEST-GET request oc of the KERNEL interface
 
@@ -1013,7 +947,7 @@ class GuestSearchResponse(SihotXmlParser):
 
         key_elem_name is the element name used for the search (only needed if self._return_value_as_key==True)
         """
-        super(GuestSearchResponse, self).__init__(ca)
+        super(GuestSearchResponse, self).__init__(cae)
         self._base_tags.append('GUEST-NR')
         self.guest_nr = None
 
@@ -1026,7 +960,7 @@ class GuestSearchResponse(SihotXmlParser):
         self.ret_elem_values = dict() if self._return_value_as_key else list()
         self._key_elem_index = 0
         self._in_guest_profile = False
-        self._elem_col_map_parser = ColMapXmlParser(ca, deepcopy(MAP_KERNEL_CLIENT))
+        self._elem_fld_map_parser = FldMapXmlParser(cae, deepcopy(MAP_KERNEL_CLIENT))
 
     def parse_xml(self, xml):
         super(GuestSearchResponse, self).parse_xml(xml)
@@ -1035,7 +969,7 @@ class GuestSearchResponse(SihotXmlParser):
 
     def start(self, tag, attrib):
         if self._in_guest_profile:
-            self._elem_col_map_parser.start(tag, attrib)
+            self._elem_fld_map_parser.start(tag, attrib)
         if super(GuestSearchResponse, self).start(tag, attrib) is None:
             return None  # processed by base class
         if tag == 'GUEST-PROFILE':
@@ -1046,7 +980,7 @@ class GuestSearchResponse(SihotXmlParser):
 
     def data(self, data):
         if self._in_guest_profile:
-            self._elem_col_map_parser.data(data)
+            self._elem_fld_map_parser.data(data)
         if super(GuestSearchResponse, self).data(data) is None:
             return None  # processed by base class
         return data
@@ -1066,7 +1000,7 @@ class GuestSearchResponse(SihotXmlParser):
                 else:
                     values = dict()
                     for key in keys:
-                        elem = self._elem_col_map_parser.elem_col_map[key]
+                        elem = self._elem_fld_map_parser.elem_fld_map[key]
                         elem_val = elem['elemListVal'] if 'elemListVal' in elem \
                             else (elem['elemVal'] if 'elemVal' in elem else None)
                         values[key] = getattr(self, key, elem_val)
@@ -1074,91 +1008,91 @@ class GuestSearchResponse(SihotXmlParser):
                         if 'elemVal' in elem:
                             elem.pop('elemVal')
                     self.ret_elem_values.append(values)
-        # for completeness call also SihotXmlParser.end() and ColMapXmlParser.end()
-        return super(GuestSearchResponse, self).end(self._elem_col_map_parser.end(tag))
+        # for completeness call also SihotXmlParser.end() and FldMapXmlParser.end()
+        return super(GuestSearchResponse, self).end(self._elem_fld_map_parser.end(tag))
 
 
-class ColMapXmlParser(SihotXmlParser):
-    def __init__(self, ca, elem_col_map):
+class FldMapXmlParser(SihotXmlParser):
+    def __init__(self, cae, elem_fld_map):
         # create mapping dict for all valid elements
-        self.elem_col_map = {c['elemName']: c for c in deepcopy(elem_col_map)}
-        # if c.get('buildExclude', False) and 'colName' in c
-        super(ColMapXmlParser, self).__init__(ca)
+        self.elem_fld_map = {c['elemName']: c for c in deepcopy(elem_fld_map)}
+        # if c.get('buildExclude', False) and 'fldName' in c
+        super(FldMapXmlParser, self).__init__(cae)
 
     # XMLParser interface
 
     def start(self, tag, attrib):
-        # if super(ColMapXmlParser, self).start(tag, attrib) is None:
+        # if super(FldMapXmlParser, self).start(tag, attrib) is None:
         #    return None  # processed by base class
-        super(ColMapXmlParser, self).start(tag, attrib)
-        if tag in self.elem_col_map:
-            if 'elemListVal' in self.elem_col_map[tag]:
-                self.elem_col_map[tag]['elemListVal'].append('')
-            elif 'elemVal' in self.elem_col_map[tag]:  # 2nd time same tag then create list
-                li = list([self.elem_col_map[tag]['elemVal'], ''])
-                self.elem_col_map[tag]['elemListVal'] = li
-            self.elem_col_map[tag]['elemVal'] = ''
-            self.elem_col_map[tag]['elemPath'] = ELEM_PATH_SEP.join(self._elem_path)
-            if 'elemPathValues' not in self.elem_col_map[tag]:
-                self.elem_col_map[tag]['elemPathValues'] = dict()
+        super(FldMapXmlParser, self).start(tag, attrib)
+        if tag in self.elem_fld_map:
+            if 'elemListVal' in self.elem_fld_map[tag]:
+                self.elem_fld_map[tag]['elemListVal'].append('')
+            elif 'elemVal' in self.elem_fld_map[tag]:  # 2nd time same tag then create list
+                li = list([self.elem_fld_map[tag]['elemVal'], ''])
+                self.elem_fld_map[tag]['elemListVal'] = li
+            self.elem_fld_map[tag]['elemVal'] = ''
+            self.elem_fld_map[tag]['elemPath'] = ELEM_PATH_SEP.join(self._elem_path)
+            if 'elemPathValues' not in self.elem_fld_map[tag]:
+                self.elem_fld_map[tag]['elemPathValues'] = dict()
             return None
         return tag
 
     def data(self, data):
-        # if super(ColMapXmlParser, self).data(data) is None:
+        # if super(FldMapXmlParser, self).data(data) is None:
         #    return None  # already processed by base class
-        super(ColMapXmlParser, self).data(data)
+        super(FldMapXmlParser, self).data(data)
         tag = self._curr_tag
-        if tag in self.elem_col_map:
-            self.elem_col_map[tag]['elemVal'] += data
-            if 'elemListVal' in self.elem_col_map[tag]:
+        if tag in self.elem_fld_map:
+            self.elem_fld_map[tag]['elemVal'] += data
+            if 'elemListVal' in self.elem_fld_map[tag]:
                 # add string fragment to last list item
-                self.elem_col_map[tag]['elemListVal'][-1] += data
+                self.elem_fld_map[tag]['elemListVal'][-1] += data
             return None
         return data
 
     def end(self, tag):
-        super(ColMapXmlParser, self).end(tag)
-        if tag in self.elem_col_map:
-            ev = self.elem_col_map[tag]['elemVal']
-            ep = self.elem_col_map[tag]['elemPath']  # use instead of self._elem_path (got just wiped by super.end())
-            epv = self.elem_col_map[tag]['elemPathValues']
+        super(FldMapXmlParser, self).end(tag)
+        if tag in self.elem_fld_map:
+            ev = self.elem_fld_map[tag]['elemVal']
+            ep = self.elem_fld_map[tag]['elemPath']  # use instead of self._elem_path (got just wiped by super.end())
+            epv = self.elem_fld_map[tag]['elemPathValues']
             if ep in epv:
                 epv[ep].append(ev)
             else:
                 epv[ep] = list([ev])
 
     def elem_path_values(self, elem_path_suffix):
-        return elem_path_values(self.elem_col_map, elem_path_suffix)
+        return elem_path_values(self.elem_fld_map, elem_path_suffix)
 
 
-class GuestFromSihot(ColMapXmlParser):
-    def __init__(self, ca, elem_col_map=MAP_CLIENT_DEF):
-        super(GuestFromSihot, self).__init__(ca, elem_col_map)
-        self.acu_col_values = None  # dict() - initialized in self.end() with acu column names:values
+class GuestFromSihot(FldMapXmlParser):
+    def __init__(self, cae, elem_fld_map=MAP_CLIENT_DEF):
+        super(GuestFromSihot, self).__init__(cae, elem_fld_map)
+        self.acu_fld_values = None  # dict() - initialized in self.end() with field names:values
 
     # XMLParser interface
 
     def end(self, tag):
         super(GuestFromSihot, self).end(tag)
         if tag == 'GUEST':  # using tag because self._curr_tag got reset by super method of end()
-            self.ca.dprint("GuestFromSihot.end(): guest data parsed", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            self.acu_col_values = dict()
-            for c in self.elem_col_map.keys():
-                if 'elemVal' in self.elem_col_map[c] and self.elem_col_map[c]['elemVal']:
-                    val = self.elem_col_map[c]['colValToAcu'] if 'colValToAcu' in self.elem_col_map[c] \
-                        else self.elem_col_map[c]['elemVal']
-                    col_name = self.elem_col_map[c]['colName']
-                    if 'valToAcuConverter' in self.elem_col_map[c]:
-                        self.acu_col_values[col_name] = self.elem_col_map[c]['valToAcuConverter'](val)
+            self.cae.dprint("GuestFromSihot.end(): guest data parsed", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.acu_fld_values = dict()
+            for c in self.elem_fld_map.keys():
+                if 'elemVal' in self.elem_fld_map[c] and self.elem_fld_map[c]['elemVal']:
+                    val = self.elem_fld_map[c]['fldValToAcu'] if 'fldValToAcu' in self.elem_fld_map[c] \
+                        else self.elem_fld_map[c]['elemVal']
+                    fld_name = self.elem_fld_map[c]['fldName']
+                    if 'valToAcuConverter' in self.elem_fld_map[c]:
+                        self.acu_fld_values[fld_name] = self.elem_fld_map[c]['valToAcuConverter'](val)
                     else:
-                        self.acu_col_values[col_name] = val
+                        self.acu_fld_values[fld_name] = val
 
 
-class ResFromSihot(ColMapXmlParser):
-    def __init__(self, ca, elem_col_map=MAP_RES_DEF):
-        super(ResFromSihot, self).__init__(ca, elem_col_map)
-        self.blank_elem_col_map = deepcopy(self.elem_col_map)
+class ResFromSihot(FldMapXmlParser):
+    def __init__(self, cae, elem_fld_map=MAP_RES_DEF):
+        super(ResFromSihot, self).__init__(cae, elem_fld_map)
+        self.blank_elem_fld_map = deepcopy(self.elem_fld_map)
         self.res_list = list()
 
     # XMLParser interface
@@ -1166,21 +1100,21 @@ class ResFromSihot(ColMapXmlParser):
     def end(self, tag):
         super(ResFromSihot, self).end(tag)
         if tag == 'RESERVATION':  # using tag because self._curr_tag got reset by super method of end()
-            if self.ca.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
+            if self.cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
                 msg = list()
-                for k in self.elem_col_map:
-                    if 'elemListVal' in self.elem_col_map[k]:
-                        msg.append(self.elem_col_map[k]['elemName'] + '=' + str(self.elem_col_map[k]['elemListVal']))
-                    elif 'elemVal' in self.elem_col_map[k]:
-                        msg.append(self.elem_col_map[k]['elemName'] + '=' + self.elem_col_map[k]['elemVal'])
+                for k in self.elem_fld_map:
+                    if 'elemListVal' in self.elem_fld_map[k]:
+                        msg.append(self.elem_fld_map[k]['elemName'] + '=' + str(self.elem_fld_map[k]['elemListVal']))
+                    elif 'elemVal' in self.elem_fld_map[k]:
+                        msg.append(self.elem_fld_map[k]['elemName'] + '=' + self.elem_fld_map[k]['elemVal'])
 
-                self.ca.dprint("ResFromSihot.end(): reservation parsed:{}".format(",".join(msg)))
+                self.cae.dprint("ResFromSihot.end(): reservation parsed:{}".format(",".join(msg)))
                 # this could possibly replace the above for loop including the dprint() call
                 uprint("ResFromSihot.end(): element path values:{}"
-                       .format([c['elemPathValues'] for c in self.elem_col_map.values() if 'elemPathValues' in c]))
-            self.res_list.append(deepcopy(self.elem_col_map))
+                       .format([c['elemPathValues'] for c in self.elem_fld_map.values() if 'elemPathValues' in c]))
+            self.res_list.append(deepcopy(self.elem_fld_map))
             # reset elemVal and elemListVal for next reservation record in the same response
-            self.elem_col_map = deepcopy(self.blank_elem_col_map)
+            self.elem_fld_map = deepcopy(self.blank_elem_fld_map)
 
 
 class ResKernelResponse(SihotXmlParser):
@@ -1197,93 +1131,66 @@ class ResKernelResponse(SihotXmlParser):
 class SihotXmlBuilder:
     tn = '1'
 
-    def __init__(self, ca, elem_col_map=(), use_kernel_interface=False, connect_to_acu=False):
+    def __init__(self, cae, elem_fld_map=None, use_kernel=None):
         super(SihotXmlBuilder, self).__init__()
-        self.ca = ca
-        self.use_kernel_interface = use_kernel_interface
-        elem_col_map = deepcopy(elem_col_map)
-        self.sihot_elem_col = [(c['elemName'],
-                                c['colName'] if 'colName' in c else None,
+        self.cae = cae
+        elem_fld_map = deepcopy(elem_fld_map or cae.get_option('mapRes'))
+        self.elem_fld_map = elem_fld_map
+        self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
+
+        self.sihot_elem_fld = [(c['elemName'],
+                                c['fldName'] if 'fldName' in c else None,
                                 ((' or a in "' + c['elemHideInActions'] + '"' if 'elemHideInActions' in c else '')
                                  + (' or ' + c['elemHideIf'] if 'elemHideIf' in c else ''))[4:],
-                                c['colVal'] if 'colVal' in c else None)
-                               for c in elem_col_map if not c.get('buildExclude', False)]
-        # self.fix_col_values = {c['colName']: c['colVal'] for c in elem_col_map if 'colName' in c and 'colVal' in c}
-        # acu_col_names and acu_col_expres need to be in sync
-        # self.acu_col_names = [c['colName'] for c in elem_col_map if 'colName' in c and 'colVal' not in c]
-        # self.acu_col_expres = [c['colValFromAcu'] + " as " + c['colName'] if 'colValFromAcu' in c else c['colName']
-        #                       for c in elem_col_map if 'colName' in c and 'colVal' not in c]
-        # alternative version preventing duplicate column names
-        self.fix_col_values = dict()
-        self.acu_col_names = list()  # acu_col_names and acu_col_expres need to be in sync
-        self.acu_col_expres = list()
-        for c in elem_col_map:
-            if 'colName' in c:
-                if 'colVal' in c:
-                    self.fix_col_values[c['colName']] = c['colVal']
-                elif c['colName'] not in self.acu_col_names:
-                    self.acu_col_names.append(c['colName'])
-                    self.acu_col_expres.append(c['colValFromAcu'] + " as " + c['colName'] if 'colValFromAcu' in c
-                                               else c['colName'])
-        # mapping dicts between db column names and xml element names (not works for dup elems like MATCHCODE in RES)
-        self.col_elem = {c['colName']: c['elemName'] for c in elem_col_map if 'colName' in c and 'elemName' in c}
-        self.elem_col = {c['elemName']: c['colName'] for c in elem_col_map if 'colName' in c and 'elemName' in c}
+                                c['fldVal'] if 'fldVal' in c else None)
+                               for c in elem_fld_map if not c.get('buildExclude', False)]
+        # self.fix_fld_values = {c['fldName']: c['fldVal'] for c in elem_fld_map if 'fldName' in c and 'fldVal' in c}
+        # acu_fld_names and acu_fld_expres need to be in sync
+        # self.acu_fld_names = [c['fldName'] for c in elem_fld_map if 'fldName' in c and 'fldVal' not in c]
+        # self.acu_fld_expres = [c['fldValFromAcu'] + " as " + c['fldName'] if 'fldValFromAcu' in c else c['fldName']
+        #                       for c in elem_fld_map if 'fldName' in c and 'fldVal' not in c]
+        # alternative version preventing duplicate field names
+        self.fix_fld_values = dict()
+        self.acu_fld_names = list()  # acu_fld_names and acu_fld_expres need to be in sync
+        self.acu_fld_expres = list()
+        for c in elem_fld_map:
+            if 'fldName' in c:
+                if 'fldVal' in c:
+                    self.fix_fld_values[c['fldName']] = c['fldVal']
+                elif c['fldName'] not in self.acu_fld_names:
+                    self.acu_fld_names.append(c['fldName'])
+                    self.acu_fld_expres.append(c['fldValFromAcu'] + " as " + c['fldName'] if 'fldValFromAcu' in c
+                                               else c['fldName'])
+        # mapping dicts between db field names and xml element names (not works for dup elems like MATCHCODE in RES)
+        self.fld_elem = {c['fldName']: c['elemName'] for c in elem_fld_map if 'fldName' in c and 'elemName' in c}
+        self.elem_fld = {c['elemName']: c['fldName'] for c in elem_fld_map if 'fldName' in c and 'elemName' in c}
 
         self.response = None
 
-        self.acu_connected = False
-        if connect_to_acu:
-            self.ora_db = OraDB(ca.get_option('acuUser'), ca.get_option('acuPassword'), ca.get_option('acuDSN'),
-                                app_name=ca.app_name(), debug_level=ca.get_option('debugLevel'))
-            err_msg = self.ora_db.connect()
-            if err_msg:
-                uprint("SihotXmlBuilder.__init__() db connect error:", err_msg)
-            else:
-                self.acu_connected = connect_to_acu  # ==True
-        self._rows = list()  # list of dicts, used by inheriting class for to store the rows to send to SiHOT.PMS
+        self._recs = list()  # list of dicts, used by inheriting class for to store the records to send to SiHOT.PMS
         self._current_row_i = 0
 
         self._xml = ''
         self._indent = 0
 
-        # added for to store fetch_from_acu timestamp
-        self._last_fetch = None
-
-    def __del__(self):
-        if self.acu_connected and self.ora_db:
-            self.ora_db.close()
-
-    # --- rows/cols helpers
+    # --- recs/fields helpers
 
     @property
-    def cols(self):
-        return self._rows[self._current_row_i] if len(self._rows) > self._current_row_i else dict()
+    def fields(self):
+        return self._recs[self._current_row_i] if len(self._recs) > self._current_row_i else dict()
 
     # def next_row(self): self._current_row_i += 1
 
     @property
-    def row_count(self):
-        return len(self._rows)
+    def rec_count(self):
+        return len(self._recs)
 
     @property
-    def rows(self):
-        return self._rows
-
-    # --- database fetching
-
-    def fetch_all_from_acu(self):
-        self._last_fetch = datetime.datetime.now()
-        self._rows = list()
-        plain_rows = self.ora_db.fetch_all()
-        for r in plain_rows:
-            col_values = self.fix_col_values.copy()
-            col_values.update(zip(self.acu_col_names, r))
-            self._rows.append(col_values)
-        self.ca.dprint("SihotXmlBuilder.fetch_all_from_acu() at {} got {}, 1st row: {}"
-                       .format(self._last_fetch, self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+    def recs(self):
+        return self._recs
 
     def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
-        self._xml = '<?xml version="1.0" encoding="' + self.ca.get_option('shXmlEncoding').lower() + \
+        self._xml = '<?xml version="1.0" encoding="' + self.cae.get_option('shXmlEncoding').lower() + \
                     '"?>\n<SIHOT-Document>\n'
         if self.use_kernel_interface:
             self._xml += '<SIHOT-XML-REQUEST>\n'
@@ -1308,13 +1215,13 @@ class SihotXmlBuilder:
     def add_tag(self, tag, val=''):
         self._xml += self.new_tag(tag, val)
 
-    def prepare_map_xml(self, col_values, action='', include_empty_values=True):
+    def prepare_map_xml(self, fld_values, action='', include_empty_values=True):
         inner_xml = ''
-        for tag, col, hide_expr, val in self.sihot_elem_col:
+        for tag, fld, hide_expr, val in self.sihot_elem_fld:
             if hide_expr:
                 local = dict()
                 local['a'] = action  # provide short names for evaluation
-                local['c'] = col_values
+                local['c'] = fld_values
                 local['datetime'] = datetime
                 try:
                     hide = eval(hide_expr, dict(), local)
@@ -1330,22 +1237,22 @@ class SihotXmlBuilder:
             elif tag.startswith('/'):
                 self._indent -= 1
                 inner_xml += self.new_tag(tag[1:], opening=False)
-            elif include_empty_values or (col and col in col_values) or val:
-                inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(col_values[col]
-                                                                                if col and col in col_values else val))
+            elif include_empty_values or (fld and fld in fld_values) or val:
+                inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(fld_values[fld]
+                                                                                if fld and fld in fld_values else val))
         return inner_xml
 
     def send_to_server(self, response_parser=None):
-        sc = TcpClient(self.ca.get_option('shServerIP'),
-                       self.ca.get_option('shServerKernelPort' if self.use_kernel_interface else 'shServerPort'),
-                       timeout=self.ca.get_option('shTimeout'),
-                       encoding=self.ca.get_option('shXmlEncoding'),
-                       debug_level=self.ca.get_option('debugLevel'))
-        self.ca.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}".format(response_parser, self.xml),
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        sc = TcpClient(self.cae.get_option('shServerIP'),
+                       self.cae.get_option('shServerKernelPort' if self.use_kernel_interface else 'shServerPort'),
+                       timeout=self.cae.get_option('shTimeout'),
+                       encoding=self.cae.get_option('shXmlEncoding'),
+                       debug_level=self.cae.get_option('debugLevel'))
+        self.cae.dprint("SihotXmlBuilder.send_to_server(): responseParser={}, xml={}".format(response_parser, self.xml),
+                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
-            self.response = response_parser or SihotXmlParser(self.ca)
+            self.response = response_parser or SihotXmlParser(self.cae)
             self.response.parse_xml(sc.received_xml)
             if self.response.server_error() != '0':
                 err_msg = "**** SihotXmlBuilder.send_to_server() server return code " + \
@@ -1378,32 +1285,8 @@ class SihotXmlBuilder:
 
     @xml.setter
     def xml(self, value):
-        self.ca.dprint('SihotXmlBuilder.xml-set:', value, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint('SihotXmlBuilder.xml-set:', value, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self._xml = value
-
-    def _add_to_acumen_sync_log(self, table, primary, action, status, message, logref, commit=False):
-        self.ca.dprint('SihotXmlBuilder._add_to_acumen_sync_log() time/now:', self._last_fetch, datetime.datetime.now(),
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        return self.ora_db.insert('T_SRSL',
-                                  {'SRSL_TABLE': table[:6],
-                                   'SRSL_PRIMARY': str(primary)[:12],
-                                   'SRSL_ACTION': action[:15],
-                                   'SRSL_STATUS': status[:12],
-                                   'SRSL_MESSAGE': message[:1998],
-                                   'SRSL_LOGREF': logref,  # NUMBER(10)
-                                   # before SRSL_DATE was set to SYSDATE by Oracle column default value
-                                   # PLEASE NOTE THAT THIS IS FAILING (see WO #58116) if query is slow and the
-                                   # .. reservation got meanwhile changed again (before calling this method);
-                                   # .. Therefore added the self._last_fetch timestamp explicitly to the SRSL record.
-                                   'SRSL_DATE': self._last_fetch,
-                                   },
-                                  commit=commit)
-
-    def _store_sihot_objid(self, table, pkey, objid, col_name_suffix=""):
-        obj_id = objid if str(objid) else '-' + (pkey[2:] if table == 'CD' else str(pkey))
-        id_col = table + "_SIHOT_OBJID" + col_name_suffix
-        pk_col = table + "_CODE"
-        return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = :pk", bind_vars=dict(pk=str(pkey)))
 
 
 class AcuServer(SihotXmlBuilder):
@@ -1449,7 +1332,7 @@ class AvailCatInfo(SihotXmlBuilder):
         #     self.add_tag('FLAGS', flags)    # there is no FLAGS element for the CATINFO oc?!?!?
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=AvailCatInfoResponse(self.ca))
+        err_msg = self.send_to_server(response_parser=AvailCatInfoResponse(self.cae))
 
         return err_msg or self.response.avail_room_cats
 
@@ -1465,48 +1348,24 @@ class CatRooms(SihotXmlBuilder):
             self.add_tag('SCOPE', scope)  # pass 'DESC' for to get room description
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=CatRoomResponse(self.ca))
+        err_msg = self.send_to_server(response_parser=CatRoomResponse(self.cae))
 
         return err_msg or self.response.cat_rooms
 
 
 class ClientToSihot(SihotXmlBuilder):
-    def __init__(self, ca, use_kernel_interface=USE_KERNEL_FOR_CLIENTS_DEF, map_client=MAP_CLIENT_DEF,
-                 connect_to_acu=True):
-        super(ClientToSihot, self).__init__(ca, elem_col_map=map_client, use_kernel_interface=use_kernel_interface,
-                                            connect_to_acu=connect_to_acu)
+    def __init__(self, cae):
+        super(ClientToSihot, self).__init__(cae)
 
-    def _fetch_from_acu(self, view, acu_id=''):
-        where_group_order = ''
-        if acu_id:
-            where_group_order += "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
-
-        err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order)
-        if not err_msg:
-            self.fetch_all_from_acu()
-        return err_msg
-
-    # use for sync only not for migration because we have clients w/o log entries
-    def fetch_from_acu_by_acu(self, acu_id=''):
-        return self._fetch_from_acu('V_ACU_CD_UNSYNCED', acu_id=acu_id)
-
-    # use for migration
-    def fetch_all_valid_from_acu(self):
-        return self._fetch_from_acu('V_ACU_CD_FILTERED')
-
-    # use for unfiltered client fetches
-    def fetch_from_acu_by_cd(self, acu_id):
-        return self._fetch_from_acu('V_ACU_CD_UNFILTERED', acu_id=acu_id)
-
-    def _prepare_guest_xml(self, c_row, action=None, col_name_suffix=''):
+    def _prepare_guest_xml(self, c_row, action=None, fld_name_suffix=''):
         if not action:
-            action = ACTION_UPDATE if c_row['CD_SIHOT_OBJID' + col_name_suffix] else ACTION_INSERT
+            action = ACTION_UPDATE if c_row['ShId' + fld_name_suffix] else ACTION_INSERT
         self.beg_xml(operation_code='GUEST-CHANGE' if action == ACTION_UPDATE else 'GUEST-CREATE')
         self.add_tag('GUEST-PROFILE' if self.use_kernel_interface else 'GUEST',
                      self.prepare_map_xml(c_row, action))
         self.end_xml()
-        self.ca.dprint("ClientToSihot._prepare_guest_xml() col_values/action/result: ",
-                       c_row, action, self.xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ClientToSihot._prepare_guest_xml() fld_values/action/result: ",
+                        c_row, action, self.xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         return action
 
     def _prepare_guest_link_xml(self, mc1, mc2, action):
@@ -1517,70 +1376,34 @@ class ClientToSihot(SihotXmlBuilder):
         self.beg_xml(operation_code='GUEST-CONTACT')
         self.add_tag('CONTACTLIST', mct1 + mct2)
         self.end_xml()
-        self.ca.dprint("ClientToSihot._prepare_guest_link_xml() mc1/mc2/result: ", mc1, mc2, self.xml,
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ClientToSihot._prepare_guest_link_xml() mc1/mc2/result: ", mc1, mc2, self.xml,
+                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _send_link_to_sihot(self, pk1, pk2, delete=False):
         self._prepare_guest_link_xml(pk1, pk2, delete)
         return self.send_to_server()
 
-    def _send_person_to_sihot(self, c_row, first_person=""):  # pass CD_CODE of first person for to send 2nd person
-        action = self._prepare_guest_xml(c_row, col_name_suffix='2' if first_person else '')
+    def _send_person_to_sihot(self, c_row, first_person=""):  # pass AcId of first person for to send 2nd person
+        action = self._prepare_guest_xml(c_row, fld_name_suffix='2' if first_person else '')
         err_msg = self.send_to_server()
         if 'guest exists already' in err_msg and action == ACTION_INSERT:  # and not self.use_kernel_interface:
             action = ACTION_UPDATE
-            self._prepare_guest_xml(c_row, action=action, col_name_suffix='2' if first_person else '')
+            self._prepare_guest_xml(c_row, action=action, fld_name_suffix='2' if first_person else '')
             err_msg = self.send_to_server()
-        if not err_msg and self.acu_connected and self.response:
-            err_msg = self._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response.objid,
-                                              col_name_suffix="2" if first_person else "")
         return err_msg, action
 
     def send_client_to_sihot(self, c_row=None, commit=False):
         if not c_row:
-            c_row = self.cols
-        err_msg, action_p1 = self._send_person_to_sihot(c_row)
-        couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
-        action_p2 = ''
-        if not err_msg and 'CD_CODE2' in c_row and c_row['CD_CODE2']:  # check for second person
-            crow2 = deepcopy(c_row)
-            for col_name in c_row.keys():
-                elem_name = 'P2_' + self.col_elem[col_name]
-                if elem_name in self.elem_col:
-                    crow2[col_name] = c_row[self.elem_col[elem_name]]
-            err_msg, action_p2 = self._send_person_to_sihot(crow2, c_row['CD_CODE'])
-            if not err_msg and action_p2 == ACTION_INSERT and c_row['SIHOT_GUESTTYPE1'] == SIHOT_AFF_COMPANY \
-                    and not self.use_kernel_interface:  # only link owners/investors
-                couple_linkage = '=P2'
-                err_msg = self._send_link_to_sihot(c_row['CD_CODE'], c_row['CD_CODE2'])
-            else:
-                couple_linkage = '+P2'
-        elif not err_msg and action_p1 == ACTION_INSERT and c_row['SIHOT_GUESTTYPE1'] == SIHOT_AFF_COMPANY \
-                and not self.use_kernel_interface:
-            # unlink second person if no longer exists in Acumen
-            couple_linkage = '-P2'
-            err_msg = self._send_link_to_sihot(c_row['CD_CODE'], '', delete=True)
-        action = action_p1 + ('/' + action_p2 if action_p2 else '')
-
-        if self.acu_connected:
-            log_err = self._add_to_acumen_sync_log('CD', c_row['CD_CODE'],
-                                                   action,
-                                                   'ERR' + (self.response.server_error() if self.response else '')
-                                                   if err_msg else 'SYNCED' + couple_linkage,
-                                                   err_msg,
-                                                   c_row.get('CDL_CODE', -966) or -969,
-                                                   commit=commit)
-            if log_err:
-                err_msg += "\nLogErr=" + log_err
-
+            c_row = self.fields
+        err_msg, action = self._send_person_to_sihot(c_row)
         if err_msg:
-            self.ca.dprint("ClientToSihot.send_client_to_sihot() row|action p1/2|err: ", c_row, action, err_msg)
+            self.cae.dprint("ClientToSihot.send_client_to_sihot() row|action|err: ", c_row, action, err_msg)
         else:
-            self.ca.dprint("ClientToSihot.send_client_to_sihot() client={} RESPONDED OBJID={}/MATCHCODE={}"
-                           .format(c_row['CD_CODE'], self.response.objid, self.response.matchcode),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("ClientToSihot.send_client_to_sihot() client={} RESPONDED OBJID={}/MATCHCODE={}"
+                            .format(c_row['AcId'], self.response.objid, self.response.matchcode),
+                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-        return err_msg
+        return err_msg, action
 
 
 class ConfigDict(SihotXmlBuilder):
@@ -1591,89 +1414,89 @@ class ConfigDict(SihotXmlBuilder):
         self.add_tag('LN', language)
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=ConfigDictResponse(self.ca))
+        err_msg = self.send_to_server(response_parser=ConfigDictResponse(self.cae))
 
         return err_msg or self.response.key_values
 
 
 class GuestSearch(SihotXmlBuilder):
     def __init__(self, ca):
-        super(GuestSearch, self).__init__(ca, elem_col_map=MAP_KERNEL_CLIENT, use_kernel_interface=True)
+        super(GuestSearch, self).__init__(ca, elem_fld_map=MAP_KERNEL_CLIENT, use_kernel=True)
 
     def get_guest(self, obj_id):
         """ return dict with guest data OR None in case of error
         """
         self.beg_xml(operation_code='GUEST-GET')
         self.add_tag('GUEST-PROFILE',
-                     self.prepare_map_xml({'CD_SIHOT_OBJID': obj_id}, action=ACTION_SEARCH, include_empty_values=False))
+                     self.prepare_map_xml({'ShId': obj_id}, action=ACTION_SEARCH, include_empty_values=False))
         self.end_xml()
 
-        rp = GuestSearchResponse(self.ca)
+        rp = GuestSearchResponse(self.cae)
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
             ret = self.response.ret_elem_values[0]
-            self.ca.dprint("GuestSearch.guest_get() obj_id|xml|result: ", obj_id, self.xml, ret,
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("GuestSearch.guest_get() obj_id|xml|result: ", obj_id, self.xml, ret,
+                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         else:
             uprint("GuestSearch.guest_get() obj_id|error: ", obj_id, err_msg)
             ret = None
         return ret
 
     def get_guest_nos_by_matchcode(self, matchcode, exact_matchcode=True):
-        col_values = {'CD_CODE': matchcode,
+        fld_values = {'AcId': matchcode,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
-        return self.search_guests(col_values, ['guest_nr'])
+        return self.search_guests(fld_values, ['guest_nr'])
 
     def get_objid_by_guest_no(self, guest_no):
-        col_values = {'SH_GUEST_NO': guest_no,
+        fld_values = {'SH_GUEST_NO': guest_no,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        ret = self.search_guests(col_values, ['objid'])
+        ret = self.search_guests(fld_values, ['objid'])
         return ret[0] if len(ret) > 0 else None
 
     def get_objids_by_guest_name(self, name):
         forename, surname = name.split(' ', maxsplit=1)
-        col_values = {'CD_SNAM1': surname,
-                      'CD_FNAM1': forename,
+        fld_values = {'Surname': surname,
+                      'Forename': forename,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(col_values, ['objid'])
+        return self.search_guests(fld_values, ['objid'])
 
     def get_objids_by_guest_names(self, surname, forename):
-        col_values = {'CD_SNAM1': surname,
-                      'CD_FNAM1': forename,
+        fld_values = {'Surname': surname,
+                      'Forename': forename,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(col_values, ['objid'])
+        return self.search_guests(fld_values, ['objid'])
 
     def get_objids_by_email(self, email):
-        col_values = {'CD_EMAIL': email,
+        fld_values = {'Email': email,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(col_values, ['objid'])
+        return self.search_guests(fld_values, ['objid'])
 
     def get_objids_by_matchcode(self, matchcode, exact_matchcode=True):
-        col_values = {'CD_CODE': matchcode,
+        fld_values = {'AcId': matchcode,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
-        return self.search_guests(col_values, ['objid'])
+        return self.search_guests(fld_values, ['objid'])
 
     def get_objid_by_matchcode(self, matchcode, exact_matchcode=True):
-        col_values = {'CD_CODE': matchcode,
+        fld_values = {'AcId': matchcode,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
-        ret = self.search_guests(col_values, [':objid'], key_elem_name='matchcode')
+        ret = self.search_guests(fld_values, [':objid'], key_elem_name='matchcode')
         if ret:
             return self._check_and_get_objid_of_matchcode_search(ret, matchcode, exact_matchcode)
 
     def search_agencies(self):
-        col_values = {'SIHOT_GUESTTYPE1': 7,
+        fld_values = {'GuestType': 7,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(col_values, ['OBJID', 'MATCHCODE'])
+        return self.search_guests(fld_values, ['OBJID', 'MATCHCODE'])
 
-    def search_guests(self, col_values, ret_elem_names, key_elem_name=None):
+    def search_guests(self, fld_values, ret_elem_names, key_elem_name=None):
         """ return dict with search element/attribute value as the dict key if len(ret_elem_names)==1 and if
             ret_elem_names[0][0]==':' (in this case key_elem_name has to provide the search element/attribute name)
             OR return list of values if len(ret_elem_names) == 1
@@ -1682,17 +1505,17 @@ class GuestSearch(SihotXmlBuilder):
         """
         self.beg_xml(operation_code='GUEST-SEARCH')
         self.add_tag('GUEST-SEARCH-REQUEST',
-                     self.prepare_map_xml(col_values, action=ACTION_SEARCH, include_empty_values=False))
+                     self.prepare_map_xml(fld_values, action=ACTION_SEARCH, include_empty_values=False))
         self.end_xml()
 
-        rp = GuestSearchResponse(self.ca, ret_elem_names, key_elem_name=key_elem_name)
+        rp = GuestSearchResponse(self.cae, ret_elem_names, key_elem_name=key_elem_name)
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
             ret = self.response.ret_elem_values
-            self.ca.dprint("GuestSearch.search_guests() col_values|xml|result: ", col_values, self.xml, ret,
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("GuestSearch.search_guests() fld_values|xml|result: ", fld_values, self.xml, ret,
+                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         else:
-            uprint("GuestSearch.search_guests() col_values|error: ", col_values, err_msg)
+            uprint("GuestSearch.search_guests() fld_values|error: ", fld_values, err_msg)
             ret = None
         return ret
 
@@ -1701,10 +1524,6 @@ class GuestSearch(SihotXmlBuilder):
         s = '\n   ...'
         if key_elem_value in ret_elem_values:
             ret = ret_elem_values[key_elem_value]
-        elif key_elem_value + AC_ID_2ND_COUPLE_SUFFIX in ret_elem_values:
-            ret = ret_elem_values[key_elem_value + AC_ID_2ND_COUPLE_SUFFIX] + s + "Only found OBJID of 2nd person: "
-        elif key_elem_value[-2:] == AC_ID_2ND_COUPLE_SUFFIX and key_elem_value[:-2] in ret_elem_values:
-            ret = ret_elem_values[key_elem_value[:-2]] + s + "Only found OBJID of 1st person matchcode: "
         else:
             ret = s + "OBJID of matchcode {} not found!!!".format(key_elem_value)
         if len(ret_elem_values) > 1 and not exact_matchcode:
@@ -1738,7 +1557,7 @@ class ResFetch(SihotXmlBuilder):
             self.add_tag('SCOPE', scope)  # e.g. BASICDATAONLY (see 14.3.4 in WEB interface doc)
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
+        err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
         # WEB interface return codes (RC): 29==res not found, 1==internal error - see 14.3.5 in WEB interface doc
 
         return err_msg or self.response.res_list[0]
@@ -1752,7 +1571,7 @@ class ResFetch(SihotXmlBuilder):
             self.add_tag('SCOPE', scope)  # e.g. BASICDATAONLY (see 14.3.4 in WEB interface doc)
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
+        err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
         # WEB interface return codes (RC): 29==res not found, 1==internal error - see 14.3.5 in WEB interface doc
 
         return err_msg or self.response.res_list[0]
@@ -1760,7 +1579,7 @@ class ResFetch(SihotXmlBuilder):
 
 class ResKernelGet(SihotXmlBuilder):
     def __init__(self, cae):
-        super(ResKernelGet, self).__init__(cae, use_kernel_interface=True)
+        super(ResKernelGet, self).__init__(cae, use_kernel=True)
 
     def fetch_res_no(self, obj_id, scope='GET'):
         """
@@ -1773,11 +1592,11 @@ class ResKernelGet(SihotXmlBuilder):
         self.add_tag('RESERVATION-PROFILE', self.new_tag('OBJID', obj_id) + self.new_tag('SCOPE', scope))
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=ResKernelResponse(self.ca))
+        err_msg = self.send_to_server(response_parser=ResKernelResponse(self.cae))
         if not err_msg and self.response:
             res_no = (self.response.hn, self.response.res_nr, self.response.sub_nr)
-            self.ca.dprint("ResKernelGet.fetch() obj_id|xml|res_no: ", obj_id, self.xml, res_no,
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("ResKernelGet.fetch() obj_id|xml|res_no: ", obj_id, self.xml, res_no,
+                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         else:
             res_no = None
             uprint("ResKernelGet.fetch() obj_id|error: ", obj_id, err_msg)
@@ -1809,7 +1628,7 @@ class ResSearch(SihotXmlBuilder):
             self.add_tag('CENTRAL-GUEST-ID', guest_id)  # this is not filtering nothing (tried GID from Sihot-To-Acu IF)
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
+        err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
 
         """
         20.5 Return Codes (RC):
@@ -1835,80 +1654,45 @@ class ResSearch(SihotXmlBuilder):
 
 
 class ResToSihot(SihotXmlBuilder):
-    def __init__(self, ca,
-                 use_kernel_interface=USE_KERNEL_FOR_RES_DEF, use_kernel_for_new_clients=USE_KERNEL_FOR_CLIENTS_DEF,
-                 map_res=MAP_RES_DEF, map_client=MAP_CLIENT_DEF,
-                 connect_to_acu=True):
-        super(ResToSihot, self).__init__(ca, elem_col_map=map_res, use_kernel_interface=use_kernel_interface,
-                                         connect_to_acu=connect_to_acu)
-        self.use_kernel_for_new_clients = use_kernel_for_new_clients
-        self.map_client = map_client
+    def __init__(self, cae):
+        super(ResToSihot, self).__init__(cae)
+        self.use_kernel_for_new_clients = cae.get_option('useKernelForClient')
+        self.map_client = cae.get_option('mapClient')
 
-        self._warning_frags = self.ca.get_config('warningFragments') or list()  # list of fragments to identify warnings
+        self._warning_frags = self.cae.get_config('warningFragments') or list()  # list of warning text fragments
         self._warning_msgs = ""
         self._gds_err_rows = dict()
 
-    def _fetch_from_acu(self, view, where_group_order, date_range, hints=''):
-        if date_range == 'H':
-            where_group_order += (" and " if where_group_order else "") + "ARR_DATE < trunc(sysdate)"
-        elif date_range == 'M':
-            where_group_order += (" and " if where_group_order else "") \
-                                 + "DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31"
-        elif date_range and date_range[0] == 'Y':     # temporary/interim solution for migration of BHH/HMC - plan B
-            where_group_order += (" and (" if where_group_order else "") \
-                + "DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31" \
-                + " or RUL_SIHOT_HOTEL in (1, 4, 999) or RUL_SIHOT_LAST_HOTEL in (1, 4, 999)" \
-                + (" or ROWNUM <= " + date_range[1:6] if date_range[1:] else "") \
-                + (")" if where_group_order else "")
-        elif date_range == 'P':
-            where_group_order += (" and " if where_group_order else "") + "DEP_DATE >= trunc(sysdate)"
-        elif date_range == 'F':
-            where_group_order += (" and " if where_group_order else "") + "ARR_DATE >= trunc(sysdate)"
-        err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order, hints=hints)
-        if not err_msg:
-            self.fetch_all_from_acu()
-        return err_msg
-
-    def fetch_from_acu_by_aru(self, where_group_order='', date_range=''):
-        return self._fetch_from_acu('V_ACU_RES_UNSYNCED', where_group_order, date_range, hints='/*+ NO_CPU_COSTING */')
-
-    def fetch_from_acu_by_cd(self, acu_id, date_range=''):
-        where_group_order = "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
-        return self._fetch_from_acu('V_ACU_RES_UNFILTERED', where_group_order, date_range)
-
-    def fetch_all_valid_from_acu(self, where_group_order='', date_range=''):
-        return self._fetch_from_acu('V_ACU_RES_FILTERED', where_group_order, date_range)
-
     def _add_sihot_configs(self, crow):
-        mkt_seg = crow.get('SIHOT_MKT_SEG', crow.get('RUL_SIHOT_RATE', ''))  # SIHOT_MKT_SEG not available if RU deleted
-        hotel_id = str(crow.get('RUL_SIHOT_HOTEL', 999))
-        arr_date = crow.get('ARR_DATE')
+        mkt_seg = crow.get('ResMktSegment', '')
+        hotel_id = str(crow.get('ResHotelId', 999))
+        arr_date = crow.get('arr_date')
         today = datetime.datetime.today()
-        cf = self.ca.get_config
+        cf = self.cae.get_config
 
         if arr_date and arr_date > today:            # Sihot doesn't accept allotment for reservations in the past
             val = cf(mkt_seg + '_' + hotel_id, section='SihotAllotments',
                      default_value=cf(mkt_seg, section='SihotAllotments'))
             if val:
-                crow['SIHOT_ALLOTMENT_NO'] = val
+                crow['ResAllotmentNo'] = val
 
-        if not crow.get('SIHOT_RATE_SEGMENT'):  # not specified? FYI: this column is not included in V_ACU_RES_DATA
-            val = cf(mkt_seg, section='SihotRateSegments', default_value=crow['RUL_SIHOT_RATE'])
+        if not crow.get('ResRateSegment'):  # not specified? FYI: this field is not included in V_ACU_RES_DATA
+            val = cf(mkt_seg, section='SihotRateSegments', default_value=crow['ResMktSegment'])
             if val:
-                crow['SIHOT_RATE_SEGMENT'] = val
+                crow['ResRateSegment'] = val
 
         val = cf(mkt_seg, section='SihotPaymentInstructions')
         if val:
-            crow['SIHOT_PAYMENT_INST'] = val
+            crow['ResAccount'] = val
 
-        if crow.get('RUL_ACTION', '') != 'DELETE' and crow.get('RU_STATUS', 0) != 120 and arr_date and arr_date > today:
+        if crow.get('ResAction', '') != 'DELETE' and crow.get('RU_STATUS', 0) != 120 and arr_date and arr_date > today:
             val = cf(mkt_seg, section='SihotResTypes')
             if val:
-                crow['SH_RES_TYPE'] = val
+                crow['ResStatus'] = val
 
     def _prepare_res_xml(self, crow):
         self._add_sihot_configs(crow)
-        action = crow['RUL_ACTION']
+        action = crow['ResAction']
         inner_xml = self.prepare_map_xml(crow, action)
         if self.use_kernel_interface:
             if action == ACTION_INSERT:
@@ -1919,24 +1703,14 @@ class ResToSihot(SihotXmlBuilder):
         else:
             self.beg_xml(operation_code='RES', add_inner_xml=inner_xml)
         self.end_xml()
-        self.ca.dprint("ResToSihot._prepare_res_xml() result: ", self.xml,
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ResToSihot._prepare_res_xml() result: ", self.xml,
+                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _send_res_to_sihot(self, crow, commit):
         self._prepare_res_xml(crow)
 
-        err_msg, warn_msg = self._handle_error(crow, self.send_to_server(response_parser=ResResponse(self.ca)))
-        if self.acu_connected:
-            if not err_msg and self.response:
-                err_msg = self._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response.objid)
-            err_msg += self._add_to_acumen_sync_log('RU', crow['RUL_PRIMARY'],
-                                                    crow['RUL_ACTION'],
-                                                    "ERR" + (self.response.server_error() if self.response else "")
-                                                    if err_msg else "SYNCED",
-                                                    err_msg + ("W" + warn_msg if warn_msg else ""),
-                                                    crow['RUL_CODE'],
-                                                    commit=commit)
-        return err_msg
+        err_msg, warn_msg = self._handle_error(crow, self.send_to_server(response_parser=ResResponse(self.cae)))
+        return err_msg, warn_msg
 
     def _handle_error(self, crow, err_msg):
         warn_msg = ""
@@ -1945,79 +1719,35 @@ class ResToSihot(SihotXmlBuilder):
             self._warning_msgs += "\n\n" + warn_msg
             err_msg = ""
         elif err_msg:
-            assert crow['SIHOT_GDSNO']
-            assert crow['SIHOT_GDSNO'] not in self._gds_err_rows
-            self._gds_err_rows[crow['SIHOT_GDSNO']] = (crow, err_msg)
+            assert crow['ResGdsNo']
+            assert crow['ResGdsNo'] not in self._gds_err_rows
+            self._gds_err_rows[crow['ResGdsNo']] = (crow, err_msg)
         return err_msg, warn_msg
 
     def _ensure_clients_exist_and_updated(self, crow, ensure_client_mode):
         if ensure_client_mode == ECM_DO_NOT_SEND_CLIENT:
             return ""
         err_msg = ""
-        if 'CD_CODE' in crow and crow['CD_CODE']:
-            acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
-                                       map_client=self.map_client, connect_to_acu=self.acu_connected)
-            if self.acu_connected:
-                client_synced = bool(crow['CD_SIHOT_OBJID'])
-                if client_synced:
-                    err_msg = acu_client.fetch_from_acu_by_acu(crow['CD_CODE'])
-                else:
-                    err_msg = acu_client.fetch_from_acu_by_cd(crow['CD_CODE'])
-                if not err_msg:
-                    if acu_client.row_count:
-                        err_msg = acu_client.send_client_to_sihot()
-                    elif not client_synced:
-                        err_msg = "ResToSihot._ensure_clients_exist_and_updated(): client not found: " + crow['CD_CODE']
-                    if not err_msg:
-                        err_msg = acu_client.fetch_from_acu_by_cd(crow['CD_CODE'])  # re-fetch OBJIDs
-                    if not err_msg and not acu_client.row_count:
-                        err_msg = "ResToSihot._ensure_clients_exist_and_updated(): IntErr/client: " + crow['CD_CODE']
-                    if not err_msg:
-                        # transfer just created guest OBJIDs from guest to reservation record
-                        crow['CD_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
-                        crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] or acu_client.cols['CD_SIHOT_OBJID']
-                        crow['CD_SIHOT_OBJID2'] = acu_client.cols['CD_SIHOT_OBJID2']
-            else:
-                err_msg = acu_client.send_client_to_sihot(crow)
-                if not err_msg:
-                    # get client/occupant objid directly from acu_client.response
-                    crow['CD_SIHOT_OBJID'] = acu_client.response.objid
+        if 'AcId' in crow and crow['AcId']:
+            acu_client = ClientToSihot(self.cae)
+            err_msg = acu_client.send_client_to_sihot(crow)
+            if not err_msg:
+                # get client/occupant objid directly from acu_client.response
+                crow['ShId'] = acu_client.response.objid
 
-        if not err_msg and 'OC_CODE' in crow and crow['OC_CODE'] \
-                and len(crow['OC_CODE']) == 7:  # exclude pseudo client like TCAG/TCRENT
-            acu_client = ClientToSihot(self.ca, use_kernel_interface=self.use_kernel_for_new_clients,
-                                       map_client=self.map_client, connect_to_acu=self.acu_connected)
-            if self.acu_connected:
-                client_synced = bool(crow['OC_SIHOT_OBJID'])
-                if client_synced:
-                    err_msg = acu_client.fetch_from_acu_by_acu(crow['OC_CODE'])
-                else:
-                    err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
-                if not err_msg:
-                    if acu_client.row_count:
-                        err_msg = acu_client.send_client_to_sihot()
-                    elif not client_synced:
-                        err_msg = "ResToSihot._ensure_clients_exist_and_updated(): invalid orderer " + crow['OC_CODE']
-                    if not err_msg:
-                        err_msg = acu_client.fetch_from_acu_by_cd(crow['OC_CODE'])
-                    if not err_msg and not acu_client.row_count:
-                        err_msg = "ResToSihot._ensure_clients_exist_and_updated(): IntErr/orderer: " + crow['OC_CODE'] \
-                            + ", cols=" + repr(getattr(acu_client, 'cols', "unDef")) + ", synced=" + str(client_synced)
-                    if not err_msg:
-                        # transfer just created guest OBJIDs from guest to reservation record
-                        crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
-            else:
-                err_msg = acu_client.send_client_to_sihot(crow)
-                if not err_msg:
-                    # get orderer objid directly from acu_client.response
-                    crow['SH_OBJID'] = crow['OC_SIHOT_OBJID'] = acu_client.response.objid
+        if not err_msg and crow.get('ResOrdererMc') and len(crow['ResOrdererMc']) == 7:  # exclude OTAs like TCAG/TCRENT
+            acu_client = ClientToSihot(self.cae)
+            err_msg = acu_client.send_client_to_sihot(crow)
+            if not err_msg:
+                # get orderer objid directly from acu_client.response
+                crow['ResOrdererId'] = acu_client.response.objid
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
     def send_row_to_sihot(self, crow=None, commit=False, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
         if not crow:
-            crow = self.cols
-        gds_no = crow.get('SIHOT_GDSNO', '')
+            crow = self.fields
+        gds_no = crow.get('ResGdsNo', '')
         if gds_no:
             if gds_no in self._gds_err_rows:    # prevent send of follow-up changes on erroneous bookings (w/ same GDS)
                 old_id = self.res_id_desc(*self._gds_err_rows[gds_no], separator="\n")
@@ -2028,60 +1758,50 @@ class ResToSihot(SihotXmlBuilder):
 
             err_msg = self._ensure_clients_exist_and_updated(crow, ensure_client_mode)
             if not err_msg:
-                err_msg = self._send_res_to_sihot(crow, commit)
-                if self.acu_connected and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']) \
-                        and "Could not find a key identifier" in err_msg:  # WEB interface
-                    self.ca.dprint("ResToSihot.send_row_to_sihot() ignoring CD_SIHOT_OBJID(" +
-                                   str(crow['CD_SIHOT_OBJID']) + "/" + str(crow['CD_SIHOT_OBJID2']) + ") error: " +
-                                   err_msg)
-                    crow['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead
-                    crow['CD_SIHOT_OBJID2'] = None
-                    err_msg = self._send_res_to_sihot(crow, commit)
+                err_msg, warn_msg = self._send_res_to_sihot(crow, commit)
         else:
-            err_msg = self.res_id_desc(crow, "ResToSihot.send_row_to_sihot(): sync with empty GDS number skipped")
+            err_msg = self.res_id_desc(crow, "AcuResToSihot.send_row_to_sihot(): sync with empty GDS number skipped")
 
         if err_msg:
-            self.ca.dprint("ResToSihot.send_row_to_sihot() error: " + err_msg)
+            self.cae.dprint("ResToSihot.send_row_to_sihot() error: {}".format(err_msg))
         else:
-            self.ca.dprint("ResToSihot.send_row_to_sihot() GDSNO={} RESPONDED OBJID={}|MATCHCODE={}"
-                           .format(gds_no, self.response.objid, self.response.matchcode),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("ResToSihot.send_row_to_sihot() GDSNO={} RESPONDED OBJID={} MATCHCODE={}"
+                            .format(gds_no, self.response.objid, self.response.matchcode),
+                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return err_msg
 
-    def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False, commit_last_row=True):
+    def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False):
         ret_msg = ""
-        for row in self.rows:
+        for row in self.recs:
             err_msg = self.send_row_to_sihot(row, commit=commit_per_row)
             if err_msg:
                 if break_on_error:
                     return err_msg  # BREAK/RETURN first error message
                 ret_msg += "\n" + err_msg
-        if commit_last_row:
-            ret_msg += self.ora_db.commit()
         return ret_msg
 
     def res_id_label(self):
-        return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.ca.get_option('debugLevel') else "")
+        return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.cae.get_option('debugLevel') else "")
 
     def res_id_values(self, crow):
-        return str(crow.get('SIHOT_GDSNO')) + \
-               "/" + str(crow.get('RH_EXT_BOOK_REF')) + \
-               "/" + str(crow.get('CD_CODE')) + "/" + str(crow.get('RUL_SIHOT_RATE')) + \
+        return str(crow.get('ResGdsNo')) + \
+               "/" + str(crow.get('ResVoucherNo')) + \
+               "/" + str(crow.get('AcId')) + "/" + str(crow.get('ResMktSegment')) + \
                ("/" + str(crow.get('RUL_PRIMARY')) + "/" + str(crow.get('RUL_CODE'))
-                if self.ca.get_option('debugLevel') and 'RUL_PRIMARY' in crow and 'RUL_CODE' in crow
+                if self.cae.get_option('debugLevel') and 'RUL_PRIMARY' in crow and 'RUL_CODE' in crow
                 else "")
 
     def res_id_desc(self, crow, error_msg, separator="\n\n"):
         indent = 8
-        return crow.get('RUL_ACTION', '') + " RESERVATION: " \
-            + (crow['ARR_DATE'].strftime('%d-%m') if crow.get('ARR_DATE') else "unknown") + ".." \
-            + (crow['DEP_DATE'].strftime('%d-%m-%y') if crow.get('DEP_DATE') else "unknown") \
-            + " in " + (crow['RUL_SIHOT_ROOM'] + "=" if crow.get('RUL_SIHOT_ROOM') else "") \
-            + str(crow.get('RUL_SIHOT_CAT')) \
-            + ("!" + crow.get('SH_PRICE_CAT', '')
-               if crow.get('SH_PRICE_CAT') and crow.get('SH_PRICE_CAT') != crow.get('RUL_SIHOT_CAT') else "") \
-            + " at hotel " + str(crow.get('RUL_SIHOT_HOTEL')) \
+        return crow.get('ResAction', '') + " RESERVATION: " \
+            + (crow['ResArrival'].strftime('%d-%m') if crow.get('ResArrival') else "unknown") + ".." \
+            + (crow['ResDeparture'].strftime('%d-%m-%y') if crow.get('ResDeparture') else "unknown") \
+            + " in " + (crow['ResRoomNo'] + "=" if crow.get('ResRoomNo') else "") \
+            + str(crow.get('ResRoomCat')) \
+            + ("!" + crow.get('ResPriceCat', '')
+               if crow.get('ResPriceCat') and crow.get('ResPriceCat') != crow.get('ResRoomCat') else "") \
+            + " at hotel " + str(crow.get('ResHotelId')) \
             + separator + " " * indent + self.res_id_label() + "==" + self.res_id_values(crow) \
             + (separator + "\n".join(wrap("ERROR: " + _strip_error_message(error_msg), subsequent_indent=" " * indent))
                if error_msg else "") \

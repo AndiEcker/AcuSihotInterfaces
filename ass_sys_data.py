@@ -1267,11 +1267,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         return apt_wk, year
 
     def sh_client_upsert(self, fields_dict):
-        guest = ClientToSihot(self.cae, connect_to_acu=False)
+        guest = ClientToSihot(self.cae)
         col_values = dict()
         for fld, val in fields_dict.items():
             col_name = ac_fld_name(fld)
-            if col_name and col_name in guest.acu_col_names:
+            if col_name and col_name in guest.acu_fld_names:
                 col_values[col_name] = val
         return guest.send_client_to_sihot(col_values)
 
@@ -1377,7 +1377,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param hotel_id:    Sihot hotel id for which the reservation was made.
         :param gds_no:      GDS number of the reservation to fetch (optional, use res_id/sub_id instead).
         :param res_id:      Reservation number (optional, used gds_no instead).
-        :param sub_id:      Reservation subordinal number (optional, used gds_no instead).
+        :param sub_id:      Reservation sub-ordinal number (optional, used gds_no instead).
         :return:            dict of reservation data or str with error message.
         """
         res_fetch = ResFetch(self.cae)

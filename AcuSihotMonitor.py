@@ -20,7 +20,7 @@ from functools import partial
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, ResToSihot, ResSearch
+from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, AcuResToSihot, ResSearch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.4'
@@ -127,7 +127,7 @@ def ass_test_link_alive():
 def sih_reservation_discrepancies(data_dict):
     beg_day = data_dict['first_occupancy_criteria']  # datetime.datetime.today()
     end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))
-    req = ResToSihot(cae)
+    req = AcuResToSihot(cae)
     results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
                                            " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'"
                                            " order by ARR_DATE, CD_CODE")
@@ -659,7 +659,7 @@ class AcuSihotMonitorApp(App):
                     if isinstance(filter_selection, dict) and 'from_join' in filter_selection:
                         acu_db = config_data.acu_db
                         err_msg = acu_db.select(from_join=filter_selection['from_join'],
-                                                cols=filter_selection['cols'],
+                                                cols=filter_selection['fields'],
                                                 where_group_order=filter_selection.get('where_group_order'),
                                                 bind_vars=filter_selection.get('bind_vars', dict()))
                         if err_msg:

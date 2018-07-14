@@ -349,11 +349,7 @@ class ResBulkFetcher(BulkFetcherBase):
 class ResSender:
     def __init__(self, cae):
         self.cae = cae
-        self.res_sender = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
-                                     map_res=cae.get_option('mapRes'),
-                                     use_kernel_for_new_clients=cae.get_option('useKernelForClient'),
-                                     map_client=cae.get_option('mapClient'),
-                                     connect_to_acu=False)
+        self.res_sender = ResToSihot(cae)
         self.debug_level = cae.get_option('debugLevel')
 
     @staticmethod
@@ -361,53 +357,45 @@ class ResSender:
         """
         complete reservation data row (crow) with the default values (specified in row_def underneath), while
         the following fields are mandatory:
-            RUL_SIHOT_HOTEL, ARR_DATE, DEP_DATE, RUL_SIHOT_CAT, RUL_SIHOT_RATE, OC_CODE, SIHOT_GDSNO.
+            ResHotelId, ResArrival, ResDeparture, ResRoomCat, ResMktSegment, ResOrdererMc, ResGdsNo.
 
         :param crow:    reservation data row (dict).
         :return:        completed reservation data row (new dict).
 
         These fields will not be completed/changed at all:
-            RUL_SIHOT_ROOM, SIHOT_NOTE, SIHOT_TEC_NOTE, SH_EXT_REF (flight no), SIHOT_ALLOTMENT_NO, RH_EXT_BOOK_REF.
+            ResRoomNo, ResNote, ResLongNote, ResFlightNo (flight no), ResAllotmentNo, ResVoucherNo.
 
         optional fields:
-            OC_SIHOT_OBJID (alternatively usable instead of matchcode value OC_CODE/SH_MC).
-            SH_ADULT1_NAME and SH_ADULT1_NAME2 (surname and firstname)
-            SH_ADULT2_NAME and SH_ADULT2_NAME2 ( ... )
+            ResOrdererId (alternatively usable instead of matchcode value ResOrdererMc).
+            ResAdult1Surname and ResAdult1Forename (surname and firstname)
+            ResAdult2Surname and ResAdult2Forename ( ... )
         optional auto-populated fields (==default value):
-            SH_MC (==OC_CODE)
-            SH_OBJID (==OC_SIHOT_OBJID)
-            RUL_ACTION (=='INSERT')
-            RH_EXT_BOOK_DATE (==today)
-            SH_PRICE_CAT (==RUL_SIHOT_CAT)
-            RUL_SIHOT_PACK (=='RO')
-            SIHOT_PAYMENT_INST (==1)
-            RU_SOURCE (=='A')
-            SIHOT_MKT_SEG and SIHOT_RATE_SEGMENT (==RUL_SIHOT_RATE)
-            RO_RES_GROUP (=='RS')
-            SH_ROOMS (==1)
-            RU_ADULTS (==2)
-            RU_CHILDREN (==0)
+            ShId (==ResOrdererId)
+            ResAction (=='INSERT')
+            ResBooked (==today)
+            ResPriceCat (==ResRoomCat)
+            ResBoard (=='RO')
+            ResAccount (==1)
+            ResSource (=='A')
+            ResRateSegment (==ResMktSegment)
+            ResMktGroup (=='RS')
+            ResAdults (==2)
+            ResChildren (==0)
 
         """
-        row_def = dict(SH_RES_TYPE='1',
-                       SH_MC=crow.get('OC_CODE', ''),
-                       SH_OBJID=crow.get('OC_SIHOT_OBJID', ''),
-                       RUL_ACTION='INSERT',
-                       RH_EXT_BOOK_DATE=datetime.datetime.today(),
-                       SH_PRICE_CAT=crow.get('RUL_SIHOT_CAT', ''),
-                       RUL_SIHOT_PACK='RO',    # room only (no board/meal-plan)
-                       SIHOT_PAYMENT_INST=1,
-                       RU_SOURCE='A',
-                       SIHOT_MKT_SEG=crow.get('RUL_SIHOT_RATE', ''),
-                       SIHOT_RATE_SEGMENT=crow.get('RUL_SIHOT_RATE', ''),
-                       RO_RES_GROUP='RS',
-                       SH_ROOMS=1,
-                       RU_ADULTS=2,
-                       RU_CHILDREN=0,
-                       SH_PERS_SEQ1=0,
-                       SH_ROOM_SEQ1=0,
-                       SH_PERS_SEQ2=1,
-                       SH_ROOM_SEQ2=0,
+        row_def = dict(ResStatus='1',
+                       AcId=crow.get('ResOrdererMc', ''),
+                       ShId=crow.get('ResOrdererId', ''),
+                       ResAction='INSERT',
+                       ResBooked=datetime.datetime.today(),
+                       ResPriceCat=crow.get('ResRoomCat', ''),
+                       ResBoard='RO',    # room only (no board/meal-plan)
+                       ResAccount=1,
+                       ResSource='A',
+                       ResRateSegment=crow.get('ResMktSegment', ''),
+                       ResMktGroup='RS',
+                       ResAdults=2,
+                       ResChildren=0,
                        )
         row_def.update(crow)
 
@@ -426,8 +414,8 @@ class ResSender:
                 err = ""
             elif 'setDataRoom not available!' in err:  # was: 'A_Persons::setDataRoom not available!'
                 err = "Apartment {} occupied between {} and {} - created GDS-No {} for manual allocation." \
-                                .format(crow['RUL_SIHOT_ROOM'], crow['ARR_DATE'].strftime('%d-%m-%Y'),
-                                        crow['DEP_DATE'].strftime('%d-%m-%Y'), crow['SIHOT_GDSNO']) \
+                                .format(crow['ResRoomNo'], crow['ResArrival'].strftime('%d-%m-%Y'),
+                                        crow['ResDeparture'].strftime('%d-%m-%Y'), crow['ResGdsNo']) \
                       + (" Original error: " + err if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
         elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
             msg = "Sent res: " + str(crow)

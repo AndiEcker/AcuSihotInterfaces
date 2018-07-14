@@ -15,9 +15,9 @@ import datetime
 
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from sxmlif import ClientToSihot, ResToSihot, ACTION_UPDATE, ACTION_DELETE, \
+from sxmlif import ACTION_UPDATE, ACTION_DELETE, \
     ERR_MESSAGE_PREFIX_CONTINUE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
-from acif import add_ac_options
+from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
 from shif import add_sh_options
 from ass_sys_data import AssSysData
 
@@ -95,8 +95,7 @@ if cae.get_option('clientsFirst'):
     try:
         uprint("####  Sync CD Changes.....  ####")
 
-        acumen_cd = ClientToSihot(cae, use_kernel_interface=cae.get_option('useKernelForClient'),
-                                  map_client=cae.get_option('mapClient'))
+        acumen_cd = AcuClientToSihot(cae)
         error_msg = acumen_cd.fetch_from_acu_by_acu()
         progress = Progress(debug_level, start_counter=acumen_cd.row_count,
                             start_msg='Prepare sending of {run_counter} client detail changes to Sihot',
@@ -127,10 +126,7 @@ if not error_msg:
 
         config_data = AssSysData(cae)
         hotel_ids = config_data.ho_id_list()     # determine active/valid Sihot-hotels
-        acumen_req = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
-                                map_res=cae.get_option('mapRes'),
-                                use_kernel_for_new_clients=cae.get_option('useKernelForClient'),
-                                map_client=cae.get_option('mapClient'))
+        acumen_req = AcuResToSihot(cae)
         error_msg = acumen_req.fetch_from_acu_by_aru(date_range=sync_date_range)
         if error_msg:
             notification.send_notification(error_msg, subject='SihotResSync fetch error notification',

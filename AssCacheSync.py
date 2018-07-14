@@ -11,7 +11,7 @@ from collections import OrderedDict
 
 from ae_console_app import ConsoleApp, uprint, to_ascii, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
-from sxmlif import ResToSihot, AC_ID_2ND_COUPLE_SUFFIX
+from sxmlif import AcuResToSihot, AC_ID_2ND_COUPLE_SUFFIX
 from shif import elem_value, pax_count, gds_no, elem_path_join, guest_data, SH_DATE_FORMAT
 from sfif import obj_from_id
 from ass_sys_data import (add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone,
@@ -362,7 +362,7 @@ def ac_pull_res_data():
     where = act_record_filters.get('R')
     if where:
         where = "(" + where + ")"
-    acumen_req = ResToSihot(cae)
+    acumen_req = AcuResToSihot(cae)
     error_msg = acumen_req.fetch_all_valid_from_acu(date_range='P', where_group_order=where)
     if error_msg:
         return error_msg

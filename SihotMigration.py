@@ -6,7 +6,7 @@
 
 from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace
 from acif import add_ac_options
-from sxmlif import ClientToSihot, ResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
+from sxmlif import AcuClientToSihot, AcuResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
 from shif import add_sh_options, print_sh_options
 
 
@@ -54,8 +54,8 @@ uprint("####  Migration of .......  ####")
 if cae.get_option('clientsFirst'):
     uprint('####  ... Clients' + ('+Res' if cae.get_option('clientsFirst') == 2 else '....')
            + ('.....' if future_only else 'Hist.') + '  ####')
-    acumen_cd = ClientToSihot(cae)
-    acu_res_hist = ResToSihot(cae)
+    acumen_cd = AcuClientToSihot(cae)
+    acu_res_hist = AcuResToSihot(cae)
 
     error_msg = acumen_cd.fetch_all_valid_from_acu()
     progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_cd.row_count,
@@ -101,18 +101,18 @@ if cae.get_option('clientsFirst'):
 uprint("####  ... " + ("future Res......" if future_only else "Reservations....") + "  ####")
 
 try:
-    acumen_req = ResToSihot(cae)
+    acumen_req = AcuResToSihot(cae)
     error_msg = acumen_req.fetch_from_acu_by_aru(date_range=sync_date_range)
     if not error_msg:
         progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.row_count,
                             start_msg='Prepare the migration of {total_count} reservations to Sihot',
                             nothing_to_do_msg='SihotMigration: acumen_req.fetch_all_valid_from_acu() returning no rows')
         if include_cxl_res:
-            all_rows = acumen_req.rows
+            all_rows = acumen_req.recs
         else:
             all_rows = list()
             del_gds_nos = list()
-            for crow in reversed(acumen_req.rows):
+            for crow in reversed(acumen_req.recs):
                 gds_no = crow['RUL_PRIMARY']
                 if gds_no in del_gds_nos:
                     continue

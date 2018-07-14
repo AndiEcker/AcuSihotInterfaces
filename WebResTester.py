@@ -1,6 +1,6 @@
 from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import SihotXmlBuilder, ResToSihot, SXML_DEF_ENCODING
-from acif import add_ac_options
+from sxmlif import SihotXmlBuilder
+from acif import AcuResToSihot, add_ac_options
 from shif import add_sh_options
 
 __version__ = '0.1'
@@ -32,14 +32,14 @@ if client_code or gds_no:
 
     uprint('####  Fetching client res  ####')
 
-    acumen_req = ResToSihot(cae, use_kernel_interface=False)
+    acumen_req = AcuResToSihot(cae)
     err_msg = acumen_req.fetch_from_acu_by_aru("RU_CODE = " + gds_no if gds_no else "CD_CODE = '" + client_code + "'")
     if not err_msg and not acumen_req.row_count:
         if gds_no:
             err_msg = acumen_req.fetch_all_valid_from_acu(where_group_order="RU_CODE = " + gds_no)
         else:
             err_msg = acumen_req.fetch_from_acu_by_cd(client_code)      # UNFILTERED !!! (possibly inactive hotel)
-    progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.row_count,
+    progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.rec_count,
                         start_msg='####  Prepare sending of {total_count} reservation requests' + client_msg,
                         nothing_to_do_msg='****  SihotMigration: acumen_req fetch returning no rows')
 
@@ -55,7 +55,7 @@ else:
     with open('test/WebResTester.req', 'r') as f:
         xml = f.read()
 
-    sxb = SihotXmlBuilder(cae, use_kernel_interface=False, elem_col_map=(), connect_to_acu=False)
+    sxb = SihotXmlBuilder(cae)
     sxb.xml = xml
 
     uprint('####  Sending ...........  ####')
