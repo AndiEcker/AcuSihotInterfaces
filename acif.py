@@ -6,7 +6,7 @@ from copy import deepcopy
 
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB
-from sxmlif import (ClientToSihot, ResToSihot,
+from sxmlif import (SihotXmlBuilder, ClientToSihot, ResToSihot,
                     EXT_REF_COUNT, RES_MAX_ADULTS, RES_MAX_CHILDREN,
                     ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT)
 
@@ -51,11 +51,14 @@ FIELD_MAP = [
     ('ExtRefs', 'EXT_REFS'),
     # reservation data
     ('ResHotelId', 'RUL_SIHOT_HOTEL'),
+    ('ResNumber', ''),
+    ('ResSubNumber', ''),
     ('ResGdsNo', 'SIHOT_GDSNO',
      "nvl(SIHOT_GDSNO, case when RUL_SIHOT_RATE in ('TC', 'TK') then case when RUL_ACTION <> 'UPDATE'"
      " then (select 'TC' || RH_EXT_BOOK_REF from T_RH"
      " where RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
      " else '(lost)' end else to_char(RUL_PRIMARY) end)"),  # RUL_PRIMARY needed for to delete/cancel res
+    ('ResObjectId', ''),
     ('ResArrival', 'ARR_DATE',
      "case when ARR_DATE is not NULL then ARR_DATE when RUL_ACTION <> 'UPDATE'"
      " then to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'), 'DD-MM-YY')"
@@ -432,3 +435,32 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder, AcuDbRow):
         if commit_last_row:
             ret_msg += self.ora_db.commit()
         return ret_msg
+
+
+class AcuServer(SihotXmlBuilder):
+    def time_sync(self):
+        self.beg_xml(operation_code='TS')
+        self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
+        self.end_xml()
+
+        err_msg = self.send_to_server()
+        if err_msg:
+            ret = err_msg
+        else:
+            ret = '' if self.response.rc == '0' else 'Time Sync Error code ' + self.response.rc
+
+        return ret
+
+    def link_alive(self, level='0'):
+        self.beg_xml(operation_code='TS')
+        self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
+        self.add_tag('STATUS', level)  # 0==request, 1==link OK
+        self.end_xml()
+
+        err_msg = self.send_to_server()
+        if err_msg:
+            ret = err_msg
+        else:
+            ret = '' if self.response.rc == '0' else 'Link Alive Error code ' + self.response.rc
+
+        return ret

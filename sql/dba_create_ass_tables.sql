@@ -130,14 +130,15 @@ SELECT audit.audit_table('res_inventories');
 CREATE TABLE res_groups
 (
   rgr_pk                  SERIAL PRIMARY KEY,
-  rgr_ho_fk               VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),   -- SIHOT hotel id (e.g. '1'==BHC, ...)
-  rgr_res_id              VARCHAR(18) NOT NULL,         -- SIHOT reservation id (res-number / sub-number)
+  rgr_ho_fk               VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),   -- Sihot hotel id (e.g. '1'==BHC, ...)
+  rgr_res_id              VARCHAR(18) NOT NULL,         -- Sihot reservation id (res-number / sub-number)
   rgr_sub_id              VARCHAR(3) NOT NULL DEFAULT '1',
-  rgr_obj_id              VARCHAR(15) NOT NULL UNIQUE,  -- SIHOT reservation object ID
-  rgr_gds_no              VARCHAR(24),                  -- opt. SIHOT reservation GDSNO
+  rgr_gds_no              VARCHAR(24),                  -- opt. Sihot reservation GDSNO
   rgr_order_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgr_used_ri_fk          INTEGER REFERENCES res_inventories(ri_pk),
   rgr_rci_deposit_ri_fk   INTEGER REFERENCES res_inventories(ri_pk),
+  rgr_obj_id              VARCHAR(15) NOT NULL UNIQUE,  -- Sihot reservation object ID
+  rgr_sf_id               VARCHAR(18),                  -- Salesforce Reservation Opportunity ID
   rgr_status              VARCHAR(3),
   rgr_adults              INTEGER NOT NULL DEFAULT 2,
   rgr_children            INTEGER NOT NULL DEFAULT 0,
@@ -160,6 +161,8 @@ CREATE TABLE res_groups
   rgr_last_sync           TIMESTAMP,                                      -- last sync to Salesforce
   UNIQUE (rgr_ho_fk, rgr_res_id, rgr_sub_id)
 );
+COMMENT ON COLUMN res_groups.rgr_obj_id IS 'Sihot Reservation Object ID';
+COMMENT ON COLUMN res_groups.rgr_sf_id IS 'Salesforce Reservation Opportunity ID';
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_groups');
 

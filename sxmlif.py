@@ -1289,35 +1289,6 @@ class SihotXmlBuilder:
         self._xml = value
 
 
-class AcuServer(SihotXmlBuilder):
-    def time_sync(self):
-        self.beg_xml(operation_code='TS')
-        self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
-        self.end_xml()
-
-        err_msg = self.send_to_server()
-        if err_msg:
-            ret = err_msg
-        else:
-            ret = '' if self.response.rc == '0' else 'Time Sync Error code ' + self.response.rc
-
-        return ret
-
-    def link_alive(self, level='0'):
-        self.beg_xml(operation_code='TS')
-        self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
-        self.add_tag('STATUS', level)  # 0==request, 1==link OK
-        self.end_xml()
-
-        err_msg = self.send_to_server()
-        if err_msg:
-            ret = err_msg
-        else:
-            ret = '' if self.response.rc == '0' else 'Link Alive Error code ' + self.response.rc
-
-        return ret
-
-
 class AvailCatInfo(SihotXmlBuilder):
     def avail_rooms(self, hotel_id='', room_cat='', from_date=datetime.date.today(), to_date=datetime.date.today()):
         # flags=''):  # SKIP-HIDDEN-ROOM-TYPES'):
@@ -1532,7 +1503,7 @@ class GuestSearch(SihotXmlBuilder):
 
 
 class PostMessage(SihotXmlBuilder):
-    def post_message(self, msg, level=3, system='AcuSihot.Interface'):
+    def post_message(self, msg, level=3, system='sxmlif_module'):
         self.beg_xml(operation_code='SYSMESSAGE')
         self.add_tag('MSG', msg)
         self.add_tag('LEVEL', str(level))
@@ -1625,7 +1596,7 @@ class ResSearch(SihotXmlBuilder):
             self.add_tag('SCOPE', scope)  # e.g. EXPORTEXTENDEDCOMMENT;FORCECALCDAYPRICE;CALCSUMDAYPRICE
         if guest_id:
             # TODO: ask Gubse to fix guest_id search/filter option on RES-SEARCH operation of Sihot WEB interface.
-            self.add_tag('CENTRAL-GUEST-ID', guest_id)  # this is not filtering nothing (tried GID from Sihot-To-Acu IF)
+            self.add_tag('CENTRAL-GUEST-ID', guest_id)  # this is not filtering nothing (tried GID)
         self.end_xml()
 
         err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
