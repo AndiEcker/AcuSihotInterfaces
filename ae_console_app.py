@@ -361,6 +361,7 @@ class ConsoleApp:
         self._log_max_size = log_max_size
         self._log_file_name = ""
         self._log_file_index = 0
+        self._nul_std_out = None
         self.multi_threading = multi_threading
         self.suppress_stdout = suppress_stdout
 

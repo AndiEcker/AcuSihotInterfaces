@@ -415,7 +415,8 @@ MAP_WEB_RES = \
          'elemHideIf': "'RO_SIHOT_SP_GROUP' not in c"},
         {'elemName': 'CHANNEL', 'colName': 'RO_SIHOT_RES_GROUP', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'RO_SIHOT_RES_GROUP' not in c"},
-        # {'elemName': 'NN2', 'colName': 'RO_RES_CLASS'},  # other option using Mkt-CM_NAME (see Q_SIHOT_SETUP#L244)
+        {'elemName': 'NN2', 'colName': 'ResSfId',
+         'elemHideIf': "'ResSfId' not in c"},
         {'elemName': 'EXT-REFERENCE', 'colName': 'SH_EXT_REF', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'RU_FLIGHT_NO' not in c",   # see also currently unused PICKUP-COMMENT-ARRIVAL element
          'colValFromAcu': "trim(RU_FLIGHT_NO || ' ' || RU_FLIGHT_PICKUP || ' ' || RU_FLIGHT_AIRPORT)"},
@@ -855,7 +856,7 @@ class ResChange(SihotXmlParser):
         if tag == 'SIHOT-Reservation':
             self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc=list()))
         elif tag in ('FIRST-Person', 'SIHOT-Person'):       # FIRST-Person only seen in room change (CI) on first occ
-            self.rgr_list[-1]['rgc'].append(dict())
+            self.rgr_list[-1]['rgc_list'].append(dict())
 
     def data(self, data):
         if super(ResChange, self).data(data) is None and self._curr_tag not in ('MATCHCODE', 'OBJID'):
@@ -895,25 +896,25 @@ class ResChange(SihotXmlParser):
 
         # rgc/reservation clients elements
         elif self._curr_tag == 'GID':                       # Sihot Guest object ID
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'ShId'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'ShId'
         elif self._curr_tag == 'MATCHCODE':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'AcId'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'AcId'
         elif self._curr_tag == 'SN':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_surname'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_surname'
         elif self._curr_tag == 'CN':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_firstname'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_firstname'
         elif self._curr_tag == 'DOB':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_dob'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_dob'
         elif self._curr_tag == 'PHONE':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_phone'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_phone'
         elif self._curr_tag == 'EMAIL':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_email'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_email'
         elif self._curr_tag == 'LN':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_language'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_language'
         elif self._curr_tag == 'COUNTRY':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_country'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_country'
         elif self._curr_tag == 'RN':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_room_id'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_room_id'
 
         # unsupported elements
         else:
@@ -1730,12 +1731,17 @@ class PostMessage(SihotXmlBuilder):
 
 
 class ResFetch(SihotXmlBuilder):
-    def fetch_by_gds_no(self, ho_id, gds_no, scope='BASICDATAONLY'):
+    def fetch_res(self, ho_id, gds_no=None, res_id=None, sub_id=None, scope='USEISODATE'):
         self.beg_xml(operation_code='SS')
         self.add_tag('ID', ho_id)
-        self.add_tag('GDSNO', gds_no)
+        if gds_no:
+            self.add_tag('GDSNO', gds_no)
+        else:
+            self.add_tag('RES-NR', res_id)
+            self.add_tag('SUB-NR', sub_id)
         if scope:
-            self.add_tag('SCOPE', scope)  # e.g. BASICDATAONLY (see 14.3.4 in WEB interface doc)
+            # e.g. BASICDATAONLY only sends RESERVATION xml block (see 14.3.4 in WEB interface doc)
+            self.add_tag('SCOPE', scope)
         self.end_xml()
 
         err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
@@ -1743,19 +1749,11 @@ class ResFetch(SihotXmlBuilder):
 
         return err_msg or self.response.res_list[0]
 
-    def fetch_by_res_id(self, ho_id, res_id, sub_id, scope='BASICDATAONLY'):
-        self.beg_xml(operation_code='SS')
-        self.add_tag('ID', ho_id)
-        self.add_tag('RES-NR', res_id)
-        self.add_tag('SUB-NR', sub_id)
-        if scope:
-            self.add_tag('SCOPE', scope)  # e.g. BASICDATAONLY (see 14.3.4 in WEB interface doc)
-        self.end_xml()
+    def fetch_by_gds_no(self, ho_id, gds_no, scope='USEISODATE'):
+        return self.fetch_res(ho_id, gds_no=gds_no, scope=scope)
 
-        err_msg = self.send_to_server(response_parser=ResFromSihot(self.ca))
-        # WEB interface return codes (RC): 29==res not found, 1==internal error - see 14.3.5 in WEB interface doc
-
-        return err_msg or self.response.res_list[0]
+    def fetch_by_res_id(self, ho_id, res_id, sub_id, scope='USEISODATE'):
+        return self.fetch_res(ho_id, res_id=res_id, sub_id=sub_id, scope=scope)
 
 
 class ResKernelGet(SihotXmlBuilder):

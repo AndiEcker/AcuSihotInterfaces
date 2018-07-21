@@ -63,8 +63,8 @@ class TestElemHelpers:
         assert pax_count(dict(NOPAX=dict(elemVal='2'), NOCHILDS=dict(elemVal='1'))) == 3
 
     def test_gds_no(self):
-        assert gds_no(dict()) is None
-        assert gds_no(dict(GDSNO=dict(elemVal='123abc'))) == '123abc'
+        assert gds_number(dict()) is None
+        assert gds_number(dict(GDSNO=dict(elemVal='123abc'))) == '123abc'
 
     def test_date_range(self):
         ds = '2018-06-01'
@@ -113,15 +113,30 @@ class TestElemHelpers:
 
 
 class TestIdConverters:
-    def test_gds_no_to_obj_id(self, console_app_env):
-        # test res of Z007184 from 26.12.17 until 3.1.2018
-        assert '60544' == gds_no_to_obj_id(console_app_env, '4', '899993')
-
+    # test res of Z007184 from 26.12.17 until 3.1.2018
     def test_obj_id_to_res_no(self, console_app_env):
         assert ('4', '33220', '1') == obj_id_to_res_no(console_app_env, '60544')
 
+    def test_gds_no_to_obj_id(self, console_app_env):
+        assert '60544' == gds_no_to_obj_id(console_app_env, '4', '899993')
+
     def test_res_no_to_obj_id(self, console_app_env):
         assert '60544' == res_no_to_obj_id(console_app_env, '4', '33220', '1')
+
+    def test_gds_no_to_obj_ids(self, console_app_env):
+        ids = gds_no_to_ids(console_app_env, '4', '899993')
+        assert '60544' == ids['ResObjId']
+        assert '33220' == ids['ResResId']
+        assert '1' == ids['ResSubId']
+        assert 'ResSfId' in ids
+        assert ids['ResSfId'] is None
+
+    def test_res_no_to_obj_ids(self, console_app_env):
+        ids = res_no_to_ids(console_app_env, '4', '33220', '1')
+        assert '60544' == ids['ResObjId']
+        assert '899993' == ids['ResGdsNo']
+        assert 'ResSfId' in ids
+        assert ids['ResSfId'] is None
 
 
 class TestResSender:

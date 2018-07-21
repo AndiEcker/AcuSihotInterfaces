@@ -76,16 +76,21 @@ def elem_value(shd, elem_name_or_path, arri=0, verbose=False, default_value=None
     :param default_value:       default element value.
     :return:                    element value.
     """
+    elem_path = ""
     if isinstance(elem_name_or_path, list):
-        elem_name_or_path = elem_path_join(elem_name_or_path)
-    is_path = ELEM_PATH_SEP in elem_name_or_path
-    elem_nam = elem_name_or_path.rsplit(ELEM_PATH_SEP, 1)[1] if is_path else elem_name_or_path
+        if len(elem_name_or_path) > 1:
+            elem_path = elem_path_join(elem_name_or_path)
+        else:
+            elem_name_or_path = elem_name_or_path[0]
+    elif ELEM_PATH_SEP in elem_name_or_path:
+        elem_path = elem_name_or_path
+    elem_nam = elem_path.rsplit(ELEM_PATH_SEP, 1)[1] if elem_path else elem_name_or_path
 
     elem_val = None
     if elem_nam not in shd:
         elem_val = ELEM_MISSING if verbose else default_value
-    elif is_path:
-        val_arr = elem_path_values(shd, elem_name_or_path)
+    elif elem_path:
+        val_arr = elem_path_values(shd, elem_path)
         if 0 <= arri < len(val_arr):
             elem_val = val_arr[arri]
     else:
@@ -126,7 +131,7 @@ def pax_count(shd):
     return adults + children
 
 
-def gds_no(shd):
+def gds_number(shd):
     return elem_value(shd, 'GDSNO')
 
 
@@ -159,22 +164,33 @@ def date_range_chunks(date_from, date_till, fetch_max_days):
         yield chunk_from, chunk_till
 
 
-def gds_no_to_obj_id(cae, hotel_id, gdsno):
-    obj_id = None
+def gds_no_to_ids(cae, hotel_id, gdsno):
+    ids = dict(ResHotelId=hotel_id, ResGdsNo=gdsno)
     rfr = ResFetch(cae).fetch_by_gds_no(hotel_id, gdsno)
     if isinstance(rfr, dict):
-        obj_id = elem_value(rfr, 'OBJID')
-    return obj_id
+        ids['ResObjId'] = elem_value(rfr, ['SIHOT-Document', 'RESERVATION', 'OBJID'])
+        ids['ResResId'] = elem_value(rfr, 'RES-NR')
+        ids['ResSubId'] = elem_value(rfr, 'SUB-NR')
+        ids['ResSfId'] = elem_value(rfr, 'NN2')
+    return ids
+
+
+def gds_no_to_obj_id(cae, hotel_id, gdsno):
+    return gds_no_to_ids(cae, hotel_id, gdsno).get('ResObjId')
+
+
+def res_no_to_ids(cae, hotel_id, res_id, sub_id):
+    ids = dict(ResHotelId=hotel_id, ResResId=res_id, ResSubId=sub_id)
+    rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
+    if isinstance(rfr, dict):
+        ids['ResObjId'] = elem_value(rfr, ['SIHOT-Document', 'RESERVATION', 'OBJID'])
+        ids['ResGdsNo'] = elem_value(rfr, 'GDSNO')
+        ids['ResSfId'] = elem_value(rfr, 'NN2')
+    return ids
 
 
 def res_no_to_obj_id(cae, hotel_id, res_id, sub_id):
-    obj_id = None
-    if not sub_id:
-        sub_id = '1'
-    rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
-    if isinstance(rfr, dict):
-        obj_id = elem_value(rfr, 'OBJID')
-    return obj_id
+    return res_no_to_ids(cae, hotel_id, res_id, sub_id).get('ResObjId')
 
 
 def obj_id_to_res_no(cae, obj_id):
