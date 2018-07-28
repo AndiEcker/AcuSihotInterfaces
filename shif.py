@@ -180,13 +180,15 @@ def gds_no_to_obj_id(cae, hotel_id, gdsno):
 
 
 def res_no_to_ids(cae, hotel_id, res_id, sub_id):
-    ids = dict(ResHotelId=hotel_id, ResResId=res_id, ResSubId=sub_id)
+    ret = dict(ResHotelId=hotel_id, ResResId=res_id, ResSubId=sub_id)
     rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
     if isinstance(rfr, dict):
-        ids['ResObjId'] = elem_value(rfr, ['SIHOT-Document', 'RESERVATION', 'OBJID'])
-        ids['ResGdsNo'] = elem_value(rfr, 'GDSNO')
-        ids['ResSfId'] = elem_value(rfr, 'NN2')
-    return ids
+        ret['ResObjId'] = elem_value(rfr, ['SIHOT-Document', 'RESERVATION', 'OBJID'])
+        ret['ResGdsNo'] = elem_value(rfr, 'GDSNO')
+        ret['ResSfId'] = elem_value(rfr, 'NN2')
+    else:
+        ret = rfr
+    return ret
 
 
 def res_no_to_obj_id(cae, hotel_id, res_id, sub_id):

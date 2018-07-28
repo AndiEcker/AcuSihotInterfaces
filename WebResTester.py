@@ -4,7 +4,7 @@ from sxmlif import SihotXmlBuilder, ResToSihot, ResResponse, ResFetch, ResSearch
 from acif import add_ac_options
 from shif import add_sh_options
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 RES_REQ_FILE = 'test/WebResTester.req'
 RES_SS_RESP = 'test/OC_SS_Response.xml'

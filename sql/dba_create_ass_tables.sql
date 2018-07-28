@@ -140,8 +140,8 @@ CREATE TABLE res_groups
   rgr_gds_no              VARCHAR(24),                  -- opt. Sihot reservation GDSNO
   rgr_sf_id               VARCHAR(18),                  -- Salesforce Reservation Opportunity ID
   rgr_status              VARCHAR(3),
-  rgr_adults              INTEGER NOT NULL DEFAULT 2,
-  rgr_children            INTEGER NOT NULL DEFAULT 0,
+  rgr_adults              INTEGER,
+  rgr_children            INTEGER,
   rgr_arrival             DATE,
   rgr_departure           DATE,
   rgr_mkt_segment         VARCHAR(3),

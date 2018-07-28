@@ -281,9 +281,10 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
 
     # creating new log file and backup of current one if the current one has more than 20 MB in size
     if _ca_instance is not None:
-        _ca_instance.log_file_check_rotation()
-        if _ca_instance.multi_threading:            # add thread ident
+        if getattr(_ca_instance, 'multi_threading', False):            # add thread ident
             print_objects = (" <{: >6}>".format(threading.get_ident()),) + print_objects
+        if getattr(_ca_instance, '_log_file_obj', False):
+            _ca_instance.log_file_check_rotation()
 
     # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
     # ..UnicodeEncodeError: 'charmap' codec can't encode character '\x9f' in position 191: character maps to <undefined>
@@ -320,6 +321,11 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                 fixed_objects.append(obj)
             print_objects = fixed_objects
         try_counter += 1
+
+
+def dprint(*objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_ENABLED):
+    if _ca_instance is None or _get_debug_level() >= minimum_debug_level:
+        uprint(*objects, sep=sep, end=end, file=file)
 
 
 INI_EXT = '.ini'
@@ -387,6 +393,7 @@ class ConsoleApp:
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
         app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
         config_files = [os.path.join(app_path, '.console_app_env.cfg'), os.path.join(cwd_path, '.console_app_env.cfg'),
+                        os.path.join(app_path, '.sys_envTEST.cfg'), os.path.join(cwd_path, '.sys_envTEST.cfg'),
                         os.path.join(app_path, '.sys_env.cfg'), os.path.join(cwd_path, '.sys_env.cfg'),
                         app_path_fnam + '.cfg', app_path_fnam + INI_EXT,
                         cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT,
@@ -420,24 +427,32 @@ class ConsoleApp:
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
 
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
-        """ defining and adding an new option for this app as INI/CFG var and as command line argument.
+        """
+        defining and adding an new option for this app as INI/CFG var and as command line argument.
 
-            The name and desc arguments are strings that are specifying the name and short description of the option
-            of the console app. The name value will also be available as long command line argument option (case-sens.).
-
-            The value argument is specifying the default value and the type of the option. It will be used only
-            if the config values are not specified in any config file. The command line argument option value
-            will always overwrite this value (and any value in any config file).
-
-            If the short option character get not passed into short_opt then the first character of the name
-            is used. The short options 'D' and 'L' are used internally (recommending using only lower-case options).
+        :param name:        string specifying the name and short description of this new option.
+                            The name value will also be available as long command line argument option (case-sens.).
+        :param desc:        description string of this new option.
+        :param value:       default value and the type of the option. The value will be used only if the config values
+                            are not specified in any config file. The command line argument option value
+                            will always overwrite this value (and any value in any config file).
+        :param short_opt:   short option character. If not passed or passed as '' then the first character of the name
+                            will be used. Please note that the short options 'D' and 'L' are used internally
+                            (recommending using only lower-case options for your application).
+        :param choices:     list of valid option values (optional, default=allow all values).
+        :param multiple:    True if option can be added multiple times to command line (optional, default=False).
 
             For string expressions that need to evaluated for to determine their value you either can pass
             True for the evaluate parameter or you enclose the string expression with triple high commas.
         """
         self._parsed_args = None        # request (re-)parsing of command line args
-        if not short_opt:
+        if short_opt == '':
             short_opt = name[0]
+
+        args = list()
+        if short_opt and len(short_opt) == 1:
+            args.append('-' + short_opt)
+        args.append('--' + name)
 
         # determine config value for to use as default for command line arg
         setting = Setting(name=name, value=value)
@@ -449,7 +464,9 @@ class ConsoleApp:
             if choices:
                 kwargs['choices'] = None    # for multiple options this instance need to check the choices
                 self.config_choices[name] = choices
-        self._arg_parser.add_argument('-' + short_opt, '--' + name, **kwargs)
+
+        self._arg_parser.add_argument(*args, **kwargs)
+
         self.config_options[name] = setting
 
     def add_parameter(self, *args, **kwargs):
@@ -763,23 +780,26 @@ class NamedLocks:
     def __init__(self, *lock_names, sys_lock=False):
         self._lock_names = lock_names
         self._sys_lock = sys_lock
-        _ca_instance.dprint("NamedLocks.__init__", lock_names, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
+        self.dprint = _ca_instance.dprint if _ca_instance and getattr(_ca_instance, 'startup_end', False) else dprint
+
+        self.dprint("NamedLocks.__init__", lock_names, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         assert not sys_lock, "sys_lock is currently not implemented"
 
     def __enter__(self):
-        _ca_instance.dprint("NamedLocks.__enter__", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.__enter__", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         for lock_name in self._lock_names:
-            _ca_instance.dprint("NamedLocks.__enter__ b4 acquire ", lock_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.dprint("NamedLocks.__enter__ b4 acquire ", lock_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.acquire(lock_name)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        _ca_instance.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         for lock_name in self._lock_names:
-            _ca_instance.dprint("NamedLocks.__exit__ b4 release ", lock_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.dprint("NamedLocks.__exit__ b4 release ", lock_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.release(lock_name)
 
     def acquire(self, lock_name, *args, **kwargs):
-        _ca_instance.dprint("NamedLocks.acquire", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.acquire", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         with self.locks_change_lock:
             if lock_name in self.active_locks:
                 self.active_lock_counters[lock_name] += 1
@@ -788,12 +808,12 @@ class NamedLocks:
                 self.active_lock_counters[lock_name] = 1
 
         lock_acquired = self.active_locks[lock_name].acquire(*args, **kwargs)
-        _ca_instance.dprint("NamedLocks.acquire", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.acquire", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return lock_acquired
 
     def release(self, lock_name, *args, **kwargs):
-        _ca_instance.dprint("NamedLocks.release", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.release", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         with self.locks_change_lock:
             if self.active_lock_counters[lock_name] == 1:
                 del self.active_lock_counters[lock_name]
@@ -803,4 +823,4 @@ class NamedLocks:
                 lock = self.active_locks[lock_name]
 
         lock.release(*args, **kwargs)
-        _ca_instance.dprint("NamedLocks.release", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.release", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)

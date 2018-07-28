@@ -415,8 +415,8 @@ MAP_WEB_RES = \
          'elemHideIf': "'RO_SIHOT_SP_GROUP' not in c"},
         {'elemName': 'CHANNEL', 'colName': 'RO_SIHOT_RES_GROUP', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'RO_SIHOT_RES_GROUP' not in c"},
-        {'elemName': 'NN2', 'colName': 'ResSfId',
-         'elemHideIf': "'ResSfId' not in c"},
+        #{'elemName': 'NN2', 'colName': 'ResSfId',
+        # 'elemHideIf': "'ResSfId' not in c"},
         {'elemName': 'EXT-REFERENCE', 'colName': 'SH_EXT_REF', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'RU_FLIGHT_NO' not in c",   # see also currently unused PICKUP-COMMENT-ARRIVAL element
          'colValFromAcu': "trim(RU_FLIGHT_NO || ' ' || RU_FLIGHT_PICKUP || ' ' || RU_FLIGHT_AIRPORT)"},

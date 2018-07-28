@@ -366,6 +366,7 @@ def ac_pull_res_data():
     if error_msg:
         return error_msg
     for crow in acumen_req.rows:
+        # TODO: refactor to use AssSysData.sh_res_change_to_ass()
         # determine orderer
         ord_cl_pk = conf_data.cl_ass_id_by_ac_id(crow['OC_CODE'])
         if ord_cl_pk is None:
@@ -379,7 +380,8 @@ def ac_pull_res_data():
         # determine used reservation inventory
         year, week = conf_data.rci_arr_to_year_week(crow['ARR_DATE'])
         apt_wk = "{}-{:0>2}".format(crow['RUL_SIHOT_ROOM'], week)
-        if ass_db.select('res_inventories', ['ri_pk'], "ri_pk = :aw AND ri_usage_year = :y", dict(aw=apt_wk, y=year)):
+        if ass_db.select('res_inventories', ['ri_pk'], "ri_pr_fk = :aw AND ri_usage_year = :y",
+                         dict(aw=apt_wk, y=year)):
             error_msg = ass_db.last_err_msg
             break
         ri_pk = ass_db.fetch_value()
@@ -421,10 +423,7 @@ def ac_pull_res_data():
                           rgr_long_comment=crow['SIHOT_TEC_NOTE'],
                           rgr_time_in=ac_res[0],
                           rgr_time_out=ac_res[1],
-                          rgr_created_by=ass_user,
-                          rgr_created_when=cae.startup_beg,
                           rgr_last_change=cae.startup_beg,
-                          rgr_last_sync=cae.startup_beg
                           )
         if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
             error_msg = ass_db.last_err_msg
@@ -624,7 +623,7 @@ def sh_pull_res_data():
     rbf_groups = ass_options['ResBulkFetcher'].fetch_all()
     error_msg = ""
     for shd in rbf_groups:
-        error_msg = conf_data.sh_res_dict_to_ass(shd)
+        error_msg = conf_data.sh_res_change_to_ass(shd)
         if error_msg:
             break
 
