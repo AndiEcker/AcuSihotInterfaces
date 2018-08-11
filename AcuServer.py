@@ -54,7 +54,7 @@ def client_to_acu(col_values, ca=None):
     err_msg = ora_db.connect()
     pkey = None
     if not err_msg:
-        if 'CD_CODE' in col_values and col_values['CD_CODE']:
+        if col_values.get('CD_CODE'):
             pkey = col_values['CD_CODE']
         else:
             err_msg = ora_db.select('dual', ['S_OWNER_SEQ.nextval'])

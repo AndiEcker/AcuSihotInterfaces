@@ -1068,8 +1068,7 @@ class GuestSearchResponse(SihotXmlParser):
                     values = dict()
                     for key in keys:
                         elem = self._elem_col_map_parser.elem_col_map[key]
-                        elem_val = elem['elemListVal'] if 'elemListVal' in elem \
-                            else (elem['elemVal'] if 'elemVal' in elem else None)
+                        elem_val = elem['elemListVal'] if 'elemListVal' in elem else elem.get('elemVal')
                         values[key] = getattr(self, key, elem_val)
                         # Q&D fix for search_agencies(): prevent to add elemListVal key/item in next run
                         if 'elemVal' in elem:
@@ -1146,7 +1145,7 @@ class GuestFromSihot(ColMapXmlParser):
             self.ca.dprint("GuestFromSihot.end(): guest data parsed", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.acu_col_values = dict()
             for c in self.elem_col_map.keys():
-                if 'elemVal' in self.elem_col_map[c] and self.elem_col_map[c]['elemVal']:
+                if self.elem_col_map[c].get('elemVal'):
                     val = self.elem_col_map[c]['colValToAcu'] if 'colValToAcu' in self.elem_col_map[c] \
                         else self.elem_col_map[c]['elemVal']
                     col_name = self.elem_col_map[c]['colName']
@@ -1204,10 +1203,10 @@ class SihotXmlBuilder:
         self.use_kernel_interface = use_kernel_interface
         elem_col_map = deepcopy(elem_col_map)
         self.sihot_elem_col = [(c['elemName'],
-                                c['colName'] if 'colName' in c else None,
+                                c.get('colName'),
                                 ((' or a in "' + c['elemHideInActions'] + '"' if 'elemHideInActions' in c else '')
                                  + (' or ' + c['elemHideIf'] if 'elemHideIf' in c else ''))[4:],
-                                c['colVal'] if 'colVal' in c else None)
+                                c.get('colVal'))
                                for c in elem_col_map if not c.get('buildExclude', False)]
         # self.fix_col_values = {c['colName']: c['colVal'] for c in elem_col_map if 'colName' in c and 'colVal' in c}
         # acu_col_names and acu_col_expres need to be in sync

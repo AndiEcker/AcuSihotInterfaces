@@ -55,6 +55,7 @@ _COMMENT = 8
 
 # default search fields for external systems (SF e.g. used by AssSysData.sf_client_field_data())
 SF_DEF_SEARCH_FIELD = 'SfId'
+SF_DEF_RES_SEARCH_FIELD = 'ReservationOpportunityId'
 SH_DEF_SEARCH_FIELD = 'ShId'
 
 
@@ -144,7 +145,7 @@ FIELD_NAMES = dict(AssId=dict(Desc="AssCache client PKey", AssSysDataClientsIdx=
                               AssDb='cl_email', AcDb='CD_EMAIL', Account='PersonEmail',
                               Sihot=dict(in_list=['EMAIL-1', 'EMAIL-2'])),
                    Phone=dict(Desc="Client phone", AssSysDataClientsIdx=_PHONE,
-                              AssDb='cl_phone', AcDb='CD_HTEL1',
+                              AssDb='cl_phone', AcDb='CD_HTEL1', Account='PersonHomePhone',
                               Sihot=dict(in_list=['PHONE-1', 'PHONE-2', 'MOBIL-1', 'MOBIL-2'])),
                    ExtRefs=dict(Desc="Client external references", AssSysDataClientsIdx=_EXT_REFS),
                    Products=dict(Desc="Products owned by client", AssSysDataClientsIdx=_PRODUCTS),
@@ -274,10 +275,18 @@ def field_dict_from_sf(sf_dict, sf_obj):
     return code_dict
 
 
-def client_fields(exclude_fields=None):
+def fields_with(field_def_key_name, exclude_fields=None):
     if exclude_fields is None:
         exclude_fields = list()
-    return list(k for k, v in FIELD_NAMES.items() if 'AssSysDataClientsIdx' in v and k not in exclude_fields)
+    return list(k for k, v in FIELD_NAMES.items() if field_def_key_name in v and k not in exclude_fields)
+
+
+def client_fields(exclude_fields=None):
+    return fields_with('AssSysDataClientsIdx', exclude_fields=exclude_fields)
+
+
+def res_fields(exclude_fields=None):
+    return fields_with('AssSysDataResIdx', exclude_fields=exclude_fields)
 
 
 def correct_email(email, changed=False, removed=None):
@@ -826,6 +835,24 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 cl_pk = self.ass_db.fetch_value()
         return cl_pk
 
+    def cl_sf_id_by_ass_id(self, ass_id):
+        """
+        :param ass_id:  AssCache client Id/PKey.
+        :return:        Salesforce Contact/Account Id.
+        """
+        sf_id = None
+        for cl_rec in self.clients:
+            if cl_rec[_ASS_ID] == ass_id:
+                sf_id = cl_rec[_SF_ID]
+                break
+        if not sf_id:
+            if self.ass_db.select('clients', ['cl_sf_id'], "cl_pk = :ass_id", dict(ass_id=ass_id)):
+                self.error_message = "cl_sf_id_by_ass_id(): AssCache client ID {} not found (err={})" \
+                    .format(ass_id, self.ass_db.last_err_msg)
+            else:
+                sf_id = self.ass_db.fetch_value()
+        return sf_id
+
     def cl_ensure_id(self, sh_id=None, ac_id=None, name=None, email=None, phone=None):
         """
         determine client id in ass_cache database, from either sh_id or ac_id, create the client record if not exists.
@@ -1052,8 +1079,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return ret
 
-    def rgr_fetch_list(self, col_names, chk_values):
-        where_clause = " AND ".join([k + " = :" + k for k in chk_values.keys()])
+    def rgr_fetch_list(self, col_names, chk_values, where_clause=""):
+        if not where_clause:
+            where_clause = " AND ".join([k + " = :" + k for k in chk_values.keys()])
         if self.ass_db.select('res_groups', col_names, where_clause, chk_values):
             self.error_message = self.ass_db.last_err_msg
         ret = self.ass_db.fetch_all()
@@ -1061,7 +1089,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message += self.ass_db.last_err_msg
         return ret
 
-    def rgr_upsert(self, col_values, chk_values=None, commit=False, multiple_row_update=False):
+    def rgr_upsert(self, col_values, chk_values=None, commit=False, multiple_row_update=False, returning_column=''):
         """
         upsert into ass_cache.res_groups
 
@@ -1070,7 +1098,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                     (opt, def=IDs from col_values items: obj_id, ho_id+res_id+sub_id, gds_no or sf_id).
         :param commit:              pass True to commit (opt, def=False).
         :param multiple_row_update: allow update of multiple records with the same chk_values (opt, def=False).
-        :return:                    error message on error else empty string.
+        :param returning_column:    name of the returning column or empty (opt, def='').
+        :return:                    returning_column value (if specified) OR chk_values OR None if self.error message.
         """
         if chk_values is None:
             chk_values = self.rgr_min_chk_values(col_values)
@@ -1080,19 +1109,25 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 if k in col_values and col_values.get(k) in (None, ''):
                     col_values.pop(k)   # remove pk column with empty value
         '''
+        ret = None
         if not chk_values:
             self.error_message = "rgr_upsert({}, {}): Missing reservation IDs (ObjId, Hotel/ResId or GdsNo)" \
                 .format(col_values, chk_values)
         elif not multiple_row_update and not self.rgr_complete_ids(col_values, chk_values):
             self.error_message = "rgr_upsert({}, {}): Incomplete-able reservation IDs".format(col_values, chk_values)
         else:
-            self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values, 'rgr_pk', commit=commit,
+            self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values,
+                                                    returning_column=returning_column, commit=commit,
                                                     multiple_row_update=multiple_row_update)
             if not self.error_message and not multiple_row_update and self.ass_db.curs.rowcount != 1:
                 self.error_message = "rgr_upsert({}, {}): Invalid affected row count; expected 1 but got {}" \
                     .format(col_values, chk_values, self.ass_db.curs.rowcount)
+            elif returning_column:
+                ret = self.ass_db.fetch_value()
+            else:
+                ret = chk_values
 
-        return self.error_message
+        return ret
 
     def rgc_upsert(self, col_values, chk_values=None, commit=False, multiple_row_update=False):
         """
@@ -1138,10 +1173,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     def rci_ro_group(self, c_idx, is_guest, file_name, line_num):
         """ determine seg=RE RG RI RL  and  grp=RCI External, RCI Guest, RCI Internal, RCI External """
-        if self.clients[c_idx][_PRODUCTS]:
+        if self.clients[c_idx][_PRODUCTS] and not is_guest:
             key = 'Internal'
         else:  # not an owner/internal, so will be either Guest or External
-            key = 'Guest' if is_guest else 'External'
+            # changed by Esther/Nitesh - now Guest is External: key = 'Guest' if is_guest else 'External'
+            key = 'External'
         seg, desc, grp = self.cae.get_config(key, 'RcMktSegments').split(',')
         if file_name[:3].upper() == 'RL_':
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -1360,7 +1396,52 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def sf_client_id_by_email(self, email, sf_obj=DEF_CLIENT_OBJ):
         return self.sf_client_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
 
-    def sf_res_upsert(self, rgr_sf_id, sh_cl_data, ass_res_data, sync_cache=True):
+    def sf_res_data(self, res_opp_id):
+        """
+        fetch client+res data from SF Reservation Opportunity object (identified by res_opp_id)
+        :param res_opp_id:  value for to identify client record.
+        :return:            dict with sf_data.
+        """
+
+        # implement generic sf_field_data() method for to be called by this method and sf_client_field_data()
+        # UNTIL THEN HARDCODED SOQL QUERIES
+        ''' 
+        # select from Reservation object:
+        SELECT Opportunity__r.Id, 
+               Opportunity__r.Account.LastName, Opportunity__r.Account.PersonEmail, 
+               Id, Arrival__c, HotelId__c, 
+               (select Id from Allocations__r) 
+          FROM Reservation__c WHERE Id = '...a8G0D0000004CH0UAM'
+        
+        # select via ResOpp:
+        SELECT Id, Account.Id, Account.PersonEmail, (select Id from Reservations__r) 
+          FROM Opportunity WHERE Id = '0060O00000rTYe1QAG'
+        SELECT Id, Account.Id, Account.PersonEmail, (select Id, HotelId__c, Arrival__c from Reservations__r)
+          FROM Opportunity WHERE Id = '0060O00000rTYe1QAG'
+        '''
+        ret_val = dict()
+        soql_query = '''
+            SELECT Account.Id, Account.FirstName, Account.LastName, Account.PersonEmail, Account.PersonHomePhone,
+                   Account.AcumenClientRef__pc, Account.SihotGuestObjId__pc, 
+                   Account.Language__pc, 
+                   Account.PersonMailingStreet, Account.PersonMailingPostalCode, Account.PersonMailingCity, 
+                   Account.PersonMailingCountry, 
+                   Account.CurrencyIsoCode, Account.Nationality__pc, 
+                   PersonAccountId,
+                   (SELECT Id, HotelId__c, Number__c, SubNumber__c, GdsNo__c, Arrival__c, Departure__c, Status__c,  
+                           RoomNo__c, MktSegment__c, MktGroup__c, RoomCat__c, Adults__c, Children__c, Note__c, 
+                           SihotResvObjectId__c
+                      FROM Reservations__r) 
+              FROM Opportunity WHERE Id = '{}'
+              '''.format(res_opp_id)
+        res = self.sf_conn.soql_query_all(soql_query)
+        if self.sf_conn.error_msg:
+            self.error_message = "sf_res_field_data(): " + self.sf_conn.error_msg
+        elif res['totalSize'] > 0:
+            ret_val = res['records'][0]
+        return ret_val
+
+    def sf_res_upsert(self, rgr_sf_id, sh_cl_data, ass_res_data, sync_cache=True, sf_data=None):
         """
         convert ass_cache db columns to SF fields, and then push to Salesforce server via APEX method call
 
@@ -1368,50 +1449,105 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param sh_cl_data:      Sihot guest data (fetched with GuestSearch.get_guest()/shif.guest_data()).
         :param ass_res_data:    reservation fields.
         :param sync_cache:      True for to update ass_cache/res_groups/rgr_last_sync+rgr_sf_id (opt, def=True).
+        :param sf_data:         Salesforce field data of Account/Reservation object (OUT, opt).
         :return:                error message if error occurred, else empty string.
         """
-        sf_args = dict(ReservationOpportunityId=rgr_sf_id)
+        sf_args = dict() if sf_data is None else sf_data
+        sf_args.update(ReservationOpportunityId=rgr_sf_id)
+        ass_id = ass_res_data.get('rgr_order_cl_fk')
+        if ass_id:
+            sf_cl_id = self.cl_sf_id_by_ass_id(ass_id)
+            if sf_cl_id:
+                sf_args['PersonAccountId'] = sf_cl_id
 
-        for sfn, shn in (('Lastname', 'NAME-1'), ('Firstname', 'NAME-2'), ('Email', 'EMAIL-1'), ('Phone', 'PHONE-1')):
-            # TODO: add external client references ('Sihot_Object_Id', 'OBJID'), ('CD_CODE__c', 'MATCHCODE')
+        for sfn, shn in (('LastName', 'NAME-1'), ('FirstName', 'NAME-2'),
+                         ('PersonEmail', 'EMAIL-1'), ('PersonHomePhone', 'PHONE-1'),
+                         ('SihotGuestObjId__pc', 'OBJID'), ('AcumenClientRef__pc', 'MATCHCODE'),
+                         ('Language__pc', 'T-LANGUAGE'), ('PersonMailingCountry', 'T-COUNTRY-CODE'),
+                         ('Nationality__pc', 'T-NATION'),
+                         ('PersonMailingStreet', 'STREET'), ('PersonMailingPostalCode', 'ZIP'),
+                         ('PersonMailingCity', 'CITY'), ('CurrencyIsoCode', 'T-STANDARD-CURRENCY'),
+                         ):
             elem_val = elem_value(sh_cl_data, shn)
             if elem_val:
-                sf_args[sfn] = elem_val.isoformat() \
-                    if isinstance(elem_val, datetime.date) or isinstance(elem_val, datetime.datetime) \
-                    else elem_val
+                sf_args[sfn] = elem_val
 
         sf_args['HotelId__c'] = ho_id = ass_res_data['rgr_ho_fk']
         sf_args['Number__c'] = res_id = ass_res_data['rgr_res_id']
         sf_args['SubNumber__c'] = sub_id = ass_res_data['rgr_sub_id']
         for sfn, asn in (('GdsNo__c', 'rgr_gds_no'),
-                         ('ObjectId__c', 'rgr_obj_id'),
+                         ('SihotResvObjectId__c', 'rgr_obj_id'),
                          ('Arrival__c', 'rgr_arrival'),
                          ('Departure__c', 'rgr_departure'),
                          ('RoomCat__c', 'rgr_room_cat_id'),
-                         ('Status__C', 'rgr_status'),
+                         ('Status__c', 'rgr_status'),
                          ('MktGroup__c', 'rgr_mkt_group'),
                          ('MktSegment__c', 'rgr_mkt_segment'),
                          ('Adults__c', 'rgr_adults'),
                          ('Children__c', 'rgr_children'),
-                         ('Note__c', 'rgr_comment')
+                         ('Note__c', 'rgr_comment'),
                          ):
             if ass_res_data.get(asn):
-                sf_args[sfn] = ass_res_data[asn].isoformat() \
-                    if isinstance(ass_res_data[asn], datetime.date) or isinstance(ass_res_data[asn], datetime.datetime)\
-                    else ass_res_data[asn]
+                sf_args[sfn] = ass_res_data[asn]
 
         if ass_res_data.get('rgc_list') and ass_res_data['rgc_list'][0].get('rgc_room_id'):
             sf_args['RoomNo__c'] = ass_res_data['rgc_list'][0]['rgc_room_id']
 
-        sf_opp_id, self.error_message = self.sf_conn.res_upsert(sf_args)
-        if not self.error_message and sync_cache:
-            col_values = dict(rgr_last_sync=self.cae.startup_beg)
+        sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
+        assert not sf_args.get('PersonAccountId') or sf_args['PersonAccountId'] == sf_cl_id
+
+        if sync_cache:
+            if sf_cl_id and ass_id:
+                col_values = dict(AssId=ass_id, SfId=sf_cl_id)
+                self.cl_save(col_values, match_fields=['AssId'])    # on error populating/overwriting self.error_message
+                if self.error_message:
+                    err_msg += self.error_message
+                    self.error_message = ""
+
+            col_values = dict() if err_msg else dict(rgr_last_sync=datetime.datetime.now())
             if not rgr_sf_id and sf_opp_id:     # save just created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
             elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and rgr_sf_id:
                 assert sf_opp_id == rgr_sf_id
-            self.rgr_upsert(col_values, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
+            if col_values:
+                self.rgr_upsert(col_values, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
+                if self.error_message:
+                    err_msg += self.error_message
+                    self.error_message = ""
 
+        if err_msg:
+            self.error_message += err_msg
+        return self.error_message
+
+    def sf_room_change(self, rgr_sf_id, mode, time, cached_in_out=None):
+        """
+        check room change and if ok then pass to Salesforce Allocation custom object.
+        :param rgr_sf_id:       SF Reservation Opportunity object Id.
+        :param mode:            'CI' for check-in or 'CO' for check-out.
+        :param time:            check-in/-out date and time.
+        :param cached_in_out:   tuple of (check-in-time, check-out-time) from cols res_groups.rgr_time_in/.rgr_time_out.
+        :return:                empty string if ok, else error message.
+        """
+        if cached_in_out:
+            check_in, check_out = cached_in_out
+        else:
+            rgr_list = self.rgr_fetch_list(['rgr_time_in', 'rgr_time_out'], dict(rgr_sf_id=rgr_sf_id))
+            if not rgr_list:
+                self.error_message = "sf_room_change({}, {}, {}, {}): reservation not found in AssCache"\
+                    .format(rgr_sf_id, mode, time, cached_in_out)
+                return self.error_message
+            check_in, check_out = rgr_list[0]
+
+        if mode == 'CI' and not check_in and not check_out:
+            check_in = time
+        elif mode == 'CO' and check_in and not check_out:
+            check_out = time
+        else:
+            self.error_message = "sf_room_change({}, {}, {}, {}): room state discrepancy in={}/out={}"\
+                .format(rgr_sf_id, mode, time, cached_in_out, check_in, check_out)
+            return self.error_message
+
+        self.error_message = self.sf_conn.room_change(rgr_sf_id, check_in, check_out)
         return self.error_message
 
     # #######################  SH helpers  ######################################################################
@@ -1682,19 +1818,20 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param res_id:          Sihot reservation main id.
         :param sub_id:          Sihot reservation sub id.
         :param action_time:     Date and time of check-in/-out.
-        :return:                Error message in case of error else empty string.
+        :return:                rgr_sf_id or None if error (error message available in self.error_message).
         """
-        err_msg = ""
         upd_col_values = dict()
         if oc[:2] == 'CI':
             upd_col_values.update(rgr_time_in=action_time, rgr_time_out=None)
         elif oc[:2] == 'CO':
             upd_col_values.update(rgr_time_out=action_time)
         else:
-            err_msg = "cache_room_change({}, {}, {}): Invalid operation code".format(oc, ho_id, res_id)
+            self.error_message = "cache_room_change({}, {}, {}): Invalid operation code".format(oc, ho_id, res_id)
 
-        if not err_msg:
-            err_msg = self.rgr_upsert(upd_col_values, chk_values=dict(rgr_ho_fk=ho_id, rgr_res_id=res_id,
-                                                                      rgr_sub_id=sub_id))
+        rgr_sf_id = None
+        if not self.error_message:
+            rgr_sf_id = self.rgr_upsert(upd_col_values,
+                                        chk_values=dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id),
+                                        returning_column='rgr_sf_id')
 
-        return err_msg
+        return rgr_sf_id

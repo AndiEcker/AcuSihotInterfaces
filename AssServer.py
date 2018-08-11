@@ -194,8 +194,8 @@ def oc_res_change_sf(conf_data, req, recs_ctx):
         # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call
         err_msg = conf_data.sf_res_upsert(rgr_sf_id, res_cached.get('sh_cl_data'), ard)
         # !!!!  MERGE WITH NEXT VERSION sys_data_generic BRANCH
-        # res_fields = conf_data.flds_from_sh(res_cached.get('sh_cl_data'))
-        # res_fields.update(conf_data.flds_from_ass(ard))
+        # res_fields = conf_data.fields_from_sh(res_cached.get('sh_cl_data'))
+        # res_fields.update(conf_data.fields_from_ass(ard))
         # err_msg = conf_data.sf_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
 
         if err_msg:
@@ -221,15 +221,22 @@ def oc_room_change_ass(conf_data, req, recs_ctx):
         recs_ctx['records'].append(dict(HotelId=ho_id, ResId=req.res_nr, SubId=req.osub_nr, RoomNo=req.orn,
                                         extended_oc=oc, action_time=action_time))
         recs_ctx['record_idx'] = idx
-        error_msg = conf_data.sh_room_change_to_ass(oc, ho_id, req.ores_nr, req.osub_nr, action_time)
-        if not error_msg:
+        rgr_sf_id = conf_data.sh_room_change_to_ass(oc, ho_id, req.ores_nr, req.osub_nr, action_time)
+        if rgr_sf_id:
             oc = 'CI-RM'
+            recs_ctx['records'][-1].update(ResSfId=rgr_sf_id)
+        else:
+            error_msg = conf_data.error_message
     if not error_msg:
         idx += 1
         recs_ctx['records'].append(dict(HotelId=ho_id, ResId=req.res_nr, SubId=req.sub_nr, RoomNo=req.rn,
                                         extended_oc=oc, action_time=action_time))
         recs_ctx['record_idx'] = idx
-        error_msg = conf_data.sh_room_change_to_ass(oc, ho_id, req.res_nr, req.sub_nr, action_time)
+        rgr_sf_id = conf_data.sh_room_change_to_ass(oc, ho_id, req.res_nr, req.sub_nr, action_time)
+        if rgr_sf_id:
+            recs_ctx['records'][-1].update(ResSfId=rgr_sf_id)
+        else:
+            error_msg = conf_data.error_message
 
     if error_msg:
         log_msg(proc_context(recs_ctx) + " room change error={}".format(error_msg),
@@ -244,25 +251,21 @@ def oc_room_change_ass(conf_data, req, recs_ctx):
 
 
 def oc_room_change_sf(conf_data, req, recs_ctx):
+    log_msg(proc_context(recs_ctx) + ": SF room change xml={}".format(req.get_xml()), importance=4)
     errors = list()
     for idx, chg_cached in enumerate(recs_ctx['records']):
         recs_ctx['record_idx'] = idx
-        log_msg(proc_context(recs_ctx) + ": SF room change xml={}".format(req.get_xml()), importance=4)
-        # oc = chg_cached['extended_oc']
+        log_msg(proc_context(recs_ctx) + ": room change {}={}".format(idx + 1, chg_cached))
         ho_id = chg_cached['HotelId']
         res_id = chg_cached['ResId']
         sub_id = chg_cached['SubId']
         res = conf_data.rgr_fetch_list(['rgr_sf_id', 'rgr_time_in', 'rgr_time_out'],
                                        dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
-        if conf_data.error_message or not res or not res[0] or not res[0][0] or not res[0][1] or not res[0][2]:
+        if conf_data.error_message or not res or not res[0] or not res[0][0]:
             errors.append(proc_context(recs_ctx) + ": AssCache fetch {} err={}".format(res, conf_data.error_message))
             continue
-
-        sf_opp_id, err_msg = conf_data.sf_conn.room_change(*res[0])
-        if err_msg:
-            errors.append(proc_context(recs_ctx) + ": " + err_msg)
-        elif not sf_opp_id or conf_data.error_message:
-            errors.append(proc_context(recs_ctx) + ": SF APEX method err={}".format(conf_data.error_message))
+        if conf_data.sf_room_change(res[0][0], chg_cached['extended_oc'][:2], chg_cached['action_time'], res[0][1:]):
+            errors.append(proc_context(recs_ctx) + ": " + conf_data.error_message)
 
     return "\n".join(errors)
 

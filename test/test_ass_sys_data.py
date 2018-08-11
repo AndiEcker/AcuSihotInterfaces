@@ -3,7 +3,7 @@ import datetime
 # import pytest
 
 from sxmlif import ResFetch, convert2date
-from shif import elem_value
+from shif import elem_value, res_search, guest_data
 from ass_sys_data import correct_email, correct_phone, AssSysData, EXT_REFS_SEP, CLIENT_REC_TYPE_ID_OWNERS
 
 
@@ -301,27 +301,176 @@ class TestRciHelpers:
 class TestAssSysDataSf:
     sf_id_of_rci_id = dict()
 
-    def test_sf_res_upsert_basic_existing(self, console_app_env):
+    def test_sf_apexecute_core_res_upsert(self, console_app_env):
         asd = AssSysData(console_app_env)
-        # dict(Name='FNam LNam', FirstName='FNam', LastName='LNam', Email='t@ts.tst', Phone='0049765432100')
-        cl_fields = {'NAME-1': dict(elemVal='LNam'), 'NAME-2': dict(elemVal='FNam'),
-                     'EMAIL-1': dict(elemVal='t@ts.tst'), 'PHONE-1': dict(elemVal='0049765432100')}
-        arr_date = datetime.date(2017, 12, 26)
-        dep_date = datetime.date(2018, 1, 3)
-        res_fields = dict(rgr_ho_fk='4', rgr_res_id='33220', rgr_sub_id='1',
-                          rgr_arrival=arr_date, rgr_departure=dep_date)
-        assert not asd.sf_res_upsert(None, cl_fields, res_fields)
+        sf_args = dict(FirstName='First-Test-Name', LastName='Last-Test-Name', Language__pc='EN',
+                       PersonEmail='TestName@test.tst', AcumenClientRef__pc='T987654',
+                       Arrival__c=datetime.date(year=2018, month=3, day=1),
+                       Departure__c=datetime.date(year=2018, month=3, day=8),
+                       HotelId__c='4', Status__c='1', Adults__c=2, Children__c=1, Note__c="core test no checks",
+                       )
+        ret = asd.sf_conn.res_upsert(sf_args)   # returning (PersonAccountId, ReservationOpportunityId, ErrorMessage)
+        print(ret)
+        assert len(ret) == 3
+        assert ret[0].startswith('001')
+        assert ret[1].startswith('006')
+        assert not ret[2]
 
-    def test_sf_res_upsert_basic_not_existing(self, console_app_env):
+    def test_sf_res_upsert_basic_not_existing_any(self, console_app_env):
         asd = AssSysData(console_app_env)
-        # dict(Name='FNam LNam', FirstName='FNam', LastName='LNam', Email='t@ts.tst', Phone='0049765432100')
         cl_fields = {'NAME-1': dict(elemVal='LNam'), 'NAME-2': dict(elemVal='FNam'),
-                     'EMAIL-1': dict(elemVal='t@ts.tst'), 'PHONE-1': dict(elemVal='0049765432100')}
+                     'OBJID': dict(elemVal='123456789'), 'MATCHCODE': dict(elemVal='E012345'),
+                     'T-LANGUAGE': dict(elemVal='EN'), 'T-COUNTRY-CODE': dict(elemVal='GB'),
+                     'EMAIL-1': dict(elemVal='t@ts.tst'), 'PHONE-1': dict(elemVal='0049765432100'),
+                     }
         arr_date = datetime.date.today() + datetime.timedelta(days=12)
         dep_date = arr_date + datetime.timedelta(days=7)
         res_fields = dict(rgr_ho_fk='999', rgr_res_id='999999', rgr_sub_id='9',
                           rgr_arrival=arr_date, rgr_departure=dep_date)
         assert not asd.sf_res_upsert(None, cl_fields, res_fields, sync_cache=False)
+
+    def test_sf_res_upsert_basic_not_existing_bhc(self, console_app_env):
+        asd = AssSysData(console_app_env)
+        cl_fields = {'NAME-1': dict(elemVal='LstNam'), 'NAME-2': dict(elemVal='FstNam'),
+                     'OBJID': dict(elemVal='11123456789'), 'MATCHCODE': dict(elemVal='T111111'),
+                     'T-LANGUAGE': dict(elemVal='EN'), 'T-COUNTRY-CODE': dict(elemVal='GB'),
+                     'EMAIL-1': dict(elemVal='t111@ts111.tst'), 'PHONE-1': dict(elemVal='00491111111'),
+                     }
+        arr_date = datetime.date.today() + datetime.timedelta(days=12)
+        dep_date = arr_date + datetime.timedelta(days=7)
+        res_fields = dict(rgr_ho_fk='1', rgr_res_id='1111111', rgr_sub_id='1',
+                          rgr_arrival=arr_date, rgr_departure=dep_date)
+        assert not asd.sf_res_upsert(None, cl_fields, res_fields, sync_cache=False)
+
+    def test_sf_res_upsert_basic_not_existing_bhh(self, console_app_env):
+        asd = AssSysData(console_app_env)
+        cl_fields = {'NAME-1': dict(elemVal='LstNam2'), 'NAME-2': dict(elemVal='FstNam2'),
+                     'OBJID': dict(elemVal='22223456789'), 'MATCHCODE': dict(elemVal='T222222'),
+                     'T-LANGUAGE': dict(elemVal='DE'), 'T-COUNTRY-CODE': dict(elemVal='DE'),
+                     'EMAIL-1': dict(elemVal='t222@ts222.tst'), 'PHONE-1': dict(elemVal='00492222222'),
+                     }
+        arr_date = datetime.date.today() + datetime.timedelta(days=14)
+        dep_date = arr_date + datetime.timedelta(days=7)
+        res_fields = dict(rgr_ho_fk='2', rgr_res_id='222222', rgr_sub_id='2',
+                          rgr_arrival=arr_date, rgr_departure=dep_date)
+        assert not asd.sf_res_upsert(None, cl_fields, res_fields, sync_cache=False)
+
+    def test_sf_res_upsert_basic_not_existing_hmc(self, console_app_env):
+        asd = AssSysData(console_app_env)
+        cl_fields = {'NAME-1': dict(elemVal='Lst3Nam'), 'NAME-2': dict(elemVal='Fst3Nam'),
+                     'OBJID': dict(elemVal='33323456789'), 'MATCHCODE': dict(elemVal='T333333'),
+                     'T-LANGUAGE': dict(elemVal='ES'), 'T-COUNTRY-CODE': dict(elemVal='ES'),
+                     'EMAIL-1': dict(elemVal='t333@ts333.tst'), 'PHONE-1': dict(elemVal='00493333333'),
+                     }
+        arr_date = datetime.date.today() + datetime.timedelta(days=12)
+        dep_date = arr_date + datetime.timedelta(days=7)
+        res_fields = dict(rgr_ho_fk='3', rgr_res_id='3333333', rgr_sub_id='3',
+                          rgr_arrival=arr_date, rgr_departure=dep_date)
+        assert not asd.sf_res_upsert(None, cl_fields, res_fields, sync_cache=False)
+
+    def test_sf_res_upsert_basic_not_existing_pbc(self, console_app_env):
+        asd = AssSysData(console_app_env)
+        cl_fields = {'NAME-1': dict(elemVal='Lst4Nam'), 'NAME-2': dict(elemVal='Fst4Nam'),
+                     'OBJID': dict(elemVal='44423456789'), 'MATCHCODE': dict(elemVal='T444444'),
+                     'T-LANGUAGE': dict(elemVal='FR'), 'T-COUNTRY-CODE': dict(elemVal='FR'),
+                     'EMAIL-1': dict(elemVal='t444@ts444.tst'), 'PHONE-1': dict(elemVal='004744444444'),
+                     }
+        arr_date = datetime.date.today() + datetime.timedelta(days=4)
+        dep_date = arr_date + datetime.timedelta(days=7)
+        res_fields = dict(rgr_ho_fk='4', rgr_res_id='4444444', rgr_sub_id='4',
+                          rgr_arrival=arr_date, rgr_departure=dep_date)
+        assert not asd.sf_res_upsert(None, cl_fields, res_fields, sync_cache=False)
+
+    def test_sf_res_upsert_basic_existing(self, console_app_env):
+        asd = AssSysData(console_app_env)
+        # dict(Name='FNam LNam', FirstName='FNam', LastName='LNam', Email='t@ts.tst', Phone='0049765432100')
+        cl_fields = {'NAME-1': dict(elemVal='LNam'), 'NAME-2': dict(elemVal='FNam'),
+                     'OBJID': dict(elemVal='123456789'), 'MATCHCODE': dict(elemVal='E012345'),
+                     'T-LANGUAGE': dict(elemVal='EN'), 'T-COUNTRY-CODE': dict(elemVal='GB'),
+                     'EMAIL-1': dict(elemVal='t@ts.tst'), 'PHONE-1': dict(elemVal='0049765432100'),
+                     }
+        arr_date = datetime.date(2017, 12, 26)
+        dep_date = datetime.date(2018, 1, 3)
+        res_fields = dict(rgr_ho_fk='4', rgr_res_id='33220', rgr_sub_id='1',
+                          rgr_gds_no='899993', rgr_obj_id='60544',
+                          rgr_arrival=arr_date, rgr_departure=dep_date, rgr_room_cat_id='STDO', rgr_status='1',
+                          rgr_mkt_group='SP', rgr_mkt_segment='TO',
+                          rgr_adults=2, rgr_children=0,
+                          rgr_comment="This is a test comment",
+                          rgc_list=[dict(rgc_room_id='3322'), ],
+                          )
+        assert not asd.sf_res_upsert(None, cl_fields, res_fields)
+
+    def test_sending_resv_of_week(self, console_app_env):
+        asd = AssSysData(console_app_env)
+
+        sent_res = list()
+        beg = datetime.date.today()
+        end = beg + datetime.timedelta(days=7)
+        ret = res_search(console_app_env, beg, date_till=end)
+        assert isinstance(ret, list)
+        for res in ret:
+            res_fields = dict()
+            assert not asd.sh_res_change_to_ass(res, res_fields)
+            cl_fields = guest_data(console_app_env, res_fields['rgr_order_cl_fk'])
+            assert isinstance(cl_fields, dict)
+            sf_data = dict()
+            assert not asd.sf_res_upsert(None, cl_fields, res_fields, sf_data=sf_data)
+            sent_res.append(sf_data)
+
+        for res in sent_res:
+            ret = asd.sf_res_data(res['ReservationOpportunityId'])
+            assert ret == res
+
+    def test_sf_apexecute_core_room_change(self, console_app_env, test_date=None):
+        asd = AssSysData(console_app_env)
+        today = datetime.date.today()
+        day = test_date or today
+        found_test_data = False
+        for step in range(3):   # do 3 tests for each res: check-in, check-out and reset check-in/-out
+            rgr_list = asd.rgr_fetch_list(['rgr_sf_id', 'rgr_time_in', 'rgr_time_out'], dict(day=day),
+                                          ":day between rgr_arrival AND rgr_departure")
+            assert isinstance(rgr_list, list)
+            if not rgr_list:
+                break
+            for res in rgr_list:
+                if res[0]:  # rgr_sf_id
+                    found_test_data = True
+                    time_in = time_out = None
+                    if not res[1]:  # rgr_time_in
+                        time_in = day
+                    elif not res[2]:    # rgr_time_out
+                        time_out = day
+                    ret = asd.sf_conn.room_change(res['rgr_sf_id'], time_in, time_out)  # returning ErrorMessage
+                    assert not ret
+        if not found_test_data:
+            print("test_sf_apexecute_core_room_change() WARNING: no test data found at day {}!".format(day))
+            if day > datetime.date(year=2018, month=1, day=1):   # try reservations of last week
+                self.test_sf_apexecute_core_room_change(console_app_env, test_date=day - datetime.timedelta(weeks=1))
+
+    def test_sf_room_change(self, console_app_env, test_date=None):
+        asd = AssSysData(console_app_env)
+        today = datetime.date.today()
+        day = (test_date or today) - datetime.timedelta(days=3)
+        found_test_data = False
+        rgr_list = asd.rgr_fetch_list(['rgr_sf_id', 'rgr_time_in', 'rgr_time_out'], dict(day=day),
+                                      ":day between rgr_arrival AND rgr_departure")
+        assert isinstance(rgr_list, list)
+        for res in rgr_list:
+            if res[0]:  # rgr_sf_id
+                mode = None
+                if not res[1]:  # rgr_time_in
+                    mode = 'CI'
+                elif not res[2]:    # rgr_time_out
+                    mode = 'CO'
+                if mode:
+                    found_test_data = True
+                    ret = asd.sf_room_change(res['rgr_sf_id'], mode, day)  # returning ErrorMessage
+                    assert not ret
+        if not found_test_data:
+            print("test_sf_room_change() WARNING: no test data found at day {}!".format(day))
+            if day > datetime.date(year=2018, month=1, day=1):   # try reservations of last week
+                self.test_sf_apexecute_core_room_change(console_app_env, test_date=day - datetime.timedelta(weeks=1))
 
     def __not_finished__test_all_clients(self, config_data):
         assert config_data.error_message == ""

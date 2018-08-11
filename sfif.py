@@ -1,5 +1,6 @@
 # salesforce high level interface
 import string
+import datetime
 import pprint
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
@@ -264,12 +265,20 @@ class SfInterface:
             rec_type_id = res['records'][0]['Id']
         return rec_type_id
 
+    def apex_call(self, function_name, function_args=None):
+        if function_args:   # remove underscore characters from arg names (APEX methods doesn't allow them) and convert
+            function_args = {k.replace('_', ''): v.strftime('%Y-%m-%d %H:%M:%S')  # .. date/time types into .NET str
+                             if isinstance(v, datetime.date) or isinstance(v, datetime.datetime) else v
+                             for (k, v) in function_args.items()}
+        result = self._conn.apexecute(function_name, method='POST', data=function_args)
+        return result
+
     def find_client(self, email="", phone="", first_name="", last_name=""):
         if not self._ensure_lazy_connect():
             return None, None
 
         service_args = dict(email=email, phone=phone, firstName=first_name, lastName=last_name)
-        result = self._conn.apexecute('clientsearch', method='POST', data=service_args)
+        result = self.apex_call('clientsearch', function_args=service_args)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("find_client({}, {}, {}, {}) result={}".format(email, phone, first_name, last_name, result))
@@ -283,21 +292,22 @@ class SfInterface:
         if not self._ensure_lazy_connect():
             return None, None
 
-        result = self._conn.apexecute('reservation_upsert', method='POST', data=client_res_data)
+        result = self.apex_call('reservation_upsert', function_args=client_res_data)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("res_upsert({}) result={}".format(client_res_data, result))
 
-        return result['ReservationOpportunityId'], self.error_msg + result['ErrorMessage']
+        return (result['PersonAccountId'], result['ReservationOpportunityId'],
+                self.error_msg + (result['ErrorMessage'] or ''))
 
     def room_change(self, res_sf_id, check_in, check_out):
         if not self._ensure_lazy_connect():
             return None, None
 
         room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out)
-        result = self._conn.apexecute('reservation_room_move', method='POST', data=room_chg_data)
+        result = self.apex_call('reservation_room_move', function_args=room_chg_data)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("room_change({}, {}, {}) result={}".format(res_sf_id, check_in, check_out, result))
 
-        return self.error_msg + result['ErrorMessage']
+        return self.error_msg + result.get('ErrorMessage', '')

@@ -126,7 +126,7 @@ def get_date_range(row):
         t_str = row['ARR-TIME']['elemVal']
         checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
         dt_key = 'DEP-TIME'
-        if dt_key in row and 'elemVal' in row[dt_key] and row[dt_key]['elemVal']:
+        if dt_key in row and row[dt_key].get('elemVal'):
             d_str = row['DEP']['elemVal']
             t_str = row[dt_key]['elemVal']
             checked_out = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
