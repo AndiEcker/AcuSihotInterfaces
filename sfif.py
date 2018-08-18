@@ -266,11 +266,23 @@ class SfInterface:
         return rec_type_id
 
     def apex_call(self, function_name, function_args=None):
-        if function_args:   # remove underscore characters from arg names (APEX methods doesn't allow them) and convert
-            function_args = {k.replace('_', ''): v.strftime('%Y-%m-%d %H:%M:%S')  # .. date/time types into .NET str
+        if function_args:
+            # don't change callers dict, remove underscore characters from arg names (APEX methods doesn't allow them)
+            # .. and convert date/time types into SF apex format
+            function_args = {k.replace('_', ''): v.strftime('%Y-%m-%d %H:%M:%S')
                              if isinstance(v, datetime.date) or isinstance(v, datetime.datetime) else v
                              for (k, v) in function_args.items()}
+            # TODO: refactor function_args data type conversion into FIELDS feature method fields_dict_to_sf()
+            # NEVER IMPLEMENTED/TESTED ALTERNATIVE: change callers dict keys (removing underscores)
+            # .. much simpler after FIELDS refactoring: function_args[k.replace('_', '')] = function_args.pop(k)
+            # for k in list(function_args):
+            #     new_k = k.replace('_', '')
+            #     v = function_args.pop(k)
+            #     if isinstance(v, datetime.date) or isinstance(v, datetime.datetime):
+            #         v.strftime('%Y-%m-%d %H:%M:%S')
+            #     function_args[new_k] = v
         result = self._conn.apexecute(function_name, method='POST', data=function_args)
+        # TODO: refactor result data type conversion into FIELDS feature methods sf_fld_value(), fields_dict_from_sf()
         return result
 
     def find_client(self, email="", phone="", first_name="", last_name=""):
@@ -295,7 +307,12 @@ class SfInterface:
         result = self.apex_call('reservation_upsert', function_args=client_res_data)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("res_upsert({}) result={}".format(client_res_data, result))
+            uprint("sfif.res_upsert({}) result={}".format(client_res_data, result))
+
+        if not client_res_data.get('ReservationOpportunityId'):
+            client_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
+        elif not result.get('ErrorMessage'):
+            assert client_res_data['ReservationOpportunityId'] == result['ReservationOpportunityId']
 
         return (result['PersonAccountId'], result['ReservationOpportunityId'],
                 self.error_msg + (result['ErrorMessage'] or ''))
@@ -310,4 +327,4 @@ class SfInterface:
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("room_change({}, {}, {}) result={}".format(res_sf_id, check_in, check_out, result))
 
-        return self.error_msg + result.get('ErrorMessage', '')
+        return self.error_msg + (result['ErrorMessage'] or '')

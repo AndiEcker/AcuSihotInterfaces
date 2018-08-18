@@ -854,7 +854,7 @@ class ResChange(SihotXmlParser):
             return None  # processed by base class
         self.ca.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         if tag == 'SIHOT-Reservation':
-            self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc=list()))
+            self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc_list=list()))
         elif tag in ('FIRST-Person', 'SIHOT-Person'):       # FIRST-Person only seen in room change (CI) on first occ
             self.rgr_list[-1]['rgc_list'].append(dict())
 

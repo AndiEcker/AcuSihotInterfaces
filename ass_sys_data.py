@@ -1402,24 +1402,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param res_opp_id:  value for to identify client record.
         :return:            dict with sf_data.
         """
-
-        # implement generic sf_field_data() method for to be called by this method and sf_client_field_data()
-        # UNTIL THEN HARDCODED SOQL QUERIES
-        ''' 
-        # select from Reservation object:
-        SELECT Opportunity__r.Id, 
-               Opportunity__r.Account.LastName, Opportunity__r.Account.PersonEmail, 
-               Id, Arrival__c, HotelId__c, 
-               (select Id from Allocations__r) 
-          FROM Reservation__c WHERE Id = '...a8G0D0000004CH0UAM'
-        
-        # select via ResOpp:
-        SELECT Id, Account.Id, Account.PersonEmail, (select Id from Reservations__r) 
-          FROM Opportunity WHERE Id = '0060O00000rTYe1QAG'
-        SELECT Id, Account.Id, Account.PersonEmail, (select Id, HotelId__c, Arrival__c from Reservations__r)
-          FROM Opportunity WHERE Id = '0060O00000rTYe1QAG'
-        '''
-        ret_val = dict()
+        ret_val = dict(ReservationOpportunityId=res_opp_id)
         soql_query = '''
             SELECT Account.Id, Account.FirstName, Account.LastName, Account.PersonEmail, Account.PersonHomePhone,
                    Account.AcumenClientRef__pc, Account.SihotGuestObjId__pc, 
@@ -1427,7 +1410,6 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                    Account.PersonMailingStreet, Account.PersonMailingPostalCode, Account.PersonMailingCity, 
                    Account.PersonMailingCountry, 
                    Account.CurrencyIsoCode, Account.Nationality__pc, 
-                   PersonAccountId,
                    (SELECT Id, HotelId__c, Number__c, SubNumber__c, GdsNo__c, Arrival__c, Departure__c, Status__c,  
                            RoomNo__c, MktSegment__c, MktGroup__c, RoomCat__c, Adults__c, Children__c, Note__c, 
                            SihotResvObjectId__c
@@ -1436,20 +1418,36 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
               '''.format(res_opp_id)
         res = self.sf_conn.soql_query_all(soql_query)
         if self.sf_conn.error_msg:
-            self.error_message = "sf_res_field_data(): " + self.sf_conn.error_msg
+            self.error_message = "sf_res_data(): " + self.sf_conn.error_msg
         elif res['totalSize'] > 0:
-            ret_val = res['records'][0]
+            ret_all = res['records'][0]
+            ret = dict()
+            if ret_all['Account']:      # is None if no Account associated
+                ret.update(ret_all['Account'])
+                ret['PersonAccountId'] = ret.get('Id')
+            if ret_all['Reservations__r'] and ret_all['Reservations__r']['totalSize'] > 0:
+                ret.update(ret_all['Reservations__r']['records'][0])
+                ret['ReservationId'] = ret.get('Id')
+            del ret['attributes']
+            for k, v in ret.items():
+                if k in ('attributes', 'Id', ):
+                    continue
+                if k in ('Arrival__c', 'Departure__c', ) and v:
+                    v = datetime.datetime.strptime(v, '%Y-%m-%d').date()
+                ret_val[k] = v
+
         return ret_val
 
     def sf_res_upsert(self, rgr_sf_id, sh_cl_data, ass_res_data, sync_cache=True, sf_data=None):
         """
         convert ass_cache db columns to SF fields, and then push to Salesforce server via APEX method call
 
-        :param rgr_sf_id:       Reservation Opportunity Id (SF ID with 18 characters).
-        :param sh_cl_data:      Sihot guest data (fetched with GuestSearch.get_guest()/shif.guest_data()).
+        :param rgr_sf_id:       Reservation Opportunity Id (SF ID with 18 characters). Pass None for to create new-one.
+        :param sh_cl_data:      dict with Sihot guest data (fetched with GuestSearch.get_guest()/shif.guest_data()).
         :param ass_res_data:    reservation fields.
         :param sync_cache:      True for to update ass_cache/res_groups/rgr_last_sync+rgr_sf_id (opt, def=True).
-        :param sf_data:         Salesforce field data of Account/Reservation object (OUT, opt).
+        :param sf_data:         Salesforce field data of Account/Reservation object (OUT, opt). The Reservation Opp. Id
+                                gets returned as sf_data['ReservationOpportunityId'].
         :return:                error message if error occurred, else empty string.
         """
         sf_args = dict() if sf_data is None else sf_data
@@ -1468,7 +1466,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                          ('PersonMailingStreet', 'STREET'), ('PersonMailingPostalCode', 'ZIP'),
                          ('PersonMailingCity', 'CITY'), ('CurrencyIsoCode', 'T-STANDARD-CURRENCY'),
                          ):
-            elem_val = elem_value(sh_cl_data, shn)
+            elem_val = sh_cl_data.get(shn)
             if elem_val:
                 sf_args[sfn] = elem_val
 
@@ -1549,6 +1547,52 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self.error_message = self.sf_conn.room_change(rgr_sf_id, check_in, check_out)
         return self.error_message
+
+    def sf_room_data(self, res_opp_id):
+        """
+        fetch client+res+room data from SF Reservation Opportunity object (identified by res_opp_id)
+        :param res_opp_id:  value for to identify client record.
+        :return:            dict with sf_data.
+        """
+        sf_data = self.sf_res_data(res_opp_id)
+
+        # TODO: implement generic sf_field_data() method for to be called by this method and sf_client_field_data()
+        # UNTIL THEN HARDCODED SOQL QUERIES
+        ''' 
+        # select from Reservation object:
+        SELECT Opportunity__r.Id, 
+               Opportunity__r.Account.LastName, Opportunity__r.Account.PersonEmail, 
+               Id, Arrival__c, HotelId__c, 
+               (select Id, CheckIn__c, CheckOut__c from Allocations__r) 
+          FROM Reservation__c WHERE Id = '...a8G0D0000004CH0UAM'
+
+        # select via ResOpp - SF does not allow more than one level of child relation:
+        SELECT Id, Account.Id, Account.PersonEmail, (select Id from Reservations__r) 
+          FROM Opportunity WHERE Id = '0060O00000rTYe1QAG'
+        SELECT Id, Account.Id, Account.PersonEmail, (select Id, HotelId__c, Arrival__c from Reservations__r)
+          FROM Opportunity WHERE Id = '0060O00000rTYe1QAG'
+        '''
+        ret_val = dict(ReservationOpportunityId=res_opp_id)
+        soql_query = '''
+            SELECT Id, 
+                   (select Id, CheckIn__c, CheckOut__c from Allocations__r) 
+              FROM Reservation__c WHERE Id = '{}'
+              '''.format(sf_data['ReservationId'])
+        res = self.sf_conn.soql_query_all(soql_query)
+        if self.sf_conn.error_msg:
+            self.error_message = "sf_room_data(): " + self.sf_conn.error_msg
+        elif res['totalSize'] > 0:
+            ret_all = res['records'][0]
+            ret = dict(ReservationId=ret_all['Id'])
+            ret.update(ret_all['Allocations__r']['records'][0])
+            ret['AllocationId'] = ret.pop('Id')
+            del ret['attributes']
+            for k, v in ret.items():
+                if k in ('CheckIn__c', 'CheckOut__c') and v:
+                    v = datetime.datetime.strptime(v, '%Y-%m-%dT%H:%M:%S.%f%z').replace(microsecond=0)
+                ret_val[k] = v
+
+        return ret_val
 
     # #######################  SH helpers  ######################################################################
 
@@ -1716,6 +1760,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         ho_id = elem_value(shd, 'RES-HOTEL')    # SS/RES-SEARCH using RES-HOTEL instead of ID xml element
         res_id = elem_value(shd, 'RES-NR')
         sub_id = elem_value(shd, 'SUB-NR')
+        err_pre = "sh_res_change_to_ass() for res-no {}/{}@{}: ".format(res_id, sub_id, ho_id)
         chk_values = dict(rgr_ho_fk=ho_id)
         if ho_id and res_id and sub_id:
             chk_values.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
@@ -1724,7 +1769,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if gds_no:
                 chk_values.update(rgr_gds_no=gds_no)
             else:
-                error_msg = "sh_res_change_to_ass(): Incomplete reservation id ({}/{}@{})".format(res_id, sub_id, ho_id)
+                error_msg = err_pre + "Incomplete reservation id ({}/{}@{})".format(res_id, sub_id, ho_id)
 
         if not error_msg:
             upd_values = chk_values.copy()
@@ -1739,9 +1784,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                         rgr_status=elem_value(shd, ['RESERVATION', 'RT']),
                         rgr_adults=elem_value(shd, ['RESERVATION', 'NOPAX']),
                         rgr_children=elem_value(shd, ['RESERVATION', 'NOCHILDS']),
-                        rgr_arrival=datetime.datetime.strptime(elem_value(shd, ['RESERVATION', 'ARR']), SH_DATE_FORMAT),
+                        rgr_arrival=datetime.datetime.strptime(elem_value(shd, ['RESERVATION', 'ARR']),
+                                                               SH_DATE_FORMAT).date(),
                         rgr_departure=datetime.datetime.strptime(elem_value(shd, ['RESERVATION', 'DEP']),
-                                                                 SH_DATE_FORMAT),
+                                                                 SH_DATE_FORMAT).date(),
                         rgr_mkt_segment=elem_value(shd, ['RESERVATION', 'MARKETCODE']),
                         rgr_mkt_group=elem_value(shd, ['RESERVATION', 'CHANNEL']),
                         rgr_room_cat_id=elem_value(shd, ['RESERVATION', 'CAT']),
@@ -1765,19 +1811,27 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 occ_cl_pk = None
                 sh_id = elem_value(shd, ['PERSON', 'GUEST-ID'], arri=arri)
                 ac_id = elem_value(shd, ['PERSON', 'MATCHCODE'], arri=arri)
+                if sh_id is None and ac_id is None:
+                    self.cae.dprint(err_pre + "ignoring unspecified person {}".format(arri + 1),
+                                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                    continue
                 sn = elem_value(shd, ['PERSON', 'NAME'], arri=arri)
                 fn = elem_value(shd, ['PERSON', 'NAME2'], arri=arri)
                 if sh_id or ac_id:
-                    self.cae.dprint("sh_res_change_to_ass(): create client for occupant {}/{}".format(sh_id, ac_id))
-                    occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id, name=fn + " " + sn if fn or sn else None)
+                    self.cae.dprint(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id))
+                    occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id,
+                                                  name=fn + " " + sn if fn and sn else sn or fn)
                     if occ_cl_pk is None:
-                        self.cae.dprint("sh_res_change_to_ass(): create client record for occupant {}/{} failed; err={}"
-                                        .format(sh_id, ac_id, self.error_message))
+                        self.cae.dprint(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
+                                        .format(fn, sn, sh_id, ac_id, self.error_message))
                         self.error_message = ""
-
-                room_seq = int(elem_value(shd, ['PERSON', 'ROOM-SEQ'], arri=arri))
-                pers_seq = int(elem_value(shd, ['PERSON', 'ROOM-PERS-SEQ'], arri=arri))
-                chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=room_seq, rgc_pers_seq=pers_seq)
+                room_seq = elem_value(shd, ['PERSON', 'ROOM-SEQ'], arri=arri)
+                pers_seq = elem_value(shd, ['PERSON', 'ROOM-PERS-SEQ'], arri=arri)
+                if room_seq is None:
+                    self.cae.dprint(err_pre + "ignoring unspecified room/person seq {}".format(arri + 1),
+                                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                    continue
+                chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(room_seq), rgc_pers_seq=int(pers_seq))
                 upd_values = chk_values.copy()
                 upd_values\
                     .update(rgc_surname=sn,
@@ -1794,9 +1848,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                             rgc_pers_type=elem_value(shd, ['PERSON', 'PERS-TYPE'], arri=arri),
                             rgc_sh_pack=elem_value(shd, ['PERSON', 'R'], arri=arri),
                             rgc_room_id=elem_value(shd, ['PERSON', 'RN'], arri=arri),
-                            rgc_dob=datetime.datetime.strptime(elem_value(shd, ['PERSON', 'DOB'], arri=arri),
-                                                               SH_DATE_FORMAT)
                             )
+                pers_dob = elem_value(shd, ['PERSON', 'DOB'], arri=arri)
+                if pers_dob:
+                    upd_values.update(rgc_dob=datetime.datetime.strptime(pers_dob, SH_DATE_FORMAT))
                 if self.ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
                     error_msg = self.ass_db.last_err_msg
                     break
