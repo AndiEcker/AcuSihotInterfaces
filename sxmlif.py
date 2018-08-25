@@ -1601,7 +1601,7 @@ class GuestSearch(SihotXmlBuilder):
         super(GuestSearch, self).__init__(ca, elem_col_map=MAP_KERNEL_CLIENT, use_kernel_interface=True)
 
     def get_guest(self, obj_id):
-        """ return dict with guest data OR None in case of error
+        """ return dict with guest data OR str with error message in case of error.
         """
         self.beg_xml(operation_code='GUEST-GET')
         self.add_tag('GUEST-PROFILE',
@@ -1615,8 +1615,7 @@ class GuestSearch(SihotXmlBuilder):
             self.ca.dprint("GuestSearch.guest_get() obj_id|xml|result: ", obj_id, self.xml, ret,
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         else:
-            uprint("GuestSearch.guest_get() obj_id|error: ", obj_id, err_msg)
-            ret = None
+            ret = "GuestSearch.guest_get() obj_id={}; err='{}'".format(obj_id, err_msg)
         return ret
 
     def get_guest_nos_by_matchcode(self, matchcode, exact_matchcode=True):

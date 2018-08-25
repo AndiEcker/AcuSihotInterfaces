@@ -6,6 +6,7 @@
     0.2     refactored using add_ass_options() and init_ass_data().
     0.3     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
+    0.5     added sync caching method sync_to_sf() for better error handling and conflict clearing.
 """
 import datetime
 from traceback import format_exc
@@ -16,7 +17,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '0.4'
+__version__ = '0.5'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres, Acumen and Salesforce",
                  multi_threading=True)
@@ -32,7 +33,7 @@ mr = missing_requirements(sys_conns, [['ass_db'], ['acu_db'], ['sf_conn'], ['sh_
 if mr:
     uprint("Invalid connection-credentials/-configuration of the external systems:", mr)
     cae.shutdown(exit_code=12)
-sys_conns = ass_data['assSysData'] = None       # del/free not thread-save sys db connections
+
 notification = ass_data['notification']
 
 
@@ -52,20 +53,16 @@ def log_msg(msg, *args, **kwargs):
         notification.send_notification(msg_body=msg, subject='AssServer notification')
 
 
-def proc_context(recs_ctx):
+def proc_context(rec_ctx):
     ctx_str = ""
-    if 'procedure' in recs_ctx:
-        ctx_str += recs_ctx['procedure']
+    if 'procedure' in rec_ctx:
+        ctx_str += rec_ctx['procedure']
     ctx_str += "("
-
-    # check for record specific context within recs_ctx['records'][recs_ctx['record_idx']]
-    rec_idx = recs_ctx['record_idx']
-    rec_ctx = recs_ctx['records'][rec_idx] if rec_idx >= 0 else recs_ctx
 
     if 'extended_oc' in rec_ctx:
         ctx_str += rec_ctx['extended_oc']
-    elif 'oc' in recs_ctx:
-        ctx_str += recs_ctx['oc']
+    elif 'oc' in rec_ctx:
+        ctx_str += rec_ctx['oc']
     else:
         ctx_str += "??"
     ctx_str += ", "
@@ -85,36 +82,30 @@ def proc_context(recs_ctx):
     return ctx_str
 
 
-def oc_keep_alive(_, __, ___):
-    # no request-/error-checks needed on operation codes: LA=Link Alive, TS=Time Sync, ACK=Acknowledge
-    return ""
-
-
-def check_res_change_data(recs_ctx):
-    """
+def check_res_change_data(rec_ctx):
+    """ TODO: migrate as field checker to AssCacheSync or as generic ass_sys_data method for system comparing/checking
     Compare data from SXML request (OCs: CR, CI, CO and RM) with reservation data loaded directly from Sihot/ResFetch.
 
-    :param recs_ctx:    current context record dict, with records item containing for each idx:
+    :param rec_ctx:     current rec context dict with:
                         req_res_data:   original Sihot notification request.
                         sh_res_data:    full Sihot reservation data (fetched with ResFetch()).
                         ass_res_data:   cached data (res_groups and res_group_clients).
     """
-    rec_ctx = recs_ctx['records'][recs_ctx['record_idx']]
     rrd = rec_ctx['req_res_data']
     srd = rec_ctx['sh_res_data']
     ard = rec_ctx['ass_res_data']
     if not rrd['rgr_obj_id'] == elem_value(srd, ['RESERVATION', 'OBJID']) == ard['rgr_obj_id']:
         # fetched res has obj id in ['RESERVATION', 'OBJID'], req in ['SIHOT-Document', 'SIHOT-Reservation', 'OBJID']
-        log_msg(proc_context(recs_ctx) + "Sihot Reservation Object Id mismatch req/sh/ass={}/{}/{}"
+        log_msg(proc_context(rec_ctx) + "Sihot Reservation Object Id mismatch req/sh/ass={}/{}/{}"
                 .format(rrd['rgr_obj_id'], elem_value(srd, ['RESERVATION', 'OBJID']), ard['rgr_obj_id']), notify=True)
     if not rrd['rgr_ho_fk'] == elem_value(srd, 'RES-HOTEL') == ard['rgr_ho_fk']:
-        log_msg(proc_context(recs_ctx) + "Sihot Hotel Id mismatch req/sh/ass={}/{}/{}"
+        log_msg(proc_context(rec_ctx) + "Sihot Hotel Id mismatch req/sh/ass={}/{}/{}"
                 .format(rrd['rgr_ho_fk'], elem_value(srd, 'RES-HOTEL'), ard['rgr_ho_fk']), notify=True)
     if not rrd['rgr_res_id'] == elem_value(srd, 'RES-NR') == ard['rgr_res_id']:
-        log_msg(proc_context(recs_ctx) + "Sihot Res Id mismatch req/sh/ass={}/{}/{}"
+        log_msg(proc_context(rec_ctx) + "Sihot Res Id mismatch req/sh/ass={}/{}/{}"
                 .format(rrd['rgr_res_id'], elem_value(srd, 'RES-NR'), ard['rgr_res_id']), notify=True)
     if not rrd['rgr_sub_id'] == elem_value(srd, 'SUB-NR') == ard['rgr_sub_id']:
-        log_msg(proc_context(recs_ctx) + "Sihot Res Sub Id mismatch req/sh/ass={}/{}/{}"
+        log_msg(proc_context(rec_ctx) + "Sihot Res Sub Id mismatch req/sh/ass={}/{}/{}"
                 .format(rrd['rgr_sub_id'], elem_value(srd, 'SUB-NR'), ard['rgr_sub_id']), notify=True)
     for idx, rgc in enumerate(rrd['rgc_list']):
         ard_room = ard.get('rgc_list')
@@ -123,178 +114,196 @@ def check_res_change_data(recs_ctx):
         if ard_room == list():
             ard_room = None
         if not rgc.get('rgc_room_id') == elem_value(srd, ['PERSON', 'RN'], arri=idx) == ard_room:
-            log_msg(proc_context(recs_ctx) + "Sihot Room No mismatch req/sh/ass={}/{}/{}"
+            log_msg(proc_context(rec_ctx) + "Sihot Room No mismatch req/sh/ass={}/{}/{}"
                     .format(rrd.get('rgc_room_id'), elem_value(srd, ['PERSON', 'RN'], arri=idx), ard_room), notify=True)
 
 
-def oc_res_change_ass(conf_data, req, recs_ctx):
-    """
-    Process Sihot Change Reservation operation code (CR) by fetching full reservation data and saving it to ass_cache
-    database. Note: this method has to be the first method in the CR slot because oc_res_change_sf() using the fetched
-    reservation data records stored in recs_ctx['records'].
-    :param conf_data:   AssSysData instance, created for this notification.
-    :param req:         Reservation Response class instance (with parsed Sihot XML data of CR-notification).
-    :param recs_ctx:    dict with records list and other context info.
-    :return:            error message(s) or empty string/"" if no errors occurred.
-    """
-    recs_ctx['oc'] = req.oc     # == 'CR'
-    # recs_ctx['record_idx'] = -1
-    errors = list()
-    rgr_list = req.rgr_list
-    for idx, req_rgr in enumerate(rgr_list):
-        obj_id = req_rgr.get('rgr_obj_id', '')
-        ho_id = getattr(req, 'hn', None)
-        res_id = req_rgr.get('rgr_res_id', '')
-        sub_id = req_rgr.get('rgr_sub_id', '')
-        room_no = req_rgr.get('rgc_list', [dict(), ])[0].get('rgc_room_id', '')
-        recs_ctx['records'].append(dict(req_res_data=req_rgr,
-                                        ObjId=obj_id, HotelId=ho_id, ResId=res_id, SubId=sub_id, RoomNo=room_no))
-        if idx != len(recs_ctx['records']) - 1:
-            log_msg(proc_context(recs_ctx) + "context record index mismatch idx/len={}/{}"
-                    .format(idx, len(recs_ctx['records']) - 1), notify=True)
-        recs_ctx['record_idx'] = idx
-        log_msg(proc_context(recs_ctx) + "res change data={}".format(req_rgr), importance=4,
-                notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+def res_from_sh_to_sf(asd, ass_ids):
+    ho_id, res_id, sub_id = ass_ids['rgr_ho_fk'], ass_ids['rgr_res_id'], ass_ids['rgr_sub_id']
+    log_msg("res_from_sh_to_sf({}/{}@{}): sync reservation from SH ObjID={} to SF ResOppId={}"
+            .format(res_id, sub_id, ho_id, ass_ids['rgr_obj_id'], ass_ids['rgr_sf_id']),
+            importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
-        res_data = ResFetch(cae).fetch_by_res_id(ho_id, res_id, sub_id)
-        if not isinstance(res_data, dict):
-            errors.append(proc_context(recs_ctx) + res_data)
-            continue
-        recs_ctx['records'][idx]['sh_res_data'] = res_data
+    sh_res = ResFetch(cae).fetch_by_res_id(ho_id, res_id, sub_id)
+    if not isinstance(sh_res, dict):
+        return sh_res
 
-        cached_rgr = dict()
-        conf_data.sh_res_change_to_ass(res_data, rgr_dict=cached_rgr)
-        if conf_data.error_message:
-            errors.append(proc_context(recs_ctx) + conf_data.error_message)
-            continue
+    sh_cl = None
+    sh_id = elem_value(sh_res, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID'])     # ==ass_res['rgr_order_cl_fk']
+    if sh_id:
+        sh_cl = guest_data(cae, sh_id)
+    if not isinstance(sh_cl, dict):
+        log_msg("res_from_sh_to_sf({}/{}@{}): guest not found; objId={}; err='{}'"
+                .format(res_id, sub_id, ho_id, sh_id, sh_cl), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+        sh_cl = dict()
 
-        recs_ctx['records'][idx]['ass_res_data'] = cached_rgr
-        if debug_level >= DEBUG_LEVEL_VERBOSE:  # only in verbose debug mode: compare res-changed and fetched rgr
-            check_res_change_data(recs_ctx)
-
-        # if cached_rgr['rgr_order_cl_fk']:
-        #    recs_ctx['records'][idx]['sh_cl_data'] = guest_data(conf_data.cae, cached_rgr['rgr_order_cl_fk'])
-        sh_id = elem_value(res_data, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID'])
-        if sh_id:
-            recs_ctx['records'][idx]['sh_cl_data'] = guest_data(conf_data.cae, sh_id)
-
-    return "\n".join(errors)
-
-
-def oc_res_change_sf(conf_data, req, recs_ctx):
-    # already set in oc_res_change_ass: recs_ctx['oc'] = req.oc  # == 'CR'
-    errors = list()
-    for idx, res_cached in enumerate(recs_ctx['records']):
-        recs_ctx['record_idx'] = idx
-        ard = res_cached['ass_res_data']
-        obj_id = ard['rgr_obj_id']
-
-        if debug_level >= DEBUG_LEVEL_VERBOSE:  # only in verbose debug mode: compare res-changed and fetched rgr
-            if req.rgr_list[idx] != res_cached['req_res_data']:
-                log_msg(proc_context(recs_ctx) + "res data mismatch req/cached={}/{}"
-                        .format(req.rgr_list[idx], res_cached['req_res_data']), notify=True)
-            check_res_change_data(recs_ctx)
-
-        # determine SF Reservation Opportunity ID - if already exists
-        rgr_sf_id = None
-        rgr_pk = ard['rgr_pk']
-        res = conf_data.rgr_fetch_list(['rgr_sf_id'], dict(rgr_pk=rgr_pk))    # SF Reservation Opportunity ID
-        if conf_data.error_message:
-            errors.append(proc_context(recs_ctx) + conf_data.error_message)
-            conf_data.error_message = ""
-            continue
-        if res and res[0] and res[0][0]:
-            rgr_sf_id = res[0][0]
-        else:
-            res = conf_data.load_view(conf_data.acu_db, 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
-                                      "RU_SIHOT_OBJID = :obj_id", dict(obj_id=obj_id))
+    rgr_sf_id = ass_ids['rgr_sf_id']
+    if not rgr_sf_id:
+        # try to determine SF Reservation Opportunity ID from Acumen
+        obj_id = ass_ids['rgr_obj_id']
+        if obj_id:
+            res = asd.load_view(asd.acu_db, 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
+                                "RU_SIHOT_OBJID = :obj_id", dict(obj_id=obj_id))
             if res and res[0] and res[0][0]:
                 rgr_sf_id = res[0][0]
+        if not rgr_sf_id:
+            log_msg("res_from_sh_to_sf({}/{}@{}): Opportunity ID not found for Sihot Res Obj ID {}; err='{}'"
+                    .format(res_id, sub_id, ho_id, obj_id, asd.error_message),
+                    notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+
+    ass_res = dict()
+    asd.sh_res_change_to_ass(sh_res, rgr_dict=ass_res)
+    if asd.error_message:
+        return asd.error_message
+
+    # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call
+    # !!!!  MERGE WITH NEXT VERSION sys_data_generic BRANCH
+    # res_fields = asd.fields_from_sh(sh_cl)
+    # res_fields.update(asd.fields_from_ass(ass_res))
+    # err_msg = asd.sf_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
+    err_msg = asd.sf_res_upsert(rgr_sf_id, sh_cl, ass_res)
+    if err_msg:
+        return "SF Opportunity push/update err='{}', rollback='{}'".format(err_msg, asd.ass_db.rollback())
+
+    err_msg = asd.acu_db.commit()
+    return err_msg
+
+
+def room_change_to_sf(asd, ass_res):
+    ho_id, res_id, sub_id = ass_res['rgr_ho_fk'], ass_res['rgr_res_id'], ass_res['rgr_sub_id']
+    log_msg("room_change_to_sf({}/{}@{}): sync room change from SH ObjID={} to SF ResOppId={}"
+            .format(res_id, sub_id, ho_id, ass_res['rgr_obj_id'], ass_res['rgr_sf_id']),
+            importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+
+    return asd.sf_conn.room_change(ass_res['rgr_sf_id'], ass_res['rgr_time_in'], ass_res['rgr_time_out'])
+
+
+# TODO: refactor Q&D sync run control check/test into separate timer-thread
+in_sync_to_sf = False
+last_sync_to_sf = datetime.datetime.now() - datetime.timedelta(seconds=21)
+
+
+def sync_to_sf(asd):
+    global in_sync_to_sf, last_sync_to_sf
+    if in_sync_to_sf or datetime.datetime.now() < last_sync_to_sf + datetime.timedelta(seconds=18):
+        return
+    try:
+        in_sync_to_sf = True
+        ass_id_cols = ['rgr_sf_id', 'rgr_obj_id', 'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id']
+        err_msg = ""
+        while True:
+            res_changed = room_changed = None
+
+            res_list = asd.rgr_fetch_list(['rgr_last_change', ] + ass_id_cols,
+                                          where_group_order="rgr_last_sync IS null OR rgr_last_change > rgr_last_sync"
+                                                            " ORDER BY rgr_last_change LIMIT 1")
+            if res_list:
+                res_changed = res_list[0][0]
+
+            room_cols = ['rgr_room_last_change', 'rgr_time_in', 'rgr_time_out'] + ass_id_cols
+            room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id IS NOT null"
+                                                                        "AND (rgr_room_last_sync IS null"
+                                                                        " OR rgr_room_last_change > rgr_room_last_sync)"
+                                                                        " ORDER BY rgr_room_last_change LIMIT 1")
+            if room_list:
+                room_changed = room_list[0][0]
+
+            if res_changed and (not room_changed or res_changed < room_changed):
+                log_msg("sync_to_sf() fetch from Sihot and send to SF the changed res={}".format(res_list[0]),
+                        notify=debug_level > DEBUG_LEVEL_VERBOSE)
+                err_msg = res_from_sh_to_sf(asd, dict(zip(ass_id_cols, res_list[0][1:])))
+            elif room_changed and (not res_changed or room_changed < res_changed):
+                log_msg("sync_to_sf() send to SF the room change {}".format(room_list[0]),
+                        notify=debug_level > DEBUG_LEVEL_VERBOSE)
+                err_msg = room_change_to_sf(asd, dict(zip(room_cols, room_list[0])))
             else:
-                err_msg = conf_data.error_message
-                log_msg(proc_context(recs_ctx) + "Opportunity ID {} not found;ignored err='{}'".format(obj_id, err_msg),
-                        notify=True)
-                conf_data.error_message = ""
+                break
+            if err_msg:
+                break
 
-        # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call
-        err_msg = conf_data.sf_res_upsert(rgr_sf_id, res_cached.get('sh_cl_data'), ard)
-        # !!!!  MERGE WITH NEXT VERSION sys_data_generic BRANCH
-        # res_fields = conf_data.fields_from_sh(res_cached.get('sh_cl_data'))
-        # res_fields.update(conf_data.fields_from_ass(ard))
-        # err_msg = conf_data.sf_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
+    except Exception as ex:
+        err_msg = "exception='{}'\n{}".format(ex, format_exc())
+    finally:
+        in_sync_to_sf = False
+        asd.error_message = ""
 
-        if err_msg:
-            errors.append(proc_context(recs_ctx) + "SF Opportunity push/update err='{}'".format(err_msg))
-            conf_data.ass_db.rollback()
-        else:
-            conf_data.acu_db.commit()
+    if err_msg:
+        log_msg("sync_to_sf() {}".format(err_msg), importance=3, is_error=True)
+
+
+def oc_keep_alive(_, __, ___):
+    # no request-/error-checks needed on operation codes: LA=Link Alive, TS=Time Sync, ACK=Acknowledge
+    return ""
+
+
+def oc_res_change(asd, req, rec_ctx):
+    """
+    Process Sihot Change Reservation operation code (CR) by saving Ids and update timestamp to ass_cache database.
+    :param asd:         AssSysData instance, created for this notification.
+    :param req:         Reservation Response class instance (with parsed Sihot XML data of CR-notification).
+    :param rec_ctx:     dict with context info (ids and actions).
+    :return:            error message(s) or empty string/"" if no errors occurred.
+    """
+    errors = list()
+    rec_ctx['oc'] = req.oc     # == 'CR'
+    rgr_list = req.rgr_list
+    for idx, req_rgr in enumerate(rgr_list):
+        rec_ctx.update(req_res_data=req_rgr,
+                       ObjId=req_rgr.get('rgr_obj_id', ''),
+                       HotelId=getattr(req, 'hn', None),
+                       ResId=req_rgr.get('rgr_res_id', ''),
+                       SubId=req_rgr.get('rgr_sub_id', ''),
+                       RoomNo=req_rgr.get('rgc_list', [dict(), ])[0].get('rgc_room_id', ''))
+        log_msg(proc_context(rec_ctx) + "res change data={}".format(req_rgr),
+                importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+
+        chk_values = {k: v for k, v in req_rgr.items() if k in ['rgr_res_id', 'rgr_sub_id']}
+        chk_values.update(rgr_ho_fk=getattr(req, 'hn', None))
+        upd_col_values = chk_values.copy()
+        upd_col_values.update(rgr_last_change=datetime.datetime.now())
+        if req_rgr.get('rgr_obj_id', ''):
+            upd_col_values.update(rgr_obj_id=req_rgr.get('rgr_obj_id', ''))
+        asd.rgr_upsert(upd_col_values, chk_values=chk_values, commit=True)
+        if asd.error_message:
+            err_msg = proc_context(rec_ctx) + "ass res change error='{}'".format(asd.error_message)
+            log_msg(err_msg, importance=3, is_error=True)
+            errors.append(err_msg)
+            asd.error_message = ""
 
     return "\n".join(errors)
 
 
-def oc_room_change_ass(conf_data, req, recs_ctx):
-    recs_ctx['oc'] = oc = req.oc     # == 'CI'|'CO'|'RM'
-    recs_ctx['record_idx'] = idx = -1
-    error_msg = ""
+def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_no, action_time):
+    ho_id = req.hn
+    res_no = req.res_nr
+    rec_ctx.update(HotelId=ho_id, ResId=res_no, SubId=sub_no, RoomNo=room_no, extended_oc=oc, action_time=action_time)
+    log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, rec_ctx, req.get_xml()),
+            importance=3, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+
+    rgr_sf_id = asd.sh_room_change_to_ass(oc, ho_id, res_no, sub_no, action_time)
+    if rgr_sf_id:
+        rec_ctx.update(ResSfId=rgr_sf_id)
+        err_msg = ""
+    else:
+        err_msg = asd.error_message
+
+    return err_msg
+
+
+def oc_room_change(asd, req, rec_ctx):
+    rec_ctx['oc'] = oc = req.oc     # == 'CI'|'CO'|'RM'
+    err_msg = ""
     action_time = datetime.datetime.now()
 
-    ho_id = req.hn
-    log_msg(proc_context(recs_ctx) + "ass room change xml='{}'".format(req.get_xml()), importance=4,
-            notify=debug_level >= DEBUG_LEVEL_VERBOSE)
     if oc == 'RM':
-        oc = 'CO-RM'
-        idx += 1
-        recs_ctx['records'].append(dict(HotelId=ho_id, ResId=req.res_nr, SubId=req.osub_nr, RoomNo=req.orn,
-                                        extended_oc=oc, action_time=action_time))
-        recs_ctx['record_idx'] = idx
-        rgr_sf_id = conf_data.sh_room_change_to_ass(oc, ho_id, req.ores_nr, req.osub_nr, action_time)
-        if rgr_sf_id:
-            oc = 'CI-RM'
-            recs_ctx['records'][-1].update(ResSfId=rgr_sf_id)
-        else:
-            error_msg = conf_data.error_message
-    if not error_msg:
-        idx += 1
-        recs_ctx['records'].append(dict(HotelId=ho_id, ResId=req.res_nr, SubId=req.sub_nr, RoomNo=req.rn,
-                                        extended_oc=oc, action_time=action_time))
-        recs_ctx['record_idx'] = idx
-        rgr_sf_id = conf_data.sh_room_change_to_ass(oc, ho_id, req.res_nr, req.sub_nr, action_time)
-        if rgr_sf_id:
-            recs_ctx['records'][-1].update(ResSfId=rgr_sf_id)
-        else:
-            error_msg = conf_data.error_message
+        err_msg = _room_change_ass(asd, req, rec_ctx, 'CO-RM', req.osub_nr, req.orn, action_time)
+        oc = 'CI-RM'
+    err_msg += _room_change_ass(asd, req, rec_ctx, oc, req.sub_nr, req.rn, action_time)
 
-    if error_msg:
-        log_msg(proc_context(recs_ctx) + "room change error='{}'".format(error_msg), importance=3, is_error=True)
-        em = conf_data.ass_db.rollback()
-        if em:
-            error_msg += "\n      " + em
-    else:
-        error_msg = conf_data.ass_db.commit()
+    if err_msg:
+        log_msg(proc_context(rec_ctx) + "ass room change error='{}'".format(err_msg), importance=3, is_error=True)
 
-    return error_msg
-
-
-def oc_room_change_sf(conf_data, req, recs_ctx):
-    log_msg(proc_context(recs_ctx) + "SF room change xml='{}'".format(req.get_xml()), importance=4,
-            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-    errors = list()
-    for idx, chg_cached in enumerate(recs_ctx['records']):
-        recs_ctx['record_idx'] = idx
-        log_msg(proc_context(recs_ctx) + "room change {}={}".format(idx + 1, chg_cached),
-                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        ho_id = chg_cached['HotelId']
-        res_id = chg_cached['ResId']
-        sub_id = chg_cached['SubId']
-        res = conf_data.rgr_fetch_list(['rgr_sf_id', 'rgr_time_in', 'rgr_time_out'],
-                                       dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
-        if conf_data.error_message or not res or not res[0] or not res[0][0]:
-            errors.append(proc_context(recs_ctx) + "AssCache fetch {} err='{}'".format(res, conf_data.error_message))
-            continue
-        if conf_data.sf_room_change(res[0][0], chg_cached['extended_oc'][:2], chg_cached['action_time'], res[0][1:]):
-            errors.append(proc_context(recs_ctx) + conf_data.error_message)
-
-    return "\n".join(errors)
+    return err_msg
 
 
 # supported operation codes (stored in AssServer.ini) with related request class and operation code handler/processor
@@ -426,22 +435,22 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                     err_messages.append((95, "AssSysData initialization error: {}; ass_db={}"
                                              .format(sys_connections.error_message, sys_connections.ass_db)))
                 else:
-                    recs_ctx = dict(records=list(), record_idx=-1, procedure='sys_conn')
+                    rec_ctx = dict(procedure='sys_conn')
                     for slot in SUPPORTED_OCS[oc]:
                         req_class = slot['reqClass']
-                        recs_ctx['procedure'] = req_class.__name__
+                        rec_ctx['procedure'] = req_class.__name__
                         req = req_class(cae)
                         req.parse_xml(xml_request)
                         if debug_level >= DEBUG_LEVEL_VERBOSE:
                             err_messages.append((0, "Slot {}:{} parsed xml: {}".format(slot, req, req.get_xml())))
                         for proc in slot['ocProcessors']:
-                            recs_ctx['procedure'] = proc.__name__
+                            rec_ctx['procedure'] = proc.__name__
                             try:
-                                msg = proc(sys_connections, req, recs_ctx)
+                                msg = proc(sys_connections, req, rec_ctx)
                                 if msg:
-                                    err_messages.append((96, proc_context(recs_ctx) + "call error '{}'".format(msg)))
+                                    err_messages.append((96, proc_context(rec_ctx) + "call error '{}'".format(msg)))
                             except Exception as ex:
-                                err_messages.append((97, proc_context(recs_ctx)
+                                err_messages.append((97, proc_context(rec_ctx)
                                                      + "call exception: '{}'\n{}".format(ex, format_exc())))
                             sys_connections.error_message = ""  # reset error message for next loop/proc
             except Exception as ex:
@@ -469,10 +478,19 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         xml_response = ack_response(tn, last_err, org=org, msg=msg, status='1' if oc == 'LA' else '')
         log_msg("OC {} processed; xml response: {}".format(oc, xml_response), importance=4)
 
+        # sync changes to SF - TODO: migrate to separate time process
+        sync_to_sf(AssSysData(cae, err_logger=log_msg, warn_logger=log_msg))
+
         return bytes(xml_response, xml_enc)
 
 
 try:
+    # sync changes to SF - TODO: migrate to separate time process
+    sync_to_sf(AssSysData(cae, err_logger=log_msg, warn_logger=log_msg))
+
+    sys_conns.close_dbs()
+    sys_conns = ass_data['assSysData'] = None  # del/free not thread-save sys db connections
+
     # ?!?!?: if sihot is connecting as client then our listening server ip has to be either localhost or 127.0.0.1
     # .. and for connect to the Sihot WEB/KERNEL interfaces only the external IP address of the Sihot server is working
     ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))

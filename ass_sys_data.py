@@ -863,7 +863,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param phone:       Phone number of client (only needed if client gets created).
         :return:            primary key (ass_id/cl_pk) of this client (if exists) or None if error.
         """
-        assert sh_id or ac_id
+        if self.debug_level >= DEBUG_LEVEL_VERBOSE and not sh_id and not ac_id:
+            uprint("  **  cl_ensure_id(... {}, {}, {}) Missing client references".format(name, email, phone))
         cl_pk = None
         if sh_id and ac_id:
             for cl_rec in self.clients:
@@ -1079,10 +1080,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return ret
 
-    def rgr_fetch_list(self, col_names, chk_values, where_clause=""):
-        if not where_clause:
-            where_clause = " AND ".join([k + " = :" + k for k in chk_values.keys()])
-        if self.ass_db.select('res_groups', col_names, where_clause, chk_values):
+    def rgr_fetch_list(self, col_names, chk_values=None, where_group_order=""):
+        if chk_values and not where_group_order:
+            where_group_order = " AND ".join([k + " = :" + k for k in chk_values.keys()])
+        if self.ass_db.select('res_groups', col_names, where_group_order, bind_vars=chk_values):
             self.error_message = self.ass_db.last_err_msg
         ret = self.ass_db.fetch_all()
         if self.ass_db.last_err_msg:
@@ -1492,7 +1493,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             sf_args['RoomNo__c'] = ass_res_data['rgc_list'][0]['rgc_room_id']
 
         sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
-        assert not sf_args.get('PersonAccountId') or sf_args['PersonAccountId'] == sf_cl_id
+        if sf_args.get('PersonAccountId') and sf_args['PersonAccountId'] != sf_cl_id \
+                and self.debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("  **  sf_res_upsert({}, {}, {}) PersonAccount discrepancy {} != {}"
+                   .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_args.get('PersonAccountId'), sf_cl_id))
 
         if sync_cache:
             if sf_cl_id and ass_id:
@@ -1505,8 +1509,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             col_values = dict() if err_msg else dict(rgr_last_sync=datetime.datetime.now())
             if not rgr_sf_id and sf_opp_id:     # save just created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
-            elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and rgr_sf_id:
-                assert sf_opp_id == rgr_sf_id
+            elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and rgr_sf_id and sf_opp_id != rgr_sf_id:
+                uprint("  **  sf_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
+                       .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_opp_id, rgr_sf_id))
+
             if col_values:
                 self.rgr_upsert(col_values, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
                 if self.error_message:
@@ -1526,24 +1532,32 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param cached_in_out:   tuple of (check-in-time, check-out-time) from cols res_groups.rgr_time_in/.rgr_time_out.
         :return:                empty string if ok, else error message.
         """
+        check_in, check_out = None, None
         if cached_in_out:
             check_in, check_out = cached_in_out
         else:
             rgr_list = self.rgr_fetch_list(['rgr_time_in', 'rgr_time_out'], dict(rgr_sf_id=rgr_sf_id))
-            if not rgr_list:
-                self.error_message = "sf_room_change({}, {}, {}, {}): reservation not found in AssCache"\
-                    .format(rgr_sf_id, mode, time, cached_in_out)
-                return self.error_message
-            check_in, check_out = rgr_list[0]
+            if rgr_list:
+                check_in, check_out = rgr_list[0]
+            elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint("  **  sf_room_change({}, {}, {}, {}): reservation not found in AssCache (ignored-send CheckIn)"
+                       .format(rgr_sf_id, mode, time, cached_in_out))
+                check_in, check_out = time, None
 
-        if mode == 'CI' and not check_in and not check_out:
+        if mode == 'CI':
             check_in = time
-        elif mode == 'CO' and check_in and not check_out:
+        elif mode == 'CO':
             check_out = time
-        else:
-            self.error_message = "sf_room_change({}, {}, {}, {}): room state discrepancy in={}/out={}"\
-                .format(rgr_sf_id, mode, time, cached_in_out, check_in, check_out)
-            return self.error_message
+        elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
+            old_mode = mode
+            if not check_in:
+                mode = 'CI'
+                check_in, check_out = time, None
+            else:
+                mode = 'CO'
+                check_out = time
+            uprint("  **  sf_room_change({}, {}, {}, {}): invalid room change type code {} (ignored-send {} {} {})"
+                   .format(rgr_sf_id, old_mode, time, cached_in_out, old_mode, mode, check_in, check_out))
 
         self.error_message = self.sf_conn.room_change(rgr_sf_id, check_in, check_out)
         return self.error_message
@@ -1875,7 +1889,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param action_time:     Date and time of check-in/-out.
         :return:                rgr_sf_id or None if error (error message available in self.error_message).
         """
-        upd_col_values = dict()
+        upd_col_values = dict(rgr_room_last_change=action_time)
         if oc[:2] == 'CI':
             upd_col_values.update(rgr_time_in=action_time, rgr_time_out=None)
         elif oc[:2] == 'CO':
@@ -1887,6 +1901,6 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not self.error_message:
             rgr_sf_id = self.rgr_upsert(upd_col_values,
                                         chk_values=dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id),
-                                        returning_column='rgr_sf_id')
+                                        commit=True, returning_column='rgr_sf_id')
 
         return rgr_sf_id
