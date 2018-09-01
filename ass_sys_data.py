@@ -1478,6 +1478,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                          ('SihotResvObjectId__c', 'rgr_obj_id'),
                          ('Arrival__c', 'rgr_arrival'),
                          ('Departure__c', 'rgr_departure'),
+                         ('RoomNo__c', 'rgr_room_id'),
                          ('RoomCat__c', 'rgr_room_cat_id'),
                          ('Status__c', 'rgr_status'),
                          ('MktGroup__c', 'rgr_mkt_group'),
@@ -1489,7 +1490,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if ass_res_data.get(asn):
                 sf_args[sfn] = ass_res_data[asn]
 
-        if ass_res_data.get('rgc_list') and ass_res_data['rgc_list'][0].get('rgc_room_id'):
+        if not sf_args.get('RoomNo__c') \
+                and ass_res_data.get('rgc_list') and ass_res_data['rgc_list'][0].get('rgc_room_id'):
             sf_args['RoomNo__c'] = ass_res_data['rgc_list'][0]['rgc_room_id']
 
         sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
@@ -1523,43 +1525,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message += err_msg
         return self.error_message
 
-    def sf_room_change(self, rgr_sf_id, mode, time, cached_in_out=None):
+    def sf_room_change(self, rgr_sf_id, check_in, check_out, next_room_id):
         """
         check room change and if ok then pass to Salesforce Allocation custom object.
         :param rgr_sf_id:       SF Reservation Opportunity object Id.
-        :param mode:            'CI' for check-in or 'CO' for check-out.
-        :param time:            check-in/-out date and time.
-        :param cached_in_out:   tuple of (check-in-time, check-out-time) from cols res_groups.rgr_time_in/.rgr_time_out.
+        :param check_in:        check-in timestamp.
+        :param check_out:       check-out timestamp.
+        :param next_room_id:    newest apartment/room number.
         :return:                empty string if ok, else error message.
         """
-        check_in, check_out = None, None
-        if cached_in_out:
-            check_in, check_out = cached_in_out
-        else:
-            rgr_list = self.rgr_fetch_list(['rgr_time_in', 'rgr_time_out'], dict(rgr_sf_id=rgr_sf_id))
-            if rgr_list:
-                check_in, check_out = rgr_list[0]
-            elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("  **  sf_room_change({}, {}, {}, {}): reservation not found in AssCache (ignored-send CheckIn)"
-                       .format(rgr_sf_id, mode, time, cached_in_out))
-                check_in, check_out = time, None
+        self._warn("sf_room_change({}, {}, {}, {}) called".format(rgr_sf_id, check_in, check_out, next_room_id),
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-        if mode == 'CI':
-            check_in = time
-        elif mode == 'CO':
-            check_out = time
-        elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            old_mode = mode
-            if not check_in:
-                mode = 'CI'
-                check_in, check_out = time, None
-            else:
-                mode = 'CO'
-                check_out = time
-            uprint("  **  sf_room_change({}, {}, {}, {}): invalid room change type code {} (ignored-send {} {} {})"
-                   .format(rgr_sf_id, old_mode, time, cached_in_out, old_mode, mode, check_in, check_out))
-
-        self.error_message = self.sf_conn.room_change(rgr_sf_id, check_in, check_out)
+        self.error_message = self.sf_conn.room_change(rgr_sf_id, check_in, check_out, next_room_id)
         return self.error_message
 
     def sf_room_data(self, res_opp_id):
@@ -1738,11 +1716,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             ret = res_fetch.fetch_by_res_id(ho_id=hotel_id, res_id=res_id, sub_id=sub_id)
         return ret
 
-    def sh_res_change_to_ass(self, shd, rgr_dict=None):
+    def sh_res_change_to_ass(self, shd, last_change=None, rgr_dict=None):
         """
         extract reservation data from sihot ResResponse dict and save it into the ass_cache database.
 
         :param shd:         Sihot ResChange dict.
+        :param last_change: if not None then set rgr_last_change column value to this passed timestamp.
         :param rgr_dict:    return reservation data and person/rooming-list (in rgr_dict['rgc_list']) (opt).
         :return:            ""/empty-string if ok and committed, else error message (and rolled-back).
         """
@@ -1804,6 +1783,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                                                  SH_DATE_FORMAT).date(),
                         rgr_mkt_segment=elem_value(shd, ['RESERVATION', 'MARKETCODE']),
                         rgr_mkt_group=elem_value(shd, ['RESERVATION', 'CHANNEL']),
+                        rgr_room_id=elem_value(shd, ['PERSON', 'RN']),
                         rgr_room_cat_id=elem_value(shd, ['RESERVATION', 'CAT']),
                         rgr_room_rate=elem_value(shd, ['RESERVATION', 'RATE-SEGMENT']),
                         rgr_payment_inst=elem_value(shd, ['RESERVATION', 'PAYMENT-INST']),
@@ -1811,8 +1791,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                         rgr_ext_book_day=elem_value(shd, ['RESERVATION', 'SALES-DATE']),
                         rgr_comment=elem_value(shd, ['RESERVATION', 'COMMENT']),
                         rgr_long_comment=elem_value(shd, ['RESERVATION', 'TEC-COMMENT']),
-                        rgr_last_change=datetime.datetime.now(),
                         )
+            if last_change:
+                upd_values.update(rgr_last_change=datetime.datetime.now())
             if self.ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
                 error_msg = self.ass_db.last_err_msg
             else:
@@ -1879,22 +1860,23 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return error_msg
 
-    def sh_room_change_to_ass(self, oc, ho_id, res_id, sub_id, action_time):
+    def sh_room_change_to_ass(self, oc, ho_id, res_id, sub_id, room_id, action_time):
         """ move/check in/out guest from/into room_no
 
-        :param oc:              operation code: either 'CI', 'CO', 'CI-RM' or 'CO-RM'.
+        :param oc:              operation code: either 'CI', 'CO', 'CI-RM', 'CO-RM' or 'RC-RM'.
         :param ho_id:           Sihot hotel id (e.g. '1'==BHC).
         :param res_id:          Sihot reservation main id.
         :param sub_id:          Sihot reservation sub id.
+        :param room_id:         id (number) of the affected Sihot room.
         :param action_time:     Date and time of check-in/-out.
         :return:                rgr_sf_id or None if error (error message available in self.error_message).
         """
-        upd_col_values = dict(rgr_room_last_change=action_time)
+        upd_col_values = dict(rgr_room_id=room_id, rgr_room_last_change=action_time)
         if oc[:2] == 'CI':
             upd_col_values.update(rgr_time_in=action_time, rgr_time_out=None)
         elif oc[:2] == 'CO':
             upd_col_values.update(rgr_time_out=action_time)
-        else:
+        elif oc != 'RC-RM':
             self.error_message = "cache_room_change({}, {}, {}): Invalid operation code".format(oc, ho_id, res_id)
 
         rgr_sf_id = None

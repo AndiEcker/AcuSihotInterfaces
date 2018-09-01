@@ -415,6 +415,7 @@ def ac_pull_res_data():
                           rgr_departure=crow['DEP_DATE'],
                           rgr_mkt_segment=crow['SIHOT_MKT_SEG'],
                           rgr_mkt_group=crow['RO_SIHOT_RES_GROUP'],
+                          rgr_room_id=crow['RUL_SIHOT_ROOM'],
                           rgr_room_cat_id=crow['RUL_SIHOT_CAT'],
                           rgr_room_rate=crow['RUL_SIHOT_RATE'],
                           rgr_ext_book_id=crow['RH_EXT_BOOK_REF'],

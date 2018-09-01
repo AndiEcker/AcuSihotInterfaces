@@ -400,7 +400,7 @@ class TestAssSysDataSf:
         arr_date = datetime.date.today() + datetime.timedelta(days=4)
         dep_date = arr_date + datetime.timedelta(days=7)
         res_fields = dict(rgr_ho_fk='4', rgr_res_id='4444444', rgr_sub_id='4',
-                          rgr_arrival=arr_date, rgr_departure=dep_date)
+                          rgr_room_id='0842', rgr_arrival=arr_date, rgr_departure=dep_date)
         sf_sent = dict()
         assert not asd.sf_res_upsert(None, cl_fields, res_fields, sync_cache=False, sf_data=sf_sent)
         sf_recd = asd.sf_res_data(sf_sent['ReservationOpportunityId'])
@@ -418,7 +418,8 @@ class TestAssSysDataSf:
         dep_date = datetime.date(2018, 1, 3)
         res_fields = dict(rgr_ho_fk='4', rgr_res_id='33220', rgr_sub_id='1',
                           rgr_gds_no='899993', rgr_obj_id='60544',
-                          rgr_arrival=arr_date, rgr_departure=dep_date, rgr_room_cat_id='STDO', rgr_status='1',
+                          rgr_arrival=arr_date, rgr_departure=dep_date,
+                          rgr_room_id='3322', rgr_room_cat_id='STDO', rgr_status='1',
                           rgr_mkt_group='SP', rgr_mkt_segment='TO',
                           rgr_adults=2, rgr_children=0,
                           rgr_comment="This is a test comment",
@@ -604,12 +605,13 @@ class TestAssSysDataSh:
         res_id = '33220'
         sub_id = '1'
         obj_id = '60544'
+        room_id = '0999'
         asd = AssSysData(console_app_env)
 
         dt_in = datetime.datetime.now().replace(microsecond=0)
-        asd.sh_room_change_to_ass('CI', ho_id=ho_id, res_id=res_id, sub_id=sub_id, action_time=dt_in)
+        asd.sh_room_change_to_ass('CI', ho_id=ho_id, res_id=res_id, sub_id=sub_id, room_id=room_id, action_time=dt_in)
 
-        cols = ['rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_obj_id', 'rgr_time_in', 'rgr_time_out']
+        cols = ['rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_obj_id', 'rgr_room_id', 'rgr_time_in', 'rgr_time_out']
 
         rgr_list = asd.rgr_fetch_list(cols, dict(rgr_obj_id=obj_id))
         assert isinstance(rgr_list, list)
@@ -618,6 +620,7 @@ class TestAssSysDataSh:
         assert res_id == rgr_dict['rgr_res_id']
         assert sub_id == rgr_dict['rgr_sub_id']
         assert obj_id == rgr_dict['rgr_obj_id']
+        assert room_id == rgr_dict['rgr_room_id']
         assert dt_in == rgr_dict['rgr_time_in']
         assert rgr_dict['rgr_time_out'] is None
 

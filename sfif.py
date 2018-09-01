@@ -110,32 +110,36 @@ class SfInterface:
         ensure that the connection to Salesforce got at least once established and did not expired since then (2 hours).
 
         :param soql_query:  SOQL query for to check established connection if expired.
-        :return:            False:  if connection never got established because of and previous invalid login,
-                            True:   if connection got established the first time (by calling this method),
+        :return:            False:  if connection never got established because of previous invalid login,
                             None:   if first try to connect to Salesforce failed,
-                            else return the Salesforce response for the check query (soql_query).
+                            else return the Salesforce response for the check query (soql_query) if connection was
+                            already established or just got established the first time (by calling this method).
         """
         if 'INVALID_LOGIN' in self.error_msg:
-            uprint(" ***  Invalid Salesforce login occurred - preventing lock of user account {}; last error={}"
-                   .format(self._user, self.error_msg))
+            msg = "preventing lock of user account {}".format(self._user)
+            if msg not in self.error_msg:
+                self.error_msg = " ***  Invalid Salesforce login - {}; last error={}".format(msg, self.error_msg)
+            uprint(self.error_msg)
             return False
         self.error_msg = ""
 
-        if self._conn:
-            try:
-                return self._conn.query_all(soql_query)
-            except SalesforceExpiredSession:
-                uprint("  ##  SfInterface._ensure_lazy_connect(): Re-connect expired Salesforce session...")
-                self._conn = None
-
         if not self._conn:
+            self.error_msg = ""
             self._connect()
             if self.error_msg:
                 if self._debug_level >= DEBUG_LEVEL_VERBOSE:
                     uprint("  **  _ensure_lazy_connect() err={}".format(self.error_msg))
                 return None
 
-        return True
+        if self._conn:
+            try:
+                return self._conn.query_all(soql_query)
+            except SalesforceExpiredSession:
+                uprint("  ##  SfInterface._ensure_lazy_connect(): Trying re-connecting expired Salesforce session...")
+                self._conn = None
+                return self._ensure_lazy_connect(soql_query)
+
+        return None
 
     def soql_query_all(self, soql_query):
         """
@@ -151,7 +155,7 @@ class SfInterface:
             response = self._ensure_lazy_connect(soql_query)
         except Exception as sf_ex:
             self.error_msg = "SfInterface.soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
-        if response and not response['done']:
+        if isinstance(response, dict) and not response['done']:
             self.error_msg = "SfInterface.soql_query_all(): Salesforce is responding that query {} is NOT done." \
                 .format(soql_query)
 
@@ -317,11 +321,12 @@ class SfInterface:
         return (result['PersonAccountId'], result['ReservationOpportunityId'],
                 self.error_msg + (result['ErrorMessage'] or ''))
 
-    def room_change(self, res_sf_id, check_in, check_out):
+    def room_change(self, res_sf_id, check_in, check_out, next_room_id):
         if not self._ensure_lazy_connect():
             return None, None
 
-        room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out)
+        room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out,
+                             RoomNo__c=next_room_id)
         result = self.apex_call('reservation_room_move', function_args=room_chg_data)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:

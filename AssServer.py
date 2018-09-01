@@ -6,9 +6,12 @@
     0.2     refactored using add_ass_options() and init_ass_data().
     0.3     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
-    0.5     added sync caching method sync_to_sf() for better error handling and conflict clearing.
+    0.5     added sync caching methods *sync_to_sf() for better error handling and conflict clearing.
 """
 import datetime
+import threading
+import time
+from functools import partial
 from traceback import format_exc
 
 from ae_console_app import ConsoleApp, uprint, missing_requirements, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
@@ -21,14 +24,20 @@ __version__ = '0.5'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres, Acumen and Salesforce",
                  multi_threading=True)
+cae.add_option('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 36, 'l')
 ass_options = add_ass_options(cae, client_port=12000, add_kernel_port=True)
 
 debug_level = cae.get_option('debugLevel')
 ass_data = init_ass_data(cae, ass_options)
+
+interval = cae.get_option('cmdInterval')
+uprint("Sync to SF interval: {} seconds".format(interval))
+
 sys_conns = ass_data['assSysData']
 if sys_conns.error_message:
-    uprint("AssServer startup error: ", sys_conns.error_message)
+    uprint("AssServer startup error initializing AssSysData: ", sys_conns.error_message)
     cae.shutdown(exit_code=9)
+
 mr = missing_requirements(sys_conns, [['ass_db'], ['acu_db'], ['sf_conn'], ['sh_conn']], bool_check=True)
 if mr:
     uprint("Invalid connection-credentials/-configuration of the external systems:", mr)
@@ -36,21 +45,27 @@ if mr:
 
 notification = ass_data['notification']
 
+sys_conns.close_dbs()
+sys_conns = ass_data['assSysData'] = None  # del/free not thread-save sys db connections
+
+
+log_lock = threading.Lock()
+
 
 def log_msg(msg, *args, **kwargs):
+    log_lock.acquire()
     is_error = kwargs.get('is_error', False)
     notify = kwargs.get('notify', False)
-    if debug_level < kwargs.get('minimum_debug_level', DEBUG_LEVEL_ENABLED) and not is_error and not notify:
-        return
-
-    importance = kwargs.get('importance', 2)
-    seps = '\n' * (importance - 2)
-    msg = seps + ' ' * (4 - importance) + ('*' if is_error else '#') * importance + '  ' + msg
-    if args:
-        msg += " (args={})".format(args)
-    uprint(msg)
-    if notification and (is_error or notify):
-        notification.send_notification(msg_body=msg, subject='AssServer notification')
+    if debug_level >= kwargs.get('minimum_debug_level', DEBUG_LEVEL_ENABLED) or is_error or notify:
+        importance = kwargs.get('importance', 2)
+        seps = '\n' * (importance - 2)
+        msg = seps + ' ' * (4 - importance) + ('*' if is_error else '#') * importance + '  ' + msg
+        if args:
+            msg += " (args={})".format(args)
+        uprint(msg)
+        if notification and (is_error or notify):
+            notification.send_notification(msg_body=msg, subject='AssServer notification')
+    log_lock.release()
 
 
 def proc_context(rec_ctx):
@@ -107,6 +122,9 @@ def check_res_change_data(rec_ctx):
     if not rrd['rgr_sub_id'] == elem_value(srd, 'SUB-NR') == ard['rgr_sub_id']:
         log_msg(proc_context(rec_ctx) + "Sihot Res Sub Id mismatch req/sh/ass={}/{}/{}"
                 .format(rrd['rgr_sub_id'], elem_value(srd, 'SUB-NR'), ard['rgr_sub_id']), notify=True)
+    if not rrd['rgr_room_id'] == elem_value(srd, 'RN') == ard['rgr_room_id']:
+        log_msg(proc_context(rec_ctx) + "Sihot Room No (main) mismatch req/sh/ass={}/{}/{}"
+                .format(rrd['rgr_room_id'], elem_value(srd, 'RN'), ard['rgr_room_id']), notify=True)
     for idx, rgc in enumerate(rrd['rgc_list']):
         ard_room = ard.get('rgc_list')
         if ard_room:
@@ -114,14 +132,14 @@ def check_res_change_data(rec_ctx):
         if ard_room == list():
             ard_room = None
         if not rgc.get('rgc_room_id') == elem_value(srd, ['PERSON', 'RN'], arri=idx) == ard_room:
-            log_msg(proc_context(rec_ctx) + "Sihot Room No mismatch req/sh/ass={}/{}/{}"
+            log_msg(proc_context(rec_ctx) + "Sihot Room No (rooming list) mismatch req/sh/ass={}/{}/{}"
                     .format(rrd.get('rgc_room_id'), elem_value(srd, ['PERSON', 'RN'], arri=idx), ard_room), notify=True)
 
 
-def res_from_sh_to_sf(asd, ass_ids):
-    ho_id, res_id, sub_id = ass_ids['rgr_ho_fk'], ass_ids['rgr_res_id'], ass_ids['rgr_sub_id']
+def res_from_sh_to_sf(asd, ass_changed_res):
+    ho_id, res_id, sub_id = ass_changed_res['rgr_ho_fk'], ass_changed_res['rgr_res_id'], ass_changed_res['rgr_sub_id']
     log_msg("res_from_sh_to_sf({}/{}@{}): sync reservation from SH ObjID={} to SF ResOppId={}"
-            .format(res_id, sub_id, ho_id, ass_ids['rgr_obj_id'], ass_ids['rgr_sf_id']),
+            .format(res_id, sub_id, ho_id, ass_changed_res['rgr_obj_id'], ass_changed_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     sh_res = ResFetch(cae).fetch_by_res_id(ho_id, res_id, sub_id)
@@ -133,27 +151,26 @@ def res_from_sh_to_sf(asd, ass_ids):
     if sh_id:
         sh_cl = guest_data(cae, sh_id)
     if not isinstance(sh_cl, dict):
-        log_msg("res_from_sh_to_sf({}/{}@{}): guest not found; objId={}; err='{}'"
-                .format(res_id, sub_id, ho_id, sh_id, sh_cl), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+        log_msg("res_from_sh_to_sf({}): guest not found; objId={}; err='{}'"
+                .format(ass_changed_res, sh_id, sh_cl), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sh_cl = dict()
 
-    rgr_sf_id = ass_ids['rgr_sf_id']
+    rgr_sf_id = ass_changed_res['rgr_sf_id']
     if not rgr_sf_id:
         # try to determine SF Reservation Opportunity ID from Acumen
-        obj_id = ass_ids['rgr_obj_id']
+        obj_id = ass_changed_res['rgr_obj_id']
         if obj_id:
             res = asd.load_view(asd.acu_db, 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
                                 "RU_SIHOT_OBJID = :obj_id", dict(obj_id=obj_id))
             if res and res[0] and res[0][0]:
                 rgr_sf_id = res[0][0]
         if not rgr_sf_id:
-            log_msg("res_from_sh_to_sf({}/{}@{}): Opportunity ID not found for Sihot Res Obj ID {}; err='{}'"
-                    .format(res_id, sub_id, ho_id, obj_id, asd.error_message),
+            log_msg("res_from_sh_to_sf({}): Opportunity ID not found for Sihot Res Obj ID {}; err='{}'"
+                    .format(ass_changed_res, obj_id, asd.error_message),
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     ass_res = dict()
-    asd.sh_res_change_to_ass(sh_res, rgr_dict=ass_res)
-    if asd.error_message:
+    if asd.sh_res_change_to_ass(sh_res, rgr_dict=ass_res):
         return asd.error_message
 
     # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call
@@ -163,9 +180,17 @@ def res_from_sh_to_sf(asd, ass_ids):
     # err_msg = asd.sf_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
     err_msg = asd.sf_res_upsert(rgr_sf_id, sh_cl, ass_res)
     if err_msg:
-        return "SF Opportunity push/update err='{}', rollback='{}'".format(err_msg, asd.ass_db.rollback())
+        return "res_from_sh_to_sf({}): SF reservation push/update err='{}', rollback='{}'"\
+            .format(ass_changed_res, err_msg, asd.ass_db.rollback())
 
-    err_msg = asd.acu_db.commit()
+    # no errors on sync to SF, then set last sync timestamp
+    chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
+    if not asd.rgr_upsert(dict(rgr_last_sync=ass_changed_res['rgr_last_sync']), chk_values, commit=True):
+        err_msg = "res_from_sh_to_sf({}): last reservation sync timestamp ass_cache update failed"\
+                      .format(ass_changed_res) + asd.error_message
+        if asd.ass_db.rollback():
+            err_msg += "\n" + asd.ass_db.last_err_msg
+
     return err_msg
 
 
@@ -175,33 +200,63 @@ def room_change_to_sf(asd, ass_res):
             .format(res_id, sub_id, ho_id, ass_res['rgr_obj_id'], ass_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
-    return asd.sf_conn.room_change(ass_res['rgr_sf_id'], ass_res['rgr_time_in'], ass_res['rgr_time_out'])
+    err_msg = asd.sf_room_change(ass_res['rgr_sf_id'],
+                                 ass_res['rgr_time_in'], ass_res['rgr_time_out'], ass_res['rgr_room_id'])
+    if err_msg:
+        return "room_change_to_sf({}): SF room push/update err='{}'".format(ass_res, err_msg)
+
+    # no errors on sync to SF, then set last sync timestamp
+    chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
+    if not asd.rgr_upsert(dict(rgr_room_last_sync=ass_res['rgr_room_last_sync']), chk_values, commit=True):
+        err_msg = "room_change_to_sf({}): last room sync timestamp ass_cache update err='{}'"\
+                      .format(ass_res, asd.error_message)
+        if asd.ass_db.rollback():
+            err_msg += "\n" + asd.ass_db.last_err_msg
+
+    return err_msg
 
 
-# TODO: refactor Q&D sync run control check/test into separate timer-thread
-in_sync_to_sf = False
-last_sync_to_sf = datetime.datetime.now() - datetime.timedelta(seconds=21)
+# variables for to control sync runs (using separate timer-thread)
+sync_run_requested = None
+sync_timer = None
+sync_lock = threading.Lock()
 
 
-def sync_to_sf(asd):
-    global in_sync_to_sf, last_sync_to_sf
-    if in_sync_to_sf or datetime.datetime.now() < last_sync_to_sf + datetime.timedelta(seconds=18):
-        return
+def check_and_init_sync_to_sf(wait=0.0):
+    global sync_run_requested, sync_timer
+    log_msg("check_and_init_sync_to_sf({}): new sync to SF; last request was at {}; timer-obj={}"
+            .format(wait, sync_run_requested, sync_timer),
+            importance=4, minimum_debug_level=DEBUG_LEVEL_VERBOSE, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+    if not sync_run_requested and not sync_timer and sync_lock.acquire(blocking=False):
+        sync_run_requested = datetime.datetime.now()
+        sync_timer = threading.Timer(wait, run_sync_to_sf)
+        sync_timer.start()
+        return True
+    log_msg("check_and_init_sync_to_sf({}): sync to SF request blocked; last request was at {}; timer-obj={}"
+            .format(wait, sync_run_requested, sync_timer),
+            importance=4, minimum_debug_level=DEBUG_LEVEL_VERBOSE, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+    return False
+
+
+def run_sync_to_sf():
+    global sync_run_requested, sync_timer
+    asd = None
+    err_msg = ""
     try:
-        in_sync_to_sf = True
+        asd = AssSysData(cae, err_logger=partial(log_msg, is_error=True), warn_logger=log_msg)
         ass_id_cols = ['rgr_sf_id', 'rgr_obj_id', 'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id']
-        err_msg = ""
         while True:
             res_changed = room_changed = None
+            action_time = datetime.datetime.now()
 
             res_list = asd.rgr_fetch_list(['rgr_last_change', ] + ass_id_cols,
-                                          where_group_order="rgr_last_sync IS null OR rgr_last_change > rgr_last_sync"
+                                          where_group_order="(rgr_last_sync IS null OR rgr_last_change > rgr_last_sync)"
                                                             " ORDER BY rgr_last_change LIMIT 1")
             if res_list:
                 res_changed = res_list[0][0]
 
-            room_cols = ['rgr_room_last_change', 'rgr_time_in', 'rgr_time_out'] + ass_id_cols
-            room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id IS NOT null"
+            room_cols = ['rgr_room_last_change', 'rgr_time_in', 'rgr_time_out', 'rgr_room_id'] + ass_id_cols
+            room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id IS NOT null "
                                                                         "AND (rgr_room_last_sync IS null"
                                                                         " OR rgr_room_last_change > rgr_room_last_sync)"
                                                                         " ORDER BY rgr_room_last_change LIMIT 1")
@@ -209,26 +264,37 @@ def sync_to_sf(asd):
                 room_changed = room_list[0][0]
 
             if res_changed and (not room_changed or res_changed < room_changed):
-                log_msg("sync_to_sf() fetch from Sihot and send to SF the changed res={}".format(res_list[0]),
+                ass_res = dict(zip(ass_id_cols, res_list[0][1:]))
+                ass_res['rgr_last_sync'] = action_time
+                log_msg("run_sync_to_sf() fetch from Sihot and send to SF the changed res={}".format(ass_res),
                         notify=debug_level > DEBUG_LEVEL_VERBOSE)
-                err_msg = res_from_sh_to_sf(asd, dict(zip(ass_id_cols, res_list[0][1:])))
+                err_msg = res_from_sh_to_sf(asd, ass_res)
             elif room_changed and (not res_changed or room_changed < res_changed):
-                log_msg("sync_to_sf() send to SF the room change {}".format(room_list[0]),
+                ass_res = dict(zip(room_cols, room_list[0]))
+                ass_res['rgr_room_last_sync'] = action_time
+                log_msg("run_sync_to_sf() send to SF the room change {}".format(ass_res),
                         notify=debug_level > DEBUG_LEVEL_VERBOSE)
-                err_msg = room_change_to_sf(asd, dict(zip(room_cols, room_list[0])))
+                err_msg = room_change_to_sf(asd, ass_res)
             else:
                 break
             if err_msg:
                 break
 
     except Exception as ex:
-        err_msg = "exception='{}'\n{}".format(ex, format_exc())
+        err_msg += "exception='{}'\n{}".format(ex, format_exc())
     finally:
-        in_sync_to_sf = False
-        asd.error_message = ""
+        if asd:
+            asd.close_dbs()
 
-    if err_msg:
-        log_msg("sync_to_sf() {}".format(err_msg), importance=3, is_error=True)
+    log_msg("run_sync_to_sf() requested {} just finished; err={}".format(sync_run_requested, err_msg),
+            importance=3, is_error=err_msg, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+
+    sync_timer = None
+    sync_run_requested = None
+    sync_lock.release()
+
+    while not check_and_init_sync_to_sf(interval):
+        time.sleep(interval)
 
 
 def oc_keep_alive(_, __, ___):
@@ -244,6 +310,7 @@ def oc_res_change(asd, req, rec_ctx):
     :param rec_ctx:     dict with context info (ids and actions).
     :return:            error message(s) or empty string/"" if no errors occurred.
     """
+    action_time = datetime.datetime.now()
     errors = list()
     rec_ctx['oc'] = req.oc     # == 'CR'
     rgr_list = req.rgr_list
@@ -253,14 +320,16 @@ def oc_res_change(asd, req, rec_ctx):
                        HotelId=getattr(req, 'hn', None),
                        ResId=req_rgr.get('rgr_res_id', ''),
                        SubId=req_rgr.get('rgr_sub_id', ''),
-                       RoomNo=req_rgr.get('rgc_list', [dict(), ])[0].get('rgc_room_id', ''))
+                       # RoomNo=req_rgr.get('rgc_list', [dict(), ])[0].get('rgc_room_id', ''),
+                       RoomNo=req_rgr.get('rgr_room_id', ''),
+                       )
         log_msg(proc_context(rec_ctx) + "res change data={}".format(req_rgr),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
         chk_values = {k: v for k, v in req_rgr.items() if k in ['rgr_res_id', 'rgr_sub_id']}
         chk_values.update(rgr_ho_fk=getattr(req, 'hn', None))
         upd_col_values = chk_values.copy()
-        upd_col_values.update(rgr_last_change=datetime.datetime.now())
+        upd_col_values.update(rgr_last_change=action_time)
         if req_rgr.get('rgr_obj_id', ''):
             upd_col_values.update(rgr_obj_id=req_rgr.get('rgr_obj_id', ''))
         asd.rgr_upsert(upd_col_values, chk_values=chk_values, commit=True)
@@ -273,14 +342,14 @@ def oc_res_change(asd, req, rec_ctx):
     return "\n".join(errors)
 
 
-def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_no, action_time):
+def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
     ho_id = req.hn
     res_no = req.res_nr
-    rec_ctx.update(HotelId=ho_id, ResId=res_no, SubId=sub_no, RoomNo=room_no, extended_oc=oc, action_time=action_time)
+    rec_ctx.update(HotelId=ho_id, ResId=res_no, SubId=sub_no, RoomNo=room_id, extended_oc=oc, action_time=action_time)
     log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, rec_ctx, req.get_xml()),
             importance=3, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
-    rgr_sf_id = asd.sh_room_change_to_ass(oc, ho_id, res_no, sub_no, action_time)
+    rgr_sf_id = asd.sh_room_change_to_ass(oc, ho_id, res_no, sub_no, room_id, action_time)
     if rgr_sf_id:
         rec_ctx.update(ResSfId=rgr_sf_id)
         err_msg = ""
@@ -291,13 +360,16 @@ def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_no, action_time):
 
 
 def oc_room_change(asd, req, rec_ctx):
+    action_time = datetime.datetime.now()
     rec_ctx['oc'] = oc = req.oc     # == 'CI'|'CO'|'RM'
     err_msg = ""
-    action_time = datetime.datetime.now()
 
     if oc == 'RM':
-        err_msg = _room_change_ass(asd, req, rec_ctx, 'CO-RM', req.osub_nr, req.orn, action_time)
-        oc = 'CI-RM'
+        if req.osub_nr:
+            err_msg = _room_change_ass(asd, req, rec_ctx, 'CO-RM', req.osub_nr, req.orn, action_time)
+            oc = 'CI-RM'
+        elif req.sub_nr == '1':
+            oc = 'RC-RM'            # reservation and in/out dates keep the same, only room number will be changed
     err_msg += _room_change_ass(asd, req, rec_ctx, oc, req.sub_nr, req.rn, action_time)
 
     if err_msg:
@@ -430,7 +502,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         elif oc in SUPPORTED_OCS:
             sys_connections = None
             try:
-                sys_connections = AssSysData(cae, err_logger=log_msg, warn_logger=log_msg)
+                sys_connections = AssSysData(cae, err_logger=partial(log_msg, is_error=True), warn_logger=log_msg)
                 if sys_connections.error_message or not sys_connections.ass_db:
                     err_messages.append((95, "AssSysData initialization error: {}; ass_db={}"
                                              .format(sys_connections.error_message, sys_connections.ass_db)))
@@ -478,26 +550,26 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         xml_response = ack_response(tn, last_err, org=org, msg=msg, status='1' if oc == 'LA' else '')
         log_msg("OC {} processed; xml response: {}".format(oc, xml_response), importance=4)
 
-        # sync changes to SF - TODO: migrate to separate time process
-        sync_to_sf(AssSysData(cae, err_logger=log_msg, warn_logger=log_msg))
+        # directly sync to Salesforce if not already running (also in case the time thread died)
+        check_and_init_sync_to_sf()
 
         return bytes(xml_response, xml_enc)
 
 
 try:
-    # sync changes to SF - TODO: migrate to separate time process
-    sync_to_sf(AssSysData(cae, err_logger=log_msg, warn_logger=log_msg))
-
-    sys_conns.close_dbs()
-    sys_conns = ass_data['assSysData'] = None  # del/free not thread-save sys db connections
+    # before starting server try to sync all the past reservation changes to SF
+    check_and_init_sync_to_sf()
 
     # ?!?!?: if sihot is connecting as client then our listening server ip has to be either localhost or 127.0.0.1
     # .. and for connect to the Sihot WEB/KERNEL interfaces only the external IP address of the Sihot server is working
     ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
+    uprint("Sihot client IP/port:", ip_addr, cae.get_option('shClientPort'))
     server = TcpServer(ip_addr, cae.get_option('shClientPort'), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 except (OSError, Exception) as tcp_ex:
     log_msg("TCP server could not be started. Exception: {}".format(tcp_ex), is_error=True)
     cae.shutdown(369)
 
+if sync_timer:
+    sync_timer.cancel()
 cae.shutdown()

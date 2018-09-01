@@ -914,6 +914,7 @@ class ResChange(SihotXmlParser):
         elif self._curr_tag == 'COUNTRY':
             di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_country'
         elif self._curr_tag == 'RN':
+            self.rgr_list[-1]['rgr_room_id'] = data     # update also rgr_room_id with same value
             di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_room_id'
 
         # unsupported elements
