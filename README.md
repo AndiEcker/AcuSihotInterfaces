@@ -10,10 +10,10 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
-| AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
+| AcuServer | Synchronize room status changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
 | [AssCacheSync](#asscachesync-application) | Initialize, pull, verify or push AssCache data against Acumen, Salesforce and/or Sihot | Web |
-| [AssServer](#assserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres, Acumen and Salesforce | Sxml, Web |
+| [AssServer](#assserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |

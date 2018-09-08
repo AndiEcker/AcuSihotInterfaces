@@ -406,6 +406,24 @@ class TestAssSysDataSf:
         sf_recd = asd.sf_res_data(sf_sent['ReservationOpportunityId'])
         assert not self._compare_converted_field_dicts(sf_sent, sf_recd)
 
+    def test_sf_res_upsert_with_unicode_strings(self, console_app_env):
+        # because HTTP is not supporting UNICODE we actually have to encode them as latin1/iso-8859-1 before sending
+        # .. and decode back to unicode on receive, s.a. PEP333/3 at https://www.python.org/dev/peps/pep-3333/
+        asd = AssSysData(console_app_env)
+        cl_fields = {'NAME-1': 'Lästñame', 'NAME-2': 'FírstNümé',
+                     'OBJID': '55423456789', 'MATCHCODE': 'T555555',
+                     'T-LANGUAGE': 'ES', 'T-COUNTRY-CODE': 'FR',
+                     'EMAIL-1': 't555@ts555.tst', 'PHONE-1': '004955555555',
+                     }
+        arr_date = datetime.date.today() + datetime.timedelta(days=4)
+        dep_date = arr_date + datetime.timedelta(days=7)
+        res_fields = dict(rgr_ho_fk='1', rgr_res_id='555555', rgr_sub_id='5',
+                          rgr_room_id='A105', rgr_arrival=arr_date, rgr_departure=dep_date)
+        sf_sent = dict()
+        assert not asd.sf_res_upsert(None, cl_fields, res_fields, sync_cache=False, sf_data=sf_sent)
+        sf_recd = asd.sf_res_data(sf_sent['ReservationOpportunityId'])
+        assert not self._compare_converted_field_dicts(sf_sent, sf_recd)
+
     def test_sf_res_upsert_basic_existing(self, console_app_env):
         asd = AssSysData(console_app_env)
         # dict(Name='FNam LNam', FirstName='FNam', LastName='LNam', Email='t@ts.tst', Phone='0049765432100')
@@ -472,7 +490,7 @@ class TestAssSysDataSf:
         dt = test_date or now
         found_test_data = False
         for step in range(3):   # do 3 tests for each res: check-in, check-out and reset check-in/-out
-            rgr_list = asd.rgr_fetch_list(['rgr_sf_id', 'rgr_time_in', 'rgr_time_out'], dict(dt=dt),
+            rgr_list = asd.rgr_fetch_list(['rgr_sf_id', 'rgr_time_in', 'rgr_time_out', 'rgr_room_id'], dict(dt=dt),
                                           ":dt between rgr_arrival AND rgr_departure")
             assert isinstance(rgr_list, list)
             if not rgr_list:
@@ -485,7 +503,7 @@ class TestAssSysDataSf:
                         time_in = dt
                     elif not res[2]:    # rgr_time_out
                         time_out = dt
-                    ret = asd.sf_conn.room_change(res[0], time_in, time_out)  # returning ErrorMessage
+                    ret = asd.sf_conn.room_change(res[0], time_in, time_out, res[3])  # returning ErrorMessage
                     assert not ret
                     rd = asd.sf_room_data(res[0])
                     assert not self._compare_converted_field_dicts(dict(CheckIn__c=time_in, CheckOut__c=time_out), rd)
@@ -625,7 +643,7 @@ class TestAssSysDataSh:
         assert rgr_dict['rgr_time_out'] is None
 
         dt_out = datetime.datetime.now().replace(microsecond=0)
-        asd.sh_room_change_to_ass('CO', ho_id=ho_id, res_id=res_id, sub_id=sub_id, action_time=dt_out)
+        asd.sh_room_change_to_ass('CO', ho_id=ho_id, res_id=res_id, sub_id=sub_id, room_id=room_id, action_time=dt_out)
         rgr_list = asd.rgr_fetch_list(cols, dict(rgr_obj_id=obj_id))
         assert isinstance(rgr_list, list)
         rgr_dict = dict(zip(cols, rgr_list[0]))
@@ -633,5 +651,6 @@ class TestAssSysDataSh:
         assert res_id == rgr_dict['rgr_res_id']
         assert sub_id == rgr_dict['rgr_sub_id']
         assert obj_id == rgr_dict['rgr_obj_id']
+        assert room_id == rgr_dict['rgr_room_id']
         assert dt_in == rgr_dict['rgr_time_in']
         assert dt_out == rgr_dict['rgr_time_out']

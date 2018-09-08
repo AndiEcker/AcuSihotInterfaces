@@ -6,7 +6,7 @@
     0.2     refactored using add_ass_options() and init_ass_data().
     0.3     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
-    0.5     added sync caching methods *sync_to_sf() for better error handling and conflict clearing.
+    0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
 """
 import datetime
 import threading
@@ -22,9 +22,9 @@ from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.5'
 
-cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres, Acumen and Salesforce",
+cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
-cae.add_option('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 36, 'l')
+cae.add_option('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 39, 'l')
 ass_options = add_ass_options(cae, client_port=12000, add_kernel_port=True)
 
 debug_level = cae.get_option('debugLevel')
@@ -224,17 +224,19 @@ sync_lock = threading.Lock()
 
 def check_and_init_sync_to_sf(wait=0.0):
     global sync_run_requested, sync_timer
-    log_msg("check_and_init_sync_to_sf({}): new sync to SF; last request was at {}; timer-obj={}"
-            .format(wait, sync_run_requested, sync_timer),
-            importance=4, minimum_debug_level=DEBUG_LEVEL_VERBOSE, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+
     if not sync_run_requested and not sync_timer and sync_lock.acquire(blocking=False):
         sync_run_requested = datetime.datetime.now()
         sync_timer = threading.Timer(wait, run_sync_to_sf)
+        log_msg("check_and_init_sync_to_sf({}): new sync to SF; requested at {}; will run at {}; timer-obj={}"
+                .format(wait, sync_run_requested, sync_run_requested + datetime.timedelta(seconds=wait), sync_timer),
+                importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sync_timer.start()
         return True
+
     log_msg("check_and_init_sync_to_sf({}): sync to SF request blocked; last request was at {}; timer-obj={}"
             .format(wait, sync_run_requested, sync_timer),
-            importance=4, minimum_debug_level=DEBUG_LEVEL_VERBOSE, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+            importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
     return False
 
 
@@ -251,19 +253,27 @@ def run_sync_to_sf():
 
             res_list = asd.rgr_fetch_list(['rgr_last_change', ] + ass_id_cols,
                                           where_group_order="(rgr_last_sync IS null OR rgr_last_change > rgr_last_sync)"
+                                                            " AND rgr_last_change IS NOT null"
                                                             " ORDER BY rgr_last_change LIMIT 1")
             if res_list:
                 res_changed = res_list[0][0]
+            elif asd.error_message:
+                err_msg = asd.error_message
+                break
 
             room_cols = ['rgr_room_last_change', 'rgr_time_in', 'rgr_time_out', 'rgr_room_id'] + ass_id_cols
             room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id IS NOT null "
+                                                                        "AND rgr_room_last_change IS NOT null "
                                                                         "AND (rgr_room_last_sync IS null"
                                                                         " OR rgr_room_last_change > rgr_room_last_sync)"
                                                                         " ORDER BY rgr_room_last_change LIMIT 1")
             if room_list:
                 room_changed = room_list[0][0]
+            elif asd.error_message:
+                err_msg = asd.error_message
+                break
 
-            if res_changed and (not room_changed or res_changed < room_changed):
+            if res_changed and (not room_changed or res_changed <= room_changed):
                 ass_res = dict(zip(ass_id_cols, res_list[0][1:]))
                 ass_res['rgr_last_sync'] = action_time
                 log_msg("run_sync_to_sf() fetch from Sihot and send to SF the changed res={}".format(ass_res),
@@ -287,7 +297,7 @@ def run_sync_to_sf():
             asd.close_dbs()
 
     log_msg("run_sync_to_sf() requested {} just finished; err={}".format(sync_run_requested, err_msg),
-            importance=3, is_error=err_msg, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+            importance=3, is_error=err_msg, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     sync_timer = None
     sync_run_requested = None

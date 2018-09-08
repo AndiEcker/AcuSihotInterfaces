@@ -425,9 +425,9 @@ def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
     return corr_phone, changed
 
 
-def _dummy_stub(msg, ctx_file, *args, **kwargs):
-    uprint("******  Fallback call of ass_sys_data._dummy_stub() with:\n        msg={}, ctx/file={}; args/kwargs:"
-           .format(msg, ctx_file), args, kwargs)
+def _dummy_stub(msg, *args, **kwargs):
+    uprint("******  Fallback call of ass_sys_data._dummy_stub() with:\n        msg='{}', args={}, kwargs={}"
+           .format(msg, args, kwargs))
 
 
 USED_SYS_ASS_ID = 'Ass'
@@ -864,7 +864,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :return:            primary key (ass_id/cl_pk) of this client (if exists) or None if error.
         """
         if self.debug_level >= DEBUG_LEVEL_VERBOSE and not sh_id and not ac_id:
-            uprint("  **  cl_ensure_id(... {}, {}, {}) Missing client references".format(name, email, phone))
+            self._err("cl_ensure_id(... {}, {}, {}) Missing client references".format(name, email, phone))
         cl_pk = None
         if sh_id and ac_id:
             for cl_rec in self.clients:
@@ -1314,13 +1314,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if sf_obj == DETERMINE_CLIENT_OBJ:
             if search_field not in (SF_DEF_SEARCH_FIELD, 'External_Id__c', 'Contact_Ref__c', 'Id_before_convert__c',
                                     'CSID__c'):
-                uprint("sf_client_field_data({}, {}, {}, {}): client object cannot be determined without Id"
-                       .format(fetch_fields, search_value, search_field, sf_obj))
+                self._err("sf_client_field_data({}, {}, {}, {}): client object cannot be determined without Id"
+                          .format(fetch_fields, search_value, search_field, sf_obj))
                 return None
             sf_obj = obj_from_id(search_value)
             if not sf_obj:
-                uprint("sf_client_field_data(): {} field value {} is not a valid Lead/Contact/Account SF ID"
-                       .format(search_field, search_value))
+                self._err("sf_client_field_data(): {} field value {} is not a valid Lead/Contact/Account SF ID"
+                          .format(search_field, search_value))
                 return None
 
         ret_dict = isinstance(fetch_fields, list)
@@ -1469,6 +1469,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                          ):
             elem_val = sh_cl_data.get(shn)
             if elem_val:
+                if isinstance(elem_val, list):
+                    self._warn("asd.sf_res_upsert({}, {}, {}); stripping of extra items for {} from list value {}"
+                               .format(rgr_sf_id, sh_cl_data, ass_res_data, sfn, elem_val))
+                    elem_val = elem_val[0]
                 sf_args[sfn] = elem_val
 
         sf_args['HotelId__c'] = ho_id = ass_res_data['rgr_ho_fk']
@@ -1497,8 +1501,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
         if sf_args.get('PersonAccountId') and sf_args['PersonAccountId'] != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("  **  sf_res_upsert({}, {}, {}) PersonAccount discrepancy {} != {}"
-                   .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_args.get('PersonAccountId'), sf_cl_id))
+            self._err("sf_res_upsert({}, {}, {}) PersonAccount discrepancy {} != {}"
+                      .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_args.get('PersonAccountId'), sf_cl_id))
 
         if sync_cache:
             if sf_cl_id and ass_id:
@@ -1512,8 +1516,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if not rgr_sf_id and sf_opp_id:     # save just created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
             elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and rgr_sf_id and sf_opp_id != rgr_sf_id:
-                uprint("  **  sf_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
-                       .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_opp_id, rgr_sf_id))
+                self._err("sf_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
+                          .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_opp_id, rgr_sf_id))
 
             if col_values:
                 self.rgr_upsert(col_values, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
@@ -1697,7 +1701,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     if not skip_reasons:
                         count += 1
                     elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                        uprint("AssSysData.sh_count_res(): skipped {} res: {}".format(str(skip_reasons), row_dict))
+                        self._warn("AssSysData.sh_count_res(): skipped {} res: {}".format(str(skip_reasons), row_dict))
         return count
 
     def sh_res_data(self, hotel_id='1', gds_no='', res_id='', sub_id=''):
@@ -1732,19 +1736,20 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         sh_id = elem_value(shd, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID'])
         ac_id = elem_value(shd, ['RESCHANNELLIST', 'RESCHANNEL', 'MATCHCODE'])
         if sh_id or ac_id:
-            self.cae.dprint("sh_res_change_to_ass(): create new client record for orderer {}/{}".format(sh_id, ac_id))
+            self._warn("sh_res_change_to_ass(): create new client record for orderer {}/{}".format(sh_id, ac_id),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             ord_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id)
             if ord_cl_pk is None:
-                uprint("sh_res_change_to_ass(): creation of new orderer {}/{} failed with (ignored) err={}"
-                       .format(sh_id, ac_id, self.error_message))
+                self._warn("sh_res_change_to_ass(): creation of new orderer {}/{} failed with (ignored) err={}"
+                           .format(sh_id, ac_id, self.error_message))
                 self.error_message = ""
 
         ri_pk = None
         apt_wk, year = self.sh_apt_wk_yr(shd)
         if self.ass_db.select('res_inventories', ['ri_pk'], "ri_pr_fk = :aw and ri_usage_year = :yr",
                               dict(aw=apt_wk, yr=year)):
-            uprint("sh_res_change_to_ass(): res inv {}~{} not found; (ignored) err={}"
-                   .format(apt_wk, year, self.error_message))
+            self._warn("sh_res_change_to_ass(): res inv {}~{} not found; (ignored) err={}"
+                       .format(apt_wk, year, self.error_message))
             self.error_message = ""
         else:
             ri_pk = self.ass_db.fetch_value()
@@ -1807,24 +1812,26 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 sh_id = elem_value(shd, ['PERSON', 'GUEST-ID'], arri=arri)
                 ac_id = elem_value(shd, ['PERSON', 'MATCHCODE'], arri=arri)
                 if sh_id is None and ac_id is None:
-                    self.cae.dprint(err_pre + "ignoring unspecified person {}".format(arri + 1),
-                                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                    self._warn(err_pre + "ignoring unspecified person {}".format(arri + 1),
+                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     continue
                 sn = elem_value(shd, ['PERSON', 'NAME'], arri=arri)
                 fn = elem_value(shd, ['PERSON', 'NAME2'], arri=arri)
                 if sh_id or ac_id:
-                    self.cae.dprint(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id))
+                    self._warn(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id),
+                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id,
                                                   name=fn + " " + sn if fn and sn else sn or fn)
                     if occ_cl_pk is None:
-                        self.cae.dprint(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
-                                        .format(fn, sn, sh_id, ac_id, self.error_message))
+                        self._warn(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
+                                   .format(fn, sn, sh_id, ac_id, self.error_message),
+                                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                         self.error_message = ""
                 room_seq = elem_value(shd, ['PERSON', 'ROOM-SEQ'], arri=arri)
                 pers_seq = elem_value(shd, ['PERSON', 'ROOM-PERS-SEQ'], arri=arri)
                 if room_seq is None:
-                    self.cae.dprint(err_pre + "ignoring unspecified room/person seq {}".format(arri + 1),
-                                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                    self._warn(err_pre + "ignoring unspecified room/person seq {}".format(arri + 1),
+                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     continue
                 chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(room_seq), rgc_pers_seq=int(pers_seq))
                 upd_values = chk_values.copy()

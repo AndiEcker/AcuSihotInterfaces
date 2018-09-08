@@ -2,6 +2,8 @@
 import string
 import datetime
 import pprint
+from traceback import format_exc
+
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 
@@ -285,7 +287,13 @@ class SfInterface:
             #     if isinstance(v, datetime.date) or isinstance(v, datetime.datetime):
             #         v.strftime('%Y-%m-%d %H:%M:%S')
             #     function_args[new_k] = v
-        result = self._conn.apexecute(function_name, method='POST', data=function_args)
+        try:
+            result = self._conn.apexecute(function_name, method='POST', data=function_args)
+        except Exception as ex:
+            err_msg = "sfif.apex_call({}, {}) exception='{}'\n{}".format(function_name, function_args, ex, format_exc())
+            result = dict(sfif_apex_error=err_msg)
+            self.error_msg = err_msg
+
         # TODO: refactor result data type conversion into FIELDS feature methods sf_fld_value(), fields_dict_from_sf()
         return result
 
@@ -299,7 +307,7 @@ class SfInterface:
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("find_client({}, {}, {}, {}) result={}".format(email, phone, first_name, last_name, result))
 
-        if 'id' not in result or 'type' not in result:
+        if self.error_msg or 'id' not in result or 'type' not in result:
             return '', DEF_CLIENT_OBJ
 
         return result['id'], result['type']
@@ -313,13 +321,14 @@ class SfInterface:
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("sfif.res_upsert({}) result={}".format(client_res_data, result))
 
-        if not client_res_data.get('ReservationOpportunityId'):
-            client_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
-        elif not result.get('ErrorMessage'):
-            assert client_res_data['ReservationOpportunityId'] == result['ReservationOpportunityId']
+        if not self.error_msg and not result.get('ErrorMessage'):
+            if client_res_data.get('ReservationOpportunityId'):
+                assert client_res_data['ReservationOpportunityId'] == result['ReservationOpportunityId']
+            else:
+                client_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
 
-        return (result['PersonAccountId'], result['ReservationOpportunityId'],
-                self.error_msg + (result['ErrorMessage'] or ''))
+        return (result.get('PersonAccountId'), result.get('ReservationOpportunityId'),
+                self.error_msg + (result.get('ErrorMessage', '') or ''))
 
     def room_change(self, res_sf_id, check_in, check_out, next_room_id):
         if not self._ensure_lazy_connect():
@@ -332,4 +341,4 @@ class SfInterface:
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("room_change({}, {}, {}) result={}".format(res_sf_id, check_in, check_out, result))
 
-        return self.error_msg + (result['ErrorMessage'] or '')
+        return self.error_msg + (result.get('ErrorMessage', '') or '')
