@@ -127,6 +127,8 @@ if not error_msg:
 
         config_data = AssSysData(cae)
         hotel_ids = config_data.ho_id_list()     # determine active/valid Sihot-hotels
+        config_data.close_dbs()
+
         acumen_req = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
                                 map_res=cae.get_option('mapRes'),
                                 use_kernel_for_new_clients=cae.get_option('useKernelForClient'),

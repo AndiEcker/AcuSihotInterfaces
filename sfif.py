@@ -5,7 +5,7 @@ import pprint
 from traceback import format_exc
 
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
-from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 
 # default client salesforce object
 DEF_CLIENT_OBJ = 'Lead'
@@ -319,16 +319,23 @@ class SfInterface:
         result = self.apex_call('reservation_upsert', function_args=client_res_data)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("sfif.res_upsert({}) result={}".format(client_res_data, result))
+            uprint("... sfif.res_upsert({}) result={} err='{}'".format(client_res_data, result, self.error_msg))
 
-        if not self.error_msg and not result.get('ErrorMessage'):
-            if client_res_data.get('ReservationOpportunityId'):
-                assert client_res_data['ReservationOpportunityId'] == result['ReservationOpportunityId']
-            else:
+        if result.get('ErrorMessage'):
+            self.error_msg += "sfif.res_upsert({}) received error '{}' from SF"\
+                .format(client_res_data, result if self._debug_level >= DEBUG_LEVEL_ENABLED else result['ErrorMessage'])
+        if not self.error_msg:
+            if not client_res_data.get('ReservationOpportunityId') and result.get('ReservationOpportunityId'):
                 client_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
+            elif client_res_data['ReservationOpportunityId'] != result.get('ReservationOpportunityId'):
+                msg = "sfif.res_upsert({}) ResOppId discrepancy; sent={} received={}"\
+                       .format(client_res_data,
+                               client_res_data['ReservationOpportunityId'], result.get('ReservationOpportunityId'))
+                uprint(msg)
+                if msg and self._debug_level >= DEBUG_LEVEL_ENABLED:
+                    self.error_msg += "\n      " + msg
 
-        return (result.get('PersonAccountId'), result.get('ReservationOpportunityId'),
-                self.error_msg + (result.get('ErrorMessage', '') or ''))
+        return result.get('PersonAccountId'), result.get('ReservationOpportunityId'), self.error_msg
 
     def room_change(self, res_sf_id, check_in, check_out, next_room_id):
         if not self._ensure_lazy_connect():
@@ -339,6 +346,12 @@ class SfInterface:
         result = self.apex_call('reservation_room_move', function_args=room_chg_data)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("room_change({}, {}, {}) result={}".format(res_sf_id, check_in, check_out, result))
+            uprint("... room_change({}, {}, {}, {}) args={} result={} err='{}'"
+                   .format(res_sf_id, check_in, check_out, next_room_id, room_chg_data, result, self.error_msg))
 
-        return self.error_msg + (result.get('ErrorMessage', '') or '')
+        if result.get('ErrorMessage'):
+            self.error_msg += "sfif.room_change({}, {}, {}, {}) received error '{}' from SF"\
+                .format(res_sf_id, check_in, check_out, next_room_id,
+                        result if self._debug_level >= DEBUG_LEVEL_VERBOSE else result['ErrorMessage'])
+
+        return self.error_msg

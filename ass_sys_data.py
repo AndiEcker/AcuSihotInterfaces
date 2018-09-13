@@ -565,10 +565,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def close_dbs(self, commit=True):
         # ensure to close of DB connections (execution of auto-commits)
         err_msg = ""
-        if self.acu_db:
+        if getattr(self, 'acu_db', None):
             err_msg += self.acu_db.close(commit=commit)
             self.acu_db = None
-        if self.ass_db:
+        if getattr(self, 'ass_db', None):
             err_msg += self.ass_db.close(commit=commit)
             self.ass_db = None      # postgres connection keeps open w/o, explicit dereference always good style:)
         return err_msg

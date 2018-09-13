@@ -415,7 +415,7 @@ MAP_WEB_RES = \
          'elemHideIf': "'RO_SIHOT_SP_GROUP' not in c"},
         {'elemName': 'CHANNEL', 'colName': 'RO_SIHOT_RES_GROUP', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'RO_SIHOT_RES_GROUP' not in c"},
-        #{'elemName': 'NN2', 'colName': 'ResSfId',
+        # {'elemName': 'NN2', 'colName': 'ResSfId',
         # 'elemHideIf': "'ResSfId' not in c"},
         {'elemName': 'EXT-REFERENCE', 'colName': 'SH_EXT_REF', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'RU_FLIGHT_NO' not in c",   # see also currently unused PICKUP-COMMENT-ARRIVAL element
@@ -1201,6 +1201,7 @@ class SihotXmlBuilder:
     def __init__(self, ca, elem_col_map=(), use_kernel_interface=False, connect_to_acu=False):
         super(SihotXmlBuilder, self).__init__()
         self.ca = ca
+        self.debug_level = ca.get_option('debugLevel')
         self.use_kernel_interface = use_kernel_interface
         elem_col_map = deepcopy(elem_col_map)
         self.sihot_elem_col = [(c['elemName'],
@@ -1235,7 +1236,7 @@ class SihotXmlBuilder:
         self.acu_connected = False
         if connect_to_acu:
             self.ora_db = OraDB(ca.get_option('acuUser'), ca.get_option('acuPassword'), ca.get_option('acuDSN'),
-                                app_name=ca.app_name(), debug_level=ca.get_option('debugLevel'))
+                                app_name=ca.app_name(), debug_level=self.debug_level)
             err_msg = self.ora_db.connect()
             if err_msg:
                 uprint("SihotXmlBuilder.__init__() db connect error:", err_msg)
@@ -1341,19 +1342,26 @@ class SihotXmlBuilder:
                        self.ca.get_option('shServerKernelPort' if self.use_kernel_interface else 'shServerPort'),
                        timeout=self.ca.get_option('shTimeout'),
                        encoding=self.ca.get_option('shXmlEncoding'),
-                       debug_level=self.ca.get_option('debugLevel'))
+                       debug_level=self.debug_level)
         self.ca.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}".format(response_parser, self.xml),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser or SihotXmlParser(self.ca)
             self.response.parse_xml(sc.received_xml)
-            if self.response.server_error() != '0':
-                err_msg = "**** SihotXmlBuilder.send_to_server() server return code " + \
-                          self.response.server_error() + " error: " + self.response.server_err_msg()
+            err_num = self.response.server_error()
+            if err_num != '0':
+                err_msg = self.response.server_err_msg()
+                if err_msg:
+                    err_msg = "msg='{}'".format(err_msg)
+                elif err_num == '29':
+                    err_msg = "No Reservations Found"
+                if err_num != '1' or self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                    err_msg += "; sent xml='{}'; got xml='{}'".format(self.xml, sc.received_xml)[0 if err_msg else 2:]
+                err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:
-            uprint("SihotXmlBuilder.send_to_server() error: ", err_msg)
+            uprint("****  SihotXmlBuilder.send_to_server() error: ", err_msg)
         return err_msg
 
     @staticmethod
@@ -2059,14 +2067,14 @@ class ResToSihot(SihotXmlBuilder):
         return ret_msg
 
     def res_id_label(self):
-        return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.ca.get_option('debugLevel') else "")
+        return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.debug_level else "")
 
     def res_id_values(self, crow):
         return str(crow.get('SIHOT_GDSNO')) + \
                "/" + str(crow.get('RH_EXT_BOOK_REF')) + \
                "/" + str(crow.get('CD_CODE')) + "/" + str(crow.get('RUL_SIHOT_RATE')) + \
                ("/" + str(crow.get('RUL_PRIMARY')) + "/" + str(crow.get('RUL_CODE'))
-                if self.ca.get_option('debugLevel') and 'RUL_PRIMARY' in crow and 'RUL_CODE' in crow
+                if self.debug_level and 'RUL_PRIMARY' in crow and 'RUL_CODE' in crow
                 else "")
 
     def res_id_desc(self, crow, error_msg, separator="\n\n"):

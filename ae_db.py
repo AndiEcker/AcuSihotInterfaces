@@ -321,7 +321,7 @@ class OraDB(GenericDB):
                        .format(self.dsn, cx_Oracle.clientversion(), cx_Oracle.apilevel,
                                self.conn.nencoding, self.conn.encoding))
         except Exception as ex:
-            self.last_err_msg = "OraDB-connect " + self.usr + "@" + self.dsn + " error: " + str(ex)
+            self.last_err_msg = "OraDB-connect {}@{} ex='{}'".format(getattr(self, 'usr'), getattr(self, 'dsn'), ex)
         else:
             self._create_cursor()
         return self.last_err_msg

@@ -220,13 +220,28 @@ def room_change_to_sf(asd, ass_res):
 sync_run_requested = None
 sync_timer = None
 sync_lock = threading.Lock()
+lock_timeout = datetime.timedelta(seconds=interval * 18)
 
 
 def check_and_init_sync_to_sf(wait=0.0):
     global sync_run_requested, sync_timer
 
+    # experienced strange locking where sync_run_requested was set but run_sync_to_sf() was no longer running
+    now = datetime.datetime.now()
+    if sync_run_requested and now - sync_run_requested > lock_timeout:
+        log_msg("check_and_init_sync_to_sf({}): {}locked sync lock timeout after {}; resetting timer {} requested at {}"
+                .format(wait, "" if sync_lock.locked() else "UN", lock_timeout, sync_timer, sync_run_requested),
+                importance=4, notify=True)
+        sync_run_requested = None
+        if sync_timer:
+            sync_timer.cancel()
+            sync_timer = None
+        if sync_lock:
+            sync_lock.release()
+
+    # check if run_sync_to_sf() is running or requested to run soon, and if not then start new timer
     if not sync_run_requested and not sync_timer and sync_lock.acquire(blocking=False):
-        sync_run_requested = datetime.datetime.now()
+        sync_run_requested = now
         sync_timer = threading.Timer(wait, run_sync_to_sf)
         log_msg("check_and_init_sync_to_sf({}): new sync to SF; requested at {}; will run at {}; timer-obj={}"
                 .format(wait, sync_run_requested, sync_run_requested + datetime.timedelta(seconds=wait), sync_timer),
@@ -244,6 +259,7 @@ def run_sync_to_sf():
     global sync_run_requested, sync_timer
     asd = None
     err_msg = ""
+    sync_count = 0
     try:
         asd = AssSysData(cae, err_logger=partial(log_msg, is_error=True), warn_logger=log_msg)
         ass_id_cols = ['rgr_sf_id', 'rgr_obj_id', 'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id']
@@ -289,6 +305,7 @@ def run_sync_to_sf():
                 break
             if err_msg:
                 break
+            sync_count += 1
 
     except Exception as ex:
         err_msg += "exception='{}'\n{}".format(ex, format_exc())
@@ -296,8 +313,9 @@ def run_sync_to_sf():
         if asd:
             asd.close_dbs()
 
-    log_msg("run_sync_to_sf() requested {} just finished; err={}".format(sync_run_requested, err_msg),
-            importance=3, is_error=err_msg, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+    log_msg("run_sync_to_sf() requested at {}; processed {} syncs; finished at {}; err?='{}'"
+            .format(sync_run_requested, sync_count, datetime.datetime.now(), err_msg),
+            importance=3, is_error=err_msg, minimum_debug_level=DEBUG_LEVEL_ENABLED)
 
     sync_timer = None
     sync_run_requested = None
