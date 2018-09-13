@@ -1,5 +1,6 @@
 # import os
 import sys
+import datetime
 import pytest
 
 from configparser import ConfigParser
@@ -169,11 +170,18 @@ class ConsoleApp:
             if val:
                 self._options[cfg_key] = eval(val)
 
+        self._env_cfg = cfg
+        self.startup_beg = self.startup_end = datetime.datetime.now()
+
     def get_config(self, name, section=None, default_value=None):
         if section == 'SihotRateSegments':
             ret = 'CMM'     # quick fix for tests (for full fix need to include SihotMktSegExceptions.cfg)
+        elif name in self._options:
+            ret = self._options[name]
+        elif section is None or section != 'Settings':
+            ret = self._env_cfg.get(section or 'Settings', name, fallback=default_value)
         else:
-            ret = self._options[name] if name in self._options else default_value
+            ret = default_value
         uprint('ConsoleAppMock.get_config', name, '=', ret, 'section=' + str(section))
         return ret
 

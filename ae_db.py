@@ -288,7 +288,7 @@ class OraDB(GenericDB):
             port, service_name = rest.split('/')
             self.dsn = cx_Oracle.makedsn(host=host, port=port, service_name=service_name)
         else:
-            self.dsn = dsn                                  # TNS name like SP.DEV
+            self.dsn = dsn                                  # TNS name like SP.WORLD
 
         # used for to fix the following unicode encoding error:
         # .. 'charmap' codec can't decode byte 0x90 in position 2: character maps to <undefined>
@@ -321,7 +321,7 @@ class OraDB(GenericDB):
                        .format(self.dsn, cx_Oracle.clientversion(), cx_Oracle.apilevel,
                                self.conn.nencoding, self.conn.encoding))
         except Exception as ex:
-            self.last_err_msg = "OraDB-connect " + self.usr + "@" + self.dsn + " error: " + str(ex)
+            self.last_err_msg = "OraDB-connect {}@{} ex='{}'".format(getattr(self, 'usr'), getattr(self, 'dsn'), ex)
         else:
             self._create_cursor()
         return self.last_err_msg

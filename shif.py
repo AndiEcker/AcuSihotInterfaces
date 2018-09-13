@@ -1,7 +1,7 @@
 # SIHOT high level interface (based on the low level interfaces provided by sxmlif)
 import datetime
 import time
-from traceback import print_exc
+from traceback import format_exc, print_exc
 
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from sxmlif import (elem_path_values, GuestSearch, ResFetch, ResSearch, ResKernelGet, ResToSihot,
@@ -76,16 +76,21 @@ def elem_value(shd, elem_name_or_path, arri=0, verbose=False, default_value=None
     :param default_value:       default element value.
     :return:                    element value.
     """
+    elem_path = ""
     if isinstance(elem_name_or_path, list):
-        elem_name_or_path = elem_path_join(elem_name_or_path)
-    is_path = ELEM_PATH_SEP in elem_name_or_path
-    elem_nam = elem_name_or_path.rsplit(ELEM_PATH_SEP, 1)[1] if is_path else elem_name_or_path
+        if len(elem_name_or_path) > 1:
+            elem_path = elem_path_join(elem_name_or_path)
+        else:
+            elem_name_or_path = elem_name_or_path[0]
+    elif ELEM_PATH_SEP in elem_name_or_path:
+        elem_path = elem_name_or_path
+    elem_nam = elem_path.rsplit(ELEM_PATH_SEP, 1)[1] if elem_path else elem_name_or_path
 
     elem_val = None
     if elem_nam not in shd:
         elem_val = ELEM_MISSING if verbose else default_value
-    elif is_path:
-        val_arr = elem_path_values(shd, elem_name_or_path)
+    elif elem_path:
+        val_arr = elem_path_values(shd, elem_path)
         if 0 <= arri < len(val_arr):
             elem_val = val_arr[arri]
     else:
@@ -94,7 +99,7 @@ def elem_value(shd, elem_name_or_path, arri=0, verbose=False, default_value=None
             elem_val = elem_def['elemListVal'][arri]
         else:
             elem_val = ""
-        if not elem_val and 'elemVal' in elem_def and elem_def['elemVal']:
+        if not elem_val and elem_def.get('elemVal'):
             elem_val = elem_def['elemVal']
 
     if not elem_val:
@@ -126,7 +131,7 @@ def pax_count(shd):
     return adults + children
 
 
-def gds_no(shd):
+def gds_number(shd):
     return elem_value(shd, 'GDSNO')
 
 
@@ -137,7 +142,7 @@ def date_range(shd):
         t_str = shd['ARR-TIME']['elemVal']
         checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, SH_DATE_FORMAT)
         dt_key = 'DEP-TIME'
-        if dt_key in shd and 'elemVal' in shd[dt_key] and shd[dt_key]['elemVal']:
+        if dt_key in shd and shd[dt_key].get('elemVal'):
             d_str = shd['DEP']['elemVal']
             t_str = shd[dt_key]['elemVal']
             checked_out = datetime.datetime.strptime(d_str + ' ' + t_str, SH_DATE_FORMAT)
@@ -159,22 +164,100 @@ def date_range_chunks(date_from, date_till, fetch_max_days):
         yield chunk_from, chunk_till
 
 
-def gds_no_to_obj_id(cae, hotel_id, gdsno):
-    obj_id = None
+def gds_no_to_ids(cae, hotel_id, gdsno):
+    ids = dict(ResHotelId=hotel_id, ResGdsNo=gdsno)
     rfr = ResFetch(cae).fetch_by_gds_no(hotel_id, gdsno)
     if isinstance(rfr, dict):
-        obj_id = elem_value(rfr, 'OBJID')
-    return obj_id
+        ids['ResObjId'] = elem_value(rfr, ['SIHOT-Document', 'RESERVATION', 'OBJID'])
+        ids['ResResId'] = elem_value(rfr, 'RES-NR')
+        ids['ResSubId'] = elem_value(rfr, 'SUB-NR')
+        ids['ResSfId'] = elem_value(rfr, 'NN2')
+    return ids
+
+
+def gds_no_to_obj_id(cae, hotel_id, gdsno):
+    return gds_no_to_ids(cae, hotel_id, gdsno).get('ResObjId')
+
+
+def res_no_to_ids(cae, hotel_id, res_id, sub_id):
+    ret = dict(ResHotelId=hotel_id, ResResId=res_id, ResSubId=sub_id)
+    rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
+    if isinstance(rfr, dict):
+        ret['ResObjId'] = elem_value(rfr, ['SIHOT-Document', 'RESERVATION', 'OBJID'])
+        ret['ResGdsNo'] = elem_value(rfr, 'GDSNO')
+        ret['ResSfId'] = elem_value(rfr, 'NN2')
+    else:
+        ret = rfr
+    return ret
 
 
 def res_no_to_obj_id(cae, hotel_id, res_id, sub_id):
-    obj_id = None
-    if not sub_id:
-        sub_id = '1'
-    rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
-    if isinstance(rfr, dict):
-        obj_id = elem_value(rfr, 'OBJID')
-    return obj_id
+    return res_no_to_ids(cae, hotel_id, res_id, sub_id).get('ResObjId')
+
+
+def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None, max_los=28,
+               search_flags='', search_scope='', chunk_pause=1):
+    """
+    search reservations with the criteria specified by the parameters.
+
+    :param cae:             instance of the application environment specifying searched Sihot server.
+    :param date_from:       date of first day of included arrivals.
+    :param date_till:       date of last day of included arrivals.
+    :param mkt_sources:     list of market source codes.
+    :param mkt_groups:      list of market group codes.
+    :param max_los:         integer with maximum length of stay.
+    :param search_flags:    string with search flag words (separated with semicolon).
+    :param search_scope:    string with search scope words (separated with semicolon).
+    :param chunk_pause:     integer with seconds to pause between fetch of date range chunks.
+    :return:                string with error message if error or list of Sihot reservations.
+    """
+    if not date_till:
+        date_till = date_from
+
+    err_msg = ""
+    all_rows = list()
+    try:
+        rs = ResSearch(cae)
+        # the from/to date range filter of WEB ResSearch filters the arrival date only (not date range/departure)
+        # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
+        # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
+        for chunk_beg, chunk_end in date_range_chunks(date_from, date_till, max_los):
+            chunk_rows = rs.search(from_date=chunk_beg, to_date=chunk_end, flags=search_flags,
+                                   scope=search_scope)
+            if chunk_rows and isinstance(chunk_rows, str):
+                err_msg = "Sihot.PMS reservation search error: {}".format(chunk_rows)
+                break
+            elif not chunk_rows or not isinstance(chunk_rows, list):
+                err_msg = "Unspecified Sihot.PMS reservation search error"
+                break
+            cae.dprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
+                       .format(len(chunk_rows), chunk_beg, chunk_end, search_flags, search_scope))
+            valid_rows = list()
+            for res in chunk_rows:
+                reasons = list()
+                check_in, check_out = date_range(res)
+                if not check_in or not check_out:
+                    reasons.append("incomplete check-in={} check-out={}".format(check_in, check_out))
+                if not (date_from <= check_in <= date_till):
+                    reasons.append("arrival {} not between {} and {}".format(check_in, date_from, date_till))
+                mkt_src = elem_value(res, 'MARKETCODE')
+                if mkt_sources and mkt_src not in mkt_sources:
+                    reasons.append("disallowed market source {}".format(mkt_src))
+                mkt_group = elem_value(res, 'CHANNEL')
+                if mkt_groups and mkt_group not in mkt_groups:
+                    reasons.append("disallowed market group/channel {}".format(mkt_group))
+                if reasons:
+                    cae.dprint("  ##  Skipped Sihot reservation:", res, " reason(s):", reasons,
+                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                    continue
+                valid_rows.append(res)
+
+            all_rows.extend(valid_rows)
+            time.sleep(chunk_pause)
+    except Exception as ex:
+        err_msg = "Sihot interface reservation fetch exception: {}\n{}".format(ex, format_exc())
+
+    return err_msg or all_rows
 
 
 def obj_id_to_res_no(cae, obj_id):
@@ -236,8 +319,8 @@ class ResBulkFetcher(BulkFetcherBase):
 
         self.date_from = None
         self.date_till = None
-        self.sh_fetch_max_days = None
-        self.sh_fetch_pause_seconds = None
+        self.max_length_of_stay = None
+        self.fetch_chunk_pause_seconds = None
         self.search_flags = None
         self.search_scope = None
         self.allowed_mkt_src = None
@@ -268,8 +351,8 @@ class ResBulkFetcher(BulkFetcherBase):
             cae.shutdown(3319)
 
         # fetch given date range in chunks for to prevent timeouts and Sihot server blocking issues
-        self.sh_fetch_max_days = min(max(1, cae.get_config('shFetchMaxDays', default_value=7)), 31)
-        self.sh_fetch_pause_seconds = cae.get_config('shFetchPauseSeconds', default_value=1)
+        self.max_length_of_stay = min(max(1, cae.get_config('shFetchMaxDays', default_value=7)), 31)
+        self.fetch_chunk_pause_seconds = cae.get_config('shFetchPauseSeconds', default_value=1)
 
         self.search_flags = cae.get_config('ResSearchFlags', default_value='ALL-HOTELS')
         self.search_scope = cae.get_config('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
@@ -284,8 +367,8 @@ class ResBulkFetcher(BulkFetcherBase):
 
         uprint("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
                'and till/before', self.date_till.strftime(SH_DATE_FORMAT))
-        uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.sh_fetch_max_days,
-               " and -pause in seconds between fetches", self.sh_fetch_pause_seconds)
+        uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.max_length_of_stay,
+               " and -pause in seconds between fetches", self.fetch_chunk_pause_seconds)
         uprint("Search flags:", self.search_flags)
         uprint("Search scope:", self.search_scope)
         uprint("Allowed Market Sources:", self.allowed_mkt_src or "ALL")
@@ -297,52 +380,11 @@ class ResBulkFetcher(BulkFetcherBase):
             ("BETWEEN" + from_date + " AND " + self.date_till.strftime(SH_DATE_FORMAT))
 
     def fetch_all(self):
-        cae = self.cae
-        self.all_rows = list()
-        try:
-            res_search = ResSearch(cae)
-            # the from/to date range filter of WEB ResSearch filters the arrival date only (not date range/departure)
-            # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
-            # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
-            for chunk_beg, chunk_end in date_range_chunks(self.date_from, self.date_till, self.sh_fetch_max_days):
-                chunk_rows = res_search.search(from_date=chunk_beg, to_date=chunk_end, flags=self.search_flags,
-                                               scope=self.search_scope)
-                if chunk_rows and isinstance(chunk_rows, str):
-                    uprint(" ***  Sihot.PMS reservation search error:", chunk_rows)
-                    cae.shutdown(3321)
-                elif not chunk_rows or not isinstance(chunk_rows, list):
-                    uprint(" ***  Unspecified Sihot.PMS reservation search error")
-                    cae.shutdown(3324)
-                uprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
-                       .format(len(chunk_rows), chunk_beg, chunk_end, self.search_flags, self.search_scope))
-                valid_rows = list()
-                for res in chunk_rows:
-                    reasons = list()
-                    check_in, check_out = date_range(res)
-                    if not check_in or not check_out:
-                        reasons.append("incomplete check-in={} check-out={}".format(check_in, check_out))
-                    if not (self.date_from <= check_in <= self.date_till):
-                        reasons.append("arrival {} not between {} and {}"
-                                       .format(check_in, self.date_from, self.date_till))
-                    mkt_src = elem_value(res, 'MARKETCODE')
-                    if self.allowed_mkt_src and mkt_src not in self.allowed_mkt_src:
-                        reasons.append("disallowed market source {}".format(mkt_src))
-                    mkt_group = elem_value(res, 'CHANNEL')
-                    if self.allowed_mkt_grp and mkt_group not in self.allowed_mkt_grp:
-                        reasons.append("disallowed market group/channel {}".format(mkt_group))
-                    if reasons:
-                        self.cae.dprint("  ##  Skipped Sihot reservation:", res, " reason(s):", reasons,
-                                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                        continue
-                    valid_rows.append(res)
-
-                self.all_rows.extend(valid_rows)
-                time.sleep(self.sh_fetch_pause_seconds)
-        except Exception as ex:
-            uprint(" ***  Sihot interface reservation fetch exception:", str(ex))
-            print_exc()
-            cae.shutdown(3330)
-
+        self.all_rows = res_search(self.cae, self.date_from, self.date_till,
+                                   mkt_sources=self.allowed_mkt_src, mkt_groups=self.allowed_mkt_grp,
+                                   max_los=self.max_length_of_stay,
+                                   search_flags=self.search_flags, search_scope=self.search_scope,
+                                   chunk_pause=self.fetch_chunk_pause_seconds)
         return self.all_rows
 
 

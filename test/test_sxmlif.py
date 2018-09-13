@@ -643,6 +643,7 @@ class TestGuestSearch:
         # also MATCHCODE element is in response (and empty in ret): assert ret['MATCHCODE']==create_test_guest.matchcode
         assert guest_search.response.matchcode == create_test_guest.matchcode
         assert guest_search.response.objid == create_test_guest.objid
+        assert isinstance(ret, dict)
         assert ret['NAME-1'] == create_test_guest.surname
         assert ret['NAME-2'] == create_test_guest.forename
         assert ret['T-GUEST'] == create_test_guest.guest_type
@@ -651,6 +652,7 @@ class TestGuestSearch:
         objid = guest_search.get_objid_by_matchcode('E396693')
         assert objid
         ret = guest_search.get_guest(objid)
+        assert isinstance(ret, dict)
         assert ret['MATCH-ADM'] == '4806-00208'
         # STRANGE?!?!?: test run 16-06-18 failed because TYPE and ID where None, on 2nd run also COMMENT Is None
         if ret['COMMENT']:

@@ -367,6 +367,7 @@ def ac_pull_res_data():
     if error_msg:
         return error_msg
     for crow in acumen_req.rows:
+        # TODO: refactor to use AssSysData.sh_res_change_to_ass()
         # determine orderer
         ord_cl_pk = conf_data.cl_ass_id_by_ac_id(crow['OC_CODE'])
         if ord_cl_pk is None:
@@ -380,7 +381,8 @@ def ac_pull_res_data():
         # determine used reservation inventory
         year, week = conf_data.rci_arr_to_year_week(crow['ARR_DATE'])
         apt_wk = "{}-{:0>2}".format(crow['RUL_SIHOT_ROOM'], week)
-        if ass_db.select('res_inventories', ['ri_pk'], "ri_pk = :aw AND ri_usage_year = :y", dict(aw=apt_wk, y=year)):
+        if ass_db.select('res_inventories', ['ri_pk'], "ri_pr_fk = :aw AND ri_usage_year = :y",
+                         dict(aw=apt_wk, y=year)):
             error_msg = ass_db.last_err_msg
             break
         ri_pk = ass_db.fetch_value()
@@ -404,13 +406,17 @@ def ac_pull_res_data():
         upd_values = chk_values.copy()
         upd_values.update(rgr_order_cl_fk=ord_cl_pk,
                           rgr_used_ri_fk=ri_pk,
-                          rgr_arrival=crow['ARR_DATE'],
-                          rgr_departure=crow['DEP_DATE'],
+                          # never added next two commented lines because ID-updates should only come from ID-system
+                          # rgr_obj_id=crow['RU_SIHOT_OBJID'],
+                          # rgr_sf_id=crow['ResSfId'],
                           rgr_status=crow['SIHOT_RES_TYPE'],
                           rgr_adults=crow['RU_ADULTS'],
                           rgr_children=crow['RU_CHILDREN'],
+                          rgr_arrival=crow['ARR_DATE'],
+                          rgr_departure=crow['DEP_DATE'],
                           rgr_mkt_segment=crow['SIHOT_MKT_SEG'],
                           rgr_mkt_group=crow['RO_SIHOT_RES_GROUP'],
+                          rgr_room_id=crow['RUL_SIHOT_ROOM'],
                           rgr_room_cat_id=crow['RUL_SIHOT_CAT'],
                           rgr_room_rate=crow['RUL_SIHOT_RATE'],
                           rgr_ext_book_id=crow['RH_EXT_BOOK_REF'],
@@ -419,10 +425,7 @@ def ac_pull_res_data():
                           rgr_long_comment=crow['SIHOT_TEC_NOTE'],
                           rgr_time_in=ac_res[0],
                           rgr_time_out=ac_res[1],
-                          rgr_created_by=ass_user,
-                          rgr_created_when=cae.startup_beg,
                           rgr_last_change=cae.startup_beg,
-                          rgr_last_sync=cae.startup_beg
                           )
         if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
             error_msg = ass_db.last_err_msg
@@ -621,90 +624,10 @@ def sh_pull_res_data():
                     importance=3)
     rbf_groups = ass_options['ResBulkFetcher'].fetch_all()
     error_msg = ""
-    for rg in rbf_groups:
-        mc = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'MATCHCODE'])
-        ord_cl_pk = conf_data.cl_ass_id_by_ac_id(mc)
-        if ord_cl_pk is None:
-            error_msg = conf_data.error_message
-            sh_id = elem_value(rg, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID'])
-            ord_cl_pk = conf_data.cl_ass_id_by_sh_id(sh_id)
-            if ord_cl_pk is None:
-                error_msg += conf_data.error_message
-                break
-            error_msg = ""
-
-        apt_wk, year = conf_data.sh_apt_wk_yr(rg)
-        if ass_db.select('res_inventories', ['ri_pk'], "ri_pk = :aw and ri_usage_year = :y", dict(aw=apt_wk, y=year)):
-            error_msg = ass_db.last_err_msg
+    for shd in rbf_groups:
+        error_msg = conf_data.sh_res_change_to_ass(shd)
+        if error_msg:
             break
-        ri_pk = ass_db.fetch_value()
-
-        gds = gds_no(rg)
-        chk_values = dict(rgr_ho_fk=elem_value(rg, 'RES-HOTEL'))  # hotelID returned by RES-SEARCH (missing ID elem)
-        if gds:
-            chk_values.update(rgr_gds_no=gds)
-        else:
-            chk_values.update(rgr_res_id=elem_value(rg, 'RES-NR'), rgr_sub_id=elem_value(rg, 'SUB-NR'))
-        upd_values = chk_values.copy()
-        upd_values\
-            .update(rgr_order_cl_fk=ord_cl_pk,
-                    rgr_used_ri_fk=ri_pk,
-                    rgr_arrival=datetime.datetime.strptime(elem_value(rg, ['RESERVATION', 'ARR']), SH_DATE_FORMAT),
-                    rgr_departure=datetime.datetime.strptime(elem_value(rg, ['RESERVATION', 'DEP']), SH_DATE_FORMAT),
-                    rgr_status=elem_value(rg, 'RT'),
-                    rgr_adults=elem_value(rg, 'NOPAX'),
-                    rgr_children=elem_value(rg, 'NOCHILDS'),
-                    rgr_mkt_segment=elem_value(rg, 'MARKETCODE'),
-                    rgr_mkt_group=elem_value(rg, 'CHANNEL'),
-                    rgr_room_cat_id=elem_value(rg, elem_path_join(['RESERVATION', 'CAT'])),
-                    rgr_room_rate=elem_value(rg, 'RATE-SEGMENT'),
-                    rgr_payment_inst=elem_value(rg, 'PAYMENT-INST'),
-                    rgr_ext_book_id=elem_value(rg, elem_path_join(['RESERVATION', 'VOUCHERNUMBER'])),
-                    rgr_ext_book_day=elem_value(rg, 'SALES-DATE'),
-                    rgr_comment=elem_value(rg, elem_path_join(['RESERVATION', 'COMMENT'])),
-                    rgr_long_comment=elem_value(rg, 'TEC-COMMENT'),
-                    rgr_created_by=ass_user,
-                    rgr_created_when=cae.startup_beg,
-                    rgr_last_change=cae.startup_beg,
-                    rgr_last_sync=cae.startup_beg
-                    )
-        if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
-            error_msg = ass_db.last_err_msg
-            break
-        rgr_pk = ass_db.fetch_value()
-
-        for arri in range(pax_count(rg)):
-            mc = elem_value(rg, ['PERSON', 'MATCHCODE'], arri=arri)
-            occ_cl_pk = None
-            if mc:
-                occ_cl_pk = conf_data.cl_ass_id_by_ac_id(mc)
-                if occ_cl_pk is None:
-                    error_msg = conf_data.error_message
-                    break
-            room_seq = int(elem_value(rg, ['PERSON', 'ROOM-SEQ'], arri=arri))
-            pers_seq = int(elem_value(rg, ['PERSON', 'ROOM-PERS-SEQ'], arri=arri))
-            chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=room_seq, rgc_pers_seq=pers_seq)
-            upd_values = chk_values.copy()
-            upd_values\
-                .update(rgc_surname=elem_value(rg, ['PERSON', 'NAME'], arri=arri),
-                        rgc_firstname=elem_value(rg, ['PERSON', 'NAME2'], arri=arri),
-                        rgc_auto_generated=elem_value(rg, ['PERSON', 'AUTO-GENERATED'], arri=arri),
-                        rgc_occup_cl_fk=occ_cl_pk,
-                        # Sihot offers also PICKUP-TYPE-ARRIVAL(1=car, 2=van), we now use PICKUP-TIME-ARRIVAL
-                        # .. instead of ARR-TIME for the flight arr/dep (pg converts str into time object/value)
-                        rgc_flight_arr_comment=elem_value(rg, ['PERSON', 'PICKUP-COMMENT-ARRIVAL']),
-                        rgc_flight_arr_time=elem_value(rg, ['PERSON', 'PICKUP-TIME-ARRIVAL']),
-                        rgc_flight_dep_comment=elem_value(rg, ['PERSON', 'PICKUP-COMMENT-DEPARTURE']),
-                        rgc_flight_dep_time=elem_value(rg, ['PERSON', 'PICKUP-TIME-DEPARTURE']),
-                        # occupation data
-                        rgc_pers_type=elem_value(rg, ['PERSON', 'PERS-TYPE'], arri=arri),
-                        rgc_sh_pack=elem_value(rg, ['PERSON', 'R'], arri=arri),
-                        rgc_room_id=elem_value(rg, ['PERSON', 'RN'], arri=arri),
-                        rgc_dob=datetime.datetime.strptime(elem_value(rg, ['PERSON', 'DOB'], arri=arri), SH_DATE_FORMAT)
-                        )
-            if ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
-                error_msg = ass_db.last_err_msg
-                break
 
     return ass_db.rollback() if error_msg else ass_db.commit()
 

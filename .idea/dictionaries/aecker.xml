@@ -14,6 +14,7 @@
       <w>allrooms</w>
       <w>aown</w>
       <w>apers</w>
+      <w>apexecute</w>
       <w>appcontext</w>
       <w>apref</w>
       <w>apts</w>
@@ -90,6 +91,7 @@
       <w>fromweb</w>
       <w>fullpath</w>
       <w>functools</w>
+      <w>fírst</w>
       <w>gdsno</w>
       <w>gdsnr</w>
       <w>gethostname</w>
@@ -132,6 +134,7 @@
       <w>logref</w>
       <w>ltrim</w>
       <w>lvqa</w>
+      <w>lästñame</w>
       <w>mainproc</w>
       <w>maintenanc</w>
       <w>mandator</w>
@@ -156,6 +159,7 @@
       <w>noperstypes</w>
       <w>norates</w>
       <w>norooms</w>
+      <w>nümé</w>
       <w>obji</w>
       <w>objid</w>
       <w>objids</w>
@@ -270,6 +274,7 @@
       <w>upsert</w>
       <w>upserted</w>
       <w>upserts</w>
+      <w>useisodate</w>
       <w>usename</w>
       <w>uwsgi</w>
       <w>valu</w>

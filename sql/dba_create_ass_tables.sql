@@ -130,50 +130,61 @@ SELECT audit.audit_table('res_inventories');
 CREATE TABLE res_groups
 (
   rgr_pk                  SERIAL PRIMARY KEY,
-  rgr_ho_fk               VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),   -- Sihot hotel id (e.g. '1'==BHC, ...)
-  rgr_res_id              VARCHAR(18) NOT NULL,         -- Sihot reservation id (res-number / sub-number)
-  rgr_sub_id              VARCHAR(3) NOT NULL DEFAULT '1',
-  rgr_gds_no              VARCHAR(24),                  -- opt. Sihot reservation GDSNO
+  rgr_obj_id              VARCHAR(15) NOT NULL UNIQUE,
+  rgr_ho_fk               VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),
+  rgr_res_id              VARCHAR(18) NOT NULL,
+  rgr_sub_id              VARCHAR(3) NOT NULL,
   rgr_order_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgr_used_ri_fk          INTEGER REFERENCES res_inventories(ri_pk),
   rgr_rci_deposit_ri_fk   INTEGER REFERENCES res_inventories(ri_pk),
-  rgr_obj_id              VARCHAR(15) NOT NULL UNIQUE,  -- Sihot reservation object ID
-  rgr_sf_id               VARCHAR(18),                  -- Salesforce Reservation Opportunity ID
+  rgr_gds_no              VARCHAR(24),
+  rgr_sf_id               VARCHAR(18),
   rgr_status              VARCHAR(3),
-  rgr_adults              INTEGER NOT NULL DEFAULT 2,
-  rgr_children            INTEGER NOT NULL DEFAULT 0,
+  rgr_adults              INTEGER,
+  rgr_children            INTEGER,
   rgr_arrival             DATE,
   rgr_departure           DATE,
   rgr_mkt_segment         VARCHAR(3),
   rgr_mkt_group           VARCHAR(3),
+  rgr_room_id             VARCHAR(6),
   rgr_room_cat_id         VARCHAR(6),
   rgr_room_rate           VARCHAR(3),
   rgr_payment_inst        VARCHAR(3),
   rgr_ext_book_id         VARCHAR(21),
   rgr_ext_book_day        DATE,
-  rgr_comment             VARCHAR(540),
-  rgr_long_comment        VARCHAR(3999),
+  rgr_comment             TEXT,           -- VARCHAR(540) was too short
+  rgr_long_comment        TEXT,           -- was VARCHAR(3999)
   rgr_time_in             TIMESTAMP,
   rgr_time_out            TIMESTAMP,
   rgr_created_by          VARCHAR(18) NOT NULL DEFAULT user,
   rgr_created_when        TIMESTAMP NOT NULL DEFAULT current_timestamp,
-  rgr_last_change         TIMESTAMP NOT NULL DEFAULT current_timestamp,   -- upsert of external system (mostly Sihot)
-  rgr_last_sync           TIMESTAMP,                                      -- last sync to Salesforce
+  rgr_last_change         TIMESTAMP NOT NULL DEFAULT current_timestamp,
+  rgr_last_sync           TIMESTAMP,
+  rgr_room_last_change    TIMESTAMP,
+  rgr_room_last_sync      TIMESTAMP,
   UNIQUE (rgr_ho_fk, rgr_res_id, rgr_sub_id)
 );
 COMMENT ON COLUMN res_groups.rgr_obj_id IS 'Sihot Reservation Object ID';
+COMMENT ON COLUMN res_groups.rgr_ho_fk IS 'Hotel Id part of Sihot reservation id (e.g. ''1''==BHC, ...)';
+COMMENT ON COLUMN res_groups.rgr_res_id IS 'Reservation number part of Sihot reservation id';
+COMMENT ON COLUMN res_groups.rgr_sub_id IS 'Reservation sub-number part of Sihot reservation id';
+COMMENT ON COLUMN res_groups.rgr_gds_no IS 'opt. Sihot reservation GDSNO';
 COMMENT ON COLUMN res_groups.rgr_sf_id IS 'Salesforce Reservation Opportunity ID';
+COMMENT ON COLUMN res_groups.rgr_last_change IS 'timestamp of last upsert of reservation in Sihot (CR)';
+COMMENT ON COLUMN res_groups.rgr_last_sync IS 'timestamp of last sync of reservation to Salesforce';
+COMMENT ON COLUMN res_groups.rgr_room_last_change IS 'timestamp of last upsert of room in Sihot (CI/CO/RM)';
+COMMENT ON COLUMN res_groups.rgr_room_last_sync IS 'timestamp of last sync of room change to Salesforce';
 -- noinspection SqlResolve
 SELECT audit.audit_table('res_groups');
 
-CREATE OR REPLACE FUNCTION rgr_modified()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.rgr_last_change = now();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-CREATE TRIGGER rgr_modified_trigger BEFORE UPDATE ON res_groups FOR EACH ROW EXECUTE PROCEDURE rgr_modified();
+-- CREATE OR REPLACE FUNCTION rgr_modified()
+-- RETURNS TRIGGER AS $$
+-- BEGIN
+--     NEW.rgr_last_change = now();
+--     RETURN NEW;
+-- END;
+-- $$ language 'plpgsql';
+-- CREATE TRIGGER rgr_modified_trigger BEFORE UPDATE ON res_groups FOR EACH ROW EXECUTE PROCEDURE rgr_modified();
 
 CREATE TABLE res_group_clients
 (

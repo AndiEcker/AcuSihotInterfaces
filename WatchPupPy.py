@@ -83,6 +83,7 @@ ass_data = init_ass_data(cae, ass_options, used_systems_msg_prefix="Active Sys E
 conf_data = ass_data['assSysData']
 if conf_data.error_message:
     uprint("WatchPupPy startup error: ", conf_data.error_message)
+    conf_data.close_dbs()
     cae.shutdown(exit_code=9)
 check_ass = USED_SYS_ASS_ID in conf_data.used_systems
 check_acu = USED_SYS_ACU_ID in conf_data.used_systems
@@ -345,8 +346,9 @@ while True:
             errors.append(err_msg)
             continue        # command not really started, so try directly again - don't reset last_run variable
         except subprocess.TimeoutExpired as toe:    # sub process killed
-            err_msg = "{}. run timed out - interval={}, current timer({})-last_run({})={}"\
-                .format(run_starts, timeout, get_timer_corrected(), last_run, last_run - get_timer_corrected())
+            err_msg = "{}. run timed out at {} last sync={}; interval={}, current timer({})-last_run({})={}"\
+                .format(run_starts, datetime.datetime.now(), last_sync,
+                        timeout, get_timer_corrected(), last_run, last_run - get_timer_corrected())
             if getattr(toe, 'output'):      # only available when running command with check_output()/send_output
                 err_msg += "\n         output=" + str(getattr(toe, 'output'))  # PyCharm says not defined: toe.output
             errors.append(err_msg)
@@ -354,13 +356,13 @@ while True:
             continue        # try directly again - don't reset last_run variable
         except KeyboardInterrupt:
             errors.append(BREAK_PREFIX + " while running {}. command {}".format(run_starts, exe_name))
-            continue        # jump to begin of loop for to notify user and quit this app
+            continue        # jump to begin of loop for to notify user, BREAK this loop and quit this app
         except Exception as ex:
             errors.append("{}. run raised unspecified exception: {}\n      {}"
                           .format(run_starts, ex, full_stack_trace(ex)))
             continue        # try directly again - don't reset last_run variable
 
-        last_run = get_timer_corrected()
+        last_run = last_check
         last_sync = datetime.datetime.now()
         run_ends += 1
     except KeyboardInterrupt:
@@ -369,6 +371,8 @@ while True:
         errors.append("WatchPupPy loop exception: " + full_stack_trace(ex))
 
 progress.finished(error_msg=err_msg)
+if conf_data:
+    conf_data.close_dbs()
 uprint("####  WatchPupPy exit - successfully run {} of {} times the command {}".format(run_ends, run_starts, exe_name))
 if err_count:
     uprint("****  {} runs failed".format(err_count))

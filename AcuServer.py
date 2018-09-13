@@ -30,7 +30,6 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 
     debug_level = cae.get_option('debugLevel')
     uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
-    uprint("Server IP/port:", cae.get_option('shServerIP'), cae.get_option('shClientPort'))
     uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
     notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
 
@@ -54,7 +53,7 @@ def client_to_acu(col_values, ca=None):
     err_msg = ora_db.connect()
     pkey = None
     if not err_msg:
-        if 'CD_CODE' in col_values and col_values['CD_CODE']:
+        if col_values.get('CD_CODE'):
             pkey = col_values['CD_CODE']
         else:
             err_msg = ora_db.select('dual', ['S_OWNER_SEQ.nextval'])
@@ -243,6 +242,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
 if __name__ == '__main__':
     ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
+    uprint("Sihot client IP/port:", ip_addr, cae.get_option('shClientPort'))
     server = TcpServer(ip_addr, cae.get_option('shClientPort'), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 

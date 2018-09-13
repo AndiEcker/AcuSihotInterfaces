@@ -10,10 +10,10 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
-| AcuServer | Synchronize changes from Sihot.PMS onto Acumen | Sxml, Web |
+| AcuServer | Synchronize room status changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
 | [AssCacheSync](#asscachesync-application) | Initialize, pull, verify or push AssCache data against Acumen, Salesforce and/or Sihot | Web |
-| [AssServer](#assserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres, Acumen and Salesforce | Sxml, Web |
+| [AssServer](#assserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
@@ -68,7 +68,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
 | correctAcumen | Correct/Fix Acumen data (0=No, 1=Yes) | 0 | A | SihotOccLogChecker |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
-| cmdInterval | Command interval in seconds | 3600 | l | WatchPupPy |
+| cmdInterval | synchronization interval in seconds | 3600 | l | AssServer, WatchPupPy |
 | dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | dateTill | End date/time of date range | (depends on command) | T | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
@@ -450,7 +450,7 @@ Acumen user name (acuUser) and password (acuPassword) as command line parameters
 
 There are four command line parameters specifying the used Sihot server (production or test): `shServerIP` is the DNS name
 or IP address of the SIHOT interface server, `shServerPort` is the IP port of the used WEB interface and optionally
-you can specify via `timeout` the timeout value in seconds for TCP/IP connections (default=69.3) and via `shXmlEncoding`
+you can specify via `shTimeout` the timeout value in seconds for TCP/IP connections (default=69.3) and via `shXmlEncoding`
 the charset encoding used for the xml data (default='cp1252').
 
 Meanwhile and for to check the client data against our Salesforce system this application needs also a user account for

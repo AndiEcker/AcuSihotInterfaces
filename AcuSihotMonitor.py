@@ -489,21 +489,20 @@ class AcuSihotMonitorApp(App):
 
     def board_items(self, board_name):
         return [ci for ci in self.check_list
-                if (board_name == ROOT_BOARD_NAME and 'parent_board' not in ci)
-                or ('parent_board' in ci and ci['parent_board'] == board_name)
+                if (board_name == ROOT_BOARD_NAME and 'parent_board' not in ci) or ci.get('parent_board') == board_name
                 ]
 
     def board_item_indexes(self, board_name):
         return [i for i in range(len(self.check_list))
                 if (board_name == ROOT_BOARD_NAME and 'parent_board' not in self.check_list[i])
-                or ('parent_board' in self.check_list[i] and self.check_list[i]['parent_board'] == board_name)
+                or self.check_list[i].get('parent_board') == board_name
                 ]
 
     def check_index(self, check_name):
         return [i for i in range(len(self.check_list)) if self.check_list[i]['name'] == check_name][0]
 
     def is_parent_item(self, check_name):
-        return [cid for cid in self.check_list if 'parent_board' in cid and cid['parent_board'] == check_name]
+        return [cid for cid in self.check_list if cid.get('parent_board') == check_name]
 
     def get_background_color(self, board_name):
         """ determines the background_color from the current board or a parent board """

@@ -148,7 +148,7 @@ MAP_KERNEL_CLIENT = \
          'elemHideInActions': ACTION_SEARCH},
         {'elemName': 'L-EXTIDS/',
          'elemHideInActions': ACTION_SEARCH},
-        {'elemName': 'EXTID/', 
+        {'elemName': 'EXTID/',
          'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs']"},
         {'elemName': 'TYPE', 'fldName': 'ExtRefType1',
          'elemHideIf': "'ExtRefs' not in c or not c['ExtRefs']"},
@@ -355,7 +355,8 @@ MAP_WEB_RES = \
          'elemHideIf': "'ResMktGroup2' not in c"},
         {'elemName': 'CHANNEL', 'fldName': 'ResMktGroup', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'ResMktGroup' not in c"},
-        # {'elemName': 'NN2', 'fldName': 'RO_RES_CLASS'},  # other option using Mkt-CM_NAME (see Q_SIHOT_SETUP#L244)
+        # {'elemName': 'NN2', 'colName': 'ResSfId',
+        # 'elemHideIf': "'ResSfId' not in c"},
         {'elemName': 'EXT-REFERENCE', 'fldName': 'ResFlightNo', 'elemHideInActions': ACTION_DELETE,
          'elemHideIf': "'ResFlightNo' not in c"},   # see also currently unused PICKUP-COMMENT-ARRIVAL element
         {'elemName': 'ARR-TIME', 'fldName': 'ResFlightETA', 'elemHideInActions': ACTION_DELETE,
@@ -787,9 +788,9 @@ class ResChange(SihotXmlParser):
             return None  # processed by base class
         self.cae.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         if tag == 'SIHOT-Reservation':
-            self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc=list()))
+            self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc_list=list()))
         elif tag in ('FIRST-Person', 'SIHOT-Person'):       # FIRST-Person only seen in room change (CI) on first occ
-            self.rgr_list[-1]['rgc'].append(dict())
+            self.rgr_list[-1]['rgc_list'].append(dict())
 
     def data(self, data):
         if super(ResChange, self).data(data) is None and self._curr_tag not in ('MATCHCODE', 'OBJID'):
@@ -829,25 +830,26 @@ class ResChange(SihotXmlParser):
 
         # rgc/reservation clients elements
         elif self._curr_tag == 'GID':                       # Sihot Guest object ID
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'ShId'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'ShId'
         elif self._curr_tag == 'MATCHCODE':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'AcId'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'AcId'
         elif self._curr_tag == 'SN':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_surname'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_surname'
         elif self._curr_tag == 'CN':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_firstname'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_firstname'
         elif self._curr_tag == 'DOB':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_dob'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_dob'
         elif self._curr_tag == 'PHONE':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_phone'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_phone'
         elif self._curr_tag == 'EMAIL':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_email'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_email'
         elif self._curr_tag == 'LN':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_language'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_language'
         elif self._curr_tag == 'COUNTRY':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_country'
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_country'
         elif self._curr_tag == 'RN':
-            di, ik = self.rgr_list[-1]['rgc'][-1], 'rgc_room_id'
+            self.rgr_list[-1]['rgr_room_id'] = data     # update also rgr_room_id with same value
+            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_room_id'
 
         # unsupported elements
         else:
@@ -1001,8 +1003,7 @@ class GuestSearchResponse(SihotXmlParser):
                     values = dict()
                     for key in keys:
                         elem = self._elem_fld_map_parser.elem_fld_map[key]
-                        elem_val = elem['elemListVal'] if 'elemListVal' in elem \
-                            else (elem['elemVal'] if 'elemVal' in elem else None)
+                        elem_val = elem['elemListVal'] if 'elemListVal' in elem else elem.get('elemVal')
                         values[key] = getattr(self, key, elem_val)
                         # Q&D fix for search_agencies(): prevent to add elemListVal key/item in next run
                         if 'elemVal' in elem:
@@ -1079,7 +1080,7 @@ class GuestFromSihot(FldMapXmlParser):
             self.cae.dprint("GuestFromSihot.end(): guest data parsed", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.acu_fld_values = dict()
             for c in self.elem_fld_map.keys():
-                if 'elemVal' in self.elem_fld_map[c] and self.elem_fld_map[c]['elemVal']:
+                if self.elem_col_map[c].get('elemVal'):
                     val = self.elem_fld_map[c]['fldValToAcu'] if 'fldValToAcu' in self.elem_fld_map[c] \
                         else self.elem_fld_map[c]['elemVal']
                     fld_name = self.elem_fld_map[c]['fldName']
@@ -1134,6 +1135,7 @@ class SihotXmlBuilder:
     def __init__(self, cae, elem_fld_map=None, use_kernel=None):
         super(SihotXmlBuilder, self).__init__()
         self.cae = cae
+        self.debug_level = ca.get_option('debugLevel')
         elem_fld_map = deepcopy(elem_fld_map or cae.get_option('mapRes'))
         self.elem_fld_map = elem_fld_map
         self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
@@ -1173,7 +1175,11 @@ class SihotXmlBuilder:
         self._xml = ''
         self._indent = 0
 
-    # --- recs/fields helpers
+    def __del__(self):
+        if self.acu_connected and self.ora_db:
+            self.ora_db.close()
+
+    # --- rows/cols helpers
 
     @property
     def fields(self):
@@ -1247,19 +1253,26 @@ class SihotXmlBuilder:
                        self.cae.get_option('shServerKernelPort' if self.use_kernel_interface else 'shServerPort'),
                        timeout=self.cae.get_option('shTimeout'),
                        encoding=self.cae.get_option('shXmlEncoding'),
-                       debug_level=self.cae.get_option('debugLevel'))
-        self.cae.dprint("SihotXmlBuilder.send_to_server(): responseParser={}, xml={}".format(response_parser, self.xml),
+                       debug_level=self.debug_level)
+        self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}".format(response_parser, self.xml),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser or SihotXmlParser(self.cae)
             self.response.parse_xml(sc.received_xml)
-            if self.response.server_error() != '0':
-                err_msg = "**** SihotXmlBuilder.send_to_server() server return code " + \
-                          self.response.server_error() + " error: " + self.response.server_err_msg()
+            err_num = self.response.server_error()
+            if err_num != '0':
+                err_msg = self.response.server_err_msg()
+                if err_msg:
+                    err_msg = "msg='{}'".format(err_msg)
+                elif err_num == '29':
+                    err_msg = "No Reservations Found"
+                if err_num != '1' or self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                    err_msg += "; sent xml='{}'; got xml='{}'".format(self.xml, sc.received_xml)[0 if err_msg else 2:]
+                err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:
-            uprint("SihotXmlBuilder.send_to_server() error: ", err_msg)
+            uprint("****  SihotXmlBuilder.send_to_server() error: ", err_msg)
         return err_msg
 
     @staticmethod
@@ -1287,6 +1300,35 @@ class SihotXmlBuilder:
     def xml(self, value):
         self.cae.dprint('SihotXmlBuilder.xml-set:', value, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self._xml = value
+
+
+class AcuServer(SihotXmlBuilder):
+    def time_sync(self):
+        self.beg_xml(operation_code='TS')
+        self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
+        self.end_xml()
+
+        err_msg = self.send_to_server()
+        if err_msg:
+            ret = err_msg
+        else:
+            ret = '' if self.response.rc == '0' else 'Time Sync Error code ' + self.response.rc
+
+        return ret
+
+    def link_alive(self, level='0'):
+        self.beg_xml(operation_code='TS')
+        self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
+        self.add_tag('STATUS', level)  # 0==request, 1==link OK
+        self.end_xml()
+
+        err_msg = self.send_to_server()
+        if err_msg:
+            ret = err_msg
+        else:
+            ret = '' if self.response.rc == '0' else 'Link Alive Error code ' + self.response.rc
+
+        return ret
 
 
 class AvailCatInfo(SihotXmlBuilder):
@@ -1395,7 +1437,7 @@ class GuestSearch(SihotXmlBuilder):
         super(GuestSearch, self).__init__(ca, elem_fld_map=MAP_KERNEL_CLIENT, use_kernel=True)
 
     def get_guest(self, obj_id):
-        """ return dict with guest data OR None in case of error
+        """ return dict with guest data OR str with error message in case of error.
         """
         self.beg_xml(operation_code='GUEST-GET')
         self.add_tag('GUEST-PROFILE',
@@ -1409,8 +1451,7 @@ class GuestSearch(SihotXmlBuilder):
             self.cae.dprint("GuestSearch.guest_get() obj_id|xml|result: ", obj_id, self.xml, ret,
                             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         else:
-            uprint("GuestSearch.guest_get() obj_id|error: ", obj_id, err_msg)
-            ret = None
+            ret = "GuestSearch.guest_get() obj_id={}; err='{}'".format(obj_id, err_msg)
         return ret
 
     def get_guest_nos_by_matchcode(self, matchcode, exact_matchcode=True):
@@ -1520,12 +1561,17 @@ class PostMessage(SihotXmlBuilder):
 
 
 class ResFetch(SihotXmlBuilder):
-    def fetch_by_gds_no(self, ho_id, gds_no, scope='BASICDATAONLY'):
+    def fetch_res(self, ho_id, gds_no=None, res_id=None, sub_id=None, scope='USEISODATE'):
         self.beg_xml(operation_code='SS')
         self.add_tag('ID', ho_id)
-        self.add_tag('GDSNO', gds_no)
+        if gds_no:
+            self.add_tag('GDSNO', gds_no)
+        else:
+            self.add_tag('RES-NR', res_id)
+            self.add_tag('SUB-NR', sub_id)
         if scope:
-            self.add_tag('SCOPE', scope)  # e.g. BASICDATAONLY (see 14.3.4 in WEB interface doc)
+            # e.g. BASICDATAONLY only sends RESERVATION xml block (see 14.3.4 in WEB interface doc)
+            self.add_tag('SCOPE', scope)
         self.end_xml()
 
         err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
@@ -1533,19 +1579,11 @@ class ResFetch(SihotXmlBuilder):
 
         return err_msg or self.response.res_list[0]
 
-    def fetch_by_res_id(self, ho_id, res_id, sub_id, scope='BASICDATAONLY'):
-        self.beg_xml(operation_code='SS')
-        self.add_tag('ID', ho_id)
-        self.add_tag('RES-NR', res_id)
-        self.add_tag('SUB-NR', sub_id)
-        if scope:
-            self.add_tag('SCOPE', scope)  # e.g. BASICDATAONLY (see 14.3.4 in WEB interface doc)
-        self.end_xml()
+    def fetch_by_gds_no(self, ho_id, gds_no, scope='USEISODATE'):
+        return self.fetch_res(ho_id, gds_no=gds_no, scope=scope)
 
-        err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
-        # WEB interface return codes (RC): 29==res not found, 1==internal error - see 14.3.5 in WEB interface doc
-
-        return err_msg or self.response.res_list[0]
+    def fetch_by_res_id(self, ho_id, res_id, sub_id, scope='USEISODATE'):
+        return self.fetch_res(ho_id, res_id=res_id, sub_id=sub_id, scope=scope)
 
 
 class ResKernelGet(SihotXmlBuilder):
@@ -1731,7 +1769,7 @@ class ResToSihot(SihotXmlBuilder):
             if not err_msg:
                 err_msg, warn_msg = self._send_res_to_sihot(crow, commit)
         else:
-            err_msg = self.res_id_desc(crow, "AcuResToSihot.send_row_to_sihot(): sync with empty GDS number skipped")
+            err_msg = self.res_id_desc(crow, "ResToSihot.send_row_to_sihot(): sync with empty GDS number skipped")
 
         if err_msg:
             self.cae.dprint("ResToSihot.send_row_to_sihot() error: {}".format(err_msg))
@@ -1742,7 +1780,7 @@ class ResToSihot(SihotXmlBuilder):
 
         return err_msg
 
-    def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False):
+    def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False, commit_last_row=True):
         ret_msg = ""
         for row in self.recs:
             err_msg = self.send_row_to_sihot(row, commit=commit_per_row)
@@ -1750,17 +1788,19 @@ class ResToSihot(SihotXmlBuilder):
                 if break_on_error:
                     return err_msg  # BREAK/RETURN first error message
                 ret_msg += "\n" + err_msg
+        if commit_last_row:
+            ret_msg += self.ora_db.commit()
         return ret_msg
 
     def res_id_label(self):
-        return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.cae.get_option('debugLevel') else "")
+        return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.debug_level else "")
 
     def res_id_values(self, crow):
-        return str(crow.get('ResGdsNo')) + \
-               "/" + str(crow.get('ResVoucherNo')) + \
-               "/" + str(crow.get('AcId')) + "/" + str(crow.get('ResMktSegment')) + \
+        return str(crow.get('SIHOT_GDSNO')) + \
+               "/" + str(crow.get('RH_EXT_BOOK_REF')) + \
+               "/" + str(crow.get('CD_CODE')) + "/" + str(crow.get('RUL_SIHOT_RATE')) + \
                ("/" + str(crow.get('RUL_PRIMARY')) + "/" + str(crow.get('RUL_CODE'))
-                if self.cae.get_option('debugLevel') and 'RUL_PRIMARY' in crow and 'RUL_CODE' in crow
+                if self.debug_level and 'RUL_PRIMARY' in crow and 'RUL_CODE' in crow
                 else "")
 
     def res_id_desc(self, crow, error_msg, separator="\n\n"):

@@ -1,8 +1,11 @@
 # salesforce high level interface
 import string
+import datetime
 import pprint
+from traceback import format_exc
+
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
-from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 
 # default client salesforce object
 DEF_CLIENT_OBJ = 'Lead'
@@ -10,9 +13,6 @@ DEF_CLIENT_OBJ = 'Lead'
 # flag to determine client object from SF ID
 DETERMINE_CLIENT_OBJ = '#Unknown#'
 
-
-# console app debug level (initialized by prepare_connection())
-_debug_level = DEBUG_LEVEL_VERBOSE
 
 # sf address field type/length - copied from https://developer.salesforce.com/forums/?id=906F00000008ih6IAA
 """
@@ -67,9 +67,7 @@ def add_sf_options(cae):
 
 
 def prepare_connection(cae, verbose=True):
-    global _debug_level
-    _debug_level = cae.get_option('debugLevel')
-
+    debug_level = cae.get_option('debugLevel')
     sf_user = cae.get_option('sfUser')
     if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
         uprint("sfif.prepare_connection(): skipped because of unspecified credentials")
@@ -82,13 +80,13 @@ def prepare_connection(cae, verbose=True):
     if verbose:
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
-    sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client)
+    sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client, debug_level)
 
     return sf_conn, sf_sandbox
 
 
 class SfInterface:
-    def __init__(self, username, password, token, sandbox, client_id='SignalliaSfInterface'):
+    def __init__(self, username, password, token, sandbox, client_id, debug_level):
         # store user credentials for lazy Salesforce connect (only if needed) because of connection limits and timeouts
         self._conn = None
         self._user = username
@@ -96,6 +94,7 @@ class SfInterface:
         self._tok = token
         self._sb = sandbox
         self._client = client_id
+        self._debug_level = debug_level
 
         self.error_msg = ""
 
@@ -103,41 +102,68 @@ class SfInterface:
         try:
             self._conn = Salesforce(username=self._user, password=self._pw, security_token=self._tok,
                                     sandbox=self._sb, client_id=self._client)
+            uprint("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
         except SalesforceAuthenticationFailed as sf_ex:
             self.error_msg = "SfInterface.__init__(): Salesforce {} authentication failed with exception: {}" \
                 .format('Sandbox' if self._sb else 'Production', sf_ex)
 
-    def _ensure_lazy_connect(self):
+    def _ensure_lazy_connect(self, soql_query="SELECT Id from Lead WHERE Name = '__test__'"):
+        """
+        ensure that the connection to Salesforce got at least once established and did not expired since then (2 hours).
+
+        :param soql_query:  SOQL query for to check established connection if expired.
+        :return:            False:  if connection never got established because of previous invalid login,
+                            None:   if first try to connect to Salesforce failed,
+                            else return the Salesforce response for the check query (soql_query) if connection was
+                            already established or just got established the first time (by calling this method).
+        """
         if 'INVALID_LOGIN' in self.error_msg:
-            uprint(" ***  Invalid Salesforce login occurred - preventing lock of user account {}; last error={}"
-                   .format(self._user, self.error_msg))
+            msg = "preventing lock of user account {}".format(self._user)
+            if msg not in self.error_msg:
+                self.error_msg = " ***  Invalid Salesforce login - {}; last error={}".format(msg, self.error_msg)
+            uprint(self.error_msg)
             return False
         self.error_msg = ""
+
         if not self._conn:
+            self.error_msg = ""
             self._connect()
             if self.error_msg:
-                return False
-        return True
+                if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+                    uprint("  **  _ensure_lazy_connect() err={}".format(self.error_msg))
+                return None
+
+        if self._conn:
+            try:
+                return self._conn.query_all(soql_query)
+            except SalesforceExpiredSession:
+                uprint("  ##  SfInterface._ensure_lazy_connect(): Trying re-connecting expired Salesforce session...")
+                self._conn = None
+                return self._ensure_lazy_connect(soql_query)
+
+        return None
 
     def soql_query_all(self, soql_query):
-        if not self._ensure_lazy_connect():
-            return None
+        """
+        Query Salesforce cloud tables with SOQL.
+        This method is tight coupled with the _ensure_lazy_connect() method above - using it for to execute the
+        query and doing a connection expiration check at the same time.
+
+        :param soql_query:      SOQL query as string.
+        :return:                response from Salesforce.
+        """
         response = None
         try:
-            response = self._conn.query_all(soql_query)
-        except SalesforceExpiredSession:
-            uprint("  **  Trying to re-connect expired Salesforce session...")
-            self._conn = None
-            if self._ensure_lazy_connect():
-                try:
-                    response = self._conn.query_all(soql_query)
-                except Exception as sf_ex:
-                    self.error_msg = "SfInterface.soql_query_all({}) reconnect exception: {}".format(soql_query, sf_ex)
+            response = self._ensure_lazy_connect(soql_query)
         except Exception as sf_ex:
             self.error_msg = "SfInterface.soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
-        if response and not response['done']:
+        if isinstance(response, dict) and not response['done']:
             self.error_msg = "SfInterface.soql_query_all(): Salesforce is responding that query {} is NOT done." \
                 .format(soql_query)
+
+        if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("soql_query_all({}) response={}".format(soql_query, response))
+
         return response
 
     def sf_obj(self, sf_obj):
@@ -213,7 +239,7 @@ class SfInterface:
         sf_er_id = err = msg = ""
         er_list = self.client_ext_refs(sf_client_id, er_id, er_type, sf_obj=sf_obj)
         if er_list:     # update?
-            if _debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
+            if self._debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
                 uprint(" ###  ext_ref_upsert(): {} duplicate external refs found: {}".format(sf_client_id, er_list))
             sf_er_id = er_list[0]
             try:
@@ -231,21 +257,11 @@ class SfInterface:
                 err = "{} create() exception {}. sent={}".format(er_obj, ex, pprint.pformat(sf_dict, indent=9))
 
         if err:
+            if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint("  **  ext_ref_upsert({}) err={}".format(sf_client_id, err))
             self.error_msg = err
 
         return sf_er_id, err, msg
-
-    def find_client(self, email="", phone="", first_name="", last_name=""):
-        if not self._ensure_lazy_connect():
-            return None, None
-
-        service_args = dict(email=email, phone=phone, firstName=first_name, lastName=last_name)
-        result = self._conn.apexecute('clientsearch', method='POST', data=service_args)
-
-        if 'id' not in result or 'type' not in result:
-            return '', DEF_CLIENT_OBJ
-
-        return result['id'], result['type']
 
     def record_type_id(self, sf_obj):
         rec_type_id = None
@@ -254,3 +270,88 @@ class SfInterface:
         if not self.error_msg and res['totalSize'] > 0:
             rec_type_id = res['records'][0]['Id']
         return rec_type_id
+
+    def apex_call(self, function_name, function_args=None):
+        if function_args:
+            # don't change callers dict, remove underscore characters from arg names (APEX methods doesn't allow them)
+            # .. and convert date/time types into SF apex format
+            function_args = {k.replace('_', ''): v.strftime('%Y-%m-%d %H:%M:%S')
+                             if isinstance(v, datetime.date) or isinstance(v, datetime.datetime) else v
+                             for (k, v) in function_args.items()}
+            # TODO: refactor function_args data type conversion into FIELDS feature method fields_dict_to_sf()
+            # NEVER IMPLEMENTED/TESTED ALTERNATIVE: change callers dict keys (removing underscores)
+            # .. much simpler after FIELDS refactoring: function_args[k.replace('_', '')] = function_args.pop(k)
+            # for k in list(function_args):
+            #     new_k = k.replace('_', '')
+            #     v = function_args.pop(k)
+            #     if isinstance(v, datetime.date) or isinstance(v, datetime.datetime):
+            #         v.strftime('%Y-%m-%d %H:%M:%S')
+            #     function_args[new_k] = v
+        try:
+            result = self._conn.apexecute(function_name, method='POST', data=function_args)
+        except Exception as ex:
+            err_msg = "sfif.apex_call({}, {}) exception='{}'\n{}".format(function_name, function_args, ex, format_exc())
+            result = dict(sfif_apex_error=err_msg)
+            self.error_msg = err_msg
+
+        # TODO: refactor result data type conversion into FIELDS feature methods sf_fld_value(), fields_dict_from_sf()
+        return result
+
+    def find_client(self, email="", phone="", first_name="", last_name=""):
+        if not self._ensure_lazy_connect():
+            return None, None
+
+        service_args = dict(email=email, phone=phone, firstName=first_name, lastName=last_name)
+        result = self.apex_call('clientsearch', function_args=service_args)
+
+        if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("find_client({}, {}, {}, {}) result={}".format(email, phone, first_name, last_name, result))
+
+        if self.error_msg or 'id' not in result or 'type' not in result:
+            return '', DEF_CLIENT_OBJ
+
+        return result['id'], result['type']
+
+    def res_upsert(self, client_res_data):
+        if not self._ensure_lazy_connect():
+            return None, None
+
+        result = self.apex_call('reservation_upsert', function_args=client_res_data)
+
+        if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("... sfif.res_upsert({}) result={} err='{}'".format(client_res_data, result, self.error_msg))
+
+        if result.get('ErrorMessage'):
+            self.error_msg += "sfif.res_upsert({}) received error '{}' from SF"\
+                .format(client_res_data, result if self._debug_level >= DEBUG_LEVEL_ENABLED else result['ErrorMessage'])
+        if not self.error_msg:
+            if not client_res_data.get('ReservationOpportunityId') and result.get('ReservationOpportunityId'):
+                client_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
+            elif client_res_data['ReservationOpportunityId'] != result.get('ReservationOpportunityId'):
+                msg = "sfif.res_upsert({}) ResOppId discrepancy; sent={} received={}"\
+                       .format(client_res_data,
+                               client_res_data['ReservationOpportunityId'], result.get('ReservationOpportunityId'))
+                uprint(msg)
+                if msg and self._debug_level >= DEBUG_LEVEL_ENABLED:
+                    self.error_msg += "\n      " + msg
+
+        return result.get('PersonAccountId'), result.get('ReservationOpportunityId'), self.error_msg
+
+    def room_change(self, res_sf_id, check_in, check_out, next_room_id):
+        if not self._ensure_lazy_connect():
+            return None, None
+
+        room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out,
+                             RoomNo__c=next_room_id)
+        result = self.apex_call('reservation_room_move', function_args=room_chg_data)
+
+        if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+            uprint("... room_change({}, {}, {}, {}) args={} result={} err='{}'"
+                   .format(res_sf_id, check_in, check_out, next_room_id, room_chg_data, result, self.error_msg))
+
+        if result.get('ErrorMessage'):
+            self.error_msg += "sfif.room_change({}, {}, {}, {}) received error '{}' from SF"\
+                .format(res_sf_id, check_in, check_out, next_room_id,
+                        result if self._debug_level >= DEBUG_LEVEL_VERBOSE else result['ErrorMessage'])
+
+        return self.error_msg
