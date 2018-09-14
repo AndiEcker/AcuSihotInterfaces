@@ -1159,13 +1159,24 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def rci_to_sihot_hotel_id(self, rc_resort_id):
         return self.cae.get_config(rc_resort_id, 'RcResortIds', default_value=-369)     # pass default for int type ret
 
+    def rci_first_week_of_year(self, year):
+        rci_wk_01 = self.cae.get_config(str(year), 'RcWeeks')
+        if rci_wk_01:
+            ret = datetime.datetime.strptime(rci_wk_01, '%Y-%m-%d')
+        else:
+            self._warn("AssSysData.rci_first_week_of_year({}): missing RcWeeks config".format(year), notify=True)
+            ret = datetime.datetime(year=year, month=1, day=1)
+            # if ret.weekday() != 4:    # is the 1st of January a Friday? if not then add some/0..6 days
+            ret += datetime.timedelta(days=(11 - ret.weekday()) % 7)
+        return ret
+
     def rci_arr_to_year_week(self, arr_date):
         year = arr_date.year
-        week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
-        next_year_week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year + 1), 'RcWeeks'), '%Y-%m-%d')
+        week_1_begin = self.rci_first_week_of_year(year)
+        next_year_week_1_begin = self.rci_first_week_of_year(year + 1)
         if arr_date < week_1_begin:
             year -= 1
-            week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
+            week_1_begin = self.rci_first_week_of_year(year)
         elif arr_date > next_year_week_1_begin:
             year += 1
             week_1_begin = next_year_week_1_begin
