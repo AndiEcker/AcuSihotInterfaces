@@ -57,7 +57,8 @@ if client_code or gds_no:
                         nothing_to_do_msg='****  SihotMigration: acumen_req fetch returning no rows')
 
     for crow in acumen_req.rows:
-        err_msg = acumen_req.send_row_to_sihot(crow, commit=True)
+        err_msg = acumen_req.send_row_to_sihot(crow)
+        acumen_req.ora_db.commit()
         progress.next(processed_id=str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']), error_msg=err_msg)
         ho_id = crow['RUL_SIHOT_HOTEL']
         xml = acumen_req.xml

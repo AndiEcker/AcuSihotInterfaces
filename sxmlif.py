@@ -48,7 +48,7 @@ SXML_DEF_ENCODING = 'cp1252'
 # special error message prefixes
 ERR_MESSAGE_PREFIX_CONTINUE = 'CONTINUE:'
 
-# ensure client modes (used by AcuResToSihot.send_row_to_sihot())
+# ensure client modes (used by ResToSihot.send_row_to_sihot())
 ECM_ENSURE_WITH_ERRORS = 0
 ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
@@ -749,7 +749,7 @@ class SihotXmlParser:  # XMLParser interface
         return ''
 
 
-class Request(SihotXmlParser):  # request from SIHOT to AcuServer
+class Request(SihotXmlParser):  # request from SIHOT
     def get_operation_code(self):
         return self.oc
 
@@ -1080,7 +1080,7 @@ class GuestFromSihot(FldMapXmlParser):
             self.cae.dprint("GuestFromSihot.end(): guest data parsed", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             self.acu_fld_values = dict()
             for c in self.elem_fld_map.keys():
-                if self.elem_col_map[c].get('elemVal'):
+                if self.elem_fld_map[c].get('elemVal'):
                     val = self.elem_fld_map[c]['fldValToAcu'] if 'fldValToAcu' in self.elem_fld_map[c] \
                         else self.elem_fld_map[c]['elemVal']
                     fld_name = self.elem_fld_map[c]['fldName']
@@ -1133,9 +1133,9 @@ class SihotXmlBuilder:
     tn = '1'
 
     def __init__(self, cae, elem_fld_map=None, use_kernel=None):
-        super(SihotXmlBuilder, self).__init__()
+        super(SihotXmlBuilder, self).__init__(cae)
         self.cae = cae
-        self.debug_level = ca.get_option('debugLevel')
+        self.debug_level = cae.get_option('debugLevel')
         elem_fld_map = deepcopy(elem_fld_map or cae.get_option('mapRes'))
         self.elem_fld_map = elem_fld_map
         self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
@@ -1174,10 +1174,6 @@ class SihotXmlBuilder:
 
         self._xml = ''
         self._indent = 0
-
-    def __del__(self):
-        if self.acu_connected and self.ora_db:
-            self.ora_db.close()
 
     # --- rows/cols helpers
 
@@ -1254,7 +1250,7 @@ class SihotXmlBuilder:
                        timeout=self.cae.get_option('shTimeout'),
                        encoding=self.cae.get_option('shXmlEncoding'),
                        debug_level=self.debug_level)
-        self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}".format(response_parser, self.xml),
+        self.cae.dprint("SihotXmlBuilder.send_to_server(): responseParser={}, xml={}".format(response_parser, self.xml),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
@@ -1300,35 +1296,6 @@ class SihotXmlBuilder:
     def xml(self, value):
         self.cae.dprint('SihotXmlBuilder.xml-set:', value, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self._xml = value
-
-
-class AcuServer(SihotXmlBuilder):
-    def time_sync(self):
-        self.beg_xml(operation_code='TS')
-        self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
-        self.end_xml()
-
-        err_msg = self.send_to_server()
-        if err_msg:
-            ret = err_msg
-        else:
-            ret = '' if self.response.rc == '0' else 'Time Sync Error code ' + self.response.rc
-
-        return ret
-
-    def link_alive(self, level='0'):
-        self.beg_xml(operation_code='TS')
-        self.add_tag('CDT', datetime.datetime.now().strftime('%y-%m-%d'))
-        self.add_tag('STATUS', level)  # 0==request, 1==link OK
-        self.end_xml()
-
-        err_msg = self.send_to_server()
-        if err_msg:
-            ret = err_msg
-        else:
-            ret = '' if self.response.rc == '0' else 'Link Alive Error code ' + self.response.rc
-
-        return ret
 
 
 class AvailCatInfo(SihotXmlBuilder):
@@ -1715,7 +1682,7 @@ class ResToSihot(SihotXmlBuilder):
         self.cae.dprint("ResToSihot._prepare_res_xml() result: ", self.xml,
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-    def _send_res_to_sihot(self, crow, commit):
+    def _send_res_to_sihot(self, crow):
         self._prepare_res_xml(crow)
 
         err_msg, warn_msg = self._handle_error(crow, self.send_to_server(response_parser=ResResponse(self.cae)))
@@ -1738,22 +1705,22 @@ class ResToSihot(SihotXmlBuilder):
             return ""
         err_msg = ""
         if 'AcId' in crow and crow['AcId']:
-            acu_client = ClientToSihot(self.cae)
-            err_msg = acu_client.send_client_to_sihot(crow)
+            client = ClientToSihot(self.cae)
+            err_msg = client.send_client_to_sihot(crow)
             if not err_msg:
-                # get client/occupant objid directly from acu_client.response
-                crow['ShId'] = acu_client.response.objid
+                # get client/occupant objid directly from client.response
+                crow['ShId'] = client.response.objid
 
         if not err_msg and crow.get('ResOrdererMc') and len(crow['ResOrdererMc']) == 7:  # exclude OTAs like TCAG/TCRENT
-            acu_client = ClientToSihot(self.cae)
-            err_msg = acu_client.send_client_to_sihot(crow)
+            client = ClientToSihot(self.cae)
+            err_msg = client.send_client_to_sihot(crow)
             if not err_msg:
-                # get orderer objid directly from acu_client.response
-                crow['ResOrdererId'] = acu_client.response.objid
+                # get orderer objid directly from client.response
+                crow['ResOrdererId'] = client.response.objid
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
-    def send_row_to_sihot(self, crow=None, commit=False, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
+    def send_row_to_sihot(self, crow=None, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
         if not crow:
             crow = self.fields
         gds_no = crow.get('ResGdsNo', '')
@@ -1767,7 +1734,7 @@ class ResToSihot(SihotXmlBuilder):
 
             err_msg = self._ensure_clients_exist_and_updated(crow, ensure_client_mode)
             if not err_msg:
-                err_msg, warn_msg = self._send_res_to_sihot(crow, commit)
+                err_msg, warn_msg = self._send_res_to_sihot(crow)
         else:
             err_msg = self.res_id_desc(crow, "ResToSihot.send_row_to_sihot(): sync with empty GDS number skipped")
 
@@ -1780,16 +1747,14 @@ class ResToSihot(SihotXmlBuilder):
 
         return err_msg
 
-    def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False, commit_last_row=True):
+    def send_rows_to_sihot(self, break_on_error=True):
         ret_msg = ""
         for row in self.recs:
-            err_msg = self.send_row_to_sihot(row, commit=commit_per_row)
+            err_msg = self.send_row_to_sihot(row)
             if err_msg:
                 if break_on_error:
                     return err_msg  # BREAK/RETURN first error message
                 ret_msg += "\n" + err_msg
-        if commit_last_row:
-            ret_msg += self.ora_db.commit()
         return ret_msg
 
     def res_id_label(self):

@@ -141,7 +141,7 @@ class AcuDbRow:
         if self.ora_db:
             self.ora_db.close()
 
-    def _add_to_acumen_sync_log(self, table, primary, action, status, message, logref, commit=False):
+    def _add_to_acumen_sync_log(self, table, primary, action, status, message, logref):
         self.cae.dprint('AcuDbRow._add_to_acumen_sync_log() time/now:', self._last_fetch, datetime.datetime.now(),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         return self.ora_db.insert('T_SRSL',
@@ -156,8 +156,7 @@ class AcuDbRow:
                                    # .. reservation got meanwhile changed again (before calling this method);
                                    # .. Therefore added the self._last_fetch timestamp explicitly to the SRSL record.
                                    'SRSL_DATE': self._last_fetch,
-                                   },
-                                  commit=commit)
+                                   })
 
     def _store_sihot_objid(self, table, pkey, objid, col_name_suffix=""):
         obj_id = objid if str(objid) else '-' + (pkey[2:] if table == 'CD' else str(pkey))
@@ -166,8 +165,9 @@ class AcuDbRow:
         return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = :pk", bind_vars=dict(pk=str(pkey)))
 
 
-class AcuXmlBuilder:
+class AcuXmlBuilder(AcuDbRow):
     def __init__(self, cae, elem_col_map=None, use_kernel=None):
+        super(AcuXmlBuilder, self).__init__(cae)
         self.cae = cae
         elem_col_map = deepcopy(elem_col_map or cae.get_option('mapRes'))
         self.elem_col_map = elem_col_map
@@ -229,14 +229,14 @@ class AcuXmlBuilder:
         self._rows = list()
         plain_rows = self.ora_db.fetch_all()
         for r in plain_rows:
-            col_values = self.fix_col_values.copy()
+            col_values = self.fix_fld_values.copy()
             col_values.update(zip(self.acu_col_names, r))
             self._rows.append(col_values)
         self.cae.dprint("AcuDbRow.fetch_all_from_acu() at {} got {}, 1st row: {}"
                         .format(self._last_fetch, self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
 
-class AcuClientToSihot(ClientToSihot, AcuXmlBuilder, AcuDbRow):
+class AcuClientToSihot(ClientToSihot, AcuXmlBuilder):
     def __init__(self, cae):
         super(AcuClientToSihot, self).__init__(cae)
         self._rows = None
@@ -296,8 +296,7 @@ class AcuClientToSihot(ClientToSihot, AcuXmlBuilder, AcuDbRow):
                                                'ERR' + (self.response.server_error() if self.response else '')
                                                if err_msg else 'SYNCED' + couple_linkage,
                                                err_msg,
-                                               c_row.get('CDL_CODE', -966) or -969,
-                                               commit=commit)
+                                               c_row.get('CDL_CODE', -966) or -969)
         if log_err:
             err_msg += "\n      LogErr=" + log_err
 
@@ -312,7 +311,7 @@ class AcuClientToSihot(ClientToSihot, AcuXmlBuilder, AcuDbRow):
         return err_msg
 
 
-class AcuResToSihot(ResToSihot, AcuXmlBuilder, AcuDbRow):
+class AcuResToSihot(ResToSihot, AcuXmlBuilder):
     def _fetch_from_acu(self, view, where_group_order, date_range, hints=''):
         if date_range == 'H':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE < trunc(sysdate)"
@@ -344,8 +343,8 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder, AcuDbRow):
     def fetch_all_valid_from_acu(self, where_group_order='', date_range=''):
         return self._fetch_from_acu('V_ACU_RES_FILTERED', where_group_order, date_range)
 
-    def _send_res_to_sihot(self, crow, commit):
-        err_msg, warn_msg = super(AcuResToSihot, self)._send_res_to_sihot(crow, commit)
+    def _send_res_to_sihot(self, crow):
+        err_msg, warn_msg = super(AcuResToSihot, self)._send_res_to_sihot(crow)
 
         if not err_msg and self.response:
             err_msg = self._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response.objid)
@@ -354,8 +353,7 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder, AcuDbRow):
                                                 "ERR" + (self.response.server_error() if self.response else "")
                                                 if err_msg else "SYNCED",
                                                 err_msg + ("W" + warn_msg if warn_msg else ""),
-                                                crow['RUL_CODE'],
-                                                commit=commit)
+                                                crow['RUL_CODE'])
         return err_msg
 
     def _ensure_clients_exist_and_updated(self, crow, ensure_client_mode):
@@ -409,16 +407,15 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder, AcuDbRow):
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
-    def send_row_to_sihot(self, crow=None, commit=False, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
-        err_msg = super(AcuResToSihot, self).send_row_to_sihot(crow=crow, commit=commit,
-                                                               ensure_client_mode=ensure_client_mode)
+    def send_row_to_sihot(self, crow=None, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
+        err_msg = super(AcuResToSihot, self).send_row_to_sihot(crow=crow, ensure_client_mode=ensure_client_mode)
 
         if "Could not find a key identifier" in err_msg and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']):
             self.cae.dprint("AcuResToSihot.send_row_to_sihot() ignoring CD_SIHOT_OBJID({}) error: {}"
                             .format(str(crow['CD_SIHOT_OBJID']) + "/" + str(crow['CD_SIHOT_OBJID2']), err_msg))
             crow['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead
             crow['CD_SIHOT_OBJID2'] = None
-            err_msg = self._send_res_to_sihot(crow, commit)
+            err_msg = self._send_res_to_sihot(crow)
 
         if err_msg:
             self.cae.dprint("AcuResToSihot.send_row_to_sihot() error: {}".format(err_msg))
@@ -429,14 +426,17 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder, AcuDbRow):
 
         return err_msg
 
-    def send_rows_to_sihot(self, break_on_error=True, commit_per_row=False, commit_last_row=True):
-        ret_msg = super(AcuResToSihot, self).send_rows_to_sihot(break_on_error=break_on_error,
-                                                                commit_per_row=commit_per_row)
+    def send_rows_to_sihot(self, break_on_error=True, commit_last_row=True):
+        ret_msg = super(AcuResToSihot, self).send_rows_to_sihot(break_on_error=break_on_error)
         if commit_last_row:
-            ret_msg += self.ora_db.commit()
+            if ret_msg:
+                ret_msg += self.ora_db.rollback()
+            else:
+                ret_msg = self.ora_db.commit()
         return ret_msg
 
 
+# currently still/only used by AcuSihotMonitor for testing purposes - can be deleted
 class AcuServer(SihotXmlBuilder):
     def time_sync(self):
         self.beg_xml(operation_code='TS')

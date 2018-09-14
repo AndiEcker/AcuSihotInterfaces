@@ -82,10 +82,13 @@ if cae.get_option('clientsFirst'):
                     error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + ' reservation history fetch error: ' + \
                                 error_msg + '! Data=' + str(crow)
                 else:
-                    error_msg = acu_res_hist.send_rows_to_sihot(commit_per_row=True)
+                    error_msg = acu_res_hist.send_rows_to_sihot()
                     if error_msg:
                         error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + \
                                     ' reservation history send error: ' + error_msg + '! Data=' + str(crow)
+                        acu_res_hist.ora_db.rollback()
+                    else:
+                        acu_res_hist.ora_db.commit()
             if error_msg:
                 uprint('****  Error sending new guest ' + crow['CD_CODE'] + ' to Sihot: ' + error_msg)
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):

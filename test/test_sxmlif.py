@@ -916,7 +916,7 @@ class TestResToSihot:
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.rec_count <= 21
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=True, commit_per_row=True)
+            error_msg = acu_res.send_rows_to_sihot(break_on_error=True)
             assert not error_msg
 
     """
@@ -989,7 +989,7 @@ class TestResToSihot:
             assert len(rows) == 4
             for row in rows:
                 assert row['ResHotelId'] in (1, 3, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
+                error_msg = acu_res.send_row_to_sihot(crow=row)
                 assert (not error_msg
                         or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
 

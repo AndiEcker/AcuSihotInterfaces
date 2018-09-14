@@ -20,7 +20,8 @@ from functools import partial
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import AcuServer, PostMessage, ConfigDict, CatRooms, AcuResToSihot, ResSearch
+from sxmlif import PostMessage, ConfigDict, CatRooms, ResSearch
+from acif import AcuResToSihot, AcuServer
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.4'

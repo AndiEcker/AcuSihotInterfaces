@@ -277,7 +277,8 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.row_count <= 21
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=True, commit_per_row=True)
+            error_msg = acu_res.send_rows_to_sihot(break_on_error=True)
+            acu_res.ora_db.commit()
             assert not error_msg
 
     """
@@ -310,7 +311,8 @@ class TestResFromAcuToSihot:
             assert len(rows) == 1
             for row in rows:
                 assert row['RUL_SIHOT_HOTEL'] in (1, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
+                error_msg = acu_res.send_row_to_sihot(crow=row)
+                acu_res.ora_db.commit()
                 assert not error_msg
 
     def _old_test_fb_with_board2(self, acu_res):
@@ -350,7 +352,8 @@ class TestResFromAcuToSihot:
             assert len(rows) == 4
             for row in rows:
                 assert row['RUL_SIHOT_HOTEL'] in (1, 3, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
+                error_msg = acu_res.send_row_to_sihot(crow=row)
+                acu_res.ora_db.commit()
                 assert (not error_msg
                         or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
 
