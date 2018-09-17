@@ -168,51 +168,51 @@ FIELD_NAMES = dict(AssId=dict(Desc="AssCache client PKey", AssSysDataClientsIdx=
                    )
 
 
-def field_desc(code_field_name):
-    if code_field_name in FIELD_NAMES:
-        return FIELD_NAMES.get(code_field_name).get('Desc', "")
+def field_desc(field_name):
+    if field_name in FIELD_NAMES:
+        return FIELD_NAMES.get(field_name).get('Desc', "")
 
 
-def field_clients_idx(code_field_name):
-    if code_field_name in FIELD_NAMES:
-        return FIELD_NAMES.get(code_field_name).get('AssSysDataClientsIdx', -1)
+def field_clients_idx(field_name):
+    if field_name in FIELD_NAMES:
+        return FIELD_NAMES.get(field_name).get('AssSysDataClientsIdx', -1)
 
 
-def ass_fld_name(code_field_name):
-    ass_field_name = code_field_name
-    field_map = FIELD_NAMES.get(code_field_name)
+def ass_fld_name(field_name):
+    fld_name = field_name
+    field_map = FIELD_NAMES.get(field_name)
     if field_map:
-        ass_field_name = field_map.get('AssDb', code_field_name)
-    return ass_field_name
+        fld_name = field_map.get('AssDb', field_name)
+    return fld_name
 
 
-def ac_fld_name(code_field_name):
-    ac_field_name = ""
-    field_map = FIELD_NAMES.get(code_field_name)
+def ac_col_name(field_name):
+    col_name = ""
+    field_map = FIELD_NAMES.get(field_name)
     if field_map:
-        ac_field_name = field_map.get('AcDb', code_field_name)
-    return ac_field_name
+        col_name = field_map.get('AcDb', field_name)
+    return col_name
 
 
-def sf_fld_name(code_field_name, sf_obj):
-    sf_field_name = code_field_name
-    field_map = FIELD_NAMES.get(code_field_name)
+def sf_fld_name(field_name, sf_obj):
+    fld_name = field_name
+    field_map = FIELD_NAMES.get(field_name)
     if field_map:
-        sf_field_name = field_map.get(sf_obj, code_field_name)
-    return sf_field_name
+        fld_name = field_map.get(sf_obj, field_name)
+    return fld_name
 
 
-def sh_fld_name(code_field_name):
-    sh_field_name = ""
-    field_map = FIELD_NAMES.get(code_field_name)
+def sh_elem_name(field_name):
+    elem_name = ""
+    field_map = FIELD_NAMES.get(field_name)
     if field_map:
-        sh_field_name = field_map.get('Sihot', code_field_name)
-    return sh_field_name
+        elem_name = field_map.get('Sihot', field_name)
+    return elem_name
 
 
-def sh_fld_value(sh_dict, code_field_name):
+def sh_fld_value(sh_dict, field_name):
     ret = ""
-    fld = sh_fld_name(code_field_name)
+    fld = sh_elem_name(field_name)
     if not isinstance(fld, dict):
         ret = sh_dict[fld]      # normal field mapping
     elif 'getter' in fld:
@@ -220,13 +220,13 @@ def sh_fld_value(sh_dict, code_field_name):
     elif 'in_list' in fld:
         ret = list((sh_dict[_] for _ in fld.get('in_list') if sh_dict[_]))
 
-    if code_field_name == 'Email':
+    if field_name == 'Email':
         if isinstance(ret, list):
             for idx, email in enumerate(ret):
                 ret[idx], _ = correct_email(email)
         else:
             ret, _ = correct_email(ret)
-    elif code_field_name == 'Phone':
+    elif field_name == 'Phone':
         if isinstance(ret, list):
             for idx, phone in enumerate(ret):
                 ret[idx], _ = correct_phone(phone)
@@ -238,40 +238,40 @@ def sh_fld_value(sh_dict, code_field_name):
 
 def field_list_to_sf(code_list, sf_obj):
     sf_list = list()
-    for code_field_name in code_list:
-        sf_list.append(sf_fld_name(code_field_name, sf_obj))
+    for field_name in code_list:
+        sf_list.append(sf_fld_name(field_name, sf_obj))
     return sf_list
 
 
 def field_dict_to_sf(code_dict, sf_obj):
     sf_dict = dict()
-    for code_field_name, val in code_dict.items():
-        sf_key = sf_fld_name(code_field_name, sf_obj)
+    for field_name, val in code_dict.items():
+        sf_key = sf_fld_name(field_name, sf_obj)
         sf_dict[sf_key] = val
     return sf_dict
 
 
-def code_name(sf_field_name, sf_obj):
-    for code_field_name, field_map in FIELD_NAMES.items():
-        if field_map.get(sf_obj) == sf_field_name:
+def code_name(sf_fld, sf_obj):
+    for field_name, field_map in FIELD_NAMES.items():
+        if field_map.get(sf_obj) == sf_fld:
             break
     else:
-        code_field_name = sf_field_name
-    return code_field_name
+        field_name = sf_fld
+    return field_name
 
 
 def field_list_from_sf(sf_list, sf_obj):
     code_list = list()
-    for sf_field_name in sf_list:
-        code_list.append(code_name(sf_field_name, sf_obj))
+    for sf_fld in sf_list:
+        code_list.append(code_name(sf_fld, sf_obj))
     return code_list
 
 
 def field_dict_from_sf(sf_dict, sf_obj):
     code_dict = dict()
-    for sf_field_name, val in sf_dict.items():
-        if sf_field_name != 'attributes':
-            code_dict[code_name(sf_field_name, sf_obj)] = val
+    for sf_fld, val in sf_dict.items():
+        if sf_fld != 'attributes':
+            code_dict[code_name(sf_fld, sf_obj)] = val
     return code_dict
 
 
@@ -1159,13 +1159,24 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def rci_to_sihot_hotel_id(self, rc_resort_id):
         return self.cae.get_config(rc_resort_id, 'RcResortIds', default_value=-369)     # pass default for int type ret
 
+    def rci_first_week_of_year(self, year):
+        rci_wk_01 = self.cae.get_config(str(year), 'RcWeeks')
+        if rci_wk_01:
+            ret = datetime.datetime.strptime(rci_wk_01, '%Y-%m-%d')
+        else:
+            self._warn("AssSysData.rci_first_week_of_year({}): missing RcWeeks config".format(year), notify=True)
+            ret = datetime.datetime(year=year, month=1, day=1)
+            # if ret.weekday() != 4:    # is the 1st of January a Friday? if not then add some/0..6 days
+            ret += datetime.timedelta(days=(11 - ret.weekday()) % 7)
+        return ret
+
     def rci_arr_to_year_week(self, arr_date):
         year = arr_date.year
-        week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
-        next_year_week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year + 1), 'RcWeeks'), '%Y-%m-%d')
+        week_1_begin = self.rci_first_week_of_year(year)
+        next_year_week_1_begin = self.rci_first_week_of_year(year + 1)
         if arr_date < week_1_begin:
             year -= 1
-            week_1_begin = datetime.datetime.strptime(self.cae.get_config(str(year), 'RcWeeks'), '%Y-%m-%d')
+            week_1_begin = self.rci_first_week_of_year(year)
         elif arr_date > next_year_week_1_begin:
             year += 1
             week_1_begin = next_year_week_1_begin
@@ -1451,7 +1462,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                 gets returned as sf_data['ReservationOpportunityId'].
         :return:                error message if error occurred, else empty string.
         """
-        sf_args = dict() if sf_data is None else sf_data
+        sf_args = dict() if sf_data is None else sf_data        # sf_data or dict()  would fail if sf_data is empty dict
         sf_args.update(ReservationOpportunityId=rgr_sf_id)
         ass_id = ass_res_data.get('rgr_order_cl_fk')
         if ass_id:
@@ -1470,8 +1481,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             elem_val = sh_cl_data.get(shn)
             if elem_val:
                 if isinstance(elem_val, list):
-                    self._warn("asd.sf_res_upsert({}, {}, {}); stripping of extra items for {} from list value {}"
-                               .format(rgr_sf_id, sh_cl_data, ass_res_data, sfn, elem_val))
+                    self._warn("asd.sf_res_upsert({}, {}, {}); using first value '{}' for {} from list value {}"
+                               .format(rgr_sf_id, sh_cl_data, ass_res_data, elem_val[0], sfn, elem_val))
                     elem_val = elem_val[0]
                 sf_args[sfn] = elem_val
 
@@ -1603,7 +1614,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         guest = ClientToSihot(self.cae)
         col_values = dict()
         for fld, val in fields_dict.items():
-            col_name = ac_fld_name(fld)
+            col_name = ac_col_name(fld)
             if col_name and col_name in guest.acu_fld_names:
                 col_values[col_name] = val
         return guest.send_client_to_sihot(col_values)

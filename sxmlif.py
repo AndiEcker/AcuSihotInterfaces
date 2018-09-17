@@ -6,6 +6,7 @@ from textwrap import wrap
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
+from ae_fields import Field
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
 from ae_tcp import TcpClient
@@ -255,8 +256,11 @@ MAP_WEB_RES = \
         # MATCHCODE, NAME, COMPANY and GUEST-ID are mutually exclusive
         # MATCHCODE/GUEST-ID needed for DELETE action for to prevent Sihot error:
         # .. "Could not find a key identifier for the client (name, matchcode, ...)"
-        {'elemName': 'GUEST-ID', 'fldName': 'ResOrdererId',
-         'elemHideIf': "not c.get('ResOrdererId') and not c.get['ShId']"},
+
+        #{'elemName': 'GUEST-ID', 'fldName': 'ResOrdererId',
+        #  'elemHideIf':  "not c.get('ResOrdererId') and not c.get['ShId']"},
+        {'elemName': 'GUEST-ID', 'field': Field('ResOrdererId')
+            .add_filter(lambda f: not f.row('Ac').get('ResOrdererId') and not f.row('Ac').get['ShId'])},
         {'elemName': 'MATCHCODE', 'fldName': 'ResOrdererMc'},
         {'elemName': 'GDSNO', 'fldName': 'ResGdsNo'},
         {'elemName': 'VOUCHERNUMBER', 'fldName': 'ResVoucherNo', 'elemHideInActions': ACTION_DELETE},

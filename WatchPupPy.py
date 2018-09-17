@@ -348,7 +348,7 @@ while True:
         except subprocess.TimeoutExpired as toe:    # sub process killed
             err_msg = "{}. run timed out at {} last sync={}; interval={}, current timer({})-last_run({})={}"\
                 .format(run_starts, datetime.datetime.now(), last_sync,
-                        timeout, get_timer_corrected(), last_run, last_run - get_timer_corrected())
+                        timeout, get_timer_corrected(), last_run, get_timer_corrected() - last_run)
             if getattr(toe, 'output'):      # only available when running command with check_output()/send_output
                 err_msg += "\n         output=" + str(getattr(toe, 'output'))  # PyCharm says not defined: toe.output
             errors.append(err_msg)
