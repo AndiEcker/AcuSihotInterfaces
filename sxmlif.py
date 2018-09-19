@@ -6,10 +6,13 @@ from textwrap import wrap
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from ae_fields import Field
+from ae_sys_data import Field, Record, FAD_ONTO
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
 from ae_tcp import TcpClient
+
+from sys_data_ids import SDI_SK, SDI_SW
+
 
 # data actions
 ACTION_DELETE = 'DELETE'
@@ -249,7 +252,7 @@ MAP_KERNEL_CLIENT = \
 """
 MAP_WEB_RES = \
     (
-        {'elemName': 'ID', 'fldName': 'ResHotelId'},  # or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
+        {'elemName': 'ID', 'fldName': 'ResHotelId'},  # ID elem or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
         {'elemName': 'ARESLIST/'},
         {'elemName': 'RESERVATION/'},
         # ### main reservation info: orderer, status, external booking references, room/price category, ...
@@ -259,8 +262,8 @@ MAP_WEB_RES = \
 
         #{'elemName': 'GUEST-ID', 'fldName': 'ResOrdererId',
         #  'elemHideIf':  "not c.get('ResOrdererId') and not c.get['ShId']"},
-        {'elemName': 'GUEST-ID', 'field': Field('ResOrdererId')
-            .add_filter(lambda f: not f.row('Ac').get('ResOrdererId') and not f.row('Ac').get['ShId'])},
+        {'elemName': 'GUEST-ID', 'fldName': 'ResOrdererId',
+         'elemHideIf': lambda f: not f.row('Ac').get('ResOrdererId') and not f.row('Ac').get('ShId')},
         {'elemName': 'MATCHCODE', 'fldName': 'ResOrdererMc'},
         {'elemName': 'GDSNO', 'fldName': 'ResGdsNo'},
         {'elemName': 'VOUCHERNUMBER', 'fldName': 'ResVoucherNo', 'elemHideInActions': ACTION_DELETE},

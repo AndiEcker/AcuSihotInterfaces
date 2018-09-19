@@ -9,6 +9,8 @@ from ae_db import OraDB
 from sxmlif import (SihotXmlBuilder, ClientToSihot, ResToSihot,
                     EXT_REF_COUNT, RES_MAX_ADULTS, RES_MAX_CHILDREN,
                     ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT)
+from sys_data_ids import SDI_AC
+
 
 ACU_DEF_USR = 'SIHOT_INTERFACE'
 ACU_DEF_DSN = 'SP.TEST'
@@ -16,10 +18,10 @@ ACU_DEF_DSN = 'SP.TEST'
 # second couple Acumen ID suffix
 AC_ID_2ND_COUPLE_SUFFIX = 'P2'
 
-# Acumen view column name [1] and expression [2] mapping to field name [0]
+# Acumen field name [0] mapping to view column name [1], SQL expression [2] and data value filter [3]
 FIELD_MAP = [
     # client data
-    ('AcId', 'CD_CODE'),
+    ('AcId', 'CD_CODE',),
     ('SfId', 'SIHOT_SF_ID'),
     ('ShId', 'CD_SIHOT_OBJID'),
     ('Salutation', 'SIHOT_SALUTATION1'),
@@ -77,7 +79,8 @@ FIELD_MAP = [
     ('ResOrdererMc', 'OC_CODE',
      "nvl(OC_CODE, CD_CODE)"),
     ('ResOrdererId', 'OC_SIHOT_OBJID',
-     "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))"),
+     "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))",
+     lambda f: not f.csv('ResOrdererId') and not f.csv('ShId')),
     ('ResStatus', 'SH_RES_TYPE',
      "case when RUL_ACTION = 'DELETE' then 'S' else nvl(SIHOT_RES_TYPE, 'S') end"),
     ('ResAction', 'RUL_ACTION'),
