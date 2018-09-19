@@ -1097,7 +1097,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param col_values:          dict of column values to be inserted/updated.
         :param chk_values:          dict of column values for to identify the record to update (insert if not exists).
                                     (opt, def=IDs from col_values items: obj_id, ho_id+res_id+sub_id, gds_no or sf_id).
-        :param commit:              pass True to commit (opt, def=False).
+        :param commit:              pass True to commit on success or rollback on error (opt, def=False).
         :param multiple_row_update: allow update of multiple records with the same chk_values (opt, def=False).
         :param returning_column:    name of the returning column or empty (opt, def='').
         :return:                    returning_column value (if specified) OR chk_values OR None if self.error message.
@@ -1120,7 +1120,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values,
                                                     returning_column=returning_column, commit=commit,
                                                     multiple_row_update=multiple_row_update)
-            if not self.error_message and not multiple_row_update and self.ass_db.curs.rowcount != 1:
+            if self.error_message:
+                if commit:
+                    self.error_message += "\n" + self.ass_db.rollback()
+            elif not multiple_row_update and self.ass_db.curs.rowcount != 1:
                 self.error_message = "rgr_upsert({}, {}): Invalid affected row count; expected 1 but got {}" \
                     .format(col_values, chk_values, self.ass_db.curs.rowcount)
             elif returning_column:

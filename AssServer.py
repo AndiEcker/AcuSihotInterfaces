@@ -188,8 +188,6 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     if not asd.rgr_upsert(dict(rgr_last_sync=ass_changed_res['rgr_last_sync']), chk_values, commit=True):
         err_msg = "res_from_sh_to_sf({}): last reservation sync timestamp ass_cache update failed"\
                       .format(ass_changed_res) + asd.error_message
-        if asd.ass_db.rollback():
-            err_msg += "\n" + asd.ass_db.last_err_msg
 
     return err_msg
 
@@ -210,8 +208,6 @@ def room_change_to_sf(asd, ass_res):
     if not asd.rgr_upsert(dict(rgr_room_last_sync=ass_res['rgr_room_last_sync']), chk_values, commit=True):
         err_msg = "room_change_to_sf({}): last room sync timestamp ass_cache update err='{}'"\
                       .format(ass_res, asd.error_message)
-        if asd.ass_db.rollback():
-            err_msg += "\n" + asd.ass_db.last_err_msg
 
     return err_msg
 
@@ -240,19 +236,20 @@ def check_and_init_sync_to_sf(wait=0.0):
             sync_lock.release()
 
     # check if run_sync_to_sf() is running or requested to run soon, and if not then start new timer
-    if not sync_run_requested and not sync_timer and sync_lock.acquire(blocking=False):
+    locked = sync_run_requested or sync_timer or not sync_lock.acquire(blocking=False)
+    if locked:
+        log_msg("check_and_init_sync_to_sf({}): sync to SF request blocked; last request was at {}; timer-obj={}"
+                .format(wait, sync_run_requested, sync_timer),
+                importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+    else:
         sync_run_requested = now
         sync_timer = threading.Timer(wait, run_sync_to_sf)
         log_msg("check_and_init_sync_to_sf({}): new sync to SF; requested at {}; will run at {}; timer-obj={}"
                 .format(wait, sync_run_requested, sync_run_requested + datetime.timedelta(seconds=wait), sync_timer),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sync_timer.start()
-        return True
 
-    log_msg("check_and_init_sync_to_sf({}): sync to SF request blocked; last request was at {}; timer-obj={}"
-            .format(wait, sync_run_requested, sync_timer),
-            importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
-    return False
+    return not locked
 
 
 def run_sync_to_sf():
