@@ -6,7 +6,7 @@ from copy import deepcopy
 
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB
-from sxmlif import (SihotXmlBuilder, ClientToSihot, ResToSihot,
+from sxmlif import (SihotXmlBuilder, ClientToSihot, ResToSihot, convert2date,
                     EXT_REF_COUNT, RES_MAX_ADULTS, RES_MAX_CHILDREN,
                     ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT)
 from sys_data_ids import SDI_AC
@@ -47,7 +47,9 @@ FIELD_MAP = [
     ('Fax', 'CD_FAX'),
     ('Email', 'CD_EMAIL'),
     ('Email2', 'CD_SIGNUP_EMAIL'),
-    ('DOB', 'CD_DOB1'),
+    ('DOB', 'CD_DOB1',
+     convert2date  # 'valToAcuConverter':
+     ),
     ('Password', 'CD_PASSWORD'),
     ('RCIRef', 'CD_RCI_REF'),
     ('ExtRefs', 'EXT_REFS'),

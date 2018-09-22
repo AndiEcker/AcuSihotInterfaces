@@ -1895,7 +1895,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         elif oc[:2] == 'CO':
             upd_col_values.update(rgr_time_out=action_time)
         elif oc != 'RC-RM':
-            self.error_message = "cache_room_change({}, {}, {}): Invalid operation code".format(oc, ho_id, res_id)
+            self.error_message = "sh_room_change_to_ass({}, {}, {}, {}, {}, {}): Invalid operation code"\
+                .format(oc, ho_id, res_id, sub_id, room_id, action_time)
 
         rgr_sf_id = None
         if not self.error_message:

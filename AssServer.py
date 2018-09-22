@@ -398,6 +398,12 @@ def oc_room_change(asd, req, rec_ctx):
             err_msg = _room_change_ass(asd, req, rec_ctx, 'CO-RM', req.osub_nr, req.orn, action_time)
             oc = 'CI-RM'
         elif req.sub_nr == '1':
+            ''' received meanwhile also RM notifications w/o OSUB-NR and with SUB-NR > 1 (see Sihot AssCache log entry):
+            20180922 010727.305[XML-IF]: onReceive: RM
+            : <OC>RM</OC><HN>4</HN>...<RN>0525</RN>...<ORN>0425</ORN>
+            ...<GDSNO>BDC-1099776257</GDSNO>...<RES-NR>77729</RES-NR><SUB-NR>2</SUB-NR>
+            20180922 010727.305[XML-IF]: Hotel number = 4 found
+            '''
             oc = 'RC-RM'            # reservation and in/out dates keep the same, only room number will be changed
     err_msg += _room_change_ass(asd, req, rec_ctx, oc, req.sub_nr, req.rn, action_time)
 
