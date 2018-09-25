@@ -576,7 +576,8 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         log_msg("OC {} processed; xml response: {}".format(oc, xml_response), importance=4)
 
         # directly sync to Salesforce if not already running (also in case the time thread died)
-        check_and_init_sync_to_sf()
+        # ae:25-09-18 13:39 commented out next line
+        # check_and_init_sync_to_sf()
 
         return bytes(xml_response, xml_enc)
 
