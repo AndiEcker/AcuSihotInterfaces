@@ -10,6 +10,10 @@ from collections import OrderedDict
 # dummy field name (not used as data field but as placeholder, e.g. for to put xml groups)
 DUMMY_FIELD_NAME = '___'
 
+# field name special characters for to identify list indexes and sub-Records
+FN_LIST_IDX_MARKER = '['
+FN_SUB_REC_MARKER = '.'
+
 # field aspect types/prefixes
 FAT_NAME = 'key'
 FAT_VAL = 'val'
@@ -50,12 +54,20 @@ class Field:
 
         return None
 
-    def aspect_value(self, aspect_type, inherited_aspect=False, system='', direction=''):
+    def aspect_exists(self, aspect_type, inherited_aspect=False, system='', direction=''):
         if inherited_aspect:
             key = self.find_key(aspect_type, system=system, direction=direction)
         else:
             key = aspect_key(aspect_type, system=system, direction=direction)
-        return self._aspects.get(key)
+        return key if key in self._aspects else None
+
+    def aspect_value(self, aspect_type, inherited_aspect=False, system='', direction=''):
+        key = self.aspect_exists(aspect_type, inherited_aspect=inherited_aspect, system=system, direction=direction)
+        if key:
+            val = self._aspects.get(key)
+        else:
+            val = None
+        return val
 
     def add_aspects(self, aspects):
         iia_map = (
@@ -206,6 +218,8 @@ class Record:
         if isinstance(fields_aspects, (tuple, list,)):
             self.add_fields_aspects(fields_aspects, field_aspect_types, new_fields=True,
                                     system=current_system, direction=current_direction)
+        elif isinstance(fields_aspects, dict):
+            self._fields.update(fields_aspects)
 
         self._current_system = current_system
         self._current_direction = current_direction
@@ -226,8 +240,8 @@ class Record:
         key, *aspect_data = aspects_data
         assert len(aspect_data) <= len(fats)
         aspects = dict(zip(fats[:len(aspect_data)], aspect_data))
-        aspects[FAT_REC] = self
         if new_field:
+            aspects[FAT_REC] = self
             self.add_field(Field(**aspects))
         else:
             self._fields[key].add_aspects(aspects)
@@ -254,6 +268,14 @@ class Record:
         return len(self._fields)
 
     def copy(self):
+        fields_names = list()
+        fields_aspects = list()
+        for field_name, field in self._fields.items():
+            fields_names.append(field_name)
+            fields_aspects.append(field)
+        return Record(fields_aspects=fields_aspects, field_aspect_types=fields_names)
+
+    def deep_copy(self):
         fields_aspects = OrderedDict()
         for field_name, field in self._fields.items():
             fields_aspects[field_name] = field.aspects
