@@ -1484,7 +1484,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             elem_val = sh_cl_data.get(shn)
             if elem_val:
                 if isinstance(elem_val, list):
-                    self._warn("asd.sf_res_upsert({}, {}, {}); stripping of extra items for {} from list value {}"
+                    self._warn("asd.sf_res_upsert({}, {}, {}) stripping of extra items for {} from list value {}"
                                .format(rgr_sf_id, sh_cl_data, ass_res_data, sfn, elem_val))
                     elem_val = elem_val[0]
                 sf_args[sfn] = elem_val
@@ -1513,6 +1513,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             sf_args['RoomNo__c'] = ass_res_data['rgc_list'][0]['rgc_room_id']
 
         sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
+        if 'ENTITY_IS_DELETED' in err_msg and rgr_sf_id:    # retry without rgr_sf_id if ResOpp got deleted within SF
+            sf_args['ReservationOpportunityId'] = ''
+            sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
+            self._warn("asd.sf_res_upsert({}, {}, {}) cached ResOpp value reset to {}; SF client={}; err='{}'"
+                       .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_opp_id, sf_cl_id, err_msg))
+            rgr_sf_id = ''
+
         if sf_args.get('PersonAccountId') and sf_args['PersonAccountId'] != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_VERBOSE:
             self._err("sf_res_upsert({}, {}, {}) PersonAccount discrepancy {} != {}"
@@ -1527,7 +1534,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     self.error_message = ""
 
             col_values = dict() if err_msg else dict(rgr_last_sync=datetime.datetime.now())
-            if not rgr_sf_id and sf_opp_id:     # save just created ID of Reservation Opportunity in AssCache
+            if not rgr_sf_id and sf_opp_id:     # save just (re-)created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
             elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and rgr_sf_id and sf_opp_id != rgr_sf_id:
                 self._err("sf_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"

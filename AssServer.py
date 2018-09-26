@@ -7,6 +7,7 @@
     0.3     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
     0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
+    0.6     removed check of resync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
 """
 import datetime
 import threading
@@ -20,7 +21,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '0.5'
+__version__ = '0.6'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -275,7 +276,7 @@ def run_sync_to_sf():
                 break
 
             room_cols = ['rgr_room_last_change', 'rgr_time_in', 'rgr_time_out', 'rgr_room_id'] + ass_id_cols
-            room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id IS NOT null "
+            room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id != '' "
                                                                         "AND rgr_room_last_change IS NOT null "
                                                                         "AND (rgr_room_last_sync IS null"
                                                                         " OR rgr_room_last_change > rgr_room_last_sync)"
@@ -394,6 +395,12 @@ def oc_room_change(asd, req, rec_ctx):
             err_msg = _room_change_ass(asd, req, rec_ctx, 'CO-RM', req.osub_nr, req.orn, action_time)
             oc = 'CI-RM'
         elif req.sub_nr == '1':
+            ''' received meanwhile also RM notifications w/o OSUB-NR and with SUB-NR > 1 (see Sihot AssCache log entry):
+            20180922 010727.305[XML-IF]: onReceive: RM
+            : <OC>RM</OC><HN>4</HN>...<RN>0525</RN>...<ORN>0425</ORN>
+            ...<GDSNO>BDC-1099776257</GDSNO>...<RES-NR>77729</RES-NR><SUB-NR>2</SUB-NR>
+            20180922 010727.305[XML-IF]: Hotel number = 4 found
+            '''
             oc = 'RC-RM'            # reservation and in/out dates keep the same, only room number will be changed
     err_msg += _room_change_ass(asd, req, rec_ctx, oc, req.sub_nr, req.rn, action_time)
 
