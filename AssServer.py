@@ -7,6 +7,7 @@
     0.3     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
     0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
+    0.6     removed check of resync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
 """
 import datetime
 import threading
@@ -21,7 +22,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '0.5'
+__version__ = '0.6'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -189,8 +190,6 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     if not asd.rgr_upsert(dict(rgr_last_sync=ass_changed_res['rgr_last_sync']), chk_values, commit=True):
         err_msg = "res_from_sh_to_sf({}): last reservation sync timestamp ass_cache update failed"\
                       .format(ass_changed_res) + asd.error_message
-        if asd.ass_db.rollback():
-            err_msg += "\n" + asd.ass_db.last_err_msg
 
     return err_msg
 
@@ -211,8 +210,6 @@ def room_change_to_sf(asd, ass_res):
     if not asd.rgr_upsert(dict(rgr_room_last_sync=ass_res['rgr_room_last_sync']), chk_values, commit=True):
         err_msg = "room_change_to_sf({}): last room sync timestamp ass_cache update err='{}'"\
                       .format(ass_res, asd.error_message)
-        if asd.ass_db.rollback():
-            err_msg += "\n" + asd.ass_db.last_err_msg
 
     return err_msg
 
@@ -241,19 +238,20 @@ def check_and_init_sync_to_sf(wait=0.0):
             sync_lock.release()
 
     # check if run_sync_to_sf() is running or requested to run soon, and if not then start new timer
-    if not sync_run_requested and not sync_timer and sync_lock.acquire(blocking=False):
+    locked = sync_run_requested or sync_timer or not sync_lock.acquire(blocking=False)
+    if locked:
+        log_msg("check_and_init_sync_to_sf({}): sync to SF request blocked; last request was at {}; timer-obj={}"
+                .format(wait, sync_run_requested, sync_timer),
+                importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+    else:
         sync_run_requested = now
         sync_timer = threading.Timer(wait, run_sync_to_sf)
         log_msg("check_and_init_sync_to_sf({}): new sync to SF; requested at {}; will run at {}; timer-obj={}"
                 .format(wait, sync_run_requested, sync_run_requested + datetime.timedelta(seconds=wait), sync_timer),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sync_timer.start()
-        return True
 
-    log_msg("check_and_init_sync_to_sf({}): sync to SF request blocked; last request was at {}; timer-obj={}"
-            .format(wait, sync_run_requested, sync_timer),
-            importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
-    return False
+    return not locked
 
 
 def run_sync_to_sf():
@@ -279,7 +277,7 @@ def run_sync_to_sf():
                 break
 
             room_cols = ['rgr_room_last_change', 'rgr_time_in', 'rgr_time_out', 'rgr_room_id'] + ass_id_cols
-            room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id IS NOT null "
+            room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id != '' "
                                                                         "AND rgr_room_last_change IS NOT null "
                                                                         "AND (rgr_room_last_sync IS null"
                                                                         " OR rgr_room_last_change > rgr_room_last_sync)"
@@ -586,7 +584,8 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         log_msg("OC {} processed; xml response: {}".format(oc, xml_response), importance=4)
 
         # directly sync to Salesforce if not already running (also in case the time thread died)
-        check_and_init_sync_to_sf()
+        # ae:25-09-18 13:39 commented out next line
+        # check_and_init_sync_to_sf()
 
         return bytes(xml_response, xml_enc)
 

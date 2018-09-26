@@ -168,51 +168,51 @@ FIELD_NAMES = dict(AssId=dict(Desc="AssCache client PKey", AssSysDataClientsIdx=
                    )
 
 
-def field_desc(field_name):
-    if field_name in FIELD_NAMES:
-        return FIELD_NAMES.get(field_name).get('Desc', "")
+def field_desc(code_field_name):
+    if code_field_name in FIELD_NAMES:
+        return FIELD_NAMES.get(code_field_name).get('Desc', "")
 
 
-def field_clients_idx(field_name):
-    if field_name in FIELD_NAMES:
-        return FIELD_NAMES.get(field_name).get('AssSysDataClientsIdx', -1)
+def field_clients_idx(code_field_name):
+    if code_field_name in FIELD_NAMES:
+        return FIELD_NAMES.get(code_field_name).get('AssSysDataClientsIdx', -1)
 
 
-def ass_fld_name(field_name):
-    fld_name = field_name
-    field_map = FIELD_NAMES.get(field_name)
+def ass_fld_name(code_field_name):
+    ass_field_name = code_field_name
+    field_map = FIELD_NAMES.get(code_field_name)
     if field_map:
-        fld_name = field_map.get('AssDb', field_name)
-    return fld_name
+        ass_field_name = field_map.get('AssDb', code_field_name)
+    return ass_field_name
 
 
-def ac_col_name(field_name):
-    col_name = ""
-    field_map = FIELD_NAMES.get(field_name)
+def ac_fld_name(code_field_name):
+    ac_field_name = ""
+    field_map = FIELD_NAMES.get(code_field_name)
     if field_map:
-        col_name = field_map.get('AcDb', field_name)
-    return col_name
+        ac_field_name = field_map.get('AcDb', code_field_name)
+    return ac_field_name
 
 
-def sf_fld_name(field_name, sf_obj):
-    fld_name = field_name
-    field_map = FIELD_NAMES.get(field_name)
+def sf_fld_name(code_field_name, sf_obj):
+    sf_field_name = code_field_name
+    field_map = FIELD_NAMES.get(code_field_name)
     if field_map:
-        fld_name = field_map.get(sf_obj, field_name)
-    return fld_name
+        sf_field_name = field_map.get(sf_obj, code_field_name)
+    return sf_field_name
 
 
-def sh_elem_name(field_name):
-    elem_name = ""
-    field_map = FIELD_NAMES.get(field_name)
+def sh_fld_name(code_field_name):
+    sh_field_name = ""
+    field_map = FIELD_NAMES.get(code_field_name)
     if field_map:
-        elem_name = field_map.get('Sihot', field_name)
-    return elem_name
+        sh_field_name = field_map.get('Sihot', code_field_name)
+    return sh_field_name
 
 
-def sh_fld_value(sh_dict, field_name):
+def sh_fld_value(sh_dict, code_field_name):
     ret = ""
-    fld = sh_elem_name(field_name)
+    fld = sh_fld_name(code_field_name)
     if not isinstance(fld, dict):
         ret = sh_dict[fld]      # normal field mapping
     elif 'getter' in fld:
@@ -220,13 +220,13 @@ def sh_fld_value(sh_dict, field_name):
     elif 'in_list' in fld:
         ret = list((sh_dict[_] for _ in fld.get('in_list') if sh_dict[_]))
 
-    if field_name == 'Email':
+    if code_field_name == 'Email':
         if isinstance(ret, list):
             for idx, email in enumerate(ret):
                 ret[idx], _ = correct_email(email)
         else:
             ret, _ = correct_email(ret)
-    elif field_name == 'Phone':
+    elif code_field_name == 'Phone':
         if isinstance(ret, list):
             for idx, phone in enumerate(ret):
                 ret[idx], _ = correct_phone(phone)
@@ -238,40 +238,40 @@ def sh_fld_value(sh_dict, field_name):
 
 def field_list_to_sf(code_list, sf_obj):
     sf_list = list()
-    for field_name in code_list:
-        sf_list.append(sf_fld_name(field_name, sf_obj))
+    for code_field_name in code_list:
+        sf_list.append(sf_fld_name(code_field_name, sf_obj))
     return sf_list
 
 
 def field_dict_to_sf(code_dict, sf_obj):
     sf_dict = dict()
-    for field_name, val in code_dict.items():
-        sf_key = sf_fld_name(field_name, sf_obj)
+    for code_field_name, val in code_dict.items():
+        sf_key = sf_fld_name(code_field_name, sf_obj)
         sf_dict[sf_key] = val
     return sf_dict
 
 
-def code_name(sf_fld, sf_obj):
-    for field_name, field_map in FIELD_NAMES.items():
-        if field_map.get(sf_obj) == sf_fld:
+def code_name(sf_field_name, sf_obj):
+    for code_field_name, field_map in FIELD_NAMES.items():
+        if field_map.get(sf_obj) == sf_field_name:
             break
     else:
-        field_name = sf_fld
-    return field_name
+        code_field_name = sf_field_name
+    return code_field_name
 
 
 def field_list_from_sf(sf_list, sf_obj):
     code_list = list()
-    for sf_fld in sf_list:
-        code_list.append(code_name(sf_fld, sf_obj))
+    for sf_field_name in sf_list:
+        code_list.append(code_name(sf_field_name, sf_obj))
     return code_list
 
 
 def field_dict_from_sf(sf_dict, sf_obj):
     code_dict = dict()
-    for sf_fld, val in sf_dict.items():
-        if sf_fld != 'attributes':
-            code_dict[code_name(sf_fld, sf_obj)] = val
+    for sf_field_name, val in sf_dict.items():
+        if sf_field_name != 'attributes':
+            code_dict[code_name(sf_field_name, sf_obj)] = val
     return code_dict
 
 
@@ -1097,7 +1097,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param col_values:          dict of column values to be inserted/updated.
         :param chk_values:          dict of column values for to identify the record to update (insert if not exists).
                                     (opt, def=IDs from col_values items: obj_id, ho_id+res_id+sub_id, gds_no or sf_id).
-        :param commit:              pass True to commit (opt, def=False).
+        :param commit:              pass True to commit on success or rollback on error (opt, def=False).
         :param multiple_row_update: allow update of multiple records with the same chk_values (opt, def=False).
         :param returning_column:    name of the returning column or empty (opt, def='').
         :return:                    returning_column value (if specified) OR chk_values OR None if self.error message.
@@ -1120,7 +1120,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values,
                                                     returning_column=returning_column, commit=commit,
                                                     multiple_row_update=multiple_row_update)
-            if not self.error_message and not multiple_row_update and self.ass_db.curs.rowcount != 1:
+            if self.error_message:
+                if commit:
+                    self.error_message += "\n" + self.ass_db.rollback()
+            elif not multiple_row_update and self.ass_db.curs.rowcount != 1:
                 self.error_message = "rgr_upsert({}, {}): Invalid affected row count; expected 1 but got {}" \
                     .format(col_values, chk_values, self.ass_db.curs.rowcount)
             elif returning_column:
@@ -1510,6 +1513,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             sf_args['RoomNo__c'] = ass_res_data['rgc_list'][0]['rgc_room_id']
 
         sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
+        if 'ENTITY_IS_DELETED' in err_msg and rgr_sf_id:    # retry without rgr_sf_id if ResOpp got deleted within SF
+            sf_args['ReservationOpportunityId'] = ''
+            sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
+            self._warn("asd.sf_res_upsert({}, {}, {}) cached ResOpp value reset to {}; SF client={}; err='{}'"
+                       .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_opp_id, sf_cl_id, err_msg))
+            rgr_sf_id = ''
+
         if sf_args.get('PersonAccountId') and sf_args['PersonAccountId'] != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_VERBOSE:
             self._err("sf_res_upsert({}, {}, {}) PersonAccount discrepancy {} != {}"
@@ -1524,7 +1534,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     self.error_message = ""
 
             col_values = dict() if err_msg else dict(rgr_last_sync=datetime.datetime.now())
-            if not rgr_sf_id and sf_opp_id:     # save just created ID of Reservation Opportunity in AssCache
+            if not rgr_sf_id and sf_opp_id:     # save just (re-)created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
             elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and rgr_sf_id and sf_opp_id != rgr_sf_id:
                 self._err("sf_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
@@ -1614,7 +1624,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         guest = ClientToSihot(self.cae)
         col_values = dict()
         for fld, val in fields_dict.items():
-            col_name = ac_col_name(fld)
+            col_name = ac_fld_name(fld)
             if col_name and col_name in guest.acu_fld_names:
                 col_values[col_name] = val
         return guest.send_client_to_sihot(col_values)
