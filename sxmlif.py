@@ -6,7 +6,7 @@ from textwrap import wrap
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from ae_sys_data import Record, FAD_FROM, FAD_ONTO, FAT_NAME, Field, FAT_REC, aspect_key
+from ae_sys_data import Record, FAD_FROM, FAD_ONTO, FAT_NAME, Field, FAT_REC, aspect_key, FAT_VAL, FAT_FLT
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
 from ae_tcp import TcpClient
@@ -1116,7 +1116,7 @@ class GuestFromSihot(FldMapXmlParser):
     def end(self, tag):
         super(GuestFromSihot, self).end(tag)
         if tag == 'GUEST':  # using tag because self._curr_tag got reset by super method of end()
-            self.guest_list.append(self._rec.copy())
+            self.guest_list.append(deepcopy(self._rec))
             self.clear_rec()
 
 
@@ -1130,7 +1130,7 @@ class ResFromSihot(FldMapXmlParser):
     def end(self, tag):
         super(ResFromSihot, self).end(tag)
         if tag == 'RESERVATION':  # using tag because self._curr_tag got reset by super method of end()
-            self.res_list.append(self._rec.copy())
+            self.res_list.append(deepcopy(self._rec))
             self.clear_rec()
 
 
@@ -1153,9 +1153,10 @@ class SihotXmlBuilder:
         self.cae = cae
         self.debug_level = cae.get_option('debugLevel')
         elem_map = deepcopy(elem_map or cae.get_option('mapRes'))
-        fields = ((fld_args[0], elem_name, ) + fld_args[1:] for elem_name, *fld_args in elem_map
+        values = ((fld_args[0], elem_name, ) + fld_args[1:] for elem_name, *fld_args in elem_map
                   if len(fld_args) and fld_args[0])
-        self.elem_fld_rec = Record(fields_aspects=fields, current_system=SDI_SH, current_direction=FAD_ONTO)
+        fields = zip((FAT_NAME, FAT_VAL, FAT_FLT, ), values)
+        self.elem_fld_rec = Record(fields=fields, current_system=SDI_SH, current_direction=FAD_ONTO)
         self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
 
         '''

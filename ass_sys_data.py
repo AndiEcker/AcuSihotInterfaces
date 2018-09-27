@@ -168,51 +168,51 @@ FIELD_NAMES = dict(AssId=dict(Desc="AssCache client PKey", AssSysDataClientsIdx=
                    )
 
 
-def field_desc(code_field_name):
-    if code_field_name in FIELD_NAMES:
-        return FIELD_NAMES.get(code_field_name).get('Desc', "")
+def field_desc(field_name):
+    if field_name in FIELD_NAMES:
+        return FIELD_NAMES.get(field_name).get('Desc', "")
 
 
-def field_clients_idx(code_field_name):
-    if code_field_name in FIELD_NAMES:
-        return FIELD_NAMES.get(code_field_name).get('AssSysDataClientsIdx', -1)
+def field_clients_idx(field_name):
+    if field_name in FIELD_NAMES:
+        return FIELD_NAMES.get(field_name).get('AssSysDataClientsIdx', -1)
 
 
-def ass_fld_name(code_field_name):
-    ass_field_name = code_field_name
-    field_map = FIELD_NAMES.get(code_field_name)
+def ass_fld_name(field_name):
+    fld_name = field_name
+    field_map = FIELD_NAMES.get(field_name)
     if field_map:
-        ass_field_name = field_map.get('AssDb', code_field_name)
-    return ass_field_name
+        fld_name = field_map.get('AssDb', field_name)
+    return fld_name
 
 
-def ac_fld_name(code_field_name):
-    ac_field_name = ""
-    field_map = FIELD_NAMES.get(code_field_name)
+def ac_col_name(field_name):
+    col_name = ""
+    field_map = FIELD_NAMES.get(field_name)
     if field_map:
-        ac_field_name = field_map.get('AcDb', code_field_name)
-    return ac_field_name
+        col_name = field_map.get('AcDb', field_name)
+    return col_name
 
 
-def sf_fld_name(code_field_name, sf_obj):
-    sf_field_name = code_field_name
-    field_map = FIELD_NAMES.get(code_field_name)
+def sf_fld_name(field_name, sf_obj):
+    fld_name = field_name
+    field_map = FIELD_NAMES.get(field_name)
     if field_map:
-        sf_field_name = field_map.get(sf_obj, code_field_name)
-    return sf_field_name
+        fld_name = field_map.get(sf_obj, field_name)
+    return fld_name
 
 
-def sh_fld_name(code_field_name):
-    sh_field_name = ""
-    field_map = FIELD_NAMES.get(code_field_name)
+def sh_elem_name(field_name):
+    elem_name = ""
+    field_map = FIELD_NAMES.get(field_name)
     if field_map:
-        sh_field_name = field_map.get('Sihot', code_field_name)
-    return sh_field_name
+        elem_name = field_map.get('Sihot', field_name)
+    return elem_name
 
 
-def sh_fld_value(sh_dict, code_field_name):
+def sh_fld_value(sh_dict, field_name):
     ret = ""
-    fld = sh_fld_name(code_field_name)
+    fld = sh_elem_name(field_name)
     if not isinstance(fld, dict):
         ret = sh_dict[fld]      # normal field mapping
     elif 'getter' in fld:
@@ -220,13 +220,13 @@ def sh_fld_value(sh_dict, code_field_name):
     elif 'in_list' in fld:
         ret = list((sh_dict[_] for _ in fld.get('in_list') if sh_dict[_]))
 
-    if code_field_name == 'Email':
+    if field_name == 'Email':
         if isinstance(ret, list):
             for idx, email in enumerate(ret):
                 ret[idx], _ = correct_email(email)
         else:
             ret, _ = correct_email(ret)
-    elif code_field_name == 'Phone':
+    elif field_name == 'Phone':
         if isinstance(ret, list):
             for idx, phone in enumerate(ret):
                 ret[idx], _ = correct_phone(phone)
@@ -238,40 +238,40 @@ def sh_fld_value(sh_dict, code_field_name):
 
 def field_list_to_sf(code_list, sf_obj):
     sf_list = list()
-    for code_field_name in code_list:
-        sf_list.append(sf_fld_name(code_field_name, sf_obj))
+    for field_name in code_list:
+        sf_list.append(sf_fld_name(field_name, sf_obj))
     return sf_list
 
 
 def field_dict_to_sf(code_dict, sf_obj):
     sf_dict = dict()
-    for code_field_name, val in code_dict.items():
-        sf_key = sf_fld_name(code_field_name, sf_obj)
+    for field_name, val in code_dict.items():
+        sf_key = sf_fld_name(field_name, sf_obj)
         sf_dict[sf_key] = val
     return sf_dict
 
 
-def code_name(sf_field_name, sf_obj):
-    for code_field_name, field_map in FIELD_NAMES.items():
-        if field_map.get(sf_obj) == sf_field_name:
+def code_name(sf_fld, sf_obj):
+    for field_name, field_map in FIELD_NAMES.items():
+        if field_map.get(sf_obj) == sf_fld:
             break
     else:
-        code_field_name = sf_field_name
-    return code_field_name
+        field_name = sf_fld
+    return field_name
 
 
 def field_list_from_sf(sf_list, sf_obj):
     code_list = list()
-    for sf_field_name in sf_list:
-        code_list.append(code_name(sf_field_name, sf_obj))
+    for sf_fld in sf_list:
+        code_list.append(code_name(sf_fld, sf_obj))
     return code_list
 
 
 def field_dict_from_sf(sf_dict, sf_obj):
     code_dict = dict()
-    for sf_field_name, val in sf_dict.items():
-        if sf_field_name != 'attributes':
-            code_dict[code_name(sf_field_name, sf_obj)] = val
+    for sf_fld, val in sf_dict.items():
+        if sf_fld != 'attributes':
+            code_dict[code_name(sf_fld, sf_obj)] = val
     return code_dict
 
 
@@ -1624,7 +1624,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         guest = ClientToSihot(self.cae)
         col_values = dict()
         for fld, val in fields_dict.items():
-            col_name = ac_fld_name(fld)
+            col_name = ac_col_name(fld)
             if col_name and col_name in guest.acu_fld_names:
                 col_values[col_name] = val
         return guest.send_client_to_sihot(col_values)
@@ -1779,16 +1779,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         ho_id = elem_value(shd, 'RES-HOTEL')    # SS/RES-SEARCH using RES-HOTEL instead of ID xml element
         res_id = elem_value(shd, 'RES-NR')
         sub_id = elem_value(shd, 'SUB-NR')
-        err_pre = "sh_res_change_to_ass() for res-no {}/{}@{}: ".format(res_id, sub_id, ho_id)
         chk_values = dict(rgr_ho_fk=ho_id)
+        gds_no = gds_number(shd)
+        if gds_no:
+            chk_values.update(rgr_gds_no=gds_no)
+        err_pre = "sh_res_change_to_ass() for res-no {}/{}@{} and GDS-No. {}: ".format(res_id, sub_id, ho_id, gds_no)
         if ho_id and res_id and sub_id:
             chk_values.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
-        else:
-            gds_no = gds_number(shd)
-            if gds_no:
-                chk_values.update(rgr_gds_no=gds_no)
-            else:
-                error_msg = err_pre + "Incomplete reservation id ({}/{}@{})".format(res_id, sub_id, ho_id)
+        elif not gds_no:
+            error_msg = err_pre + "Incomplete reservation id"
 
         if not error_msg:
             upd_values = chk_values.copy()
