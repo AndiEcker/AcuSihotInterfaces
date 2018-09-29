@@ -18,6 +18,7 @@ FN_SUB_REC_MARKER = '.'
 FAT_NAME = 'nom'
 FAT_IDX = 'idx'
 FAT_VAL = 'val'
+FAT_TYPE = 'typ'
 FAT_CAL = 'cal'
 FAT_CHK = 'chk'
 FAT_CON = 'con'
@@ -31,7 +32,8 @@ FAD_ONTO = 'Onto'
 
 def aspect_key(aspect_type, system='', direction=''):
     key = aspect_type + direction + system
-    assert key.isidentifier() and not keyword.iskeyword()
+    assert key.isidentifier() and not keyword.iskeyword(), \
+        "aspect_key({}, {}, {}): key '{}' contains invalid characters".format(aspect_type, system, direction, key)
     return key
 
 
@@ -44,6 +46,10 @@ class Value(list):
 
 
 class Values(list):
+    pass
+
+
+class Records(Values):
     pass
 
 
@@ -93,11 +99,47 @@ class Field:
         return value
 
     def set_value(self, value, system='', direction=''):
-        if type(value) not in (Value, Values, list):
-            value = Value((value, ))
+        ori_val = value
+        if not isinstance(value, (Value, Values, Records)):
+            if not isinstance(value, (tuple, list)):
+                value = Value((value, ))
+            elif value:
+                value = Values(value) if isinstance(value[0], Value) else Records(value)
+
+        val_type = self.aspect_value(FAT_TYPE, inherited_aspect=True, system=system, direction=direction) or Value
+        assert isinstance(value, val_type), \
+            "set_value({}, {}, {}): value '{}' has wrong type {}".format(ori_val, system, direction, value, type(value))
+
         # self.set_aspect(value, FAT_VAL, system=system, direction=direction)
         self._aspects[aspect_key(FAT_VAL, system=system, direction=direction)] = value
+
         return self
+
+    def val(self, *keys, system='', direction=''):
+        val = self.value(system=system, direction=direction)
+        if val is None:
+            asp_val_key = self.find_key(FAT_VAL, system=system, direction=direction) or ''
+            asp_cal_key = self.find_key(FAT_CAL, system=system, direction=direction) or ''
+            asp_key = asp_val_key if len(asp_val_key) >= len(asp_cal_key) else asp_cal_key
+            if not asp_key:
+                return None
+            val = self._aspects[asp_key]
+
+        key_cnt = len(keys)
+        idx = 0
+        val_type = type(val)
+        while idx < key_cnt and val_type in (Records, Values):
+            key = keys[idx]
+            assert type(key) in (int, str), \
+                "val({}, {}, {}): key has to be of type int or str (not {})".format(keys, system, direction, type(key))
+            assert key in val, \
+                "val({}, {}, {}): key {} not found in value '{}'".format(keys, system, direction, key, val)
+            self.set_idx(key, system=system, direction=direction)
+            val = val[key]
+            idx += 1
+            val_type = type(val)
+
+        return val.value(system=system, direction=direction)
 
     def convert_and_validate(self, value, system='', direction=''):
         converter = self.aspect_value(FAT_CON, system=system, direction=direction)
@@ -109,36 +151,6 @@ class Field:
             return None
 
         return value
-
-    def val(self, *keys, system='', direction=''):
-        val = self.value(system=system, direction=direction)
-        if val is None:
-            asp_key = self.find_key(FAT_VAL, system=system, direction=direction)
-            if asp_key is None:
-                return None
-            val = self._aspects[asp_key]
-
-        key = next(keys)
-        val_type = type(val)
-        while val_type in (Record, Values):
-            if type(key) in (int, str) and key in val:
-                k = key
-                key = next(keys)
-            elif val_type == Record:
-                k = next(val.fields.keys())
-            elif val_type == Values:
-                k = -1
-                self.set_idx(k, system=system, direction=direction)
-            else:
-                break
-            val = val[k].value(system=system, direction=direction)
-            val_type = type(val)
-
-        while key:
-            val = val[key]
-            key = next(keys)
-
-        return val
 
     def pull(self, system=''):
         direction = FAD_FROM
@@ -180,9 +192,6 @@ class Field:
 
         return None
 
-    def set_rec(self, rec, system='', direction=''):
-        self.set_aspect(rec, FAT_REC, system=system, direction=direction)
-
     def aspect_exists(self, aspect_type, inherited_aspect=False, system='', direction=''):
         if inherited_aspect:
             key = self.find_key(aspect_type, system=system, direction=direction)
@@ -218,7 +227,8 @@ class Field:
 
     def add_aspect(self, aspect_type, aspect_data, system='', direction=''):
         key = aspect_key(aspect_type, system=system, direction=direction)
-        assert key not in self._aspects
+        assert key not in self._aspects, "add_aspect({}, {}, {}, {}): key not found in aspects ({})"\
+            .format(aspect_type, aspect_data, system, direction, key, self._aspects)
         self._aspects[key] = aspect_data
         return self
 
@@ -226,7 +236,10 @@ class Field:
         return self._aspects.pop(aspect_key(aspect_type, system=system, direction=direction))
 
     def set_aspect(self, aspect_value, aspect_type, system='', direction=''):
-        self._aspects[aspect_key(aspect_type, system=system, direction=direction)] = aspect_value
+        if aspect_type == FAT_VAL:
+            self.set_value(aspect_value, system=system, direction=direction)
+        else:
+            self._aspects[aspect_key(aspect_type, system=system, direction=direction)] = aspect_value
         return self
 
     def add_name(self, name, system='', direction=''):
@@ -240,6 +253,10 @@ class Field:
     def set_name(self, name, system='', direction=''):
         self.set_aspect(name, FAT_NAME, system=system, direction=direction)
         return self
+
+    def full_name(self, *keys, base_name=''):
+        key_names = ((FN_LIST_IDX_MARKER if isinstance(k, int) else FN_SUB_REC_MARKER) + k for k in keys)
+        return (base_name or self.name) + "".join(key_names)
 
     def add_value(self, value, system='', direction=''):
         self.add_aspect(FAT_VAL, value, system=system, direction=direction)
@@ -256,6 +273,14 @@ class Field:
         self.del_aspect(FAT_VAL, system=system, direction=direction)
         return self
 
+    def value_type(self, system='', direction=''):
+        return self.aspect_value(FAT_TYPE, system=system, direction=direction) or Value
+
+    def set_value_type(self, value_type, system='', direction=''):
+        assert value_type in (Value, Values, Records)
+        self.add_aspect(FAT_TYPE, value_type, system=system, direction=direction)
+        return self
+
     def add_calculator(self, calculator, system='', direction=''):
         return self.add_aspect(FAT_CAL, calculator, system=system, direction=direction)
 
@@ -267,6 +292,21 @@ class Field:
 
     def add_filter(self, filter_func, system='', direction=''):
         return self.add_aspect(FAT_FLT, filter_func, system=system, direction=direction)
+
+    def set_rec(self, rec, system='', direction=''):
+        self.set_aspect(rec, FAT_REC, system=system, direction=direction)
+
+    def string_to_records(self, rec_sep, fld_names, fld_sep, system='', direction=''):
+        str_val = self.value(system=system, direction=direction)
+        recs = Records()
+        for idx, str_rec in enumerate(str_val.split(rec_sep)):
+            rec = Record()
+            for fld_idx, fld_val in enumerate(str_rec.split(fld_sep)):
+                aspects = dict(FAT_NAME=fld_names[fld_idx], FAT_VAL=fld_val)
+                fld = Field(**aspects)
+                rec.add_field(fld)
+            recs.append(rec)
+        return recs
 
     def current_system_val(self, name=''):
         rec = self.rec
@@ -314,13 +354,16 @@ class Record:
         return self._current_action
 
     def add_field(self, field, name=''):
-        assert isinstance(field, Field)
+        ori_name = name
+        assert isinstance(field, Field), \
+            "add_field({}, {}): field has to be of type Field (not {})".format(field, name, type(field))
         if not name:
             name = field.name
             if not name:
                 name = DUMMY_FIELD_NAME + str(len(self._fields) + 1)
         field.name = name
-        assert name not in self._fields
+        assert name not in self._fields, \
+            "add_field({}, {}): field name {} already exists in Record".format(field, ori_name, name)
         self._fields[name] = field
 
     def add_fields(self, fields):
@@ -348,17 +391,33 @@ class Record:
         for field in self.fields.values():
             field.push(system=system)
 
-    def filtered_record(self, system='', direction=''):
-        filtered_fields = dict()
-        for field in self._fields.values():
-            filter_field_validator = field.aspect_value(FAT_FLT, system=system, direction=direction)
-            hide = False if filter_field_validator is None else filter_field_validator(field)
-            if not hide:
-                filtered_fields[field.name] = field.aspects
-        rec = Record(fields=filtered_fields,
-                     current_system=system or self.current_system,
-                     current_direction=direction or self.current_direction)
-        return rec
+    def copy(self, *keys, to_rec=None, filter_fields=False, link_fields=False, link_values=False,
+             system='', direction=''):
+        if to_rec is None:
+            to_rec = Record(current_system=system, current_direction=direction)
+        for name, field in self._fields.items():
+            keys += (name, )
+            if filter_fields:
+                filter_field_validator = field.aspect_value(FAT_FLT, system=system, direction=direction)
+                if filter_field_validator and not filter_field_validator(field):
+                    continue
+            val = field.value(system=system, direction=direction)
+            if isinstance(val, Records):
+                for idx, rec in enumerate(val):
+                    field.set_idx(idx, system=system, direction=direction)
+                    rec.clone_fields(*(keys + (idx, )), to_rec=to_rec, filter_fields=filter_fields,
+                                     link_values=link_values, system=system, direction=direction)
+            else:
+                assert not link_fields or not link_values, "copy(): there can be only one link mode (2 given)"
+                if not link_fields:
+                    field = Field(**field.aspects)
+                    if not link_values:
+                        if isinstance(val, Values):
+                            val = Values((Value(v) for v in val))
+                        field.set_value(type(val)(val))
+                to_rec.add_field(field, name=field.full_name(keys))
+
+        return to_rec
 
     def sql_select(self, system, direction=''):
         col_expr = list()

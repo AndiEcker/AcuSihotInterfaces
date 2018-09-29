@@ -7,9 +7,8 @@ from copy import deepcopy
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB
 from sxmlif import (SihotXmlBuilder, ClientToSihot, ResToSihot, convert2date,
-                    EXT_REF_COUNT, RES_MAX_ADULTS, RES_MAX_CHILDREN,
                     ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT)
-from sys_data_ids import SDI_AC
+# from sys_data_ids import SDI_AC
 
 
 ACU_DEF_USR = 'SIHOT_INTERFACE'
@@ -18,7 +17,12 @@ ACU_DEF_DSN = 'SP.TEST'
 # second couple Acumen ID suffix
 AC_ID_2ND_COUPLE_SUFFIX = 'P2'
 
-# Acumen field name [0] mapping to view column name [1], SQL expression [2] and data value filter [3]
+# Acumen field name mapping tuple, having the following elements (put None if not needed for a field):
+# - field name
+# - system view column name
+# - system view SQL expression
+# - field filter
+# - field value converter
 FIELD_MAP = [
     # client data
     ('AcId', 'CD_CODE',),
@@ -48,21 +52,19 @@ FIELD_MAP = [
     ('Email', 'CD_EMAIL'),
     ('Email2', 'CD_SIGNUP_EMAIL'),
     ('DOB', 'CD_DOB1',
-     convert2date  # 'valToAcuConverter':
-     ),
+     None, None, lambda f: convert2date(f.csv())),
     ('Password', 'CD_PASSWORD'),
     ('RCIRef', 'CD_RCI_REF'),
-    ('ExtRefs', 'EXT_REFS'),
     # reservation data
     ('ResHotelId', 'RUL_SIHOT_HOTEL'),
-    ('ResNumber', ''),
-    ('ResSubNumber', ''),
+    ('ResNumber', ),
+    ('ResSubNumber', ),
     ('ResGdsNo', 'SIHOT_GDSNO',
      "nvl(SIHOT_GDSNO, case when RUL_SIHOT_RATE in ('TC', 'TK') then case when RUL_ACTION <> 'UPDATE'"
      " then (select 'TC' || RH_EXT_BOOK_REF from T_RH"
      " where RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
      " else '(lost)' end else to_char(RUL_PRIMARY) end)"),  # RUL_PRIMARY needed for to delete/cancel res
-    ('ResObjectId', ''),
+    ('ResObjectId', ),
     ('ResArrival', 'ARR_DATE',
      "case when ARR_DATE is not NULL then ARR_DATE when RUL_ACTION <> 'UPDATE'"
      " then to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'), 'DD-MM-YY')"
@@ -106,7 +108,12 @@ FIELD_MAP = [
     ('ResChildren', 'RU_CHILDREN'),
     ('ResGroupNo', 'SIHOT_LINK_GROUP'),
     # only one room per reservation, so not needed: ('ResRooms', 'SH_ROOMS'),
+    ('ExtRefs', 'EXT_REFS',
+     None, None, None,
+     lambda f, v: f.string_to_records(',', ('TYPE', 'ID'), '=')),
+    ('Persons', )
     ]
+'''
 for idx in range(1, EXT_REF_COUNT + 1):
     FIELD_MAP.append(('ExtRefType' + str(idx), 'EXT_REF_TYPE' + str(idx),
                       "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, " + str(idx) + "), '[^=]+', 1, 1)"))
@@ -120,6 +127,7 @@ for idx in range(1, RES_MAX_CHILDREN + 1):
     FIELD_MAP.append(('ResChild' + str(idx) + 'Surname', 'SH_CHILD' + str(idx) + '_NAME'))      # ResChild1Surname
     FIELD_MAP.append(('ResChild' + str(idx) + 'Forename', 'SH_CHILD' + str(idx) + '_NAME2'))    # ResChild1Forename
     FIELD_MAP.append(('ResChild' + str(idx) + 'PaxSeq', 'SH_CHILD' + str(idx) + '_DOB'))        # ResChild1DOB
+'''
 
 
 def add_ac_options(cae):

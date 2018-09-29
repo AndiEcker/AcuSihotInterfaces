@@ -6,7 +6,7 @@ from textwrap import wrap
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from ae_sys_data import Record, FAD_FROM, FAD_ONTO, FAT_NAME, Field, FAT_REC, aspect_key, FAT_VAL, FAT_FLT
+from ae_sys_data import FAT_NAME, FAT_REC, FAT_VAL, FAT_FLT, FAD_FROM, FAD_ONTO, Field, Record, Records
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
 from ae_tcp import TcpClient
@@ -18,14 +18,6 @@ ACTION_DELETE = 'DELETE'
 ACTION_INSERT = 'INSERT'
 ACTION_UPDATE = 'UPDATE'
 ACTION_SEARCH = 'SEARCH'
-
-# maximum number of external references per client
-EXT_REF_COUNT = 10
-
-# maximum number of named adults and children per reservation is currently restricted
-RES_MAX_ADULTS = 6
-RES_MAX_CHILDREN = 4
-
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
 # .. so we use ISO-8859-15 instead ?!?!? (see
@@ -106,6 +98,8 @@ MTI_ELEM_NAME = 0
 MTI_FIELD_NAME = 1
 MTI_HIDE_IF = 2
 MTI_FIELD_VAL = 3
+MTI_FIELD_TYPE = 4
+MTI_FIELD_CON = 5   # currently only needed for kernel DOB field
 
 # mapping element name in tuple item 0 onto field name in [1], hideIf callable in [2] and default field value in [3]
 # default map for GuestFromSihot.elem_fld_map instance and as read-only constant by AcuClientToSihot using the SIHOT
@@ -147,7 +141,8 @@ MAP_KERNEL_CLIENT = \
         ('ADD-DATA/', None,
          lambda f: f.ica(ACTION_SEARCH)),
         ('T-PERSON-GROUP', None, "1A"),
-        ('D-BIRTHDAY', 'DOB'),
+        ('D-BIRTHDAY', 'DOB',
+         None, None, None, lambda f, v: convert2date(v)),
         # 27-09-17: removed b4 migration of BHH/HMC because CD_INDUSTRY1/2 needs first grouping into 3-alphanumeric code
         # ('T-PROFESSION', 'CD_INDUSTRY1'),
         ('INTERNET-PASSWORD', 'Password'),
@@ -295,24 +290,24 @@ MAP_WEB_RES = \
          lambda f: f.ica(ACTION_DELETE) or not f.csv()),
         ('SALES-DATE', 'ResBooked',
          lambda f: f.ica(ACTION_DELETE) or not f.csv()),
-        ('RATE-SEGMENT', 'ResRateSegment', '',
-         lambda f: not f.csv()),
+        ('RATE-SEGMENT', 'ResRateSegment',
+         lambda f: not f.csv(), ''),
         ('RATE/', ),  # package/arrangement has also to be specified in PERSON:
         ('R', 'ResBoard'),
-        ('ISDEFAULT', None, 'Y'),
+        ('ISDEFAULT', None, None, 'Y'),
         ('/RATE', ),
         ('RATE/', None,
          lambda f: f.ica(ACTION_DELETE) or f.csv('ResMktSegment') not in ('ER', )),
-        ('R', None, 'GSC',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResMktSegment') not in ('ER', )),
-        ('ISDEFAULT', None, 'N',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResMktSegment') not in ('ER', )),
+        ('R', None,
+         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResMktSegment') not in ('ER', ), 'GSC'),
+        ('ISDEFAULT', None,
+         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResMktSegment') not in ('ER', ), 'N'),
         ('/RATE', None,
          lambda f: f.ica(ACTION_DELETE) or not f.csv('ResMktSegment') not in ('ER', )),
         # The following fallback rate results in error Package TO not valid for hotel 1
         # ('RATE/', ),
-        # ('R', 'RO_SIHOT_RATE', 'fldValFromAcu': "nvl(RO_SIHOT_RATE, ResMktSegment)"},
-        # ('ISDEFAULT', 'fldVal': 'N'),
+        # ('R', 'RO_SIHOT_RATE'},
+        # ('ISDEFAULT', None, None, 'N'),
         # ('/RATE', ),
         # ### Reservation Channels - used for assignment of reservation to a allotment or to board payment
         ('RESCHANNELLIST/', None,
@@ -320,26 +315,26 @@ MAP_WEB_RES = \
         ('RESCHANNEL/', None,
          lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         # needed for to add RCI booking to RCI allotment
-        ('IDX', None, 1,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', )),
-        ('MATCHCODE', None, 'RCI',
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', )),
-        ('ISPRICEOWNER', None, 1,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', )),
+        ('IDX', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', ), 1),
+        ('MATCHCODE', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', ), 'RCI'),
+        ('ISPRICEOWNER', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', ), 1),
         # needed for marketing fly buys for board payment bookings
-        ('IDX', None, 1,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', )),
-        ('MATCHCODE', None, 'MAR01',
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', )),
-        ('ISPRICEOWNER', None, 1,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', )),
+        ('IDX', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', ), 1),
+        ('MATCHCODE', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', ), 'MAR01'),
+        ('ISPRICEOWNER', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', ), 1),
         # needed for owner bookings for to select/use owner allotment
-        ('IDX', None, 2,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', )),
-        ('MATCHCODE', None, 'TSP',
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', )),
-        ('ISPRICEOWNER', None, 1,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', )),
+        ('IDX', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', ), 2),
+        ('MATCHCODE', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', ), 'TSP'),
+        ('ISPRICEOWNER', None,
+         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', ), 1),
         ('/RESCHANNEL', None,
          lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         ('/RESCHANNELLIST', None,
@@ -347,7 +342,7 @@ MAP_WEB_RES = \
         # ### GENERAL RESERVATION DATA: arrival/departure, pax, market sources, comments
         ('ARR', 'ResArrival'),
         ('DEP', 'ResDeparture'),
-        ('NOROOMS', None, 1),  # needed for DELETE action
+        ('NOROOMS', None, None, 1),  # needed for DELETE action
         ('NOPAX', 'ResAdults'),  # needed for DELETE action
         ('NOCHILDS', 'ResChildren',
          lambda f: f.ica(ACTION_DELETE)),
@@ -357,7 +352,7 @@ MAP_WEB_RES = \
          lambda f: f.ica(ACTION_DELETE)),
         ('MARKETCODE-NO', 'ResMktSegment',
          lambda f: f.ica(ACTION_DELETE)),
-        # ('MEDIA'),
+        # ('MEDIA', ),
         ('SOURCE', 'ResSource',
          lambda f: f.ica(ACTION_DELETE)),
         ('NN', 'ResMktGroup2',
@@ -372,271 +367,49 @@ MAP_WEB_RES = \
          lambda f: f.ica(ACTION_DELETE) or not f.csv()),
         ('PICKUP-TIME-ARRIVAL', 'ResFlightETA',
          lambda f: f.ica(ACTION_DELETE) or not f.csv()),
-        ('PICKUP-TYPE-ARRIVAL', None, 1,                    # 1=car, 2=van
-         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResFlightETA')),
+        ('PICKUP-TYPE-ARRIVAL', None,                       # 1=car, 2=van
+         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResFlightETA'), 1),
         # ### PERSON/occupant details
         ('PERS-TYPE-LIST/', ),
         ('PERS-TYPE/', ),
-        ('TYPE', None, '1A'),
+        ('TYPE', None, None, '1A'),
         ('NO', 'ResAdults'),
         ('/PERS-TYPE', ),
         ('PERS-TYPE/', ),
-        ('TYPE', None, '2B'),
+        ('TYPE', None, None, '2B'),
         ('NO', 'ResChildren'),
         ('/PERS-TYPE', ),
         ('/PERS-TYPE-LIST', ),
-        # First person/adult of reservation
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0),
-        ('NAME', 'ResAdult1Surname', 'Adult 1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0 or not f.csv()),
-        ('NAME2', 'ResAdult1Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0 or not f.csv('ResAdult1Surname')
-            or f.csv('ResAdult1Surname')[:5] == 'Adult'),
+        # Person Records
+        ('PERSON/', 'ResPersons',
+         lambda f: f.ica(ACTION_DELETE),
+         None, Records),
+        ('NAME', 'ResPersonSurname',
+         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('AcId') or f.csv('ShId'),
+         lambda f: "Adult " + str(f.idx()) if f.idx() < f.csv('ResAdults')
+            else "Child " + str(f.idx() - f.csv('ResAdults') + 1)),
+        ('NAME2', 'ResPersonForename',
+         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('AcId') or f.csv('ShId')),
+        ('AUTO-GENERATED', 'ResPersonAutoGenerated',
+         lambda f: f.ica(ACTION_DELETE) or (f.csv('ResAdults') <= 2 and (f.csv('AcId') or f.csv('ShId'))), '1'),
         ('MATCHCODE', 'AcId',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0 or not f.csv() or f.csv('ShId')),
+         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('ShId')),
         ('GUEST-ID', 'ShId',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0 or not f.csv()),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0),
-        ('ROOM-PERS-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0),
-        ('PERS-TYPE', None, '1A',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0),
+         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+        ('ROOM-SEQ', None,
+         lambda f: f.ica(ACTION_DELETE), '0'),
+        ('ROOM-PERS-SEQ', None,
+         lambda f: f.ica(ACTION_DELETE), lambda f: str(f.idx())),
+        ('PERS-TYPE', None,
+         lambda f: f.ica(ACTION_DELETE), lambda f: '1A' if f.idx() < f.csv('ResAdults') else '2B'),
         ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0),
+         lambda f: f.ica(ACTION_DELETE)),
         ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResAdult1DOB',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('ResAdults') <= 0),
+         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('ResDeparture') < datetime.datetime.now()),
+        ('DOB', 'ResPersonDOB',
+         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
         ('/PERSON', None,
          lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0),
-        # Second adult of client
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1),
-        # NAME xml element needed for clients with only one person but reservation with 2nd pax (ResAdults >= 2):
-        # ('NAME', 'ResAdult2Surname',
-        #  lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('ResAdults') <= 1),
-        ('NAME', 'ResAdult2Surname', 'Adult 2',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1 or f.csv('AcId2')),
-        ('NAME2', 'ResAdult2Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1 or f.csv('AcId2')),
-        ('MATCHCODE', 'AcId2',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1 or not f.csv('AcId2') or f.csv('ShId2')),
-        ('GUEST-ID', 'ShId2',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1 or not f.csv()),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1),
-        ('ROOM-PERS-SEQ', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1),
-        ('PERS-TYPE', None, '1A',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResAdult2DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 1),
-        # Adult 3
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2),
-        ('NAME', 'ResAdult3Surname', 'Adult 3',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2),
-        ('NAME2', 'ResAdult3Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2),
-        ('ROOM-PERS-SEQ', None, '2',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2),
-        ('PERS-TYPE', None, '1A',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResAdult3DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 2),
-        # Adult 4
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3),
-        ('NAME', 'ResAdult4Surname', 'Adult 4',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3),
-        ('NAME2', 'ResAdult4Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3),
-        ('ROOM-PERS-SEQ', None, '3',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3),
-        ('PERS-TYPE', None, '1A',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResAdult4DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 3),
-        # Adult 5
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4),
-        ('NAME', 'ResAdult5Surname', 'Adult 5',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4),
-        ('NAME2', 'ResAdult5Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4),
-        ('ROOM-PERS-SEQ', None, '4',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4),
-        ('PERS-TYPE', None, '1A',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResAdult5DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 4),
-        # Adult 6
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5),
-        ('NAME', 'ResAdult6Surname', 'Adult 6',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5),
-        ('NAME2', 'ResAdult6Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5),
-        ('ROOM-PERS-SEQ', None, '5',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5),
-        ('PERS-TYPE', None, '1A',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResAdult6DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 5),
-        # Children 1
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0),
-        ('NAME', 'ResChild1Surname', 'Child 1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0),
-        ('NAME2', 'ResChild1Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0),
-        ('ROOM-PERS-SEQ', None, '10',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0),
-        ('PERS-TYPE', None, '2B',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResChild1DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 0),
-        # Children 2
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1),
-        ('NAME', 'ResChild2Surname', 'Child 2',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1),
-        ('NAME2', 'ResChild2Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1),
-        ('ROOM-PERS-SEQ', None, '11',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1),
-        ('PERS-TYPE', None, '2B',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResChild2DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 1),
-        # Children 3
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2),
-        ('NAME', 'ResChild3Surname', 'Child 3',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2),
-        ('NAME2', 'ResChild3Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2),
-        ('ROOM-PERS-SEQ', None, '12',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2),
-        ('PERS-TYPE', None, '2B',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResChild3DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 2),
-        # Children 4
-        ('PERSON/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3),
-        ('NAME', 'ResChild4Surname', 'Child 4',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3),
-        ('NAME2', 'ResChild4Forename', '',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3 or not f.csv()),
-        ('AUTO-GENERATED', None, '1',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3),
-        ('ROOM-SEQ', None, '0',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3),
-        ('ROOM-PERS-SEQ', None, '13',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3),
-        ('PERS-TYPE', None, '2B',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3),
-        ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3),
-        ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3 or not f.csv()
-            or f.csv('ResDeparture') < datetime.datetime.now()),
-        ('DOB', 'ResChild4DOB',
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3 or not f.csv()),
-        ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResChildren') <= 3),
         ('/RESERVATION',),
         ('/ARESLIST',),
     )
@@ -1051,24 +824,56 @@ class FldMapXmlParser(SihotXmlParser):
         super(FldMapXmlParser, self).__init__(cae)
         self._current_field = None
         self._current_data = None
+        self._rec = Record(current_system=SDI_SH, current_direction=FAD_FROM)
+        self._parent_recs = list()
 
         # create field data parsing record and mapping dict for all elements having a field value
-        self._rec = Record(current_system=SDI_SH, current_direction=FAD_FROM)
         self.elem_fld_map = dict()
         for fas in elem_map:
+            mi = len(fas) - 1
+            if mi <= MTI_FIELD_NAME:
+                continue
             field_name = fas[MTI_FIELD_NAME]
-            if field_name:
-                elem_name = fas[MTI_ELEM_NAME]
-                aspects = dict()
-                aspects[FAT_REC] = self._rec
-                aspects[FAT_NAME] = field_name
-                aspects[aspect_key(FAT_NAME, SDI_SH, FAD_FROM)] = elem_name
-                field = Field(**aspects)
-                self.elem_fld_map[elem_name] = field
+            if not field_name:
+                continue
+
+            elem_name = fas[MTI_ELEM_NAME]
+            if elem_name.endswith('/'):
+                elem_name = elem_name[:-1]
+            aspects = dict()
+            aspects[FAT_REC] = self._rec
+            aspects[FAT_NAME] = field_name
+            field = Field(**aspects)
+            field.add_name(elem_name, SDI_SH, FAD_FROM)
+            if mi > MTI_HIDE_IF and fas[MTI_HIDE_IF]:
+                field.add_filter(fas[MTI_HIDE_IF], SDI_SH, FAD_FROM)
+            if mi > MTI_FIELD_TYPE and fas[MTI_FIELD_TYPE]:
+                field.set_value_type(fas[MTI_FIELD_TYPE], SDI_SH, FAD_FROM)
+            if mi > MTI_FIELD_VAL and fas[MTI_FIELD_VAL] is not None:
+                val_or_cal = fas[MTI_FIELD_VAL]
+                if callable(val_or_cal):
+                    field.add_calculator(val_or_cal, SDI_SH, FAD_FROM)
+                else:
+                    field.set_value(val_or_cal, SDI_SH, FAD_FROM)
+            if mi > MTI_FIELD_CON and fas[MTI_FIELD_CON]:
+                field.add_converter(fas[MTI_FIELD_CON], SDI_SH, FAD_FROM)
+
+            self.elem_fld_map[elem_name] = field
 
     def clear_rec(self):
         for field in self._rec.fields.values():
             field.del_value(system=self._rec.current_system, direction=self._rec.current_direction)
+
+    def find_field(self, tag):
+        field = None
+        if tag in self.elem_fld_map:
+            field = self.elem_fld_map[tag]
+        else:
+            full_path = ELEM_PATH_SEP.join(self._elem_path)
+            for elem_path_suffix, field in self.elem_fld_map:
+                if full_path.endswith(elem_path_suffix):
+                    break
+        return field
 
     @property
     def rec(self):
@@ -1078,17 +883,19 @@ class FldMapXmlParser(SihotXmlParser):
 
     def start(self, tag, attrib):
         super(FldMapXmlParser, self).start(tag, attrib)
-        if tag in self.elem_fld_map:
-            field = self.elem_fld_map[tag]
-        else:
-            full_path = ELEM_PATH_SEP.join(self._elem_path)
-            for elem_path_suffix, field in self.elem_fld_map:
-                if full_path.endswith(elem_path_suffix):
-                    break
-            else:
-                self._current_field = None
-                return tag
-        self._current_field = field
+        field = self.find_field(tag)
+        if not field:
+            self._current_field = None
+            return tag
+        if field.value_type(SDI_SH, FAD_FROM) == Records:
+            field.set_value(Records(), SDI_SH, FAD_FROM)
+            rec = Record(current_system=SDI_SH, current_direction=FAD_FROM)
+            field.value(SDI_SH, FAD_FROM).append(rec)
+            self._parent_recs.append(self._rec)
+            self._rec = rec
+            self._current_field = None
+            return tag
+        self._current_field = self.elem_fld_map[tag] = Field(**field.aspects).set_rec(self._rec)
         self._current_data = ''
         return None
 
@@ -1102,8 +909,12 @@ class FldMapXmlParser(SihotXmlParser):
     def end(self, tag):
         super(FldMapXmlParser, self).end(tag)
         if self._current_field:
-            self._current_field.append_value(self._current_data,
-                                             system=self._rec.current_system, direction=self._rec.current_direction)
+            self._current_field.set_value(self._current_data, SDI_SH, FAD_FROM)
+            self._current_field = None
+        else:
+            field = self.find_field(tag)
+            if field and field.value_type(SDI_SH, FAD_FROM) == Records:
+                self._rec = self._parent_recs.pop()
 
 
 class GuestFromSihot(FldMapXmlParser):
@@ -1235,8 +1046,8 @@ class SihotXmlBuilder:
 
     def prepare_map_xml(self, fld_values, action='', include_empty_values=True):
         inner_xml = ''
-        filtered_rec = self.elem_fld_rec.filtered_record()
-        filtered_rec.current_action = action
+        filtered_rec = Record(current_action=action)
+        self.elem_fld_rec.copy(to_rec=filtered_rec, filter_fields=True)
         for fld, field in filtered_rec.fields().items():
             tag = field.aspect_value(FAT_NAME, SDI_SH)
             val = field.val(SDI_SH)

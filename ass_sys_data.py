@@ -1777,20 +1777,22 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         error_msg = ""
         ho_id = elem_value(shd, 'RES-HOTEL')    # SS/RES-SEARCH using RES-HOTEL instead of ID xml element
+        chk_values = dict(rgr_ho_fk=ho_id)
         res_id = elem_value(shd, 'RES-NR')
         sub_id = elem_value(shd, 'SUB-NR')
-        chk_values = dict(rgr_ho_fk=ho_id)
         gds_no = gds_number(shd)
-        if gds_no:
-            chk_values.update(rgr_gds_no=gds_no)
         err_pre = "sh_res_change_to_ass() for res-no {}/{}@{} and GDS-No. {}: ".format(res_id, sub_id, ho_id, gds_no)
         if ho_id and res_id and sub_id:
             chk_values.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
-        elif not gds_no:
+        elif gds_no:
+            chk_values.update(rgr_gds_no=gds_no)
+        else:
             error_msg = err_pre + "Incomplete reservation id"
 
         if not error_msg:
             upd_values = chk_values.copy()
+            if gds_no and 'rgr_gds_no' not in upd_values:
+                upd_values.update(rgr_gds_no=gds_no)
             upd_values\
                 .update(rgr_order_cl_fk=ord_cl_pk,
                         rgr_used_ri_fk=ri_pk,
