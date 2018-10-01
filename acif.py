@@ -6,7 +6,7 @@ from copy import deepcopy
 
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB
-from sxmlif import (SihotXmlBuilder, ClientToSihot, ResToSihot, convert2date,
+from sxmlif import (SihotXmlBuilder, ClientToSihot, ResToSihot,
                     ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT)
 # from sys_data_ids import SDI_AC
 
@@ -18,13 +18,11 @@ ACU_DEF_DSN = 'SP.TEST'
 AC_ID_2ND_COUPLE_SUFFIX = 'P2'
 
 # Acumen field name mapping tuple, having the following elements (put None if not needed for a field):
-# - field name
-# - system view column name
-# - system view SQL expression
-# - field filter
-# - field value converter
-FIELD_MAP = [
-    # client data
+FMI_FLD_NAME = 0    # field name
+FMI_COL_NAME = 1    # system view sql column name
+FMI_SQL_EXPR = 2    # system view sql expression
+FMI_CON_FUNC = 3    # field value converter
+CLI_FIELD_MAP = [       # client data
     ('AcId', 'CD_CODE',),
     ('SfId', 'SIHOT_SF_ID'),
     ('ShId', 'CD_SIHOT_OBJID'),
@@ -51,20 +49,23 @@ FIELD_MAP = [
     ('Fax', 'CD_FAX'),
     ('Email', 'CD_EMAIL'),
     ('Email2', 'CD_SIGNUP_EMAIL'),
-    ('DOB', 'CD_DOB1',
-     None, None, lambda f: convert2date(f.csv())),
+    ('DOB', 'CD_DOB1'),
     ('Password', 'CD_PASSWORD'),
     ('RCIRef', 'CD_RCI_REF'),
-    # reservation data
+    ('ExtRefs', 'EXT_REFS',
+     None,
+     lambda f, v: f.string_to_records(',', ('TYPE', 'ID'), '=')),
+    ]
+RES_FIELD_MAP = [       # reservation data
     ('ResHotelId', 'RUL_SIHOT_HOTEL'),
-    ('ResNumber', ),
-    ('ResSubNumber', ),
+    # ('ResNumber', ),
+    # ('ResSubNumber', ),
     ('ResGdsNo', 'SIHOT_GDSNO',
      "nvl(SIHOT_GDSNO, case when RUL_SIHOT_RATE in ('TC', 'TK') then case when RUL_ACTION <> 'UPDATE'"
      " then (select 'TC' || RH_EXT_BOOK_REF from T_RH"
      " where RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
      " else '(lost)' end else to_char(RUL_PRIMARY) end)"),  # RUL_PRIMARY needed for to delete/cancel res
-    ('ResObjectId', ),
+    ('ResObjectId', 'RU_SIHOT_OBJID'),
     ('ResArrival', 'ARR_DATE',
      "case when ARR_DATE is not NULL then ARR_DATE when RUL_ACTION <> 'UPDATE'"
      " then to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'), 'DD-MM-YY')"
@@ -83,8 +84,7 @@ FIELD_MAP = [
     ('ResOrdererMc', 'OC_CODE',
      "nvl(OC_CODE, CD_CODE)"),
     ('ResOrdererId', 'OC_SIHOT_OBJID',
-     "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))",
-     lambda f: not f.csv('ResOrdererId') and not f.csv('ShId')),
+     "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))"),
     ('ResStatus', 'SH_RES_TYPE',
      "case when RUL_ACTION = 'DELETE' then 'S' else nvl(SIHOT_RES_TYPE, 'S') end"),
     ('ResAction', 'RUL_ACTION'),
@@ -108,10 +108,7 @@ FIELD_MAP = [
     ('ResChildren', 'RU_CHILDREN'),
     ('ResGroupNo', 'SIHOT_LINK_GROUP'),
     # only one room per reservation, so not needed: ('ResRooms', 'SH_ROOMS'),
-    ('ExtRefs', 'EXT_REFS',
-     None, None, None,
-     lambda f, v: f.string_to_records(',', ('TYPE', 'ID'), '=')),
-    ('Persons', )
+    ('ResPersons', )
     ]
 '''
 for idx in range(1, EXT_REF_COUNT + 1):
@@ -136,26 +133,25 @@ def add_ac_options(cae):
     cae.add_option('acuDSN', "Acumen/Oracle data source name", ACU_DEF_DSN, 'd')
 
 
-class AcuDbRow:
+class AcuDbRows:
     def __init__(self, cae):
+        self._last_fetch = None     # store fetch_from_acu timestamp
+        self._rows = None
+
         self.cae = cae
+
         self.ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
                             app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
         err_msg = self.ora_db.connect()
         if err_msg:
-            uprint("AcuDbRow.__init__() db connect error: {}".format(err_msg))
-
-        # added for to store fetch_from_acu timestamp
-        self._last_fetch = None
-
-        self._rows = None
+            uprint("AcuDbRows.__init__() db connect error: {}".format(err_msg))
 
     def __del__(self):
         if self.ora_db:
             self.ora_db.close()
 
     def _add_to_acumen_sync_log(self, table, primary, action, status, message, logref):
-        self.cae.dprint('AcuDbRow._add_to_acumen_sync_log() time/now:', self._last_fetch, datetime.datetime.now(),
+        self.cae.dprint('AcuDbRows._add_to_acumen_sync_log() fetched/now:', self._last_fetch, datetime.datetime.now(),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         return self.ora_db.insert('T_SRSL',
                                   {'SRSL_TABLE': table[:6],
@@ -178,7 +174,7 @@ class AcuDbRow:
         return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = :pk", bind_vars=dict(pk=str(pkey)))
 
 
-class AcuXmlBuilder(AcuDbRow):
+class AcuXmlBuilder(AcuDbRows):
     def __init__(self, cae, elem_col_map=None, use_kernel=None):
         super(AcuXmlBuilder, self).__init__(cae)
         self.cae = cae
@@ -245,7 +241,7 @@ class AcuXmlBuilder(AcuDbRow):
             col_values = self.fix_fld_values.copy()
             col_values.update(zip(self.acu_col_names, r))
             self._rows.append(col_values)
-        self.cae.dprint("AcuDbRow.fetch_all_from_acu() at {} got {}, 1st row: {}"
+        self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} got {}, 1st row: {}"
                         .format(self._last_fetch, self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
 

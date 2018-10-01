@@ -409,7 +409,6 @@ class AcuSihotMonitorApp(App):
 
     def __init__(self, **kwargs):
         super(AcuSihotMonitorApp, self).__init__(**kwargs)
-        self.ca = cae
 
         self.config_dict = ConfigDict(cae)
         self.post_message = PostMessage(cae)
@@ -794,7 +793,7 @@ class AcuSihotMonitorApp(App):
         self.check_list[check_index]['last_check'] = run_at
 
         # save updated CHECKS to config/INI file
-        err_msg = self.ca.set_config('checks', self.check_list)
+        err_msg = cae.set_config('checks', self.check_list)
         if err_msg:
             uprint("AcuSihotMonitorApp.update_check_result() error={} checks_list={}".format(err_msg, self.check_list))
 

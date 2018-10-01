@@ -107,12 +107,12 @@ MTI_FIELD_CON = 5   # currently only needed for kernel DOB field
 MAP_KERNEL_CLIENT = \
     (
         ('OBJID', 'ShId',
-         lambda f: f.ica(ACTION_INSERT)),
+         lambda f: f.ina(ACTION_INSERT)),
         ('MATCHCODE', 'AcId'),
         ('GUEST-NR', 'SH_GUEST_NO',  # only needed for GUEST-SEARCH/get_objid_by_guest_no()
-         lambda f: not f.csv()),
+         lambda f: not f.srv()),
         ('FLAGS', 'SH_FLAGS',        # only needed for GUEST-SEARCH/get_objid_by_guest_no()
-         lambda f: not f.csv()),
+         lambda f: not f.srv()),
         ('T-SALUTATION', 'Salutation'),  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
         ('T-TITLE', 'Title'),
         ('T-GUEST', 'GuestType'),
@@ -124,11 +124,11 @@ MAP_KERNEL_CLIENT = \
         ('CITY', 'City'),
         ('T-COUNTRY-CODE', 'Country'),
         ('T-STATE', 'State',
-         lambda f: not f.csv()),
+         lambda f: not f.srv()),
         ('T-LANGUAGE', 'Language'),
         ('COMMENT', 'Comment'),
         ('COMMUNICATION/', None,
-         lambda f: f.ica(ACTION_SEARCH)),
+         lambda f: f.ina(ACTION_SEARCH)),
         ('PHONE-1', 'HomePhone'),
         ('PHONE-2', 'WorkPhone'),
         ('FAX-1', 'Fax'),
@@ -137,9 +137,9 @@ MAP_KERNEL_CLIENT = \
         ('MOBIL-1', 'MobilePhone'),
         ('MOBIL-2', 'MobilePhone2'),
         ('/COMMUNICATION', None,
-         lambda f: f.ica(ACTION_SEARCH)),
+         lambda f: f.ina(ACTION_SEARCH)),
         ('ADD-DATA/', None,
-         lambda f: f.ica(ACTION_SEARCH)),
+         lambda f: f.ina(ACTION_SEARCH)),
         ('T-PERSON-GROUP', None, "1A"),
         ('D-BIRTHDAY', 'DOB',
          None, None, None, lambda f, v: convert2date(v)),
@@ -149,91 +149,91 @@ MAP_KERNEL_CLIENT = \
         ('MATCH-ADM', 'RCIRef'),
         ('MATCH-SM', 'SfId'),
         ('/ADD-DATA', None,
-         lambda f: f.ica(ACTION_SEARCH)),
+         lambda f: f.ina(ACTION_SEARCH)),
         ('L-EXTIDS/', None,
-         lambda f: f.ica(ACTION_SEARCH)),
+         lambda f: f.ina(ACTION_SEARCH)),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs')),
+         lambda f: not f.srv('ExtRefs')),
         ('TYPE', 'ExtRefType1',
-         lambda f: not f.csv('ExtRefs')),
+         lambda f: not f.srv('ExtRefs')),
         ('ID', 'ExtRefId1',
-         lambda f: not f.csv('ExtRefs')),
+         lambda f: not f.srv('ExtRefs')),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs')),
+         lambda f: not f.srv('ExtRefs')),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 1),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 1),
         ('TYPE', 'ExtRefType2',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 1),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 1),
         ('ID', 'ExtRefId2',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 1),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 1),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 1),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 1),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 2),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 2),
         ('TYPE', 'ExtRefType3',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 2),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 2),
         ('ID', 'ExtRefId3',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 2),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 2),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 2),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 2),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 3),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 3),
         ('TYPE', 'ExtRefType4',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 3),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 3),
         ('ID', 'ExtRefId4',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 3),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 3),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 3),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 3),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 4),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 4),
         ('TYPE', 'ExtRefType5',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 4),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 4),
         ('ID', 'ExtRefId5',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 4),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 4),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 4),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 4),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 5),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 5),
         ('TYPE', 'ExtRefType6',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 5),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 5),
         ('ID', 'ExtRefId6',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 5),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 5),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 5),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 5),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 6),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 6),
         ('TYPE', 'ExtRefType7',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 6),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 6),
         ('ID', 'ExtRefId7',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 6),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 6),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 6),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 6),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 7),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 7),
         ('TYPE', 'ExtRefType8',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 7),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 7),
         ('ID', 'ExtRefId8',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 7),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 7),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 7),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 7),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 8),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 8),
         ('TYPE', 'ExtRefType9',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 8),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 8),
         ('ID', 'ExtRefId9',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 8),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 8),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 8),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 8),
         ('EXTID/', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 9),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 9),
         ('TYPE', 'ExtRefType10',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 9),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 9),
         ('ID', 'ExtRefId10',
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 9),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 9),
         ('/EXTID', None,
-         lambda f: not f.csv('ExtRefs') or f.csv('ExtRefs').count(', ') > 9),
+         lambda f: not f.srv('ExtRefs') or f.srv('ExtRefs').count(', ') > 9),
         ('/L-EXTIDS', None,
-         lambda f: f.ica(ACTION_SEARCH)),
+         lambda f: f.ina(ACTION_SEARCH)),
     )
 
 MAP_PARSE_KERNEL_CLIENT = \
@@ -266,13 +266,13 @@ MAP_WEB_RES = \
         # ('GUEST-ID', 'ResOrdererId',
         #  'elemHideIf':  "not c.get('ResOrdererId') and not c.get['ShId']"},
         ('GUEST-ID', 'ResOrdererId',
-         lambda f: not f.csv() and not f.csv('ShId')),
+         lambda f: not f.srv() and not f.srv('ShId')),
         ('MATCHCODE', 'ResOrdererMc'),
         ('GDSNO', 'ResGdsNo'),
         ('VOUCHERNUMBER', 'ResVoucherNo',
-         lambda f: f.ica(ACTION_DELETE)),
+         lambda f: f.ina(ACTION_DELETE)),
         ('EXT-KEY', 'ResGroupNo',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         ('FLAGS', None,
          None, 'IGNORE-OVERBOOKING'),  # ;NO-FALLBACK-TO-ERRONEOUS'),
         ('RT', 'ResStatus'),
@@ -283,27 +283,27 @@ MAP_WEB_RES = \
         # .. get determined from the requested room size
         ('CAT', 'ResRoomCat'),  # needed for DELETE action
         ('PCAT', 'ResPriceCat',
-         lambda f: f.ica(ACTION_DELETE)),
+         lambda f: f.ina(ACTION_DELETE)),
         ('ALLOTMENT-EXT-NO', 'ResAllotmentNo',
-         lambda f: not f.csv(),  ''),
+         lambda f: not f.srv(),  ''),
         ('PAYMENT-INST', 'ResAccount',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         ('SALES-DATE', 'ResBooked',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         ('RATE-SEGMENT', 'ResRateSegment',
-         lambda f: not f.csv(), ''),
+         lambda f: not f.srv(), ''),
         ('RATE/', ),  # package/arrangement has also to be specified in PERSON:
         ('R', 'ResBoard'),
         ('ISDEFAULT', None, None, 'Y'),
         ('/RATE', ),
         ('RATE/', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResMktSegment') not in ('ER', )),
+         lambda f: f.ina(ACTION_DELETE) or f.srv('ResMktSegment') not in ('ER', )),
         ('R', None,
-         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResMktSegment') not in ('ER', ), 'GSC'),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResMktSegment') not in ('ER', ), 'GSC'),
         ('ISDEFAULT', None,
-         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResMktSegment') not in ('ER', ), 'N'),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResMktSegment') not in ('ER', ), 'N'),
         ('/RATE', None,
-         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResMktSegment') not in ('ER', )),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResMktSegment') not in ('ER', )),
         # The following fallback rate results in error Package TO not valid for hotel 1
         # ('RATE/', ),
         # ('R', 'RO_SIHOT_RATE'},
@@ -311,64 +311,64 @@ MAP_WEB_RES = \
         # ('/RATE', ),
         # ### Reservation Channels - used for assignment of reservation to a allotment or to board payment
         ('RESCHANNELLIST/', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         ('RESCHANNEL/', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         # needed for to add RCI booking to RCI allotment
         ('IDX', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', ), 1),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup')[:4] not in ('RCI ', ), 1),
         ('MATCHCODE', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', ), 'RCI'),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup')[:4] not in ('RCI ', ), 'RCI'),
         ('ISPRICEOWNER', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('RCI ', ), 1),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup')[:4] not in ('RCI ', ), 1),
         # needed for marketing fly buys for board payment bookings
         ('IDX', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', ), 1),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup') not in ('Promo', ), 1),
         ('MATCHCODE', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', ), 'MAR01'),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup') not in ('Promo', ), 'MAR01'),
         ('ISPRICEOWNER', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Promo', ), 1),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup') not in ('Promo', ), 1),
         # needed for owner bookings for to select/use owner allotment
         ('IDX', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', ), 2),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup') not in ('Owner', ), 2),
         ('MATCHCODE', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', ), 'TSP'),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup') not in ('Owner', ), 'TSP'),
         ('ISPRICEOWNER', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup') not in ('Owner', ), 1),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup') not in ('Owner', ), 1),
         ('/RESCHANNEL', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         ('/RESCHANNELLIST', None,
-         lambda f: not f.csv('ResAllotmentNo') or f.csv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
+         lambda f: not f.srv('ResAllotmentNo') or f.srv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         # ### GENERAL RESERVATION DATA: arrival/departure, pax, market sources, comments
         ('ARR', 'ResArrival'),
         ('DEP', 'ResDeparture'),
         ('NOROOMS', None, None, 1),  # needed for DELETE action
         ('NOPAX', 'ResAdults'),  # needed for DELETE action
         ('NOCHILDS', 'ResChildren',
-         lambda f: f.ica(ACTION_DELETE)),
+         lambda f: f.ina(ACTION_DELETE)),
         ('TEC-COMMENT', 'ResLongNote',
-         lambda f: f.ica(ACTION_DELETE)),
+         lambda f: f.ina(ACTION_DELETE)),
         ('COMMENT', 'ResNote',
-         lambda f: f.ica(ACTION_DELETE)),
+         lambda f: f.ina(ACTION_DELETE)),
         ('MARKETCODE-NO', 'ResMktSegment',
-         lambda f: f.ica(ACTION_DELETE)),
+         lambda f: f.ina(ACTION_DELETE)),
         # ('MEDIA', ),
         ('SOURCE', 'ResSource',
-         lambda f: f.ica(ACTION_DELETE)),
+         lambda f: f.ina(ACTION_DELETE)),
         ('NN', 'ResMktGroup2',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         ('CHANNEL', 'ResMktGroup',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         # ('NN2', 'ResSfId',
-        # lambda f: not f.csv()),
+        # lambda f: not f.srv()),
         ('EXT-REFERENCE', 'ResFlightNo',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),    # see also currently unused PICKUP-COMMENT-ARRIVAL element
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),    # see also currently unused PICKUP-COMMENT-ARRIVAL element
         ('ARR-TIME', 'ResFlightETA',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         ('PICKUP-TIME-ARRIVAL', 'ResFlightETA',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         ('PICKUP-TYPE-ARRIVAL', None,                       # 1=car, 2=van
-         lambda f: f.ica(ACTION_DELETE) or not f.csv('ResFlightETA'), 1),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResFlightETA'), 1),
         # ### PERSON/occupant details
         ('PERS-TYPE-LIST/', ),
         ('PERS-TYPE/', ),
@@ -382,34 +382,34 @@ MAP_WEB_RES = \
         ('/PERS-TYPE-LIST', ),
         # Person Records
         ('PERSON/', 'ResPersons',
-         lambda f: f.ica(ACTION_DELETE),
+         lambda f: f.ina(ACTION_DELETE),
          None, Records),
         ('NAME', 'ResPersonSurname',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('AcId') or f.csv('ShId'),
-         lambda f: "Adult " + str(f.idx()) if f.idx() < f.csv('ResAdults')
-            else "Child " + str(f.idx() - f.csv('ResAdults') + 1)),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv() or f.srv('AcId') or f.srv('ShId'),
+         lambda f: "Adult " + str(f.idx()) if f.idx() < f.srv('ResAdults')
+            else "Child " + str(f.idx() - f.srv('ResAdults') + 1)),
         ('NAME2', 'ResPersonForename',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('AcId') or f.csv('ShId')),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv() or f.srv('AcId') or f.srv('ShId')),
         ('AUTO-GENERATED', 'ResPersonAutoGenerated',
-         lambda f: f.ica(ACTION_DELETE) or (f.csv('ResAdults') <= 2 and (f.csv('AcId') or f.csv('ShId'))), '1'),
+         lambda f: f.ina(ACTION_DELETE) or (f.srv('ResAdults') <= 2 and (f.srv('AcId') or f.srv('ShId'))), '1'),
         ('MATCHCODE', 'AcId',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('ShId')),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv() or f.srv('ShId')),
         ('GUEST-ID', 'ShId',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         ('ROOM-SEQ', None,
-         lambda f: f.ica(ACTION_DELETE), '0'),
+         lambda f: f.ina(ACTION_DELETE), '0'),
         ('ROOM-PERS-SEQ', None,
-         lambda f: f.ica(ACTION_DELETE), lambda f: str(f.idx())),
+         lambda f: f.ina(ACTION_DELETE), lambda f: str(f.idx())),
         ('PERS-TYPE', None,
-         lambda f: f.ica(ACTION_DELETE), lambda f: '1A' if f.idx() < f.csv('ResAdults') else '2B'),
+         lambda f: f.ina(ACTION_DELETE), lambda f: '1A' if f.idx() < f.srv('ResAdults') else '2B'),
         ('R', 'ResBoard',
-         lambda f: f.ica(ACTION_DELETE)),
+         lambda f: f.ina(ACTION_DELETE)),
         ('RN', 'ResRoomNo',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv() or f.csv('ResDeparture') < datetime.datetime.now()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv() or f.srv('ResDeparture') < datetime.datetime.now()),
         ('DOB', 'ResPersonDOB',
-         lambda f: f.ica(ACTION_DELETE) or not f.csv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
         ('/PERSON', None,
-         lambda f: f.ica(ACTION_DELETE) or f.csv('ResAdults') <= 0),
+         lambda f: f.ina(ACTION_DELETE) or f.srv('ResAdults') <= 0),
         ('/RESERVATION',),
         ('/ARESLIST',),
     )
@@ -824,7 +824,7 @@ class FldMapXmlParser(SihotXmlParser):
         super(FldMapXmlParser, self).__init__(cae)
         self._current_field = None
         self._current_data = None
-        self._rec = Record(current_system=SDI_SH, current_direction=FAD_FROM)
+        self._rec = Record(system=SDI_SH, direction=FAD_FROM)
         self._parent_recs = list()
 
         # create field data parsing record and mapping dict for all elements having a field value
@@ -837,32 +837,30 @@ class FldMapXmlParser(SihotXmlParser):
             if not field_name:
                 continue
 
-            elem_name = fas[MTI_ELEM_NAME]
-            if elem_name.endswith('/'):
-                elem_name = elem_name[:-1]
+            elem_name = fas[MTI_ELEM_NAME].strip('/')
             aspects = dict()
             aspects[FAT_REC] = self._rec
             aspects[FAT_NAME] = field_name
             field = Field(**aspects)
-            field.add_name(elem_name, SDI_SH, FAD_FROM)
+            field.set_name(elem_name, SDI_SH, FAD_FROM, add=True)
             if mi > MTI_HIDE_IF and fas[MTI_HIDE_IF]:
-                field.add_filter(fas[MTI_HIDE_IF], SDI_SH, FAD_FROM)
+                field.set_filter(fas[MTI_HIDE_IF], SDI_SH, FAD_FROM, add=True)
             if mi > MTI_FIELD_TYPE and fas[MTI_FIELD_TYPE]:
-                field.set_value_type(fas[MTI_FIELD_TYPE], SDI_SH, FAD_FROM)
+                field.set_value_type(fas[MTI_FIELD_TYPE], SDI_SH, FAD_FROM, add=True)
             if mi > MTI_FIELD_VAL and fas[MTI_FIELD_VAL] is not None:
                 val_or_cal = fas[MTI_FIELD_VAL]
                 if callable(val_or_cal):
-                    field.add_calculator(val_or_cal, SDI_SH, FAD_FROM)
+                    field.set_calculator(val_or_cal, SDI_SH, FAD_FROM, add=True)
                 else:
-                    field.set_value(val_or_cal, SDI_SH, FAD_FROM)
+                    field.set_value(val_or_cal, SDI_SH, FAD_FROM, add=True)
             if mi > MTI_FIELD_CON and fas[MTI_FIELD_CON]:
-                field.add_converter(fas[MTI_FIELD_CON], SDI_SH, FAD_FROM)
+                field.set_converter(fas[MTI_FIELD_CON], SDI_SH, FAD_FROM, add=True)
 
             self.elem_fld_map[elem_name] = field
 
     def clear_rec(self):
         for field in self._rec.fields.values():
-            field.del_value(system=self._rec.current_system, direction=self._rec.current_direction)
+            field.del_value(system=self._rec.system, direction=self._rec.direction)
 
     def find_field(self, tag):
         field = None
@@ -889,7 +887,7 @@ class FldMapXmlParser(SihotXmlParser):
             return tag
         if field.value_type(SDI_SH, FAD_FROM) == Records:
             field.set_value(Records(), SDI_SH, FAD_FROM)
-            rec = Record(current_system=SDI_SH, current_direction=FAD_FROM)
+            rec = Record(system=SDI_SH, direction=FAD_FROM)
             field.value(SDI_SH, FAD_FROM).append(rec)
             self._parent_recs.append(self._rec)
             self._rec = rec
@@ -963,11 +961,12 @@ class SihotXmlBuilder:
         super(SihotXmlBuilder, self).__init__(cae)
         self.cae = cae
         self.debug_level = cae.get_option('debugLevel')
-        elem_map = deepcopy(elem_map or cae.get_option('mapRes'))
+        self.elem_map = deepcopy(elem_map or cae.get_option('mapRes'))
         values = ((fld_args[0], elem_name, ) + fld_args[1:] for elem_name, *fld_args in elem_map
                   if len(fld_args) and fld_args[0])
         fields = zip((FAT_NAME, FAT_VAL, FAT_FLT, ), values)
-        self.elem_fld_rec = Record(fields=fields, current_system=SDI_SH, current_direction=FAD_ONTO)
+        self.elem_fld_rec = Record(fields=fields, system=SDI_SH, direction=FAD_ONTO)
+        self.row_link_field = Field().set_rec(self.elem_fld_rec)
         self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
 
         '''
@@ -1046,11 +1045,23 @@ class SihotXmlBuilder:
 
     def prepare_map_xml(self, fld_values, action='', include_empty_values=True):
         inner_xml = ''
-        filtered_rec = Record(current_action=action)
+        filtered_rec = Record(action=action)
         self.elem_fld_rec.copy(to_rec=filtered_rec, filter_fields=True)
-        for fld, field in filtered_rec.fields().items():
-            tag = field.aspect_value(FAT_NAME, SDI_SH)
-            val = field.val(SDI_SH)
+        for elem_map_item in self.elem_map:
+            tag = elem_map_item[MTI_ELEM_NAME]
+            fld = elem_map_item[MTI_FIELD_NAME]
+            val = None
+            if fld is None:
+                field = self.row_link_field
+                filter_func = field.aspect_value(FAT_FLT, system=SDI_SH, direction=FAD_ONTO)
+                if filter_func:
+                    assert callable(filter_func), "filter aspect must be callable"
+                    if filter_func(field):
+                        continue
+            elif fld in filtered_rec:
+                field = filtered_rec[fld]
+                val = field.val(SDI_SH)
+
             if tag.endswith('/'):
                 self._indent += 1
                 inner_xml += '\n' + ' ' * self._indent + self.new_tag(tag[:-1], closing=False)
@@ -1153,7 +1164,7 @@ class CatRooms(SihotXmlBuilder):
 
 class ClientToSihot(SihotXmlBuilder):
     def __init__(self, cae):
-        super(ClientToSihot, self).__init__(cae)
+        super(ClientToSihot, self).__init__(cae, elem_map=cae.get_config('mapClient') or MAP_KERNEL_CLIENT)
 
     def _prepare_guest_xml(self, c_row, action=None, fld_name_suffix=''):
         if not action:
@@ -1218,8 +1229,8 @@ class ConfigDict(SihotXmlBuilder):
 
 
 class GuestSearch(SihotXmlBuilder):
-    def __init__(self, ca):
-        super(GuestSearch, self).__init__(ca, elem_map=MAP_KERNEL_CLIENT, use_kernel=True)
+    def __init__(self, cae):
+        super().__init__(cae, elem_map=cae.get_config('mapClient') or MAP_KERNEL_CLIENT, use_kernel=True)
 
     def get_guest(self, obj_id):
         """ return dict with guest data OR str with error message in case of error.
@@ -1449,7 +1460,7 @@ class ResSearch(SihotXmlBuilder):
 
 class ResToSihot(SihotXmlBuilder):
     def __init__(self, cae):
-        super(ResToSihot, self).__init__(cae)
+        super(ResToSihot, self).__init__(cae, elem_map=cae.get_config('mapRes') or MAP_WEB_RES)
         self.use_kernel_for_new_clients = cae.get_option('useKernelForClient')
         self.map_client = cae.get_option('mapClient')
 

@@ -7,7 +7,7 @@
     0.3     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
     0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
-    0.6     removed check of resync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
+    0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
 """
 import datetime
 import threading
@@ -15,8 +15,7 @@ import time
 from functools import partial
 from traceback import format_exc
 
-from ae_console_app import (ConsoleApp, uprint, missing_requirements,
-                            DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE)
+from ae_console_app import ConsoleApp, uprint, missing_requirements, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
