@@ -128,45 +128,51 @@ for future/upcoming command line options with less conflicts: | l | m | n | q |.
 
 The table underneath is showing all the fields that can be used to specify a reservation created within Sihot. Only the
 fields marked with an asterisk (*) are mandatory, with the exception that the reservation orderer can be specified
-either only by `ResOrdererId` or `ResOrdererMc` (or by both):
+either only by `ResOrdererId` or `ResOrdererMc` (or by both). The fields marked with an plus character (+) are optional
+only if the reservation gets sent the first time to Sihot, so for every change/update of an already existing
+reservation these fields need to be included in the send to Sihot:
 
-| Field Name | Acumen View Column | Field Type | Description | Example Values |
+| Field Name | Acumen Column | Salesforce Field | Field Type | Description | Example Values |
 | --- | --- | --- | --- | --- |
-| ResHotelId * | RUL_SIHOT_HOTEL | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
-| ResGdsNo * | SIHOT_GDSNO | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
-| ResArrival * | ARR_DATE | Date | Arrival Date | 28-02-2017 |
-| ResDeparture * | DEP_DATE | Date | Departure Date | 07-03-2017 |
-| ResRoomCat * | RUL_SIHOT_CAT | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
-| ResPriceCat | SH_PRICE_CAT | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
-| ResRoomNo | RUL_SIHOT_ROOM | String | Sihot Room Number (optional) | '0426', 'A112' |
-| ResOrdererMc * | OC_CODE | String | Sihot Orderer Matchcode (owner or OTA channel) | 'TCRENT' |
-| ResOrdererId * | OC_SIHOT_OBJID | String | Sihot Orderer Object Id (owner or OTA channel) | '123456' |
-| ResMktSegment * | RUL_SIHOT_RATE, SIHOT_MKT_SEG | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
-| ResRateSegment | SIHOT_RATE_SEGMENT | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
-| ResStatus | SH_RES_TYPE | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
-| ResAction | RUL_ACTION | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
-| ResVoucherNo | RH_EXT_BOOK_REF | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
-| ResBooked | RH_EXT_BOOK_DATE | Date | Sihot Reservation Booking Date | 24-12-2016 |
-| ResBoard | RUL_SIHOT_PACK | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
-| ResSource | RU_SOURCE | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
-| ResMktGroup | RO_RES_GROUP | String | Sihot Reservation Channel | 'RS'=Rental SP |
-| ResNote | SIHOT_NOTE | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
-| ResLongNote | SIHOT_TEC_NOTE | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '&#124;CR&#124;' for to separate various comments) |
-| ResFlightNo | SH_EXT_REF | String | Flight Number (optional) | 'ABC-2345' |
-| ResAccount | SIHOT_PAYMENT_INST | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
-| ResAllotmentNo | SIHOT_ALLOTMENT_NO | Numeric | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
-| ResAdults | RU_ADULTS | Numeric | Number of Adults | 1, 2, 4 |
-| ResChildren | RU_CHILDREN | Numeric | Number of Children | 0, 1, 2 |
-| ResAdult1Surname | SH_ADULT1_NAME | String | Surname of first adult | 'Smith' | 
-| ResAdult1Forename | SH_ADULT1_NAME2 | String | Forename of first adult | 'John' | 
-| ResAdult1DOB | SH_ADULT1_DOB | Date | Date of birth of first adult | 24-12-1947 | 
+| ResHotelId * | RUL_SIHOT_HOTEL | HotelId__c | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
+| ResNumber + | - | Number__c | String | Sihot Reservation Number | 123456789' |
+| ResSubNumber + | - | SubNumber__c | String | Sihot Reservation Subnumber | '1' |
+| ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | String | Sihot Internal Reservation Object Id | '123456789' |
+| ResOppId | - | ReservationOpportunityId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
+| ResGdsNo * | SIHOT_GDSNO | GdsNo__c | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
+| ResArrival * | ARR_DATE | Arrival__c | Date | Arrival Date | 28-02-2017 |
+| ResDeparture * | DEP_DATE | Departure__c | Date | Departure Date | 07-03-2017 |
+| ResRoomCat * | RUL_SIHOT_CAT | RoomCat__c | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
+| ResPriceCat | SH_PRICE_CAT | - | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
+| ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | String | Sihot Room Number (optional) | '0426', 'A112' |
+| ResOrdererMc * | OC_CODE | AcumenClientRef__pc | String | Sihot Orderer Matchcode (owner or OTA channel) | 'TCRENT' |
+| ResOrdererId * | OC_SIHOT_OBJID | - | String | Sihot Orderer Object Id (owner or OTA channel) | '123456' |
+| ResMktSegment * | RUL_SIHOT_RATE, SIHOT_MKT_SEG | MktSegment__c | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
+| ResRateSegment | SIHOT_RATE_SEGMENT | - | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
+| ResStatus | SH_RES_TYPE | Status__c | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
+| ResAction | RUL_ACTION | - | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
+| ResVoucherNo | RH_EXT_BOOK_REF | - | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
+| ResBooked | RH_EXT_BOOK_DATE | - | Date | Sihot Reservation Booking Date | 24-12-2016 |
+| ResBoard | RUL_SIHOT_PACK | - | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
+| ResSource | RU_SOURCE | - | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
+| ResMktGroup | RO_RES_GROUP | MktGroup__c | String | Sihot Reservation Channel | 'RS'=Rental SP |
+| ResNote | SIHOT_NOTE | Note__c | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
+| ResLongNote | SIHOT_TEC_NOTE | - | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '&#124;CR&#124;' for to separate various comments) |
+| ResFlightNo | SH_EXT_REF | - | String | Flight Number (optional) | 'ABC-2345' |
+| ResAccount | SIHOT_PAYMENT_INST | - | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
+| ResAllotmentNo | SIHOT_ALLOTMENT_NO | - | Numeric | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
+| ResAdults | RU_ADULTS | Adults__c | Numeric | Number of Adults | 1, 2, 4 |
+| ResChildren | RU_CHILDREN | Children__c | Numeric | Number of Children | 0, 1, 2 |
+| ResAdult1Surname | SH_ADULT1_NAME | - | String | Surname of first adult | 'Smith' | 
+| ResAdult1Forename | SH_ADULT1_NAME2 | - | String | Forename of first adult | 'John' | 
+| ResAdult1DOB | SH_ADULT1_DOB | - | Date | Date of birth of first adult | 24-12-1947 | 
 | ... |  |  |  |  | 
-| ResAdult<n>DOB | SH_ADULT<n>_DOB | Date | Date of birth of last adult | 24-12-1977 | 
-| ResChild1Surname | SH_CHILD1_NAME | String | Surname of first child | 'Smith' | 
-| ResChild1Forename | SH_CHILD1_NAME2 | String | Forename of first child | 'Paul' | 
-| ResChild1DOB | SH_CHILD1_DOB | Date | Date of birth of first child | 24-12-2007 | 
+| ResAdult<n>DOB | SH_ADULT<n>_DOB | - | Date | Date of birth of last adult | 24-12-1977 | 
+| ResChild1Surname | SH_CHILD1_NAME | - | String | Surname of first child | 'Smith' | 
+| ResChild1Forename | SH_CHILD1_NAME2 | - | String | Forename of first child | 'Paul' | 
+| ResChild1DOB | SH_CHILD1_DOB | - | Date | Date of birth of first child | 24-12-2007 | 
 | ... |  |  |  |  | 
-| ResChild<n>DOB | SH_CHILD<n>_DOB | Date | Date of birth of last child | 24-12-2016 | 
+| ResChild<n>DOB | SH_CHILD<n>_DOB | - | Date | Date of birth of last child | 24-12-2016 | 
 
 Currently the maximum number of named adults is restricted to 6 and of named children to 4.
 

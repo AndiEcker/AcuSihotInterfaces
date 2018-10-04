@@ -6,18 +6,13 @@ from textwrap import wrap
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from ae_sys_data import FAT_NAME, FAT_REC, FAT_VAL, FAT_FLT, FAD_FROM, FAD_ONTO, Field, Record, Records
+from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH,\
+    FAT_NAME, FAT_REC, FAT_VAL, FAT_FLT, FAD_FROM, FAD_ONTO, Field, Record, Records
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
 from ae_tcp import TcpClient
 
 from sys_data_ids import SDI_SW, SDI_SH
-
-# data actions
-ACTION_DELETE = 'DELETE'
-ACTION_INSERT = 'INSERT'
-ACTION_UPDATE = 'UPDATE'
-ACTION_SEARCH = 'SEARCH'
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
 # .. so we use ISO-8859-15 instead ?!?!? (see
@@ -860,7 +855,7 @@ class FldMapXmlParser(SihotXmlParser):
 
     def clear_rec(self):
         for field in self._rec.fields.values():
-            field.del_value(system=self._rec.system, direction=self._rec.direction)
+            field.clear_value(system=self._rec.system, direction=self._rec.direction)
 
     def find_field(self, tag):
         field = None
@@ -1044,23 +1039,23 @@ class SihotXmlBuilder:
         self._xml += self.new_tag(tag, val)
 
     def prepare_map_xml(self, fld_values, action='', include_empty_values=True):
+        old_act = self.elem_fld_rec.action
+        self.elem_fld_rec.action = action
         inner_xml = ''
-        filtered_rec = Record(action=action)
-        self.elem_fld_rec.copy(to_rec=filtered_rec, filter_fields=True)
         for elem_map_item in self.elem_map:
             tag = elem_map_item[MTI_ELEM_NAME]
             fld = elem_map_item[MTI_FIELD_NAME]
-            val = None
             if fld is None:
                 field = self.row_link_field
-                filter_func = field.aspect_value(FAT_FLT, system=SDI_SH, direction=FAD_ONTO)
-                if filter_func:
-                    assert callable(filter_func), "filter aspect must be callable"
-                    if filter_func(field):
-                        continue
-            elif fld in filtered_rec:
-                field = filtered_rec[fld]
+                val = None
+            else:
+                field = self.elem_fld_rec[fld]
                 val = field.val(SDI_SH)
+            filter_func = field.aspect_value(FAT_FLT, system=SDI_SH, direction=FAD_ONTO)
+            if filter_func:
+                assert callable(filter_func), "filter aspect {} must be callable".format(filter_func)
+                if filter_func(field):
+                    continue
 
             if tag.endswith('/'):
                 self._indent += 1
@@ -1071,6 +1066,7 @@ class SihotXmlBuilder:
             elif include_empty_values or (fld and fld in fld_values) or val:
                 inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(fld_values[fld]
                                                                                 if fld and fld in fld_values else val))
+        self.elem_fld_rec.action = old_act
         return inner_xml
 
     def send_to_server(self, response_parser=None):

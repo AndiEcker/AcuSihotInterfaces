@@ -15,8 +15,8 @@ import datetime
 
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from sxmlif import ACTION_UPDATE, ACTION_DELETE, \
-    ERR_MESSAGE_PREFIX_CONTINUE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
+from ae_sys_data import ACTION_UPDATE, ACTION_DELETE
+from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
 from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
 from shif import add_sh_options
 from ass_sys_data import AssSysData
