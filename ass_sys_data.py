@@ -59,6 +59,9 @@ SF_DEF_RES_SEARCH_FIELD = 'ReservationOpportunityId'
 SH_DEF_SEARCH_FIELD = 'ShId'
 
 
+ppf = pprint.PrettyPrinter(indent=9, width=96, depth=9).pformat
+
+
 def add_ass_options(cae, client_port=None, add_kernel_port=False, break_on_error=False, bulk_fetcher=None):
     cae.add_option('assUser', "AssCache/Postgres user account name", '', 'U')
     cae.add_option('assPassword', "AssCache/Postgres user account password", '', 'P')
@@ -541,6 +544,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("Text fragments for to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
 
+        self.sf_id_reset_fragments = cae.get_config('SfIdResetResendFragments') or list()
+        if self.sf_id_reset_fragments:
+            uprint('Error fragments to re-sync res change with reset ResOppId:', self.sf_id_reset_fragments)
+
         # --- self.clients contains client data from AssCache database like external references/Ids, owner status ...
         self.clients = list()
         self.clients_changed = list()      # list indexes of changed records within self.clients
@@ -723,7 +730,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         chk_values = {ass_fld_name(k): v for k, v in client_data.items() if k in match_fields}
         if not col_values or not chk_values:
             self.error_message = "AssSysData.cl_save({}, {}, {}) called without data or non-empty foreign system id"\
-                .format(client_data, save_fields, match_fields)
+                .format(ppf(client_data), save_fields, match_fields)
             return None
         # if locked_cols is None:
         #    locked_cols = save_fields.copy()        # uncomment for all fields being locked by default
@@ -731,7 +738,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if self.ass_db.upsert('clients', col_values, chk_values=chk_values, returning_column='cl_pk', commit=commit,
                               locked_cols=locked_cols):
             self.error_message = "cl_save({}, {}, {}) clients upsert error: "\
-                                     .format(client_data, save_fields, match_fields) + self.ass_db.last_err_msg
+                                     .format(ppf(client_data), save_fields, match_fields) + self.ass_db.last_err_msg
             return None
 
         cl_pk = self.ass_db.fetch_value()
@@ -742,7 +749,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 break
         if self.ass_db.last_err_msg:
             self.error_message = "cl_save({}, {}, {}) external_refs upsert error: "\
-                                     .format(client_data, save_fields, match_fields) + self.ass_db.last_err_msg
+                                     .format(ppf(client_data), save_fields, match_fields) + self.ass_db.last_err_msg
             return None
 
         if ass_idx is None:
@@ -1113,9 +1120,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         ret = None
         if not chk_values:
             self.error_message = "rgr_upsert({}, {}): Missing reservation IDs (ObjId, Hotel/ResId or GdsNo)" \
-                .format(col_values, chk_values)
+                .format(ppf(col_values), ppf(chk_values))
         elif not multiple_row_update and not self.rgr_complete_ids(col_values, chk_values):
-            self.error_message = "rgr_upsert({}, {}): Incomplete-able reservation IDs".format(col_values, chk_values)
+            self.error_message = "rgr_upsert({}, {}): Incomplete-able res IDs".format(ppf(col_values), ppf(chk_values))
         else:
             self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values,
                                                     returning_column=returning_column, commit=commit,
@@ -1125,7 +1132,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     self.error_message += "\n" + self.ass_db.rollback()
             elif not multiple_row_update and self.ass_db.curs.rowcount != 1:
                 self.error_message = "rgr_upsert({}, {}): Invalid affected row count; expected 1 but got {}" \
-                    .format(col_values, chk_values, self.ass_db.curs.rowcount)
+                    .format(ppf(col_values), ppf(chk_values), self.ass_db.curs.rowcount)
             elif returning_column:
                 ret = self.ass_db.fetch_value()
             else:
@@ -1151,9 +1158,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                                     multiple_row_update=multiple_row_update)
             if not self.error_message and not multiple_row_update and self.ass_db.curs.rowcount != 1:
                 self.error_message = "rgc_upsert({}, {}): Invalid affected row count; expected 1 but got {}"\
-                    .format(col_values, chk_values, self.ass_db.curs.rowcount)
+                    .format(ppf(col_values), ppf(chk_values), self.ass_db.curs.rowcount)
         else:
-            self.error_message = "rgc_upsert({}): Missing res-client id (rgr_pk,room_seq,pers_seq)".format(col_values)
+            self.error_message = "rgc_upsert({}): no res-client id (rgr_pk,room_seq,pers_seq)".format(ppf(col_values))
 
         return self.error_message
 
@@ -1227,13 +1234,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if sf_obj is None:
             if not sf_id:
                 self.error_message = "sf_client_upsert({}, {}): client object cannot be determined without Id"\
-                    .format(fields_dict, sf_obj)
+                    .format(ppf(fields_dict), sf_obj)
                 return None, self.error_message, ""
             sf_obj = obj_from_id(sf_id)
 
         client_obj = self.sf_conn.sf_obj(sf_obj)
         if not client_obj:
-            self.error_message += "\n      +sf_client_upsert({}, {}): empty client object".format(fields_dict, sf_obj)
+            self.error_message += "\n      +sf_client_upsert({}, {}): no client object".format(ppf(fields_dict), sf_obj)
             return None, self.error_message, ""
 
         sf_dict = field_dict_to_sf(fields_dict, sf_obj)
@@ -1241,17 +1248,17 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if update_client:
             try:
                 sf_ret = client_obj.update(sf_id, sf_dict)
-                msg = "{} {} updated with {}, ret={}".format(sf_obj, sf_id, pprint.pformat(sf_dict, indent=9), sf_ret)
+                msg = "{} {} updated with {}, ret={}".format(sf_obj, sf_id, ppf(sf_dict), sf_ret)
             except Exception as ex:
-                err = "{} update() raised exception {}. sent={}".format(sf_obj, ex, pprint.pformat(sf_dict, indent=9))
+                err = "{} update() raised exception {}. sent={}".format(sf_obj, ex, ppf(sf_dict))
         else:
             try:
                 sf_ret = client_obj.create(sf_dict)
-                msg = "{} created with {}, ret={}".format(sf_obj, pprint.pformat(sf_dict, indent=9), sf_ret)
+                msg = "{} created with {}, ret={}".format(sf_obj, ppf(sf_dict), sf_ret)
                 if sf_ret['success']:
                     sf_id = sf_ret[sf_fld_name(SF_DEF_SEARCH_FIELD, sf_obj)]
             except Exception as ex:
-                err = "{} create() exception {}. sent={}".format(sf_obj, ex, pprint.pformat(sf_dict, indent=9))
+                err = "{} create() exception {}. sent={}".format(sf_obj, ex, ppf(sf_dict))
 
         if not err and sf_id and 'RciId' in fields_dict:
             _, err, msg = self.sf_conn.ext_ref_upsert(sf_id, fields_dict['RciId'], EXT_REF_TYPE_RCI, sf_obj=sf_obj)
@@ -1485,7 +1492,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if elem_val:
                 if isinstance(elem_val, list):
                     self._warn("asd.sf_res_upsert({}, {}, {}) stripping of extra items for {} from list value {}"
-                               .format(rgr_sf_id, sh_cl_data, ass_res_data, sfn, elem_val))
+                               .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sfn, elem_val))
                     elem_val = elem_val[0]
                 sf_args[sfn] = elem_val
 
@@ -1513,17 +1520,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             sf_args['RoomNo__c'] = ass_res_data['rgc_list'][0]['rgc_room_id']
 
         sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
-        if 'ENTITY_IS_DELETED' in err_msg and rgr_sf_id:    # retry without rgr_sf_id if ResOpp got deleted within SF
+        if err_msg and rgr_sf_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
+            # retry without rgr_sf_id if ResOpp got deleted within SF
             sf_args['ReservationOpportunityId'] = ''
             sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
             self._warn("asd.sf_res_upsert({}, {}, {}) cached ResOpp value reset to {}; SF client={}; err='{}'"
-                       .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_opp_id, sf_cl_id, err_msg))
+                       .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, err_msg),
+                       notify=True)
             rgr_sf_id = ''
 
         if sf_args.get('PersonAccountId') and sf_args['PersonAccountId'] != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_VERBOSE:
             self._err("sf_res_upsert({}, {}, {}) PersonAccount discrepancy {} != {}"
-                      .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_args.get('PersonAccountId'), sf_cl_id))
+                      .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_args.get('PersonAccountId'), sf_cl_id))
 
         if sync_cache:
             if sf_cl_id and ass_id:
@@ -1538,7 +1547,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 col_values['rgr_sf_id'] = sf_opp_id
             elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and rgr_sf_id and sf_opp_id != rgr_sf_id:
                 self._err("sf_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
-                          .format(rgr_sf_id, sh_cl_data, ass_res_data, sf_opp_id, rgr_sf_id))
+                          .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, rgr_sf_id))
 
             if col_values:
                 self.rgr_upsert(col_values, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
@@ -1722,7 +1731,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     if not skip_reasons:
                         count += 1
                     elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                        self._warn("AssSysData.sh_count_res(): skipped {} res: {}".format(str(skip_reasons), row_dict))
+                        self._warn("AssSysData.sh_count_res(): skipped {} res: {}".format(skip_reasons, row_dict))
         return count
 
     def sh_res_data(self, hotel_id='1', gds_no='', res_id='', sub_id=''):

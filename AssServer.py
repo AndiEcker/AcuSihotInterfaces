@@ -7,13 +7,15 @@
     0.3     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
     0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
-    0.6     removed check of resync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
+    0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
+    0.7     reset/resend ResOppId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
 """
 import datetime
 import threading
 import time
 from functools import partial
 from traceback import format_exc
+import pprint
 
 from ae_console_app import ConsoleApp, uprint, missing_requirements, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
@@ -21,7 +23,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '0.6'
+__version__ = '0.7'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -50,6 +52,9 @@ sys_conns.close_dbs()
 sys_conns = ass_data['assSysData'] = None  # del/free not thread-save sys db connections
 
 
+ppf = pprint.PrettyPrinter(indent=6, width=96, depth=9).pformat
+
+
 log_lock = threading.Lock()
 
 
@@ -62,7 +67,7 @@ def log_msg(msg, *args, **kwargs):
         seps = '\n' * (importance - 2)
         msg = seps + ' ' * (4 - importance) + ('*' if is_error else '#') * importance + '  ' + msg
         if args:
-            msg += " (args={})".format(args)
+            msg += " (args={})".format(ppf(args))
         uprint(msg)
         if notification and (is_error or notify):
             notification.send_notification(msg_body=msg, subject='AssServer notification')
@@ -153,7 +158,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         sh_cl = guest_data(cae, sh_id)
     if not isinstance(sh_cl, dict):
         log_msg("res_from_sh_to_sf({}): guest not found; objId={}; err='{}'"
-                .format(ass_changed_res, sh_id, sh_cl), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+                .format(ppf(ass_changed_res), sh_id, ppf(sh_cl)), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sh_cl = dict()
 
     rgr_sf_id = ass_changed_res['rgr_sf_id']
@@ -167,7 +172,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
                 rgr_sf_id = res[0][0]
         if not rgr_sf_id:
             log_msg("res_from_sh_to_sf({}): Opportunity ID not found for Sihot Res Obj ID {}; err='{}'"
-                    .format(ass_changed_res, obj_id, asd.error_message),
+                    .format(ppf(ass_changed_res), obj_id, asd.error_message),
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     ass_res = dict()
@@ -175,20 +180,20 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         return asd.error_message
 
     # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call
-    # !!!!  MERGE WITH NEXT VERSION sys_data_generic BRANCH
+    # TODO: MERGE WITH NEXT VERSION sys_data_generic BRANCH
     # res_fields = asd.fields_from_sh(sh_cl)
     # res_fields.update(asd.fields_from_ass(ass_res))
     # err_msg = asd.sf_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
     err_msg = asd.sf_res_upsert(rgr_sf_id, sh_cl, ass_res)
     if err_msg:
         return "res_from_sh_to_sf({}): SF reservation push/update err='{}', rollback='{}'"\
-            .format(ass_changed_res, err_msg, asd.ass_db.rollback())
+            .format(ppf(ass_changed_res), err_msg, asd.ass_db.rollback())
 
     # no errors on sync to SF, then set last sync timestamp
     chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
     if not asd.rgr_upsert(dict(rgr_last_sync=ass_changed_res['rgr_last_sync']), chk_values, commit=True):
         err_msg = "res_from_sh_to_sf({}): last reservation sync timestamp ass_cache update failed"\
-                      .format(ass_changed_res) + asd.error_message
+                      .format(ppf(ass_changed_res)) + asd.error_message
 
     return err_msg
 
@@ -202,13 +207,13 @@ def room_change_to_sf(asd, ass_res):
     err_msg = asd.sf_room_change(ass_res['rgr_sf_id'],
                                  ass_res['rgr_time_in'], ass_res['rgr_time_out'], ass_res['rgr_room_id'])
     if err_msg:
-        return "room_change_to_sf({}): SF room push/update err='{}'".format(ass_res, err_msg)
+        return "room_change_to_sf({}): SF room push/update err='{}'".format(ppf(ass_res), err_msg)
 
     # no errors on sync to SF, then set last sync timestamp
     chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
     if not asd.rgr_upsert(dict(rgr_room_last_sync=ass_res['rgr_room_last_sync']), chk_values, commit=True):
         err_msg = "room_change_to_sf({}): last room sync timestamp ass_cache update err='{}'"\
-                      .format(ass_res, asd.error_message)
+                      .format(ppf(ass_res), asd.error_message)
 
     return err_msg
 
@@ -290,13 +295,13 @@ def run_sync_to_sf():
             if res_changed and (not room_changed or res_changed <= room_changed):
                 ass_res = dict(zip(ass_id_cols, res_list[0][1:]))
                 ass_res['rgr_last_sync'] = action_time
-                log_msg("run_sync_to_sf() fetch from Sihot and send to SF the changed res={}".format(ass_res),
+                log_msg("run_sync_to_sf() fetch from Sihot and send to SF the changed res={}".format(ppf(ass_res)),
                         notify=debug_level > DEBUG_LEVEL_VERBOSE)
                 err_msg = res_from_sh_to_sf(asd, ass_res)
             elif room_changed and (not res_changed or room_changed < res_changed):
                 ass_res = dict(zip(room_cols, room_list[0]))
                 ass_res['rgr_room_last_sync'] = action_time
-                log_msg("run_sync_to_sf() send to SF the room change {}".format(ass_res),
+                log_msg("run_sync_to_sf() send to SF the room change {}".format(ppf(ass_res)),
                         notify=debug_level > DEBUG_LEVEL_VERBOSE)
                 err_msg = room_change_to_sf(asd, ass_res)
             else:
@@ -349,7 +354,7 @@ def oc_res_change(asd, req, rec_ctx):
                        # RoomNo=req_rgr.get('rgc_list', [dict(), ])[0].get('rgc_room_id', ''),
                        RoomNo=req_rgr.get('rgr_room_id', ''),
                        )
-        log_msg(proc_context(rec_ctx) + "res change data={}".format(req_rgr),
+        log_msg(proc_context(rec_ctx) + "res change data={}".format(ppf(req_rgr)),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
         chk_values = {k: v for k, v in req_rgr.items() if k in ['rgr_res_id', 'rgr_sub_id']}
@@ -372,7 +377,7 @@ def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
     ho_id = req.hn
     res_no = req.res_nr
     rec_ctx.update(HotelId=ho_id, ResId=res_no, SubId=sub_no, RoomNo=room_id, extended_oc=oc, action_time=action_time)
-    log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, rec_ctx, req.get_xml()),
+    log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, ppf(rec_ctx), ppf(req.get_xml())),
             importance=3, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     rgr_sf_id = asd.sh_room_change_to_ass(oc, ho_id, res_no, sub_no, room_id, action_time)
@@ -433,12 +438,12 @@ def reload_oc_config():
     module_declarations = globals()
     for oc, slots in SUPPORTED_OCS.items():
         if not isinstance(slots, list):
-            return "SUPPORTED_OCS {} slots syntax error - list expected but got {}".format(oc, slots)
+            return "SUPPORTED_OCS {} slots syntax error - list expected but got {}".format(oc, ppf(slots))
         for slot in slots:
             if not isinstance(slot, dict):
-                return "SUPPORTED_OCS {} slot syntax error - dict expected but got {}".format(oc, slot)
+                return "SUPPORTED_OCS {} slot syntax error - dict expected but got {}".format(oc, ppf(slot))
             if 'reqClass' not in slot or 'ocProcessors' not in slot:
-                return "SUPPORTED_OCS {} slot keys reqClass/ocProcessors missing - dict has only {}".format(oc, slot)
+                return "SUPPORTED_OCS {} slot keys reqClass/ocProcessors missing - got {}".format(oc, ppf(slot))
 
             req_class = slot['reqClass']
             if req_class not in module_declarations:
@@ -511,7 +516,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         """ types of parameter xml_from_client and return value are bytes """
         xml_enc = cae.get_option('shXmlEncoding')
         xml_request = str(xml_from_client, encoding=xml_enc)
-        log_msg("AssServer.handle_xml(): request='{}'".format(xml_request), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        log_msg("AssServer.handle_xml(): req='{}'".format(ppf(xml_request)), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # classify request for to also respond on error (e.g. if config_reload/xml_parsing failed)
         oc = operation_code(xml_request)
@@ -546,7 +551,8 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                         req = req_class(cae)
                         req.parse_xml(xml_request)
                         if debug_level >= DEBUG_LEVEL_VERBOSE:
-                            err_messages.append((0, "Slot {}:{} parsed xml: {}".format(slot, req, req.get_xml())))
+                            err_messages.append((0,
+                                                 "Slot {}:{} parsed xml={}".format(slot, ppf(req), ppf(req.get_xml()))))
                         for proc in slot['ocProcessors']:
                             rec_ctx['procedure'] = proc.__name__
                             try:
@@ -580,7 +586,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
         msg = "AssServer.handle_xml(): " + ("\n    ** ".join([_[1] for _ in err_messages if _[0]]) or "OK")
         xml_response = ack_response(tn, last_err, org=org, msg=msg, status='1' if oc == 'LA' else '')
-        log_msg("OC {} processed; xml response: {}".format(oc, xml_response), importance=4)
+        log_msg("OC {} processed; xml response: {}".format(oc, ppf(xml_response)), importance=4)
 
         # directly sync to Salesforce if not already running (also in case the time thread died)
         # ae:25-09-18 13:39 commented out next line
