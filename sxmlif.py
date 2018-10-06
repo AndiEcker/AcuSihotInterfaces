@@ -2,6 +2,7 @@
 import datetime
 from copy import deepcopy
 from textwrap import wrap
+import pprint
 
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
@@ -44,6 +45,9 @@ ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
 
 ELEM_PATH_SEP = '.'
+
+
+ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
 #  HELPER METHODS  ###################################
@@ -1075,8 +1079,8 @@ class SihotXmlBuilder:
                        timeout=self.cae.get_option('shTimeout'),
                        encoding=self.cae.get_option('shXmlEncoding'),
                        debug_level=self.debug_level)
-        self.cae.dprint("SihotXmlBuilder.send_to_server(): responseParser={}, xml={}".format(response_parser, self.xml),
-                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}"
+                       .format(response_parser, ppf(self.xml)), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser or SihotXmlParser(self.cae)
@@ -1089,7 +1093,8 @@ class SihotXmlBuilder:
                 elif err_num == '29':
                     err_msg = "No Reservations Found"
                 if err_num != '1' or self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    err_msg += "; sent xml='{}'; got xml='{}'".format(self.xml, sc.received_xml)[0 if err_msg else 2:]
+                    err_msg += "; sent xml='{}'; got xml='{}'"\
+                        .format(ppf(self.xml), ppf(sc.received_xml))[0 if err_msg else 2:]
                 err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:

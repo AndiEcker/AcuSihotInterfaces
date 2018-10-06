@@ -31,6 +31,9 @@ RECORD_TYPES = dict(Lead='SIHOT_Leads', Contact='Rentals', Account='PersonAccoun
 ID_PREFIX_OBJECTS = {'001': 'Account', '003': 'Contact', '00Q': 'Lead'}
 
 
+ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
+
+
 def obj_from_id(sf_id):
     return ID_PREFIX_OBJECTS.get(sf_id[:3], DEF_CLIENT_OBJ)
 
@@ -189,7 +192,7 @@ class SfInterface:
         msg = ""
         try:
             sf_ret = client_obj.delete(sf_id)
-            msg = "{} {} deleted, status={}".format(sf_obj, sf_id, pprint.pformat(sf_ret, indent=9))
+            msg = "{} {} deleted, status={}".format(sf_obj, sf_id, ppf(sf_ret))
         except Exception as ex:
             self.error_msg = "{} {} deletion raised exception {}".format(sf_obj, sf_id, ex)
 
@@ -240,21 +243,21 @@ class SfInterface:
         er_list = self.client_ext_refs(sf_client_id, er_id, er_type, sf_obj=sf_obj)
         if er_list:     # update?
             if self._debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
-                uprint(" ###  ext_ref_upsert(): {} duplicate external refs found: {}".format(sf_client_id, er_list))
+                uprint(" ###  ext_ref_upsert({}): duplicate external refs found: {}".format(sf_client_id, ppf(er_list)))
             sf_er_id = er_list[0]
             try:
                 sf_ret = ext_ref_obj.update(sf_er_id, sf_dict)
-                msg = "{} {} updated with {} ret={}".format(er_obj, sf_er_id, pprint.pformat(sf_dict, indent=9), sf_ret)
+                msg = "{} {} updated with {} ret={}".format(er_obj, sf_er_id, ppf(sf_dict), sf_ret)
             except Exception as ex:
-                err = "{} update() raised exception {}. sent={}".format(er_obj, ex, pprint.pformat(sf_dict, indent=9))
+                err = "{} update() raised exception {}. sent={}".format(er_obj, ex, ppf(sf_dict))
         else:
             try:
                 sf_ret = ext_ref_obj.create(sf_dict)
-                msg = "{} created with {}, ret={}".format(er_obj, pprint.pformat(sf_dict, indent=9), sf_ret)
+                msg = "{} created with {}, ret={}".format(er_obj, ppf(sf_dict), sf_ret)
                 if sf_ret['success']:
                     sf_er_id = sf_ret['Id']
             except Exception as ex:
-                err = "{} create() exception {}. sent={}".format(er_obj, ex, pprint.pformat(sf_dict, indent=9))
+                err = "{} create() exception {}. sent={}".format(er_obj, ex, ppf(sf_dict))
 
         if err:
             if self._debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -305,32 +308,32 @@ class SfInterface:
         result = self.apex_call('clientsearch', function_args=service_args)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("find_client({}, {}, {}, {}) result={}".format(email, phone, first_name, last_name, result))
+            uprint("find_client({}, {}, {}, {}) result={}".format(email, phone, first_name, last_name, ppf(result)))
 
         if self.error_msg or 'id' not in result or 'type' not in result:
             return '', DEF_CLIENT_OBJ
 
         return result['id'], result['type']
 
-    def res_upsert(self, client_res_data):
+    def res_upsert(self, cl_res_data):
         if not self._ensure_lazy_connect():
             return None, None
 
-        result = self.apex_call('reservation_upsert', function_args=client_res_data)
+        result = self.apex_call('reservation_upsert', function_args=cl_res_data)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("... sfif.res_upsert({}) result={} err='{}'".format(client_res_data, result, self.error_msg))
+            uprint("... sfif.res_upsert({}) result={} err='{}'".format(ppf(cl_res_data), ppf(result), self.error_msg))
 
         if result.get('ErrorMessage'):
-            self.error_msg += "sfif.res_upsert({}) received error '{}' from SF"\
-                .format(client_res_data, result if self._debug_level >= DEBUG_LEVEL_ENABLED else result['ErrorMessage'])
+            msg = ppf(result) if self._debug_level >= DEBUG_LEVEL_ENABLED else result['ErrorMessage']
+            self.error_msg += "sfif.res_upsert({}) received error '{}' from SF".format(ppf(cl_res_data), msg)
         if not self.error_msg:
-            if not client_res_data.get('ReservationOpportunityId') and result.get('ReservationOpportunityId'):
-                client_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
-            elif client_res_data['ReservationOpportunityId'] != result.get('ReservationOpportunityId'):
+            if not cl_res_data.get('ReservationOpportunityId') and result.get('ReservationOpportunityId'):
+                cl_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
+            elif cl_res_data['ReservationOpportunityId'] != result.get('ReservationOpportunityId'):
                 msg = "sfif.res_upsert({}) ResOppId discrepancy; sent={} received={}"\
-                       .format(client_res_data,
-                               client_res_data['ReservationOpportunityId'], result.get('ReservationOpportunityId'))
+                       .format(ppf(cl_res_data),
+                               cl_res_data['ReservationOpportunityId'], result.get('ReservationOpportunityId'))
                 uprint(msg)
                 if msg and self._debug_level >= DEBUG_LEVEL_ENABLED:
                     self.error_msg += "\n      " + msg
@@ -347,11 +350,11 @@ class SfInterface:
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("... room_change({}, {}, {}, {}) args={} result={} err='{}'"
-                   .format(res_sf_id, check_in, check_out, next_room_id, room_chg_data, result, self.error_msg))
+                   .format(res_sf_id, check_in, check_out, next_room_id, room_chg_data, ppf(result), self.error_msg))
 
         if result.get('ErrorMessage'):
             self.error_msg += "sfif.room_change({}, {}, {}, {}) received error '{}' from SF"\
                 .format(res_sf_id, check_in, check_out, next_room_id,
-                        result if self._debug_level >= DEBUG_LEVEL_VERBOSE else result['ErrorMessage'])
+                        ppf(result) if self._debug_level >= DEBUG_LEVEL_VERBOSE else result['ErrorMessage'])
 
         return self.error_msg

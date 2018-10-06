@@ -134,10 +134,18 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 
 def res_upsert(res_id=''):
     # web service parameters are available as dict in request.json
-    res_data = request.json
-    add_log_entry("res_upsert({}): {}".format(res_id, res_data))
+    res_json = request.json
+    add_log_entry("res_upsert({}): {}".format(res_id, res_json))
 
-    if res_id:      # res_id is passed also within request
+    # added Q&D for to support new parameter/field names
+    tt = dict(HotelIdc='RUL_SIHOT_HOTEL', Numberc='', SubNumberc='', GdsNoc='SIHOT_GDSNO',
+              Arrivalc='ARR_DATE', Departurec='DEP_DATE',
+              RoomCatc='RUL_SIHOT_CAT', AcumenClientRefpc='OC_CODE', Statusc='SH_RES_TYPE', Actionc='RUL_ACTION',
+              BaordIdc='RUL_SIHOT_PACK', SourceIdc='RU_SOURCE', Notec='SIHOT_NOTE', Adultsc='RU_ADULTS',
+              Childrenc='RU_CHILDREN')
+    res_data = {tt[k]: v for k, v in res_json.items() if k in tt}
+
+    if res_id and not res_data.get('RUL_ACTION'):      # res_id is passed also within request
         res_data['RUL_ACTION'] = 'UPDATE'
 
     res_send = ResSender(cae)
@@ -149,7 +157,8 @@ def res_upsert(res_id=''):
     else:
         response.status_code = 400
         ho_id, res_id, sub_id = res_send.get_res_no()
-        res_dict = dict(Sihot_Hotel_Id=ho_id, Sihot_Res_Id=res_id, Sihot_Sub_Id=sub_id)
+        # res_dict = dict(Sihot_Hotel_Id=ho_id, Sihot_Res_Id=res_id, Sihot_Sub_Id=sub_id)
+        res_dict = dict(HotelIdc=ho_id, Numberc=res_id, SubNumberc=sub_id)
     return res_dict
 
 
