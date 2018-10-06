@@ -2,6 +2,7 @@
 import datetime
 from copy import deepcopy
 from textwrap import wrap
+import pprint
 
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
@@ -53,6 +54,9 @@ ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
 
 ELEM_PATH_SEP = '.'
+
+
+ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
 #  HELPER METHODS  ###################################
@@ -1175,10 +1179,10 @@ class ResFromSihot(ColMapXmlParser):
                     elif 'elemVal' in self.elem_col_map[k]:
                         msg.append(self.elem_col_map[k]['elemName'] + '=' + self.elem_col_map[k]['elemVal'])
 
-                self.ca.dprint("ResFromSihot.end(): reservation parsed:{}".format(",".join(msg)))
+                self.ca.dprint("ResFromSihot.end(): reservation parsed:{}".format(ppf(msg)))
                 # this could possibly replace the above for loop including the dprint() call
                 uprint("ResFromSihot.end(): element path values:{}"
-                       .format([c['elemPathValues'] for c in self.elem_col_map.values() if 'elemPathValues' in c]))
+                       .format(ppf([c['elemPathValues'] for c in self.elem_col_map.values() if 'elemPathValues' in c])))
             self.res_list.append(deepcopy(self.elem_col_map))
             # reset elemVal and elemListVal for next reservation record in the same response
             self.elem_col_map = deepcopy(self.blank_elem_col_map)
@@ -1282,7 +1286,8 @@ class SihotXmlBuilder:
             col_values.update(zip(self.acu_col_names, r))
             self._rows.append(col_values)
         self.ca.dprint("SihotXmlBuilder.fetch_all_from_acu() at {} got {}, 1st row: {}"
-                       .format(self._last_fetch, self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                       .format(self._last_fetch, self.row_count, ppf(self.cols)),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
         self._xml = '<?xml version="1.0" encoding="' + self.ca.get_option('shXmlEncoding').lower() + \
@@ -1343,8 +1348,8 @@ class SihotXmlBuilder:
                        timeout=self.ca.get_option('shTimeout'),
                        encoding=self.ca.get_option('shXmlEncoding'),
                        debug_level=self.debug_level)
-        self.ca.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}".format(response_parser, self.xml),
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.ca.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}"
+                       .format(response_parser, ppf(self.xml)), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser or SihotXmlParser(self.ca)
@@ -1357,7 +1362,8 @@ class SihotXmlBuilder:
                 elif err_num == '29':
                     err_msg = "No Reservations Found"
                 if err_num != '1' or self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    err_msg += "; sent xml='{}'; got xml='{}'".format(self.xml, sc.received_xml)[0 if err_msg else 2:]
+                    err_msg += "; sent xml='{}'; got xml='{}'"\
+                        .format(ppf(self.xml), ppf(sc.received_xml))[0 if err_msg else 2:]
                 err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:

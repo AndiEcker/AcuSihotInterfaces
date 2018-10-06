@@ -1521,11 +1521,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
         if err_msg and rgr_sf_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
+            ori_err = err_msg
             # retry without rgr_sf_id if ResOpp got deleted within SF
             sf_args['ReservationOpportunityId'] = ''
             sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
-            self._warn("asd.sf_res_upsert({}, {}, {}) cached ResOpp value reset to {}; SF client={}; err='{}'"
-                       .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, err_msg),
+            self._warn("asd.sf_res_upsert({}, {}, {}) cached ResOpp value reset to {}; SF client={}; ori-/err='{}'/'{}'"
+                       .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
                        notify=True)
             rgr_sf_id = ''
 

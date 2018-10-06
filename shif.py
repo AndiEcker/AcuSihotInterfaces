@@ -2,6 +2,7 @@
 import datetime
 import time
 from traceback import format_exc, print_exc
+import pprint
 
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from sxmlif import (elem_path_values, GuestSearch, ResFetch, ResSearch, ResKernelGet, ResToSihot,
@@ -16,6 +17,9 @@ SH_RES_SUB_SEP = '/'
 
 ELEM_MISSING = "(missing)"
 ELEM_EMPTY = "(empty)"
+
+
+ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
 def add_sh_options(cae, client_port=None, add_kernel_port=False, add_maps_and_kernel_usage=False):
