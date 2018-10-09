@@ -1525,7 +1525,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             # retry without rgr_sf_id if ResOpp got deleted within SF
             sf_args['ReservationOpportunityId'] = ''
             sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_args)
-            self._warn("asd.sf_res_upsert({}, {}, {}) cached ResOpp value reset to {}; SF client={}; ori-/err='{}'/'{}'"
+            self._warn("asd.sf_res_upsert({}, {}, {}) cached ResOppId reset to {}; SF client={}; ori-/err='{}'/'{}'"
                        .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
                        notify=True)
             rgr_sf_id = ''
@@ -1572,7 +1572,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self._warn("sf_room_change({}, {}, {}, {}) called".format(rgr_sf_id, check_in, check_out, next_room_id),
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-        self.error_message = self.sf_conn.room_change(rgr_sf_id, check_in, check_out, next_room_id)
+        err_msg = self.sf_conn.room_change(rgr_sf_id, check_in, check_out, next_room_id)
+        if err_msg and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
+            # reset (set last res change to midnight) to re-sync reservation (to get new ResOppId) and then try again
+            self.rgr_upsert(dict(rgr_last_change=datetime.date.today(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
+                            multiple_row_update=True)
+            self._warn("asd.sf_room_change({}, {}, {}, {}) ResOppId reset; ori-/err='{}'/'{}'"
+                       .format(rgr_sf_id, check_in, check_out, next_room_id, err_msg, self.error_message),
+                       notify=True)
+            self.error_message = ""
+            return ""
+
+        if err_msg:
+            self.error_message += err_msg
         return self.error_message
 
     def sf_room_data(self, res_opp_id):
