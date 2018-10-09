@@ -1,4 +1,4 @@
-from ae_sys_data import DUMMY_FIELD_NAME, FAT_VAL, Field
+from ae_sys_data import DUMMY_FIELD_NAME, FAT_VAL, Field, Value
 
 
 class TestField:
@@ -6,13 +6,13 @@ class TestField:
         f = Field()
         assert f.value() == ['']
         assert f.val() == ''
-        f.set_value(None)
+        f.set_value(Value())
+        assert f.value() == ['']
+        assert f.val() == ''
+        f = Field().set_value(Value((None, )))
         assert f.value() == [None]
         assert f.val() is None
-        f = Field().set_value(None)
-        assert f.value() == [None]
-        assert f.val() is None
-        f = Field(**{FAT_VAL: None})
+        f = Field(**{FAT_VAL: Value((None, ))})
         assert f.value() == [None]
         assert f.val() is None
 

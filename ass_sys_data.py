@@ -189,7 +189,7 @@ def ass_fld_name(field_name):
     return fld_name
 
 
-def ac_col_name(field_name):
+def ac_fld_name(field_name):
     col_name = ""
     field_map = FIELD_NAMES.get(field_name)
     if field_map:
@@ -1635,7 +1635,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         col_values = dict()
         for fld, val in fields_dict.items():
             col_name = ac_fld_name(fld)
-            if col_name and col_name in guest.acu_col_names:
+            if col_name and col_name in guest.elem_fld_rec:
                 col_values[col_name] = val
         return guest.send_client_to_sihot(col_values)
 

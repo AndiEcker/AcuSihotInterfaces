@@ -1,5 +1,6 @@
 # SiHOT xml interface
 import datetime
+from collections import OrderedDict
 from copy import deepcopy
 from textwrap import wrap
 import pprint
@@ -8,7 +9,8 @@ import pprint
 from xml.etree.ElementTree import XMLParser, ParseError
 
 from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH,\
-    FAT_NAME, FAT_REC, FAT_VAL, FAT_FLT, FAD_FROM, FAD_ONTO, Field, Record, Records
+    FAT_NAME, FAT_REC, FAT_CAL, FAT_CON, FAT_FLT, FAT_TYPE, FAD_FROM, FAD_ONTO, \
+    aspect_key, Field, Record, Records
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
 from ae_tcp import TcpClient
@@ -94,11 +96,11 @@ def elem_path_values(elem_fld_map, elem_path_suffix):
 #  ELEMENT-FIELD-MAPS  #################################
 
 MTI_ELEM_NAME = 0
-MTI_FIELD_NAME = 1
-MTI_HIDE_IF = 2
-MTI_FIELD_VAL = 3
-MTI_FIELD_TYPE = 4
-MTI_FIELD_CON = 5   # currently only needed for kernel DOB field
+MTI_FLD_NAME = 1
+MTI_FLD_FILTER = 2
+MTI_FLD_VAL = 3
+MTI_FLD_TYPE = 4
+MTI_FLD_CONVERT = 5   # currently only needed for kernel DOB field
 
 # mapping element name in tuple item 0 onto field name in [1], hideIf callable in [2] and default field value in [3]
 # default map for GuestFromSihot.elem_fld_map instance and as read-only constant by AcuClientToSihot using the SIHOT
@@ -109,9 +111,9 @@ MAP_KERNEL_CLIENT = \
          lambda f: f.ina(ACTION_INSERT)),
         ('MATCHCODE', 'AcId'),
         ('GUEST-NR', 'SH_GUEST_NO',  # only needed for GUEST-SEARCH/get_objid_by_guest_no()
-         lambda f: not f.srv()),
+         lambda f: not f.val()),
         ('FLAGS', 'SH_FLAGS',        # only needed for GUEST-SEARCH/get_objid_by_guest_no()
-         lambda f: not f.srv()),
+         lambda f: not f.val()),
         ('T-SALUTATION', 'Salutation'),  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
         ('T-TITLE', 'Title'),
         ('T-GUEST', 'GuestType'),
@@ -123,7 +125,7 @@ MAP_KERNEL_CLIENT = \
         ('CITY', 'City'),
         ('T-COUNTRY-CODE', 'Country'),
         ('T-STATE', 'State',
-         lambda f: not f.srv()),
+         lambda f: not f.val()),
         ('T-LANGUAGE', 'Language'),
         ('COMMENT', 'Comment'),
         ('COMMUNICATION/', None,
@@ -265,13 +267,13 @@ MAP_WEB_RES = \
         # ('GUEST-ID', 'ResOrdererId',
         #  'elemHideIf':  "not c.get('ResOrdererId') and not c.get['ShId']"},
         ('GUEST-ID', 'ResOrdererId',
-         lambda f: not f.srv() and not f.srv('ShId')),
+         lambda f: not f.val() and not f.srv('ShId')),
         ('MATCHCODE', 'ResOrdererMc'),
         ('GDSNO', 'ResGdsNo'),
         ('VOUCHERNUMBER', 'ResVoucherNo',
          lambda f: f.ina(ACTION_DELETE)),
         ('EXT-KEY', 'ResGroupNo',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('FLAGS', None,
          None, 'IGNORE-OVERBOOKING'),  # ;NO-FALLBACK-TO-ERRONEOUS'),
         ('RT', 'ResStatus'),
@@ -284,13 +286,13 @@ MAP_WEB_RES = \
         ('PCAT', 'ResPriceCat',
          lambda f: f.ina(ACTION_DELETE)),
         ('ALLOTMENT-EXT-NO', 'ResAllotmentNo',
-         lambda f: not f.srv(),  ''),
+         lambda f: not f.val(),  ''),
         ('PAYMENT-INST', 'ResAccount',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('SALES-DATE', 'ResBooked',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('RATE-SEGMENT', 'ResRateSegment',
-         lambda f: not f.srv(), ''),
+         lambda f: not f.val(), ''),
         ('RATE/', ),  # package/arrangement has also to be specified in PERSON:
         ('R', 'ResBoard'),
         ('ISDEFAULT', None, None, 'Y'),
@@ -355,17 +357,17 @@ MAP_WEB_RES = \
         ('SOURCE', 'ResSource',
          lambda f: f.ina(ACTION_DELETE)),
         ('NN', 'ResMktGroup2',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('CHANNEL', 'ResMktGroup',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         # ('NN2', 'ResSfId',
-        # lambda f: not f.srv()),
+        # lambda f: not f.val()),
         ('EXT-REFERENCE', 'ResFlightNo',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),    # see also currently unused PICKUP-COMMENT-ARRIVAL element
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),    # see also currently unused PICKUP-COMMENT-ARRIVAL element
         ('ARR-TIME', 'ResFlightETA',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('PICKUP-TIME-ARRIVAL', 'ResFlightETA',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('PICKUP-TYPE-ARRIVAL', None,                       # 1=car, 2=van
          lambda f: f.ina(ACTION_DELETE) or not f.srv('ResFlightETA'), 1),
         # ### PERSON/occupant details
@@ -384,17 +386,17 @@ MAP_WEB_RES = \
          lambda f: f.ina(ACTION_DELETE),
          None, Records),
         ('NAME', 'ResPersonSurname',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv() or f.srv('AcId') or f.srv('ShId'),
+         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.srv('AcId') or f.srv('ShId'),
          lambda f: "Adult " + str(f.idx()) if f.idx() < f.srv('ResAdults')
             else "Child " + str(f.idx() - f.srv('ResAdults') + 1)),
         ('NAME2', 'ResPersonForename',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv() or f.srv('AcId') or f.srv('ShId')),
+         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.srv('AcId') or f.srv('ShId')),
         ('AUTO-GENERATED', 'ResPersonAutoGenerated',
          lambda f: f.ina(ACTION_DELETE) or (f.srv('ResAdults') <= 2 and (f.srv('AcId') or f.srv('ShId'))), '1'),
         ('MATCHCODE', 'AcId',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv() or f.srv('ShId')),
+         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.srv('ShId')),
         ('GUEST-ID', 'ShId',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('ROOM-SEQ', None,
          lambda f: f.ina(ACTION_DELETE), '0'),
         ('ROOM-PERS-SEQ', None,
@@ -404,9 +406,9 @@ MAP_WEB_RES = \
         ('R', 'ResBoard',
          lambda f: f.ina(ACTION_DELETE)),
         ('RN', 'ResRoomNo',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv() or f.srv('ResDeparture') < datetime.datetime.now()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.srv('ResDeparture') < datetime.datetime.now()),
         ('DOB', 'ResPersonDOB',
-         lambda f: f.ina(ACTION_DELETE) or not f.srv()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('/PERSON', None,
          lambda f: f.ina(ACTION_DELETE) or f.srv('ResAdults') <= 0),
         ('/RESERVATION',),
@@ -830,9 +832,9 @@ class FldMapXmlParser(SihotXmlParser):
         self.elem_fld_map = dict()
         for fas in elem_map:
             mi = len(fas) - 1
-            if mi <= MTI_FIELD_NAME:
+            if mi <= MTI_FLD_NAME:
                 continue
-            field_name = fas[MTI_FIELD_NAME]
+            field_name = fas[MTI_FLD_NAME]
             if not field_name:
                 continue
 
@@ -842,18 +844,18 @@ class FldMapXmlParser(SihotXmlParser):
             aspects[FAT_NAME] = field_name
             field = Field(**aspects)
             field.set_name(elem_name, SDI_SH, FAD_FROM, add=True)
-            if mi > MTI_HIDE_IF and fas[MTI_HIDE_IF]:
-                field.set_filter(fas[MTI_HIDE_IF], SDI_SH, FAD_FROM, add=True)
-            if mi > MTI_FIELD_TYPE and fas[MTI_FIELD_TYPE]:
-                field.set_value_type(fas[MTI_FIELD_TYPE], SDI_SH, FAD_FROM, add=True)
-            if mi > MTI_FIELD_VAL and fas[MTI_FIELD_VAL] is not None:
-                val_or_cal = fas[MTI_FIELD_VAL]
+            if mi > MTI_FLD_FILTER and fas[MTI_FLD_FILTER]:
+                field.set_filter(fas[MTI_FLD_FILTER], SDI_SH, FAD_FROM, add=True)
+            if mi > MTI_FLD_TYPE and fas[MTI_FLD_TYPE]:
+                field.set_value_type(fas[MTI_FLD_TYPE], SDI_SH, FAD_FROM, add=True)
+            if mi > MTI_FLD_VAL and fas[MTI_FLD_VAL] is not None:
+                val_or_cal = fas[MTI_FLD_VAL]
                 if callable(val_or_cal):
                     field.set_calculator(val_or_cal, SDI_SH, FAD_FROM, add=True)
                 else:
                     field.set_value(val_or_cal, SDI_SH, FAD_FROM, add=True)
-            if mi > MTI_FIELD_CON and fas[MTI_FIELD_CON]:
-                field.set_converter(fas[MTI_FIELD_CON], SDI_SH, FAD_FROM, add=True)
+            if mi > MTI_FLD_CONVERT and fas[MTI_FLD_CONVERT]:
+                field.set_converter(fas[MTI_FLD_CONVERT], SDI_SH, FAD_FROM, add=True)
 
             self.elem_fld_map[elem_name] = field
 
@@ -867,7 +869,7 @@ class FldMapXmlParser(SihotXmlParser):
             field = self.elem_fld_map[tag]
         else:
             full_path = ELEM_PATH_SEP.join(self._elem_path)
-            for elem_path_suffix, field in self.elem_fld_map:
+            for elem_path_suffix, field in self.elem_fld_map.items():
                 if full_path.endswith(elem_path_suffix):
                     break
         return field
@@ -956,65 +958,14 @@ class ResKernelResponse(SihotXmlParser):
 class SihotXmlBuilder:
     tn = '1'
 
-    def __init__(self, cae, elem_map=None, use_kernel=None):
-        super(SihotXmlBuilder, self).__init__(cae)
+    def __init__(self, cae, use_kernel=False):
         self.cae = cae
         self.debug_level = cae.get_option('debugLevel')
-        self.elem_map = deepcopy(elem_map or cae.get_option('mapRes'))
-        values = ((fld_args[0], elem_name, ) + fld_args[1:] for elem_name, *fld_args in elem_map
-                  if len(fld_args) and fld_args[0])
-        fields = zip((FAT_NAME, FAT_VAL, FAT_FLT, ), values)
-        self.elem_fld_rec = Record(fields=fields, system=SDI_SH, direction=FAD_ONTO)
-        self.row_link_field = Field().set_rec(self.elem_fld_rec)
-        self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
-
-        '''
-        self.sihot_elem_fld = [(c[MTI_ELEM_NAME],
-                                c[MTI_FIELD_NAME] if len(c) > MTI_FIELD_NAME else None,
-                                c[MTI_FIELD_VAL] if len(c) > MTI_FIELD_VAL else None,
-                                c[MTI_HIDE_IF] if len(c) > MTI_HIDE_IF else None,
-                                )
-                               for c in elem_map]
-        self.fix_fld_values = dict()
-        self.acu_fld_names = list()  # acu_fld_names and acu_fld_expres need to be in sync
-        self.acu_fld_expres = list()
-        self.fld_elem = dict()
-        self.elem_fld = dict()
-        for c in elem_map:
-            if len(c) > MTI_FIELD_NAME and c[MTI_FIELD_NAME]:
-                if len(c) > MTI_FIELD_VAL:
-                    self.fix_fld_values[c[MTI_FIELD_NAME]] = c[MTI_FIELD_VAL]
-                elif c[MTI_FIELD_NAME] not in self.acu_fld_names:
-                    self.acu_fld_names.append(c[MTI_FIELD_NAME])
-                    self.acu_fld_expres.append(c['fldValFromAcu'] + " as " + c[MTI_FIELD_NAME] if 'fldValFromAcu' in c
-                                               else c[MTI_FIELD_NAME])
-                # mapping dicts between db col names and xml elem names (not works for dup elems like MATCHCODE in RES)
-                self.fld_elem[c[MTI_FIELD_NAME]] = c[MTI_ELEM_NAME]
-                self.elem_fld[c[MTI_ELEM_NAME]] = c[MTI_FIELD_NAME]
-        '''
+        self.use_kernel_interface = use_kernel
         self.response = None
-
-        self._recs = list()  # list of dicts, used by inheriting class for to store the records to send to SiHOT.PMS
-        self._current_row_i = 0
 
         self._xml = ''
         self._indent = 0
-
-    # --- rows/cols helpers
-
-    @property
-    def fields(self):
-        return self._recs[self._current_row_i] if len(self._recs) > self._current_row_i else dict()
-
-    # def next_row(self): self._current_row_i += 1
-
-    @property
-    def rec_count(self):
-        return len(self._recs)
-
-    @property
-    def recs(self):
-        return self._recs
 
     def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
         self._xml = '<?xml version="1.0" encoding="' + self.cae.get_option('shXmlEncoding').lower() + \
@@ -1042,37 +993,6 @@ class SihotXmlBuilder:
     def add_tag(self, tag, val=''):
         self._xml += self.new_tag(tag, val)
 
-    def prepare_map_xml(self, fld_values, action='', include_empty_values=True):
-        old_act = self.elem_fld_rec.action
-        self.elem_fld_rec.action = action
-        inner_xml = ''
-        for elem_map_item in self.elem_map:
-            tag = elem_map_item[MTI_ELEM_NAME]
-            fld = elem_map_item[MTI_FIELD_NAME]
-            if fld is None:
-                field = self.row_link_field
-                val = None
-            else:
-                field = self.elem_fld_rec[fld]
-                val = field.val(SDI_SH)
-            filter_func = field.aspect_value(FAT_FLT, system=SDI_SH, direction=FAD_ONTO)
-            if filter_func:
-                assert callable(filter_func), "filter aspect {} must be callable".format(filter_func)
-                if filter_func(field):
-                    continue
-
-            if tag.endswith('/'):
-                self._indent += 1
-                inner_xml += '\n' + ' ' * self._indent + self.new_tag(tag[:-1], closing=False)
-            elif tag.startswith('/'):
-                self._indent -= 1
-                inner_xml += self.new_tag(tag[1:], opening=False)
-            elif include_empty_values or (fld and fld in fld_values) or val:
-                inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(fld_values[fld]
-                                                                                if fld and fld in fld_values else val))
-        self.elem_fld_rec.action = old_act
-        return inner_xml
-
     def send_to_server(self, response_parser=None):
         sc = TcpClient(self.cae.get_option('shServerIP'),
                        self.cae.get_option('shServerKernelPort' if self.use_kernel_interface else 'shServerPort'),
@@ -1080,7 +1000,7 @@ class SihotXmlBuilder:
                        encoding=self.cae.get_option('shXmlEncoding'),
                        debug_level=self.debug_level)
         self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}"
-                       .format(response_parser, ppf(self.xml)), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                        .format(response_parser, ppf(self.xml)), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser or SihotXmlParser(self.cae)
@@ -1163,59 +1083,6 @@ class CatRooms(SihotXmlBuilder):
         return err_msg or self.response.cat_rooms
 
 
-class ClientToSihot(SihotXmlBuilder):
-    def __init__(self, cae):
-        super(ClientToSihot, self).__init__(cae, elem_map=cae.get_config('mapClient') or MAP_KERNEL_CLIENT)
-
-    def _prepare_guest_xml(self, c_row, action=None, fld_name_suffix=''):
-        if not action:
-            action = ACTION_UPDATE if c_row['ShId' + fld_name_suffix] else ACTION_INSERT
-        self.beg_xml(operation_code='GUEST-CHANGE' if action == ACTION_UPDATE else 'GUEST-CREATE')
-        self.add_tag('GUEST-PROFILE' if self.use_kernel_interface else 'GUEST',
-                     self.prepare_map_xml(c_row, action))
-        self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_xml() fld_values/action/result: ",
-                        c_row, action, self.xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        return action
-
-    def _prepare_guest_link_xml(self, mc1, mc2, action):
-        mct1 = self.new_tag('MATCHCODE-GUEST', self.convert_value_to_xml_string(mc1))
-        mct2 = self.new_tag('CONTACT',
-                            self.new_tag('MATCHCODE', self.convert_value_to_xml_string(mc2)) +
-                            self.new_tag('FLAG', 'DELETE' if action == ACTION_DELETE else ''))
-        self.beg_xml(operation_code='GUEST-CONTACT')
-        self.add_tag('CONTACTLIST', mct1 + mct2)
-        self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_link_xml() mc1/mc2/result: ", mc1, mc2, self.xml,
-                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-
-    def _send_link_to_sihot(self, pk1, pk2, delete=False):
-        self._prepare_guest_link_xml(pk1, pk2, delete)
-        return self.send_to_server()
-
-    def _send_person_to_sihot(self, c_row, first_person=""):  # pass AcId of first person for to send 2nd person
-        action = self._prepare_guest_xml(c_row, fld_name_suffix='2' if first_person else '')
-        err_msg = self.send_to_server()
-        if 'guest exists already' in err_msg and action == ACTION_INSERT:  # and not self.use_kernel_interface:
-            action = ACTION_UPDATE
-            self._prepare_guest_xml(c_row, action=action, fld_name_suffix='2' if first_person else '')
-            err_msg = self.send_to_server()
-        return err_msg, action
-
-    def send_client_to_sihot(self, c_row=None, commit=False):
-        if not c_row:
-            c_row = self.fields
-        err_msg, action = self._send_person_to_sihot(c_row)
-        if err_msg:
-            self.cae.dprint("ClientToSihot.send_client_to_sihot() row|action|err: ", c_row, action, err_msg)
-        else:
-            self.cae.dprint("ClientToSihot.send_client_to_sihot() client={} RESPONDED OBJID={}/MATCHCODE={}"
-                            .format(c_row['AcId'], self.response.objid, self.response.matchcode),
-                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-
-        return err_msg, action
-
-
 class ConfigDict(SihotXmlBuilder):
     def get_key_values(self, config_type, hotel_id='1', language='EN'):
         self.beg_xml(operation_code='GCF')
@@ -1231,14 +1098,13 @@ class ConfigDict(SihotXmlBuilder):
 
 class GuestSearch(SihotXmlBuilder):
     def __init__(self, cae):
-        super().__init__(cae, elem_map=cae.get_config('mapClient') or MAP_KERNEL_CLIENT, use_kernel=True)
+        super().__init__(cae, use_kernel=True)
 
     def get_guest(self, obj_id):
         """ return dict with guest data OR str with error message in case of error.
         """
         self.beg_xml(operation_code='GUEST-GET')
-        self.add_tag('GUEST-PROFILE',
-                     self.prepare_map_xml({'ShId': obj_id}, action=ACTION_SEARCH, include_empty_values=False))
+        self.add_tag('GUEST-PROFILE', self.new_tag('OBJID', obj_id))
         self.end_xml()
 
         rp = GuestSearchResponse(self.cae)
@@ -1252,60 +1118,60 @@ class GuestSearch(SihotXmlBuilder):
         return ret
 
     def get_guest_nos_by_matchcode(self, matchcode, exact_matchcode=True):
-        fld_values = {'AcId': matchcode,
+        search_for = {'MATCHCODE': matchcode,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
-        return self.search_guests(fld_values, ['guest_nr'])
+        return self.search_guests(search_for, ['guest_nr'])
 
     def get_objid_by_guest_no(self, guest_no):
-        fld_values = {'SH_GUEST_NO': guest_no,
+        search_for = {'GUEST-NR': guest_no,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        ret = self.search_guests(fld_values, ['objid'])
+        ret = self.search_guests(search_for, ['objid'])
         return ret[0] if len(ret) > 0 else None
 
     def get_objids_by_guest_name(self, name):
         forename, surname = name.split(' ', maxsplit=1)
-        fld_values = {'Surname': surname,
-                      'Forename': forename,
+        search_for = {'NAME-1': surname,
+                      'NAME-2': forename,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(fld_values, ['objid'])
+        return self.search_guests(search_for, ['objid'])
 
     def get_objids_by_guest_names(self, surname, forename):
-        fld_values = {'Surname': surname,
-                      'Forename': forename,
+        search_for = {'NAME-1': surname,
+                      'NAME-2': forename,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(fld_values, ['objid'])
+        return self.search_guests(search_for, ['objid'])
 
     def get_objids_by_email(self, email):
-        fld_values = {'Email': email,
+        search_for = {'EMAIL-1': email,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(fld_values, ['objid'])
+        return self.search_guests(search_for, ['objid'])
 
     def get_objids_by_matchcode(self, matchcode, exact_matchcode=True):
-        fld_values = {'AcId': matchcode,
+        search_for = {'MATCHCODE': matchcode,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
-        return self.search_guests(fld_values, ['objid'])
+        return self.search_guests(search_for, ['objid'])
 
     def get_objid_by_matchcode(self, matchcode, exact_matchcode=True):
-        fld_values = {'AcId': matchcode,
+        search_for = {'MATCHCODE': matchcode,
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
                       }
-        ret = self.search_guests(fld_values, [':objid'], key_elem_name='matchcode')
+        ret = self.search_guests(search_for, [':objid'], key_elem_name='matchcode')
         if ret:
             return self._check_and_get_objid_of_matchcode_search(ret, matchcode, exact_matchcode)
 
     def search_agencies(self):
-        fld_values = {'GuestType': 7,
+        search_for = {'T-GUEST': 2,     # 1=Guest, 2=Company
                       'SH_FLAGS': 'FIND-ALSO-DELETED-GUESTS',
                       }
-        return self.search_guests(fld_values, ['OBJID', 'MATCHCODE'])
+        return self.search_guests(search_for, ['OBJID', 'MATCHCODE'])
 
-    def search_guests(self, fld_values, ret_elem_names, key_elem_name=None):
+    def search_guests(self, search_for, ret_elem_names, key_elem_name=None):
         """ return dict with search element/attribute value as the dict key if len(ret_elem_names)==1 and if
             ret_elem_names[0][0]==':' (in this case key_elem_name has to provide the search element/attribute name)
             OR return list of values if len(ret_elem_names) == 1
@@ -1313,18 +1179,17 @@ class GuestSearch(SihotXmlBuilder):
             OR return None in case of error.
         """
         self.beg_xml(operation_code='GUEST-SEARCH')
-        self.add_tag('GUEST-SEARCH-REQUEST',
-                     self.prepare_map_xml(fld_values, action=ACTION_SEARCH, include_empty_values=False))
+        self.add_tag('GUEST-SEARCH-REQUEST', ''.join([self.new_tag(e, v) for e, v in search_for.items()]))
         self.end_xml()
 
         rp = GuestSearchResponse(self.cae, ret_elem_names, key_elem_name=key_elem_name)
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
             ret = self.response.ret_elem_values
-            self.cae.dprint("GuestSearch.search_guests() fld_values|xml|result: ", fld_values, self.xml, ret,
+            self.cae.dprint("GuestSearch.search_guests() search_for|xml|result: ", search_for, self.xml, ret,
                             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         else:
-            uprint("GuestSearch.search_guests() fld_values|error: ", fld_values, err_msg)
+            uprint("GuestSearch.search_guests() search_for|error: ", search_for, err_msg)
             ret = None
         return ret
 
@@ -1459,11 +1324,164 @@ class ResSearch(SihotXmlBuilder):
         return elem_path_values(self.response.res_list, elem_path_suffix)
 
 
-class ResToSihot(SihotXmlBuilder):
+class FldMapXmlBuilder(SihotXmlBuilder):
+    def __init__(self, cae, use_kernel=None, elem_map=None):
+        super().__init__(cae, use_kernel=use_kernel)
+
+        self._recs = list()  # list of dicts, used by inheriting class for to store the records to send to SiHOT.PMS
+        self._current_row_i = 0
+
+        self.elem_map = deepcopy(elem_map or cae.get_option('mapRes'))
+        asp_name_keys = (aspect_key(FAT_NAME, SDI_SH, FAD_ONTO), FAT_NAME)
+        fields = OrderedDict()
+        for fd in self.elem_map:
+            num_asp = len(fd)
+            if num_asp <= MTI_FLD_NAME or fd[MTI_FLD_NAME] is None:
+                continue
+            aspects = dict(zip(asp_name_keys, fd[:2]))
+            if num_asp > MTI_FLD_FILTER and fd[MTI_FLD_FILTER] is not None:
+                aspects[aspect_key(FAT_FLT, SDI_SH, FAD_ONTO)] = fd[MTI_FLD_FILTER]
+            if num_asp > MTI_FLD_VAL and fd[MTI_FLD_VAL] is not None:
+                aspects[aspect_key(FAT_CAL, SDI_SH, FAD_ONTO)] = lambda f: fd[MTI_FLD_VAL]
+            if num_asp > MTI_FLD_TYPE and fd[MTI_FLD_TYPE] is not None:
+                aspects[aspect_key(FAT_TYPE, SDI_SH, FAD_ONTO)] = fd[MTI_FLD_TYPE]
+            if num_asp > MTI_FLD_CONVERT and fd[MTI_FLD_CONVERT] is not None:
+                aspects[aspect_key(FAT_CON, SDI_SH, FAD_ONTO)] = fd[MTI_FLD_CONVERT]
+            fields[MTI_FLD_NAME] = Field(**aspects)
+        self.elem_fld_rec = Record(fields=fields, system=SDI_SH, direction=FAD_ONTO)
+        self.row_link_field = Field().set_rec(self.elem_fld_rec)
+
+        ''' TODO: remove after refactoring
+        self.sihot_elem_fld = [(c[MTI_ELEM_NAME],
+                                c[MTI_FLD_NAME] if len(c) > MTI_FLD_NAME else None,
+                                c[MTI_FLD_VAL] if len(c) > MTI_FLD_VAL else None,
+                                c[MTI_FLD_FILTER] if len(c) > MTI_FLD_FILTER else None,
+                                )
+                               for c in elem_map]
+        self.fix_fld_values = dict()
+        self.acu_fld_names = list()  # acu_fld_names and acu_fld_expres need to be in sync
+        self.acu_fld_expres = list()
+        self.fld_elem = dict()
+        self.elem_fld = dict()
+        for c in elem_map:
+            if len(c) > MTI_FLD_NAME and c[MTI_FLD_NAME]:
+                if len(c) > MTI_FLD_VAL:
+                    self.fix_fld_values[c[MTI_FLD_NAME]] = c[MTI_FLD_VAL]
+                elif c[MTI_FLD_NAME] not in self.acu_fld_names:
+                    self.acu_fld_names.append(c[MTI_FLD_NAME])
+                    self.acu_fld_expres.append(c['fldValFromAcu'] + " as " + c[MTI_FLD_NAME] if 'fldValFromAcu' in c
+                                               else c[MTI_FLD_NAME])
+                # mapping dicts between db col names and xml elem names (not works for dup elems like MATCHCODE in RES)
+                self.fld_elem[c[MTI_FLD_NAME]] = c[MTI_ELEM_NAME]
+                self.elem_fld[c[MTI_ELEM_NAME]] = c[MTI_FLD_NAME]
+        '''
+
+    # --- rows/cols helpers
+
+    @property
+    def fields(self):
+        return self._recs[self._current_row_i] if len(self._recs) > self._current_row_i else dict()
+
+    # def next_row(self): self._current_row_i += 1
+
+    @property
+    def rec_count(self):
+        return len(self._recs)
+
+    @property
+    def recs(self):
+        return self._recs
+
+    def prepare_map_xml(self, fld_values, action='', include_empty_values=True):
+        old_act = self.elem_fld_rec.action
+        self.elem_fld_rec.action = action
+        inner_xml = ''
+        for elem_map_item in self.elem_map:
+            tag = elem_map_item[MTI_ELEM_NAME]
+            fld = elem_map_item[MTI_FLD_NAME]
+            if fld is None:
+                field = self.row_link_field
+                val = None
+            else:
+                field = self.elem_fld_rec[fld]
+                val = field.val(SDI_SH)
+            filter_func = field.aspect_value(FAT_FLT, system=SDI_SH, direction=FAD_ONTO)
+            if filter_func:
+                assert callable(filter_func), "filter aspect {} must be callable".format(filter_func)
+                if filter_func(field):
+                    continue
+
+            if tag.endswith('/'):
+                self._indent += 1
+                inner_xml += '\n' + ' ' * self._indent + self.new_tag(tag[:-1], closing=False)
+            elif tag.startswith('/'):
+                self._indent -= 1
+                inner_xml += self.new_tag(tag[1:], opening=False)
+            elif include_empty_values or (fld and fld in fld_values) or val:
+                inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(fld_values[fld]
+                                                                                if fld and fld in fld_values else val))
+        self.elem_fld_rec.action = old_act
+        return inner_xml
+
+
+class ClientToSihot(FldMapXmlBuilder):
     def __init__(self, cae):
-        super(ResToSihot, self).__init__(cae, elem_map=cae.get_config('mapRes') or MAP_WEB_RES)
+        super(ClientToSihot, self).__init__(cae, elem_map=cae.get_config('mapClient') or MAP_KERNEL_CLIENT)
+
+    def _prepare_guest_xml(self, c_row, action=None, fld_name_suffix=''):
+        if not action:
+            action = ACTION_UPDATE if c_row['ShId' + fld_name_suffix] else ACTION_INSERT
+        self.beg_xml(operation_code='GUEST-CHANGE' if action == ACTION_UPDATE else 'GUEST-CREATE')
+        self.add_tag('GUEST-PROFILE', self.prepare_map_xml(c_row, action))
+        self.end_xml()
+        self.cae.dprint("ClientToSihot._prepare_guest_xml() fld_values/action/result: ",
+                        c_row, action, self.xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        return action
+
+    def _prepare_guest_link_xml(self, mc1, mc2, action):
+        mct1 = self.new_tag('MATCHCODE-GUEST', self.convert_value_to_xml_string(mc1))
+        mct2 = self.new_tag('CONTACT',
+                            self.new_tag('MATCHCODE', self.convert_value_to_xml_string(mc2)) +
+                            self.new_tag('FLAG', 'DELETE' if action == ACTION_DELETE else ''))
+        self.beg_xml(operation_code='GUEST-CONTACT')
+        self.add_tag('CONTACTLIST', mct1 + mct2)
+        self.end_xml()
+        self.cae.dprint("ClientToSihot._prepare_guest_link_xml() mc1/mc2/result: ", mc1, mc2, self.xml,
+                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+
+    def _send_link_to_sihot(self, pk1, pk2, delete=False):
+        self._prepare_guest_link_xml(pk1, pk2, delete)
+        return self.send_to_server()
+
+    def _send_person_to_sihot(self, c_row, first_person=""):  # pass AcId of first person for to send 2nd person
+        action = self._prepare_guest_xml(c_row, fld_name_suffix='2' if first_person else '')
+        err_msg = self.send_to_server()
+        if 'guest exists already' in err_msg and action == ACTION_INSERT:
+            action = ACTION_UPDATE
+            self._prepare_guest_xml(c_row, action=action, fld_name_suffix='2' if first_person else '')
+            err_msg = self.send_to_server()
+        return err_msg, action
+
+    def send_client_to_sihot(self, c_row=None, commit=False):
+        if not c_row:
+            c_row = self.fields
+        err_msg, action = self._send_person_to_sihot(c_row)
+        if err_msg:
+            self.cae.dprint("ClientToSihot.send_client_to_sihot() row|action|err: ", c_row, action, err_msg)
+        else:
+            self.cae.dprint("ClientToSihot.send_client_to_sihot() client={} RESPONDED OBJID={}/MATCHCODE={}"
+                            .format(c_row['AcId'], self.response.objid, self.response.matchcode),
+                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+
+        return err_msg, action
+
+
+class ResToSihot(FldMapXmlBuilder):
+    def __init__(self, cae):
+        super().__init__(cae, elem_map=cae.get_config('mapRes') or MAP_WEB_RES,
+                         use_kernel=cae.get_option('useKernelForRes'))
         self.use_kernel_for_new_clients = cae.get_option('useKernelForClient')
-        self.map_client = cae.get_option('mapClient')
+        self.map_client = cae.get_option('mapClient') or MAP_KERNEL_CLIENT
 
         self._warning_frags = self.cae.get_config('warningFragments') or list()  # list of warning text fragments
         self._warning_msgs = ""

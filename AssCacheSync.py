@@ -16,7 +16,7 @@ from shif import elem_value, pax_count, gds_no, elem_path_join, guest_data, SH_D
 from sfif import obj_from_id
 from ass_sys_data import (add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone,
                           field_desc, field_clients_idx,
-                          ac_col_name, sf_fld_name, sh_fld_value, field_list_to_sf, field_dict_from_sf, client_fields,
+                          ac_fld_name, sf_fld_name, sh_fld_value, field_list_to_sf, field_dict_from_sf, client_fields,
                           AC_SQL_EXT_REF_TYPE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
                           SF_DEF_SEARCH_FIELD, SH_DEF_SEARCH_FIELD)
 
@@ -701,8 +701,8 @@ def ac_push_clients():
 
     for as_cl in conf_data.clients:
         match_val = as_cl[field_clients_idx(match_field)]
-        cols = {ac_col_name(_): as_cl[field_clients_idx(_)] for _ in filter_fields if ac_col_name(_)}
-        if acu_db.update("T_CD", cols, where="{} = '{}'".format(ac_col_name(match_field), match_val)):
+        cols = {ac_fld_name(_): as_cl[field_clients_idx(_)] for _ in filter_fields if ac_fld_name(_)}
+        if acu_db.update("T_CD", cols, where="{} = '{}'".format(ac_fld_name(match_field), match_val)):
             log_error("ac_push_clients(): Push client Acumen error: " + acu_db.last_err_msg, ctx, importance=4)
 
     return acu_db.commit()

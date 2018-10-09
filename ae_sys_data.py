@@ -150,11 +150,12 @@ class Record(OrderedDict):      # isinstance(..., dict) not working if using Mut
         :param fields:      OrderedDict/dict of Field instances (field order is not preserved when using dict).
         :param system:      main/current system of this record,
         :param direction:   interface direction of this record.
-        :param action:      current action (see ACTION_INSERT, ACTION_SEARCH, ACTION_DELETE, ...).TODO: move from sxmlif
+        :param action:      current action (see ACTION_INSERT, ACTION_SEARCH, ACTION_DELETE, ...)
         """
         self._fields = OrderedDict()
         self.system = self.direction = self.action = ''
-        self.add_fields(fields)
+        if fields:
+            self.add_fields(fields)
         # super().__init__(*self._fields.items(), {})        # OrderedDict signature is: *args, **kwargs)
         super().__init__([], **self._fields)
         self.set_env(system=system, direction=direction, action=action)
@@ -500,23 +501,23 @@ class Field:
 
     def set_value_type(self, value_type, system='', direction='', add=False):
         assert value_type in VALUE_TYPES, "Invalid value type {} (allowed are only {})".format(value_type, VALUE_TYPES)
-        self.set_aspect(FAT_TYPE, value_type, system=system, direction=direction, add=add)
+        self.set_aspect(value_type, FAT_TYPE, system=system, direction=direction, add=add)
         return self
 
     def set_calculator(self, calculator, system='', direction='', add=False):
-        return self.set_aspect(FAT_CAL, calculator, system=system, direction=direction, add=add)
+        return self.set_aspect(calculator, FAT_CAL, system=system, direction=direction, add=add)
 
     def set_validator(self, validator, system='', direction='', add=False):
-        return self.set_aspect(FAT_CHK, validator, system=system, direction=direction, add=add)
+        return self.set_aspect(validator, FAT_CHK, system=system, direction=direction, add=add)
 
     def set_converter(self, converter, system='', direction='', add=False):
-        return self.set_aspect(FAT_CON, converter, system=system, direction=direction, add=add)
+        return self.set_aspect(converter, FAT_CON, system=system, direction=direction, add=add)
 
     def set_filter(self, filter_func, system='', direction='', add=False):
-        return self.set_aspect(FAT_FLT, filter_func, system=system, direction=direction, add=add)
+        return self.set_aspect(filter_func, FAT_FLT, system=system, direction=direction, add=add)
 
     def set_sql_expression(self, sql_expression, system='', direction='', add=False):
-        return self.set_aspect(FAT_SQE, sql_expression, system=system, direction=direction, add=add)
+        return self.set_aspect(sql_expression, FAT_SQE, system=system, direction=direction, add=add)
 
     def convert_and_validate(self, value, system='', direction=''):
         converter = self.aspect_value(FAT_CON, system=system, direction=direction)
