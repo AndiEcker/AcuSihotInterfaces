@@ -18,8 +18,8 @@ ACTION_SEARCH = 'SEARCH'
 DUMMY_FIELD_NAME = '___'
 
 # field name special characters for to identify list indexes and sub-Records
-FN_LIST_IDX_MARKER = '#'
-FN_SUB_REC_MARKER = '.'
+# FN_LIST_IDX_MARKER = '#'
+# FN_SUB_REC_MARKER = '.'
 
 # field aspect types/prefixes
 FAT_NAME = 'nom'
@@ -82,9 +82,50 @@ def aspect_key_direction(key):
     return key[beg:]
 
 
+def deeper(deepness, instance):
+    """
+    check and calculate resulting/remaining deepness for Record/Field/Records.copy() when going one level deeper
+    :param deepness:    <0 will be returned unchanged until last level is reached (-1==full deep copy, -2==deep copy
+                        until deepest Value, -3==deep copy until deepest Field.
+    :param instance:    instance to be copied (if this method is returning != 0/zero).
+    :return:            if deepness == 0 then return 0, if deepness < 0 then return 0 if the deepest level is reached,
+                        else (deepness > 0) return deepness - 1.
+    """
+    if deepness > 0:
+        remaining = deepness - 1
+    elif deepness == -2 and type(instance) == 'Value' \
+            or deepness == -3 and type(instance) == 'Field' and type(instance.value()) == 'Value':
+        remaining = 0
+    else:
+        remaining = deepness    # return unchanged if deepness in (0, -1) or == -2/-3 but not reached bottom/last level
+    return remaining
+
+
 class Value(list):
     def __init__(self, seq=('',)):
         super().__init__(seq)
+
+    def value(self, *idx_path, **__):
+        assert isinstance(idx_path, tuple) and len(idx_path) == 0, \
+            "Value.value() passed non-empty idx_path list {}".format(idx_path)
+        return self
+
+    def set_value(self, value, *idx_path, **__):
+        assert isinstance(idx_path, tuple) and len(idx_path) == 0, \
+            "Value.set_value({}) passed non-empty idx_path list {}".format(value, idx_path)
+        assert isinstance(value, Value), "{}.set_value({}, {}) expecting Value type".format(self, value, __)
+        self[-1] = value[-1]
+
+    def val(self, *idx_path, **__):
+        assert isinstance(idx_path, tuple) and len(idx_path) <= 1, \
+            "Value.val() passed idx_path list {} with more than one entry".format(idx_path)
+        return self[idx_path[0] if isinstance(idx_path, tuple) and len(idx_path) else -1]
+
+    def set_val(self, val, *idx_path, **__):
+        assert isinstance(idx_path, tuple) and len(idx_path) <= 1, \
+            "Value.set_val({}) idx_path list {} has more than one entry".format(val, idx_path)
+        assert not isinstance(val, VALUE_TYPES), "Value.set_val({}) got unexpected value type {}".format(val, type(val))
+        self[idx_path[0] if isinstance(idx_path, tuple) and len(idx_path) else -1] = val
 
     def clear(self, **__):
         self[-1] = ''
@@ -96,31 +137,35 @@ class Value(list):
         """
         return Value((self[-1], ))
 
-    def value(self, *_, **__):
-        return self
-
-    def set_value(self, value, **__):
-        assert isinstance(value, Value), "{}.set_value({}, {}) expecting Value type".format(self, value, __)
-        self[-1] = value[-1]
-
-    def val(self, *idx_path, **__):
-        assert not idx_path, "Value.val() passed a non empty idx_path list"
-        return self[-1]
-
-    def set_val(self, val, *idx_path, **__):
-        assert not idx_path, "Value.set_val({}) passed a non empty idx_path list".format(val)
-        assert not isinstance(val, VALUE_TYPES), "Value.set_val({}) got unexpected value type {}".format(val, type(val))
-        self[-1] = val
-
 
 class Values(list):
+    def value(self, *idx_path, system='', direction='', **kwargs):
+        if len(idx_path) == 0:
+            return self
+        idx, *idx_path = idx_path
+        return self[idx].value(*idx_path, system=system, direction=direction, **kwargs)
+
+    def set_value(self, value, *idx_path, system='', direction='', add=False):
+        idx, *idx_path = idx_path
+        self[idx].set_value(value, *idx_path, system=system, direction=direction, add=add)
+        return self
+
+    def val(self, *idx_path, system='', direction='', **kwargs):
+        idx, *idx_path = idx_path
+        return self[idx].val(*idx_path, system=system, direction=direction, **kwargs)
+
+    def set_val(self, val, *idx_path, system='', direction=''):
+        idx, *idx_path = idx_path
+        self[idx].set_val(val, *idx_path, system=system, direction=direction)
+        return self
+
     # def clear(self, system='', direction=''):     NOT NEEDED because list has already a clear method
 
     def copy(self, *idx_path, deepness=0, **kwargs):
         """
-        copy the fields of this list (Values or Records)
+        copy the values/records of this list (Values or Records)
         :param idx_path:        path of field names and/or list/Records indexes.
-        :param deepness:        deep copy levels: -1==full deep copy, 0==only copy current instance, >0==deep copy
+        :param deepness:        deep copy levels: <0==see deeper(), 0==only copy current instance, >0==deep copy
                                 to deepness value - please note that Field occupies two deepness: 1st=Field, 2nd=Value).
         :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
         :return:                new/extended record instance.
@@ -128,23 +173,21 @@ class Values(list):
         ret = type(self)()      # create new instance of this list/class (Values or Records)
         for idx, rec in enumerate(self):
             idx_path += (idx,)
-            if deepness:
-                rec = rec.copy(*idx_path, deepness=deepness - 1, **kwargs)
+            if deeper(deepness, rec):
+                rec = rec.copy(*idx_path, deepness=deeper(deepness, rec), **kwargs)
             ret.append(rec)
         return ret
 
-    def val(self, *idx_path, system='', direction=''):
-        idx, *idx_path = idx_path
-        return self[idx].val(*idx_path, system=system, direction=direction)
 
-    def set_val(self, val, *idx_path, system='', direction=''):
-        idx, *idx_path = idx_path
-        self[idx].set_val(val, *idx_path, system=system, direction=direction)
-        return self
+class Records(Values):
+    pass
 
 
-class Record(OrderedDict):      # isinstance(..., dict) not working if using MutableMapping instead of OrderedDict
-    def __init__(self, fields=None, system=None, direction=None, action=None):
+class Record(OrderedDict):
+    # isinstance(..., dict) not working if using MutableMapping instead of OrderedDict
+    # dict should not be used because **instance will then not work see the answer of Groxx in the stackoverflow
+    # .. question https://stackoverflow.com/questions/3387691/how-to-perfectly-override-a-dict/47361653#47361653
+    def __init__(self, fields=None, system='', direction='', action=None):
         """
         ordered collection of Field items.
         :param fields:      OrderedDict/dict of Field instances (field order is not preserved when using dict).
@@ -152,38 +195,87 @@ class Record(OrderedDict):      # isinstance(..., dict) not working if using Mut
         :param direction:   interface direction of this record.
         :param action:      current action (see ACTION_INSERT, ACTION_SEARCH, ACTION_DELETE, ...)
         """
-        self._fields = OrderedDict()
+        self._fields = self     # using internal store of OrderedDict() while keeping code more readable
         self.system = self.direction = self.action = ''
         if fields:
             self.add_fields(fields)
         # super().__init__(*self._fields.items(), {})        # OrderedDict signature is: *args, **kwargs)
-        super().__init__([], **self._fields)
+        super().__init__(*(), **self._fields)
         self.set_env(system=system, direction=direction, action=action)
-
-    def __iter__(self):
-        return iter(self._fields)
-
-    def _find_key(self, key):
-        if key in self._fields:
-            return key
-
-        for fld_nam, field in self._fields.items():
-            for asp_key, asp_val in field.aspects.items():
-                if asp_key.startswith(FAT_NAME) and asp_val == key:
-                    return fld_nam
-
-    def __getitem__(self, key):
-        field_name = self._find_key(key)
-        if not field_name:
-            raise KeyError("There is no field with the name/key '{}' in this Record/OrderedDict".format(key))
-        return self._fields[field_name]
-
-    def __contains__(self, key):
-        return self._find_key(key) is not None
 
     @property
     def fields(self):
         return self._fields
+
+    def __iter__(self):
+        return iter(self._fields)
+
+    def _find_field(self, idx_path):
+        for fld_nam, field in self._fields.items():
+            if fld_nam == idx_path:
+                return fld_nam, field
+            for asp_key, asp_val in field.aspects.items():
+                if asp_key.startswith(FAT_NAME) and asp_val == idx_path:
+                    return fld_nam, field
+            idx_len = len(idx_path)
+            if isinstance(idx_path, tuple) and idx_len and fld_nam == idx_path[0]:
+                if idx_len == 1:
+                    return fld_nam, field
+                elif field.__contains__(idx_path[1:]):
+                    return idx_path, None
+
+        return '', None
+
+    def __contains__(self, idx_path):
+        return self._find_field(idx_path)[0] != ''
+
+    def __getitem__(self, key):
+        idx_path, field = self._find_field(key)
+        if not idx_path:
+            raise KeyError("There is no field with the name/idx_path '{}' in this Record/OrderedDict ({})"
+                           .format(idx_path, self))
+        if field is None:  # isinstance(idx_path, tuple):
+            field = self._fields.get(idx_path[0])
+            return field.value(*idx_path[1:])
+        else:
+            return self._fields.get(idx_path)
+
+    def __setitem__(self, key, value):
+        idx_path, field = self._find_field(key)
+        if idx_path and field is None:  # and isinstance(idx_path, tuple):
+            field = self._fields.get(idx_path[0])
+            field.set_value(value, *idx_path[1:])
+        else:
+            super().__setitem__(key, value)
+
+    def value(self, *idx_path, system='', direction='', **kwargs):
+        if len(idx_path) == 0:
+            return self
+        idx, *idx_path = idx_path
+        return self._fields[idx].value(*idx_path, system=system, direction=direction, **kwargs)
+
+    def set_value(self, value, *idx_path, system='', direction='', add=False):
+        idx, *idx_path = idx_path
+        self[idx].set_value(value, *idx_path, system=system, direction=direction, add=add)
+        return self
+
+    def set_values(self, values, fuzzy_aspect=False, system='', direction=''):
+        for field in self._fields.values():
+            key = field.aspect_exists(FAT_NAME, fuzzy_aspect=fuzzy_aspect, system=system, direction=direction)
+            if key and field.aspects[key] in values:
+                field.set_value(values[field.aspects[key]], system=system, direction=direction)
+
+    def val(self, *idx_path, system='', direction='', **kwargs):
+        idx, *idx_path = idx_path
+        # return self._fields[idx].val(*idx_path, system=system, direction=direction, **kwargs)
+        # field_or_val = self._fields[idx]
+        # return field_or_val.val(*idx_path, system=system, direction=direction, **kwargs) if idx_path else field_or_val
+        return self._fields[idx].val(*idx_path, system=system, direction=direction, **kwargs)
+
+    def set_val(self, val, *idx_path, system='', direction=''):
+        idx, *idx_path = idx_path
+        self[idx].set_val(val, *idx_path, system=system, direction=direction)
+        return self
 
     def add_field(self, field, name=''):
         ori_name = name
@@ -200,20 +292,18 @@ class Record(OrderedDict):      # isinstance(..., dict) not working if using Mut
 
     def add_fields(self, fields):
         for name, field in fields.items():
-            self.add_field(field)
-
-    def set_env(self, system='', direction='', action=''):
-        if system:
-            self.system = system
-        if direction:
-            self.direction = direction
-        if action:
-            self.action = action
-        for field in self._fields.values():
-            field.set_rec(self, system=system, direction=direction)
+            self.add_field(field, name=name)
 
     def field_count(self):
         return len(self._fields)
+
+    def names(self, system='', direction=''):
+        names = list()
+        for field in self._fields.values():
+            name = field.aspect_value(FAT_NAME, system=system, direction=direction)
+            if name:
+                names.append(name)
+        return names
 
     def clear(self, system='', direction=''):
         for field in self._fields.values():
@@ -223,22 +313,20 @@ class Record(OrderedDict):      # isinstance(..., dict) not working if using Mut
         """
         copy the fields of this record
         :param idx_path:        list of path items of field names and/or indexes.
-        :param deepness:        deep copy level: -1==full deep copy, 0==only copy current instance, >0==deep copy
+        :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
                                 to deepness value - please note that Field occupies two deepness: 1st=Field, 2nd=Value).
         :param to_rec:          destination record; pass None to create new Record instance.
         :param filter_func:     method called for each copied field (return True to filter/hide/not-include into copy).
         :param fields_patches:  restrict fields to the idx_path in this dict and use dict values as override aspects.
         :return:                new/extended record instance.
         """
-        if to_rec is None:
+        new_rec = to_rec is None
+        if new_rec:
             to_rec = Record()
         elif not fields_patches:
-            assert to_rec is not self, "copy() cannot copy to self without patches"
+            assert to_rec is not self, "copy() cannot copy to self (same Record instance) without patches"
 
         for name, field in self._fields.items():
-            idx_path += (name,)
-            full_name = field.full_name(idx_path)
-
             if filter_func:
                 assert callable(filter_func)
                 if not filter_func(field):
@@ -246,18 +334,25 @@ class Record(OrderedDict):      # isinstance(..., dict) not working if using Mut
 
             patches = None
             if fields_patches:
-                if full_name in fields_patches:
-                    patches = fields_patches[full_name]
-                elif name in fields_patches:
+                if name in fields_patches:
                     patches = fields_patches[name]
                 else:
                     continue
-            if deepness:
-                field = field.copy(*idx_path, deepness=deepness - 1,
+
+            if deeper(deepness, field):
+                name = idx_path + (name, )
+                field = field.copy(*name,  deepness=deeper(deepness, field),
                                    to_rec=to_rec, filter_func=filter_func, fields_patches=fields_patches)
+            elif name in to_rec:
+                field = to_rec[name]
+
             if patches:
                 field.set_aspects(**patches)
-            to_rec.add_field(field, name=full_name)
+
+            if new_rec:
+                to_rec.add_field(field, name=name)
+            else:
+                to_rec[name] = field
 
         return to_rec
 
@@ -271,28 +366,15 @@ class Record(OrderedDict):      # isinstance(..., dict) not working if using Mut
         for field in self._fields.values():
             field.push(system=system)
 
-    def names(self, system='', direction=''):
-        names = list()
+    def set_env(self, system='', direction='', action=''):
+        if system:
+            self.system = system
+        if direction:
+            self.direction = direction
+        if action:
+            self.action = action
         for field in self._fields.values():
-            name = field.aspect_value(FAT_NAME, system=system, direction=direction)
-            if name:
-                names.append(name)
-        return names
-
-    def set_values(self, values, fuzzy_aspect=False, system='', direction=''):
-        for field in self._fields.values():
-            key = field.aspect_exists(FAT_NAME, fuzzy_aspect=fuzzy_aspect, system=system, direction=direction)
-            if key and field.aspects[key] in values:
-                field.set_value(values[field.aspects[key]], system=system, direction=direction)
-
-    def val(self, *idx_path, system='', direction=''):
-        idx, *idx_path = idx_path
-        return self._fields[idx].val(*idx_path, system=system, direction=direction)
-
-    def set_val(self, val, *idx_path, system='', direction=''):
-        idx, *idx_path = idx_path
-        self[idx].set_val(val, *idx_path, system=system, direction=direction)
-        return self
+            field.set_rec(self, system=system, direction=direction)
 
     def sql_select(self, system):
         """
@@ -314,10 +396,6 @@ class Record(OrderedDict):      # isinstance(..., dict) not working if using Mut
         pass
 
 
-class Records(Values):
-    pass
-
-
 class Field:
     def __init__(self, **aspects):
         self._aspects = dict()
@@ -327,12 +405,86 @@ class Field:
         if FAT_NAME not in self._aspects:
             self._aspects[FAT_NAME] = DUMMY_FIELD_NAME
 
-    def __getitem__(self, idx_path):
-        return self.val(*idx_path)
-
     @property
     def aspects(self):
         return self._aspects
+
+    @property
+    def name(self):
+        return self._aspects.get(FAT_NAME)
+
+    @name.setter
+    def name(self, name):
+        self._aspects[FAT_NAME] = name
+
+    def __getitem__(self, idx_path):
+        return self.value(*idx_path)
+
+    def __setitem__(self, idx_path, value):
+        self.set_value(value, *idx_path)
+
+    def __contains__(self, idx_path):
+        idx_len = len(idx_path)
+        value = self._aspects[FAT_VAL]
+        if isinstance(idx_path, tuple) and idx_len and isinstance(value, Records) and len(value) > idx_path[0]:
+            if idx_len == 1:
+                return idx_path[0]
+            else:
+                return value[idx_path[0]].__contains__(idx_path[1:])
+
+    def __repr__(self):
+        return "Field(" + repr(self._aspects) + ")"
+    # __repr__ = __str__
+
+    def value(self, *idx_path, fuzzy_aspect=False, system='', direction=''):
+        value = None
+        val_or_cal = self.aspect_value(FAT_VAL, FAT_CAL, fuzzy_aspect=fuzzy_aspect, system=system, direction=direction)
+        if val_or_cal:
+            if callable(val_or_cal):
+                value = val_or_cal(self)
+            else:
+                value = val_or_cal
+        assert isinstance(value, VALUE_TYPES), \
+            "Field.value({}, {}, {}, {}): value '{}' has to be of type {}"\
+            .format(idx_path, fuzzy_aspect, system, direction, value, VALUE_TYPES)
+        if value and isinstance(idx_path, tuple):
+            value = value.value(*idx_path)
+        return value
+
+    def set_value(self, value, *idx_path, system='', direction='', add=False):
+        assert isinstance(value, VALUE_TYPES), \
+            "Field.set_value({}, {}, {}, {}, {}): value has to be of type {}"\
+            .format(value, idx_path, system, direction, add, VALUE_TYPES)
+
+        key = aspect_key(FAT_VAL, system=system, direction=direction)
+
+        if isinstance(idx_path, tuple) and len(idx_path):
+            self._aspects[key].set_value(value, *idx_path, system=system, direction=direction, add=add)
+        else:
+            if add:
+                assert key not in self._aspects, \
+                    "Field.set_value({}, {}, {}, {}, {}): value key {} already exists in aspects ({})"\
+                    .format(value, idx_path, system, direction, add, key, self._aspects)
+            else:
+                val_typ = self.aspect_value(FAT_TYPE, system=system, direction=direction)
+                # noinspection PyTypeChecker
+                assert not val_typ or isinstance(value, val_typ), \
+                    "Field.set_value({}, {}, {}, {}, {}): value '{}' has wrong type {} (declared as {})" \
+                    .format(value, idx_path, system, direction, add, value, type(value), val_typ)
+            self._aspects[key] = value
+
+        return self
+
+    def val(self, *idx_path, fuzzy_aspect=True, system='', direction=''):
+        value = self.value(fuzzy_aspect=fuzzy_aspect, system=system, direction=direction)
+        assert idx_path or isinstance(value, Value), \
+            "Field.val() without idx_path ({}) has to point to Value instance (but got {})".format(idx_path, value)
+        return value.val(*idx_path, fuzzy_aspect=fuzzy_aspect, system=system, direction=direction)
+
+    def set_val(self, val, *idx_path, system='', direction=''):
+        value = self.aspect_value(FAT_VAL, system=system, direction=direction)
+        value.set_val(val, *idx_path, system=system, direction=direction)
+        return self
 
     def find_aspect_key(self, *aspect_types, system='', direction=''):
         keys = list()
@@ -340,7 +492,7 @@ class Field:
             for aspect_type in aspect_types:
                 keys.append(aspect_key(aspect_type, system=system, direction=direction))
         else:
-            assert direction == '', "find_aspect_key({}, {}, {}) direction without system not allowed"\
+            assert direction == '', "Field.find_aspect_key({}, {}, {}) direction without system not allowed"\
                 .format(aspect_types, system, direction)
         if system:
             for aspect_type in aspect_types:
@@ -376,7 +528,7 @@ class Field:
     def set_aspect(self, aspect_value, type_or_key, system='', direction='', add=False):
         key = aspect_key(type_or_key, system=system, direction=direction)
         if add:
-            assert key not in self._aspects, "set_aspect({}, {}, {}, {}, {}): key already exists in aspects ({})"\
+            assert key not in self._aspects, "Field.set_aspect({}, {}, {}, {}, {}): key already exists in aspects ({})"\
                 .format(type_or_key, aspect_value, system, add, direction, key, self._aspects)
         if key.startswith(FAT_VAL):
             self.set_value(aspect_value, system=aspect_key_system(key), direction=aspect_key_direction(key))
@@ -402,14 +554,6 @@ class Field:
             self.set_aspect(data, key, add=True)
         return self
 
-    @property
-    def name(self):
-        return self._aspects.get(FAT_NAME)
-
-    @name.setter
-    def name(self, name):
-        self._aspects[FAT_NAME] = name
-
     def del_name(self, system='', direction=''):
         self.del_aspect(FAT_NAME, system=system, direction=direction)
         return self
@@ -417,10 +561,6 @@ class Field:
     def set_name(self, name, system='', direction='', add=False):
         self.set_aspect(name, FAT_NAME, system=system, direction=direction, add=add)
         return self
-
-    def full_name(self, *idx_path, base_name=''):
-        idx_names = ((FN_LIST_IDX_MARKER if isinstance(k, int) else FN_SUB_REC_MARKER) + k for k in idx_path)
-        return (base_name or self.name) + "".join(idx_names)
 
     def rec(self, system='', direction='') -> Optional[Record]:
         return self.aspect_value(FAT_REC, fuzzy_aspect=True, system=system, direction=direction)
@@ -433,68 +573,6 @@ class Field:
 
     def set_idx(self, idx, system='', direction=''):
         self.set_aspect(idx, FAT_IDX, system=system, direction=direction)
-
-    def value(self, fuzzy_aspect=False, system='', direction=''):
-        value = None
-        val_or_cal = self.aspect_value(FAT_VAL, FAT_CAL, fuzzy_aspect=fuzzy_aspect, system=system, direction=direction)
-        if val_or_cal:
-            if callable(val_or_cal):
-                value = val_or_cal(self)
-            else:
-                value = val_or_cal
-        assert isinstance(value, VALUE_TYPES), \
-            "value({}, {}): value '{}' has to be of type Value, Values or Records".format(system, direction, value)
-        return value
-
-    def set_value(self, value, system='', direction='', add=False):
-        assert isinstance(value, VALUE_TYPES), \
-            "set_value({}, {}, {}, {}): value has to be Value, Values or Records".format(value, system, direction, add)
-
-        key = aspect_key(FAT_VAL, system=system, direction=direction)
-
-        if add:
-            assert key not in self._aspects, "set_value({}, {}, {}, {}): value key {} already exists in aspects ({})"\
-                .format(value, system, direction, add, key, self._aspects)
-        else:
-            val_typ = self.aspect_value(FAT_TYPE, system=system, direction=direction)
-            # noinspection PyTypeChecker
-            assert not val_typ or isinstance(value, val_typ), \
-                "set_value({}, {}, {}, {}): value '{}' has wrong type {} (declared as {})" \
-                .format(value, system, direction, add, value, type(value), val_typ)
-
-        self._aspects[key] = value
-
-        return self
-
-    def clear(self, system='', direction=''):
-        self.value(system=system, direction=direction).clear(system=system, direction=direction)
-        return self
-
-    def copy(self, *idx_path, deepness=0, **kwargs):
-        """
-        copy the fields of this record
-        :param idx_path:        path of field names and/or list/Records/Values indexes.
-        :param deepness:        deep copy level: -1==full deep copy, 0==only copy current instance, >0==deep copy
-                                to deepness value - please note that Field occupies two deepness: 1st=Field, 2nd=Value).
-        :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
-        :return:                new/extended record instance.
-        """
-        aspects = self.aspects
-        if deepness:
-            for asp_key, asp_val in aspects:        # asp_val is Value or Records
-                if asp_key.startswith(FAT_VAL):
-                    aspects[asp_key] = asp_val.copy(*idx_path, deepness=deepness - 1, **kwargs)
-        return Field(**aspects)
-
-    def val(self, *idx_path, fuzzy_aspect=True, system='', direction=''):
-        value = self.value(fuzzy_aspect=True, system=system, direction=direction)
-        assert idx_path or isinstance(value, Value), "Field.val without idx_path have to point to an Value instance"
-        return value.val(*idx_path, fuzzy_aspect=fuzzy_aspect, system=system, direction=direction)
-
-    def set_val(self, val, *idx_path, system='', direction=''):
-        value = self.aspect_value(FAT_VAL, system=system, direction=direction)
-        value.set_val(val, *idx_path, system=system, direction=direction)
-        return self
 
     def value_type(self, system='', direction=''):
         return self.aspect_value(FAT_TYPE, system=system, direction=direction) or Value
@@ -532,6 +610,26 @@ class Field:
                 return None
 
         return value
+
+    def clear(self, system='', direction=''):
+        self.value(system=system, direction=direction).clear(system=system, direction=direction)
+        return self
+
+    def copy(self, *idx_path, deepness=0, **kwargs):
+        """
+        copy the values of this field
+        :param idx_path:        path of field names and/or list/Records/Values indexes.
+        :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
+                                to deepness value - please note that Field occupies two deepness: 1st=Field, 2nd=Value).
+        :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
+        :return:                new/extended record instance.
+        """
+        aspects = self.aspects
+        if deepness:
+            for asp_key, asp_val in aspects:        # asp_val is of VALUE_TYPES (Value, Records, ...)
+                if asp_key.startswith(FAT_VAL) and deeper(deepness, asp_val):
+                    aspects[asp_key] = asp_val.copy(*idx_path, deepness=deeper(deepness, asp_val), **kwargs)
+        return Field(**aspects)
 
     def pull(self, system=''):
         direction = FAD_FROM

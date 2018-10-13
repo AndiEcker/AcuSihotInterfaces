@@ -2,7 +2,7 @@
 import datetime
 # import pytest
 
-from sxmlif import ResFetch, convert2date
+from sxmlif import ResFetch, convert_date_from_sh
 from shif import elem_value, res_search, guest_data
 from ass_sys_data import correct_email, correct_phone, AssSysData, EXT_REFS_SEP, CLIENT_REC_TYPE_ID_OWNERS
 
@@ -583,8 +583,8 @@ class TestAssSysDataSh:
         assert res_id == elem_value(res_data, 'RES-NR')
         assert sub_id == elem_value(res_data, 'SUB-NR')
         assert obj_id == elem_value(res_data, ['RESERVATION', 'OBJID'])
-        arr_date = convert2date(elem_value(res_data, ['RESERVATION', 'ARR'])).date()
-        dep_date = convert2date(elem_value(res_data, ['RESERVATION', 'DEP'])).date()
+        arr_date = convert_date_from_sh(elem_value(res_data, ['RESERVATION', 'ARR'])).date()
+        dep_date = convert_date_from_sh(elem_value(res_data, ['RESERVATION', 'DEP'])).date()
 
         rgr_dict = dict()
         asd.sh_res_change_to_ass(res_data, rgr_dict=rgr_dict)

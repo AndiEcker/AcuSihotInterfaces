@@ -70,9 +70,13 @@ def _strip_error_message(error_msg):
     return error_msg[pos1: max(pos2, pos3)]
 
 
-def convert2date(xml_string):
+def convert_date_from_sh(xml_string):
     """ needed for the maps in the valToAcuConverter dict item """
     return datetime.datetime.strptime(xml_string, '%Y-%m-%d')
+
+
+def convert_date_onto_sh(date):
+    return datetime.datetime.strftime(date, '%Y-%m-%d')
 
 
 def elem_path_values(elem_fld_map, elem_path_suffix):
@@ -143,7 +147,7 @@ MAP_KERNEL_CLIENT = \
          lambda f: f.ina(ACTION_SEARCH)),
         ('T-PERSON-GROUP', None, "1A"),
         ('D-BIRTHDAY', 'DOB',
-         None, None, None, lambda f, v: convert2date(v)),
+         None, None, None, lambda f, v: convert_date_from_sh(v)),
         # 27-09-17: removed b4 migration of BHH/HMC because CD_INDUSTRY1/2 needs first grouping into 3-alphanumeric code
         # ('T-PROFESSION', 'CD_INDUSTRY1'),
         ('INTERNET-PASSWORD', 'Password'),
