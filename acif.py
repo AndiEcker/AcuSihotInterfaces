@@ -135,6 +135,7 @@ def add_ac_options(cae):
 
 class AcuDbRows:
     def __init__(self, cae):
+        super(AcuDbRows, self).__init__(cae)
         self._last_fetch = None     # store fetch_from_acu timestamp
         self._rows = None
 
@@ -174,7 +175,7 @@ class AcuDbRows:
         return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = :pk", bind_vars=dict(pk=str(pkey)))
 
 
-class AcuXmlBuilder(AcuDbRows):
+class AcuXmlBuilder(SihotXmlBuilder, AcuDbRows):
     def __init__(self, cae, elem_col_map=None, use_kernel=None):
         super(AcuXmlBuilder, self).__init__(cae)
         self.cae = cae
@@ -245,7 +246,7 @@ class AcuXmlBuilder(AcuDbRows):
                         .format(self._last_fetch, self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
 
-class AcuClientToSihot(ClientToSihot, AcuXmlBuilder):
+class AcuClientToSihot(AcuXmlBuilder, ClientToSihot):
     def __init__(self, cae):
         super(AcuClientToSihot, self).__init__(cae)
         self._rows = None

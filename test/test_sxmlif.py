@@ -1,8 +1,7 @@
 import datetime
 # import pytest
 
-from sxmlif import SihotXmlParser, ResResponse, GuestFromSihot, ResFromSihot, SihotXmlBuilder, \
-    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF
+from sxmlif import SihotXmlParser, ResResponse, GuestFromSihot, ResFromSihot, SihotXmlBuilder, ClientToSihot, ResToSihot
 
 
 class TestAvailCats:
@@ -458,10 +457,11 @@ class TestGuestFromSihot:
     def test_elem_map(self, console_app_env):
         xml_parser = GuestFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.elem_fld_map['MATCHCODE']['elemVal'] == 'test2'
-        assert xml_parser.acu_fld_values['AcId'] == 'test2'
-        assert xml_parser.elem_fld_map['CITY']['elemVal'] == 'city'
-        assert xml_parser.acu_fld_values['City'] == 'city'
+        assert len(xml_parser.guest_list)
+        assert xml_parser.guest_list[0]['MATCHCODE'].val() == 'test2'
+        assert xml_parser.guest_list[0]['AcId'].val() == 'test2'
+        assert xml_parser.guest_list[0]['CITY'].val() == 'city'
+        assert xml_parser.guest_list[0]['City'].val() == 'city'
 
         # cae.dprint("--COUNTRY-fldValToAcu/acu_fld_values: ",
         # xml_guest.elem_fld_map['COUNTRY']['fldValToAcu'],
@@ -469,6 +469,24 @@ class TestGuestFromSihot:
 
 
 class TestResFromSihot:
+    XML_MATCHCODE_EXAMPLE = '''
+    <SIHOT-Document>
+        <ARESLIST>
+        <RESERVATION>
+        <PERSON>
+            <MATCHCODE>PersonAcId</MATCHCODE>
+        </PERSON>
+        <RESCHANNELLIST>
+            <RESCHANNEL>
+                <MATCHCODE>GUBSE</MATCHCODE>
+            </RESCHANNEL>
+        </RESCHANNELLIST>
+        <MATCHCODE>test2</MATCHCODE>
+        </RESERVATION>
+        </ARESLIST>
+        </SIHOT-Document>
+        '''
+
     XML_EXAMPLE = '''
     <SIHOT-Document>
         <OC>RES-SEARCH</OC>
@@ -477,63 +495,63 @@ class TestResFromSihot:
         <RESERVATION>
         <PRICE>99</PRICE>
         <RATE>
-        <ISDEFAULT>Y</ISDEFAULT>
-        <R>UF1</R>
-        <PRICE>99</PRICE>
+            <ISDEFAULT>Y</ISDEFAULT>
+            <R>UF1</R>
+            <PRICE>99</PRICE>
         </RATE>
         <PERSON>
-        <SEX>0</SEX>
-        <ROOM-SEQ>0</ROOM-SEQ>
-        <ROOM-PERS-SEQ>0</ROOM-PERS-SEQ>
-        <CITY>Schiffweiler</CITY>
-        <DOB/>
-        <EMAIL/>
-        <COUNTRY>DE</COUNTRY>
-        <NAME>GUBSE AG</NAME>
-        <PERS-TYPE>1A</PERS-TYPE>
-        <TITLE></TITLE>
-        <COMMENT/>
-        <ADDRESS></ADDRESS>
-        <NAME2/>
-        <PHONE/>
-        <ZIP>66578</ZIP>
-        <STREET/>
-        <FAX/>
-        <ARR>2009-02-23</ARR>
-        <DEP>2009-03-01</DEP>
-        <CAT/>
-        <PCAT>EZ</PCAT>
-        <RN>102</RN>
-        <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
-        <MATCHCODE-ADM/>
-        <EXT-REFERENCE/>
-        <VOUCHERNUMBER/>
-        <MATCHCODE/>
+            <SEX>0</SEX>
+            <ROOM-SEQ>0</ROOM-SEQ>
+            <ROOM-PERS-SEQ>0</ROOM-PERS-SEQ>
+            <CITY>Schiffweiler</CITY>
+            <DOB/>
+            <EMAIL/>
+            <COUNTRY>DE</COUNTRY>
+            <NAME>GUBSE AG</NAME>
+            <PERS-TYPE>1A</PERS-TYPE>
+            <TITLE></TITLE>
+            <COMMENT/>
+            <ADDRESS></ADDRESS>
+            <NAME2/>
+            <PHONE/>
+            <ZIP>66578</ZIP>
+            <STREET/>
+            <FAX/>
+            <ARR>2009-02-23</ARR>
+            <DEP>2009-03-01</DEP>
+            <CAT/>
+            <PCAT>EZ</PCAT>
+            <RN>102</RN>
+            <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
+            <MATCHCODE-ADM/>
+            <EXT-REFERENCE/>
+            <VOUCHERNUMBER/>
+            <MATCHCODE>PersonAcId</MATCHCODE>
         </PERSON>
         <RESCHANNELLIST>
-        <RESCHANNEL>
-        <IDX>0</IDX>
-        <MATCHCODE>GUBSE</MATCHCODE>
-        <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
-        <CONTACT-ID>0</CONTACT-ID>
-        <COMMISSION>
-        <PC>0</PC>
-        <TOTAL>0</TOTAL>
-        </COMMISSION>
-        </RESCHANNEL>
+            <RESCHANNEL>
+                <IDX>0</IDX>
+                <MATCHCODE>GUBSE</MATCHCODE>
+                <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
+                <CONTACT-ID>0</CONTACT-ID>
+                <COMMISSION>
+                <PC>0</PC>
+                <TOTAL>0</TOTAL>
+                </COMMISSION>
+            </RESCHANNEL>
         </RESCHANNELLIST>
         <CHECKLIST>
-        <CHECKLISTENTRY>
-        <TYPE>6</TYPE>
-        <DATE>2009-02-23</DATE>
-        <USER>ADM</USER>
-        </CHECKLISTENTRY>
+            <CHECKLISTENTRY>
+                <TYPE>6</TYPE>
+                <DATE>2009-02-23</DATE>
+                <USER>ADM</USER>
+            </CHECKLISTENTRY>
         </CHECKLIST>
         <APERS-TYPE-LIST>
-        <PERS-TYPE>
-        <TYPE>1A</TYPE>
-        <NO>1</NO>
-        </PERS-TYPE>
+            <PERS-TYPE>
+                <TYPE>1A</TYPE>
+                <NO>1</NO>
+            </PERS-TYPE>
         </APERS-TYPE-LIST>
         <CCLIST/>
         <RES-HOTEL>1</RES-HOTEL>
@@ -607,17 +625,31 @@ class TestResFromSihot:
         assert xml_parser.error_level == '0'
         assert xml_parser.error_text == ''
 
-    def test_fld_map(self, console_app_env):
+    def test_fld_map_matchcode(self, console_app_env):
+        xml_parser = ResFromSihot(console_app_env)
+        xml_parser.parse_xml(self.XML_MATCHCODE_EXAMPLE)
+        assert xml_parser.res_list[0]['ResOrdererMc'].val() == 'test2'
+        assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
+        assert xml_parser.res_list[0]['AcId'].val() == 'PersonAcId'
+        assert xml_parser.res_list[0]['PERSON.MATCHCODE'].val() == 'PersonAcId'
+        # TODO: assert xml_parser.res_list[0][('ResPersons', 0, 'AcId', )].val() == 'PersonAcId'
+        # assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['PersonAcId', 'GUBSE', 'test2']
+
+    def test_fld_map_big(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.res_list[0]['MATCHCODE']['elemVal'] == 'test2'
-        assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['', 'GUBSE', 'test2']
-        assert xml_parser.res_list[0]['GDSNO']['elemVal'] == '1234567890ABC'
+        assert xml_parser.res_list[0]['ResOrdererMc'].val() == 'test2'
+        assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
+        assert xml_parser.res_list[0]['AcId'].val() == 'PersonAcId'
+        assert xml_parser.res_list[0]['PERSON.MATCHCODE'].val() == 'PersonAcId'
+        # assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['PersonAcId', 'GUBSE', 'test2']
+        assert xml_parser.res_list[0]['ResGdsNo'].val() == '1234567890ABC'
+        assert xml_parser.res_list[0]['GDSNO'].val() == '1234567890ABC'
 
 
 class TestSihotXmlBuilder:
     def test_create_xml(self, console_app_env):
-        xml_builder = SihotXmlBuilder(console_app_env, use_kernel=USE_KERNEL_FOR_CLIENTS_DEF)
+        xml_builder = SihotXmlBuilder(console_app_env, use_kernel=False)
         xml_builder.beg_xml('TEST_OC')
         xml_builder.add_tag('EMPTY')
         xml_builder.add_tag('DEEP', xml_builder.new_tag('DEEPER', 'value'))
@@ -625,14 +657,22 @@ class TestSihotXmlBuilder:
         xml_builder.add_tag('DATE', test_date)
         xml_builder.end_xml()
         console_app_env.dprint('####  New XML created: ', xml_builder.xml)
-        if xml_builder.use_kernel_interface:
-            assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n<SIHOT-XML-REQUEST>' + \
-                '\n<REQUEST-TYPE>TEST_OC</REQUEST-TYPE><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
-                '<DATE>' + test_date + '</DATE>\n</SIHOT-XML-REQUEST>\n</SIHOT-Document>'
-        else:
-            assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n' + \
-                '<OC>TEST_OC</OC><TN>2</TN><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
-                '<DATE>' + test_date + '</DATE>\n</SIHOT-Document>'
+        assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n' + \
+            '<OC>TEST_OC</OC><TN>2</TN><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
+            '<DATE>' + test_date + '</DATE>\n</SIHOT-Document>'
+
+    def test_create_xml_kernel(self, console_app_env):
+        xml_builder = SihotXmlBuilder(console_app_env, use_kernel=True)
+        xml_builder.beg_xml('TEST_OC')
+        xml_builder.add_tag('EMPTY')
+        xml_builder.add_tag('DEEP', xml_builder.new_tag('DEEPER', 'value'))
+        test_date = xml_builder.convert_value_to_xml_string(datetime.datetime.now())
+        xml_builder.add_tag('DATE', test_date)
+        xml_builder.end_xml()
+        console_app_env.dprint('####  New XML created: ', xml_builder.xml)
+        assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n<SIHOT-XML-REQUEST>' + \
+            '\n<REQUEST-TYPE>TEST_OC</REQUEST-TYPE><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
+            '<DATE>' + test_date + '</DATE>\n</SIHOT-XML-REQUEST>\n</SIHOT-Document>'
 
 
 class TestGuestSearch:
@@ -656,14 +696,16 @@ class TestGuestSearch:
         # STRANGE?!?!?: test run 16-06-18 failed because TYPE and ID where None, on 2nd run also COMMENT Is None
         if ret['COMMENT']:
             assert 'RCI=1442-11521' in ret['COMMENT']
-        if ret['TYPE']:
-            assert 'RCI' in ret['TYPE']
-            assert 'RCIP' in ret['TYPE']
-        if ret['ID']:
-            assert '5445-12771' in ret['ID']
-            assert '5-207931' in ret['ID']
-        # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
-        # .. so this one fails: assert '1442-11521' in ret['ID']
+            assert 'RCI=5445-12771' in ret['COMMENT']
+            assert 'RCIP=5-207931' in ret['COMMENT']
+        if ret['EXTID.TYPE']:
+            assert 'RCI' in ret['EXTID.TYPE']
+            assert 'RCIP' in ret['EXTID.TYPE']
+        if ret['EXTID.ID']:
+            assert '5445-12771' in ret['EXTID.ID']
+            assert '5-207931' in ret['EXTID.ID']
+            # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
+            # TODO: .. so this one fails: assert '1442-11521' in ret['EXTID.ID']
 
     def test_get_guest_nos_by_matchcode(self, guest_search):
         guest_nos = guest_search.get_guest_nos_by_matchcode('OTS')
@@ -729,322 +771,22 @@ class TestGuestSearch:
 
 
 class TestClientToSihot:
-    def test_pax1_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
-        error_msg = acu_guest.fetch_from_acu_by_acu(acu_id='G561518')
-        assert not error_msg
-        if not error_msg:
-            assert acu_guest.rec_count <= 1
-            if acu_guest.rec_count:
-                row = acu_guest.fields
-                assert row['AcId'] == 'G561518'
-                assert row['AcId2'] == 'G561518P2'
-                assert str(row['Salutation']) == 'None'
-                assert str(row['SIHOT_SALUTATION2']) == '1'
-                assert str(row['Title']) == '1'
-                assert str(row['SIHOT_TITLE2']) == 'None'
-                assert str(row['GuestType']) == '1'
-                assert str(row['SIHOT_GUESTTYPE2']) == '0'
-                assert row['Country'] == 'AT'
-                assert row['Language'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
-                assert not error_msg
 
-    def test_both_pax_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
-        error_msg = acu_guest.fetch_from_acu_by_acu(acu_id='G558956')
-        assert not error_msg
-        if not error_msg:
-            assert acu_guest.rec_count <= 1
-            if acu_guest.rec_count:
-                row = acu_guest.fields
-                assert row['AcId'] == 'G558956'
-                assert row['AcId2'] == 'G558956P2'
-                assert str(row['Salutation']) == 'None'
-                assert str(row['SIHOT_SALUTATION2']) == 'None'
-                assert str(row['Title']) == '1'
-                assert str(row['SIHOT_TITLE2']) == '1'
-                assert str(row['GuestType']) == '1'
-                assert str(row['SIHOT_GUESTTYPE2']) == '0'
-                assert row['Country'] == 'AT'
-                assert row['Language'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
-                assert not error_msg
-
-    def test_both_pax_are_doctors_and_have_salutation(self, acu_guest):  # Y203585/HUN - Name decoded wrongly with ISO
-        error_msg = acu_guest.fetch_from_acu_by_cd('Y203585')
-        assert not error_msg
-        if not error_msg:
-            assert acu_guest.rec_count == 1
-            row = acu_guest.fields
-            assert row['AcId'] == 'Y203585'
-            assert row['AcId2'] == 'Y203585P2'
-            assert str(row['Salutation']) == '1'
-            assert str(row['SIHOT_SALUTATION2']) == '1'
-            assert str(row['Title']) == '1'
-            assert str(row['SIHOT_TITLE2']) == '1'
-            assert str(row['GuestType']) == '1'
-            assert str(row['SIHOT_GUESTTYPE2']) == '0'
-            assert row['Country'] == 'HU'
-            assert row['Language'] is None
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
-            assert not error_msg
-
-    def test_client_with_10_ext_refs(self, acu_guest):  # E396693 - fetch from unsynced
-        error_msg = acu_guest.fetch_from_acu_by_acu('E396693')
-        assert not error_msg
-        if not error_msg:
-            assert acu_guest.rec_count <= 1
-            if acu_guest.rec_count:
-                row = acu_guest.fields
-                assert row['AcId'] == 'E396693'
-                # RCI=1442-11521,RCI=1442-55556,RCI=2429-09033,RCI=2429-09777,RCI=2429-12042,RCI=2429-13656,
-                # .. RCI=2429-55556,RCI=2972-00047,RCI=5445-12771,RCIP=5-207931
-                assert 'RCI=1442-11521' in row['ExtRefs']
-                assert 'RCI=2972-00047' in row['ExtRefs']
-                assert 'RCI=5-207931' in row['ExtRefs']
-                assert len(row['ExtRefs'].split(',')) >= 12
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
-                # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
-                assert not error_msg
-
-    def test_client_with_objid_but_deleted_in_sihot(self, acu_guest):  # E610488, ObjId=294
-        error_msg = acu_guest.fetch_from_acu_by_cd('E610488')
-        assert not error_msg
-        if not error_msg:
-            assert acu_guest.rec_count == 1
-            row = acu_guest.fields
-            assert row['AcId'] == 'E610488'
-            assert row['AcId2'] is None
-            # overwrite objid with not existing one
-            acu_guest.fields['ShId'] = int(row['ShId']) + 1 if row['ShId'] else 99999
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
-            assert not error_msg or error_msg.endswith('No guest found.')
+    def test_basic_build_and_send(self, console_app_env):
+        cli_to = ClientToSihot(console_app_env)
+        row = dict(AcId='T111222', Title='1', GuestType='1', Country='AT', Language='DE', ExtRefs='RCI=123,XXX=456')
+        err_msg = cli_to.send_client_to_sihot(c_row=row, commit=True)
+        assert not err_msg
 
 
 class TestResToSihot:
 
-    def test_client_with_sp_usage(self, acu_res):
-        # Silverpoint Usage 2016 - 884 request on 29-09-16 but not synced because of resOcc/RO_SIHOT_RATE filter
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E578973'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count == 0
-
-    def test_client_with_reforma_res(self, acu_res):
-        # --E420545: 371 / 27 = Reforma Reforma(~330 Arr < 5.7.16 - checked on 23.7.) - Not synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E420545'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count == 0
-
-    def test_fx_vuelo_res(self, acu_res):
-        # --E599377: 130 / 0 - later 4 FX Vuelo(~180 Arr:6.5. - 23.6.16) - Not synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E599377'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count == 0
-
-    def test_disney_res(self, acu_res):
-        # --E558549: 167 / 83 - later 437 = Inventory Disney(8 Arr:12.8. - 30.12.16) - not synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E558549'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count == 0
-
-    def test_pax1_with_doctor_title(self, acu_res):
-        # G558956/G561518 - same family with future res - 13 res in HMC - not synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'G558956'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count == 0
-
-    """
-    def _old_test_excluded_rental_ota_res_occ(self, acu_res):
-        # 1 RR request in PBC arriving 13-10-16
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E610488'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count == 0
-        error_msg = acu_res.fetch_from_acu_by_cd('E610488')
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count >= 1
-    """
-
-    #################################################################
-    #  SENDING TO SIHOT PMS
-
-    def test_guest_booking_in_the_past(self, acu_res):
-        # 2 guest requests (1 PBC, 1 BHC) on behave of owner E113650
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E421535'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count in (0, 1)
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
-            assert not error_msg
-
-    def test_tc_booking_with_kids_in_the_future(self, acu_res):
-        # 1 request in PBC on behave of thomas cook
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'N616715'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count in (0, 1)
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
-            assert not error_msg
-
-    def test_remove_past_no_room_and_future_cxl(self, acu_res):
-        # 23 PBC requests (2 future) - 21 req synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'F385312'")
-        assert not error_msg
-        if not error_msg:
-            assert 0 <= acu_res.rec_count <= 23
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
-            assert not error_msg
-
-    def test_remove_res_occ_and_cancelled(self, acu_res):
-        # 20 PBC requests, 2 excluded because BK resOcc or cancelled/past/no-room
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'Z007184'")
-        assert not error_msg
-        if not error_msg:
-            assert 0 <= acu_res.rec_count <= 20
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
-            assert not error_msg
-
-    def test_exclude_cancelled_with_break_and_row_commit(self, acu_res):
-        # 21 PBC requests
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E499163'")
-        assert not error_msg
-        if not error_msg:
-            assert 0 <= acu_res.rec_count <= 21
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=True)
-            assert not error_msg
-
-    """
-    def _old_test_15_requests_by_cd(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'Z136231'")
-        assert not error_msg
-        if not error_msg:
-            assert acu_res.rec_count == 15
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
-            assert not error_msg
-
-    def _old_test_res_with_euro_char_fetched_by_cd(self, acu_res):
-        # 20 PBC reservations and one with Euro-sign (in reservation comment of transfer on 10-10-2014)
-        # .. and some with wrong/different arrival client id - e.g. E436263 is 1st RU within 3-4 wk requests/RH
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'E374408'")
-        assert not error_msg
-        if not error_msg:
-            recs = acu_res.recs
-            assert len(recs) in (0, 20)
-            assert '€' in [r['ResNote'] for r in recs if r['RUL_PRIMARY'] == '864355'][0]
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-
-    # FB examples with board: F468913, F614205, V576425, I615916
-    def _old_test_fb_with_board1(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'F468913'")
-        assert not error_msg
-        if not error_msg:
-            recs = acu_res.recs
-            assert len(recs) == 1
-            for row in recs:
-                assert row['ResHotelId'] in (1, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
-                assert not error_msg
-
-    def _old_test_fb_with_board2(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'F614205'")
-        assert not error_msg
-        if not error_msg:
-            recs = acu_res.recs
-            assert len(recs) == 1
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-
-    def _old_test_fb_with_board3(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'V576425'")
-        assert not error_msg
-        if not error_msg:
-            recs = acu_res.recs
-            assert len(recs) == 2
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-    """
-
-    def test_fb_with_board4(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'I615916'")
-        assert not error_msg
-        if not error_msg:
-            rows = acu_res.recs
-            assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-
-    # test ER/External Rental: G522633, E588450, E453121, Z124997
-    def test_external_rental1(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'G522633'")
-        assert not error_msg
-        if not error_msg:
-            rows = acu_res.recs
-            assert len(rows) == 4
-            for row in rows:
-                assert row['ResHotelId'] in (1, 3, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row)
-                assert (not error_msg
-                        or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
-
-    def test_external_rental2(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'E588450'")
-        assert not error_msg
-        if not error_msg:
-            rows = acu_res.recs
-            assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-
-    def test_external_rental3(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'E453121'")
-        assert not error_msg
-        if not error_msg:
-            rows = acu_res.recs
-            assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-
-    """
-    def test_external_rental4(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'Z124997'")
-        assert not error_msg
-        if not error_msg:
-            recs = acu_res.recs
-            assert len(recs) >= 15
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-
-    def _old_test_any_resort1(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'C612158'")
-        assert not error_msg
-        if not error_msg:
-            recs = acu_res.recs
-            assert len(recs) == 1
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-
-    def _old_test_any_resort2(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'E543935'")
-        assert not error_msg
-        if not error_msg:
-            recs = acu_res.recs
-            assert len(recs) == 4  # only one is for ANY and future - 3 others in past/2014
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-
-    def _old_test_tc_booking_created_via_sync_and_then_deleted_via_res_import(self, acu_res):
-        # RUL_CODE == 4785629
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="RUL_PRIMARY = 1023128")
-        assert not error_msg
-        if not error_msg:
-            recs = acu_res.recs
-            assert len(recs) == 1
-            error_msg = acu_res.send_rows_to_sihot()
-            assert not error_msg
-    """
+    def test_basic_build_and_send(self, console_app_env):
+        res_to = ResToSihot(console_app_env)
+        row = dict(ResHotelId='1', ResGdsNo='TEST-123456789', ResOrdererMc='E578973',
+                   ResArrival=datetime.date(year=2019, month=12, day=24),
+                   ResDeparture=datetime.date(year=2019, month=12, day=30),
+                   ResAdults=1, ResChildren=1, ResRoomCat='1STDP',
+                   )
+        err_msg = res_to.send_row_to_sihot(crow=row)
+        assert not err_msg
