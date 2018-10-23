@@ -219,7 +219,7 @@ class Record(OrderedDict):
             if isinstance(idx_path, tuple) and idx_len and fld_nam == idx_path[0]:
                 if idx_len == 1:
                     return fld_nam, field
-                elif field.find_recs_field(idx_path[1:], system=self.system, direction=self.direction):
+                elif field.find_deeper_field(idx_path[1:], system=self.system, direction=self.direction):
                     return idx_path, None
 
         return '', None
@@ -338,9 +338,10 @@ class Record(OrderedDict):
                     continue
 
             if deeper(deepness, field):
-                name = idx_path + (name, )
-                field = field.copy(*name,  deepness=deeper(deepness, field),
-                                   to_rec=to_rec, filter_func=filter_func, fields_patches=fields_patches)
+                new_path = (name, ) if new_rec else idx_path + (name, )
+                field = field.copy(*new_path,  deepness=deeper(deepness, field),
+                                   to_rec=None if new_rec else to_rec,
+                                   filter_func=filter_func, fields_patches=fields_patches)
             elif name in to_rec:
                 field = to_rec[name]
 
@@ -437,14 +438,15 @@ class Field:
     def __str__(self):
         return "Field(" + repr(self._aspects) + ")"
 
-    def find_recs_field(self, idx_path, fuzzy_aspect=True, system='', direction=''):
+    def find_deeper_field(self, idx_path, fuzzy_aspect=True, system='', direction=''):
         idx_len = len(idx_path)
         value = self.aspect_value(FAT_VAL, fuzzy_aspect=fuzzy_aspect, system=system, direction=direction)
-        if isinstance(idx_path, tuple) and idx_len and isinstance(value, Records) and len(value) > idx_path[0]:
+        if isinstance(idx_path, tuple) and idx_len and isinstance(value, VALUE_TYPES) and len(value) > idx_path[0]:
             if idx_len == 1:
-                return idx_path[0]
+                return idx_path[0] in value
             else:
                 return value[idx_path[0]].__contains__(idx_path[1:])
+        return False
 
     def value(self, *idx_path, fuzzy_aspect=False, system='', direction=''):
         value = None
@@ -598,6 +600,9 @@ class Field:
         self.set_aspect(value_type, FAT_TYPE, system=system, direction=direction, add=add)
         return self
 
+    def calculator(self, system='', direction=''):
+        return self.aspect_value(FAT_CAL, system=system, direction=direction)
+
     def set_calculator(self, calculator, system='', direction='', add=False):
         return self.set_aspect(calculator, FAT_CAL, system=system, direction=direction, add=add)
 
@@ -605,18 +610,30 @@ class Field:
         if not self.aspect_exists(FAT_VAL, system=system, direction=direction):
             self.set_value(Value(), system=system, direction=direction)
 
+    def validator(self, system='', direction=''):
+        return self.aspect_value(FAT_CHK, system=system, direction=direction)
+
     def set_validator(self, validator, system='', direction='', add=False):
         assert system != '', "Field validator can only be set for a given/non-empty system"
         self._ensure_system_value(system, direction=direction)
         return self.set_aspect(validator, FAT_CHK, system=system, direction=direction, add=add)
+
+    def converter(self, system='', direction=''):
+        return self.aspect_value(FAT_CON, system=system, direction=direction)
 
     def set_converter(self, converter, system='', direction='', add=False):
         assert system != '', "Field converter can only be set for a given/non-empty system"
         self._ensure_system_value(system, direction=direction)
         return self.set_aspect(converter, FAT_CON, system=system, direction=direction, add=add)
 
+    def filter(self, system='', direction=''):
+        return self.aspect_value(FAT_FLT, system=system, direction=direction)
+
     def set_filter(self, filter_func, system='', direction='', add=False):
         return self.set_aspect(filter_func, FAT_FLT, system=system, direction=direction, add=add)
+
+    def sql_expression(self, system='', direction=''):
+        return self.aspect_value(FAT_SQE, system=system, direction=direction)
 
     def set_sql_expression(self, sql_expression, system='', direction='', add=False):
         return self.set_aspect(sql_expression, FAT_SQE, system=system, direction=direction, add=add)

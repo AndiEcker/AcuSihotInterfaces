@@ -7,8 +7,7 @@ import pprint
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH,\
-    FAT_NAME, FAT_REC, FAT_FLT, FAD_FROM, FAD_ONTO, \
+from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, FAD_FROM, FAD_ONTO, \
     Field, Record, Records
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
@@ -94,6 +93,10 @@ def elem_path_values(elem_fld_map, elem_path_suffix):
                 if path_key.endswith(elem_path_suffix):
                     ret_list.extend(values)
     return ret_list
+
+
+def elem_to_attr(elem):
+    return elem.lower().replace('-', '_')
 
 
 #  ELEMENT-FIELD-MAP-TUPLE-INDEXES  #################################
@@ -452,7 +455,7 @@ class SihotXmlParser:  # XMLParser interface
         self._elem_path.append(tag)
         if tag in self._base_tags:
             self.cae.dprint("SihotXmlParser.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            self._curr_attr = tag.lower().replace('-', '_')
+            self._curr_attr = elem_to_attr(tag)
             setattr(self, self._curr_attr, '')
             return None
         # collect extra info on error response (RC != '0') within the MSG tag field
@@ -687,15 +690,16 @@ class GuestSearchResponse(SihotXmlParser):
         """
         response to the GUEST-GET request oc of the KERNEL interface
 
-        ret_elem_names is a list of xml element names (or response attributes) to return. If there is only one
-        list element with a leading ':' character then self.ret_elem_values will be a dict with the search value
-        as the key. If ret_elem_names consists of exact one item then ret_elem_values will be a list with the
-        plain return values. If ret_elem_names contains more than one item then self.ret_elem_values will be
-        a dict where the ret_elem_names are used as keys. If the ret_elem_names list is empty (or None) then the
-        returned self.ret_elem_values list of dicts will provide all elements that are returned by the
-        Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
-
-        key_elem_name is the element name used for the search (only needed if self._return_value_as_key==True)
+        :param cae:             app environment instance.
+        :param ret_elem_names:  list of xml element names (or response attributes) to return. If there is only one
+                                list element with a leading ':' character then self.ret_elem_values will be a dict
+                                with the search value as the key. If ret_elem_names consists of exact one item then
+                                ret_elem_values will be a list with the plain return values. If ret_elem_names contains
+                                more than one item then self.ret_elem_values will be a dict where the ret_elem_names
+                                are used as keys. If the ret_elem_names list is empty (or None) then the returned
+                                self.ret_elem_values list of dicts will provide all elements that are returned by the
+                                Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
+        :param key_elem_name:   element name used for the search (only needed if self._return_value_as_key==True).
         """
         super(GuestSearchResponse, self).__init__(cae)
         self._base_tags.append('GUEST-NR')
@@ -741,20 +745,21 @@ class GuestSearchResponse(SihotXmlParser):
         if tag == 'GUEST-PROFILE':
             self._in_guest_profile = False
             if self._return_value_as_key:
-                elem = getattr(self, self._key_elem_name)
+                elem = getattr(self, elem_to_attr(self._key_elem_name))
                 if self._key_elem_index > 1:
                     elem += '_' + str(self._key_elem_index)
-                self.ret_elem_values[elem] = getattr(self, self._ret_elem_names[0][1:])
+                self.ret_elem_values[elem] = getattr(self, elem_to_attr(self._ret_elem_names[0][1:]))
             else:
                 elem_names = self._ret_elem_names
                 if len(elem_names) == 1:
-                    self.ret_elem_values.append(getattr(self, elem_names[0]))
+                    self.ret_elem_values.append(getattr(self, elem_to_attr(elem_names[0])))
                 else:
                     values = dict()
                     for elem in elem_names:
                         if elem in self._elem_fld_map_parser.elem_fld_map:
                             field = self._elem_fld_map_parser.elem_fld_map[elem]
-                            values[elem] = getattr(self, elem, field.val(system=SDI_SW, direction=FAD_FROM))
+                            values[elem] = getattr(self, elem_to_attr(elem),
+                                                   field.val(system=SDI_SW, direction=FAD_FROM))
                             # Q&D fix for search_agencies(): prevent to add elemListVal elem/item in next run
                             # if 'elemVal' in field:
                             #     field.pop('elemVal')
@@ -782,11 +787,10 @@ class FldMapXmlParser(SihotXmlParser):
                 continue
 
             elem_name = fas[MTI_ELEM_NAME].strip('/')
-            aspects = dict()
-            aspects[FAT_REC] = self._rec
-            aspects[FAT_NAME] = field_name
-            field = Field(**aspects)
+            field = Field()
+            field.name = field_name
             field.set_name(elem_name, system=SDI_SH, direction=FAD_FROM, add=True)
+            field.set_rec(self._rec)
             # add additional aspects: first always add converter (for to create separate system value)
             if map_len > MTI_FLD_CONVERT and fas[MTI_FLD_CONVERT]:
                 field.set_converter(fas[MTI_FLD_CONVERT], system=SDI_SH, direction=FAD_FROM, add=True)
@@ -1289,11 +1293,10 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 continue
 
             elem_name = fas[MTI_ELEM_NAME].strip('/')
-            aspects = dict()
-            aspects[FAT_REC] = self.elem_fld_rec
-            aspects[FAT_NAME] = field_name
-            field = Field(**aspects)
+            field = Field()
+            field.name = field_name
             field.set_name(elem_name, system=SDI_SH, direction=FAD_ONTO, add=True)
+            field.set_rec(self.elem_fld_rec)
             # add additional aspects: first always add converter (for to create separate system value)
             if map_len > MTI_FLD_CONVERT and fas[MTI_FLD_CONVERT]:
                 field.set_converter(fas[MTI_FLD_CONVERT], system=SDI_SH, direction=FAD_ONTO, add=True)
@@ -1366,7 +1369,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
             else:
                 field = self.elem_fld_rec[fld]
                 val = field.val(system=SDI_SH)
-            filter_func = field.aspect_value(FAT_FLT, system=SDI_SH, direction=FAD_ONTO)
+            filter_func = field.filter(system=SDI_SH, direction=FAD_ONTO)
             if filter_func:
                 assert callable(filter_func), "filter aspect {} must be callable".format(filter_func)
                 if filter_func(field):

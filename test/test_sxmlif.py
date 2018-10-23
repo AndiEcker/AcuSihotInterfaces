@@ -632,7 +632,8 @@ class TestResFromSihot:
         assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
         assert xml_parser.res_list[0]['AcId'].val() == 'PersonAcId'
         assert xml_parser.res_list[0]['PERSON.MATCHCODE'].val() == 'PersonAcId'
-        # TODO: assert xml_parser.res_list[0][('ResPersons', 0, 'AcId', )].val() == 'PersonAcId'
+        # TODO:
+        assert xml_parser.res_list[0][('ResPersons', 0, 'AcId', )].val() == 'PersonAcId'
         # assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['PersonAcId', 'GUBSE', 'test2']
 
     def test_fld_map_big(self, console_app_env):
@@ -705,7 +706,8 @@ class TestGuestSearch:
             assert '5445-12771' in ret['EXTID.ID']
             assert '5-207931' in ret['EXTID.ID']
             # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
-            # TODO: .. so this one fails: assert '1442-11521' in ret['EXTID.ID']
+            # TODO: .. so this one fails:
+            assert '1442-11521' in ret['EXTID.ID']
 
     def test_get_guest_nos_by_matchcode(self, guest_search):
         guest_nos = guest_search.get_guest_nos_by_matchcode('OTS')

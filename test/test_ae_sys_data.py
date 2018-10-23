@@ -147,10 +147,20 @@ class TestCopy:
         f = Field().set_value(rs)
         r1.add_field(f, fn2)
         print(r1)
+
+        # test simple/shadow copy
+        r1c = r1.copy()
+        assert r1 == r1c
+        assert r1 is not r1c
+
+        # test flattening copy into existing record (r2)
         r2 = Record(fields={(fn2, ri2, sfn2): Field().set_val(vc2)})
         assert r2[(fn2, ri2, sfn2)].val() == vc2
         r3 = r2.copy(to_rec=r1)
         print(r3)
+        assert r1 != r2
+        assert r1 is not r2
         assert r1 == r3
+        assert r1 is r3
         assert r1[(fn2, ri2, sfn2)].val() == v2
         assert r3[(fn2, ri2, sfn2)].val() == v2
