@@ -27,7 +27,7 @@ __version__ = '0.7'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
-cae.add_option('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 39, 'l')
+cae.add_option('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 69, 'l')
 ass_options = add_ass_options(cae, client_port=12000, add_kernel_port=True)
 
 debug_level = cae.get_option('debugLevel')
