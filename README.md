@@ -66,7 +66,7 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
-| correctAcumen | Correct/Fix Acumen data (0=No, 1=Yes) | 0 | A | SihotOccLogChecker |
+| correctSystem | Correct/Fix data for system (Acu=Acumen, Ass=AssCache) | - | A | SihotOccLogChecker |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
 | cmdInterval | synchronization interval in seconds | 3600 | l | AssServer, WatchPupPy |
 | dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
@@ -408,11 +408,12 @@ password with the `acuUser` and `acuPassword` command line options and finally t
 SXML log file as command line parameter (e.g. `E:\sihot\log\SP\SXML_ACUMEN@SP.log` directly from our Sihot production
  server or `\\<sihot-server>\e$\sihot\log\sp\SXML_ACUMEN@SP.log` from the network).
 
-After checking the discrepancies you can add the `correctAcumen` command line option for to fix the Acumen
-occupation status. If you want for example to fix the missing occupation changes in our second big outage (between
-21/10/2017 17:54:38 and 23/10/2017 10:20:50) in Acumen you have to specify the following command line arguments: 
+After checking the discrepancies you can add the `correctSystem` command line option for to fix either the Acumen (Acu)
+or the AssCache (Ass) occupation status. If you want for example to fix the missing occupation changes in our second big
+outage (between 21/10/2017 17:54:38 and 23/10/2017 10:20:50) in Acumen you have to specify the following command
+line arguments: 
 
-`-F="2017-10-21 17:54:38.0" -T="2017-10-23 10:20:50.0" -A=1 -u=AECKER -p=password -d=SP.WORLD`
+`-F="2017-10-21 17:54:38.0" -T="2017-10-23 10:20:50.0" -A=Acu -u=AECKER -p=password -d=SP.WORLD`
 
 In the last example the short options got used (see the Short Option column in the section
 [General command line arguments](#general-command-line-arguments) above). For a more verbose output you can also
