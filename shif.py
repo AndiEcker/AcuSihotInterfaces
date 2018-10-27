@@ -4,6 +4,7 @@ import time
 from traceback import format_exc, print_exc
 import pprint
 
+from sys_data_ids import SDI_SH
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from sxmlif import (elem_path_values, GuestSearch, ResFetch, ResSearch, ResKernelGet, ResToSihot,
                     SXML_DEF_ENCODING, ELEM_PATH_SEP,
@@ -392,21 +393,16 @@ class ResBulkFetcher(BulkFetcherBase):
         return self.all_rows
 
 
-class ResSender:
-    def __init__(self, cae):
-        self.cae = cae
-        self.res_sender = ResToSihot(cae)
-        self.debug_level = cae.get_option('debugLevel')
-
+class ResSender(ResToSihot):
     @staticmethod
-    def complete_res_data(crow):
+    def complete_res_data(rec):
         """
-        complete reservation data row (crow) with the default values (specified in row_def underneath), while
+        complete reservation data row (rec) with the default values (specified in default_values underneath), while
         the following fields are mandatory:
             ResHotelId, ResArrival, ResDeparture, ResRoomCat, ResMktSegment, ResOrdererMc, ResGdsNo.
 
-        :param crow:    reservation data row (dict).
-        :return:        completed reservation data row (new dict).
+        :param rec:     reservation data Record instance.
+        :return:        completed reservation data Record instance.
 
         These fields will not be completed/changed at all:
             ResRoomNo, ResNote, ResLongNote, ResFlightNo (flight no), ResAllotmentNo, ResVoucherNo.
@@ -415,60 +411,47 @@ class ResSender:
             ResOrdererId (alternatively usable instead of matchcode value ResOrdererMc).
             ResAdult1Surname and ResAdult1Forename (surname and firstname)
             ResAdult2Surname and ResAdult2Forename ( ... )
-        optional auto-populated fields (==default value):
-            ShId (==ResOrdererId)
-            ResAction (=='INSERT')
-            ResBooked (==today)
-            ResPriceCat (==ResRoomCat)
-            ResBoard (=='RO')
-            ResAccount (==1)
-            ResSource (=='A')
-            ResRateSegment (==ResMktSegment)
-            ResMktGroup (=='RS')
-            ResAdults (==2)
-            ResChildren (==0)
-
+        optional auto-populated fields (see default_values dict underneath).
         """
-        row_def = dict(ResStatus='1',
-                       AcId=crow.get('ResOrdererMc', ''),
-                       ShId=crow.get('ResOrdererId', ''),
-                       ResAction='INSERT',
-                       ResBooked=datetime.datetime.today(),
-                       ResPriceCat=crow.get('ResRoomCat', ''),
-                       ResBoard='RO',    # room only (no board/meal-plan)
-                       ResAccount=1,
-                       ResSource='A',
-                       ResRateSegment=crow.get('ResMktSegment', ''),
-                       ResMktGroup='RS',
-                       ResAdults=2,
-                       ResChildren=0,
-                       )
-        row_def.update(crow)
+        default_values = dict(ResStatus='1',
+                              AcId=rec['ResOrdererMc'].val() if 'ResOrdererMc' in rec else '',
+                              ShId=rec['ResOrdererId'].val() if 'ResOrdererId' in rec else '',
+                              ResAction='INSERT',
+                              ResBooked=datetime.datetime.today(),
+                              ResPriceCat=rec['ResRoomCat'].val() if 'ResRoomCat' in rec else '',
+                              ResBoard='RO',  # room only (no board/meal-plan)
+                              ResAccount=1,
+                              ResSource='A',
+                              ResRateSegment=rec['ResMktSegment'].val() if 'ResMktSegment' in rec else '',
+                              ResMktGroup='RS',
+                              ResAdults=2,
+                              ResChildren=0,
+                              )
+        for field_name, field_value in default_values.items():
+            if field_name not in rec or not rec[field_name].val():
+                rec.set_val(field_value, field_name)
+        return rec
 
-        return row_def
-
-    def send_row(self, crow):
+    def send_rec(self, rec):
         msg = ""
-        crow = self.complete_res_data(crow)
+        rec = self.complete_res_data(rec)
+        rec.push(SDI_SH)
         try:
-            err = self.res_sender.send_row_to_sihot(crow, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
+            err = self.send_row_to_sihot(rec, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
         except Exception as ex:
-            err = "ResSender.send_row() exception: {}".format(full_stack_trace(ex))
+            err = "ResSender.send_rec() exception: {}".format(full_stack_trace(ex))
         if err:
             if err.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
-                msg = "Ignoring error sending res: " + str(crow)
+                msg = "Ignoring error sending res: " + str(rec)
                 err = ""
             elif 'setDataRoom not available!' in err:  # was: 'A_Persons::setDataRoom not available!'
                 err = "Apartment {} occupied between {} and {} - created GDS-No {} for manual allocation." \
-                                .format(crow['ResRoomNo'], crow['ResArrival'].strftime('%d-%m-%Y'),
-                                        crow['ResDeparture'].strftime('%d-%m-%Y'), crow['ResGdsNo']) \
+                                .format(rec['ResRoomNo'], rec['ResArrival'].strftime('%d-%m-%Y'),
+                                        rec['ResDeparture'].strftime('%d-%m-%Y'), rec['ResGdsNo']) \
                       + (" Original error: " + err if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
         elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            msg = "Sent res: " + str(crow)
+            msg = "Sent res: " + str(rec)
         return err, msg
 
     def get_res_no(self):
-        return obj_id_to_res_no(self.cae, self.res_sender.response.objid)
-
-    def get_warnings(self):
-        return self.res_sender.get_warnings()
+        return obj_id_to_res_no(self.cae, self.response.objid)

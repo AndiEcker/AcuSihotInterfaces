@@ -38,7 +38,10 @@ sys.path.append(os.path.dirname(__file__))
 
 from bottle import default_app, request, response, static_file, template, run
 
+from sys_data_ids import SDI_SF
+from ae_sys_data import FAD_FROM
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from sfif import field_converters
 from shif import ResSender
 from ass_sys_data import add_ass_options, init_ass_data
 
@@ -137,19 +140,12 @@ def res_upsert(res_id=''):
     res_json = request.json
     add_log_entry("res_upsert({}): {}".format(res_id, res_json))
 
-    # added Q&D for to support new parameter/field names
-    tt = dict(HotelIdc='RUL_SIHOT_HOTEL', Numberc='', SubNumberc='', GdsNoc='SIHOT_GDSNO',
-              Arrivalc='ARR_DATE', Departurec='DEP_DATE',
-              RoomCatc='RUL_SIHOT_CAT', AcumenClientRefpc='OC_CODE', Statusc='SH_RES_TYPE', Actionc='RUL_ACTION',
-              BaordIdc='RUL_SIHOT_PACK', SourceIdc='RU_SOURCE', Notec='SIHOT_NOTE', Adultsc='RU_ADULTS',
-              Childrenc='RU_CHILDREN')
-    res_data = {tt[k]: v for k, v in res_json.items() if k in tt}
-
-    if res_id and not res_data.get('RUL_ACTION'):      # res_id is passed also within request
-        res_data['RUL_ACTION'] = 'UPDATE'
-
     res_send = ResSender(cae)
-    err, msg = res_send.send_row(res_data)
+    rec = res_send.elem_fld_rec
+    for name, value in res_json.items():
+        rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_converters.get(name))
+    rec.pull(SDI_SF)
+    err, msg = res_send.send_rec(rec)
     if err or msg:
         add_log_entry(warning_msg=msg, error_msg=err, importance=3 if err else 2)
     if err:

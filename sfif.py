@@ -34,6 +34,29 @@ ID_PREFIX_OBJECTS = {'001': 'Account', '003': 'Contact', '00Q': 'Lead'}
 ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
+SF_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+
+
+def convert_date_from_sf(str_val):
+    return datetime.datetime.strptime(str_val, SF_DATE_FORMAT)
+
+
+def convert_date_onto_sf(date):
+    return date.strftime(SF_DATE_FORMAT)
+
+
+def convert_date_field_from_sf(_, str_val):
+    return convert_date_from_sf(str_val)
+
+
+def convert_date_field_onto_sf(_, date):
+    return convert_date_onto_sf(date)
+
+
+field_converters = dict(ResArrival=convert_date_field_from_sf, ResDeparture=convert_date_field_from_sf,
+                        ResAdults=lambda f, v: int(v), ResChildren=lambda f, v: int(v))
+
+
 def obj_from_id(sf_id):
     return ID_PREFIX_OBJECTS.get(sf_id[:3], DEF_CLIENT_OBJ)
 
@@ -278,7 +301,7 @@ class SfInterface:
         if function_args:
             # don't change callers dict, remove underscore characters from arg names (APEX methods doesn't allow them)
             # .. and convert date/time types into SF apex format
-            function_args = {k.replace('_', ''): v.strftime('%Y-%m-%d %H:%M:%S')
+            function_args = {k.replace('_', ''): convert_date_onto_sf(v)
                              if isinstance(v, datetime.date) or isinstance(v, datetime.datetime) else v
                              for (k, v) in function_args.items()}
             # TODO: refactor function_args data type conversion into FIELDS feature method fields_dict_to_sf()

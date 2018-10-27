@@ -168,12 +168,12 @@ class TestResSender:
         err, msg = rs.send_row(crow)
         if "setDataRoom not available!" in err:     # no error only on first run after TEST replication
             crow.pop('ResRoomNo')              # .. so on n. run simply remove room number and then retry
-            rs.res_sender.wipe_gds_errors()         # .. and also remove send locking by wiping GDS errors for this GDS
+            rs.wipe_gds_errors()         # .. and also remove send locking by wiping GDS errors for this GDS
             err, msg = rs.send_row(crow)
 
         assert not err
-        assert ho_id == rs.res_sender.response.id
-        assert gdsno == rs.res_sender.response.gdsno
+        assert ho_id == rs.response.id
+        assert gdsno == rs.response.gdsno
         h, r, s = rs.get_res_no()
         assert ho_id == h
         assert r
@@ -196,8 +196,8 @@ class TestResSender:
         err, msg = rs.send_row(crow)
 
         assert not err
-        assert ho_id == rs.res_sender.response.id
-        assert gdsno == rs.res_sender.response.gdsno
+        assert ho_id == rs.response.id
+        assert gdsno == rs.response.gdsno
         h, r, s = rs.get_res_no()
         assert ho_id == h
         assert r
@@ -220,8 +220,8 @@ class TestResSender:
         err, msg = rs.send_row(crow)
 
         assert not err
-        assert ho_id == rs.res_sender.response.id
-        assert gdsno == rs.res_sender.response.gdsno
+        assert ho_id == rs.response.id
+        assert gdsno == rs.response.gdsno
         h, r, s = rs.get_res_no()
         assert ho_id == h
         assert r

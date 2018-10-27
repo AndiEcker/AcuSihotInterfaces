@@ -136,7 +136,7 @@ reservation these fields need to be included in the send to Sihot:
 | --- | --- | --- | --- | --- |
 | ResHotelId * | RUL_SIHOT_HOTEL | HotelId__c | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
 | ResNumber + | - | Number__c | String | Sihot Reservation Number | 123456789' |
-| ResSubNumber + | - | SubNumber__c | String | Sihot Reservation Subnumber | '1' |
+| ResSubNumber + | - | SubNumber__c | String | Sihot Reservation Sub-number | '1' |
 | ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | String | Sihot Internal Reservation Object Id | '123456789' |
 | ResOppId | - | ReservationOpportunityId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
 | ResGdsNo * | SIHOT_GDSNO | GdsNo__c | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
