@@ -54,7 +54,8 @@ if conf_data.error_message:
     cae.shutdown(exit_code=33)
 
 # logon to and prepare ass_cache database
-ass_db = PostgresDB(usr=pg_user, pwd=pg_pw, dsn=pg_dsn, app_name=cae.app_name(), debug_level=debug_level)
+ass_db = PostgresDB(usr=pg_user, pwd=pg_pw, dsn=pg_dsn, app_name=cae.app_name(), ssl_args=cae.get_config('assSslArgs'),
+                    debug_level=debug_level)
 if ass_db.connect():
     log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
     cae.shutdown(exit_code=66)

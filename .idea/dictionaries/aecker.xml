@@ -238,6 +238,10 @@
       <w>sosl</w>
       <w>spdev</w>
       <w>srsl</w>
+      <w>sslcert</w>
+      <w>sslkey</w>
+      <w>sslmode</w>
+      <w>sslrootcert</w>
       <w>stackoverflow</w>
       <w>starttls</w>
       <w>staymonth</w>

@@ -339,7 +339,8 @@ try:
                                     bind_vars=dict(beg=date_from, till=date_till, days=max_days_diff))
     else:
         sys_db = PostgresDB(cae.get_option('assUser'), cae.get_option('assPassword'), cae.get_option('assDSN'),
-                            app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
+                            app_name=cae.app_name(), ssl_args=cae.get_config('assSslArgs'),
+                            debug_level=cae.get_option('debugLevel'))
         err_msg = sys_db.connect()
         if not err_msg:
             err_msg = sys_db.select('res_groups LEFT OUTER JOIN clients ON rgr_order_cl_fk = cl_pk',

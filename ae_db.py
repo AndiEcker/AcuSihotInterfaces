@@ -349,15 +349,18 @@ class OraDB(GenericDB):
 
 
 class PostgresDB(GenericDB):
-    def __init__(self, usr, pwd, dsn, app_name='ae_db-pg', debug_level=DEBUG_LEVEL_DISABLED):
+    def __init__(self, usr, pwd, dsn, app_name='ae_db-pg', ssl_args=None, debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of postgres database object
-        :param usr:         user name
-        :param pwd:         user password
-        :param dsn:         database name and optionally host address (separated with a @ character)
-        :param debug_level: debug level
+        :param usr:         user name.
+        :param pwd:         user password.
+        :param dsn:         database name and optionally host address (separated with a @ character).
+        :param app_name:    application name (shown in the server DB session).
+        :param ssl_args:    dict of SSL arguments sslmode, sslrootcert, sslcert, sslkey.
+        :param debug_level: debug level.
         """
         super(PostgresDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, app_name=app_name, debug_level=debug_level)
+        self._ssl_args = ssl_args
         # for "named" PEP-0249 sql will be adapted to fit postgres driver "pyformat" sql bind-var/parameter syntax
         self._param_style = 'pyformat'
 
@@ -371,6 +374,8 @@ class PostgresDB(GenericDB):
                 connection_params['dbname'] = self.dsn
             if self._app_name:
                 connection_params['application_name'] = self._app_name
+            if self._ssl_args:
+                connection_params.update(self._ssl_args)
 
             self.conn = psycopg2.connect(**connection_params)
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:

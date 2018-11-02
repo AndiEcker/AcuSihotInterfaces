@@ -45,10 +45,10 @@ CLI_FIELD_MAP = [       # client data
     ('WorkPhone', 'CD_WTEL1'
      "CD_WTEL1 || CD_WEXT1"),
     ('MobilePhone', 'CD_MOBILE1'),
-    ('MobilePhone2', 'CD_LAST_SMS_TEL'),
+    ('MobilePhoneB', 'CD_LAST_SMS_TEL'),
     ('Fax', 'CD_FAX'),
     ('Email', 'CD_EMAIL'),
-    ('Email2', 'CD_SIGNUP_EMAIL'),
+    ('EmailB', 'CD_SIGNUP_EMAIL'),
     ('DOB', 'CD_DOB1'),
     ('Password', 'CD_PASSWORD'),
     ('RCIRef', 'CD_RCI_REF'),
@@ -93,7 +93,7 @@ RES_FIELD_MAP = [       # reservation data
     ('ResBoard', 'RUL_SIHOT_PACK'),
     ('ResSource', 'RU_SOURCE'),
     ('ResMktGroup', 'RO_SIHOT_RES_GROUP'),      # Acumen value in RO_RES_GROUP
-    ('ResMktGroup2', 'RO_SIHOT_SP_GROUP'),
+    ('ResMktGroupNN', 'RO_SIHOT_SP_GROUP'),
     ('ResMktSegment', 'SIHOT_MKT_SEG',
      "nvl(SIHOT_MKT_SEG, RUL_SIHOT_RATE)"),     # SIHOT_MKT_SEG is NULL if RU is deleted
     ('ResRateSegment', 'SIHOT_RATE_SEGMENT'),
@@ -112,9 +112,9 @@ RES_FIELD_MAP = [       # reservation data
     ]
 '''
 for idx in range(1, EXT_REF_COUNT + 1):
-    FIELD_MAP.append(('ExtRefType' + str(idx), 'EXT_REF_TYPE' + str(idx),
+    FIELD_MAP.append(('ExtRefs' + str(idx) + 'Type', 'EXT_REF_TYPE' + str(idx),
                       "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, " + str(idx) + "), '[^=]+', 1, 1)"))
-    FIELD_MAP.append(('ExtRefId' + str(idx), 'EXT_REF_ID' + str(idx),
+    FIELD_MAP.append(('ExtRefs' + str(idx) + 'Id', 'EXT_REF_ID' + str(idx),
                       "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, " + str(idx) + "), '[^=]+', 1, 2)"))
 for idx in range(1, RES_MAX_ADULTS + 1):
     FIELD_MAP.append(('ResAdult' + str(idx) + 'Surname', 'SH_ADULT' + str(idx) + '_NAME'))      # ResAdult1Surname

@@ -593,7 +593,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def connect_ass_db(self, force_reconnect=False):
         if not self.ass_db or force_reconnect:
             self.ass_db = PostgresDB(usr=self.ass_user, pwd=self.ass_password, dsn=self.ass_dsn,
-                                     app_name=self.cae.app_name(), debug_level=self.debug_level)
+                                     app_name=self.cae.app_name(), ssl_args=cae.get_config('assSslArgs'),
+                                     debug_level=self.debug_level)
             self.error_message = self.ass_db.connect()
             if self.error_message:
                 self._err(self.error_message, self._ctx_no_file + 'ConnAssDb')

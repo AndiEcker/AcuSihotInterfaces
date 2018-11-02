@@ -632,9 +632,6 @@ class TestResFromSihot:
         assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
         assert xml_parser.res_list[0]['AcId'].val() == 'PersonAcId'
         assert xml_parser.res_list[0]['PERSON.MATCHCODE'].val() == 'PersonAcId'
-        # TODO:
-        assert xml_parser.res_list[0][('ResPersons', 0, 'AcId', )].val() == 'PersonAcId'
-        # assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['PersonAcId', 'GUBSE', 'test2']
 
     def test_fld_map_big(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
@@ -698,10 +695,10 @@ class TestGuestSearch:
         if ret['COMMENT']:
             assert 'RCI=1442-11521' in ret['COMMENT']
             assert 'RCI=5445-12771' in ret['COMMENT']
-            assert 'RCIP=5-207931' in ret['COMMENT']
+            assert 'RCI=5-207931' in ret['COMMENT']
         if ret['EXTID.TYPE']:
             assert 'RCI' in ret['EXTID.TYPE']
-            assert 'RCIP' in ret['EXTID.TYPE']
+            # RCIP got remapped to RCI: assert 'RCIP' in ret['EXTID.TYPE']
         if ret['EXTID.ID']:
             assert '5445-12771' in ret['EXTID.ID']
             assert '5-207931' in ret['EXTID.ID']

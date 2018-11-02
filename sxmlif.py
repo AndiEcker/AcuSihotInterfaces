@@ -104,8 +104,7 @@ MTI_ELEM_NAME = 0
 MTI_FLD_NAME = 1
 MTI_FLD_FILTER = 2
 MTI_FLD_VAL = 3
-MTI_FLD_TYPE = 4
-MTI_FLD_CONVERT = 5   # currently only needed for kernel DOB field
+MTI_FLD_CONVERT = 4   # currently only needed for kernel DOB field
 
 DUP_FLD_NAME_PREFIX = "+"
 
@@ -141,16 +140,16 @@ MAP_KERNEL_CLIENT = \
         ('PHONE-2', 'WorkPhone'),
         ('FAX-1', 'Fax'),
         ('EMAIL-1', 'Email'),
-        ('EMAIL-2', 'Email2'),
+        ('EMAIL-2', 'EmailB'),
         ('MOBIL-1', 'MobilePhone'),
-        ('MOBIL-2', 'MobilePhone2'),
+        ('MOBIL-2', 'MobilePhoneB'),
         ('/COMMUNICATION', None,
          lambda f: f.ina(ACTION_SEARCH)),
         ('ADD-DATA/', None,
          lambda f: f.ina(ACTION_SEARCH)),
         ('T-PERSON-GROUP', None, "1A"),
         ('D-BIRTHDAY', 'DOB',
-         None, None, None, lambda f, v: convert_date_from_sh(v)),
+         None, None, lambda f, v: convert_date_from_sh(v)),
         # 27-09-17: removed b4 migration of BHH/HMC because CD_INDUSTRY1/2 needs first grouping into 3-alphanumeric code
         # ('T-PROFESSION', 'CD_INDUSTRY1'),
         ('INTERNET-PASSWORD', 'Password'),
@@ -160,11 +159,11 @@ MAP_KERNEL_CLIENT = \
          lambda f: f.ina(ACTION_SEARCH)),
         ('L-EXTIDS/', None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('EXTID/', 'ExtRefs',
-         lambda f: not f.srv('ExtRefs'), None, Records),
-        ('EXTID.TYPE', 'ExtRefType1',
+        ('EXTID/', ('ExtRefs', ),
          lambda f: not f.srv('ExtRefs')),
-        ('EXTID.ID', 'ExtRefId1',
+        ('EXTID.TYPE', ('ExtRefs', 0, 'Type'),
+         lambda f: not f.srv('ExtRefs')),
+        ('EXTID.ID', ('ExtRefs', 0, 'Id'),
          lambda f: not f.srv('ExtRefs')),
         ('/EXTID', None,
          lambda f: not f.srv('ExtRefs')),
@@ -286,11 +285,12 @@ MAP_WEB_RES = \
         # ### GENERAL RESERVATION DATA: arrival/departure, pax, market sources, comments
         ('ARR', 'ResArrival'),
         ('DEP', 'ResDeparture'),
-        ('NOROOMS', None, None, 1),     # needed for DELETE action
+        ('NOROOMS', None,
+         None, 1),     # needed for DELETE action
         ('NOPAX', 'ResAdults',          # needed for DELETE action
-         None, None, None, lambda f: int(f.val())),
+         None, None, lambda f: int(f.val())),
         ('NOCHILDS', 'ResChildren',
-         lambda f: f.ina(ACTION_DELETE), None, None, lambda f: int(f.val())),
+         lambda f: f.ina(ACTION_DELETE), None, lambda f: int(f.val())),
         ('TEC-COMMENT', 'ResLongNote',
          lambda f: f.ina(ACTION_DELETE)),
         ('COMMENT', 'ResNote',
@@ -300,7 +300,7 @@ MAP_WEB_RES = \
         # ('MEDIA', ),
         ('SOURCE', 'ResSource',
          lambda f: f.ina(ACTION_DELETE)),
-        ('NN', 'ResMktGroup2',
+        ('NN', 'ResMktGroupNN',
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('CHANNEL', 'ResMktGroup',
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
@@ -317,18 +317,20 @@ MAP_WEB_RES = \
         # ### PERSON/occupant details
         ('PERS-TYPE-LIST/', ),
         ('PERS-TYPE/', ),
-        ('TYPE', None, None, '1A'),
+        ('TYPE', None,
+         None, '1A'),
         ('NO', DUP_FLD_NAME_PREFIX + 'ResAdults'),
         ('/PERS-TYPE', ),
         ('PERS-TYPE/', ),
-        ('TYPE', None, None, '2B'),
+        ('TYPE', None,
+         None, '2B'),
         ('NO', DUP_FLD_NAME_PREFIX + 'ResChildren'),
         ('/PERS-TYPE', ),
         ('/PERS-TYPE-LIST', ),
         # Person Records
-        ('PERSON/', 'ResPersons',
-         lambda f: f.ina(ACTION_DELETE), None, Records),
-        ('NAME', 'ResPersonSurname',
+        ('PERSON/', ('ResPersons', ),
+         lambda f: f.ina(ACTION_DELETE)),
+        ('NAME', ('ResPersons', 0, 'Surname'),
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.srv('AcId') or f.srv('ShId'),
          lambda f: ("Adult " + str(f.idx()) if f.idx() is None or f.idx() < f.srv('ResAdults')
                     else "Child " + str(f.idx() - f.srv('ResAdults') + 1))),
@@ -557,7 +559,7 @@ class ResChange(SihotXmlParser):
             di, ik = self.rgr_list[-1], 'rgr_sub_id'
         elif self._curr_tag == 'GDSNO':
             di, ik = self.rgr_list[-1], 'rgr_gds_no'
-        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'OBJID']:   # TODO: not provided by CI/CO/RM
+        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'OBJID']:   # not provided by CI/CO/RM
             di, ik = self.rgr_list[-1], 'rgr_obj_id'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'ARR']:
             di, ik = self.rgr_list[-1], 'rgr_arrival'
@@ -568,7 +570,7 @@ class ResChange(SihotXmlParser):
             di, ik = self.rgr_list[-1], 'rgr_status'
         elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOPAX']:
             di, ik = self.rgr_list[-1], 'rgr_adults'
-        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOCHILDS']:  # TODO: not provided by CR
+        elif self._elem_path == ['SIHOT-Document', 'SIHOT-Reservation', 'NOCHILDS']:  # not provided by CR
             di, ik = self.rgr_list[-1], 'rgr_children'
 
         # rgr/reservation group elements that are repeated (e.g. for each PAX in SIHOT-Person sections)
@@ -773,7 +775,7 @@ class FldMapXmlParser(SihotXmlParser):
         super(FldMapXmlParser, self).__init__(cae)
         self._current_field = None
         self._current_data = None
-        self._current_rec_idx = None
+        self._current_idx_path = list()
         self._rec = Record(system=SDI_SH, direction=FAD_FROM)
 
         # create field data parsing record and mapping dict for all elements having a field value
@@ -782,35 +784,43 @@ class FldMapXmlParser(SihotXmlParser):
             map_len = len(fas)
             if map_len <= MTI_FLD_NAME:
                 continue
-            field_name = fas[MTI_FLD_NAME]
-            if not field_name or field_name.startswith(DUP_FLD_NAME_PREFIX):
+            field_name = field_idx = fas[MTI_FLD_NAME]
+            if not field_name:
+                continue
+            if isinstance(field_name, tuple):
+                if len(field_name) == 1:
+                    field_idx = field_name[0]
+                field_name = field_name[-1]
+            elif field_name.startswith(DUP_FLD_NAME_PREFIX):
                 continue
 
             elem_name = fas[MTI_ELEM_NAME].strip('/')
             field = Field()
             field.name = field_name
-            field.set_name(elem_name, system=SDI_SH, direction=FAD_FROM, add=True)
+            field.set_name(elem_name, system=SDI_SH, direction=FAD_FROM, protect=True)
             field.set_rec(self._rec)
             # add additional aspects: first always add converter (for to create separate system value)
             if map_len > MTI_FLD_CONVERT and fas[MTI_FLD_CONVERT]:
-                field.set_converter(fas[MTI_FLD_CONVERT], system=SDI_SH, direction=FAD_FROM, add=True)
+                field.set_converter(fas[MTI_FLD_CONVERT], system=SDI_SH, direction=FAD_FROM, extend=True)
             if map_len > MTI_FLD_FILTER and fas[MTI_FLD_FILTER]:
-                field.set_filter(fas[MTI_FLD_FILTER], system=SDI_SH, direction=FAD_FROM, add=True)
-            if map_len > MTI_FLD_TYPE and fas[MTI_FLD_TYPE]:
-                field.set_value_type(fas[MTI_FLD_TYPE], system=SDI_SH, direction=FAD_FROM, add=True)
+                field.set_filter(fas[MTI_FLD_FILTER], system=SDI_SH, direction=FAD_FROM, protect=True)
             if map_len > MTI_FLD_VAL and fas[MTI_FLD_VAL] is not None:
                 val_or_cal = fas[MTI_FLD_VAL]
                 if callable(val_or_cal):
-                    field.set_calculator(val_or_cal, system=SDI_SH, direction=FAD_FROM, add=True)
+                    field.set_calculator(val_or_cal, system=SDI_SH, direction=FAD_FROM, protect=True)
                 else:
                     field.set_val(val_or_cal, system=SDI_SH, direction=FAD_FROM)
 
-            self._rec.add_field(field, name=field_name)
+            self._rec.add_field(field, idx=field_idx)
             self.elem_fld_map[elem_name] = field
 
     def clear_rec(self):
         for field in self._rec.fields.values():
             field.clear(system=self._rec.system, direction=self._rec.direction)
+
+    @property
+    def rec(self):
+        return self._rec
 
     def find_field(self, tag):
         if tag in self.elem_fld_map:
@@ -825,9 +835,26 @@ class FldMapXmlParser(SihotXmlParser):
                 elem_name, field = None, None
         return elem_name, field
 
-    @property
-    def rec(self):
-        return self._rec
+    def fld_idx_path(self, fld_path):
+        fld_path_len = len(fld_path)
+        cur_path = self._current_idx_path
+        cur_path_len = len(cur_path)
+        if fld_path_len == cur_path_len:
+            idx_path = cur_path[:-1]
+            idx_path.append(fld_path[-1])
+        else:
+            match = 0
+            while match < min(fld_path_len, cur_path_len) and fld_path[match] == cur_path[match]:
+                match += 1
+            idx_path = list(fld_path)
+            if match:
+                idx_pos = min(match, cur_path_len - 1)
+                if fld_path_len > cur_path_len >= match \
+                        and isinstance(fld_path[idx_pos], int) and isinstance(cur_path[idx_pos], int):
+                    idx_path[match] = cur_path[idx_pos] + 1
+                elif fld_path_len < cur_path_len:
+                    idx_path.append(cur_path[fld_path_len])
+        return idx_path
 
     # XMLParser interface
 
@@ -837,15 +864,23 @@ class FldMapXmlParser(SihotXmlParser):
         if not field:
             self._current_field = None
             return tag
+
+        if isinstance(field.name, tuple):   # deeper structure?
+            self._current_idx_path = self.fld_idx_path(field.name)
+        self._current_field = Field(**field.aspects).set_rec(self._rec, system=SDI_SH, direction=FAD_FROM)
+
+        '''
         if field.append_record(system=SDI_SH, direction=FAD_FROM):
             recs = field.value(system=SDI_SH, direction=FAD_FROM)
-            self._current_rec_idx = len(recs) - 1   # set current Records idx to new/just-appended Record instance
+            self._current_idx_path = len(recs) - 1   # set current Records idx to new/just-appended Record instance
             self._current_field = None
             return tag
         field = Field(**field.aspects).set_rec(self._rec, system=SDI_SH, direction=FAD_FROM)
-        if self._current_rec_idx is not None:
-            field.set_idx(self._current_rec_idx)
+        if self._current_idx_path is not None:
+            field.set_idx(self._current_idx_path)
         self._current_field = self.elem_fld_map[elem_name] = field
+        '''
+
         self._current_data = ''
         return None
 
@@ -858,19 +893,15 @@ class FldMapXmlParser(SihotXmlParser):
 
     def end(self, tag):
         if self._current_field:
-            self._current_field.set_val(self._current_data, system=SDI_SH, direction=FAD_FROM)
+            self._current_field.set_val(self._current_data, *self._current_idx_path, system=SDI_SH, direction=FAD_FROM)
             self._current_field = None
-        else:
-            _, field = self.find_field(tag)
-            if field and field.value_type(system=SDI_SH, direction=FAD_FROM) == Records:
-                self._current_rec_idx = None
         super(FldMapXmlParser, self).end(tag)
 
 
 class GuestFromSihot(FldMapXmlParser):
     def __init__(self, cae, elem_map=MAP_CLIENT_DEF):
         super(GuestFromSihot, self).__init__(cae, elem_map)
-        self.guest_list = list()
+        self.guest_list = Records()
 
     # XMLParser interface
 
@@ -884,7 +915,7 @@ class GuestFromSihot(FldMapXmlParser):
 class ResFromSihot(FldMapXmlParser):
     def __init__(self, cae, elem_map=MAP_RES_DEF):
         super(ResFromSihot, self).__init__(cae, elem_map)
-        self.res_list = list()
+        self.res_list = Records()
 
     # XMLParser interface
 
@@ -965,7 +996,7 @@ class SihotXmlBuilder:
                     err_msg = "No Reservations Found"
                 if err_num != '1' or self.debug_level >= DEBUG_LEVEL_VERBOSE:
                     err_msg += "; sent xml='{}'; got xml='{}'"\
-                        .format(ppf(self.xml), ppf(sc.received_xml))[0 if err_msg else 2:]
+                        .format(self.xml, sc.received_xml)[0 if err_msg else 2:]
                 err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:
@@ -1246,7 +1277,7 @@ class ResSearch(SihotXmlBuilder):
         if scope:
             self.add_tag('SCOPE', scope)  # e.g. EXPORTEXTENDEDCOMMENT;FORCECALCDAYPRICE;CALCSUMDAYPRICE
         if guest_id:
-            # TODO: ask Gubse to fix guest_id search/filter option on RES-SEARCH operation of Sihot WEB interface.
+            # ask Gubse to implement/fix guest_id search/filter option on RES-SEARCH operation of Sihot WEB interface.
             self.add_tag('CENTRAL-GUEST-ID', guest_id)  # this is not filtering nothing (tried GID)
         self.end_xml()
 
@@ -1288,30 +1319,34 @@ class FldMapXmlBuilder(SihotXmlBuilder):
             map_len = len(fas)
             if map_len <= MTI_FLD_NAME or fas[MTI_FLD_NAME] is None:
                 continue
-            field_name = fas[MTI_FLD_NAME]
-            if not field_name or field_name.startswith(DUP_FLD_NAME_PREFIX):
+            field_name = field_idx = fas[MTI_FLD_NAME]
+            if not field_name:
+                continue
+            elif isinstance(field_name, tuple):
+                if len(field_name) == 1:
+                    field_idx = field_name[-1]
+                field_name = field_name[-1]
+            elif field_name.startswith(DUP_FLD_NAME_PREFIX):
                 continue
 
             elem_name = fas[MTI_ELEM_NAME].strip('/')
             field = Field()
             field.name = field_name
-            field.set_name(elem_name, system=SDI_SH, direction=FAD_ONTO, add=True)
+            field.set_name(elem_name, system=SDI_SH, direction=FAD_ONTO, protect=True)
             field.set_rec(self.elem_fld_rec)
             # add additional aspects: first always add converter (for to create separate system value)
             if map_len > MTI_FLD_CONVERT and fas[MTI_FLD_CONVERT]:
-                field.set_converter(fas[MTI_FLD_CONVERT], system=SDI_SH, direction=FAD_ONTO, add=True)
+                field.set_converter(fas[MTI_FLD_CONVERT], system=SDI_SH, direction=FAD_ONTO, extend=True)
             if map_len > MTI_FLD_FILTER and fas[MTI_FLD_FILTER]:
-                field.set_filter(fas[MTI_FLD_FILTER], system=SDI_SH, direction=FAD_ONTO, add=True)
-            if map_len > MTI_FLD_TYPE and fas[MTI_FLD_TYPE]:
-                field.set_value_type(fas[MTI_FLD_TYPE], system=SDI_SH, direction=FAD_ONTO, add=True)
+                field.set_filter(fas[MTI_FLD_FILTER], system=SDI_SH, direction=FAD_ONTO, protect=True)
             if map_len > MTI_FLD_VAL and fas[MTI_FLD_VAL] is not None:
                 val_or_cal = fas[MTI_FLD_VAL]
                 if callable(val_or_cal):
-                    field.set_calculator(val_or_cal, system=SDI_SH, direction=FAD_ONTO, add=True)
+                    field.set_calculator(val_or_cal, system=SDI_SH, direction=FAD_ONTO, protect=True)
                 else:
                     field.set_val(val_or_cal, system=SDI_SH, direction=FAD_ONTO)
 
-            self.elem_fld_rec.add_field(field, name=field_name)
+            self.elem_fld_rec.add_field(field, idx=field_idx)
 
         self.row_link_field = Field().set_rec(self.elem_fld_rec)
 

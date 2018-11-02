@@ -512,7 +512,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     '''
 
     def rc_complete_client_row_with_ext_refs(c_row, ext_refs):
-        """ complete client row for to send to Sihot as external references (ExtRefs/ExtRefId1/ExtRefType1...) """
+        """ complete client row for to send to Sihot as external references (ExtRefs/ExtRefs0Id/ExtRefs0Type...) """
         s_ext_refs = list()
         for i, ext_ref in enumerate(ext_refs):
             if EXT_REF_TYPE_ID_SEP in ext_ref:
@@ -521,10 +521,10 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 er_type = EXT_REF_TYPE_RCI
                 er_ref = ext_ref
             er_type += str(i + 1)
-            c_row['ExtRefType' + str(i + 1)] = er_type
-            c_row['ExtRefId' + str(i + 1)] = er_ref
+            c_row['ExtRefs' + str(i) + 'Type'] = er_type
+            c_row['ExtRefs' + str(i) + 'Id'] = er_ref
             s_ext_refs.append(er_type + EXT_REF_TYPE_ID_SEP + er_ref)
-        # EXT_REFS xml element is only needed for elemHideIf, data is in ExtRefId<n>/ExtRefType<n>
+        # EXT_REFS xml element is only needed for elemHideIf, data is in ExtRefs<n>Id/Type
         c_row['ExtRefs'] = EXT_REFS_SEP.join(s_ext_refs)
 
     def rc_country_to_iso2(rci_country):

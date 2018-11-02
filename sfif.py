@@ -53,8 +53,11 @@ def convert_date_field_onto_sf(_, date):
     return convert_date_onto_sf(date)
 
 
-field_converters = dict(ResArrival=convert_date_field_from_sf, ResDeparture=convert_date_field_from_sf,
-                        ResAdults=lambda f, v: int(v), ResChildren=lambda f, v: int(v))
+field_from_converters = dict(ResArrival=convert_date_field_from_sf, ResDeparture=convert_date_field_from_sf,
+                             ResAdults=lambda f, v: int(v), ResChildren=lambda f, v: int(v))
+
+field_onto_converters = dict(ResArrival=convert_date_field_onto_sf, ResDeparture=convert_date_field_onto_sf,
+                             ResAdults=lambda f, v: str(v), ResChildren=lambda f, v: str(v))
 
 
 def obj_from_id(sf_id):
