@@ -55,7 +55,8 @@ if conf_data.error_message:
     log_error(conf_data.error_message, 'AssSysDataInit', importance=4, exit_code=9)
 '''
 # prepare ass_cache database
-ass_db = PostgresDB(usr=ass_user, pwd=ass_pw, dsn=ass_dsn, app_name=cae.app_name(), debug_level=debug_level)
+ass_db = PostgresDB(usr=ass_user, pwd=ass_pw, dsn=ass_dsn, app_name=cae.app_name(),
+                    ssl_args=cae.get_config('assSslArgs'), debug_level=debug_level)
 if ass_db.connect():
     log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
 

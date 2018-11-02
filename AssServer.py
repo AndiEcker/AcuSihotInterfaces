@@ -9,6 +9,7 @@
     0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
     0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
     0.7     reset/resend ResOppId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
+    0.8     added SSL to postgres connection.
 """
 import datetime
 import threading
@@ -23,11 +24,11 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '0.7'
+__version__ = '0.8'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
-cae.add_option('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 69, 'l')
+cae.add_option('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 369, 'l')
 ass_options = add_ass_options(cae, client_port=12000, add_kernel_port=True)
 
 debug_level = cae.get_option('debugLevel')
@@ -377,7 +378,7 @@ def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
     ho_id = req.hn
     res_no = req.res_nr
     rec_ctx.update(HotelId=ho_id, ResId=res_no, SubId=sub_no, RoomNo=room_id, extended_oc=oc, action_time=action_time)
-    log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, ppf(rec_ctx), ppf(req.get_xml())),
+    log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, ppf(rec_ctx), req.get_xml()),
             importance=3, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     rgr_sf_id = asd.sh_room_change_to_ass(oc, ho_id, res_no, sub_no, room_id, action_time)
@@ -516,7 +517,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         """ types of parameter xml_from_client and return value are bytes """
         xml_enc = cae.get_option('shXmlEncoding')
         xml_request = str(xml_from_client, encoding=xml_enc)
-        log_msg("AssServer.handle_xml(): req='{}'".format(ppf(xml_request)), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        log_msg("AssServer.handle_xml(): req='{}'".format(xml_request), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # classify request for to also respond on error (e.g. if config_reload/xml_parsing failed)
         oc = operation_code(xml_request)
@@ -551,8 +552,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                         req = req_class(cae)
                         req.parse_xml(xml_request)
                         if debug_level >= DEBUG_LEVEL_VERBOSE:
-                            err_messages.append((0,
-                                                 "Slot {}:{} parsed xml={}".format(slot, ppf(req), ppf(req.get_xml()))))
+                            err_messages.append((0, "Slot {}:{} parsed xml={}".format(slot, ppf(req), req.get_xml())))
                         for proc in slot['ocProcessors']:
                             rec_ctx['procedure'] = proc.__name__
                             try:
@@ -586,7 +586,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
         msg = "AssServer.handle_xml(): " + ("\n    ** ".join([_[1] for _ in err_messages if _[0]]) or "OK")
         xml_response = ack_response(tn, last_err, org=org, msg=msg, status='1' if oc == 'LA' else '')
-        log_msg("OC {} processed; xml response: {}".format(oc, ppf(xml_response)), importance=4)
+        log_msg("OC {} processed; xml response: {}".format(oc, xml_response), importance=4)
 
         # directly sync to Salesforce if not already running (also in case the time thread died)
         # ae:25-09-18 13:39 commented out next line

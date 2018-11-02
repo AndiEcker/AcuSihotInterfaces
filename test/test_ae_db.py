@@ -61,7 +61,8 @@ class TestPostgresDB:
         global test_db
         cae = console_app_env
         test_db = PostgresDB(usr=cae.get_option('assRootUsr'), pwd=cae.get_option('assRootPwd'), dsn='test',
-                             app_name='test_ae_db-pg', debug_level=cae.get_option('debugLevel'))
+                             app_name='test_ae_db-pg', ssl_args=cae.get_config('assSslArgs'),
+                             debug_level=cae.get_option('debugLevel'))
         test_db.connect()
         assert not test_db.last_err_msg
 

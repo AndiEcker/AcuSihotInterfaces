@@ -1349,7 +1349,7 @@ class SihotXmlBuilder:
                        encoding=self.ca.get_option('shXmlEncoding'),
                        debug_level=self.debug_level)
         self.ca.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}"
-                       .format(response_parser, ppf(self.xml)), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                       .format(response_parser, self.xml), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser or SihotXmlParser(self.ca)
@@ -1363,7 +1363,7 @@ class SihotXmlBuilder:
                     err_msg = "No Reservations Found"
                 if err_num != '1' or self.debug_level >= DEBUG_LEVEL_VERBOSE:
                     err_msg += "; sent xml='{}'; got xml='{}'"\
-                        .format(ppf(self.xml), ppf(sc.received_xml))[0 if err_msg else 2:]
+                        .format(self.xml, sc.received_xml)[0 if err_msg else 2:]
                 err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:
