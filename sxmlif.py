@@ -982,7 +982,7 @@ class SihotXmlBuilder:
                        encoding=self.cae.get_option('shXmlEncoding'),
                        debug_level=self.debug_level)
         self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}"
-                        .format(response_parser, ppf(self.xml)), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                        .format(response_parser, self.xml), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser or SihotXmlParser(self.cae)

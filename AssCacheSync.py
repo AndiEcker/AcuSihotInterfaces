@@ -150,9 +150,10 @@ ass_pw = cae.get_option('assPassword')
 ass_dsn = cae.get_option('assDSN')
 if act_init:
     pg_dbname, pg_host = ass_dsn.split('@') if '@' in ass_dsn else (ass_dsn, '')
-    pg_root_dsn = cae.get_config('assRootDb', default_value='postgres') + ('@' + pg_host if '@' in ass_dsn else '')
+    pg_root_usr = cae.get_config('assRootUsr', default_value='postgres')
+    pg_root_dsn = pg_root_usr + ('@' + pg_host if '@' in ass_dsn else '')
     log_warning("creating database {} and user {}".format(ass_dsn, ass_user), 'initCreateDBandUser')
-    pg_db = PostgresDB(usr=cae.get_config('assRootUsr'), pwd=cae.get_config('assRootPwd'), dsn=pg_root_dsn,
+    pg_db = PostgresDB(usr=pg_root_usr, pwd=cae.get_config('assRootPwd'), dsn=pg_root_dsn,
                        app_name=cae.app_name() + "-CreateDb", ssl_args=cae.get_config('assSslArgs'),
                        debug_level=_debug_level)
     if pg_db.execute_sql("CREATE DATABASE " + pg_dbname + ";", auto_commit=True):  # " LC_COLLATE 'C'"):

@@ -545,7 +545,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             uprint("Text fragments for to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
 
         self.sf_id_reset_fragments = cae.get_config('SfIdResetResendFragments') or list()
-        if self.sf_id_reset_fragments:
+        if self.sf_id_reset_fragments and self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint('Error fragments to re-sync res change with reset ResOppId:', self.sf_id_reset_fragments)
 
         # --- self.clients contains client data from AssCache database like external references/Ids, owner status ...
@@ -593,7 +593,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def connect_ass_db(self, force_reconnect=False):
         if not self.ass_db or force_reconnect:
             self.ass_db = PostgresDB(usr=self.ass_user, pwd=self.ass_password, dsn=self.ass_dsn,
-                                     app_name=self.cae.app_name(), ssl_args=cae.get_config('assSslArgs'),
+                                     app_name=self.cae.app_name(), ssl_args=self.cae.get_config('assSslArgs'),
                                      debug_level=self.debug_level)
             self.error_message = self.ass_db.connect()
             if self.error_message:
