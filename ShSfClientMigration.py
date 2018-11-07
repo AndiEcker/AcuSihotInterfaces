@@ -15,7 +15,7 @@ from copy import deepcopy
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_client_validation import add_validation_options, init_validation
 from ae_notification import add_notification_options, init_notification
-from shif import ResBulkFetcher, date_range, elem_value, hotel_and_res_id
+from shif import ResBulkFetcher, elem_value, hotel_and_res_id
 from sfif import add_sf_options
 from ass_sys_data import correct_email, correct_phone, AssSysData
 
@@ -150,35 +150,17 @@ def name_is_valid(name):
 
 def valid_name_indexes(shd):
     indexes = list()
-    if 'NAME' in shd and 'NAME2' in shd:
-        elem_def1 = shd['NAME']
-        elem_def2 = shd['NAME2']
-        if 'elemListVal' in elem_def1 and 'elemListVal' in elem_def2:
-            for idx, name in enumerate(elem_def1['elemListVal']):
-                if len(elem_def2['elemListVal']) > idx:
-                    name2 = elem_def2['elemListVal'][idx]
-                    if name and name_is_valid(name) and name2 and name_is_valid(name2):
-                        indexes.append(idx)
-        if not indexes and 'elemVal' in elem_def1 and elem_def1['elemVal'] and name_is_valid(elem_def1['elemVal']) \
-                and 'elemVal' in elem_def2 and elem_def2['elemVal'] and name_is_valid(elem_def2['elemVal']):
-            elem_def1['elemListVal'] = [elem_def1['elemVal']]
-            elem_def2['elemListVal'] = [elem_def2['elemVal']]
-            indexes.append(0)
+    for idx, occ_rec in enumerate(shd.val('ResPersons')):
+        if occ_rec.val('Surname') and occ_rec.val('Firstname'):
+            indexes.append(idx)
     return indexes
 
 
 def valid_email_indexes(shd):
     indexes = list()
-    if 'EMAIL' in shd:
-        elem_def = shd['EMAIL']
-        if 'elemListVal' in elem_def:
-            for idx, email_addr in enumerate(elem_def['elemListVal']):
-                if email_addr and conf_data.email_is_valid(email_addr):
-                    indexes.append(idx)
-        if not indexes and 'elemVal' in elem_def and elem_def['elemVal'] \
-                and conf_data.email_is_valid(elem_def['elemVal']):
-            elem_def['elemListVal'] = [elem_def['elemVal']]
-            indexes.append(0)
+    for idx, occ_rec in enumerate(shd.val('ResPersons')):
+        if occ_rec.val('Email'):
+            indexes.append(idx)
     return indexes
 
 
@@ -320,9 +302,10 @@ try:
                 ext_sf_dict(sf_dict, "invalid hotel-id {}".format(hotel_id))
             if not res_id:
                 ext_sf_dict(sf_dict, "missing res-id")
-            check_in, check_out = date_range(row_dict)
+            check_in = row_dict['ResArrival'].val()
+            check_out = row_dict['ResDeparture'].val()
             if not check_in or not check_out:
-                ext_sf_dict(sf_dict, "incomplete check-in={} check-out={}".format(check_in, check_out))
+                ext_sf_dict(sf_dict, "incomplete arrival/check-in={} departure/checkout={}".format(check_in, check_out))
             if not (rbf.date_from <= check_in <= rbf.date_till):
                 ext_sf_dict(sf_dict, "arrival {} not between {} and {}".format(check_in, rbf.date_from, rbf.date_till))
             if res_type in ('S', 'N', '', None):

@@ -5,7 +5,7 @@ import os
 import struct
 import keyword
 from collections import OrderedDict
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 # data actions
 ACTION_INSERT = 'INSERT'
@@ -21,16 +21,16 @@ DUMMY_FIELD_NAME = '___'
 # FN_SUB_REC_MARKER = '.'
 
 # field aspect types/prefixes
-FAT_NAME = 'nam'
-FAT_VAL = 'val'
-FAT_TYPE = 'typ'
-FAT_REC = 'rec'
+FAT_NAME = 'nme'
+FAT_VAL = 'vle'
+FAT_TYPE = 'tpe'
+FAT_REC = 'rcd'
 FAT_IDX = 'idx'
-FAT_CAL = 'cal'
+FAT_CAL = 'clc'
 FAT_CHK = 'chk'
-FAT_CON = 'con'
+FAT_CON = 'cnv'
 FAT_FLT = 'flt'
-FAT_SQE = 'sce'
+FAT_SQE = 'sqc'
 
 ALL_FATS = (FAT_NAME, FAT_VAL, FAT_TYPE, FAT_REC, FAT_IDX, FAT_CAL, FAT_CHK, FAT_CON, FAT_FLT, FAT_SQE)
 
@@ -158,16 +158,16 @@ class Value(list):
         self[idx_path[0] if isinstance(idx_path, tuple) and len(idx_path) else -1] = val
         return self
 
-    def clear(self, **__):
-        self[-1] = ''
-        return self
-
     def copy(self, *_, **__):
         """
         copy the value of this Value instance into a new one
         :return:                new Value instance containing the same immutable value.
         """
         return Value((self[-1], ))
+
+    def clear_val(self, **__):
+        self[-1] = ''
+        return self
 
 
 class Values(list):
@@ -212,8 +212,6 @@ class Values(list):
             return self[lst_idx]
         return self[lst_idx].deeper_item(idx_path[1:], system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    # def clear(self, system='', direction=''):     NOT NEEDED because list has already a clear method
-
     def copy(self, *idx_path, deepness=0, **kwargs):
         """
         copy the values/records of this list (Values or Records)
@@ -230,6 +228,11 @@ class Values(list):
                 rec = rec.copy(*idx_path, deepness=deeper(deepness, rec), **kwargs)
             ret.append(rec)
         return ret
+
+    def clear_vals(self, system='', direction=''):
+        for rec in self:
+            rec.clear_vals(system=system, direction=direction)
+        return self
 
 
 class Records(Values):
@@ -361,7 +364,7 @@ class Record(OrderedDict):
             idx = field.name
             if idx == DUMMY_FIELD_NAME:
                 idx += chr(ord('A') + len(self._fields))
-        elif not field.name:
+        elif idx and (not field.name or field.name.startswitch(DUMMY_FIELD_NAME)):
             field.name = idx
         assert idx not in self._fields, \
             "add_field({}, {}): Record '{}' has already a field with the key '{}'".format(field, ori_idx, self, idx)
@@ -387,10 +390,6 @@ class Record(OrderedDict):
             if name:
                 names.append(name)
         return names
-
-    def clear(self, system='', direction=''):
-        for field in self._fields.values():
-            field.clear(system=system, direction=direction)
 
     def copy(self, *idx_path, deepness=0, to_rec=None, filter_func=None, fields_patches=None):
         """
@@ -440,6 +439,10 @@ class Record(OrderedDict):
 
         return to_rec
 
+    def clear_vals(self, system='', direction=''):
+        for field in self._fields.values():
+            field.clear_vals(system=system, direction=direction)
+
     def pull(self, from_system):
         assert from_system, "Record.pull() with empty value in from_system is not allowed"
         for field in self._fields.values():
@@ -483,6 +486,10 @@ class Record(OrderedDict):
 
 
 class Field:
+    # following type hint is for instance (not class) variable - see https://stackoverflow.com/.
+    # .. questions/47532472/can-python-class-variables-become-instance-variables-when-altered-in-init
+    _aspects = ...  # type: Dict[str, Any]
+
     def __init__(self, **aspects):
         self._aspects = dict()
         self.add_aspects(**aspects)
@@ -586,6 +593,27 @@ class Field:
         value.set_val(val, *idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir, extend=extend,
                       converter=converter)
         return self
+
+    def copy(self, *idx_path, deepness=0, **kwargs):
+        """
+        copy the values of this field
+        :param idx_path:        path of field names and/or list/Records/Values indexes.
+        :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
+                                to deepness value - please note that Field occupies two deepness: 1st=Field, 2nd=Value).
+        :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
+        :return:                new/extended record instance.
+        """
+        aspects = self.aspects
+        if deepness:
+            copied = dict()
+            for asp_key, asp_val in aspects.items():  # type: (str, Any)
+                if asp_key.startswith(FAT_VAL) and deeper(deepness, asp_val):
+                    # FAT_VAL.asp_val is field value of VALUE_TYPES (Value, Records, ...)
+                    copied[asp_key] = asp_val.copy(*idx_path, deepness=deeper(deepness, asp_val), **kwargs)
+                else:
+                    copied[asp_key] = asp_val
+            aspects = copied
+        return Field(**aspects)
 
     def find_aspect_key(self, *aspect_types, system='', direction=''):
         keys = list()
@@ -728,7 +756,18 @@ class Field:
     def set_sql_expression(self, sql_expression, system='', direction='', protect=False):
         return self.set_aspect(sql_expression, FAT_SQE, system=system, direction=direction, protect=protect)
 
-    def clear(self, system='', direction='', flex_sys_dir=True):
+    def append_record(self, system='', direction=''):
+        value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=True)
+        if isinstance(value, Records) or self.value_type(system=system, direction=direction) == Records:
+            if not isinstance(value, Records):
+                value = Records()
+                self.set_value(value, system=system, direction=direction)
+            rec = Record(system=system, direction=direction)
+            value.append(rec)
+            return True
+        return False
+
+    def clear_vals(self, system='', direction='', flex_sys_dir=True):
         """
         clear/reset field values
         :param system:          system of the field value to clear, pass None for to clear all field values.
@@ -739,38 +778,31 @@ class Field:
         if system is None:
             for asp_key, asp_val in self._aspects:
                 if asp_key.startswith(FAT_VAL):
-                    asp_val.clear()
+                    asp_val.clear_val()
         else:
             asp_val = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
             if asp_val is not None:
-                asp_val.clear()
+                asp_val.clear_val()
         return self
 
-    def copy(self, *idx_path, deepness=0, **kwargs):
-        """
-        copy the values of this field
-        :param idx_path:        path of field names and/or list/Records/Values indexes.
-        :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
-                                to deepness value - please note that Field occupies two deepness: 1st=Field, 2nd=Value).
-        :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
-        :return:                new/extended record instance.
-        """
-        aspects = self.aspects
-        if deepness:
-            copied = dict()
-            for asp_key, asp_val in aspects.items():  # type: (str, Any)
-                if asp_key.startswith(FAT_VAL) and deeper(deepness, asp_val):
-                    # FAT_VAL.asp_val is field value of VALUE_TYPES (Value, Records, ...)
-                    copied[asp_key] = asp_val.copy(*idx_path, deepness=deeper(deepness, asp_val), **kwargs)
-                else:
-                    copied[asp_key] = asp_val
-            aspects = copied
-        return Field(**aspects)
+    def convert_and_validate(self, val, system='', direction=''):
+        converter = self.aspect_value(FAT_CON, system=system, direction=direction)
+        if converter:
+            assert callable(converter)
+            val = converter(self, val)
+
+        validator = self.aspect_value(FAT_CHK, system=system, direction=direction)
+        if validator:
+            assert callable(validator)
+            if not validator(self, val):
+                return None
+
+        return val
 
     def pull(self, from_system):
         assert from_system, "Field.pull() with empty value in from_system is not allowed"
         direction = FAD_FROM
-        val = self.value(system=from_system, direction=direction)
+        val = self.val(system=from_system, direction=direction)
 
         validator = self.aspect_value(FAT_CHK, system=from_system, direction=direction)
         if validator:
@@ -783,45 +815,17 @@ class Field:
             assert callable(converter)
             val = converter(self, val)
 
-        self.set_value(val)
+        self.set_val(val)
 
         return self
 
     def push(self, onto_system):
         assert onto_system, "Field.push() with empty value in onto_system is not allowed"
         direction = FAD_ONTO
-        val = self.convert_and_validate(self.value(), system=onto_system, direction=direction)
-        if val is None:
-            return None
-
-        self.set_value(val, system=onto_system, direction=direction)
-
+        val = self.convert_and_validate(self.val(), system=onto_system, direction=direction)
+        if val is not None:
+            self.set_val(val, system=onto_system, direction=direction)
         return self
-
-    def append_record(self, system='', direction=''):
-        value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=True)
-        if isinstance(value, Records) or self.value_type(system=system, direction=direction) == Records:
-            if not isinstance(value, Records):
-                value = Records()
-                self.set_value(value, system=system, direction=direction)
-            rec = Record(system=system, direction=direction)
-            value.append(rec)
-            return True
-        return False
-
-    def convert_and_validate(self, value, system='', direction=''):
-        converter = self.aspect_value(FAT_CON, system=system, direction=direction)
-        if converter:
-            assert callable(converter)
-            value = converter(self, value)
-
-        validator = self.aspect_value(FAT_CHK, system=system, direction=direction)
-        if validator:
-            assert callable(validator)
-            if not validator(self, value):
-                return None
-
-        return value
 
     def string_to_records(self, rec_sep, fld_names, fld_sep, system='', direction=''):
         str_val = self.val(system=system, direction=direction)
@@ -835,13 +839,20 @@ class Field:
             recs.append(rec)
         return recs
 
-    def system_rec_val(self, name='', system='', direction=''):
+    def rec_field_val(self, name, system='', direction=''):
         rec = self.rec(system=system, direction=direction)
-        if name == '':
-            field = self
-        else:
+        field = rec[name]
+        return field.val(system=system, direction=direction)
+
+    rfv = rec_field_val
+
+    def system_rec_val(self, name=None, system='', direction=''):
+        rec = self.rec(system=system, direction=direction)
+        if name:
             # noinspection PyTypeChecker
             field = rec[name]
+        else:
+            field = self
         return field.val(system=rec.system or '', direction=rec.direction or '')
 
     srv = system_rec_val

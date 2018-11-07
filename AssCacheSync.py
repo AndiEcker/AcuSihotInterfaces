@@ -5,14 +5,13 @@
     0.1     first beta.
     0.2     refactored using add_ass_options() and init_ass_data().
 """
-import datetime
 import pprint
 from collections import OrderedDict
 
 from ae_console_app import ConsoleApp, uprint, to_ascii, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
 from acif import AcuResToSihot, AC_ID_2ND_COUPLE_SUFFIX
-from shif import elem_value, pax_count, gds_number, elem_path_join, guest_data, SH_DATE_FORMAT
+from shif import guest_data
 from sfif import obj_from_id
 from ass_sys_data import (add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone,
                           field_desc, field_clients_idx,
@@ -981,9 +980,9 @@ def sf_verify_clients():
             return err_msg
 
         log_warnings = list()
-        sf_fld_values = conf_data.sf_client_field_data(client_fld_names, search_val, search_field=match_field,
+        sf_fld_vals = conf_data.sf_client_field_data(client_fld_names, search_val, search_field=match_field,
                                                        log_warnings=log_warnings)
-        if not sf_fld_values:
+        if not sf_fld_vals:
             if _debug_level >= DEBUG_LEVEL_VERBOSE:
                 for msg in log_warnings:
                     log_warning("{} - {}; ass={}".format(ass_id, msg, as_cl), ctx, importance=1)
@@ -991,8 +990,8 @@ def sf_verify_clients():
                         .format(ass_id, obj_from_id(sf_id), sf_id, conf_data.error_message, as_cl), ctx, importance=3)
             continue
 
-        di = "; REC: ass={} sf={}".format(as_cl, sf_fld_values) if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
-        for fld_name, fld_value in sf_fld_values.items():
+        di = "; REC: ass={} sf={}".format(as_cl, sf_fld_vals) if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
+        for fld_name, fld_value in sf_fld_vals.items():
             if fld_name not in filter_fields:
                 continue
             desc = field_desc(fld_name)
@@ -1004,7 +1003,7 @@ def sf_verify_clients():
             ass_ext_refs = [tuple(_.split(EXT_REF_TYPE_ID_SEP)) for _ in ass_ext_refs.split(EXT_REFS_SEP)] \
                 if ass_ext_refs else list()
             sf_ext_refs = conf_data.sf_conn.client_ext_refs(sf_id)
-            di = "; REFS ass={} sf={}; REC ass={} sf={}".format(ass_ext_refs, sf_ext_refs, as_cl, sf_fld_values) \
+            di = "; REFS ass={} sf={}; REC ass={} sf={}".format(ass_ext_refs, sf_ext_refs, as_cl, sf_fld_vals) \
                 if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
             for er in ass_ext_refs:
                 if er not in sf_ext_refs:

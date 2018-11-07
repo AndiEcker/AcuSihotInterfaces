@@ -124,7 +124,51 @@ The following lower case letters could be used more easily as short options than
 for future/upcoming command line options with less conflicts: | l | m | n | q |.
 
 
-### Available Reservation Fields
+### System Data Fields
+
+#### Available Client Fields
+
+The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+each of our clients/guests:
+
+ Field Name | Field Type | Description | Example Values |
+| --- | --- | --- | --- |
+| AcId | String | Acumen Client Reference, Sihot Matchcode | X123456, E234567 |
+| AssId | Integer | Primary key value of ass_cache.clients table | 123456789 |
+| City | String | City name of Client/Guest | Madrid, London, Berlin |
+| Comment | String | Client/Guest Comment | Disabled, Wheel Chair, Has Kids, Has Pets |
+| Country | String | ISO2 Country code of Client/Guest | ES, DE, UK |
+| Currency | String | Currency code of Client/Guest | GBP, EUR, USD |
+| DOB | Date | Birthdate of Client/Guest | 15-12-1962 |
+| Email | String | First email address of Client/Guest | john.smith@provider.com |
+| EmailB | String | Second email address of Client/Guest | jim.knopf@company.com |
+| ExtRefs | List(Type, Id) | External Client/Guest Ids/Reference-numbers | ((RCI, 5-67890), (SF, 001234ABC67890QEI1)) |
+| ExtRefs<n>Type | String | Type of External Client/Guest Id | RCI, SF, KEYS |
+| ExtRefs<n>Id | String | Id/Reference-number of External Client/Guest Id | 5-67890, 001234ABC67890QEI1 |
+| Fax | String | Fax number of Client/Guest | 004898765432 |
+| Forename | String | Firstname of Client/Guest | John, Walter |
+| GuestType | String | Sihot Type of Client/Guest | 1=Individual, 6=Company |
+| HomePhone | String | Home phone number of Client/Guest | 0034678901234, 004987654321 |
+| Language | String | ISO2 Language code of Client/Guest | ES, EN, DE |
+| MobilePhone | String | Main mobile phone number of Client/Guest | 0034678901234 |
+| MobilePhoneB | String | Second mobile phone number of Client/Guest | 0046789012345 |
+| Name | String | Full name of Client/Guest | John Smith |
+| Nationality | String | Nationality of Client/Guest (ISO2 Country code) | ES, DE, UK |
+| Password | String | Password of Client/Guest | secRet12345, MyPassword |
+| POBox | String | Postbox of Client/Guest | 12345, ABC123 |
+| Postal | String | ZIP code of Client/Guest city | A1234, 234567 |
+| RCIRef | String | First/Main RCI reference of Client/Guest | 5-123456, 9876-54321 |
+| Salutation | String | Client/Guest Salutation | Mr., Mrs, Herr, Fru |
+| SfId | String | Salesforce Client Id | 001ABC234DEF567GHI |
+| ShId | String | Sihot Client/Guest Object Id | 123456789 |
+| State | String | Province of Client/Guest | Tenerife, California, Yorkshire |
+| Street | String | Street of Client/Guest | Main Street 45, Road 69, Hauptstrasse 12 |
+| Surname | String | Lastname of Client/Guest | Smith, Johnson |
+| Title | String | Client/Guest Title | Dr., Prof. |
+| WorkPhone | String | Working phone number of Client/Guest | 004567891234 |
+
+
+#### Available Reservation Fields
 
 The table underneath is showing all the fields that can be used to specify a reservation created within Sihot. Only the
 fields marked with an asterisk (*) are mandatory, with the exception that the reservation orderer can be specified
@@ -132,49 +176,173 @@ either only by `ResOrdererId` or `ResOrdererMc` (or by both). The fields marked 
 only if the reservation gets sent the first time to Sihot, so for every change/update of an already existing
 reservation these fields need to be included in the send to Sihot:
 
-| Field Name | Acumen Column | Salesforce Field | Field Type | Description | Example Values |
-| --- | --- | --- | --- | --- |
-| ResHotelId * | RUL_SIHOT_HOTEL | HotelId__c | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
-| ResNumber + | - | Number__c | String | Sihot Reservation Number | 123456789' |
-| ResSubNumber + | - | SubNumber__c | String | Sihot Reservation Sub-number | '1' |
-| ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | String | Sihot Internal Reservation Object Id | '123456789' |
-| ResOppId | - | ReservationOpportunityId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
-| ResGdsNo * | SIHOT_GDSNO | GdsNo__c | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
-| ResArrival * | ARR_DATE | Arrival__c | Date | Arrival Date | 28-02-2017 |
-| ResDeparture * | DEP_DATE | Departure__c | Date | Departure Date | 07-03-2017 |
-| ResRoomCat * | RUL_SIHOT_CAT | RoomCat__c | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
-| ResPriceCat | SH_PRICE_CAT | - | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
-| ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | String | Sihot Room Number (optional) | '0426', 'A112' |
-| ResOrdererMc * | OC_CODE | AcumenClientRef__pc | String | Sihot Orderer Matchcode (owner or OTA channel) | 'TCRENT' |
-| ResOrdererId * | OC_SIHOT_OBJID | - | String | Sihot Orderer Object Id (owner or OTA channel) | '123456' |
-| ResMktSegment * | RUL_SIHOT_RATE, SIHOT_MKT_SEG | MktSegment__c | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
-| ResRateSegment | SIHOT_RATE_SEGMENT | - | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
-| ResStatus | SH_RES_TYPE | Status__c | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
-| ResAction | RUL_ACTION | - | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
-| ResVoucherNo | RH_EXT_BOOK_REF | - | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
-| ResBooked | RH_EXT_BOOK_DATE | - | Date | Sihot Reservation Booking Date | 24-12-2016 |
-| ResBoard | RUL_SIHOT_PACK | - | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
-| ResSource | RU_SOURCE | - | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
-| ResMktGroup | RO_RES_GROUP | MktGroup__c | String | Sihot Reservation Channel | 'RS'=Rental SP |
-| ResNote | SIHOT_NOTE | Note__c | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
-| ResLongNote | SIHOT_TEC_NOTE | - | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '&#124;CR&#124;' for to separate various comments) |
-| ResFlightNo | SH_EXT_REF | - | String | Flight Number (optional) | 'ABC-2345' |
-| ResAccount | SIHOT_PAYMENT_INST | - | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
-| ResAllotmentNo | SIHOT_ALLOTMENT_NO | - | Numeric | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
-| ResAdults | RU_ADULTS | Adults__c | Numeric | Number of Adults | 1, 2, 4 |
-| ResChildren | RU_CHILDREN | Children__c | Numeric | Number of Children | 0, 1, 2 |
-| ResAdult1Surname | SH_ADULT1_NAME | - | String | Surname of first adult | 'Smith' | 
-| ResAdult1Forename | SH_ADULT1_NAME2 | - | String | Forename of first adult | 'John' | 
-| ResAdult1DOB | SH_ADULT1_DOB | - | Date | Date of birth of first adult | 24-12-1947 | 
-| ... |  |  |  |  | 
-| ResAdult<n>DOB | SH_ADULT<n>_DOB | - | Date | Date of birth of last adult | 24-12-1977 | 
-| ResChild1Surname | SH_CHILD1_NAME | - | String | Surname of first child | 'Smith' | 
-| ResChild1Forename | SH_CHILD1_NAME2 | - | String | Forename of first child | 'Paul' | 
-| ResChild1DOB | SH_CHILD1_DOB | - | Date | Date of birth of first child | 24-12-2007 | 
-| ... |  |  |  |  | 
-| ResChild<n>DOB | SH_CHILD<n>_DOB | - | Date | Date of birth of last child | 24-12-2016 | 
+Field Name | Field Type | Description | Example Values |
+| --- | --- | --- | --- |
+| ResAccount | Integer | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
+| ResAction | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
+| ResAdults | Integer | Number of Adults | 1, 2, 4 |
+| ResAllotmentNo | Integer | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
+| ResArrival * | Date | Arrival Date | 28-02-2017 |
+| ResBoard | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
+| ResBooked | Date | Sihot Reservation Booking Date | 24-12-2016 |
+| ResCheckIn | Datetime | Room Check-/Move-In date and time | 01-02-2018 10:11:12 |
+| ResCheckOut | Datetime | Room Check-/Move-Out date and time | 10-02-2018 09:10:11 |
+| ResChildren | Integer | Number of Children | 0, 1, 2 |
+| ResDeparture * | Date | Departure Date | 07-03-2017 |
+| ResFlightETA | Datetime | ETA of flight | 11-12-2019 16:17:18 |
+| ResFlightETD | Datetime | Departure of flight | 29-12-2019 14:45 |
+| ResFlightArrComment | String | Arrival Flight Comment (flight number, ...) | 'ABC-2345 to Tenerife' |
+| ResFlightDepComment | String | Departure Flight Comment (flight number, airport, ...) | 'TFS-1234 London' |
+| ResGdsNo * | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
+| ResGroupNo | String | Reservation Grouping Info | 345678, <123456> |
+| ResHotelId * | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
+| ResLongNote | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '&#124;CR&#124;' for to separate various comments) |
+| ResMktGroup | String | Sihot Reservation Channel | 'OW'=Owner |
+| ResMktGroupNN | String | Reservation Marketing Group | 'RS'=Rental SP | 
+| ResMktSegment * | String | Sihot Marketing Segment / OTA Channel | 'TO', 'PA', 'TC' |
+| ResNo + | String | Sihot Reservation Number | 123456789' |
+| ResNote | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
+| ResObjId | String | Sihot Internal Reservation Object Id | '123456789' |
+| ResOrdererId * | String | Sihot Orderer Object Id (owner or OTA channel) | '123456' |
+| ResOrdererMc * | String | Sihot Orderer Matchcode (owner or OTA channel) | 'TCRENT' |
+| ResPersons | List | List of Occupants | ((Smith, John, 24-12-1962, ...), (Knopf, Jim, 27-01-1955, ...)) |
+| ResPersons<n>AcId | String | Sihot Occupant Matchcode | E123456 |
+| ResPersons<n>DOB | Date | Birthdate of n-th Occupant | 24-12-1962 |
+| ResPersons<n>Forename | String | Firstname of n-th Occupant | John | 
+| ResPersons<n>ShId | String | Sihot Occupant Object Id | 1234567 |
+| ResPersons<n>Surname | String | Lastname of n-th Occupant | Smith |
+| ResPersons<n>Type | String | Person type (adult, children, baby) | '1B', '2B' | 
+| ResPriceCat | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
+| ResSfId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
+| ResSubNo + | String | Sihot Reservation Sub-number | '1' |
+| ResRateSegment | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
+| ResRoomCat * | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
+| ResRoomNo | String | Sihot Room Number (optional) | '0426', 'A112' |
+| ResSource | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
+| ResStatus | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
+| ResVoucherNo | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
 
-Currently the maximum number of named adults is restricted to 6 and of named children to 4.
+
+#### Available Reservation Inventory Fields
+
+The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+each of each reservation inventory:
+
+ Field Name | Field Type | Description | Example Values |
+| --- | --- | --- | --- |
+| RinUsageYear | Integer | Usage year | 2019 |
+| RinType | String | Reservation Inventory Type | TO, RX |
+| RinSwappedWith | String | Product Id of swapped Reservation Inventory | B234-52, 1024-44 |
+| RinGrantedTo | String | Company to which Reservation Inventory got granted to | XL, SP |
+| RinUsedPoints | String | Used Points for this Reservation Inventory | 23456, i56789 |
+| RinUsageComment | String | User comment on the usage | Granted twice because last year her father passed away |   
+
+
+#### Available Product Fields
+
+The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+each of our products:
+
+ Field Name | Field Type | Description | Example Values |
+| --- | --- | --- | --- |
+| ProId | String | Id of a certain product article | A123-45, 0345-52, KEYS-1234, ELPP-5678 |
+| ProTypGroup | Char | Product type group code | O=owner, I=investor, K=keys |
+| ProTypName | String | Product type name | BHH, PBC, KEYS, ELPP |
+
+
+#### Field Mapping of our systems
+ 
+The table underneath is showing the association between the Record Fields and the fields/columns/element names used
+for them within our systems (Acumen, Salesforce, Sihot and AssCache):
+
+| Field Name | Acumen Column | Salesforce Field | Sihot Element | AssCache Column |
+| --- | --- | --- | --- | --- |
+| AcId | CD_CODE | CD_CODE__pc, AcumenClientRef__pc | MATCHCODE | cl_ac_id | 
+| AssId | - | AssCache_Id__pc | - | cl_pk |
+| City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
+| Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |
+| Country | CD_COREF | PersonMailingCountry, Country__pc | T-COUNTRY-CODE | rgc_country |
+| Currency | CD_CUREF | CurrencyIsoCode | T-STANDARD-CURRENCY | - |
+| DOB | CD_DOB1 | DOB1__pc, KM_DOB__pc | D-BIRTHDAY | rgc_dob |
+| Email | CD_EMAIL | PersonEmail | EMAIL-1 | cl_email, rgc_email |
+| EmailB | - | - | EMAIL-2 | - |
+| ExtRefs | T_CR | - | EXTID | external_refs |
+| ExtRefs<n>Type | CR_TYPE+CD_RCI_REF+CD_SF_ID1 | - | EXTID.TYPE | er_type | 
+| ExtRefs<n>Id | CR_REF | - | EXTID.ID | er_id |
+| Fax | CD_FAX | Fax | FAX-1 | - |
+| Forename | CD_FNAM1 | FirstName | NAME-2 | rgc_firstname |
+| GuestType | - | - | T-GUEST | - |
+| HomePhone | CD_HTEL1 | PersonHomePhone | PHONE-1 | cl_phone, rgc_phone |
+| Language | CD_LGREF | Language__pc | T-LANGUAGE | rgc_language |
+| MobilePhone | CD_MOBILE1 | PersonMobilePhone | MOBIL-1 | - |
+| MobilePhoneB | - | - | MOBIL-2 | - |
+| Name | - | - | - | cl_name |
+| Nationality | CD_LGREF | Nationality__pc | T-NATION | - |
+| Password | CD_PASSWORD | - | INTERNET-PASSWORD | - |
+| POBox | CD_ADD12 | - | PO-BOX | - |
+| Postal | CD_POSTAL | PersonMailingPostalCode | ZIP | - |
+| ProTypGroup | RS_SIHOT_GUEST_TYPE | - | - | pt_group |
+| ProTypName | RS_NAME | - | - | pt_name |
+| ProId | WK_CODE | - | - | pr_pk |
+| RCIRef | CD_RCI_REF, CR_REF | RCI_Reference__pc | MATCH-ADM | - |
+| ResAccount | SIHOT_PAYMENT_INST | - | RESERVATION.PAYMENT-INST | rgr_payment_inst |
+| ResAction | RUL_ACTION | - | - | - |
+| ResAdults | RU_ADULTS | Adults__c | RESERVATION.NOPAX, NO | rgr_adults |
+| ResAllotmentNo | SIHOT_ALLOTMENT_NO | - | ALLOTMENT-EXT-NO | - | 
+| ResArrival | ARR_DATE | Arrival__c | RESERVATION.ARR | rgr_arrival |
+| ResBoard | RUL_SIHOT_PACK | - | PERSON.R | rgc_sh_pack |
+| ResBooked | RH_EXT_BOOK_DATE | - | RESERVATION.SALES-DATE | rgr_ext_book_day |
+| ResCheckIn | ARO_TIMEIN | CheckIn__c | ARR-TIME | rgr_time_in |
+| ResCheckOut | ARO_TIMEOUT | CheckOut__c | DEP-TIME | rgr_time_out |
+| ResChildren | RU_CHILDREN | Children__c | RESERVATION.NOCHILDS, NO | rgr_children |
+| ResDeparture | DEP_DATE | Departure__c | RESERVATION.DEP | rgr_departure |
+| ResFlightETA | RU_FLIGHT_LANDS | - | PICKUP-TIME-ARRIVAL | rgc_flight_arr_time |
+| ResFlightETD | - | - | PICKUP-TIME-DEPARTURE | rgc_flight_dep_time |
+| ResFlightArrComment | SH_EXT_REF | - | EXT-REFERENCE, PICKUP-COMMENT-ARRIVAL | rgc_flight_arr_comment |
+| ResFlightDepComment | - | - | PICKUP-COMMENT-DEPARTURE | rgc_flight_dep_comment |
+| ResGdsNo | SIHOT_GDSNO | GdsNo__c | GDSNO | rgr_gds_no |
+| ResGroupNo | SIHOT_LINK_GROUP | - | EXT-KEY | - |
+| ResHotelId | RUL_SIHOT_HOTEL | HotelId__c | ID, HN, RES-HOTEL | rgr_ho_fk |
+| ResLongNote | SIHOT_TEC_NOTE | - | RESERVATION.TEC-COMMENT | rgr_long_comment |
+| ResMktGroup | RO_RES_GROUP | MktGroup__c | RESERVATION.CHANNEL | rgr_mkt_group |
+| ResMktGroupNN | RO_SIHOT_SP_GROUP | - | NN | - |
+| ResMktSegment | SIHOT_MKT_SEG | MktSegment__c (Marketing_Source__pc) | RESERVATION.MARKETCODE, MARKETCODE-NO | rgr_mkt_segment |
+| ResNo | - | Number__c | RES-NR | rgr_res_id |
+| ResNote | SIHOT_NOTE | Note__c | RESERVATION.COMMENT | rgr_comment |
+| ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | RESERVATION.OBJID | rgr_obj_id |
+| ResOrdererId | OC_SIHOT_OBJID | - | GUEST-ID | rgr_order_cl_fk->cl_sh_id |
+| ResOrdererMc | OC_CODE | CD_CODE__pc, AcumenClientRef__pc | RESERVATION.MATCHCODE | rgr_order_cl_fk->cl_ac_id |
+| ResPersons | - | - | PERSON | res_group_clients |
+| ResPersons<n>AcId | CD_CODE | - | PERSON.MATCHCODE | rgc_occup_cl_fk->cl_ac_id |
+| ResPersons<n>DOB | CD_DOB1, CD_DOB2 | - | PERSON.NAME | rgc_dob |
+| ResPersons<n>Forename | CD_FNAM1, CD_FNAM2 | - | PERSON.NAME2 | rgc_firstname |
+| ResPersons<n>ShId | CD_SIHOT_OBJID | - | PERSON.GUEST-ID | rgc_occup_cl_fk->cl_sh_id |
+| ResPersons<n>Surname | CD_SNAM1, CD_SNAM2 | - | PERSON.NAME | rgc_surname |
+| ResPersons<n>Type | - | - | PERSON.PERS-TYPE | rgc_pers_type |
+| ResPriceCat | SH_PRICE_CAT | - | PCAT | - |
+| ResRateSegment | RUL_SIHOT_RATE | - | RESERVATION.RATE-SEGMENT | rgr_room_rate |
+| ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
+| ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgr_room_id, rgc_room_id |
+| ResSfId | - | ReservationOpportunityId, Opportunity.Id | NN2(?) | rgr_sf_id |
+| ResSource | RU_SOURCE | - | SOURCE | - |
+| ResStatus | SH_RES_TYPE | Status__c | RESERVATION.RT | rgr_status |
+| ResSubNo | - | SubNumber__c | SUB-NR | rgr_sub_id |
+| ResVoucherNo | RH_EXT_BOOK_REF | - | RESERVATION.VOUCHERNUMBER | rgr_ext_book_id |
+| RinUsageYear | AOWN_YEAR | - | - | ri_usage_year |
+| RinType | AOWN_ROREF | - | - | ri_inv_type |
+| RinSwappedWith | AOWN_SWAPPED_WITH | - | - | ri_swapped_product_id |
+| RinGrantedTo | AOWN_GRANTED_TO | - | - | ri_granted_to |
+| RinUsedPoints | - | - | - | ri_used_points |
+| RinUsageComment | - | - | -  | ri_usage_comment |   
+| Salutation | F_SIHOT_SALUTATION() | Salutation | T-SALUTATION | - |
+| SfId | CD_SF_ID1/2, MS_SF_ID | PersonAccountId | MATCH-SM | cl_sf_id |
+| ShId | CD_SIHOT_OBJID | SihotGuestObjId__pc | OBJID | cl_sh_id |
+| State | (CD_ADD13) | PersonMailingState | T-STATE | - |
+| Street | CD_ADD11 | PersonMailingStreet | STREET | - |
+| Surname | CD_SNAM1 | LastName | NAME-1 | rgc_surname |
+| Title | CD_TITL1 | PersonTitle | T-TITLE | - |
+| WorkPhone | CD_WTEL1+CD_WEXT1 | Work_Phone__pc | PHONE-2 | - |
+
 
 ### AcuSihotMonitor Application
 

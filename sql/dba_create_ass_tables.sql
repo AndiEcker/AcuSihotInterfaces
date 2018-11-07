@@ -89,7 +89,7 @@ CREATE TABLE res_inventories
   ri_ho_fk                VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),
   ri_usage_year           INTEGER NOT NULL,
   ri_inv_type             VARCHAR(3) NOT NULL,
-  ri_swapped_product_id   VARCHAR(12),
+  ri_swapped_product_id   VARCHAR(12) REFERENCES products(pr_pk),
   ri_granted_to           VARCHAR(3),
   ri_used_points          VARCHAR(9),           -- 'i' prefixed if individual owner points value
   ri_usage_comment        VARCHAR(33),          -- for Esther/Nancy Status Entitlement Usage spreadsheet column
@@ -202,9 +202,9 @@ CREATE TABLE res_group_clients
   rgc_occup_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgc_flight_arr_comment  VARCHAR(42),
   rgc_flight_arr_time     TIME,
-  rgc_flight_dep_comment  VARCHAR(42),
-  rgc_flight_dep_time     TIME,
-  rgc_pers_type           VARCHAR(3),
+  rgc_flight_dep_comment  VARCHAR(42),            -- currently not used
+  rgc_flight_dep_time     TIME,                   -- currently not used
+  rgc_pers_type           VARCHAR(3),             -- 1A=adult, 2B=children
   rgc_sh_pack             VARCHAR(3),
   rgc_room_id             VARCHAR(6),
   UNIQUE (rgc_rgr_fk, rgc_room_seq, rgc_pers_seq)

@@ -291,7 +291,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResSource'] = 'T'
             row['ResArrival'] = datetime.datetime.strptime(curr_cols[TCI_ResArrival], '%Y-%m-%d')
             row['ResDeparture'] = row['ResArrival'] + datetime.timedelta(int(curr_cols[TCI_STAY_DAYS]))
-            row['ResFlightNo'] = curr_cols[TCI_FLIGHT_NO]
+            row['ResFlightArrComment'] = curr_cols[TCI_FLIGHT_NO]
             row['ResAdults' if is_adult else 'ResChildren'] = 1
             row['ResChildren' if is_adult else 'ResAdults'] = 0
 

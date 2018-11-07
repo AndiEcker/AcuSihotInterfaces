@@ -357,7 +357,7 @@ class SfInterface:
             if not cl_res_data.get('ReservationOpportunityId') and result.get('ReservationOpportunityId'):
                 cl_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
             elif cl_res_data['ReservationOpportunityId'] != result.get('ReservationOpportunityId'):
-                msg = "sfif.res_upsert({}) ResOppId discrepancy; sent={} received={}"\
+                msg = "sfif.res_upsert({}) ResSfId discrepancy; sent={} received={}"\
                        .format(ppf(cl_res_data),
                                cl_res_data['ReservationOpportunityId'], result.get('ReservationOpportunityId'))
                 uprint(msg)

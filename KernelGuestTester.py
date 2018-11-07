@@ -34,7 +34,7 @@ if client_code:
     uprint('####  Sending ...........  ####')
 
     for crow in acumen_client.rows:
-        err_msg = acumen_client.send_client_to_sihot(crow, commit=True)
+        err_msg = acumen_client.send_client_to_sihot(crow)
         progress.next(processed_id=str(crow['CD_CODE']) + '/' + str(crow['CDL_CODE']), error_msg=err_msg)
 
     progress.finished(error_msg=err_msg)

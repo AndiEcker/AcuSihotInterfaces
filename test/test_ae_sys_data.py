@@ -107,7 +107,7 @@ class TestValue:
         v.set_value(Value().set_val('tvA'))
         assert v.value() == ['tvA']
         assert v.val() == 'tvA'
-        v.clear()
+        v.clear_val()
         assert v.value() == ['']
         assert v.val() == ''
 

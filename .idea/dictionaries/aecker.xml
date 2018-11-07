@@ -22,6 +22,7 @@
       <w>arol</w>
       <w>arolref</w>
       <w>arraysize</w>
+      <w>asscache</w>
       <w>atgeneric</w>
       <w>atref</w>
       <w>auditable</w>
@@ -62,6 +63,7 @@
       <w>coref</w>
       <w>countrycode</w>
       <w>csid</w>
+      <w>curef</w>
       <w>dbname</w>
       <w>defaultpaymenttype</w>
       <w>devmen</w>
@@ -282,6 +284,7 @@
       <w>useisodate</w>
       <w>usename</w>
       <w>uwsgi</w>
+      <w>vals</w>
       <w>valu</w>
       <w>veri</w>
       <w>veris</w>

@@ -6,10 +6,11 @@ import pytest
 from configparser import ConfigParser
 from ae_db import OraDB
 from ass_sys_data import AssSysData
-from sxmlif import (PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, AvailCatInfo,
-                    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF, USE_KERNEL_FOR_RES_DEF, MAP_RES_DEF)
+from sxmlif import PostMessage, ConfigDict, CatRooms, AvailCatInfo
 from acif import AcuClientToSihot, AcuResToSihot
 from sfif import prepare_connection
+from shif import GuestSearch, ClientToSihot, \
+    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF, USE_KERNEL_FOR_RES_DEF, MAP_RES_DEF
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +91,7 @@ def create_test_guest(console_app_env):
     else:
         guest = ClientToSihot(console_app_env)
         col_values = dict()
-        for col_map in guest.elem_col_map:
+        for col_map in guest.elem_fld_rec:
             if 'fldName' not in col_map:
                 continue
             col = col_map['fldName']

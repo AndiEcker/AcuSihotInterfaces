@@ -1,6 +1,6 @@
 import datetime
 
-from sxmlif import GuestFromSihot, ResFromSihot
+from shif import GuestFromSihot, ResFromSihot
 from acif import AcuXmlBuilder  # , AcuClientToSihot, AcuResToSihot
 from AcuServer import client_to_acu
 
@@ -19,7 +19,7 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'GB'
             assert row['SIHOT_LANG'] == 'EN'
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg
 
     def test_couple_with_same_surname(self, acu_guest):
@@ -35,7 +35,7 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'ES'
             assert row['SIHOT_LANG'] == 'ES'
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg
 
     def test_female_client(self, acu_guest):
@@ -57,7 +57,7 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == 'None'
             assert row['SIHOT_COUNTRY'] == 'GB'
             assert row['SIHOT_LANG'] == 'EN'
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg
 
     def test_couple_rci_number_without_res(self, acu_guest):
@@ -74,7 +74,7 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'GB'
             assert row['SIHOT_LANG'] == 'EN'
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg
 
     def test_couple_with_rci_without_res(self, acu_guest):
@@ -91,7 +91,7 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'GB'
             assert row['SIHOT_LANG'] == 'EN'
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg
 
     def test_pax1_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
@@ -111,7 +111,7 @@ class TestClientFromAcuToSihot:
                 assert str(row['SIHOT_GUESTTYPE2']) == '0'
                 assert row['SIHOT_COUNTRY'] == 'AT'
                 assert row['SIHOT_LANG'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+                error_msg = acu_guest.send_client_to_sihot(row)
                 assert not error_msg
 
     def test_both_pax_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
@@ -131,7 +131,7 @@ class TestClientFromAcuToSihot:
                 assert str(row['SIHOT_GUESTTYPE2']) == '0'
                 assert row['SIHOT_COUNTRY'] == 'AT'
                 assert row['SIHOT_LANG'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+                error_msg = acu_guest.send_client_to_sihot(row)
                 assert not error_msg
 
     def test_both_pax_are_doctors_and_have_salutation(self, acu_guest):  # Y203585/HUN - Name decoded wrongly with ISO
@@ -150,7 +150,7 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'HU'
             assert row['SIHOT_LANG'] is None
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg
 
     def test_client_with_10_ext_refs(self, acu_guest):  # E396693 - fetch from unsynced
@@ -167,7 +167,7 @@ class TestClientFromAcuToSihot:
                 assert 'RCI=2972-00047' in row['EXT_REFS']
                 assert 'RCI=5-207931' in row['EXT_REFS']
                 assert len(row['EXT_REFS'].split(',')) >= 12
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+                error_msg = acu_guest.send_client_to_sihot(row)
                 # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
                 assert not error_msg
 
@@ -181,7 +181,7 @@ class TestClientFromAcuToSihot:
             assert row['CD_CODE2'] is None
             # overwrite objid with not existing one
             acu_guest.cols['CD_SIHOT_OBJID'] = int(row['CD_SIHOT_OBJID']) + 1 if row['CD_SIHOT_OBJID'] else 99999
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg or error_msg.endswith('No guest found.')
 
 
@@ -244,7 +244,7 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             assert acu_res.row_count in (0, 1)
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def test_tc_booking_with_kids_in_the_future(self, acu_res):
@@ -253,7 +253,7 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             assert acu_res.row_count in (0, 1)
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def test_remove_past_no_room_and_future_cxl(self, acu_res):
@@ -262,7 +262,7 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.row_count <= 23
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def test_remove_res_occ_and_cancelled(self, acu_res):
@@ -271,7 +271,7 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.row_count <= 20
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def test_exclude_cancelled_with_break_and_row_commit(self, acu_res):
@@ -280,7 +280,7 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.row_count <= 21
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=True)
             acu_res.ora_db.commit()
             assert not error_msg
 
@@ -290,7 +290,7 @@ class TestResFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             assert acu_res.row_count == 15
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def _old_test_res_with_euro_char_fetched_by_cd(self, acu_res):
@@ -302,7 +302,7 @@ class TestResFromAcuToSihot:
             rows = acu_res.rows
             assert len(rows) in (0, 20)
             assert '€' in [r['SIHOT_NOTE'] for r in rows if r['RUL_PRIMARY'] == '864355'][0]
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     # FB examples with board: F468913, F614205, V576425, I615916
@@ -314,7 +314,7 @@ class TestResFromAcuToSihot:
             assert len(rows) == 1
             for row in rows:
                 assert row['RUL_SIHOT_HOTEL'] in (1, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row)
+                error_msg = acu_res.send_res_to_sihot(crow=row)
                 acu_res.ora_db.commit()
                 assert not error_msg
 
@@ -324,7 +324,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) == 1
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def _old_test_fb_with_board3(self, acu_res):
@@ -333,7 +333,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
     """
 
@@ -343,7 +343,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     # test ER/External Rental: G522633, E588450, E453121, Z124997
@@ -355,7 +355,7 @@ class TestResFromAcuToSihot:
             assert len(rows) == 4
             for row in rows:
                 assert row['RUL_SIHOT_HOTEL'] in (1, 3, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row)
+                error_msg = acu_res.send_res_to_sihot(fld_vals=row)
                 acu_res.ora_db.commit()
                 assert (not error_msg
                         or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
@@ -366,7 +366,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def test_external_rental3(self, acu_res):
@@ -375,7 +375,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     """
@@ -385,7 +385,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) >= 15
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def _old_test_any_resort1(self, acu_res):
@@ -394,7 +394,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) == 1
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def _old_test_any_resort2(self, acu_res):
@@ -403,7 +403,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) == 4  # only one is for ANY and future - 3 others in past/2014
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def _old_test_tc_booking_created_via_sync_and_then_deleted_via_res_import(self, acu_res):
@@ -413,7 +413,7 @@ class TestResFromAcuToSihot:
         if not error_msg:
             rows = acu_res.rows
             assert len(rows) == 1
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
     """
 
@@ -549,7 +549,7 @@ class TestAcuServerParts:
         xml_parser = GuestFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
 
-        error_msg, pk = client_to_acu(xml_parser.acu_fld_values, console_app_env)
+        error_msg, pk = client_to_acu(xml_parser.acu_fld_vals, console_app_env)
         assert not error_msg
         assert pk == 'test2'
 
@@ -615,13 +615,13 @@ class TestGuestFromSihot:
         xml_parser = GuestFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.elem_fld_map['MATCHCODE'].val() == 'test2'
-        assert xml_parser.acu_fld_values['AcId'] == 'test2'
+        assert xml_parser.acu_fld_vals['AcId'] == 'test2'
         assert xml_parser.elem_fld_map['CITY'].val() == 'city'
-        assert xml_parser.acu_fld_values['City'] == 'city'
+        assert xml_parser.acu_fld_vals['City'] == 'city'
 
-        # cae.dprint("--COUNTRY-fldValToAcu/acu_fld_values: ",
+        # cae.dprint("--COUNTRY-fldValToAcu/acu_fld_vals: ",
         # xml_guest.elem_fld_map['COUNTRY']['fldValToAcu'],
-        # xml_guest.acu_fld_values[xml_guest.elem_fld_map['COUNTRY']['fldName']])
+        # xml_guest.acu_fld_vals[xml_guest.elem_fld_map['COUNTRY']['fldName']])
 
 
 class TestResFromSihot:
@@ -766,9 +766,9 @@ class TestResFromSihot:
     def test_fld_map(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.res_list[0]['MATCHCODE']['elemVal'] == 'test2'
+        assert xml_parser.res_list[0]['MATCHCODE'].val() == 'test2'
         assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['', 'GUBSE', 'test2']
-        assert xml_parser.res_list[0]['GDSNO']['elemVal'] == '1234567890ABC'
+        assert xml_parser.res_list[0]['GDSNO'].val() == '1234567890ABC'
 
 
 class TestAcuXmlBuilder:
@@ -817,7 +817,7 @@ class TestClientToSihot:
                 assert str(row['SIHOT_GUESTTYPE2']) == '0'
                 assert row['Country'] == 'AT'
                 assert row['Language'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+                error_msg = acu_guest.send_client_to_sihot(row)
                 assert not error_msg
 
     def test_both_pax_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
@@ -837,7 +837,7 @@ class TestClientToSihot:
                 assert str(row['SIHOT_GUESTTYPE2']) == '0'
                 assert row['Country'] == 'AT'
                 assert row['Language'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+                error_msg = acu_guest.send_client_to_sihot(row)
                 assert not error_msg
 
     def test_both_pax_are_doctors_and_have_salutation(self, acu_guest):  # Y203585/HUN - Name decoded wrongly with ISO
@@ -856,7 +856,7 @@ class TestClientToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['Country'] == 'HU'
             assert row['Language'] is None
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg
 
     def test_client_with_10_ext_refs(self, acu_guest):  # E396693 - fetch from unsynced
@@ -873,7 +873,7 @@ class TestClientToSihot:
                 assert 'RCI=2972-00047' in row['ExtRefs']
                 assert 'RCI=5-207931' in row['ExtRefs']
                 assert len(row['ExtRefs'].split(',')) >= 12
-                error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+                error_msg = acu_guest.send_client_to_sihot(row)
                 # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
                 assert not error_msg
 
@@ -887,7 +887,7 @@ class TestClientToSihot:
             assert row['AcId2'] is None
             # overwrite objid with not existing one
             acu_guest.fields['ShId'] = int(row['ShId']) + 1 if row['ShId'] else 99999
-            error_msg = acu_guest.send_client_to_sihot(row, commit=True)
+            error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg or error_msg.endswith('No guest found.')
 
 
@@ -950,7 +950,7 @@ class TestResToSihot:
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count in (0, 1)
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def test_tc_booking_with_kids_in_the_future(self, acu_res):
@@ -959,7 +959,7 @@ class TestResToSihot:
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count in (0, 1)
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def test_remove_past_no_room_and_future_cxl(self, acu_res):
@@ -968,7 +968,7 @@ class TestResToSihot:
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.rec_count <= 23
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def test_remove_res_occ_and_cancelled(self, acu_res):
@@ -977,7 +977,7 @@ class TestResToSihot:
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.rec_count <= 20
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def test_exclude_cancelled_with_break_and_row_commit(self, acu_res):
@@ -986,7 +986,7 @@ class TestResToSihot:
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.rec_count <= 21
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=True)
             assert not error_msg
 
     """
@@ -995,7 +995,7 @@ class TestResToSihot:
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count == 15
-            error_msg = acu_res.send_rows_to_sihot(break_on_error=False, commit_last_row=True)
+            error_msg = acu_res.send_res_recs_to_sihot(break_on_error=False, commit_last_row=True)
             assert not error_msg
 
     def _old_test_res_with_euro_char_fetched_by_cd(self, acu_res):
@@ -1007,7 +1007,7 @@ class TestResToSihot:
             recs = acu_res.recs
             assert len(recs) in (0, 20)
             assert '€' in [r['ResNote'] for r in recs if r['RUL_PRIMARY'] == '864355'][0]
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     # FB examples with board: F468913, F614205, V576425, I615916
@@ -1019,7 +1019,7 @@ class TestResToSihot:
             assert len(recs) == 1
             for row in recs:
                 assert row['ResHotelId'] in (1, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row, commit=True)
+                error_msg = acu_res.send_res_to_sihot(crow=row, commit=True)
                 assert not error_msg
 
     def _old_test_fb_with_board2(self, acu_res):
@@ -1028,7 +1028,7 @@ class TestResToSihot:
         if not error_msg:
             recs = acu_res.recs
             assert len(recs) == 1
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def _old_test_fb_with_board3(self, acu_res):
@@ -1037,7 +1037,7 @@ class TestResToSihot:
         if not error_msg:
             recs = acu_res.recs
             assert len(recs) == 2
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
     """
 
@@ -1047,7 +1047,7 @@ class TestResToSihot:
         if not error_msg:
             rows = acu_res.recs
             assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     # test ER/External Rental: G522633, E588450, E453121, Z124997
@@ -1059,7 +1059,7 @@ class TestResToSihot:
             assert len(rows) == 4
             for row in rows:
                 assert row['ResHotelId'] in (1, 3, 4)
-                error_msg = acu_res.send_row_to_sihot(crow=row)
+                error_msg = acu_res.send_res_to_sihot(fld_vals=row)
                 assert (not error_msg
                         or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
 
@@ -1069,7 +1069,7 @@ class TestResToSihot:
         if not error_msg:
             rows = acu_res.recs
             assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def test_external_rental3(self, acu_res):
@@ -1078,7 +1078,7 @@ class TestResToSihot:
         if not error_msg:
             rows = acu_res.recs
             assert len(rows) == 2
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     """
@@ -1088,7 +1088,7 @@ class TestResToSihot:
         if not error_msg:
             recs = acu_res.recs
             assert len(recs) >= 15
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def _old_test_any_resort1(self, acu_res):
@@ -1097,7 +1097,7 @@ class TestResToSihot:
         if not error_msg:
             recs = acu_res.recs
             assert len(recs) == 1
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def _old_test_any_resort2(self, acu_res):
@@ -1106,7 +1106,7 @@ class TestResToSihot:
         if not error_msg:
             recs = acu_res.recs
             assert len(recs) == 4  # only one is for ANY and future - 3 others in past/2014
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
 
     def _old_test_tc_booking_created_via_sync_and_then_deleted_via_res_import(self, acu_res):
@@ -1116,6 +1116,6 @@ class TestResToSihot:
         if not error_msg:
             recs = acu_res.recs
             assert len(recs) == 1
-            error_msg = acu_res.send_rows_to_sihot()
+            error_msg = acu_res.send_res_recs_to_sihot()
             assert not error_msg
     """

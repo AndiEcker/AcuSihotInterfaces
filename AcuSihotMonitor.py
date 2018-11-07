@@ -20,8 +20,9 @@ from functools import partial
 from traceback import print_exc
 
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import PostMessage, ConfigDict, CatRooms, ResSearch
+from sxmlif import PostMessage, ConfigDict, CatRooms
 from acif import AcuResToSihot, AcuServer
+from shif import ResSearch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.4'
@@ -147,9 +148,9 @@ def sih_reservation_discrepancies(data_dict):
                     # compare reservation for errors/discrepancies
                     if len(rd) != 1:
                         row_err += err_sep + 'Res. count AC=1 SH=' + str(len(rd)) + \
-                                   ('(' + ','.join([rd[n]['_RES-HOTEL'].get('elemVal', '') + '='
-                                                   + str(rd[n]['ARR'].get('elemVal')) + '...'
-                                                   + str(rd[n]['DEP'].get('elemVal')) for n in range(len(rd))]) + ')'
+                                   ('(' + ','.join([(rd[n]['_RES-HOTEL'].val() or '') + '='
+                                                   + str(rd[n]['ARR'].val()) + '...'
+                                                   + str(rd[n]['DEP'].val()) for n in range(len(rd))]) + ')'
                                     if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE else '')
                     row_err = _sih_check_all_res(crow, rd, row_err, err_sep)
                 elif rd:
@@ -174,41 +175,41 @@ def _sih_check_all_res(crow, rd, row_err, err_sep):
     for n in range(len(rd)):
         if len(rd) > 1:
             sih_sep = ' SH' + str(n + 1) + '='
-        if rd[n]['GDSNO'].get('elemVal') != crow['SIHOT_GDSNO']:
+        if rd[n]['GDSNO'].val() != crow['SIHOT_GDSNO']:
             row_err += err_sep + 'GDS no mismatch' + \
                        acu_sep + str(crow['SIHOT_GDSNO']) + \
-                       sih_sep + str(rd[n]['GDSNO'].get('elemVal'))
-        if abs(datetime.datetime.strptime(rd[n]['ARR'].get('elemVal'), '%Y-%m-%d') - crow['ARR_DATE']) > max_offset:
+                       sih_sep + str(rd[n]['GDSNO'].val())
+        if abs(datetime.datetime.strptime(rd[n]['ARR'].val(), '%Y-%m-%d') - crow['ARR_DATE']) > max_offset:
             row_err += err_sep + 'Arrival date offset more than ' + str(max_offset.days) + ' days' + \
                        acu_sep + crow['ARR_DATE'].strftime('%Y-%m-%d') + \
-                       sih_sep + str(rd[n]['ARR'].get('elemVal'))
-        if abs(datetime.datetime.strptime(rd[n]['DEP'].get('elemVal'), '%Y-%m-%d') - crow['DEP_DATE']) > max_offset:
+                       sih_sep + str(rd[n]['ARR'].val())
+        if abs(datetime.datetime.strptime(rd[n]['DEP'].val(), '%Y-%m-%d') - crow['DEP_DATE']) > max_offset:
             row_err += err_sep + 'Departure date offset more than ' + str(max_offset.days) + ' days' + \
                        acu_sep + crow['DEP_DATE'].strftime('%Y-%m-%d') + \
-                       sih_sep + str(rd[n]['DEP'].get('elemVal'))
-        if rd[n]['RT'].get('elemVal') != crow['SH_RES_TYPE']:
+                       sih_sep + str(rd[n]['DEP'].val())
+        if rd[n]['RT'].val() != crow['SH_RES_TYPE']:
             row_err += err_sep + 'Res. status mismatch' + \
                        acu_sep + str(crow['SH_RES_TYPE']) + \
-                       sih_sep + str(rd[n]['RT'].get('elemVal'))
+                       sih_sep + str(rd[n]['RT'].val())
         # Marketcode-no is mostly empty in Sihot RES-SEARCH response!!!
-        if rd[n]['MARKETCODE-NO'].get('elemVal') and rd[n]['MARKETCODE-NO'].get('elemVal') != crow['RUL_SIHOT_RATE']:
+        if rd[n]['MARKETCODE-NO'].val() and rd[n]['MARKETCODE-NO'].val() != crow['RUL_SIHOT_RATE']:
             row_err += err_sep + 'Market segment mismatch' + \
                        acu_sep + str(crow['RUL_SIHOT_RATE']) + \
-                       sih_sep + str(rd[n]['MARKETCODE-NO'].get('elemVal'))
+                       sih_sep + str(rd[n]['MARKETCODE-NO'].val())
         # RN can be empty/None - prevent None != '' false posit.
-        if rd[n]['RN'].get('elemVal', crow['RUL_SIHOT_ROOM']) and rd[n]['RN'].get('elemVal') != crow['RUL_SIHOT_ROOM']:
+        if (rd[n]['RN'].val() or '') != crow['RUL_SIHOT_ROOM']:
             row_err += err_sep + 'Room no mismatch' + \
                        acu_sep + str(crow['RUL_SIHOT_ROOM']) + \
-                       sih_sep + str(rd[n]['RN'].get('elemVal'))
-        elif rd[n]['_RES-HOTEL'].get('elemVal') and rd[n]['_RES-HOTEL'].get('elemVal') != str(crow['RUL_SIHOT_HOTEL']):
+                       sih_sep + str(rd[n]['RN'].val())
+        elif rd[n]['_RES-HOTEL'].val() and rd[n]['_RES-HOTEL'].val() != str(crow['RUL_SIHOT_HOTEL']):
             row_err += err_sep + 'Hotel-ID mismatch' + \
                        acu_sep + str(crow['RUL_SIHOT_HOTEL']) + \
-                       sih_sep + str(rd[n]['_RES-HOTEL'].get('elemVal'))
-        elif rd[n]['ID'].get('elemVal') and str(rd[n]['ID'].get('elemVal')) != str(crow['RUL_SIHOT_HOTEL']):
+                       sih_sep + str(rd[n]['_RES-HOTEL'].val())
+        elif rd[n]['ID'].val() and str(rd[n]['ID'].val()) != str(crow['RUL_SIHOT_HOTEL']):
             # actually the hotel ID is not provided within the Sihot interface response xml?!?!?
             row_err += err_sep + 'Hotel ID mismatch' + \
                        acu_sep + str(crow['RUL_SIHOT_HOTEL']) + \
-                       sih_sep + str(rd[n]['ID'].get('elemVal'))
+                       sih_sep + str(rd[n]['ID'].val())
 
     return row_err
 
@@ -227,12 +228,6 @@ def sih_reservation_search(data_dict):
     results = list()
     if rd and isinstance(rd, list):
         for row in rd:
-            # col_values = [(str(row[col[len(list_marker_prefix):]]['elemListVal'])
-            #                if col[:len(list_marker_prefix)] == list_marker_prefix
-            #                   and 'elemListVal' in row[col[len(list_marker_prefix):]]
-            #                else row[col]['elemVal'])
-            #               if col in row or col[len(list_marker_prefix):] in row else '(undef.)'
-            #               for col in result_columns]
             col_values = list()
             for c in result_columns:
                 is_list = c.startswith(list_marker_prefix)
@@ -242,10 +237,10 @@ def sih_reservation_search(data_dict):
                     c = c.split(COLUMN_ATTRIBUTE_SEP)[0]
                 if c not in row:
                     elem_val = '(undef.)'
-                elif is_list and 'elemListVal' in row[c]:
-                    elem_val = str(row[c]['elemListVal'])
-                elif 'elemVal' in row[c]:
-                    elem_val = row[c]['elemVal']
+                elif is_list and isinstance(row[c].val(), list):
+                    elem_val = str(row[c].val())
+                elif row[c].val() is not None:
+                    elem_val = row[c].val()
                 else:
                     elem_val = '(missing)'
                 col_values.append(elem_val)

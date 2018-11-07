@@ -82,7 +82,7 @@ if cae.get_option('clientsFirst'):
                     error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + ' reservation history fetch error: ' + \
                                 error_msg + '! Data=' + str(crow)
                 else:
-                    error_msg = acu_res_hist.send_rows_to_sihot()
+                    error_msg = acu_res_hist.send_res_recs_to_sihot()
                     if error_msg:
                         error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + \
                                     ' reservation history send error: ' + error_msg + '! Data=' + str(crow)
@@ -125,7 +125,7 @@ try:
                     all_rows.append(crow)
             all_rows = reversed(all_rows)
         for crow in all_rows:
-            error_msg = acumen_req.send_row_to_sihot(crow)
+            error_msg = acumen_req.send_res_to_sihot(crow)
             res_id = acumen_req.res_id_values(crow)
             progress.next(processed_id=res_id, error_msg=error_msg)
             if error_msg:

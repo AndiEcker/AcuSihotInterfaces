@@ -6,7 +6,7 @@ from sfif import add_sf_options
 __version__ = '0.1'
 
 cae = ConsoleApp(__version__, "Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE,
-                 additional_cfg_files=['../.console_app_env.cfg'])
+                 additional_cfg_files=['../.console_app_env.cfg', '../.sys_envTEST.cfg'])
 
 add_sf_options(cae)
 
@@ -23,33 +23,50 @@ print('Top-level objects describe:', pprint.pformat(sb.describe(), indent=3, com
 print('Account metadata:', pprint.pformat(sb.Account.metadata(), indent=3, compact=True))
 print('Contact metadata:', pprint.pformat(sb.Contact.metadata(), indent=3, compact=True))
 print('Opportunity metadata:', pprint.pformat(sb.Opportunity.metadata(), indent=3, compact=True))
+print('Reservation metadata:', pprint.pformat(sb.Reservation__c.metadata(), indent=3, compact=True))
+print('Allocation metadata:', pprint.pformat(sb.Allocation__c.metadata(), indent=3, compact=True))
+
 describe_txt = pprint.pformat(sb.Account.describe(), indent=3, compact=True)
 with open('describe_account.log', 'w') as f:
     f.write(describe_txt)
 print('Account describe:', describe_txt)
+
 describe_txt = pprint.pformat(sb.Contact.describe(), indent=3, compact=True)
 with open('describe_contact.log', 'w') as f:
     f.write(describe_txt)
 print('Contact describe:', describe_txt)
+
 describe_txt = pprint.pformat(sb.Opportunity.describe(), indent=3, compact=True)
 with open('describe_opportunity.log', 'w') as f:
     f.write(describe_txt)
 print('Opportunity describe:', describe_txt)
 
+describe_txt = pprint.pformat(sb.Reservation__c.describe(), indent=3, compact=True)
+with open('describe_reservation.log', 'w') as f:
+    f.write(describe_txt)
+print('Reservation describe:', describe_txt)
+
+describe_txt = pprint.pformat(sb.Allocation__c.describe(), indent=3, compact=True)
+with open('describe_allocation.log', 'w') as f:
+    f.write(describe_txt)
+print('Allocation describe:', describe_txt)
+
 print('External_Ref metadata:', sb.External_Ref__c.metadata())
 print('External_Ref describe:', sb.External_Ref__c.describe())
 
-result = sb.query_all("SELECT Id, Email FROM Contact WHERE LastName = 'Pepper'")
+result = sb.query_all("SELECT Id, PersonEmail FROM Account WHERE LastName = 'Pepper'")
 print('SOQL query:', result)
 
 client = sb.search("FIND {Pepper}")
 print('SOSL search:', client)
 
 client_id = client['searchRecords'][0]['Id']
-print('Contact Id:', client_id)
+print('Account Id:', client_id)
 
-c_data = sb.Contact.get(client_id)
-print('Contact data:', c_data)
+
+# 7-Nov-18 - NOT WORKING ANYMORE: not with Contact, Account, PersonAccount, ...
+c_data = sb.Account.get(client_id)
+print('Account data:', c_data)
 
 c_with_rci = sb.search("FIND {1234\-56789}")
 print('SOSL ext refs custom object search for RCI ref:', c_with_rci)
@@ -57,7 +74,7 @@ print('SOSL ext refs custom object search for RCI ref:', c_with_rci)
 c_with_acu = sb.search("FIND {T123456}")
 print('SOSL custom field search for Acumen ref:', c_with_acu)
 
-c_data2 = sb.Contact.get_by_custom_id('CD_CODE__c', 'T654321')
+c_data2 = sb.Contact.get_by_custom_id('CD_CODE__pc', 'T654321')
 print('Contact data by Acumen ref. custom field:', c_data2)
 
 # the RCI_Reference__c custom field is NOT an External ID

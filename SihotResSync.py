@@ -15,10 +15,11 @@ import datetime
 
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from ae_sys_data import ACTION_UPDATE, ACTION_DELETE
-from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
+from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
+
+from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
 from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
-from shif import add_sh_options
+from shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
 from ass_sys_data import AssSysData
 
 __version__ = '1.0'
@@ -146,7 +147,7 @@ if not error_msg:
                                     nothing_to_do_msg=" ***  SihotResSync: room swap fetch returning no rows")
                 for crow in room_rows:
                     crow['RUL_SIHOT_ROOM'] = ''
-                    error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
+                    error_msg = acumen_req.send_res_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
                     progress.next(processed_id='RoomSwap:' + acumen_req.res_id_values(crow), error_msg=error_msg)
                     if error_msg and notification:
                         error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
@@ -170,9 +171,9 @@ if not error_msg:
                     new_hotel = str(crow['RUL_SIHOT_HOTEL'])
                     crow['RUL_SIHOT_HOTEL'] = crow['RUL_SIHOT_LAST_HOTEL']
                     crow['RUL_SIHOT_CAT'] = crow['RUL_SIHOT_LAST_CAT']
-                    crow['RUL_ACTION'] = 'DELETE'
+                    crow['RUL_ACTION'] = ACTION_DELETE
                     crow['SH_RES_TYPE'] = 'S'
-                    error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
+                    error_msg = acumen_req.send_res_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
                     progress.next(processed_id='HotMove:' + acumen_req.res_id_values(crow), error_msg=error_msg)
                     if error_msg and notification:
                         error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
@@ -204,8 +205,8 @@ if not error_msg:
                         synced_ids.append(rid + "(H)")
                         continue        # skip HOTMOVE if new hotel is a non-Sihot-hotel
                     elif str(crow['RUL_SIHOT_LAST_HOTEL']) not in hotel_ids:
-                        crow['RUL_ACTION'] = 'INSERT'
-                    error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS)
+                        crow['RUL_ACTION'] = ACTION_INSERT
+                    error_msg = acumen_req.send_res_to_sihot(crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS)
                     progress.next(processed_id=rid, error_msg=error_msg)
                     if error_msg:
                         send_notification("Acumen Reservation", rid, acumen_req.res_id_desc(crow, error_msg), crow)

@@ -8,7 +8,7 @@
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
     0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
     0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
-    0.7     reset/resend ResOppId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
+    0.7     reset/resend ResSfId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
     0.8     added SSL to postgres connection.
 """
 import datetime
@@ -92,10 +92,10 @@ def proc_context(rec_ctx):
     if 'RoomNo' in rec_ctx:
         ctx_str += rec_ctx['RoomNo'] + ", "
 
-    if 'ResId' in rec_ctx:
-        ctx_str += rec_ctx['ResId']
-    if "SubId" in rec_ctx:
-        ctx_str += "/" + rec_ctx['SubId']
+    if 'ResNo' in rec_ctx:
+        ctx_str += rec_ctx['ResNo']
+    if "ResSubNo" in rec_ctx:
+        ctx_str += "/" + rec_ctx['ResSubNo']
     if "HotelId" in rec_ctx:
         ctx_str += "@" + rec_ctx['HotelId']
 
@@ -145,7 +145,7 @@ def check_res_change_data(rec_ctx):
 
 def res_from_sh_to_sf(asd, ass_changed_res):
     ho_id, res_id, sub_id = ass_changed_res['rgr_ho_fk'], ass_changed_res['rgr_res_id'], ass_changed_res['rgr_sub_id']
-    log_msg("res_from_sh_to_sf({}/{}@{}): sync reservation from SH ObjID={} to SF ResOppId={}"
+    log_msg("res_from_sh_to_sf({}/{}@{}): sync reservation from SH ObjID={} to SF ResSfId={}"
             .format(res_id, sub_id, ho_id, ass_changed_res['rgr_obj_id'], ass_changed_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
@@ -201,7 +201,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
 
 def room_change_to_sf(asd, ass_res):
     ho_id, res_id, sub_id = ass_res['rgr_ho_fk'], ass_res['rgr_res_id'], ass_res['rgr_sub_id']
-    log_msg("room_change_to_sf({}/{}@{}): sync room change from SH ObjID={} to SF ResOppId={}"
+    log_msg("room_change_to_sf({}/{}@{}): sync room change from SH ObjID={} to SF ResSfId={}"
             .format(res_id, sub_id, ho_id, ass_res['rgr_obj_id'], ass_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
@@ -350,9 +350,9 @@ def oc_res_change(asd, req, rec_ctx):
         rec_ctx.update(req_res_data=req_rgr,
                        ObjId=req_rgr.get('rgr_obj_id', ''),
                        HotelId=getattr(req, 'hn', None),
-                       ResId=req_rgr.get('rgr_res_id', ''),
-                       SubId=req_rgr.get('rgr_sub_id', ''),
-                       # RoomNo=req_rgr.get('rgc_list', [dict(), ])[0].get('rgc_room_id', ''),
+                       No=req_rgr.get('rgr_res_id', ''),
+                       SubNo=req_rgr.get('rgr_sub_id', ''),
+                       # ResRoomNo=req_rgr.get('rgc_list', [dict(), ])[0].get('rgc_room_id', ''),
                        RoomNo=req_rgr.get('rgr_room_id', ''),
                        )
         log_msg(proc_context(rec_ctx) + "res change data={}".format(ppf(req_rgr)),
@@ -377,7 +377,7 @@ def oc_res_change(asd, req, rec_ctx):
 def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
     ho_id = req.hn
     res_no = req.res_nr
-    rec_ctx.update(HotelId=ho_id, ResId=res_no, SubId=sub_no, RoomNo=room_id, extended_oc=oc, action_time=action_time)
+    rec_ctx.update(HotelId=ho_id, No=res_no, SubNo=sub_no, RoomNo=room_id, extended_oc=oc, action_time=action_time)
     log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, ppf(rec_ctx), req.get_xml()),
             importance=3, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 

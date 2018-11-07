@@ -2,8 +2,8 @@
 import datetime
 # import pytest
 
-from sxmlif import ResFetch, convert_date_from_sh
-from shif import elem_value, res_search, guest_data
+from sxmlif import ResFetch
+from shif import elem_value, res_search, guest_data, convert_date_from_sh
 from ass_sys_data import correct_email, correct_phone, AssSysData, EXT_REFS_SEP, CLIENT_REC_TYPE_ID_OWNERS
 
 
@@ -242,9 +242,11 @@ class TestAssSysDataAptWkYr:
     def test_apt_wk_yr(self, console_app_env, config_data):
         console_app_env._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
         console_app_env._options['2019'] = '2019-01-04'
-        assert config_data.sh_apt_wk_yr(dict(ARR=dict(elemVal='2018-06-01')), console_app_env) == ('None-22', 2018)
-        assert config_data.sh_apt_wk_yr(dict(ARR=dict(elemVal='2018-06-01'),
-                                             RN=dict(elemVal='A')), console_app_env) == ('A-22', 2018)
+        arr = Field().set_name('ARR', system=SDI_SH).set_val('2018-06-01')
+        rno = Field().set_name('RN', system=SDI_SH).set_val('A')
+        assert config_data.sh_apt_wk_yr(Record({'ResArrival': arr}), console_app_env) == ('None-22', 2018)
+        assert config_data.sh_apt_wk_yr(Record({'ResArrival': arr, 'ResRoomNo': rno}), console_app_env) \
+               == ('A-22', 2018)
 
 
 class TestAssSysDataHotelData:
