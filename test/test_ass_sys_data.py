@@ -2,8 +2,10 @@
 import datetime
 # import pytest
 
-from sxmlif import ResFetch
-from shif import elem_value, res_search, guest_data, convert_date_from_sh
+from ae_sys_data import Record, Field
+
+from sys_data_ids import SDI_SH
+from shif import res_search, guest_data, convert_date_from_sh, ResFetch
 from ass_sys_data import correct_email, correct_phone, AssSysData, EXT_REFS_SEP, CLIENT_REC_TYPE_ID_OWNERS
 
 
@@ -246,7 +248,7 @@ class TestAssSysDataAptWkYr:
         rno = Field().set_name('RN', system=SDI_SH).set_val('A')
         assert config_data.sh_apt_wk_yr(Record({'ResArrival': arr}), console_app_env) == ('None-22', 2018)
         assert config_data.sh_apt_wk_yr(Record({'ResArrival': arr, 'ResRoomNo': rno}), console_app_env) \
-               == ('A-22', 2018)
+            == ('A-22', 2018)
 
 
 class TestAssSysDataHotelData:
@@ -469,7 +471,7 @@ class TestAssSysDataSf:
             if send_err:
                 send_err = "sh_res_change_to_ass error " + send_err
                 break
-            cl_fields = guest_data(console_app_env, elem_value(res, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID']))
+            cl_fields = guest_data(console_app_env, res.val('ResOrdererId'))
             if not isinstance(cl_fields, dict):
                 send_err = "guest_data error - no dict=" + str(cl_fields)
                 break
@@ -524,17 +526,17 @@ class TestAssSysDataSf:
         assert isinstance(rgr_list, list)
         for res in rgr_list:
             if res[0]:  # rgr_sf_id
-                mode = None
+                ci = co = None
                 sd = dict()
                 if not res[1]:  # rgr_time_in
-                    mode = 'CI'
+                    ci = dt
                     sd = dict(CheckIn__c=dt)
                 elif not res[2]:    # rgr_time_out
-                    mode = 'CO'
+                    co = dt
                     sd = dict(CheckOut__c=dt)
-                if mode:
+                if sd:
                     found_test_data = True
-                    ret = asd.sf_room_change(res['rgr_sf_id'], mode, dt)  # returning ErrorMessage
+                    ret = asd.sf_room_change(res[0], ci, co, None)  # returning ErrorMessage
                     assert not ret
                     rd = asd.sf_room_data(res[0])
                     assert not self._compare_converted_field_dicts(sd, rd)
@@ -581,12 +583,12 @@ class TestAssSysDataSh:
 
         res_data = ResFetch(console_app_env).fetch_by_res_id(ho_id=ho_id, res_id=res_id, sub_id=sub_id)
         assert isinstance(res_data, dict)
-        assert ho_id == elem_value(res_data, 'RES-HOTEL')
-        assert res_id == elem_value(res_data, 'RES-NR')
-        assert sub_id == elem_value(res_data, 'SUB-NR')
-        assert obj_id == elem_value(res_data, ['RESERVATION', 'OBJID'])
-        arr_date = convert_date_from_sh(elem_value(res_data, ['RESERVATION', 'ARR'])).date()
-        dep_date = convert_date_from_sh(elem_value(res_data, ['RESERVATION', 'DEP'])).date()
+        assert ho_id == res_data.val('ResHotelId')
+        assert res_id == res_data.val('ResNo')
+        assert sub_id == res_data.val('ResSubNo')
+        assert obj_id == res_data.val('ResObjId')
+        arr_date = convert_date_from_sh(res_data.val('ResArrival')).date()
+        dep_date = convert_date_from_sh(res_data.val('ResDeparture')).date()
 
         rgr_dict = dict()
         asd.sh_res_change_to_ass(res_data, rgr_dict=rgr_dict)

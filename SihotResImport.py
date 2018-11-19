@@ -489,7 +489,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
             # add pax name(s) and person sequence number
             for i, full_name in enumerate(curr_cols[BKC_GUEST_NAMES].split(',')):
-                name_col = 'ResAdult' + str(i + 1) + 'Surname'
+                name_col = 'ResPerson' + str(i + 1) + 'Surname'
                 fore_name, last_name = full_name.strip().split(' ', maxsplit=1)
                 if last_name:
                     row[name_col] = last_name
@@ -731,14 +731,14 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             comments.append('ExcMail=' + curr_cols[RCI_CLIENT_EMAIL])
             row['ShId'] = None
             row['AcId'] = ''
-            row['ResAdult1Surname'] = curr_cols[RCI_GUEST_SURNAME]
-            row['ResAdult1Forename'] = curr_cols[RCI_GUEST_FORENAME]
+            row['ResPersons1Surname'] = curr_cols[RCI_GUEST_SURNAME]
+            row['ResPersons1Forename'] = curr_cols[RCI_GUEST_FORENAME]
         else:
             row['ShId'] = conf_data.cl_sh_id_by_idx(cl_occ_idx)
             row['AcId'] = conf_data.cl_ac_id_by_idx(cl_occ_idx)
             # has to be populated after send to Sihot: row['ShId'] = client_row['ShId']
-            row['ResAdult1Surname'] = curr_cols[RCI_CLIENT_SURNAME]
-            row['ResAdult1Forename'] = curr_cols[RCI_CLIENT_FORENAME]
+            row['ResPersons1Surname'] = curr_cols[RCI_CLIENT_SURNAME]
+            row['ResPersons1Forename'] = curr_cols[RCI_CLIENT_FORENAME]
         row['ResAdults'] = 1
         row['ResChildren'] = 0
 
@@ -896,11 +896,11 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             else:
                 own_name = '(unknown)'
             comments.append('GuestOf=' + own_name)
-            row['ResAdult1Surname'] = curr_cols[RCIP_GUEST_SURNAME]
-            row['ResAdult1Forename'] = curr_cols[RCIP_GUEST_FORENAME]
+            row['ResPersons1Surname'] = curr_cols[RCIP_GUEST_SURNAME]
+            row['ResPersons1Forename'] = curr_cols[RCIP_GUEST_FORENAME]
         else:
-            row['ResAdult1Surname'] = curr_cols[RCIP_CLIENT_SURNAME]
-            row['ResAdult1Forename'] = curr_cols[RCIP_CLIENT_FORENAME]
+            row['ResPersons1Surname'] = curr_cols[RCIP_CLIENT_SURNAME]
+            row['ResPersons1Forename'] = curr_cols[RCIP_CLIENT_FORENAME]
         row['ResAdults'] = 1
         row['ResChildren'] = 0
 

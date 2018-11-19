@@ -10,6 +10,7 @@
     0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
     0.7     reset/resend ResSfId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
     0.8     added SSL to postgres connection.
+    0.9     refactored to use ae_sys_data.
 """
 import datetime
 import threading
@@ -20,11 +21,11 @@ import pprint
 
 from ae_console_app import ConsoleApp, uprint, missing_requirements, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
-from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
-from shif import elem_value, guest_data
+from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
+from shif import guest_data, ResFetch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '0.8'
+__version__ = '0.9'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -116,31 +117,31 @@ def check_res_change_data(rec_ctx):
     rrd = rec_ctx['req_res_data']
     srd = rec_ctx['sh_res_data']
     ard = rec_ctx['ass_res_data']
-    if not rrd['rgr_obj_id'] == elem_value(srd, ['RESERVATION', 'OBJID']) == ard['rgr_obj_id']:
+    if not rrd['rgr_obj_id'] == srd.val('ResObjId') == ard['rgr_obj_id']:
         # fetched res has obj id in ['RESERVATION', 'OBJID'], req in ['SIHOT-Document', 'SIHOT-Reservation', 'OBJID']
         log_msg(proc_context(rec_ctx) + "Sihot Reservation Object Id mismatch req/sh/ass={}/{}/{}"
-                .format(rrd['rgr_obj_id'], elem_value(srd, ['RESERVATION', 'OBJID']), ard['rgr_obj_id']), notify=True)
-    if not rrd['rgr_ho_fk'] == elem_value(srd, 'RES-HOTEL') == ard['rgr_ho_fk']:
+                .format(rrd['rgr_obj_id'], srd.val('ResObjId'), ard['rgr_obj_id']), notify=True)
+    if not rrd['rgr_ho_fk'] == srd.val('ResHotelId') == ard['rgr_ho_fk']:
         log_msg(proc_context(rec_ctx) + "Sihot Hotel Id mismatch req/sh/ass={}/{}/{}"
-                .format(rrd['rgr_ho_fk'], elem_value(srd, 'RES-HOTEL'), ard['rgr_ho_fk']), notify=True)
-    if not rrd['rgr_res_id'] == elem_value(srd, 'RES-NR') == ard['rgr_res_id']:
+                .format(rrd['rgr_ho_fk'], srd.val('ResHotelId'), ard['rgr_ho_fk']), notify=True)
+    if not rrd['rgr_res_id'] == srd.val('ResNo') == ard['rgr_res_id']:
         log_msg(proc_context(rec_ctx) + "Sihot Res Id mismatch req/sh/ass={}/{}/{}"
-                .format(rrd['rgr_res_id'], elem_value(srd, 'RES-NR'), ard['rgr_res_id']), notify=True)
-    if not rrd['rgr_sub_id'] == elem_value(srd, 'SUB-NR') == ard['rgr_sub_id']:
+                .format(rrd['rgr_res_id'], srd.val('ResNo'), ard['rgr_res_id']), notify=True)
+    if not rrd['rgr_sub_id'] == srd.val('ResSubNo') == ard['rgr_sub_id']:
         log_msg(proc_context(rec_ctx) + "Sihot Res Sub Id mismatch req/sh/ass={}/{}/{}"
-                .format(rrd['rgr_sub_id'], elem_value(srd, 'SUB-NR'), ard['rgr_sub_id']), notify=True)
-    if not rrd['rgr_room_id'] == elem_value(srd, 'RN') == ard['rgr_room_id']:
+                .format(rrd['rgr_sub_id'], srd.val('ResSubNo'), ard['rgr_sub_id']), notify=True)
+    if not rrd['rgr_room_id'] == srd.val('ResRoomNo') == ard['rgr_room_id']:
         log_msg(proc_context(rec_ctx) + "Sihot Room No (main) mismatch req/sh/ass={}/{}/{}"
-                .format(rrd['rgr_room_id'], elem_value(srd, 'RN'), ard['rgr_room_id']), notify=True)
+                .format(rrd['rgr_room_id'], srd.val('ResRoomNo'), ard['rgr_room_id']), notify=True)
     for idx, rgc in enumerate(rrd['rgc_list']):
         ard_room = ard.get('rgc_list')
         if ard_room:
             ard_room = ard_room[min(idx, len(ard_room) - 1)].get('rgc_room_id', '')
         if ard_room == list():
             ard_room = None
-        if not rgc.get('rgc_room_id') == elem_value(srd, ['PERSON', 'RN'], arri=idx) == ard_room:
+        if not rgc.get('rgc_room_id') == srd.val(idx, 'ResRoomNo') == ard_room:
             log_msg(proc_context(rec_ctx) + "Sihot Room No (rooming list) mismatch req/sh/ass={}/{}/{}"
-                    .format(rrd.get('rgc_room_id'), elem_value(srd, ['PERSON', 'RN'], arri=idx), ard_room), notify=True)
+                    .format(rrd.get('rgc_room_id'), srd.val(idx, 'ResRoomNo'), ard_room), notify=True)
 
 
 def res_from_sh_to_sf(asd, ass_changed_res):
@@ -154,7 +155,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         return sh_res
 
     sh_cl = None
-    sh_id = elem_value(sh_res, ['RESCHANNELLIST', 'RESCHANNEL', 'OBJID'])     # ==ass_res['rgr_order_cl_fk']
+    sh_id = sh_res.val('ResOrdererId')     # ==ass_res['rgr_order_cl_fk']
     if sh_id:
         sh_cl = guest_data(cae, sh_id)
     if not isinstance(sh_cl, dict):

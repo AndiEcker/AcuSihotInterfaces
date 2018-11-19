@@ -4,7 +4,7 @@ Acumen interface constants and helpers
 import datetime
 from copy import deepcopy
 
-from ae_sys_data import ACTION_UPDATE, ACTION_DELETE
+from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB
 from sxmlif import SihotXmlBuilder
@@ -117,13 +117,13 @@ for idx in range(1, EXT_REF_COUNT + 1):
     FIELD_MAP.append(('ExtRefs' + str(idx) + 'Id', 'EXT_REF_ID' + str(idx),
                       "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, " + str(idx) + "), '[^=]+', 1, 2)"))
 for idx in range(1, RES_MAX_ADULTS + 1):
-    FIELD_MAP.append(('ResAdult' + str(idx) + 'Surname', 'SH_ADULT' + str(idx) + '_NAME'))      # ResAdult1Surname
-    FIELD_MAP.append(('ResAdult' + str(idx) + 'Forename', 'SH_ADULT' + str(idx) + '_NAME2'))    # ResAdult1Forename
-    FIELD_MAP.append(('ResAdult' + str(idx) + 'DOB', 'SH_ADULT' + str(idx) + '_DOB'))           # ResAdult1DOB
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'Surname', 'SH_ADULT' + str(idx) + '_NAME'))      # ResPersons1Surname
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'Forename', 'SH_ADULT' + str(idx) + '_NAME2'))    # ResPersons1Forename
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'DOB', 'SH_ADULT' + str(idx) + '_DOB'))           # ResPersons1DOB
 for idx in range(1, RES_MAX_CHILDREN + 1):
-    FIELD_MAP.append(('ResChild' + str(idx) + 'Surname', 'SH_CHILD' + str(idx) + '_NAME'))      # ResChild1Surname
-    FIELD_MAP.append(('ResChild' + str(idx) + 'Forename', 'SH_CHILD' + str(idx) + '_NAME2'))    # ResChild1Forename
-    FIELD_MAP.append(('ResChild' + str(idx) + 'PaxSeq', 'SH_CHILD' + str(idx) + '_DOB'))        # ResChild1DOB
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'Surname', 'SH_CHILD' + str(idx) + '_NAME'))      # ResPersons1Surname
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'Forename', 'SH_CHILD' + str(idx) + '_NAME2'))    # ResPersons1Forename
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'PaxSeq', 'SH_CHILD' + str(idx) + '_DOB'))        # ResPersons1DOB
 '''
 
 row_field_name_map = {rcn: rfn for rfn, rcn, *_ in CLI_FIELD_MAP + RES_FIELD_MAP}
@@ -223,6 +223,8 @@ class AcuXmlBuilder(SihotXmlBuilder, AcuDbRows):
         self.response = None
 
         self._rows = list()  # list of dicts, used by inheriting class for to store the records to send to SiHOT.PMS
+        self._current_rows_i = 0
+        self._recs = Records()  # used by inheriting class for to store the Record instances to be send to SiHOT.PMS
         self._current_rec_i = 0
 
         self._xml = ''
@@ -232,9 +234,9 @@ class AcuXmlBuilder(SihotXmlBuilder, AcuDbRows):
 
     @property
     def cols(self):
-        return self._rows[self._current_rec_i] if len(self._rows) > self._current_rec_i else dict()
+        return self._rows[self._current_rows_i] if len(self._rows) > self._current_rows_i else dict()
 
-    # def next_row(self): self._current_rec_i += 1
+    # def next_row(self): self._current_rows_i += 1
 
     @property
     def row_count(self):
@@ -243,6 +245,10 @@ class AcuXmlBuilder(SihotXmlBuilder, AcuDbRows):
     @property
     def rows(self):
         return self._rows
+
+    @property
+    def recs(self):
+        return self._recs
 
     def fetch_all_from_acu(self):
         self._last_fetch = datetime.datetime.now()
@@ -292,7 +298,7 @@ class AcuClientToSihot(AcuXmlBuilder, ClientToSihot):
         return err_msg
 
     def send_client_to_sihot(self, c_row=None):
-        err_msg = super().send_client_to_sihot(fld_vals=remap_row_to_field_names(c_row))
+        err_msg = super().send_client_to_sihot(rec=remap_row_to_field_names(c_row))
 
         action = self.action
         couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
@@ -427,8 +433,8 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder):
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
-    def send_res_to_sihot(self, crow=None, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
-        err_msg = super().send_res_to_sihot(fld_vals=remap_row_to_field_names(crow),
+    def send_res_to_sihot(self, crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
+        err_msg = super().send_res_to_sihot(rec=remap_row_to_field_names(crow),
                                             ensure_client_mode=ensure_client_mode)
 
         if "Could not find a key identifier" in err_msg and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']):
@@ -448,12 +454,20 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder):
         return err_msg
 
     def send_res_recs_to_sihot(self, break_on_error=True, commit_last_row=True):
-        ret_msg = super().send_res_recs_to_sihot(break_on_error=break_on_error)
+        ret_msg = ""
+        for fld_vals in self.recs:
+            err_msg = self.send_res_to_sihot(fld_vals)
+            if err_msg:
+                if break_on_error:
+                    return err_msg  # BREAK/RETURN first error message
+                ret_msg += "\n" + err_msg
+
         if commit_last_row:
             if ret_msg:
                 ret_msg += self.ora_db.rollback()
             else:
                 ret_msg = self.ora_db.commit()
+
         return ret_msg
 
 

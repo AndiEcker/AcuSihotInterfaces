@@ -355,7 +355,7 @@ class TestResFromAcuToSihot:
             assert len(rows) == 4
             for row in rows:
                 assert row['RUL_SIHOT_HOTEL'] in (1, 3, 4)
-                error_msg = acu_res.send_res_to_sihot(fld_vals=row)
+                error_msg = acu_res.send_res_to_sihot(rec=row)
                 acu_res.ora_db.commit()
                 assert (not error_msg
                         or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
@@ -424,123 +424,123 @@ class TestAcuServerParts:
             <OC>RES-SEARCH</OC>
             <RC>0</RC>
             <ARESLIST>
-            <RESERVATION>
-            <PRICE>99</PRICE>
-            <RATE>
-            <ISDEFAULT>Y</ISDEFAULT>
-            <R>UF1</R>
-            <PRICE>99</PRICE>
-            </RATE>
-            <PERSON>
-            <SEX>0</SEX>
-            <ROOM-SEQ>0</ROOM-SEQ>
-            <ROOM-PERS-SEQ>0</ROOM-PERS-SEQ>
-            <CITY>Schiffweiler</CITY>
-            <DOB/>
-            <EMAIL/>
-            <COUNTRY>DE</COUNTRY>
-            <NAME>GUBSE AG</NAME>
-            <PERS-TYPE>1A</PERS-TYPE>
-            <TITLE></TITLE>
-            <COMMENT/>
-            <ADDRESS></ADDRESS>
-            <NAME2/>
-            <PHONE/>
-            <ZIP>66578</ZIP>
-            <STREET/>
-            <FAX/>
-            <ARR>2009-02-23</ARR>
-            <DEP>2009-03-01</DEP>
-            <CAT/>
-            <PCAT>EZ</PCAT>
-            <RN>102</RN>
-            <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
-            <MATCHCODE-ADM/>
-            <EXT-REFERENCE/>
-            <VOUCHERNUMBER/>
-            <MATCHCODE/>
-            </PERSON>
-            <RESCHANNELLIST>
-            <RESCHANNEL>
-            <IDX>0</IDX>
-            <MATCHCODE>GUBSE</MATCHCODE>
-            <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
-            <CONTACT-ID>0</CONTACT-ID>
-            <COMMISSION>
-            <PC>0</PC>
-            <TOTAL>0</TOTAL>
-            </COMMISSION>
-            </RESCHANNEL>
-            </RESCHANNELLIST>
-            <CHECKLIST>
-            <CHECKLISTENTRY>
-            <TYPE>6</TYPE>
-            <DATE>2009-02-23</DATE>
-            <USER>ADM</USER>
-            </CHECKLISTENTRY>
-            </CHECKLIST>
-            <APERS-TYPE-LIST>
-            <PERS-TYPE>
-            <TYPE>1A</TYPE>
-            <NO>1</NO>
-            </PERS-TYPE>
-            </APERS-TYPE-LIST>
-            <CCLIST/>
-            <RES-HOTEL>1</RES-HOTEL>
-            <RES-NR>20000003</RES-NR>
-            <SUB-NR>1</SUB-NR>
-            <OBJID>2</OBJID>
-            <OUTPUTCOUNTER>1</OUTPUTCOUNTER>
-            <RT>1</RT>
-            <ALLOTMENT-NO>0</ALLOTMENT-NO>
-            <ARR>2009-02-23</ARR>
-            <DEP>2009-03-01</DEP>
-            <ARR-TIME/>
-            <DEP-TIME/>
-            <CAT>EZ</CAT>
-            <PCAT>EZ</PCAT>
-            <CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID>
-            <COMMENT/>
-            <GDSNO>1234567890ABC</GDSNO>
-            <EXT-REFERENCE/>
-            <EXT-KEY/>
-            <LAST-MOD>2009-02-23</LAST-MOD>
-            <MARKETCODE>F2</MARKETCODE>
-            <MEDIA/>
-            <SOURCE/>
-            <CHANNEL/>
-            <NN/>
-            <NOPAX>1</NOPAX>
-            <NOROOMS>1</NOROOMS>
-            <PERS-TYPE>1A</PERS-TYPE>
-            <DISCOUNT-GROUP/>
-            <RATE-SEGMENT/>
-            <T-POST-COMMISSION>0</T-POST-COMMISSION>
-            <ASSIGNED-TO/>
-            <DISABLE-DEPOSIT>N</DISABLE-DEPOSIT>
-            <ADDRESS>0</ADDRESS>
-            <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
-            <CITY>city</CITY>
-            <COUNTRY>DE</COUNTRY>
-            <DOB/>
-            <EMAIL1>info@gubse.com</EMAIL1>
-            <FAX1>+49 6821 9646 110</FAX1>
-            <RT>2</RT>
-            <LANG>DE</LANG>
-            <MATCHCODE>test2</MATCHCODE>
-            <NAME2/>
-            <NAME>GUBSE AG</NAME>
-            <PHONE1>+49 6821 9646 0</PHONE1>
-            <STREET>Test Street 28</STREET>
-            <ZIP>66578</ZIP>
-            <DEPOSIT-DATE1/>
-            <DEPOSIT-AMOUNT1>0</DEPOSIT-AMOUNT1>
-            <DEPOSIT-DATE2/>
-            <DEPOSIT-AMOUNT2>0</DEPOSIT-AMOUNT2>
-            <DEPOSIT-DATE3/>
-            <DEPOSIT-AMOUNT3>0</DEPOSIT-AMOUNT3>
-            <IS-LOCKED>N</IS-LOCKED>
-            </RESERVATION>
+                <RESERVATION>
+                <PRICE>99</PRICE>
+                <RATE>
+                <ISDEFAULT>Y</ISDEFAULT>
+                <R>UF1</R>
+                <PRICE>99</PRICE>
+                </RATE>
+                <PERSON>
+                    <SEX>0</SEX>
+                    <ROOM-SEQ>0</ROOM-SEQ>
+                    <ROOM-PERS-SEQ>0</ROOM-PERS-SEQ>
+                    <CITY>Schiffweiler</CITY>
+                    <DOB/>
+                    <EMAIL/>
+                    <COUNTRY>DE</COUNTRY>
+                    <NAME>GUBSE AG</NAME>
+                    <PERS-TYPE>1A</PERS-TYPE>
+                    <TITLE></TITLE>
+                    <COMMENT/>
+                    <ADDRESS></ADDRESS>
+                    <NAME2/>
+                    <PHONE/>
+                    <ZIP>66578</ZIP>
+                    <STREET/>
+                    <FAX/>
+                    <ARR>2009-02-23</ARR>
+                    <DEP>2009-03-01</DEP>
+                    <CAT/>
+                    <PCAT>EZ</PCAT>
+                    <RN>102</RN>
+                    <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
+                    <MATCHCODE-ADM/>
+                    <EXT-REFERENCE/>
+                    <VOUCHERNUMBER/>
+                    <MATCHCODE/>
+                </PERSON>
+                <RESCHANNELLIST>
+                    <RESCHANNEL>
+                    <IDX>0</IDX>
+                    <MATCHCODE>GUBSE</MATCHCODE>
+                    <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
+                    <CONTACT-ID>0</CONTACT-ID>
+                    <COMMISSION>
+                    <PC>0</PC>
+                    <TOTAL>0</TOTAL>
+                    </COMMISSION>
+                    </RESCHANNEL>
+                </RESCHANNELLIST>
+                <CHECKLIST>
+                    <CHECKLISTENTRY>
+                    <TYPE>6</TYPE>
+                    <DATE>2009-02-23</DATE>
+                    <USER>ADM</USER>
+                    </CHECKLISTENTRY>
+                </CHECKLIST>
+                <APERS-TYPE-LIST>
+                    <PERS-TYPE>
+                    <TYPE>1A</TYPE>
+                    <NO>1</NO>
+                    </PERS-TYPE>
+                </APERS-TYPE-LIST>
+                <CCLIST/>
+                <RES-HOTEL>1</RES-HOTEL>
+                <RES-NR>20000003</RES-NR>
+                <SUB-NR>1</SUB-NR>
+                <OBJID>2</OBJID>
+                <OUTPUTCOUNTER>1</OUTPUTCOUNTER>
+                <RT>1</RT>
+                <ALLOTMENT-NO>0</ALLOTMENT-NO>
+                <ARR>2009-02-23</ARR>
+                <DEP>2009-03-01</DEP>
+                <ARR-TIME/>
+                <DEP-TIME/>
+                <CAT>EZ</CAT>
+                <PCAT>EZ</PCAT>
+                <CENTRAL-RESERVATION-ID>0</CENTRAL-RESERVATION-ID>
+                <COMMENT/>
+                <GDSNO>1234567890ABC</GDSNO>
+                <EXT-REFERENCE/>
+                <EXT-KEY/>
+                <LAST-MOD>2009-02-23</LAST-MOD>
+                <MARKETCODE>F2</MARKETCODE>
+                <MEDIA/>
+                <SOURCE/>
+                <CHANNEL/>
+                <NN/>
+                <NOPAX>1</NOPAX>
+                <NOROOMS>1</NOROOMS>
+                <PERS-TYPE>1A</PERS-TYPE>
+                <DISCOUNT-GROUP/>
+                <RATE-SEGMENT/>
+                <T-POST-COMMISSION>0</T-POST-COMMISSION>
+                <ASSIGNED-TO/>
+                <DISABLE-DEPOSIT>N</DISABLE-DEPOSIT>
+                <ADDRESS>0</ADDRESS>
+                <CENTRALGUEST-ID>0</CENTRALGUEST-ID>
+                <CITY>city</CITY>
+                <COUNTRY>DE</COUNTRY>
+                <DOB/>
+                <EMAIL1>info@gubse.com</EMAIL1>
+                <FAX1>+49 6821 9646 110</FAX1>
+                <RT>2</RT>
+                <LANG>DE</LANG>
+                <MATCHCODE>test2</MATCHCODE>
+                <NAME2/>
+                <NAME>GUBSE AG</NAME>
+                <PHONE1>+49 6821 9646 0</PHONE1>
+                <STREET>Test Street 28</STREET>
+                <ZIP>66578</ZIP>
+                <DEPOSIT-DATE1/>
+                <DEPOSIT-AMOUNT1>0</DEPOSIT-AMOUNT1>
+                <DEPOSIT-DATE2/>
+                <DEPOSIT-AMOUNT2>0</DEPOSIT-AMOUNT2>
+                <DEPOSIT-DATE3/>
+                <DEPOSIT-AMOUNT3>0</DEPOSIT-AMOUNT3>
+                <IS-LOCKED>N</IS-LOCKED>
+                </RESERVATION>
             </ARESLIST>
             </SIHOT-Document>
             '''
@@ -766,9 +766,10 @@ class TestResFromSihot:
     def test_fld_map(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.res_list[0]['MATCHCODE'].val() == 'test2'
-        assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['', 'GUBSE', 'test2']
-        assert xml_parser.res_list[0]['GDSNO'].val() == '1234567890ABC'
+        assert xml_parser.res_list.val(0, 'AcId') == 'test2'
+        assert xml_parser.res_list.val(0, 'MATCHCODE') == 'test2'
+        assert xml_parser.res_list.val(0, 'ResGdsNo') == '1234567890ABC'
+        assert xml_parser.res_list.val(0, 'GDSNO') == '1234567890ABC'
 
 
 class TestAcuXmlBuilder:
@@ -806,7 +807,7 @@ class TestClientToSihot:
         if not error_msg:
             assert acu_guest.rec_count <= 1
             if acu_guest.rec_count:
-                row = acu_guest.fields
+                row = acu_guest
                 assert row['AcId'] == 'G561518'
                 assert row['AcId2'] == 'G561518P2'
                 assert str(row['Salutation']) == 'None'
@@ -826,7 +827,7 @@ class TestClientToSihot:
         if not error_msg:
             assert acu_guest.rec_count <= 1
             if acu_guest.rec_count:
-                row = acu_guest.fields
+                row = acu_guest
                 assert row['AcId'] == 'G558956'
                 assert row['AcId2'] == 'G558956P2'
                 assert str(row['Salutation']) == 'None'
@@ -845,7 +846,7 @@ class TestClientToSihot:
         assert not error_msg
         if not error_msg:
             assert acu_guest.rec_count == 1
-            row = acu_guest.fields
+            row = acu_guest
             assert row['AcId'] == 'Y203585'
             assert row['AcId2'] == 'Y203585P2'
             assert str(row['Salutation']) == '1'
@@ -865,7 +866,7 @@ class TestClientToSihot:
         if not error_msg:
             assert acu_guest.rec_count <= 1
             if acu_guest.rec_count:
-                row = acu_guest.fields
+                row = acu_guest
                 assert row['AcId'] == 'E396693'
                 # RCI=1442-11521,RCI=1442-55556,RCI=2429-09033,RCI=2429-09777,RCI=2429-12042,RCI=2429-13656,
                 # .. RCI=2429-55556,RCI=2972-00047,RCI=5445-12771,RCIP=5-207931
@@ -882,11 +883,11 @@ class TestClientToSihot:
         assert not error_msg
         if not error_msg:
             assert acu_guest.rec_count == 1
-            row = acu_guest.fields
+            row = acu_guest
             assert row['AcId'] == 'E610488'
             assert row['AcId2'] is None
             # overwrite objid with not existing one
-            acu_guest.fields['ShId'] = int(row['ShId']) + 1 if row['ShId'] else 99999
+            row['ShId'] = int(row['ShId']) + 1 if row['ShId'] else 99999
             error_msg = acu_guest.send_client_to_sihot(row)
             assert not error_msg or error_msg.endswith('No guest found.')
 
@@ -1059,7 +1060,7 @@ class TestResToSihot:
             assert len(rows) == 4
             for row in rows:
                 assert row['ResHotelId'] in (1, 3, 4)
-                error_msg = acu_res.send_res_to_sihot(fld_vals=row)
+                error_msg = acu_res.send_res_to_sihot(rec=row)
                 assert (not error_msg
                         or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
 

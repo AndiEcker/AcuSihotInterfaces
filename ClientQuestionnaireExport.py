@@ -9,6 +9,7 @@
     CSV file into the folder U:/transfer/staysformarketing/.
     
     0.1     first beta.
+    0.2     roughly refactored to use Record/Field from ae_sys_data - NOT TESTED.
 """
 import os
 import datetime
@@ -20,7 +21,7 @@ from shif import ResSearch, SH_DATE_FORMAT
 from shif import add_sh_options, print_sh_options
 
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 LIST_MARKER_PREFIX = '*'
 LINE_SEPARATOR = '\n'
@@ -84,24 +85,6 @@ if not export_fnam:
 elif date_from >= date_till:
     uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({}).".format(date_from, date_till))
     cae.shutdown(18)
-
-
-def elem_value(row, col_nam, arri=-1):
-    """ get the column value from the row_dict variable, using arr_index in case of """
-    is_list = col_nam.startswith(LIST_MARKER_PREFIX)
-    if is_list:
-        col_nam = col_nam[len(LIST_MARKER_PREFIX):]
-
-    if col_nam not in row:
-        col_val = "(missing)"
-    elif is_list and isinstance(row[col_nam], list) and len(row[col_nam]) > arri:
-        col_val = row[col_nam].val()[arri]
-    elif row[col_nam].val() is not None:
-        col_val = row[col_nam].val()
-    else:
-        col_val = "(incomplete)"
-
-    return col_val
 
 
 def get_hotel_and_res_id(row):  # see also shif.py/hotel_and_res_id()

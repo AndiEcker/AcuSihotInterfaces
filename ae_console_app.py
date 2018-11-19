@@ -586,7 +586,7 @@ class ConsoleApp:
                 cfg_parser = ConfigParser()     # not using self._cfg_parser for to put INI vars from other files
                 cfg_parser.optionxform = str    # or use 'lambda option: option' to have case sensitive var names
                 cfg_parser.read(cfg_fnam)
-                if isinstance(val, dict) or isinstance(val, list) or isinstance(val, tuple):
+                if isinstance(val, (dict, list, tuple)):
                     str_val = "'''" + repr(val).replace('%', '%%') + "'''"
                 elif type(val) is datetime.datetime:
                     str_val = val.strftime(DATE_TIME_ISO)

@@ -33,8 +33,6 @@ SXML_DEF_ENCODING = 'cp1252'
 # special error message prefixes
 ERR_MESSAGE_PREFIX_CONTINUE = 'CONTINUE:'
 
-ELEM_PATH_SEP = '.'
-
 
 ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 

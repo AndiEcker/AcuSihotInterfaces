@@ -8,14 +8,16 @@ import pprint
 
 from sys_data_ids import SDI_SH
 from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, FAD_FROM, FAD_ONTO, \
-    Field, Record, Records
+    Field, Record, Records, Value
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder, elem_to_attr,
-                    SXML_DEF_ENCODING, ELEM_PATH_SEP, ERR_MESSAGE_PREFIX_CONTINUE)
+                    SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
 
 SH_DATE_FORMAT = '%Y-%m-%d'
 
 SH_RES_SUB_SEP = '/'
+
+ELEM_PATH_SEP = '.'
 
 ELEM_MISSING = "(missing)"
 ELEM_EMPTY = "(empty)"
@@ -44,8 +46,6 @@ MTI_FLD_FILTER = 2
 MTI_FLD_VAL = 3
 MTI_FLD_CNV_FROM = 4
 MTI_FLD_CNV_ONTO = 5
-
-DUP_FLD_NAME_PREFIX = '+'
 
 # mapping element name in tuple item 0 onto field name in [1], hideIf callable in [2] and default field value in [3]
 # default map for GuestFromSihot.elem_fld_map instance and as read-only constant by AcuClientToSihot using the SIHOT
@@ -95,11 +95,11 @@ MAP_KERNEL_CLIENT = \
          lambda f: f.ina(ACTION_SEARCH)),
         ('L-EXTIDS/', None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('EXTID/', ('ExtRefs', ),
+        ('EXTID/', None,
          lambda f: not f.rfv('ExtRefs')),
-        ('EXTID.TYPE', ('ExtRefs', 0, 'Type'),
+        ('EXTID' + ELEM_PATH_SEP + 'TYPE', ('ExtRefs', 0, 'Type'),
          lambda f: not f.rfv('ExtRefs')),
-        ('EXTID.ID', ('ExtRefs', 0, 'Id'),
+        ('EXTID' + ELEM_PATH_SEP + 'ID', ('ExtRefs', 0, 'Id'),
          lambda f: not f.rfv('ExtRefs')),
         ('/EXTID', None,
          lambda f: not f.rfv('ExtRefs')),
@@ -117,7 +117,7 @@ MAP_KERNEL_CLIENT = \
 
 MAP_PARSE_KERNEL_CLIENT = \
     (
-        ('EXT_REFS', DUP_FLD_NAME_PREFIX + 'ExtRefs'),  # only for elemHideIf expressions
+        ('EXT_REFS', 'ExtRefs'),  # only for elemHideIf expressions
         ('CDLREF', 'CDL_CODE'),
         # ('STATUS', 'CD_STATUS', 'fldValToAcu': 500),
         # ('PAF_STAT', 'CD_PAF_STATUS', 'fldValToAcu': 0),
@@ -139,15 +139,21 @@ MAP_WEB_RES = \
         ('ARESLIST/', ),
         ('RESERVATION/', ),
         # ### main reservation info: orderer, status, external booking references, room/price category, ...
+        # ('RESERVATION' + ELEM_PATH_SEP + 'RES-HOTEL', 'ResHotelId'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'RES-NR', 'ResNo'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'SUB-NR', 'ResSubNo'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'OBJID', 'ResObjId'),
+        ('GDSNO', 'ResGdsNo'),
+        # ('NN2', 'ResSfId',
+        # lambda f: not f.val()),
         # MATCHCODE, NAME, COMPANY and GUEST-ID are mutually exclusive
         # MATCHCODE/GUEST-ID needed for DELETE action for to prevent Sihot error:
         # .. "Could not find a key identifier for the client (name, matchcode, ...)"
         # ('GUEST-ID', 'ResOrdererId',
         #  'elemHideIf':  "not c.get('ResOrdererId') and not c.get['ShId']"},
-        ('RESERVATION.GUEST-ID', 'ResOrdererId',
+        ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-ID', 'ResOrdererId',
          lambda f: not f.val() and not f.rfv('ShId')),
-        ('RESERVATION.MATCHCODE', 'ResOrdererMc'),
-        ('GDSNO', 'ResGdsNo'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'ResOrdererMc'),
         ('VOUCHERNUMBER', 'ResVoucherNo',
          lambda f: f.ina(ACTION_DELETE)),
         ('EXT-KEY', 'ResGroupNo',
@@ -172,8 +178,8 @@ MAP_WEB_RES = \
         ('RATE-SEGMENT', 'ResRateSegment',
          lambda f: not f.val(), ''),
         ('RATE/', ),  # package/arrangement has also to be specified in PERSON:
-        ('R', 'ResBoard'),
-        ('ISDEFAULT', None, None, 'Y'),
+        ('RATE' + ELEM_PATH_SEP + 'R', 'ResBoard'),
+        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None, None, 'Y'),
         ('/RATE', ),
         ('RATE/', None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
@@ -194,33 +200,33 @@ MAP_WEB_RES = \
         ('RESCHANNEL/', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         # needed for to add RCI booking to RCI allotment
-        ('RESCHANNEL.IDX', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', ),
          1),
-        ('RESCHANNEL.MATCHCODE', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', ),
          'RCI'),
-        ('RESCHANNEL.ISPRICEOWNER', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', ),
          1),
         # needed for marketing fly buys for board payment bookings
-        ('RESCHANNEL.IDX', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', ),
          1),
-        ('RESCHANNEL.MATCHCODE', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', ),
          'MAR01'),
-        ('RESCHANNEL.ISPRICEOWNER', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', ),
          1),
         # needed for owner bookings for to select/use owner allotment
-        ('RESCHANNEL.IDX', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', ),
          2),
-        ('RESCHANNEL.MATCHCODE', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', ),
          'TSP'),
-        ('RESCHANNEL.ISPRICEOWNER', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', ),
          1),
         ('/RESCHANNEL', None,
@@ -256,8 +262,6 @@ MAP_WEB_RES = \
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('CHANNEL', 'ResMktGroup',
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        # ('NN2', 'ResSfId',
-        # lambda f: not f.val()),
         ('EXT-REFERENCE', 'ResFlightArrComment',
          lambda f: f.ina(ACTION_DELETE) or not f.val()),    # see also currently unused PICKUP-COMMENT-ARRIVAL element
         ('ARR-TIME', 'ResCheckIn',      # was ResFlightETA (but changed because cannot have duplicate field names)
@@ -273,45 +277,45 @@ MAP_WEB_RES = \
         ('TYPE', None,
          None,
          '1A'),
-        ('NO', DUP_FLD_NAME_PREFIX + 'ResAdults'),
+        ('NO', 'ResAdults'),
         ('/PERS-TYPE', ),
         ('PERS-TYPE/', ),
         ('TYPE', None,
          None,
          '2B'),
-        ('NO', DUP_FLD_NAME_PREFIX + 'ResChildren'),
+        ('NO', 'ResChildren'),
         ('/PERS-TYPE', ),
         ('/PERS-TYPE-LIST', ),
         # Person Records
-        ('PERSON/', ('ResPersons', 0),
+        ('PERSON/', None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('PERSON.NAME', ('ResPersons', 0, 'Surname'),
+        ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'Surname'),
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('AcId') or f.rfv('ShId'),
-         lambda f: ("Adult " + str(f.idx()) if f.idx() is None or f.idx() < f.rfv('ResAdults')
-                    else "Child " + str(f.idx() - f.rfv('ResAdults') + 1))),
-        ('PERSON.NAME2', ('ResPersons', 0, 'Forename'),
+         lambda f: ("Adult " + str(f.crx()) if f.crx() is None or f.crx() < f.rfv('ResAdults')
+                    else "Child " + str(f.crx() - f.rfv('ResAdults') + 1))),
+        ('PERSON' + ELEM_PATH_SEP + 'NAME2', ('ResPersons', 0, 'Forename'),
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('AcId') or f.rfv('ShId')),
         ('AUTO-GENERATED', None,
          lambda f: f.ina(ACTION_DELETE) or (f.rfv('ResAdults') <= 2 and (f.rfv('AcId') or f.rfv('ShId'))),
          '1'),
-        ('PERSON.MATCHCODE', ('ResPersons', 0, 'AcId'),
+        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcId'),
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ShId')),
-        ('PERSON.GUEST-ID', ('ResPersons', 0, 'ShId'),
+        ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'ShId'),
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('ROOM-SEQ', None,
          lambda f: f.ina(ACTION_DELETE),
          '0'),
         ('ROOM-PERS-SEQ', None,
          lambda f: f.ina(ACTION_DELETE),
-         lambda f: (str(f.idx()))),
-        ('PERSON.PERS-TYPE', None,
+         lambda f: (str(f.crx()))),
+        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'GuestType'),
          lambda f: f.ina(ACTION_DELETE),
-         lambda f: ('1A' if f.idx() < f.rfv('ResAdults') else '2B')),
-        ('PERSON.R', DUP_FLD_NAME_PREFIX + 'ResBoard',
+         lambda f: ('1A' if f.crx() < f.rfv('ResAdults') else '2B')),
+        ('PERSON' + ELEM_PATH_SEP + 'PERS-RATE' + ELEM_PATH_SEP + 'R', 'Board',
          lambda f: f.ina(ACTION_DELETE)),
-        ('PERSON.RN', ('ResPersons', 0, 'ResRoomNo'),
+        ('PERSON' + ELEM_PATH_SEP + 'RN', ('ResPersons', 0, 'RoomNo'),
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResDeparture') < datetime.datetime.now()),
-        ('PERSON.DOB', ('ResPersons', 0, 'DOB'),
+        ('PERSON' + ELEM_PATH_SEP + 'DOB', ('ResPersons', 0, 'DOB'),
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('/PERSON', None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResAdults') <= 0),
@@ -409,92 +413,27 @@ def elem_path_join(elem_names):
     return ELEM_PATH_SEP.join(elem_names)
 
 
-def elem_path_values(elem_fld_map, elem_path_suffix):
-    """
-    determine list of data values from the passed elem_fld_map (extended by FldMapXmlParser) of all element paths
-    ending with the passed elem_path_suffix string value.
-    :param elem_fld_map:        element field map dict in the form {elem_name: sys-data-Field}.
-    :param elem_path_suffix:    element path (either full path or suffix, e.g. SIHOT-Document.ARESLIST.RESERVATION.ARR)
-    :return:                    merged list of all parsed data in fld map with passed element path suffix
-    """
-    ret_list = list()
-    for fld in elem_fld_map.values():
-        paths_values = fld.paths(system=SDI_SH, direction=FAD_FROM)
-        if paths_values:
-            for path_key, values in paths_values:
-                if path_key.endswith(elem_path_suffix):
-                    ret_list.extend(values)
-    return ret_list
-
-
-def elem_value(shd, elem_name_or_path, arri=0, verbose=False, default_value=None):
-    """
-    get the xml element value from the shd row_dict variable, using array index (arri) in case of multiple values
-
-    :param shd:                 dict of sihot data row with the element names as the dict keys.
-    :param elem_name_or_path:   either single element name (str), element path (str) or list of path element names.
-    :param arri:                index of element array value (starting with 0).
-    :param verbose:             pass True to get ELEM_EMPTY/ELEM_MISSING pseudo values instead of default_value value.
-    :param default_value:       default element value.
-    :return:                    element value.
-    """
-    elem_path = ""
-    if isinstance(elem_name_or_path, list):
-        if len(elem_name_or_path) > 1:
-            elem_path = elem_path_join(elem_name_or_path)
-        else:
-            elem_name_or_path = elem_name_or_path[0]
-    elif ELEM_PATH_SEP in elem_name_or_path:
-        elem_path = elem_name_or_path
-    elem_nam = elem_path.rsplit(ELEM_PATH_SEP, 1)[1] if elem_path else elem_name_or_path
-
-    elem_val = None
-    if elem_nam not in shd:
-        elem_val = ELEM_MISSING if verbose else default_value
-    elif elem_path:
-        val_arr = elem_path_values(shd, elem_path)
-        if 0 <= arri < len(val_arr):
-            elem_val = val_arr[arri]
-    else:
-        elem_def = shd[elem_nam]
-        if 'elemListVal' in elem_def and len(elem_def['elemListVal']) > arri:
-            elem_val = elem_def['elemListVal'][arri]
-        else:
-            elem_val = ""
-        if not elem_val and elem_def.get('elemVal'):
-            elem_val = elem_def['elemVal']
-
-    if not elem_val:
-        elem_val = ELEM_EMPTY if verbose else default_value
-
-    return elem_val
-
-
 def hotel_and_res_id(shd):
-    ho_id = elem_value(shd, 'RES-HOTEL')
-    res_nr = elem_value(shd, 'RES-NR')
-    sub_nr = elem_value(shd, 'SUB-NR')
+    ho_id = shd.val('ResHotelId')
+    res_nr = shd.val('ResNo')
+    sub_nr = shd.val('ResSubNo')
     if not ho_id or not res_nr:
         return None, None
     return ho_id, res_nr + (SH_RES_SUB_SEP + sub_nr if sub_nr else '') + '@' + ho_id
 
 
 def pax_count(shd):
-    adults = elem_value(shd, 'NOPAX')
+    adults = shd.val('ResAdults')
     if not adults:
         adults = 0
     else:
         adults = int(adults)
-    children = elem_value(shd, 'NOCHILDS')
+    children = shd.val('ResChildren')
     if not children:
         children = 0
     else:
         children = int(children)
     return adults + children
-
-
-def gds_number(shd):
-    return elem_value(shd, 'GDSNO')
 
 
 def date_range_chunks(date_from, date_till, fetch_max_days):
@@ -510,11 +449,11 @@ def date_range_chunks(date_from, date_till, fetch_max_days):
 def gds_no_to_ids(cae, hotel_id, gdsno):
     ids = dict(ResHotelId=hotel_id, ResGdsNo=gdsno)
     rfr = ResFetch(cae).fetch_by_gds_no(hotel_id, gdsno)
-    if isinstance(rfr, dict):
-        ids['ResObjId'] = elem_value(rfr, ['SIHOT-Document', 'RESERVATION', 'OBJID'])
-        ids['ResNo'] = elem_value(rfr, 'RES-NR')
-        ids['ResSubNo'] = elem_value(rfr, 'SUB-NR')
-        ids['ResSfId'] = elem_value(rfr, 'NN2')
+    if isinstance(rfr, Record):
+        ids['ResObjId'] = rfr.val('ResObjId')
+        ids['ResNo'] = rfr.val('ResNo')
+        ids['ResSubNo'] = rfr.val('ResSubNo')
+        ids['ResSfId'] = rfr.val('ResSfId')
     return ids
 
 
@@ -525,10 +464,10 @@ def gds_no_to_obj_id(cae, hotel_id, gdsno):
 def res_no_to_ids(cae, hotel_id, res_id, sub_id):
     ret = dict(ResHotelId=hotel_id, ResNo=res_id, ResSubNo=sub_id)
     rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
-    if isinstance(rfr, dict):
-        ret['ResObjId'] = elem_value(rfr, ['SIHOT-Document', 'RESERVATION', 'OBJID'])
-        ret['ResGdsNo'] = elem_value(rfr, 'GDSNO')
-        ret['ResSfId'] = elem_value(rfr, 'NN2')
+    if isinstance(rfr, Record):
+        ret['ResObjId'] = rfr.val('ResObjId')
+        ret['ResGdsNo'] = rfr.val('ResGdsNo')
+        ret['ResSfId'] = rfr.val('ResSfId')
     else:
         ret = rfr
     return ret
@@ -578,16 +517,16 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
             valid_rows = list()
             for res in chunk_rows:
                 reasons = list()
-                check_in = res['ResArrival'].val()
-                check_out = res['ResDeparture'].val()
+                check_in = res.val('ResArrival')
+                check_out = res.val('ResDeparture')
                 if not check_in or not check_out:
                     reasons.append("incomplete check-in={} check-out={}".format(check_in, check_out))
                 if not (date_from <= check_in <= date_till):
                     reasons.append("arrival {} not between {} and {}".format(check_in, date_from, date_till))
-                mkt_src = elem_value(res, 'MARKETCODE')
+                mkt_src = res.val('ResMktSegment')
                 if mkt_sources and mkt_src not in mkt_sources:
                     reasons.append("disallowed market source {}".format(mkt_src))
-                mkt_group = elem_value(res, 'CHANNEL')
+                mkt_group = res.val('ResMktGroup')
                 if mkt_groups and mkt_group not in mkt_groups:
                     reasons.append("disallowed market group/channel {}".format(mkt_group))
                 if reasons:
@@ -630,7 +569,7 @@ def _strip_err_msg(error_msg):
     return error_msg[pos1: max(pos2, pos3)]
 
 
-class GuestSearchResponse(SihotXmlParser):
+class OldGuestSearchResponse(SihotXmlParser):
     def __init__(self, cae, ret_elem_names=None, key_elem_name=None):
         """
         response to the GUEST-GET request oc of the KERNEL interface
@@ -646,7 +585,7 @@ class GuestSearchResponse(SihotXmlParser):
                                 Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
         :param key_elem_name:   element name used for the search (only needed if self._return_value_as_key==True).
         """
-        super(GuestSearchResponse, self).__init__(cae)
+        super().__init__(cae)
         self._base_tags.append('GUEST-NR')
         self.guest_nr = None
 
@@ -664,14 +603,14 @@ class GuestSearchResponse(SihotXmlParser):
         self._elem_fld_map_parser = FldMapXmlParser(cae, deepcopy(full_map))
 
     def parse_xml(self, xml):
-        super(GuestSearchResponse, self).parse_xml(xml)
+        super().parse_xml(xml)
         self._key_elem_index = 0
         self._in_guest_profile = False
 
     def start(self, tag, attrib):
         if self._in_guest_profile:
             self._elem_fld_map_parser.start(tag, attrib)
-        if super(GuestSearchResponse, self).start(tag, attrib) is None:
+        if super().start(tag, attrib) is None:
             return None  # processed by base class
         if tag == 'GUEST-PROFILE':
             self._key_elem_index += 1
@@ -682,7 +621,7 @@ class GuestSearchResponse(SihotXmlParser):
     def data(self, data):
         if self._in_guest_profile:
             self._elem_fld_map_parser.data(data)
-        if super(GuestSearchResponse, self).data(data) is None:
+        if super().data(data) is None:
             return None  # processed by base class
         return data
 
@@ -707,52 +646,20 @@ class GuestSearchResponse(SihotXmlParser):
                                                    field.val(system=SDI_SH, direction=FAD_FROM))
                     self.ret_elem_values.append(values)
         # for completeness call also SihotXmlParser.end() and FldMapXmlParser.end()
-        return super(GuestSearchResponse, self).end(self._elem_fld_map_parser.end(tag))
+        return super().end(self._elem_fld_map_parser.end(tag))
 
 
 class FldMapXmlParser(SihotXmlParser):
     def __init__(self, cae, elem_map):
         super(FldMapXmlParser, self).__init__(cae)
-        self._current_field = None
-        self._current_data = None
-        self._current_idx_path = list()
+        self._elem_map = elem_map
+        self._collected_fields = list()
+        self._current_data = ''
         self._rec = Record(system=SDI_SH, direction=FAD_FROM)
 
         # create field data parsing record and mapping dict for all elements having a field value
-        self.elem_fld_map = dict()
-        for fas in elem_map:
-            map_len = len(fas)
-            if map_len <= MTI_FLD_NAME:
-                continue
-            field_name = field_idx = fas[MTI_FLD_NAME]
-            if not field_name:
-                continue
-            if isinstance(field_name, tuple):
-                if len(field_name) == 1:
-                    field_idx = field_name[0]
-                field_name = field_name[-1]
-            elif field_name.startswith(DUP_FLD_NAME_PREFIX):
-                continue
-
-            elem_name = fas[MTI_ELEM_NAME].strip('/')
-            field = Field()
-            field.name = field_name
-            field.set_name(elem_name, system=SDI_SH, direction=FAD_FROM, protect=True)
-            field.set_rec(self._rec)
-            # add additional aspects: first always add converter (for to create separate system value)
-            if map_len > MTI_FLD_CNV_FROM and fas[MTI_FLD_CNV_FROM]:
-                field.set_converter(fas[MTI_FLD_CNV_FROM], system=SDI_SH, direction=FAD_FROM, extend=True)
-            if map_len > MTI_FLD_FILTER and fas[MTI_FLD_FILTER]:
-                field.set_filter(fas[MTI_FLD_FILTER], system=SDI_SH, direction=FAD_FROM, protect=True)
-            if map_len > MTI_FLD_VAL and fas[MTI_FLD_VAL] is not None:
-                val_or_cal = fas[MTI_FLD_VAL]
-                if callable(val_or_cal):
-                    field.set_calculator(val_or_cal, system=SDI_SH, direction=FAD_FROM, protect=True)
-                else:
-                    field.set_val(val_or_cal, system=SDI_SH, direction=FAD_FROM)
-
-            self._rec.add_field(field, idx=field_idx)
-            self.elem_fld_map[elem_name] = field
+        self._rec.add_system_fields(elem_map)
+        self.elem_fld_map = self._rec.system_fields
 
     def clear_rec(self):
         self._rec.clear_vals(system=self._rec.system, direction=self._rec.direction)
@@ -762,81 +669,35 @@ class FldMapXmlParser(SihotXmlParser):
     def rec(self):
         return self._rec
 
-    def find_field(self, tag):
-        if tag in self.elem_fld_map:
-            elem_name = tag
-            field = self.elem_fld_map[elem_name]
-        else:
-            full_path = ELEM_PATH_SEP.join(self._elem_path)
-            for elem_name, field in self.elem_fld_map.items():
-                if elem_name == full_path or full_path.endswith(ELEM_PATH_SEP + elem_name):
-                    break
-            else:
-                elem_name, field = None, None
-        return elem_name, field
-
-    def fld_idx_path(self, fld_path):
-        fld_path_len = len(fld_path)
-        cur_path = self._current_idx_path
-        cur_path_len = len(cur_path)
-        if fld_path_len == cur_path_len:
-            idx_path = cur_path[:-1]
-            idx_path.append(fld_path[-1])
-        else:
-            match = 0
-            while match < min(fld_path_len, cur_path_len) and fld_path[match] == cur_path[match]:
-                match += 1
-            idx_path = list(fld_path)
-            if match:
-                idx_pos = min(match, cur_path_len - 1)
-                if fld_path_len > cur_path_len >= match \
-                        and isinstance(fld_path[idx_pos], int) and isinstance(cur_path[idx_pos], int):
-                    idx_path[match] = cur_path[idx_pos] + 1
-                elif fld_path_len < cur_path_len:
-                    idx_path.append(cur_path[fld_path_len])
-        return idx_path
-
     # XMLParser interface
 
     def start(self, tag, attrib):
         super(FldMapXmlParser, self).start(tag, attrib)
-        elem_name, field = self.find_field(tag)
-        if not field:
-            self._current_field = None
-            return tag
+        self._collected_fields = self._rec.collect_system_fields(self._elem_path, ELEM_PATH_SEP)
+        if self._collected_fields:
+            self._current_data = ''
+            return None
 
-        if isinstance(field.name, tuple):   # deeper structure?
-            self._current_idx_path = self.fld_idx_path(field.name)
-        self._current_field = Field(**field.aspects).set_rec(self._rec, system=SDI_SH, direction=FAD_FROM)
-
-        # TODO: remove after refactoring
-        '''
-        if field.append_record(system=SDI_SH, direction=FAD_FROM):
-            recs = field.value(system=SDI_SH, direction=FAD_FROM)
-            self._current_idx_path = len(recs) - 1   # set current Records idx to new/just-appended Record instance
-            self._current_field = None
-            return tag
-        field = Field(**field.aspects).set_rec(self._rec, system=SDI_SH, direction=FAD_FROM)
-        if self._current_idx_path is not None:
-            field.set_idx(self._current_idx_path)
-        self._current_field = self.elem_fld_map[elem_name] = field
-        '''
-
-        self._current_data = ''
-        return None
+        return tag
 
     def data(self, data):
         super(FldMapXmlParser, self).data(data)
-        if self._current_field:
+        if self._collected_fields:
             self._current_data += data
             return None
         return data
 
     def end(self, tag):
-        if self._current_field:
-            self._current_field.set_val(self._current_data, *self._current_idx_path, system=SDI_SH, direction=FAD_FROM)
-            self._current_field = None
+        for cf in self._collected_fields:
+            idx_path = cf.root_idx(system=SDI_SH, direction=FAD_FROM)
+            if idx_path:
+                self._rec.set_val(self._current_data, *idx_path, system=SDI_SH, direction=FAD_FROM,
+                                  root_rec=self._rec, root_idx=idx_path, use_curr_idx=Value((1, )))
+        self._collected_fields = list()
         super(FldMapXmlParser, self).end(tag)
+        for elem_name, *_ in self._elem_map:
+            if elem_name == '/' + tag:
+                self._rec.set_current_system_index(tag, ELEM_PATH_SEP)
 
 
 class GuestFromSihot(FldMapXmlParser):
@@ -854,8 +715,8 @@ class GuestFromSihot(FldMapXmlParser):
 
 
 class ResFromSihot(FldMapXmlParser):
-    def __init__(self, cae, elem_map=MAP_RES_DEF):
-        super(ResFromSihot, self).__init__(cae, elem_map)
+    def __init__(self, cae):
+        super(ResFromSihot, self).__init__(cae, MAP_RES_DEF)
         self.res_list = Records()
 
     # XMLParser interface
@@ -865,6 +726,75 @@ class ResFromSihot(FldMapXmlParser):
         if tag == 'RESERVATION':  # using tag because self._curr_tag got reset by super method of end()
             self.res_list.append(deepcopy(self._rec))
             self.clear_rec()
+
+
+class GuestSearchResponse(FldMapXmlParser):
+    def __init__(self, cae, ret_elem_names=None, key_elem_name=None):
+        """
+        response to the GUEST-GET request oc of the KERNEL interface
+
+        :param cae:             app environment instance.
+        :param ret_elem_names:  list of xml element names (or response attributes) to return. If there is only one
+                                list element with a leading ':' character then self.ret_elem_values will be a dict
+                                with the search value as the key. If ret_elem_names consists of exact one item then
+                                ret_elem_values will be a list with the plain return values. If ret_elem_names contains
+                                more than one item then self.ret_elem_values will be a dict where the ret_elem_names
+                                are used as keys. If the ret_elem_names list is empty (or None) then the returned
+                                self.ret_elem_values list of dicts will provide all elements that are returned by the
+                                Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
+        :param key_elem_name:   element name used for the search (only needed if self._return_value_as_key==True).
+        """
+        full_map = MAP_KERNEL_CLIENT + MAP_PARSE_KERNEL_CLIENT
+        super().__init__(cae, full_map)
+        self._base_tags.append('GUEST-NR')
+        self.guest_nr = None
+
+        if not ret_elem_names:
+            ret_elem_names = [_[MTI_ELEM_NAME].strip('/') for _ in full_map]
+        self._ret_elem_names = ret_elem_names    # list of names of XML-elements or response-base-attributes
+        self._return_value_as_key = len(ret_elem_names) == 1 and ret_elem_names[0][0] == ':'
+        self._key_elem_name = key_elem_name
+
+        self.ret_elem_values = dict() if self._return_value_as_key else list()
+        self._key_elem_index = 0
+
+    def parse_xml(self, xml):
+        super().parse_xml(xml)
+        self._key_elem_index = 0
+
+    def start(self, tag, attrib):
+        if super().start(tag, attrib) is None:
+            return None  # processed by base class
+        if tag == 'GUEST-PROFILE':
+            self._key_elem_index += 1
+            return None
+        return tag
+
+    def data(self, data):
+        if super().data(data) is None:
+            return None  # processed by base class
+        return data
+
+    def end(self, tag):
+        if tag == 'GUEST-PROFILE':
+            if self._return_value_as_key:
+                elem = getattr(self, elem_to_attr(self._key_elem_name))
+                if self._key_elem_index > 1:
+                    elem += '_' + str(self._key_elem_index)
+                self.ret_elem_values[elem] = getattr(self, elem_to_attr(self._ret_elem_names[0][1:]))
+            else:
+                elem_names = self._ret_elem_names
+                if len(elem_names) == 1:
+                    self.ret_elem_values.append(getattr(self, elem_to_attr(elem_names[0])))
+                else:
+                    values = dict()
+                    for elem in elem_names:
+                        if elem in self.elem_fld_map:
+                            field = self.elem_fld_map[elem]
+                            values[elem] = getattr(self, elem_to_attr(elem),
+                                                   field.val(system=SDI_SH, direction=FAD_FROM))
+                    self.ret_elem_values.append(values)
+        return super().end(tag)
 
 
 class GuestSearch(SihotXmlBuilder):
@@ -1042,120 +972,56 @@ class ResSearch(SihotXmlBuilder):
         """
         return err_msg or self.response.res_list
 
-    def elem_path_values(self, elem_path_suffix):
-        """
-        return list of parsed data values where the element path is ending with the passed element path suffix.
-        Has to be called after self.search().
-        :param      elem_path_suffix:    element path suffix.
-        :return:    list of parsed data values.
-        """
-        return elem_path_values(self.response.res_list, elem_path_suffix)
-
 
 class FldMapXmlBuilder(SihotXmlBuilder):
     def __init__(self, cae, use_kernel=None, elem_map=None):
         super().__init__(cae, use_kernel=use_kernel)
 
-        self._recs = list()  # list of dicts, used by inheriting class for to store the records to send to SiHOT.PMS
-        self._current_rec_i = 0
-
         self.action = ''
         self.elem_map = deepcopy(elem_map or cae.get_option('mapRes'))
-        self.elem_fld_rec = Record(system=SDI_SH, direction=FAD_ONTO)
-        for fas in self.elem_map:
-            map_len = len(fas)
-            if map_len <= MTI_FLD_NAME or fas[MTI_FLD_NAME] is None:
-                continue
-            field_name = field_idx = fas[MTI_FLD_NAME]
-            if not field_name:
-                continue
-            elif isinstance(field_name, tuple):
-                if len(field_name) == 1:
-                    field_idx = field_name[-1]
-                field_name = field_name[-1]
-            elif field_name.startswith(DUP_FLD_NAME_PREFIX):
-                continue
+        self.elem_fld_rec = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(self.elem_map)
+        self.rec_link_field = Field().set_root_rec(self.elem_fld_rec, system=SDI_SH, direction=FAD_FROM)
 
-            elem_name = fas[MTI_ELEM_NAME].strip('/')
-            field = Field()
-            field.name = field_name
-            field.set_name(elem_name, system=SDI_SH, direction=FAD_ONTO, protect=True)
-            field.set_rec(self.elem_fld_rec)
-            # add additional aspects: first always add converter (for to create separate system value)
-            if map_len > MTI_FLD_CNV_ONTO and fas[MTI_FLD_CNV_ONTO]:
-                field.set_converter(fas[MTI_FLD_CNV_ONTO], system=SDI_SH, direction=FAD_ONTO, extend=True)
-            if map_len > MTI_FLD_FILTER and fas[MTI_FLD_FILTER]:
-                field.set_filter(fas[MTI_FLD_FILTER], system=SDI_SH, direction=FAD_ONTO, protect=True)
-            if map_len > MTI_FLD_VAL and fas[MTI_FLD_VAL] is not None:
-                val_or_cal = fas[MTI_FLD_VAL]
-                if callable(val_or_cal):
-                    field.set_calculator(val_or_cal, system=SDI_SH, direction=FAD_ONTO, protect=True)
-                else:
-                    field.set_val(val_or_cal, system=SDI_SH, direction=FAD_ONTO)
+    # --- rec helpers
 
-            self.elem_fld_rec.add_field(field, idx=field_idx)
-
-        self.rec_link_field = Field().set_rec(self.elem_fld_rec)
-
-        # TODO: remove after refactoring
-        ''' 
-        self.sihot_elem_fld = [(c[MTI_ELEM_NAME],
-                                c[MTI_FLD_NAME] if len(c) > MTI_FLD_NAME else None,
-                                c[MTI_FLD_VAL] if len(c) > MTI_FLD_VAL else None,
-                                c[MTI_FLD_FILTER] if len(c) > MTI_FLD_FILTER else None,
-                                )
-                               for c in elem_map]
-        self.fix_fld_vals = dict()
-        self.acu_fld_names = list()  # acu_fld_names and acu_fld_expres need to be in sync
-        self.acu_fld_expres = list()
-        self.fld_elem = dict()
-        self.elem_fld = dict()
-        for c in elem_map:
-            if len(c) > MTI_FLD_NAME and c[MTI_FLD_NAME]:
-                if len(c) > MTI_FLD_VAL:
-                    self.fix_fld_vals[c[MTI_FLD_NAME]] = c[MTI_FLD_VAL]
-                elif c[MTI_FLD_NAME] not in self.acu_fld_names:
-                    self.acu_fld_names.append(c[MTI_FLD_NAME])
-                    self.acu_fld_expres.append(c['fldValFromAcu'] + " as " + c[MTI_FLD_NAME] if 'fldValFromAcu' in c
-                                               else c[MTI_FLD_NAME])
-                # mapping dicts between db col names and xml elem names (not works for dup elems like MATCHCODE in RES)
-                self.fld_elem[c[MTI_FLD_NAME]] = c[MTI_ELEM_NAME]
-                self.elem_fld[c[MTI_ELEM_NAME]] = c[MTI_FLD_NAME]
-        '''
-
-    # --- rec/fld_vals helpers
-
-    @property
-    def fields(self):
-        return self._recs[self._current_rec_i] if len(self._recs) > self._current_rec_i else dict()
-
-    # def next_rec(self): self._current_rec_i += 1
-
-    @property
-    def rec_count(self):
-        return len(self._recs)
-
-    @property
-    def recs(self):
-        return self._recs
-
-    def prepare_map_xml(self, fld_vals, include_empty_values=True):
+    def prepare_map_xml(self, rec, include_empty_values=True):
         self.elem_fld_rec.clear_vals()
-        for k, v in fld_vals.items():
-            self.elem_fld_rec[k].set_val(v)
+        for k, f in rec.items():
+            if k in self.elem_fld_rec:
+                self.elem_fld_rec[k].set_val(f.val())
         self.elem_fld_rec.push(SDI_SH)
 
         old_act = self.elem_fld_rec.action
         self.elem_fld_rec.action = self.action
         inner_xml = ''
-        for elem_map_item in self.elem_map:
+        map_i = group_i = -1
+        field = None
+        while True:
+            map_i += 1
+            if map_i >= len(self.elem_map):
+                break
+            elem_map_item = self.elem_map[map_i]
             tag = elem_map_item[MTI_ELEM_NAME]
-            fld = elem_map_item[MTI_FLD_NAME] if len(elem_map_item) > MTI_FLD_NAME else None
-            if fld:
-                if not isinstance(fld, tuple):
-                    fld = fld.strip(DUP_FLD_NAME_PREFIX)
-                field = self.elem_fld_rec[fld]
-                val = field.val(system=SDI_SH, direction=FAD_ONTO)
+            if tag.endswith('/'):
+                self._indent += 1
+                inner_xml += '\n' + ' ' * self._indent + self.new_tag(tag[:-1], closing=False)
+                group_i = map_i
+                continue
+            if tag.startswith('/'):
+                self._indent -= 1
+                inner_xml += self.new_tag(tag[1:], opening=False)
+                if field:
+                    recs = field.parent(system=SDI_SH, direction=FAD_ONTO, types=(Records, ))
+                    if recs and recs.current_idx + 1 < len(recs):
+                        recs.current_idx += 1
+                        map_i = group_i
+                        continue
+
+            fld_idx = elem_map_item[MTI_FLD_NAME] if len(elem_map_item) > MTI_FLD_NAME else None
+            if fld_idx:
+                field = self.elem_fld_rec.deeper_item(fld_idx, system=SDI_SH, direction=FAD_ONTO)
+                idx_path = fld_idx if isinstance(fld_idx, (tuple, list)) else (fld_idx, )
+                val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
             else:
                 field = self.rec_link_field
                 val = None
@@ -1164,16 +1030,8 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 assert callable(filter_func), "filter aspect {} must be callable".format(filter_func)
                 if filter_func(field):
                     continue
-
-            if tag.endswith('/'):
-                self._indent += 1
-                inner_xml += '\n' + ' ' * self._indent + self.new_tag(tag[:-1], closing=False)
-            elif tag.startswith('/'):
-                self._indent -= 1
-                inner_xml += self.new_tag(tag[1:], opening=False)
-            elif include_empty_values or (fld and fld in fld_vals) or val:
-                inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(fld_vals[fld]
-                                                                                if fld and fld in fld_vals else val))
+            if fld_idx and (include_empty_values or val):
+                inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(val))
         self.elem_fld_rec.action = old_act
         return inner_xml
 
@@ -1184,14 +1042,14 @@ class ClientToSihot(FldMapXmlBuilder):
                          use_kernel=cae.get_option('useKernelForClient'),
                          elem_map=cae.get_option('mapClient') or MAP_KERNEL_CLIENT)
 
-    def _prepare_guest_xml(self, fld_vals, fld_name_suffix=''):
+    def _prepare_guest_xml(self, rec, fld_name_suffix=''):
         if not self.action:
-            self.action = ACTION_UPDATE if fld_vals.get('ShId' + fld_name_suffix) else ACTION_INSERT
+            self.action = ACTION_UPDATE if rec.val('ShId' + fld_name_suffix) else ACTION_INSERT
         self.beg_xml(operation_code='GUEST-CHANGE' if self.action == ACTION_UPDATE else 'GUEST-CREATE')
-        self.add_tag('GUEST-PROFILE', self.prepare_map_xml(fld_vals))
+        self.add_tag('GUEST-PROFILE', self.prepare_map_xml(rec))
         self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_xml() fld_vals/action/result: ",
-                        fld_vals, self.action, self.xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ClientToSihot._prepare_guest_xml() act={} xml='{}' rec={}".format(self.action, self.xml, rec),
+                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _prepare_guest_link_xml(self, mc1, mc2):
         mct1 = self.new_tag('MATCHCODE-GUEST', self.convert_value_to_xml_string(mc1))
@@ -1201,32 +1059,30 @@ class ClientToSihot(FldMapXmlBuilder):
         self.beg_xml(operation_code='GUEST-CONTACT')
         self.add_tag('CONTACTLIST', mct1 + mct2)
         self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_link_xml() mc1/mc2/result: ", mc1, mc2, self.xml,
+        self.cae.dprint("ClientToSihot._prepare_guest_link_xml(): mc1={} mc2={} xml='{}'".format(mc1, mc2, self.xml),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _send_link_to_sihot(self, pk1, pk2):
         self._prepare_guest_link_xml(pk1, pk2)
         return self.send_to_server()
 
-    def _send_person_to_sihot(self, fld_vals, first_person=""):  # pass AcId of first person for to send 2nd person
-        self._prepare_guest_xml(fld_vals, fld_name_suffix='2' if first_person else '')
+    def _send_person_to_sihot(self, rec, first_person=""):  # pass AcId of first person for to send 2nd person
+        self._prepare_guest_xml(rec, fld_name_suffix='_B' if first_person else '')
         err_msg = self.send_to_server()
         if 'guest exists already' in err_msg and self.action == ACTION_INSERT:
             self.action = ACTION_UPDATE
-            self._prepare_guest_xml(fld_vals, fld_name_suffix='2' if first_person else '')
+            self._prepare_guest_xml(rec, fld_name_suffix='_B' if first_person else '')
             err_msg = self.send_to_server()
         return err_msg
 
-    def send_client_to_sihot(self, fld_vals=None):
-        if not fld_vals:
-            fld_vals = self.fields
-        msg = "ClientToSihot.send_client_to_sihot({}): action={}".format(fld_vals, self.action)
-        err_msg = self._send_person_to_sihot(fld_vals)
+    def send_client_to_sihot(self, rec):
+        msg = "ClientToSihot.send_client_to_sihot({}): action={}".format(rec, self.action)
+        err_msg = self._send_person_to_sihot(rec)
         if err_msg:
             self.cae.dprint(msg + "; err='{}'".format(err_msg))
         else:
-            self.cae.dprint(msg + "; client={} RESPONDED OBJID={}/MATCHCODE={}"
-                            .format(fld_vals['AcId'], self.response.objid, self.response.matchcode),
+            self.cae.dprint(msg + "; client={} RESPONDED OBJID={} MATCHCODE={}"
+                            .format(rec.val('AcId'), self.response.objid, self.response.matchcode),
                             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return err_msg
@@ -1241,10 +1097,10 @@ class ResToSihot(FldMapXmlBuilder):
         self._warning_msgs = ""
         self._gds_errors = dict()
 
-    def _add_sihot_configs(self, fld_vals):
-        mkt_seg = fld_vals.get('ResMktSegment', '')
-        hotel_id = str(fld_vals.get('ResHotelId', 999))
-        arr_date = fld_vals.get('arr_date')
+    def _add_sihot_configs(self, rec):
+        mkt_seg = rec.val('ResMktSegment')
+        hotel_id = rec.val('ResHotelId')
+        arr_date = rec.val('ResArrival')
         today = datetime.datetime.today()
         cf = self.cae.get_config
 
@@ -1252,26 +1108,26 @@ class ResToSihot(FldMapXmlBuilder):
             val = cf(mkt_seg + '_' + hotel_id, section='SihotAllotments',
                      default_value=cf(mkt_seg, section='SihotAllotments'))
             if val:
-                fld_vals['ResAllotmentNo'] = val
+                rec.set_val(val, 'ResAllotmentNo')
 
-        if not fld_vals.get('ResRateSegment'):  # not specified? FYI: this field is not included in V_ACU_RES_DATA
+        if not rec.val('ResRateSegment'):  # not specified? FYI: this field is not included in V_ACU_RES_DATA
             val = cf(mkt_seg, section='SihotRateSegments', default_value=mkt_seg)
             if val:
-                fld_vals['ResRateSegment'] = val
+                rec.set_val(val, 'ResRateSegment')
 
         val = cf(mkt_seg, section='SihotPaymentInstructions')
         if val:
-            fld_vals['ResAccount'] = val
+            rec.set_val(val, 'ResAccount')
 
-        if self.action != ACTION_DELETE and fld_vals.get('RU_STATUS', 0) != 120 and arr_date and arr_date > today:
+        if self.action != ACTION_DELETE and rec.val('ResStatus') != 'S' and arr_date and arr_date > today:
             val = cf(mkt_seg, section='SihotResTypes')
             if val:
-                fld_vals['ResStatus'] = val
+                rec.set_val(val, 'ResStatus')
 
-    def _prepare_res_xml(self, fld_vals):
-        self.action = fld_vals.get('ResAction', ACTION_INSERT)
-        self._add_sihot_configs(fld_vals)
-        inner_xml = self.prepare_map_xml(fld_vals)
+    def _prepare_res_xml(self, rec):
+        self.action = rec.val('ResAction') or ACTION_INSERT
+        self._add_sihot_configs(rec)
+        inner_xml = self.prepare_map_xml(rec)
         if self.use_kernel_interface:
             if self.action == ACTION_INSERT:
                 self.beg_xml(operation_code='RESERVATION-CREATE')
@@ -1284,66 +1140,64 @@ class ResToSihot(FldMapXmlBuilder):
         self.cae.dprint("ResToSihot._prepare_res_xml() result: ", self.xml,
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-    def _sending_res_to_sihot(self, fld_vals):
-        self._prepare_res_xml(fld_vals)
+    def _sending_res_to_sihot(self, rec):
+        self._prepare_res_xml(rec)
 
-        err_msg, warn_msg = self._handle_error(fld_vals, self.send_to_server(response_parser=ResResponse(self.cae)))
+        err_msg, warn_msg = self._handle_error(rec, self.send_to_server(response_parser=ResResponse(self.cae)))
         return err_msg, warn_msg
 
-    def _handle_error(self, fld_vals, err_msg):
+    def _handle_error(self, rec, err_msg):
         warn_msg = ""
         if [frag for frag in self._warning_frags if frag in err_msg]:
-            warn_msg = self.res_id_desc(fld_vals, err_msg, separator="\n")
+            warn_msg = self.res_id_desc(rec, err_msg, separator="\n")
             self._warning_msgs += "\n\n" + warn_msg
             err_msg = ""
         elif err_msg:
-            assert fld_vals['ResGdsNo']
-            assert fld_vals['ResGdsNo'] not in self._gds_errors
-            self._gds_errors[fld_vals['ResGdsNo']] = (fld_vals, err_msg)
+            assert rec.val('ResGdsNo')
+            assert rec.val('ResGdsNo') not in self._gds_errors
+            self._gds_errors[rec.val('ResGdsNo')] = (rec, err_msg)
         return err_msg, warn_msg
 
-    def _ensure_clients_exist_and_updated(self, fld_vals, ensure_client_mode):
+    def _ensure_clients_exist_and_updated(self, rec, ensure_client_mode):
         if ensure_client_mode == ECM_DO_NOT_SEND_CLIENT:
             return ""
         err_msg = ""
 
         # check main Occupant
-        if fld_vals.get('AcId'):
+        if rec.val('AcId'):
             client = ClientToSihot(self.cae)
-            err_msg = client.send_client_to_sihot(fld_vals)
+            err_msg = client.send_client_to_sihot(rec)
             if not err_msg:
                 # get client/occupant objid directly from client.response
-                fld_vals['ShId'] = client.response.objid
+                rec.set_val(client.response.objid, 'ShId')
 
         # check also Orderer but exclude OTAs like TCAG/TCRENT with a MATCHCODE that is no normal Acumen-CDREF
-        if not err_msg and fld_vals.get('ResOrdererMc') and len(fld_vals['ResOrdererMc']) == 7:
+        if not err_msg and rec.val('ResOrdererMc') and len(rec.val('ResOrdererMc')) == 7:
             client = ClientToSihot(self.cae)
-            err_msg = client.send_client_to_sihot(fld_vals)
+            err_msg = client.send_client_to_sihot(rec)
             if not err_msg:
                 # get orderer objid directly from client.response
-                fld_vals['ResOrdererId'] = client.response.objid
+                rec.set_val(client.response.objid, 'ResOrdererId')
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
-    def send_res_to_sihot(self, fld_vals=None, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
-        if not fld_vals:
-            fld_vals = self.fields
-        gds_no = fld_vals.get('ResGdsNo', '')
+    def send_res_to_sihot(self, rec, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
+        gds_no = rec.val('ResGdsNo')
         if gds_no:
             if gds_no in self._gds_errors:    # prevent send of follow-up changes on erroneous bookings (w/ same GDS)
                 old_id = self.res_id_desc(*self._gds_errors[gds_no], separator="\n")
                 warn_msg = "\n\n" + "Synchronization skipped because GDS number {} had errors in previous send: {}" \
                            + "\nSkipped reservation: {}"
-                self._warning_msgs += warn_msg.format(gds_no, old_id, self.res_id_desc(fld_vals, "", separator="\n"))
+                self._warning_msgs += warn_msg.format(gds_no, old_id, self.res_id_desc(rec, "", separator="\n"))
                 return self._gds_errors[gds_no][1]    # return same error message
 
-            err_msg = self._ensure_clients_exist_and_updated(fld_vals, ensure_client_mode)
+            err_msg = self._ensure_clients_exist_and_updated(rec, ensure_client_mode)
             if not err_msg:
-                err_msg, warn_msg = self._sending_res_to_sihot(fld_vals)
+                err_msg, warn_msg = self._sending_res_to_sihot(rec)
                 if warn_msg:
                     self._warning_msgs += warn_msg
         else:
-            err_msg = self.res_id_desc(fld_vals, "ResToSihot.send_res_to_sihot(): sync with empty GDS number skipped")
+            err_msg = self.res_id_desc(rec, "ResToSihot.send_res_to_sihot(): sync with empty GDS number skipped")
 
         if err_msg:
             self.cae.dprint("ResToSihot.send_res_to_sihot() error: {}".format(err_msg))
@@ -1354,42 +1208,28 @@ class ResToSihot(FldMapXmlBuilder):
 
         return err_msg
 
-    def send_res_recs_to_sihot(self, break_on_error=True):
-        ret_msg = ""
-        for fld_vals in self.recs:
-            err_msg = self.send_res_to_sihot(fld_vals)
-            if err_msg:
-                if break_on_error:
-                    return err_msg  # BREAK/RETURN first error message
-                ret_msg += "\n" + err_msg
-        return ret_msg
+    @staticmethod
+    def res_id_label():
+        return "GDS/VOUCHER/CD/RO"
 
-    def res_id_label(self):
-        return "GDS/VOUCHER/CD/RO" + ("/RU/RUL" if self.debug_level else "")
+    @staticmethod
+    def res_id_values(rec):
+        return str(rec.val('ResGdsNo')) + \
+               "/" + str(rec.val('ResVoucherNo')) + \
+               "/" + str(rec.val('ResOrdererMc')) + "/" + str(rec.val('ResMktSegment'))
 
-    def res_id_values(self, fld_vals):
-        return str(fld_vals.get('SIHOT_GDSNO')) + \
-               "/" + str(fld_vals.get('RH_EXT_BOOK_REF')) + \
-               "/" + str(fld_vals.get('CD_CODE')) + "/" + str(fld_vals.get('RUL_SIHOT_RATE')) + \
-               ("/" + str(fld_vals.get('RUL_PRIMARY')) + "/" + str(fld_vals.get('RUL_CODE'))
-                if self.debug_level and 'RUL_PRIMARY' in fld_vals and 'RUL_CODE' in fld_vals
-                else "")
-
-    def res_id_desc(self, fld_vals, error_msg, separator="\n\n"):
+    def res_id_desc(self, rec, error_msg, separator="\n\n"):
         indent = 8
-        return fld_vals.get('ResAction', self.action) + " RESERVATION: " \
-            + (fld_vals['ResArrival'].strftime('%d-%m') if fld_vals.get('ResArrival') else "unknown") + ".." \
-            + (fld_vals['ResDeparture'].strftime('%d-%m-%y') if fld_vals.get('ResDeparture') else "unknown") \
-            + " in " + (fld_vals['ResRoomNo'] + "=" if fld_vals.get('ResRoomNo') else "") \
-            + str(fld_vals.get('ResRoomCat')) \
-            + ("!" + fld_vals['ResPriceCat']
-               if fld_vals.get('ResPriceCat') and fld_vals.get('ResPriceCat') != fld_vals.get('ResRoomCat') else "") \
-            + " at hotel " + str(fld_vals.get('ResHotelId')) \
-            + separator + " " * indent + self.res_id_label() + "==" + self.res_id_values(fld_vals) \
+        return self.action + " RESERVATION: " \
+            + (rec.val('ResArrival').strftime('%d-%m') if rec.val('ResArrival') else "unknown") + ".." \
+            + (rec.val('ResDeparture').strftime('%d-%m-%y') if rec.val('ResDeparture') else "unknown") \
+            + " in " + (rec.val('ResRoomNo') + "=" if rec.val('ResRoomNo') else "") + rec.val('ResRoomCat') \
+            + ("!" + rec.val('ResPriceCat')
+               if rec.val('ResPriceCat') and rec.val('ResPriceCat') != rec.val('ResRoomCat') else "") \
+            + " at hotel " + rec.val('ResHotelId') \
+            + separator + " " * indent + self.res_id_label() + "==" + self.res_id_values(rec) \
             + (separator + "\n".join(wrap("ERROR: " + _strip_err_msg(error_msg), subsequent_indent=" " * indent))
-               if error_msg else "") \
-            + (separator + "\n".join(wrap("TRAIL: " + fld_vals['RUL_CHANGES'], subsequent_indent=" " * indent))
-               if fld_vals.get('RUL_CHANGES') else "")
+               if error_msg else "")
 
     def get_warnings(self):
         return self._warning_msgs + "\n\nEnd_Of_Message\n" if self._warning_msgs else ""
@@ -1533,8 +1373,8 @@ class ResSender(ResToSihot):
 
         optional fields:
             ResOrdererId (alternatively usable instead of matchcode value ResOrdererMc).
-            ResAdult1Surname and ResAdult1Forename (surname and firstname)
-            ResAdult2Surname and ResAdult2Forename ( ... )
+            ResPersons1Surname and ResPersons1Forename (surname and firstname)
+            ResPersons2Surname and ResPersons2Forename ( ... )
         optional auto-populated fields (see default_values dict underneath).
         """
         default_values = dict(ResStatus='1',
@@ -1570,8 +1410,7 @@ class ResSender(ResToSihot):
                 err = ""
             elif 'setDataRoom not available!' in err:  # was: 'A_Persons::setDataRoom not available!'
                 err = "Apartment {} occupied between {} and {} - created GDS-No {} for manual allocation." \
-                                .format(rec['ResRoomNo'], rec['ResArrival'].strftime('%d-%m-%Y'),
-                                        rec['ResDeparture'].strftime('%d-%m-%Y'), rec['ResGdsNo']) \
+                    .format(rec.val('ResRoomNo'), rec.val('ResArrival'), rec.val('ResDeparture'), rec.val('ResGdsNo')) \
                       + (" Original error: " + err if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
         elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
             msg = "Sent res: " + str(rec)

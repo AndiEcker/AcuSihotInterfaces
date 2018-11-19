@@ -8,7 +8,7 @@ from ae_notification import add_notification_options, init_notification
 from acif import add_ac_options
 from sxmlif import AvailCatInfo
 from sfif import add_sf_options, prepare_connection, ensure_long_id, obj_from_id, DEF_CLIENT_OBJ, DETERMINE_CLIENT_OBJ
-from shif import (add_sh_options, print_sh_options, pax_count, gds_number,
+from shif import (add_sh_options, print_sh_options, pax_count,
                   gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
                   GuestSearch, ClientToSihot, ResSearch, ResFetch, ResBulkFetcher, SH_DATE_FORMAT)
 
@@ -1804,7 +1804,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         chk_values = dict(rgr_ho_fk=ho_id)
         res_id = shd.val('ResNo')
         sub_id = shd.val('ResSubNo')
-        gds_no = gds_number(shd)
+        gds_no = shd.val('ResGdsNo')
         err_pre = "sh_res_change_to_ass() for res-no {}/{}@{} and GDS-No. {}: ".format(res_id, sub_id, ho_id, gds_no)
         if ho_id and res_id and sub_id:
             chk_values.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
@@ -1891,8 +1891,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                             rgc_flight_dep_comment=shd.val('ResPersons', arri, 'PERSON.PICKUP-COMMENT-DEPARTURE'),
                             rgc_flight_dep_time=shd.val('ResPersons', arri, 'PERSON.PICKUP-TIME-DEPARTURE'),
                             # occupation data
-                            rgc_pers_type=shd.val('ResPersons', arri, 'Type'),
-                            rgc_sh_pack=shd.val('ResBoard'),    # val('ResPersons', arri, 'PERSON.R'),
+                            rgc_pers_type=shd.val('ResPersons', arri, 'GuestType'),
+                            rgc_sh_pack=shd.val('ResBoard'),    # val('ResPersons', arri, 'PERSON.PERS-RATE.R'),
                             rgc_room_id=shd.val('ResRoomNo'),   # val('ResPersons', arri, 'PERSON.RN'),
                             )
                 pers_dob = shd.val('ResPersons', arri, 'DOB')

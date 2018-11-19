@@ -208,10 +208,10 @@ Field Name | Field Type | Description | Example Values |
 | ResPersons | List | List of Occupants | ((Smith, John, 24-12-1962, ...), (Knopf, Jim, 27-01-1955, ...)) |
 | ResPersons<n>AcId | String | Sihot Occupant Matchcode | E123456 |
 | ResPersons<n>DOB | Date | Birthdate of n-th Occupant | 24-12-1962 |
-| ResPersons<n>Forename | String | Firstname of n-th Occupant | John | 
-| ResPersons<n>ShId | String | Sihot Occupant Object Id | 1234567 |
-| ResPersons<n>Surname | String | Lastname of n-th Occupant | Smith |
-| ResPersons<n>Type | String | Person type (adult, children, baby) | '1B', '2B' | 
+| ResPersons<n>Forename | String | Firstname of n-th occupant | John |
+| ResPersons<n>GuestType | String | GuestType of n-th occupant | '1A', '2B' |
+| ResPersons<n>ShId | String | Sihot occupant Object Id | 1234567 |
+| ResPersons<n>Surname | String | Lastname of n-th occupant | Smith |
 | ResPriceCat | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
 | ResSfId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
 | ResSubNo + | String | Sihot Reservation Sub-number | '1' |
@@ -261,10 +261,10 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | AssId | - | AssCache_Id__pc | - | cl_pk |
 | City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
 | Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |
-| Country | CD_COREF | PersonMailingCountry, Country__pc | T-COUNTRY-CODE | rgc_country |
+| Country | CD_COREF | PersonMailingCountry, Country__pc | T-COUNTRY-CODE, COUNTRY | rgc_country |
 | Currency | CD_CUREF | CurrencyIsoCode | T-STANDARD-CURRENCY | - |
-| DOB | CD_DOB1 | DOB1__pc, KM_DOB__pc | D-BIRTHDAY | rgc_dob |
-| Email | CD_EMAIL | PersonEmail | EMAIL-1 | cl_email, rgc_email |
+| DOB | CD_DOB1 | DOB1__pc, KM_DOB__pc | D-BIRTHDAY, DOB | rgc_dob |
+| Email | CD_EMAIL | PersonEmail | EMAIL-1, EMAIL | cl_email, rgc_email |
 | EmailB | - | - | EMAIL-2 | - |
 | ExtRefs | T_CR | - | EXTID | external_refs |
 | ExtRefs<n>Type | CR_TYPE+CD_RCI_REF+CD_SF_ID1 | - | EXTID.TYPE | er_type | 
@@ -272,9 +272,9 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | Fax | CD_FAX | Fax | FAX-1 | - |
 | Forename | CD_FNAM1 | FirstName | NAME-2 | rgc_firstname |
 | GuestType | - | - | T-GUEST | - |
-| HomePhone | CD_HTEL1 | PersonHomePhone | PHONE-1 | cl_phone, rgc_phone |
-| Language | CD_LGREF | Language__pc | T-LANGUAGE | rgc_language |
-| MobilePhone | CD_MOBILE1 | PersonMobilePhone | MOBIL-1 | - |
+| HomePhone | CD_HTEL1 | PersonHomePhone | PHONE-1, PHONE | cl_phone, rgc_phone |
+| Language | CD_LGREF | Language__pc | T-LANGUAGE, LANG | rgc_language |
+| MobilePhone | CD_MOBILE1 | PersonMobilePhone | MOBIL-1, MOBIL | - |
 | MobilePhoneB | - | - | MOBIL-2 | - |
 | Name | - | - | - | cl_name |
 | Nationality | CD_LGREF | Nationality__pc | T-NATION | - |
@@ -316,9 +316,9 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResPersons<n>AcId | CD_CODE | - | PERSON.MATCHCODE | rgc_occup_cl_fk->cl_ac_id |
 | ResPersons<n>DOB | CD_DOB1, CD_DOB2 | - | PERSON.NAME | rgc_dob |
 | ResPersons<n>Forename | CD_FNAM1, CD_FNAM2 | - | PERSON.NAME2 | rgc_firstname |
+| ResPersons<n>GuestType | - | - | PERSON.PERS-TYPE | rgc_pers_type |
 | ResPersons<n>ShId | CD_SIHOT_OBJID | - | PERSON.GUEST-ID | rgc_occup_cl_fk->cl_sh_id |
 | ResPersons<n>Surname | CD_SNAM1, CD_SNAM2 | - | PERSON.NAME | rgc_surname |
-| ResPersons<n>Type | - | - | PERSON.PERS-TYPE | rgc_pers_type |
 | ResPriceCat | SH_PRICE_CAT | - | PCAT | - |
 | ResRateSegment | RUL_SIHOT_RATE | - | RESERVATION.RATE-SEGMENT | rgr_room_rate |
 | ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
@@ -352,7 +352,7 @@ the correct functionality of the Salesforce, Acumen and Sihot servers and interf
 
 ### AssCacheSync Application
 
-AssCacheSync is a command line tool for to synchronize and verify data between our three main systems (Acumen, Salesforce
+AssCacheSync is a command line tool for to synchronize and verify data between our three systems (Acumen, Salesforce
 and Sihot). The actions performed by this tool get specified by the [command line options --pull, --push and --verify](#action-command-line-options),
 which can be specify multiple times. The [command line options --filterRecords and --filterFields](#filter-command-line-options) allow to filter the
 processed data records and fields. The way how two data records will be associated for to be verified or synchronized

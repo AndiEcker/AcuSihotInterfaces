@@ -1,5 +1,40 @@
-from ae_sys_data import Record, Field
-from shif import *  # guest_data, elem_path_join, elem_value, ...
+# from ae_sys_data import Record, Field
+from shif import *
+
+
+class TestFldMapXmlParser:
+    ELEM_MAP = (
+        ('SYS_FNA', 'fnA'),
+        ('SYS_FNB/', ),
+        ('SYS_FNB.SF-A', ('fnB', 0, 'sfnA')),
+        ('SYS_FNB.SF-B', ('fnB', 0, 'sfnB')),
+        ('/SYS_FNB', ),
+    )
+
+    XML = "<root>" \
+          "<SYS_FNA>fnAV</SYS_FNA>" \
+          "<UNKNOWN/>" \
+          "<SYS_FNB><SF-A>sfnAV0</SF-A></SYS_FNB>" \
+          "<SYS_FNB><SF-A>sfnAV1</SF-A><SF-B>sfnBV1</SF-B></SYS_FNB>" \
+          "<SYS_FNB><invali>xx</invali><SF-B>sfnBV2</SF-B></SYS_FNB>" \
+          "</root>"
+
+    def test_parse(self, console_app_env):
+        mp = FldMapXmlParser(console_app_env, self.ELEM_MAP)
+        assert len(mp.rec) == 2
+        assert mp.elem_fld_map['SYS_FNA'].val() == ''
+        assert mp.rec['fnA'].root_idx(system=SDI_SH) == ('fnA', )
+        assert mp.rec['fnB0sfnA'].root_idx(system=SDI_SH) == ('fnB', 0, 'sfnA')
+        assert mp.rec[('fnB', 0, 'sfnB')].root_idx(system=SDI_SH) == ('fnB', 0, 'sfnB')
+
+        mp.parse_xml(self.XML)
+        assert mp.rec['fnA'].val() == 'fnAV'
+        assert mp.rec.val('fnB', 0, 'sfnA', system=SDI_SH) == 'sfnAV0'
+        assert mp.rec.val('fnB', 0, 'sfnB') == ''       # not None because created as template field
+        assert mp.rec.val('fnB', 1, 'sfnA') == 'sfnAV1'
+        assert mp.rec.val('fnB', 1, 'sfnB') == 'sfnBV1'
+        assert mp.rec.val('fnB', 2, 'sfnA') is None
+        assert mp.rec.val('fnB', 2, 'sfnB') == 'sfnBV2'
 
 
 class TestGuestData:
@@ -41,13 +76,9 @@ class TestElemHelpers:
         assert pax_count(Record(fields={'ResAdults': pxc})) == 1
         assert pax_count(Record(fields={'ResChildren': chc})) == 1
         assert pax_count(Record(fields={'ResAdults': pxc, 'ResChildren': chc})) == 2
-        assert pax_count(Record(fields={'ResAdults': pxn, 'ResChildren': che})) == 2
+        assert pax_count(Record(fields={'ResAdults': pxn, 'ResChildren': che})) == 1
         assert pax_count(Record(fields={'ResAdults': pxn, 'ResChildren': chn})) == 2
         assert pax_count(Record(fields={'ResAdults': pxc, 'ResChildren': chn})) == 2
-
-    def test_gds_no(self):
-        assert gds_number(Record()) is None
-        assert gds_number(Record({'ResGdsNo': Field().set_name('GDSNO', system=SDI_SH).set_val('123abc')})) == '123abc'
 
     def test_date_range_chunks(self):
         d1 = datetime.date(2018, 6, 1)
@@ -136,18 +167,20 @@ class TestResSender:
                     ResMktSegment='TC', SIHOT_MKT_SEG='TC', ResRateSegment='TC',
                     ResAccount=1,
                     ResSource='A', ResMktGroup='RS',
-                    ResAdults=1, ResChildren=1,
-                    ResAdult1Surname='Tester', ResAdult1Forename='TestY', ResAdult1DOB=today - 100 * wk1,
-                    ResAdult2Surname='', ResAdult2Forename='',
-                    ResChild1Surname='Tester', ResChild1Forename='Chilly', ResChild1DOB=today - 10 * wk1,
-                    ResChild2Surname='', ResChild2Forename='',
+                    ResAdults=2, ResChildren=2,
+                    ResPersons1Surname='Tester', ResPersons1Forename='TestY', ResPersons1DOB=today - 1000 * wk1,
+                    ResPersons2Surname='', ResPersons2Forename='',
+                    ResPersons3Surname='Tester', ResPersons3Forename='Chilly', ResPersons3DOB=today - 100 * wk1,
+                    ResPersons3GuestType='2B',
+                    ResPersons4Surname='', ResPersons4Forename='', ResPersons4GuestType='2B',
                     ResFlightArrComment='Flight1234',
                     ResAllotmentNo=123456)
-        err, msg = rs.send_row(crow)
+        rec = Record(fields=crow)
+        err, msg = rs.send_rec(rec)
         if "setDataRoom not available!" in err:     # no error only on first run after TEST replication
-            crow.pop('ResRoomNo')              # .. so on n. run simply remove room number and then retry
-            rs.wipe_gds_errors()         # .. and also remove send locking by wiping GDS errors for this GDS
-            err, msg = rs.send_row(crow)
+            crow.pop('ResRoomNo')           # .. so on n. run simply remove room number and then retry
+            rs.wipe_gds_errors()            # .. and also remove send locking by wiping GDS errors for this GDS
+            err, msg = rs.send_rec(Record(fields=crow))
 
         assert not err
         assert ho_id == rs.response.id
@@ -171,7 +204,7 @@ class TestResSender:
         rs = ResSender(console_app_env)
         crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
                     ResOrdererMc='TCRENT', ResGdsNo=gdsno)
-        err, msg = rs.send_row(crow)
+        err, msg = rs.send_rec(Record(fields=crow))
 
         assert not err
         assert ho_id == rs.response.id
@@ -195,7 +228,7 @@ class TestResSender:
         rs = ResSender(console_app_env)
         crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
                     ResOrdererId='27', ResGdsNo=gdsno)
-        err, msg = rs.send_row(crow)
+        err, msg = rs.send_rec(Record(fields=crow))
 
         assert not err
         assert ho_id == rs.response.id
@@ -267,14 +300,10 @@ class TestGuestFromSihot:
     def test_elem_map(self, console_app_env):
         xml_parser = GuestFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.elem_fld_map['MATCHCODE'].val() == 'test2'
-        assert xml_parser.acu_fld_vals['AcId'] == 'test2'
-        assert xml_parser.elem_fld_map['CITY'].val() == 'city'
-        assert xml_parser.acu_fld_vals['City'] == 'city'
-
-        # cae.dprint("--COUNTRY-fldValToAcu/acu_fld_vals: ",
-        # xml_guest.elem_fld_map['COUNTRY']['fldValToAcu'],
-        # xml_guest.acu_fld_vals[xml_guest.elem_fld_map['COUNTRY']['fldName']])
+        assert xml_parser.rec.val('AcId') == 'test2'
+        assert xml_parser.rec.val('MATCHCODE') == 'test2'
+        assert xml_parser.rec.val('City') == 'city'
+        assert xml_parser.rec.val('CITY') == 'city'
 
 
 class TestResFromSihot:
@@ -445,12 +474,17 @@ class TestResFromSihot:
     def test_fld_map_big(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
+        assert xml_parser.res_list.val(0, 'ResOrdererMc') == 'test2'
         assert xml_parser.res_list[0]['ResOrdererMc'].val() == 'test2'
+        assert xml_parser.res_list.val(0, 'RESERVATION.MATCHCODE') == 'test2'
         assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
+        assert xml_parser.res_list.val(0, 'AcId') == 'PersonAcId'
         assert xml_parser.res_list[0]['AcId'].val() == 'PersonAcId'
+        assert xml_parser.res_list.val(0, 'PERSON.MATCHCODE') == 'PersonAcId'
         assert xml_parser.res_list[0]['PERSON.MATCHCODE'].val() == 'PersonAcId'
-        # assert xml_parser.res_list[0]['MATCHCODE']['elemListVal'] == ['PersonAcId', 'GUBSE', 'test2']
+        assert xml_parser.res_list.val(0, 'ResGdsNo') == '1234567890ABC'
         assert xml_parser.res_list[0]['ResGdsNo'].val() == '1234567890ABC'
+        assert xml_parser.res_list.val(0, 'GDSNO') == '1234567890ABC'
         assert xml_parser.res_list[0]['GDSNO'].val() == '1234567890ABC'
 
 
@@ -460,7 +494,7 @@ class TestClientToSihot:
         cli_to = ClientToSihot(console_app_env)
         fld_vals = dict(AcId='T111222', Title='1', GuestType='1', Country='AT', Language='DE',
                         ExtRefs='RCI=123,XXX=456')
-        err_msg = cli_to.send_client_to_sihot(fld_vals=fld_vals)
+        err_msg = cli_to.send_client_to_sihot(Record(fields=fld_vals))
         assert not err_msg
         assert cli_to.response.objid
 
@@ -469,10 +503,97 @@ class TestResToSihot:
 
     def test_basic_build_and_send(self, console_app_env):
         res_to = ResToSihot(console_app_env)
-        fld_vals = dict(ResHotelId='1', ResGdsNo='TEST-123456789', ResOrdererMc='E578973',
+        fld_vals = dict(ResOrdererMc='E578973',
+                        ResHotelId='1', ResGdsNo='TEST-123456789',
                         ResArrival=datetime.date(year=2019, month=12, day=24),
                         ResDeparture=datetime.date(year=2019, month=12, day=30),
                         ResAdults=1, ResChildren=1, ResRoomCat='1STDP',
                         )
-        err_msg = res_to.send_res_to_sihot(fld_vals=fld_vals, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
+        err_msg = res_to.send_res_to_sihot(rec=Record(fields=fld_vals), ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
         assert not err_msg
+
+
+class TestGuestSearch:
+    def test_get_guest_with_test_client(self, guest_search, create_test_guest):
+        ret = guest_search.get_guest(create_test_guest.objid)
+        assert guest_search.response.objid == create_test_guest.objid     # OBJID passed only to response (ret is empty)
+        # also MATCHCODE element is in response (and empty in ret): assert ret['MATCHCODE']==create_test_guest.matchcode
+        assert guest_search.response.matchcode == create_test_guest.matchcode
+        assert guest_search.response.objid == create_test_guest.objid
+        assert isinstance(ret, dict)
+        assert ret['NAME-1'] == create_test_guest.surname
+        assert ret['NAME-2'] == create_test_guest.forename
+        assert ret['T-GUEST'] == create_test_guest.guest_type
+
+    def test_get_guest_with_10_ext_refs(self, guest_search):
+        objid = guest_search.get_objid_by_matchcode('E396693')
+        assert objid
+        ret = guest_search.get_guest(objid)
+        assert isinstance(ret, dict)
+        assert ret['MATCH-ADM'] == '4806-00208'
+        if ret['COMMENT']:
+            assert 'RCI=1442-11521' in ret['COMMENT']
+            assert 'RCI=5445-12771' in ret['COMMENT']
+            assert 'RCI=5-207931' in ret['COMMENT']     # RCIP got remapped to RCI
+
+    def test_get_guest_nos_by_matchcode(self, guest_search):
+        guest_nos = guest_search.get_guest_nos_by_matchcode('OTS')
+        assert '31' in guest_nos
+        guest_nos = guest_search.get_guest_nos_by_matchcode('SF')
+        assert '62' in guest_nos
+        guest_nos = guest_search.get_guest_nos_by_matchcode('TCAG')
+        assert '12' in guest_nos
+        guest_nos = guest_search.get_guest_nos_by_matchcode('TCRENT')
+        assert '19' in guest_nos
+
+    def test_get_objid_by_guest_no(self, guest_search):
+        obj_id1 = guest_search.get_objid_by_guest_no(31)
+        obj_id2 = guest_search.get_objid_by_matchcode('OTS')
+        assert obj_id1 == obj_id2
+        obj_id1 = guest_search.get_objid_by_guest_no(62)
+        obj_id2 = guest_search.get_objid_by_matchcode('SF')
+        assert obj_id1 == obj_id2
+        obj_id1 = guest_search.get_objid_by_guest_no(12)
+        obj_id2 = guest_search.get_objid_by_matchcode('TCAG')
+        assert obj_id1 == obj_id2
+        obj_id1 = guest_search.get_objid_by_guest_no('19')
+        obj_id2 = guest_search.get_objid_by_matchcode('TCRENT')
+        assert obj_id1 == obj_id2
+
+    def test_get_objids_by_guest_names(self, guest_search):
+        obj_ids = guest_search.get_objids_by_guest_names('OTS Open Travel Services AG', '')
+        obj_id = guest_search.get_objid_by_matchcode('OTS')
+        assert obj_id in obj_ids
+        obj_ids = guest_search.get_objids_by_guest_names('Sumar Ferdir', '')
+        obj_id = guest_search.get_objid_by_matchcode('SF')
+        assert obj_id in obj_ids
+        obj_ids = guest_search.get_objids_by_guest_names('Thomas Cook AG', '')
+        obj_id = guest_search.get_objid_by_matchcode('TCAG')
+        assert obj_id in obj_ids
+        obj_ids = guest_search.get_objids_by_guest_names('Thomas Cook Northern Europe', '')
+        obj_id = guest_search.get_objid_by_matchcode('TCRENT')
+        assert obj_id in obj_ids
+
+    def test_get_objids_by_email(self, guest_search):
+        obj_ids = guest_search.get_objids_by_email('info@opentravelservice.com')
+        obj_id = guest_search.get_objid_by_matchcode('OTS')
+        assert obj_id in obj_ids
+        obj_id = guest_search.get_objid_by_matchcode('SF')
+        assert obj_id in obj_ids
+
+    def test_get_objid_by_matchcode(self, guest_search):
+        assert guest_search.get_objid_by_matchcode('OTS') == '69'
+        assert guest_search.get_objid_by_matchcode('SF') == '100'
+        assert guest_search.get_objid_by_matchcode('TCAG') == '20'
+        assert guest_search.get_objid_by_matchcode('TCRENT') == '27'
+
+    def test_get_objid_by_matchcode2(self, guest_search, create_test_guest):
+        ret = guest_search.get_objid_by_matchcode(create_test_guest.matchcode)
+        assert ret == create_test_guest.objid
+
+    def test_search_agencies(self, guest_search):
+        ags = guest_search.search_agencies()
+        assert [_ for _ in ags if _['MATCHCODE'] == 'OTS' and _['OBJID'] == '69']
+        assert [_ for _ in ags if _['MATCHCODE'] == 'SF' and _['OBJID'] == '100']
+        assert [_ for _ in ags if _['MATCHCODE'] == 'TCAG' and _['OBJID'] == '20']
+        assert [_ for _ in ags if _['MATCHCODE'] == 'TCRENT' and _['OBJID'] == '27']

@@ -6,6 +6,7 @@
     0.2     refactored for to upload to SF as Account/Lead all yesterday arrivals (before: only
             Rentals), implemented email/phone validation options and adapted for new SF instance, also renamed
             module from ShSfContactMigration to ShSfClientMigration.
+    0.3     only roughly refactored to use ae_sys_data - NOT TESTED.
 """
 from traceback import print_exc
 import pprint
@@ -15,11 +16,11 @@ from copy import deepcopy
 from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
 from ae_client_validation import add_validation_options, init_validation
 from ae_notification import add_notification_options, init_notification
-from shif import ResBulkFetcher, elem_value, hotel_and_res_id
+from shif import ResBulkFetcher, hotel_and_res_id
 from sfif import add_sf_options
 from ass_sys_data import correct_email, correct_phone, AssSysData
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 
 PP_DEF_WIDTH = 120
@@ -189,11 +190,11 @@ def prepare_mig_data(shd, arri, sh_res_id, email_addr, phone_no, snam, fnam, src
 
     sfd['RecordType.DeveloperName'] = None  # will be populated after client search against SF
     # FirstName or LastName or Name (combined field - not works with UPDATE/CREATE) or Full_Name__c (Formula)
-    sfd['FirstName'] = fnam     # elem_value(shd, 'NAME2', arri)
+    sfd['FirstName'] = fnam
     sfd['LastName'] = snam
-    sfd['Birthdate'] = elem_value(shd, 'DOB', arri)
+    sfd['Birthdate'] = shd.val(arri, 'DOB')
     # Language__c (Picklist) or Spoken_Languages__c (Picklist, multi-select) ?!?!?
-    lc_iso2 = elem_value(shd, 'LANG', arri)
+    lc_iso2 = shd.val(arri, 'Language')
     sfd['Language'] = cae.get_config(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
     # Market_Source__c or Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000)
     # .. or LeadSource (Picklist) or Source__c (Picklist) or HERE_HOW__c (Picklist) or Marketing_Source__c (Lead) ?!?!?
@@ -202,23 +203,23 @@ def prepare_mig_data(shd, arri, sh_res_id, email_addr, phone_no, snam, fnam, src
     # Phone or HomePhone or MobilePhone or Work_Phone__c (or Phone or OtherPhone or Phone2__c or AssistantPhone) ?!?!?
     sfd['Phone'] = phone_no
     # Mobile phone number is not provided by Sihot WEB RES-SEARCH
-    # sfd['MobilePhone'] = elem_value(shd, 'MOBIL', arri)
+    # sfd['MobilePhone'] = shd.val(arri, 'MobilePhone')
     # Address_1__c or AddressStreet or MailingStreet
-    sfd['Street'] = elem_value(shd, 'STREET', arri)
+    sfd['Street'] = shd.val(arri, 'Street')
     # MailingCity or City (Text, 50) or AddressCity or Address_2__c (Text, 80)
-    sfd['City'] = elem_value(shd, 'CITY', arri)
+    sfd['City'] = shd.val(arri, 'City')
     # Country__c/code (Picklist) or AddressCountry or Address_3__c (Text, 100) or MailingCountry
     # .. and remap, e.g. Great Britain need to be UK not GB (ISO2).
     # .. Also remove extra characters, because ES has sometimes suffix w/ two numbers
-    cc_iso2 = elem_value(shd, 'COUNTRY', arri, default_value="")[:2]
+    cc_iso2 = shd.val(arri, 'Country')[:2]
     sfd['Country'] = cae.get_config(cc_iso2, 'CountryCodes', default_value=cc_iso2)
     # Booking__c (Long Text Area, 32768) or use field Previous_Arrival_Info__c (Text, 100) ?!?!?
     sfd['ArrivalInfo'] = (""
-                          + " Arr=" + elem_value(shd, 'ARR', arri, default_value='')
-                          + " Dep=" + elem_value(shd, 'DEP', arri, default_value='')
+                          + " Arr=" + str(shd.val(arri, 'ResArrival'))
+                          + " Dep=" + str(shd.val(arri, 'ResDeparture'))
                           + " Hotel=" + str(hot_id)
-                          + " Room=" + elem_value(shd, 'RN', arri, default_value='')
-                          + " GdsNo=" + elem_value(shd, 'GDSNO', arri, default_value='')
+                          + " Room=" + shd.val(arri, 'ResRoomNo')
+                          + " GdsNo=" + shd.val(arri, 'ResGdsNo')
                           + " ResId=" + sh_rl_id
                           ).strip()
 
@@ -269,22 +270,21 @@ try:
         if not arr_indexes:
             add_log_msg("Skipping res-id {} with invalid/empty {}: {}"
                         .format(res_id, "email address" if filter_email[:5] == 'valid' else "surname",
-                                elem_value(row_dict, 'EMAIL' if filter_email[:5] == 'valid' else 'NAME', verbose=True)))
+                                row_dict.val('Email' if filter_email[:5] == 'valid' else 'Surname')))
             continue
+        mkt_group = row_dict.val('ResMktGroup')
         for arr_index in arr_indexes:
             mail_changes = list()
-            email, mail_changed = correct_email(elem_value(row_dict, 'EMAIL', arr_index),
-                                                changed=False, removed=mail_changes)
+            email, mail_changed = correct_email(row_dict.val(arr_index, 'Email'), changed=False, removed=mail_changes)
             phone_changes = list()
-            phone, phone_changed = correct_phone(elem_value(row_dict, 'PHONE', arr_index),
+            phone, phone_changed = correct_phone(row_dict.val(arr_index, 'HomePhone'),
                                                  changed=False, removed=phone_changes)
-            surname = elem_value(row_dict, 'NAME', arr_index)
-            forename = elem_value(row_dict, 'NAME2', arr_index)
-            mkt_src = elem_value(row_dict, 'MARKETCODE', arr_index)
+            surname = row_dict.val(arr_index, 'Surname')
+            forename = row_dict.val(arr_index, 'Forename')
+            mkt_src = row_dict.val('ResMktSegment')
             sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email, phone, surname, forename, mkt_src, hotel_id)
 
-            res_type = elem_value(row_dict, 'RT', arr_index)
-            mkt_group = elem_value(row_dict, 'CHANNEL', arr_index)
+            res_type = row_dict.val('ResStatus')
 
             if mail_changed:
                 ext_sf_dict(sf_dict, "email corrected, removed 'index:char'=" + str(mail_changes), skip_it=False)
@@ -295,7 +295,7 @@ try:
             if phone_changed:
                 ext_sf_dict(sf_dict, "phone corrected, removed 'index:char'=" + str(phone_changes), skip_it=False)
             if phone_validator and phone:
-                err_msg = phone_validator.validate(phone, country_code=elem_value(row_dict, 'COUNTRY', arr_index))
+                err_msg = phone_validator.validate(phone, country_code=row_dict.val(arr_index, 'Country'))
                 if err_msg:
                     ext_sf_dict(sf_dict, "phone {} invalid, err={}".format(phone, err_msg), skip_it=False)
             if not hotel_id or hotel_id == '999':
@@ -322,7 +322,7 @@ try:
                 ext_sf_dict(sf_dict, "disallowed market source {}".format(mkt_src))
             if rbf.allowed_mkt_grp and mkt_group not in rbf.allowed_mkt_grp:
                 ext_sf_dict(sf_dict, "empty/invalid res. group/channel {} (market-source={})"
-                            .format(mkt_group, elem_value(row_dict, 'MARKETCODE')),
+                            .format(mkt_group, row_dict.val('ResMktSegment')),
                             skip_it=False)  # only warn on missing channel, so no: skip_it = True
 
             if sf_dict[AI_SCORE] >= 0.0:
