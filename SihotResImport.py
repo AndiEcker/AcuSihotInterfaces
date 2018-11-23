@@ -263,11 +263,11 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResAdults' if is_adult else 'ResChildren'] += 1
         else:
             rows.append(row)
+            row['ShId'] = conf_data.ro_agency_objid('TK')
+            row['AcId'] = conf_data.ro_agency_matchcode('TK')
             row['ResGdsNo'] = TCI_GDSNO_PREFIX + curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
             row['ResStatus'] = 'S' if curr_cols[TCI_BOOK_TYPE] == 'CNL' else '1'
             row['ResHotelId'] = '1' if curr_cols[TCI_RESORT] == 'BEVE' else '4'  # '1'=BHC, '4'=PBC
-            row['ResOrdererId'] = conf_data.ro_agency_objid('TK')
-            row['ResOrdererMc'] = conf_data.ro_agency_matchcode('TK')
             row['ResVoucherNo'] = curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
             row['ResBooked'] = curr_cols[TCI_BOOK_DATE]
             row['ResAllotmentNo'] = 11 if curr_cols[TCI_RESORT] == 'BEVE' else 12
@@ -461,11 +461,11 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                     row['ResLongNote'] += '|CR|' + txt
         else:
             rows.append(row)
+            row['ShId'] = conf_data.ro_agency_objid('BK')
+            row['AcId'] = conf_data.ro_agency_matchcode('BK')
             row['ResGdsNo'] = BKC_GDSNO_PREFIX + ext_key
             row['ResStatus'] = 'S' if curr_cols[BKC_CANCEL_DATE] else '1'
             row['ResHotelId'] = resort  # 1=BHC, 4=PBC
-            row['ResOrdererId'] = conf_data.ro_agency_objid('BK')
-            row['ResOrdererMc'] = conf_data.ro_agency_matchcode('BK')
             row['ResVoucherNo'] = curr_cols[BKC_BOOK_REF]
             row['ResBooked'] = curr_cols[BKC_BOOK_DATE]
             row['ResGroupNo'] = (ext_key + ' ' if sub_res_id else '') + acu_user[:2].lower()
@@ -717,8 +717,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
         cl_own_idx = curr_cols[RC_OWN_CLIENTS_IDX] if curr_cols[RC_OWN_CLIENTS_IDX] > -1 else cl_occ_idx
         own_rci_ref = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
-        row['ResOrdererId'] = conf_data.cl_sh_id_by_idx(cl_own_idx)
-        row['ResOrdererMc'] = conf_data.cl_ac_id_by_idx(cl_own_idx)
+        row['ShId'] = conf_data.cl_sh_id_by_idx(cl_own_idx)
+        row['AcId'] = conf_data.cl_ac_id_by_idx(cl_own_idx)
 
         is_guest = curr_cols[RCI_IS_GUEST] == 'Y'
         if is_guest:                                # guest bookings doesn't provide RCI client Id
@@ -726,7 +726,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 own_name = curr_cols[RCI_CLIENT_SURNAME] + ', ' + curr_cols[RCI_CLIENT_FORENAME]
             else:
                 own_name = '(unknown)'
-            comments.append('GuestOf=' + own_rci_ref + '=' + row['ResOrdererMc'] + ':' + own_name)
+            comments.append('GuestOf=' + own_rci_ref + '=' + row['AcId'] + ':' + own_name)
 
             comments.append('ExcMail=' + curr_cols[RCI_CLIENT_EMAIL])
             row['ShId'] = None
@@ -886,8 +886,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResRoomNo'] = conf_data.ri_allocated_room(rno, row['ResArrival'])
 
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
-        row['ResOrdererId'] = row['ShId'] = conf_data.cl_sh_id_by_idx(cl_occ_idx)
-        row['ResOrdererMc'] = row['AcId'] = conf_data.cl_ac_id_by_idx(cl_occ_idx)
+        row['ShId'] = conf_data.cl_sh_id_by_idx(cl_occ_idx)
+        row['AcId'] = conf_data.cl_ac_id_by_idx(cl_occ_idx)
 
         is_guest = curr_cols[RCIP_IS_GUEST] == 'Y'
         if is_guest:

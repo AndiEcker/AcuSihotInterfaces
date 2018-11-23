@@ -9,7 +9,7 @@
     CSV file into the folder U:/transfer/staysformarketing/.
     
     0.1     first beta.
-    0.2     roughly refactored to use Record/Field from ae_sys_data - NOT TESTED.
+    0.2     roughly refactored to use ae_sys_data - NOT TESTED.
 """
 import os
 import datetime

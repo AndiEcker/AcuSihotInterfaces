@@ -8,7 +8,7 @@ import pprint
 
 from sys_data_ids import SDI_SH
 from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, FAD_FROM, FAD_ONTO, \
-    Field, Record, Records, Value
+    Record, Records, Values, Value, current_index, set_current_index, field_name_idx_path
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder, elem_to_attr,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
@@ -82,7 +82,9 @@ MAP_KERNEL_CLIENT = \
          lambda f: f.ina(ACTION_SEARCH)),
         ('ADD-DATA/', None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('T-PERSON-GROUP', None, "1A"),
+        ('T-PERSON-GROUP', None,
+         None,
+         '1A'),
         ('D-BIRTHDAY', 'DOB',
          None,
          None, lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
@@ -140,20 +142,23 @@ MAP_WEB_RES = \
         ('RESERVATION/', ),
         # ### main reservation info: orderer, status, external booking references, room/price category, ...
         # ('RESERVATION' + ELEM_PATH_SEP + 'RES-HOTEL', 'ResHotelId'),
-        ('RESERVATION' + ELEM_PATH_SEP + 'RES-NR', 'ResNo'),
-        ('RESERVATION' + ELEM_PATH_SEP + 'SUB-NR', 'ResSubNo'),
-        ('RESERVATION' + ELEM_PATH_SEP + 'OBJID', 'ResObjId'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'RES-NR', 'ResNo',
+         lambda f: not f.val()),
+        ('RESERVATION' + ELEM_PATH_SEP + 'SUB-NR', 'ResSubNo',
+         lambda f: not f.val()),
+        ('RESERVATION' + ELEM_PATH_SEP + 'OBJID', 'ResObjId',
+         lambda f: not f.val()),
         ('GDSNO', 'ResGdsNo'),
         # ('NN2', 'ResSfId',
         # lambda f: not f.val()),
         # MATCHCODE, NAME, COMPANY and GUEST-ID are mutually exclusive
         # MATCHCODE/GUEST-ID needed for DELETE action for to prevent Sihot error:
         # .. "Could not find a key identifier for the client (name, matchcode, ...)"
-        # ('GUEST-ID', 'ResOrdererId',
-        #  'elemHideIf':  "not c.get('ResOrdererId') and not c.get['ShId']"},
-        ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-ID', 'ResOrdererId',
+        # ('GUEST-ID', 'ShId',
+        #  'elemHideIf':  "not c.get('ShId')"},
+        ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-ID', 'ShId',
          lambda f: not f.val() and not f.rfv('ShId')),
-        ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'ResOrdererMc'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'AcId'),
         ('VOUCHERNUMBER', 'ResVoucherNo',
          lambda f: f.ina(ACTION_DELETE)),
         ('EXT-KEY', 'ResGroupNo',
@@ -179,20 +184,26 @@ MAP_WEB_RES = \
          lambda f: not f.val(), ''),
         ('RATE/', ),  # package/arrangement has also to be specified in PERSON:
         ('RATE' + ELEM_PATH_SEP + 'R', 'ResBoard'),
-        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None, None, 'Y'),
+        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None,
+         None,
+         'Y'),
         ('/RATE', ),
         ('RATE/', None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
         ('R', None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResMktSegment') not in ('ER', ), 'GSC'),
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', ),
+         'GSC'),
         ('ISDEFAULT', None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResMktSegment') not in ('ER', ), 'N'),
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', ),
+         'N'),
         ('/RATE', None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResMktSegment') not in ('ER', )),
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
         # The following fallback rate results in error Package TO not valid for hotel 1
         # ('RATE/', ),
         # ('R', 'RO_SIHOT_RATE'},
-        # ('ISDEFAULT', None, None, 'N'),
+        # ('ISDEFAULT', None,
+        #  None,
+        #  'N'),
         # ('/RATE', ),
         # ### Reservation Channels - used for assignment of reservation to a allotment or to board payment
         ('RESCHANNELLIST/', None,
@@ -242,8 +253,11 @@ MAP_WEB_RES = \
          None, lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
         ('NOROOMS', None,
          None,
-         1),     # needed for DELETE action
-        ('NOPAX', 'ResAdults',          # needed for DELETE action
+         1),     # mandatory field, also needed for DELETE action
+        # ('NOPAX', None,          # needed for DELETE action
+        #  None,
+        #  lambda f: f.rfv('ResAdults') + f.rfv('ResChildren'), lambda f, v: int(v), lambda f, v: str(v)),
+        ('NOPAX', 'ResAdults',          # actually NOPAX is number of adults (adults + children)
          None,
          None, lambda f, v: int(v), lambda f, v: str(v)),
         ('NOCHILDS', 'ResChildren',
@@ -290,16 +304,17 @@ MAP_WEB_RES = \
         ('PERSON/', None,
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'Surname'),
-         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('AcId') or f.rfv('ShId'),
-         lambda f: ("Adult " + str(f.crx()) if f.crx() is None or f.crx() < f.rfv('ResAdults')
-                    else "Child " + str(f.crx() - f.rfv('ResAdults') + 1))),
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId'),
+         lambda f: "Adult " + str(f.crx() + 1) if f.crx() < f.rfv('ResAdults')
+            else "Child " + str(f.crx() - f.rfv('ResAdults') + 1)),
         ('PERSON' + ELEM_PATH_SEP + 'NAME2', ('ResPersons', 0, 'Forename'),
-         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('AcId') or f.rfv('ShId')),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()
+            or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')),
         ('AUTO-GENERATED', None,
-         lambda f: f.ina(ACTION_DELETE) or (f.rfv('ResAdults') <= 2 and (f.rfv('AcId') or f.rfv('ShId'))),
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId'),
          '1'),
         ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcId'),
-         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ShId')),
+         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResPersons', f.crx(), 'ShId')),
         ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'ShId'),
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('ROOM-SEQ', None,
@@ -307,16 +322,16 @@ MAP_WEB_RES = \
          '0'),
         ('ROOM-PERS-SEQ', None,
          lambda f: f.ina(ACTION_DELETE),
-         lambda f: (str(f.crx()))),
+         lambda f: f.crx()),
         ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'GuestType'),
          lambda f: f.ina(ACTION_DELETE),
          lambda f: ('1A' if f.crx() < f.rfv('ResAdults') else '2B')),
-        ('PERSON' + ELEM_PATH_SEP + 'PERS-RATE' + ELEM_PATH_SEP + 'R', 'Board',
-         lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'RN', ('ResPersons', 0, 'RoomNo'),
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResDeparture') < datetime.datetime.now()),
         ('PERSON' + ELEM_PATH_SEP + 'DOB', ('ResPersons', 0, 'DOB'),
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
+        ('PERSON' + ELEM_PATH_SEP + 'R', 'ResBoard',
+         lambda f: f.ina(ACTION_DELETE)),
         ('/PERSON', None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResAdults') <= 0),
         ('/RESERVATION',),
@@ -332,8 +347,8 @@ MAP_PARSE_WEB_RES = \
         # ('RU_OBJID', 'RU_SIHOT_OBJID'),
         ('RU_OBJID', 'RUL_SIHOT_OBJID'),
         # ('RO_AGENCY_OBJID', 'RO_SIHOT_AGENCY_OBJID'),
-        ('OC_CODE', 'ResOrdererMc'),
-        ('OC_OBJID', 'ResOrdererId'),
+        ('OC_CODE', 'AcId'),
+        ('OC_OBJID', 'ShId'),
         ('RES_GROUP', 'ResMktGroup'),  # needed for elemHideIf
         ('RES_OCC', 'ResMktSegment'),  # needed for res_id_values
         ('CHANGES', 'RUL_CHANGES'),  # needed for error notifications
@@ -980,58 +995,84 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         self.action = ''
         self.elem_map = deepcopy(elem_map or cae.get_option('mapRes'))
         self.elem_fld_rec = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(self.elem_map)
-        self.rec_link_field = Field().set_root_rec(self.elem_fld_rec, system=SDI_SH, direction=FAD_FROM)
 
     # --- rec helpers
 
-    def prepare_map_xml(self, rec, include_empty_values=True):
+    def fill_elem_fld_rec(self, rec):
         self.elem_fld_rec.clear_vals()
-        for k, f in rec.items():
-            if k in self.elem_fld_rec:
-                self.elem_fld_rec[k].set_val(f.val())
+        for k in rec.leaf_indexes():
+            if k[0] in self.elem_fld_rec:
+                self.elem_fld_rec.set_val(rec[k].val(), *k, root_rec=rec, root_idx=k)
+
+    def prepare_map_xml(self, rec, include_empty_values=True):
+        self.fill_elem_fld_rec(rec)
         self.elem_fld_rec.push(SDI_SH)
 
         old_act = self.elem_fld_rec.action
         self.elem_fld_rec.action = self.action
+
+        field = recs = None
         inner_xml = ''
         map_i = group_i = -1
-        field = None
         while True:
             map_i += 1
             if map_i >= len(self.elem_map):
                 break
+
             elem_map_item = self.elem_map[map_i]
             tag = elem_map_item[MTI_ELEM_NAME]
+            if ELEM_PATH_SEP in tag:
+                tag = tag[tag.rfind(ELEM_PATH_SEP) + 1:]
+            idx = elem_map_item[MTI_FLD_NAME] if len(elem_map_item) > MTI_FLD_NAME else None
+            if idx:
+                field = self.elem_fld_rec.node_child(idx, system=SDI_SH, direction=FAD_ONTO)
+                if field is None:
+                    continue        # skip xml creation for missing field
+                idx_path = idx if isinstance(idx, (tuple, list)) else (field_name_idx_path(idx) or (idx, ))
+                val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
+                if val is None:     # if field from empty rec (added for to fulfill pax count)
+                    val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO)   # use template val/cal
+                filter_func = field.filter(system=SDI_SH, direction=FAD_ONTO)
+            else:
+                if field is None:   # try to use field of last map item (especially for to get crx())
+                    field = next(iter(self.elem_fld_rec.values()))
+                val = elem_map_item[MTI_FLD_VAL] if len(elem_map_item) > MTI_FLD_VAL else ''
+                if callable(val):
+                    val = val(field)
+                filter_func = elem_map_item[MTI_FLD_FILTER] if len(elem_map_item) > MTI_FLD_FILTER else None
+            if filter_func:
+                assert callable(filter_func), "filter aspect {} has to be a callable".format(filter_func)
+                if filter_func(field):
+                    continue
+
             if tag.endswith('/'):
                 self._indent += 1
                 inner_xml += '\n' + ' ' * self._indent + self.new_tag(tag[:-1], closing=False)
-                group_i = map_i
-                continue
-            if tag.startswith('/'):
+                if recs is None and map_i + 1 < len(self.elem_map):
+                    nel = self.elem_map[map_i + 1]
+                    if len(nel) > MTI_FLD_NAME and isinstance(nel[MTI_FLD_NAME], (tuple, list)):
+                        root_field = self.elem_fld_rec.node_child(nel[MTI_FLD_NAME][0])
+                        if root_field:
+                            recs = root_field.value()
+                            if isinstance(recs, (Values, Records)):
+                                set_current_index(recs, idx=recs.idx_min)
+                                group_i = map_i - 1
+                            else:
+                                recs = None     # set to None also if recs is empty/False
+
+            elif tag.startswith('/'):
                 self._indent -= 1
                 inner_xml += self.new_tag(tag[1:], opening=False)
-                if field:
-                    recs = field.parent(system=SDI_SH, direction=FAD_ONTO, types=(Records, ))
-                    if recs and recs.current_idx + 1 < len(recs):
-                        recs.current_idx += 1
-                        map_i = group_i
-                        continue
+                if recs:
+                    if current_index(recs) >= len(recs) - 1:
+                        recs = None
+                    else:
+                        set_current_index(recs, add=1)
+                        map_i = group_i     # jump back to begin of xml group
 
-            fld_idx = elem_map_item[MTI_FLD_NAME] if len(elem_map_item) > MTI_FLD_NAME else None
-            if fld_idx:
-                field = self.elem_fld_rec.deeper_item(fld_idx, system=SDI_SH, direction=FAD_ONTO)
-                idx_path = fld_idx if isinstance(fld_idx, (tuple, list)) else (fld_idx, )
-                val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
-            else:
-                field = self.rec_link_field
-                val = None
-            filter_func = field.filter(system=SDI_SH, direction=FAD_ONTO)
-            if filter_func:
-                assert callable(filter_func), "filter aspect {} must be callable".format(filter_func)
-                if filter_func(field):
-                    continue
-            if fld_idx and (include_empty_values or val):
+            elif include_empty_values or val not in ('', None):
                 inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(val))
+
         self.elem_fld_rec.action = old_act
         return inner_xml
 
@@ -1104,7 +1145,8 @@ class ResToSihot(FldMapXmlBuilder):
         today = datetime.datetime.today()
         cf = self.cae.get_config
 
-        if arr_date and arr_date > today:            # Sihot doesn't accept allotment for reservations in the past
+        if arr_date and arr_date.toordinal() > today.toordinal():
+            # Sihot doesn't accept allotment for reservations in the past
             val = cf(mkt_seg + '_' + hotel_id, section='SihotAllotments',
                      default_value=cf(mkt_seg, section='SihotAllotments'))
             if val:
@@ -1119,14 +1161,67 @@ class ResToSihot(FldMapXmlBuilder):
         if val:
             rec.set_val(val, 'ResAccount')
 
-        if self.action != ACTION_DELETE and rec.val('ResStatus') != 'S' and arr_date and arr_date > today:
+        if self.action != ACTION_DELETE and rec.val('ResStatus') != 'S' \
+                and arr_date and arr_date.toordinal() > today.toordinal():
             val = cf(mkt_seg, section='SihotResTypes')
             if val:
                 rec.set_val(val, 'ResStatus')
 
+    @staticmethod
+    def _complete_res_data(rec):
+        """
+        complete reservation data row (rec) with the default values (specified in default_values underneath), while
+        the following fields are mandatory:
+            ShId or AcId or Surname (to specify the orderer of the reservation), ResHotelId, ResArrival, ResDeparture,
+            ResRoomCat, ResMktSegment, ResGdsNo.
+
+        :param rec:     reservation data Record instance.
+        :return:        completed reservation data Record instance.
+
+        These fields will not be completed/changed at all:
+            ResRoomNo, ResNote, ResLongNote, ResFlightArrComment (flight no...), ResAllotmentNo, ResVoucherNo.
+
+        optional fields:
+            ResPersons1Surname and ResPersons1Forename (surname and forename)
+            ResPersons2Surname and ResPersons2Forename ( ... )
+        optional auto-populated fields (see default_values dict underneath).
+        """
+        default_values = dict(ResStatus='1',
+                              ResAction=ACTION_INSERT,
+                              ResBooked=datetime.datetime.today(),
+                              ResPriceCat=rec.val('ResRoomCat'),
+                              ResBoard='RO',  # room only (no board/meal-plan)
+                              ResAccount=1,
+                              ResSource='A',
+                              ResRateSegment=rec.val('ResMktSegment'),
+                              ResMktGroup='RS',
+                              ResAdults=2,
+                              ResChildren=0,
+                              )
+        for field_name, field_value in default_values.items():
+            if not rec.val(field_name) and field_value not in ('', None):
+                rec.set_val(field_value, field_name)
+        return rec
+
+    def fill_elem_fld_rec(self, rec):
+        self._add_sihot_configs(rec)
+        self._complete_res_data(rec)
+
+        super().fill_elem_fld_rec(rec)
+
+        adults = self.elem_fld_rec.val('ResAdults')
+        pax = adults + self.elem_fld_rec.val('ResChildren')
+        recs = self.elem_fld_rec.value('ResPersons')
+        while True:
+            recs_len = len(recs)
+            if recs_len >= pax:
+                for _ in range(pax, recs_len):
+                    recs.pop()                                                  # remove recs (from last send)
+                break
+            self.elem_fld_rec.set_val('', 'ResPersons', recs_len, 'Forename')    # add rec with empty name
+
     def _prepare_res_xml(self, rec):
         self.action = rec.val('ResAction') or ACTION_INSERT
-        self._add_sihot_configs(rec)
         inner_xml = self.prepare_map_xml(rec)
         if self.use_kernel_interface:
             if self.action == ACTION_INSERT:
@@ -1172,16 +1267,20 @@ class ResToSihot(FldMapXmlBuilder):
                 rec.set_val(client.response.objid, 'ShId')
 
         # check also Orderer but exclude OTAs like TCAG/TCRENT with a MATCHCODE that is no normal Acumen-CDREF
-        if not err_msg and rec.val('ResOrdererMc') and len(rec.val('ResOrdererMc')) == 7:
+        if not err_msg and rec.val('AcId') and len(rec.val('AcId')) == 7:
             client = ClientToSihot(self.cae)
             err_msg = client.send_client_to_sihot(rec)
             if not err_msg:
                 # get orderer objid directly from client.response
-                rec.set_val(client.response.objid, 'ResOrdererId')
+                rec.set_val(client.response.objid, 'ShId')
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
     def send_res_to_sihot(self, rec, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
+        missing = rec.missing_fields((('ShId', 'AcId', 'Surname'), 'ResHotelId', ('ResGdsNo', 'ResNo', 'ResObjId'),
+                                      'ResMktSegment', 'ResRoomCat', 'ResArrival', 'ResDeparture'))
+        assert not missing, "ResToSihot expects non-empty value in fields {}".format(missing)
+
         gds_no = rec.val('ResGdsNo')
         if gds_no:
             if gds_no in self._gds_errors:    # prevent send of follow-up changes on erroneous bookings (w/ same GDS)
@@ -1216,7 +1315,7 @@ class ResToSihot(FldMapXmlBuilder):
     def res_id_values(rec):
         return str(rec.val('ResGdsNo')) + \
                "/" + str(rec.val('ResVoucherNo')) + \
-               "/" + str(rec.val('ResOrdererMc')) + "/" + str(rec.val('ResMktSegment'))
+               "/" + str(rec.val('AcId')) + "/" + str(rec.val('ResMktSegment'))
 
     def res_id_desc(self, rec, error_msg, separator="\n\n"):
         indent = 8
@@ -1358,48 +1457,8 @@ class ResBulkFetcher(BulkFetcherBase):
 
 
 class ResSender(ResToSihot):
-    @staticmethod
-    def complete_res_data(rec):
-        """
-        complete reservation data row (rec) with the default values (specified in default_values underneath), while
-        the following fields are mandatory:
-            ResHotelId, ResArrival, ResDeparture, ResRoomCat, ResMktSegment, ResOrdererMc, ResGdsNo.
-
-        :param rec:     reservation data Record instance.
-        :return:        completed reservation data Record instance.
-
-        These fields will not be completed/changed at all:
-            ResRoomNo, ResNote, ResLongNote, ResFlightArrComment (flight no...), ResAllotmentNo, ResVoucherNo.
-
-        optional fields:
-            ResOrdererId (alternatively usable instead of matchcode value ResOrdererMc).
-            ResPersons1Surname and ResPersons1Forename (surname and firstname)
-            ResPersons2Surname and ResPersons2Forename ( ... )
-        optional auto-populated fields (see default_values dict underneath).
-        """
-        default_values = dict(ResStatus='1',
-                              AcId=rec['ResOrdererMc'].val() if 'ResOrdererMc' in rec else '',
-                              ShId=rec['ResOrdererId'].val() if 'ResOrdererId' in rec else '',
-                              ResAction=ACTION_INSERT,
-                              ResBooked=datetime.datetime.today(),
-                              ResPriceCat=rec['ResRoomCat'].val() if 'ResRoomCat' in rec else '',
-                              ResBoard='RO',  # room only (no board/meal-plan)
-                              ResAccount=1,
-                              ResSource='A',
-                              ResRateSegment=rec['ResMktSegment'].val() if 'ResMktSegment' in rec else '',
-                              ResMktGroup='RS',
-                              ResAdults=2,
-                              ResChildren=0,
-                              )
-        for field_name, field_value in default_values.items():
-            if field_name not in rec or not rec[field_name].val():
-                rec.set_val(field_value, field_name)
-        return rec
-
     def send_rec(self, rec):
         msg = ""
-        rec = self.complete_res_data(rec)
-        rec.push(SDI_SH)
         try:
             err = self.send_res_to_sihot(rec, ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
         except Exception as ex:

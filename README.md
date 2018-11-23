@@ -171,9 +171,9 @@ each of our clients/guests:
 #### Available Reservation Fields
 
 The table underneath is showing all the fields that can be used to specify a reservation created within Sihot. Only the
-fields marked with an asterisk (*) are mandatory, with the exception that the reservation orderer can be specified
-either only by `ResOrdererId` or `ResOrdererMc` (or by both). The fields marked with an plus character (+) are optional
-only if the reservation gets sent the first time to Sihot, so for every change/update of an already existing
+fields marked with an asterisk (*) are mandatory, with the extension that the reservation orderer has to be specified
+by at least one of the client fields `ShId`, `AcId` or `Surname`. The fields names marked with an plus character (+) are
+optional only if the reservation gets sent the first time to Sihot, so for every change/update of an already existing
 reservation these fields need to be included in the send to Sihot:
 
 Field Name | Field Type | Description | Example Values |
@@ -203,8 +203,6 @@ Field Name | Field Type | Description | Example Values |
 | ResNo + | String | Sihot Reservation Number | 123456789' |
 | ResNote | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
 | ResObjId | String | Sihot Internal Reservation Object Id | '123456789' |
-| ResOrdererId * | String | Sihot Orderer Object Id (owner or OTA channel) | '123456' |
-| ResOrdererMc * | String | Sihot Orderer Matchcode (owner or OTA channel) | 'TCRENT' |
 | ResPersons | List | List of Occupants | ((Smith, John, 24-12-1962, ...), (Knopf, Jim, 27-01-1955, ...)) |
 | ResPersons<n>AcId | String | Sihot Occupant Matchcode | E123456 |
 | ResPersons<n>DOB | Date | Birthdate of n-th Occupant | 24-12-1962 |
@@ -221,6 +219,11 @@ Field Name | Field Type | Description | Example Values |
 | ResSource | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
 | ResStatus | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
 | ResVoucherNo | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
+
+All the field specifying the orderer of a reservation as well as the `ResPersons` fields are identical to the 
+[client fields](#available-client-fields).
+
+Please note that the first value of the ResPersons index value (represented by <n> in the above table) is 0 (zero).
 
 
 #### Available Reservation Inventory Fields
@@ -257,7 +260,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 
 | Field Name | Acumen Column | Salesforce Field | Sihot Element | AssCache Column |
 | --- | --- | --- | --- | --- |
-| AcId | CD_CODE | CD_CODE__pc, AcumenClientRef__pc | MATCHCODE | cl_ac_id | 
+| AcId | CD_CODE+OC_CODE | CD_CODE__pc, AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | cl_ac_id+rgr_order_cl_fk->cl_ac_id | 
 | AssId | - | AssCache_Id__pc | - | cl_pk |
 | City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
 | Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |
@@ -310,8 +313,6 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResNo | - | Number__c | RES-NR | rgr_res_id |
 | ResNote | SIHOT_NOTE | Note__c | RESERVATION.COMMENT | rgr_comment |
 | ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | RESERVATION.OBJID | rgr_obj_id |
-| ResOrdererId | OC_SIHOT_OBJID | - | GUEST-ID | rgr_order_cl_fk->cl_sh_id |
-| ResOrdererMc | OC_CODE | CD_CODE__pc, AcumenClientRef__pc | RESERVATION.MATCHCODE | rgr_order_cl_fk->cl_ac_id |
 | ResPersons | - | - | PERSON | res_group_clients |
 | ResPersons<n>AcId | CD_CODE | - | PERSON.MATCHCODE | rgc_occup_cl_fk->cl_ac_id |
 | ResPersons<n>DOB | CD_DOB1, CD_DOB2 | - | PERSON.NAME | rgc_dob |
@@ -336,7 +337,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | RinUsageComment | - | - | -  | ri_usage_comment |   
 | Salutation | F_SIHOT_SALUTATION() | Salutation | T-SALUTATION | - |
 | SfId | CD_SF_ID1/2, MS_SF_ID | PersonAccountId | MATCH-SM | cl_sf_id |
-| ShId | CD_SIHOT_OBJID | SihotGuestObjId__pc | OBJID | cl_sh_id |
+| ShId | CD_SIHOT_OBJID+OC_SIHOT_OBJID | SihotGuestObjId__pc | OBJID+GUEST-ID | cl_sh_id+rgr_order_cl_fk->cl_sh_id |
 | State | (CD_ADD13) | PersonMailingState | T-STATE | - |
 | Street | CD_ADD11 | PersonMailingStreet | STREET | - |
 | Surname | CD_SNAM1 | LastName | NAME-1 | rgc_surname |

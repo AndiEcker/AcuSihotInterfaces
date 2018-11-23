@@ -25,3 +25,33 @@ COMMENT ON ROLE itdev_support IS 'used e.g. for owner exchanges and suspensions 
 --ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO itdev_support;
 --ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO itdev_support;
 --ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO itdev_support;
+
+
+
+
+-- USER ACCOUNT admin_sql
+-- created manually on test
+
+CREATE USER admin_sql WITH
+	LOGIN
+	SUPERUSER
+	CREATEDB
+	CREATEROLE
+	INHERIT
+	REPLICATION
+	CONNECTION LIMIT -1
+	PASSWORD 'xxxxxx';
+GRANT postgres TO admin_sql WITH ADMIN OPTION;
+
+
+-- copied SQL from pgAdmin from live (after moving to db2v.acumen.es)
+CREATE USER admin_sql WITH
+  LOGIN
+  SUPERUSER
+  INHERIT
+  CREATEDB
+  CREATEROLE
+  REPLICATION;
+
+GRANT postgres TO admin_sql WITH ADMIN OPTION;
+

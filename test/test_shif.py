@@ -1,5 +1,19 @@
-# from ae_sys_data import Record, Field
+# from ae_sys_data import Record, _Field
 from shif import *
+
+
+class TestResToSihot:
+
+    def test_basic_build_and_send(self, console_app_env):
+        res_to = ResToSihot(console_app_env)
+        fld_vals = dict(AcId='E578973',
+                        ResHotelId='1', ResGdsNo='TEST-123456789',
+                        ResArrival=datetime.date(year=2019, month=12, day=24),
+                        ResDeparture=datetime.date(year=2019, month=12, day=30),
+                        ResAdults=1, ResChildren=1, ResRoomCat='1JNS', ResMktSegment='TO'
+                        )
+        err_msg = res_to.send_res_to_sihot(rec=Record(fields=fld_vals), ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
+        assert not err_msg
 
 
 class TestFldMapXmlParser:
@@ -58,27 +72,19 @@ class TestElemHelpers:
         assert elem_path_join(['path', 'to', 'elem']) == "path" + ELEM_PATH_SEP + "to" + ELEM_PATH_SEP + "elem"
 
     def test_hotel_and_res_id(self):
-        hof = Field().set_name('RES-HOTEL', system=SDI_SH).set_val('4', system=SDI_SH)
-        rnf = Field().set_name('RES-NR', system=SDI_SH).set_val('5')
-        rsf = Field().set_name('SUB-NR', system=SDI_SH).set_val('X')
-        assert hotel_and_res_id(Record({'ResHotelId': hof})) == (None, None)
-        assert hotel_and_res_id(Record({'ResNo': rnf})) == (None, None)
-        assert hotel_and_res_id(Record({'ResHotelId': hof, 'ResNo': rnf})) == ('4', '5@4')
-        assert hotel_and_res_id(Record({'ResHotelId': hof, 'ResNo': rnf, 'ResSubNo': rsf})) == ('4', '5/X@4')
+        assert hotel_and_res_id(Record({'ResHotelId': '4'})) == (None, None)
+        assert hotel_and_res_id(Record({'ResNo': '5'})) == (None, None)
+        assert hotel_and_res_id(Record({'ResHotelId': '4', 'ResNo': '5'})) == ('4', '5@4')
+        assert hotel_and_res_id(Record({'ResHotelId': '4', 'ResNo': '5', 'ResSubNo': 'X'})) == ('4', '5/X@4')
 
     def test_pax_count(self):
-        pxc = Field().set_name('NOPAX', system=SDI_SH).set_val('1')
-        chc = Field().set_name('NOCHILDS', system=SDI_SH).set_val('1')
-        pxn = Field().set_name('NOPAX', system=SDI_SH).set_val(1)
-        chn = Field().set_name('NOCHILDS', system=SDI_SH).set_val(1)
-        che = Field().set_name('NOCHILDS', system=SDI_SH).set_val('')
         assert pax_count(Record()) == 0
-        assert pax_count(Record(fields={'ResAdults': pxc})) == 1
-        assert pax_count(Record(fields={'ResChildren': chc})) == 1
-        assert pax_count(Record(fields={'ResAdults': pxc, 'ResChildren': chc})) == 2
-        assert pax_count(Record(fields={'ResAdults': pxn, 'ResChildren': che})) == 1
-        assert pax_count(Record(fields={'ResAdults': pxn, 'ResChildren': chn})) == 2
-        assert pax_count(Record(fields={'ResAdults': pxc, 'ResChildren': chn})) == 2
+        assert pax_count(Record(fields={'ResAdults': '1'})) == 1
+        assert pax_count(Record(fields={'ResChildren': '1'})) == 1
+        assert pax_count(Record(fields={'ResAdults': '1', 'ResChildren': '1'})) == 2
+        assert pax_count(Record(fields={'ResAdults': 1, 'ResChildren': ''})) == 1
+        assert pax_count(Record(fields={'ResAdults': 1, 'ResChildren': 1})) == 2
+        assert pax_count(Record(fields={'ResAdults': '1', 'ResChildren': 1})) == 2
 
     def test_date_range_chunks(self):
         d1 = datetime.date(2018, 6, 1)
@@ -161,7 +167,7 @@ class TestResSender:
                     ResGdsNo=gdsno, ResVoucherNo='Voucher1234567890',
                     ResBooked=today, ResArrival=today + wk1, ResDeparture=today + wk1 + wk1,
                     ResRoomCat=cat, ResPriceCat=cat, ResRoomNo='3220',
-                    ShId='27', ResOrdererId='27', AcId='TCRENT', ResOrdererMc='TCRENT',
+                    ShId='27', AcId='TCRENT',
                     ResNote='test short note', ResLongNote='test large TEC note',
                     ResBoard='RO',    # room only (no board/meal-plan)
                     ResMktSegment='TC', SIHOT_MKT_SEG='TC', ResRateSegment='TC',
@@ -203,7 +209,7 @@ class TestResSender:
 
         rs = ResSender(console_app_env)
         crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
-                    ResOrdererMc='TCRENT', ResGdsNo=gdsno)
+                    AcId='TCRENT', ResGdsNo=gdsno)
         err, msg = rs.send_rec(Record(fields=crow))
 
         assert not err
@@ -227,7 +233,7 @@ class TestResSender:
 
         rs = ResSender(console_app_env)
         crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
-                    ResOrdererId='27', ResGdsNo=gdsno)
+                    ShId='27', ResGdsNo=gdsno)
         err, msg = rs.send_rec(Record(fields=crow))
 
         assert not err
@@ -300,10 +306,10 @@ class TestGuestFromSihot:
     def test_elem_map(self, console_app_env):
         xml_parser = GuestFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.rec.val('AcId') == 'test2'
-        assert xml_parser.rec.val('MATCHCODE') == 'test2'
-        assert xml_parser.rec.val('City') == 'city'
-        assert xml_parser.rec.val('CITY') == 'city'
+        assert xml_parser.guest_list.val(0, 'AcId') == 'test2'
+        assert xml_parser.guest_list.val(0, 'MATCHCODE') == 'test2'
+        assert xml_parser.guest_list.val(0, 'City') == 'city'
+        assert xml_parser.guest_list.val(0, 'CITY') == 'city'
 
 
 class TestResFromSihot:
@@ -466,22 +472,22 @@ class TestResFromSihot:
     def test_fld_map_matchcode(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_MATCHCODE_EXAMPLE)
-        assert xml_parser.res_list[0]['ResOrdererMc'].val() == 'test2'
+        assert xml_parser.res_list[0]['AcId'].val() == 'test2'
         assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
-        assert xml_parser.res_list[0]['AcId'].val() == 'PersonAcId'
-        assert xml_parser.res_list[0]['PERSON.MATCHCODE'].val() == 'PersonAcId'
+        assert xml_parser.res_list[0][('ResPersons', 0, 'AcId')].val() == 'PersonAcId'
+        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcId'
 
     def test_fld_map_big(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.res_list.val(0, 'ResOrdererMc') == 'test2'
-        assert xml_parser.res_list[0]['ResOrdererMc'].val() == 'test2'
+        assert xml_parser.res_list.val(0, 'AcId') == 'test2'
+        assert xml_parser.res_list[0]['AcId'].val() == 'test2'
         assert xml_parser.res_list.val(0, 'RESERVATION.MATCHCODE') == 'test2'
         assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
-        assert xml_parser.res_list.val(0, 'AcId') == 'PersonAcId'
-        assert xml_parser.res_list[0]['AcId'].val() == 'PersonAcId'
-        assert xml_parser.res_list.val(0, 'PERSON.MATCHCODE') == 'PersonAcId'
-        assert xml_parser.res_list[0]['PERSON.MATCHCODE'].val() == 'PersonAcId'
+        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'AcId') == 'PersonAcId'
+        assert xml_parser.res_list[0]['ResPersons0AcId'].val() == 'PersonAcId'
+        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcId'
+        assert xml_parser.res_list.value(0, 'ResPersons', 0)['PERSON.MATCHCODE'].val() == 'PersonAcId'
         assert xml_parser.res_list.val(0, 'ResGdsNo') == '1234567890ABC'
         assert xml_parser.res_list[0]['ResGdsNo'].val() == '1234567890ABC'
         assert xml_parser.res_list.val(0, 'GDSNO') == '1234567890ABC'
@@ -497,20 +503,6 @@ class TestClientToSihot:
         err_msg = cli_to.send_client_to_sihot(Record(fields=fld_vals))
         assert not err_msg
         assert cli_to.response.objid
-
-
-class TestResToSihot:
-
-    def test_basic_build_and_send(self, console_app_env):
-        res_to = ResToSihot(console_app_env)
-        fld_vals = dict(ResOrdererMc='E578973',
-                        ResHotelId='1', ResGdsNo='TEST-123456789',
-                        ResArrival=datetime.date(year=2019, month=12, day=24),
-                        ResDeparture=datetime.date(year=2019, month=12, day=30),
-                        ResAdults=1, ResChildren=1, ResRoomCat='1STDP',
-                        )
-        err_msg = res_to.send_res_to_sihot(rec=Record(fields=fld_vals), ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
-        assert not err_msg
 
 
 class TestGuestSearch:

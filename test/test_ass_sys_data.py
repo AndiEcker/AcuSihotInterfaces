@@ -471,7 +471,7 @@ class TestAssSysDataSf:
             if send_err:
                 send_err = "sh_res_change_to_ass error " + send_err
                 break
-            cl_fields = guest_data(console_app_env, res.val('ResOrdererId'))
+            cl_fields = guest_data(console_app_env, res.val('ShId'))
             if not isinstance(cl_fields, dict):
                 send_err = "guest_data error - no dict=" + str(cl_fields)
                 break

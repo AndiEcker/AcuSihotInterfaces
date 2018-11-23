@@ -1778,8 +1778,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             rgr_dict = dict()
         # determine ordering client; RESCHANNELLIST element is situated within RESERVATION xml block
         ord_cl_pk = None
-        sh_id = shd.val('ResOrdererId')     # was RESCHANNELLIST.RESCHANNEL.OBJID
-        ac_id = shd.val('ResOrdererMc')     # was RESCHANNELLIST.RESCHANNEL.MATCHCODE
+        sh_id = shd.val('ShId')     # was RESCHANNELLIST.RESCHANNEL.OBJID
+        ac_id = shd.val('AcId')     # was RESCHANNELLIST.RESCHANNEL.MATCHCODE
         if sh_id or ac_id:
             self._warn("sh_res_change_to_ass(): create new client record for orderer {}/{}".format(sh_id, ac_id),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -1822,7 +1822,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                         rgr_used_ri_fk=ri_pk,
                         # xml path prefix for all elements within RESERVATION block is different for responses of
                         # .. RES-SEARCH (['SIHOT-Document', 'ARESLIST']) and of SS (['SIHOT-Document'])
-                        rgr_obj_id=shd.val('ResOrdererId'),
+                        rgr_obj_id=shd.val('ShId'),
                         # finally not added next/commented line because IDs should only come from ID generating system
                         # rgr_sf_id=shd.val('ResSfId'),
                         rgr_status=shd.val('ResStatus'),

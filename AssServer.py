@@ -155,7 +155,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         return sh_res
 
     sh_cl = None
-    sh_id = sh_res.val('ResOrdererId')     # ==ass_res['rgr_order_cl_fk']
+    sh_id = sh_res.val('ShId')     # ==ass_res['rgr_order_cl_fk']
     if sh_id:
         sh_cl = guest_data(cae, sh_id)
     if not isinstance(sh_cl, dict):

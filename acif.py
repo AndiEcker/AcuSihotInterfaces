@@ -54,7 +54,7 @@ CLI_FIELD_MAP = [       # client data
     ('RCIRef', 'CD_RCI_REF'),
     ('ExtRefs', 'EXT_REFS',
      None,
-     lambda f, v: f.string_to_records(',', ('TYPE', 'ID'), '=')),
+     lambda f, v: f.string_to_records(v, ('Type', 'Id'))),
     ]
 RES_FIELD_MAP = [       # reservation data
     ('ResHotelId', 'RUL_SIHOT_HOTEL'),
@@ -81,9 +81,9 @@ RES_FIELD_MAP = [       # reservation data
     ('ResPriceCat', 'SH_PRICE_CAT',
      "F_SIHOT_CAT('RU' || RUL_PRIMARY)"),
     ('ResRoomNo', 'RUL_SIHOT_ROOM'),
-    ('ResOrdererMc', 'OC_CODE',
+    ('AcId', 'OC_CODE',
      "nvl(OC_CODE, CD_CODE)"),
-    ('ResOrdererId', 'OC_SIHOT_OBJID',
+    ('ShId', 'OC_SIHOT_OBJID',
      "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))"),
     ('ResStatus', 'SH_RES_TYPE',
      "case when RUL_ACTION = '" + ACTION_DELETE + "' then 'S' else nvl(SIHOT_RES_TYPE, 'S') end"),
