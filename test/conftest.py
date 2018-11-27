@@ -20,18 +20,6 @@ def console_app_env():
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def acu_guest(console_app_env):
-    return AcuClientToSihot(console_app_env)
-
-
-# noinspection PyShadowingNames
-@pytest.fixture()
-def acu_res(console_app_env):
-    return AcuResToSihot(console_app_env)
-
-
-# noinspection PyShadowingNames
-@pytest.fixture()
 def avail_cats(console_app_env):
     return AvailCatInfo(console_app_env)
 

@@ -2,7 +2,7 @@ import pytest
 
 from collections import OrderedDict
 from ae_sys_data import aspect_key, aspect_key_system, aspect_key_direction, deeper, field_name_idx_path, \
-    Value, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
+    Value, Values, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
     FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE
 from sys_data_ids import SDI_SH
 
@@ -300,13 +300,6 @@ class TestRecord:
         assert r['fnA'].root_idx() == ('fnA',)
 
         r = Record()
-        r.set_val('fAv1', 'fnA', 1, 'sfnA')
-        assert r['fnA'].root_rec() is r
-        assert r['fnA'].root_idx() == ('fnA', )
-        assert r[('fnA', 1, 'sfnA')].root_rec() is r
-        assert r[('fnA', 1, 'sfnA')].root_idx() == ('fnA', 1, 'sfnA')
-
-        r = Record()
         r.set_node_child('fBv1', 'fnB', 0, 'sfnB')
         assert r['fnB'].root_rec() is r
         assert r['fnB'].root_idx() == ('fnB', )
@@ -314,7 +307,14 @@ class TestRecord:
         assert r[('fnB', 0, 'sfnB')].root_idx() == ('fnB', 0, 'sfnB')
 
         r = Record()
-        r.set_val('fAv3', 'fnA', root_rec=r, root_idx=('fnA', ))
+        r.set_val('fAv1', 'fnA', 1, 'sfnA')
+        assert r['fnA'].root_rec() is r
+        assert r['fnA'].root_idx() == ('fnA', )
+        assert r[('fnA', 1, 'sfnA')].root_rec() is r
+        assert r[('fnA', 1, 'sfnA')].root_idx() == ('fnA', 1, 'sfnA')
+
+        r = Record()
+        r.set_val('fAv3', 'fnA', root_rec=r)
         assert r['fnA'].root_rec() is r
         assert r['fnA'].root_idx() == ('fnA', )
 
@@ -326,21 +326,21 @@ class TestRecord:
         assert r[('fnA', 1, 'sfnA')].root_idx() == ('fnA', 1, 'sfnA')
 
         r = Record()
-        r.set_node_child('fBv1', 'fnB', 0, 'sfnB', root_rec=r)
+        r.set_node_child('fBv1', 'fnB', 0, 'sfnB')
         assert r['fnB'].root_rec() is r
         assert r['fnB'].root_idx() == ('fnB', )
         assert r[('fnB', 0, 'sfnB')].root_rec() is r
         assert r[('fnB', 0, 'sfnB')].root_idx() == ('fnB', 0, 'sfnB')
 
         r = Record()
-        r.set_val('fAv3', 'fnA', 1, 'sfnA', root_rec=r, root_idx=('fnA', 1, 'sfnA'))
+        r.set_val('fAv3', 'fnA', 1, 'sfnA')
         assert r['fnA'].root_rec() is r
         assert r['fnA'].root_idx() == ('fnA', )
         assert r[('fnA', 1, 'sfnA')].root_rec() is r
         assert r[('fnA', 1, 'sfnA')].root_idx() == ('fnA', 1, 'sfnA')
 
         r = Record()
-        r.set_node_child('fBv3', 'fnB', 0, 'sfnB', root_rec=r, root_idx=('fnB', 0, 'sfnB'))
+        r.set_node_child('fBv3', 'fnB', 0, 'sfnB', root_rec=r)
         assert r['fnB'].root_rec() is r
         assert r['fnB'].root_idx() == ('fnB', )
         assert r[('fnB', 0, 'sfnB')].root_rec() is r
@@ -566,10 +566,9 @@ class TestRecord:
                         else "Child " + str(f.crx() - f.rfv('Cnt') + 1))),
             ('F' + SEP + 'NAME2', ('fn', 0, 'Forename')),
             ('AUTO-GENERATED', None,
-             lambda f: f.ina(ACTION_DELETE) or (f.rfv('ResAdults') <= 2 and f.rfv('Id')),
+             lambda f: f.ina(ACTION_DELETE) or (f.rfv('ResAdults') <= 2 and f.rfv('fn', f.crx(), 'Id')),
              '1'),
-            ('F' + SEP + 'MATCHCODE', ('fn', 0, 'Id'),
-             lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ShId')),
+            ('F' + SEP + 'MATCHCODE', ('fn', 0, 'Id')),
             ('ROOM-SEQ', None,
              lambda f: f.ina(ACTION_DELETE),
              '0'),
@@ -581,7 +580,7 @@ class TestRecord:
             ('/F', None,
              lambda f: f.ina(ACTION_DELETE) or f.rfv('Cnt') <= 0),
         )
-        sys_r = Record(system=SDI_SH, direction=FAD_FROM)
+        sys_r = Record(system=SDI_SH, direction=FAD_ONTO)
         sys_r.add_system_fields(d)
         assert sys_r.val('Cnt') == ''
 
@@ -589,10 +588,14 @@ class TestRecord:
         sys_r.clear_vals()
         for k in data_r.leaf_indexes():
             if k[0] in sys_r:
-                sys_r.set_val(data_r[k].val(), *k)
+                sys_r.set_val(data_r[k].val(), *k, root_rec=data_r)
         sys_r.push(SDI_SH)
         assert sys_r.val('Cnt') == 2
-        #assert sys_r.val('fn', 0, 'Surname') == 'Adult0'
+        assert sys_r.val('fn', 0, 'Surname') == ''
+        assert sys_r.val('fn', 0, 'Surname', system=SDI_SH, direction=FAD_ONTO) == 'Adult 0'
+
+        sys_r.set_val(0, 'Cnt')
+        assert sys_r.val('fn', 0, 'Surname', system=SDI_SH, direction=FAD_ONTO) == 'Child 1'
 
         sys_r.set_val('Johnson', 'fn', 0, 'Surname')
         assert sys_r.val('fn', 0, 'Surname') == 'Johnson'
@@ -607,7 +610,9 @@ class TestRecords:
         assert isinstance(Records(), list)
 
     def test_repr_eval(self):
-        assert eval(repr(Records())) == Records()
+        _ = Values      # added for to remove Pycharm warning
+        rec_str = repr(Records())
+        assert eval(rec_str) == Records()
 
     def test_set_val_flex_sys(self):
         r = Records()
@@ -681,6 +686,37 @@ class TestRecords:
         r.clear_vals()
         assert r.value(3, 'fnA').val() == ''
         assert len(r) == 4
+
+    def test_append_sub_record(self):
+        r1 = Record(fields=dict(fnA=1, fnB0sfnA=2, fnB0sfnB=3))
+
+        r1.value('fnB').append_record(root_rec=r1, root_idx=('fnB', ))
+        assert r1.val('fnB', 1, 'sfnA') == 2
+        assert r1.val('fnB', 1, 'sfnB') == 3
+
+        r1.node_child('fnB').append_record(root_rec=r1, root_idx=('fnB', ))
+        assert r1.val('fnB', 2, 'sfnA') == 2
+        assert r1.val('fnB', 2, 'sfnB') == 3
+
+    def test_append_sub_record_to_foreign_records(self):
+        r1 = Record(fields=dict(fnA=1, fnB0sfnA=2, fnB0sfnB=3))
+        r2 = Record(fields=dict(fnA=7, fnB1sfnA=8, fnB1sfnB=9))
+
+        r2.value('fnB').append_record(from_rec=r1.value('fnB', 0), root_rec=r2, root_idx=('fnB', ))
+        assert r2.val('fnB', 2, 'sfnA') == 2
+        assert r2.val('fnB', 2, 'sfnB') == 3
+        assert r2['fnB'].root_rec() is r2
+        assert r2[('fnB', 2, 'sfnB')].root_rec() is r2
+        assert r2['fnB'].root_idx() == ('fnB', )
+        assert r2[('fnB', 2, 'sfnB')].root_idx() == ('fnB', 2, 'sfnB')
+
+        r1.value('fnB').append_record(from_rec=r2.value('fnB', 1), root_rec=r1, root_idx=('fnB', ))
+        assert r1.val('fnB', 1, 'sfnA') == 8
+        assert r1.val('fnB', 1, 'sfnB') == 9
+        assert r1['fnB'].root_rec() is r1
+        assert r1[('fnB', 1, 'sfnB')].root_rec() is r1
+        assert r1['fnB'].root_idx() == ('fnB', )
+        assert r1[('fnB', 1, 'sfnB')].root_idx() == ('fnB', 1, 'sfnB')
 
 
 class TestStructures:
@@ -775,7 +811,7 @@ class TestCopy:
         # test flattening copy into existing record (r2)
         r2 = Record(fields={('fnB', 1, 'sfnB'): 'sfB2v_old'})
         assert r2[('fnB', 1, 'sfnB')].val() == 'sfB2v_old'
-        r3 = r2.copy(to_rec=rec_2f_2s_incomplete)
+        r3 = r2.copy(onto_rec=rec_2f_2s_incomplete)
         print(r3)
         assert rec_2f_2s_incomplete != r2
         assert rec_2f_2s_incomplete is not r2

@@ -4,12 +4,12 @@ Acumen interface constants and helpers
 import datetime
 from copy import deepcopy
 
-from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB
-from sxmlif import SihotXmlBuilder
+from ae_sys_data import ACTION_UPDATE, ACTION_DELETE, FAD_FROM
 from shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
-
+from sxmlif import SihotXmlBuilder
+from sys_data_ids import SDI_AC
 
 ACU_DEF_USR = 'SIHOT_INTERFACE'
 ACU_DEF_DSN = 'SP.TEST'
@@ -21,7 +21,7 @@ AC_ID_2ND_COUPLE_SUFFIX = 'P2'
 FMI_FLD_NAME = 0    # field name
 FMI_COL_NAME = 1    # system view sql column name
 FMI_SQL_EXPR = 2    # system view sql expression
-FMI_CON_FUNC = 3    # field value converter
+FMI_CON_FUNC = 3    # field value converter - ONLY USED FOR EXT_REFS
 CLI_FIELD_MAP = [       # client data
     ('AcId', 'CD_CODE',),
     ('SfId', 'SIHOT_SF_ID'),
@@ -117,16 +117,16 @@ for idx in range(1, EXT_REF_COUNT + 1):
     FIELD_MAP.append(('ExtRefs' + str(idx) + 'Id', 'EXT_REF_ID' + str(idx),
                       "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, " + str(idx) + "), '[^=]+', 1, 2)"))
 for idx in range(1, RES_MAX_ADULTS + 1):
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'Surname', 'SH_ADULT' + str(idx) + '_NAME'))      # ResPersons1Surname
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'Forename', 'SH_ADULT' + str(idx) + '_NAME2'))    # ResPersons1Forename
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'DOB', 'SH_ADULT' + str(idx) + '_DOB'))           # ResPersons1DOB
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'Surname', 'SH_ADULT' + str(idx) + '_NAME'))     # ResPersons1Surname
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'Forename', 'SH_ADULT' + str(idx) + '_NAME2'))   # ResPersons1Forename
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'DOB', 'SH_ADULT' + str(idx) + '_DOB'))          # ResPersons1DOB
 for idx in range(1, RES_MAX_CHILDREN + 1):
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'Surname', 'SH_CHILD' + str(idx) + '_NAME'))      # ResPersons1Surname
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'Forename', 'SH_CHILD' + str(idx) + '_NAME2'))    # ResPersons1Forename
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'PaxSeq', 'SH_CHILD' + str(idx) + '_DOB'))        # ResPersons1DOB
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'Surname', 'SH_CHILD' + str(idx) + '_NAME'))     # ResPersons1Surname
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'Forename', 'SH_CHILD' + str(idx) + '_NAME2'))   # ResPersons1Forename
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'DOB', 'SH_CHILD' + str(idx) + '_DOB'))          # ResPersons1DOB
 '''
 
-row_field_name_map = {rcn: rfn for rfn, rcn, *_ in CLI_FIELD_MAP + RES_FIELD_MAP}
+row_field_name_map = {fmi[FMI_COL_NAME]: fmi[FMI_FLD_NAME] for fmi in CLI_FIELD_MAP + RES_FIELD_MAP}
 
 
 def add_ac_options(cae):
@@ -143,19 +143,56 @@ def remap_row_to_field_names(crow):
     return fld_vals
 
 
+def init_col_names(field_col_map, rec):
+    return [fmi[FMI_COL_NAME] for fmi in field_col_map if fmi[FMI_FLD_NAME] in rec]
+
+
+def init_col_expressions(field_col_map, col_names):
+    return [fmi[FMI_SQL_EXPR] + " as " + fmi[FMI_COL_NAME]
+            if len(fmi) > FMI_SQL_EXPR and fmi[FMI_SQL_EXPR]
+            else fmi[FMI_COL_NAME]
+            for fmi in field_col_map if fmi[FMI_COL_NAME] in col_names]
+
+
 class AcuDbRows:
     def __init__(self, cae):
-        super(AcuDbRows, self).__init__(cae)
-        self._last_fetch = None     # store fetch_from_acu timestamp
-        self._rows = None
-
         self.cae = cae
+
+        self._last_fetch = None     # store fetch_from_acu timestamp
 
         self.ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
                             app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
         err_msg = self.ora_db.connect()
         if err_msg:
             uprint("AcuDbRows.__init__() db connect error: {}".format(err_msg))
+
+    '''
+    def __init__(self, cae, elem_col_map=None, use_kernel=None):
+        super(_AcuXmlBuilder, self).__init__(cae)
+        self.cae = cae
+        elem_col_map = deepcopy(elem_col_map)
+        self.elem_col_map = elem_col_map
+        self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
+
+        self.fix_fld_vals = dict()
+        self.acu_col_names = list()  # acu_col_names and acu_col_expres need to be in sync
+        self.acu_col_expres = list()
+        for c in elem_col_map:
+            if 'colVal' in c:
+                self.fix_fld_vals[c['colName']] = c['colVal']
+            elif c['colName'] not in self.acu_col_names:
+                self.acu_col_names.append(c['colName'])
+                self.acu_col_expres.append(c['colValFromAcu'] + " as " + c['colName'] if 'colValFromAcu' in c
+                                           else c['colName'])
+        self.response = None
+
+        self._rows = list()  # list of dicts, used by inheriting class for to store the records to send to SiHOT.PMS
+        self._recs = Records()  # used by inheriting class for to store the Record instances to be send to SiHOT.PMS
+        self._current_rec_i = 0
+
+        self._xml = ''
+        self._indent = 0
+    '''
 
     def __del__(self):
         if self.ora_db:
@@ -184,97 +221,42 @@ class AcuDbRows:
         pk_col = table + "_CODE"
         return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = :pk", bind_vars=dict(pk=str(pkey)))
 
-
-class AcuXmlBuilder(SihotXmlBuilder, AcuDbRows):
-    def __init__(self, cae, elem_col_map=None, use_kernel=None):
-        super(AcuXmlBuilder, self).__init__(cae)
-        self.cae = cae
-        elem_col_map = deepcopy(elem_col_map or cae.get_option('mapRes'))
-        self.elem_col_map = elem_col_map
-        self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
-
-        self.sihot_elem_col = [(c['elemName'],
-                                c['colName'] if 'colName' in c else None,
-                                ((' or a in "' + c['elemHideInActions'] + '"' if 'elemHideInActions' in c else '')
-                                 + (' or ' + c['elemHideIf'] if 'elemHideIf' in c else ''))[4:],
-                                c['colVal'] if 'colVal' in c else None)
-                               for c in elem_col_map if not c.get('buildExclude', False)]
-        # self.fix_fld_vals = {c['colName']: c['colVal'] for c in elem_col_map if 'colName' in c and 'colVal' in c}
-        # acu_col_names and acu_col_expres need to be in sync
-        # self.acu_col_names = [c['colName'] for c in elem_col_map if 'colName' in c and 'colVal' not in c]
-        # self.acu_col_expres = [c['colValFromAcu'] + " as " + c['colName'] if 'colValFromAcu' in c else c['colName']
-        #                       for c in elem_col_map if 'colName' in c and 'colVal' not in c]
-        # alternative version preventing duplicate column names
-        self.fix_fld_vals = dict()
-        self.acu_col_names = list()  # acu_col_names and acu_col_expres need to be in sync
-        self.acu_col_expres = list()
-        for c in elem_col_map:
-            if 'colName' in c:
-                if 'colVal' in c:
-                    self.fix_fld_vals[c['colName']] = c['colVal']
-                elif c['colName'] not in self.acu_col_names:
-                    self.acu_col_names.append(c['colName'])
-                    self.acu_col_expres.append(c['colValFromAcu'] + " as " + c['colName'] if 'colValFromAcu' in c
-                                               else c['colName'])
-        # mapping dicts between db column names and xml element names (not works for dup elems like MATCHCODE in RES)
-        self.col_elem = {c['colName']: c['elemName'] for c in elem_col_map if 'colName' in c and 'elemName' in c}
-        self.elem_col = {c['elemName']: c['colName'] for c in elem_col_map if 'colName' in c and 'elemName' in c}
-
-        self.response = None
-
-        self._rows = list()  # list of dicts, used by inheriting class for to store the records to send to SiHOT.PMS
-        self._current_rows_i = 0
-        self._recs = Records()  # used by inheriting class for to store the Record instances to be send to SiHOT.PMS
-        self._current_rec_i = 0
-
-        self._xml = ''
-        self._indent = 0
-
-    # --- recs/fields helpers
-
-    @property
-    def cols(self):
-        return self._rows[self._current_rows_i] if len(self._rows) > self._current_rows_i else dict()
-
-    # def next_row(self): self._current_rows_i += 1
-
-    @property
-    def row_count(self):
-        return len(self._rows)
-
-    @property
-    def rows(self):
-        return self._rows
-
-    @property
-    def recs(self):
-        return self._recs
-
-    def fetch_all_from_acu(self):
+    def fetch_all_from_acu(self, col_names):
         self._last_fetch = datetime.datetime.now()
-        self._rows = list()
+        ret_rows = list()
         plain_rows = self.ora_db.fetch_all()
-        for r in plain_rows:
-            col_values = self.fix_fld_vals.copy()
-            col_values.update(zip(self.acu_col_names, r))
-            self._rows.append(col_values)
+        for row in plain_rows:
+            ret_rows.append(dict(zip(col_names, row)))
         self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} got {}, 1st row: {}"
-                        .format(self._last_fetch, self.row_count, self.cols), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                        .format(self._last_fetch, len(ret_rows), ret_rows), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        return ret_rows
 
 
-class AcuClientToSihot(AcuXmlBuilder, ClientToSihot):
+class AcuClientToSihot(ClientToSihot):
     def __init__(self, cae):
         super(AcuClientToSihot, self).__init__(cae)
-        self._rows = None
+        self.acu_db = AcuDbRows(cae)
+        self._col_names = init_col_names(CLI_FIELD_MAP, self.elem_fld_rec)
+        self._col_expressions = init_col_expressions(CLI_FIELD_MAP, self._col_names)
+        self.rows = ()
+
+    def __del__(self):
+        self.acu_db = None
 
     def _fetch_from_acu(self, view, acu_id=''):
         where_group_order = ''
         if acu_id:
             where_group_order += "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
 
-        err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order)
-        if not err_msg:
-            self.fetch_all_from_acu()
+        err_msg = self.acu_db.ora_db.select(view, self._col_expressions, where_group_order)
+        if err_msg:
+            self.rows = ()
+        else:
+            rows = self.acu_db.fetch_all_from_acu(self._col_names)
+            for col_values in rows:
+                for col, val in col_values.items():
+                    if col in self.elem_fld_rec:
+                        self.elem_fld_rec.set_val(val, col, system=SDI_AC, direction=FAD_FROM)
         return err_msg
 
     # use for sync only not for migration because we have clients w/o log entries
@@ -293,8 +275,8 @@ class AcuClientToSihot(AcuXmlBuilder, ClientToSihot):
         err_msg = super()._send_person_to_sihot(remap_row_to_field_names(c_row), first_person=first_person)
 
         if not err_msg and self.response:
-            err_msg = self._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response.objid,
-                                              col_name_suffix="2" if first_person else "")
+            err_msg = self.acu_db._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response.objid,
+                                                     col_name_suffix="2" if first_person else "")
         return err_msg
 
     def send_client_to_sihot(self, c_row=None):
@@ -317,12 +299,12 @@ class AcuClientToSihot(AcuXmlBuilder, ClientToSihot):
             action += '/' + self.action
             couple_linkage = '+P2'
 
-        log_err = self._add_to_acumen_sync_log('CD', c_row['CD_CODE'],
-                                               action,
-                                               'ERR' + (self.response.server_error() if self.response else '')
-                                               if err_msg else 'SYNCED' + couple_linkage,
-                                               err_msg,
-                                               c_row.get('CDL_CODE', -966) or -969)
+        log_err = self.acu_db._add_to_acumen_sync_log('CD', c_row['CD_CODE'],
+                                                      action,
+                                                      'ERR' + (self.response.server_error() if self.response else '')
+                                                      if err_msg else 'SYNCED' + couple_linkage,
+                                                      err_msg,
+                                                      c_row.get('CDL_CODE', -966) or -969)
         if log_err:
             err_msg += "\n      LogErr=" + log_err
 
@@ -337,7 +319,17 @@ class AcuClientToSihot(AcuXmlBuilder, ClientToSihot):
         return err_msg
 
 
-class AcuResToSihot(ResToSihot, AcuXmlBuilder):
+class AcuResToSihot(ResToSihot):
+    def __init__(self, cae):
+        super(AcuResToSihot, self).__init__(cae)
+        self.acu_db = AcuDbRows(cae)
+        self._col_names = init_col_names(RES_FIELD_MAP, self.elem_fld_rec)
+        self._col_expressions = init_col_expressions(RES_FIELD_MAP, self._col_names)
+        self.rows = ()
+
+    def __del__(self):
+        self.acu_db = None
+
     def _fetch_from_acu(self, view, where_group_order, date_range, hints=''):
         if date_range == 'H':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE < trunc(sysdate)"
@@ -354,9 +346,16 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder):
             where_group_order += (" and " if where_group_order else "") + "DEP_DATE >= trunc(sysdate)"
         elif date_range == 'F':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE >= trunc(sysdate)"
-        err_msg = self.ora_db.select(view, self.acu_col_expres, where_group_order, hints=hints)
-        if not err_msg:
-            self.fetch_all_from_acu()
+
+        err_msg = self.acu_db.ora_db.select(view, self._col_expressions, where_group_order, hints=hints)
+        if err_msg:
+            self.rows = ()
+        else:
+            self.rows = self.acu_db.fetch_all_from_acu(self._col_names)
+            for col_values in self.rows:
+                for col, val in col_values.items():
+                    if col in self.elem_fld_rec:
+                        self.elem_fld_rec.set_val(val, col, system=SDI_AC, direction=FAD_FROM)
         return err_msg
 
     def fetch_from_acu_by_aru(self, where_group_order='', date_range=''):
@@ -373,13 +372,13 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder):
         err_msg, warn_msg = super()._sending_res_to_sihot(remap_row_to_field_names(crow))
 
         if not err_msg and self.response:
-            err_msg = self._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response.objid)
-        err_msg += self._add_to_acumen_sync_log('RU', crow['RUL_PRIMARY'],
-                                                crow['RUL_ACTION'],
-                                                "ERR" + (self.response.server_error() if self.response else "")
-                                                if err_msg else "SYNCED",
-                                                err_msg + ("W" + warn_msg if warn_msg else ""),
-                                                crow['RUL_CODE'])
+            err_msg = self.acu_db._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response.objid)
+        err_msg += self.acu_db._add_to_acumen_sync_log('RU', crow['RUL_PRIMARY'],
+                                                       crow['RUL_ACTION'],
+                                                       "ERR" + (self.response.server_error() if self.response else "")
+                                                       if err_msg else "SYNCED",
+                                                       err_msg + ("W" + warn_msg if warn_msg else ""),
+                                                       crow['RUL_CODE'])
         return err_msg
 
     def _ensure_clients_exist_and_updated(self, fld_vals, ensure_client_mode):
@@ -394,14 +393,14 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder):
             else:
                 err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['CD_CODE'])
             if not err_msg:
-                if acu_client.row_count:
+                if acu_client.rows:
                     err_msg = acu_client.send_client_to_sihot()
                 elif not client_synced:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): client {} not found"\
                         .format(fld_vals['CD_CODE'])
                 if not err_msg:
                     err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['CD_CODE'])  # re-fetch OBJIDs
-                if not err_msg and not acu_client.row_count:
+                if not err_msg and not acu_client.rows:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): IntErr/client: " + fld_vals['CD_CODE']
                 if not err_msg:
                     # transfer just created guest OBJIDs from guest to reservation record
@@ -417,14 +416,14 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder):
             else:
                 err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['OC_CODE'])
             if not err_msg:
-                if acu_client.row_count:
+                if acu_client.rows:
                     err_msg = acu_client.send_client_to_sihot()
                 elif not client_synced:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): invalid orderer {}"\
                         .format(fld_vals['OC_CODE'])
                 if not err_msg:
                     err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['OC_CODE'])
-                if not err_msg and not acu_client.row_count:
+                if not err_msg and not acu_client.rows:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated() error: orderer={} cols={} sync={}"\
                         .format(fld_vals['OC_CODE'], repr(getattr(acu_client, 'cols', "unDef")), client_synced)
                 if not err_msg:
@@ -471,7 +470,7 @@ class AcuResToSihot(ResToSihot, AcuXmlBuilder):
         return ret_msg
 
 
-# currently still/only used by AcuSihotMonitor for testing purposes - can be deleted
+# only used by AcuSihotMonitor for testing purposes
 class AcuServer(SihotXmlBuilder):
     def time_sync(self):
         self.beg_xml(operation_code='TS')

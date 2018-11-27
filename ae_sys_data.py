@@ -16,8 +16,8 @@ ACTION_SEARCH = 'SEARCH'
 # field aspect types/prefixes
 FAT_IDX = 'idx'                 # field name within parent Record or list index within Records/Values
 FAT_VAL = 'vle'                 # field value - storing one of the VALUE_TYPES instance
-FAT_REC = 'rcd'                 # root Record instance
-FAT_RCX = 'rcx'                 # field index path (idx_path) from the root Record instance
+FAT_REC = 'rrd'                 # root Record instance
+FAT_RCX = 'rrx'                 # field index path (idx_path) from the root Record instance
 FAT_CAL = 'clc'                 # calculator callable
 FAT_CHK = 'chk'                 # validator callable
 FAT_CNV = 'cnv'                 # system value converter callable
@@ -99,8 +99,8 @@ def deeper(deepness, instance):
     """
     if deepness > 0:
         remaining = deepness - 1
-    elif deepness == -2 and type(instance) == Value \
-            or deepness == -3 and type(instance) == _Field and type(instance.value()) == Value:
+    elif deepness == -2 and isinstance(instance, Value) \
+            or deepness == -3 and isinstance(instance, _Field) and isinstance(instance.value(), Value):
         remaining = 0
     else:
         remaining = deepness    # return unchanged if deepness in (0, -1) or == -2/-3 but not reached bottom/last level
@@ -261,7 +261,7 @@ class Values(list):
         self.current_idx = self.idx_min = self.idx_max = None
 
     def __repr__(self):
-        return ("Values" if type(self) == Values else "Records") + "([" + ",".join(repr(v) for v in self) + "])"
+        return ("Records" if isinstance(self, Records) else "Values") + "([" + ",".join(repr(v) for v in self) + "])"
 
     def value(self, *idx_path, system='', direction='', **kwargs):
         if len(idx_path) == 0:
@@ -269,12 +269,14 @@ class Values(list):
         idx, *idx2 = idx_path
         return self[idx].value(*idx2, system=system, direction=direction, **kwargs)
 
-    def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=None,
+    def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=(),
                   use_curr_idx=None):
         assert len(idx_path), \
             "Values/Records.set_value() idx_path '{}' must be non-empty tuple or list".format(idx_path)
 
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
+        if root_idx:
+            root_idx += (idx, )
         self[idx].set_value(value, *idx2, system=system, direction=direction, protect=protect,
                             root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
         return self
@@ -306,7 +308,7 @@ class Values(list):
             self[idx] = value
         return self
 
-    def node_child(self, idx_path, system='', direction='', flex_sys_dir=True, moan=False):
+    def node_child(self, idx_path, system='', direction='', flex_sys_dir=True, use_curr_idx=None, moan=False):
         assert isinstance(idx_path, (tuple, list)), "Values/Records.node_child() idx_path has to be tuple or list"
         idx_len = len(idx_path)
         if moan:
@@ -314,7 +316,7 @@ class Values(list):
         elif idx_len == 0:
             return None
 
-        idx, *idx2 = idx_path
+        idx, *idx2 = use_current_index(self, idx_path, use_curr_idx)
         if moan:
             lst_len = len(self)
             assert isinstance(idx, int) and lst_len > idx, \
@@ -323,22 +325,23 @@ class Values(list):
 
         if idx_len == 1:
             return self[idx]
-        return self[idx].node_child(idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir, moan=moan)
+        return self[idx].node_child(idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
+                                    use_curr_idx=use_curr_idx, moan=moan)
 
-    def copy(self, *idx_path, deepness=0, **kwargs):
+    def copy(self, deepness=0, root_rec=None, root_idx=(), **kwargs):
         """
         copy the values/records of this list (Values or Records)
-        :param idx_path:        path of field names and/or list/Records indexes.
         :param deepness:        deep copy levels: <0==see deeper(), 0==only copy current instance, >0==deep copy
                                 to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
+        :param root_rec:        destination root record.
+        :param root_idx:        destination index path (tuple of field names and/or list/Records indexes).
         :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
         :return:                new/extended record instance.
         """
         ret = type(self)()      # create new instance of this list/class (Values or Records)
         for idx, rec in enumerate(self):
-            idx_path += (idx,)
             if deeper(deepness, rec):
-                rec = rec.copy(*idx_path, deepness=deeper(deepness, rec), **kwargs)
+                rec = rec.copy(deepness=deeper(deepness, rec), root_rec=root_rec, root_idx=root_idx + (idx, ), **kwargs)
             ret.append(rec)
         return ret
 
@@ -355,7 +358,7 @@ class Values(list):
 
 class Records(Values):
     def set_node_child(self, rec_or_fld_or_val, *idx_path, system='', direction='', protect=False,
-                       root_rec=None, root_idx=None, use_curr_idx=None):
+                       root_rec=None, root_idx=(), use_curr_idx=None):
         idx_len = len(idx_path)
         assert idx_len, "Records.set_node_child() idx_path {} too short; expected one or more items".format(idx_path)
 
@@ -368,6 +371,8 @@ class Records(Values):
             protect = False
 
         rec = self[idx]
+        if root_idx:
+            root_idx += (idx, )
         if idx_len == 1:
             assert not protect, "protect has to be False to overwrite Record"
             if isinstance(rec_or_fld_or_val, Record):
@@ -380,11 +385,13 @@ class Records(Values):
         return self
 
     def set_val(self, val, *idx_path, system='', direction='', flex_sys_dir=True,
-                protect=False, extend=True, converter=None, root_rec=None, root_idx=None, use_curr_idx=None):
+                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
         assert isinstance(idx, int), "Records expects first index of type int, but got {}".format(idx_path)
 
         list_len = len(self)
+        if root_idx:
+            root_idx += (idx, )
         if list_len <= idx:
             assert extend, "extend has to be True for to add Value instances to Values"
             for _ in range(idx - list_len + 1):
@@ -411,7 +418,17 @@ class Records(Values):
             item_idx = idx_path + (idx, )
             yield from item.leaf_indexes(*item_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def set_env(self, system='', direction='', root_rec=None, root_idx=None):
+    def append_record(self, from_rec=None, root_rec=None, root_idx=()):
+        recs_len = len(self)
+        if from_rec is None:
+            from_rec = self[0] if recs_len else Record()
+        if root_rec is None:
+            root_rec = from_rec
+        new_rec = from_rec.copy(deepness=-1, root_rec=root_rec, root_idx=root_idx + (recs_len,))
+        self.append(new_rec)
+        return new_rec
+
+    def set_env(self, system='', direction='', root_rec=None, root_idx=()):
         for idx, rec in enumerate(self):
             rec.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (idx, ))
         return self
@@ -467,7 +484,7 @@ class Record(OrderedDict):
         idx_path = key if isinstance(key, (tuple, list)) else (field_name_idx_path(key) or (key, ))
         self.set_node_child(value, *idx_path)
 
-    def node_child(self, idx_path, system='', direction='', flex_sys_dir=True, moan=False):
+    def node_child(self, idx_path, system='', direction='', flex_sys_dir=True, use_curr_idx=None, moan=False):
         msg = "Record.node_child() expects "
         if not isinstance(idx_path, (tuple, list)):
             if not isinstance(idx_path, str):
@@ -485,7 +502,7 @@ class Record(OrderedDict):
         if direction is None:
             direction = self.direction
 
-        idx, *idx2 = idx_path
+        idx, *idx2 = use_current_index(self, idx_path, use_curr_idx=use_curr_idx)
         if isinstance(idx, int):
             assert not moan, msg + "str (not int) type in 1st idx_path {} item, got {}".format(idx_path, type(idx_path))
             return None     # RETURN item not found (caller doing deep search with integer idx)
@@ -494,7 +511,8 @@ class Record(OrderedDict):
             if fld_nam == idx:
                 if not idx2:
                     break
-                fld = field.node_child(idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir, moan=moan)
+                fld = field.node_child(idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
+                                       use_curr_idx=use_curr_idx, moan=moan)
                 if fld is not None:
                     field = fld
                     break
@@ -506,7 +524,7 @@ class Record(OrderedDict):
         return field
 
     def set_node_child(self, fld_or_val, *idx_path, system=None, direction=None, protect=False,
-                       root_rec=None, root_idx=None, use_curr_idx=None):
+                       root_rec=None, root_idx=(), use_curr_idx=None):
         idx_len = len(idx_path)
         assert idx_len, "Record.set_node_child() expect 2 or more args - missing field name/-path"
         assert isinstance(idx_path[0], str), \
@@ -524,14 +542,14 @@ class Record(OrderedDict):
             direction = self.direction
         if root_rec is None:
             root_rec = self
-        if root_idx is None:
-            root_idx = idx_path
 
         fld_idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
+        root_idx += (fld_idx, )
         if not isinstance(fld_or_val, NODE_CHILD_TYPES):
             use_current_index(self, idx_path, use_curr_idx, delta=-1)
             self.set_val(fld_or_val, *idx_path, system=system, direction=direction, protect=protect,
-                         root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+                         root_rec=root_rec, root_idx=root_idx[:-1], use_curr_idx=use_curr_idx)
+
         elif fld_idx in self._fields:
             if idx_len == 1:
                 assert not protect, "set_node_child(): field {} exists; pass protect=False to overwrite".format(fld_idx)
@@ -541,27 +559,29 @@ class Record(OrderedDict):
                 ror = self.value(fld_idx)    # if protect==True then should be of Record or Records
                 if not isinstance(ror, NODE_TYPES):
                     assert not protect, \
-                        "value ({}) of field {} is of {}; expected Record or Records or pass protect arg as False"\
-                        .format(ror, idx_path, type(ror))
+                        "value ({}) of field {} is of {}; expected {} or pass protect arg as False"\
+                        .format(ror, idx_path, type(ror), NODE_TYPES)
                     ror = Record() if isinstance(idx2[0], str) else Records()
                     init_current_index(ror, idx2, use_curr_idx)
-                    self.set_value(ror, fld_idx, root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+                    self.set_value(ror, fld_idx, root_rec=root_rec, root_idx=root_idx[:-1], use_curr_idx=use_curr_idx)
                 ror.set_node_child(fld_or_val, *idx2, system=system, direction=direction, protect=protect,
                                    root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+
         elif idx_len == 1:
             fld_or_val.set_system_root_rec_idx(root_rec, root_idx)
             self._add_field(fld_or_val, fld_idx)
+
         else:
             use_current_index(self, idx_path, use_curr_idx, delta=-1)
             *rec_path, deep_fld_name = idx_path
-            rec = self.node_child(rec_path)
+            rec = self.node_child(rec_path, use_curr_idx=use_curr_idx)
             if not rec:     # if no deeper Record instance exists, then create new Record via empty dict and set_val()
-                self.set_val(dict(), *rec_path, protect=protect, root_rec=root_rec, root_idx=root_idx,
+                self.set_val(dict(), *rec_path, protect=protect, root_rec=root_rec, root_idx=root_idx[:-1],
                              use_curr_idx=use_curr_idx)
-                rec = self.node_child(rec_path)
+                rec = self.node_child(rec_path, use_curr_idx=use_curr_idx)
             use_current_index(self, idx_path, use_curr_idx, delta=len(rec_path))
             rec.set_node_child(fld_or_val, deep_fld_name, system=system, direction=direction, protect=protect,
-                               root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+                               root_rec=root_rec, root_idx=idx_path[:-1], use_curr_idx=use_curr_idx)
 
     def value(self, *idx_path, system='', direction='', **kwargs):
         if len(idx_path) == 0:
@@ -569,9 +589,10 @@ class Record(OrderedDict):
         idx, *idx2 = idx_path
         return self._fields[idx].value(*idx2, system=system, direction=direction, **kwargs)
 
-    def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=None,
+    def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=(),
                   use_curr_idx=None):
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
+        root_idx += (idx, )
         self[idx].set_value(value, *idx2, system=system, direction=direction, protect=protect,
                             root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
         return self
@@ -593,18 +614,17 @@ class Record(OrderedDict):
         return val
 
     def set_val(self, val, *idx_path, system='', direction='', flex_sys_dir=True,
-                protect=False, extend=True, converter=None, root_rec=None, root_idx=None, use_curr_idx=None):
+                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
         assert len(idx_path), "Record.set_val() expect 2 or more args - missing field name or index"
 
         if root_rec is None:
             root_rec = self
-        if root_idx is None:
-            root_idx = idx_path
 
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
+        root_idx += (idx, )
         if idx not in self:
             assert extend, "Record.set_val() expects extend=True for to add new fields"
-            field = _Field(root_rec=root_rec or self, root_idx=root_idx or (idx, ))
+            field = _Field(root_rec=root_rec or self, root_idx=root_idx)
             self._add_field(field, idx)
             protect = False
         self._fields[idx].set_val(val, *idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
@@ -660,16 +680,14 @@ class Record(OrderedDict):
             items = fields
         if root_rec is None:
             root_rec = self
-        for name, field in items:
+        for name, fld_or_val in items:
             idx_path = name if isinstance(name, (tuple, list)) else (field_name_idx_path(name) or (name, ))
             if root_rec is None:
-                root_rec = field.root_rec() if isinstance(field, _Field) else self
-            if root_idx:
-                root_idx += idx_path
-            else:
-                root_idx = field.root_idx() if isinstance(field, _Field) else idx_path
+                root_rec = fld_or_val.root_rec() if isinstance(fld_or_val, _Field) else self
+            if not root_idx and isinstance(fld_or_val, _Field):
+                root_idx = fld_or_val.root_idx()
 
-            self.set_node_child(field, *idx_path, protect=True, root_rec=root_rec, root_idx=root_idx)
+            self.set_node_child(fld_or_val, *idx_path, protect=True, root_rec=root_rec, root_idx=root_idx)
         return self
 
     def add_system_fields(self, system_fields, sys_fld_indexes=None):
@@ -742,7 +760,7 @@ class Record(OrderedDict):
                         else:
                             field.set_val(fas[fi], system=self.system, direction=self.direction, protect=True,
                                           root_rec=self, root_idx=idx_path)
-                self.set_node_child(field, *idx_path, protect=True, root_rec=self, root_idx=idx_path)
+                self.set_node_child(field, *idx_path, protect=True, root_rec=self, root_idx=())
 
             self.system_fields[sys_name] = field
 
@@ -760,23 +778,25 @@ class Record(OrderedDict):
 
         return self.collected_system_fields
 
-    def copy(self, *idx_path, deepness=0, to_rec=None, filter_func=None, fields_patches=None):
+    def copy(self, deepness=0, onto_rec=None, root_rec=None, root_idx=(), filter_func=None, fields_patches=None):
         """
         copy the fields of this record
-        :param idx_path:        list of path items of field names and/or indexes.
-        :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
+        :param deepness:        deep copy level: <0==see deeper(), 0==only copy this record instance, >0==deep copy
                                 to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
-        :param to_rec:          destination record; pass None to create new Record instance.
+        :param onto_rec:        destination record; pass None to create new Record instance.
+        :param root_rec:        destination root record - using onto_rec/new record if not specified.
+        :param root_idx:        destination root index (tuple/list with index path items: field names, list indexes).
         :param filter_func:     method called for each copied field (return True to filter/hide/not-include into copy).
         :param fields_patches:  dict with keys as idx_paths and values as dict of aspect keys and values (for to
                                 overwrite aspects in the copied Record instance).
         :return:                new/extended record instance.
         """
-        new_rec = to_rec is None
+        new_rec = onto_rec is None
         if new_rec:
-            to_rec = Record()
-        elif not fields_patches:
-            assert to_rec is not self, "copy() cannot copy to self (same Record instance) without patches"
+            onto_rec = Record()
+        if root_rec is None:
+            root_rec = onto_rec
+        assert onto_rec is not self, "copy() cannot copy to self (same Record instance)"
 
         for name, field in self._fields.items():
             if filter_func:
@@ -785,23 +805,21 @@ class Record(OrderedDict):
                     continue
 
             if deeper(deepness, field):
-                new_path = (name, ) if new_rec else idx_path + (name, )
-                field = field.copy(*new_path,  deepness=deeper(deepness, field),
-                                   to_rec=None if new_rec else to_rec,
+                field = field.copy(deepness=deeper(deepness, field), onto_rec=None if new_rec else onto_rec,
+                                   root_rec=root_rec, root_idx=root_idx + (name, ),
                                    filter_func=filter_func, fields_patches=fields_patches)
-                field.set_system_root_rec_idx(to_rec, new_path)
-            elif name in to_rec:
-                field = to_rec[name]
+            elif name in onto_rec:
+                field = onto_rec[name]
 
             if fields_patches and name in fields_patches:
                 field.set_aspects(**fields_patches[name], allow_values=True)
 
             if new_rec:
-                to_rec._add_field(field, name)
+                onto_rec._add_field(field, name)
             else:
-                to_rec[name] = field
+                onto_rec[name] = field
 
-        return to_rec
+        return onto_rec
 
     def clear_vals(self, system='', direction=''):
         for field in self._fields.values():
@@ -881,12 +899,12 @@ class _Field:
     # .. questions/47532472/can-python-class-variables-become-instance-variables-when-altered-in-init
     _aspects = ...  # type: Dict[str, Any]
 
-    def __init__(self, root_rec=None, root_idx=None, allow_values=False, **aspects):
+    def __init__(self, root_rec=None, root_idx=(), allow_values=False, **aspects):
         self._aspects = dict()
 
         if root_rec is not None:
             self.set_root_rec(root_rec)
-        if root_idx is not None:
+        if root_idx:
             self.set_root_idx(root_idx)
         self.add_aspects(allow_values=allow_values, **aspects)
         assert FAT_REC in self._aspects, "_Field need to have a root Record instance"
@@ -920,16 +938,16 @@ class _Field:
             idx_path = field_name_idx_path(idx_path) or (idx_path, )
         self.set_value(value, *idx_path)
 
-    def node_child(self, idx_path, system='', direction='', flex_sys_dir=True, moan=False):
+    def node_child(self, idx_path, system='', direction='', flex_sys_dir=True, use_curr_idx=None, moan=False):
         assert isinstance(idx_path, (tuple, list)), "_Field.node_child() idx_path has to be tuple or list"
         idx_len = len(idx_path)
-        if moan:
-            assert idx_len, " _Field idx_path '{}' must be non-empty tuple or list".format(idx_path)
-        elif not idx_len:
+        if not idx_len:
+            assert not moan, " _Field.node_child(): idx_path has to be non-empty tuple or list"
             return None
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir or idx_len)
         assert isinstance(value, VALUE_TYPES), "_Field value type '{}' not of {}".format(type(value), VALUE_TYPES)
-        return value.node_child(idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir, moan=moan)
+        return value.node_child(idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
+                                use_curr_idx=use_curr_idx, moan=moan)
 
     def value(self, *idx_path, system='', direction='', flex_sys_dir=False):
         value = None
@@ -944,11 +962,11 @@ class _Field:
         assert not flex_sys_dir and value is None or isinstance(value, VALUE_TYPES), \
             "_Field.value({}, {}, {}, {}): value '{}'/'{}' has to be of type {}"\
             .format(idx_path, system, direction, flex_sys_dir, val_or_cal, value, VALUE_TYPES)
-        if value and isinstance(idx_path, (tuple, list)) and len(idx_path) > 0:
+        if value and len(idx_path) > 0:
             value = value.value(*idx_path)
         return value
 
-    def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=None,
+    def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=(),
                   use_curr_idx=None):
         assert isinstance(value, VALUE_TYPES), \
             "_Field.set_value({}, {}, {}, {}, {}): value has to be of type {}, but got {}"\
@@ -956,16 +974,15 @@ class _Field:
 
         key = aspect_key(FAT_VAL, system=system, direction=direction)
 
-        if isinstance(idx_path, (tuple, list)) and len(idx_path):
+        if len(idx_path) == 0:
+            assert not protect or key not in self._aspects, \
+                "_Field.set_value({}, {}, {}, {}, {}): value key {} already exists as aspect ({})" \
+                .format(value, idx_path, system, direction, protect, key, self._aspects[key])
+            self.set_system_root_rec_idx(root_rec, root_idx)
+            self._aspects[key] = value
+        else:
             self._aspects[key].set_value(value, *idx_path, system=system, direction=direction, protect=protect,
                                          root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
-        else:
-            assert not protect or key not in self._aspects, \
-                "_Field.set_value({}, {}, {}, {}, {}): value key {} already exists in aspects ({})"\
-                .format(value, idx_path, system, direction, protect, key, self._aspects)
-            if root_rec is not None and root_idx:
-                self.set_system_root_rec_idx(root_rec, root_idx)
-            self._aspects[key] = value
 
         return self
 
@@ -975,12 +992,12 @@ class _Field:
                          use_curr_idx=use_curr_idx)
 
     def set_val(self, val, *idx_path, system='', direction='', flex_sys_dir=True,
-                protect=False, extend=True, converter=None, root_rec=None, root_idx=None, use_curr_idx=None):
+                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
         idx_len = len(idx_path)
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir or idx_len)
+
         if idx_len == 0:
-            if root_rec is not None and root_idx:
-                self.set_system_root_rec_idx(root_rec, root_idx)
+            self.set_system_root_rec_idx(root_rec, root_idx)
             if converter:   # create system value if converter is specified and on leaf idx_path item
                 self.set_converter(converter, system=system, direction=direction, extend=extend,
                                    root_rec=root_rec, root_idx=root_idx)
@@ -993,7 +1010,8 @@ class _Field:
             value = Record() if isinstance(idx_path[0], str) \
                 else (Records() if idx_len > 1 or isinstance(val, dict) else Values())
             init_current_index(value, idx_path, use_curr_idx)
-            self.set_value(value, protect=protect, root_rec=root_rec, root_idx=root_idx[:-len(idx_path)])
+            self.set_value(value, protect=protect, root_rec=root_rec, root_idx=root_idx)
+
         value.set_val(val, *idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
                       protect=protect, extend=extend, converter=converter, root_rec=root_rec, root_idx=root_idx,
                       use_curr_idx=use_curr_idx)
@@ -1012,27 +1030,6 @@ class _Field:
             yield idx_path
         else:
             yield from value.leaf_indexes(*idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
-
-    def copy(self, *idx_path, deepness=0, **kwargs):
-        """
-        copy the aspects (names, indexes, values, ...) of this field
-        :param idx_path:        path of field names and/or list/Records/Values indexes.
-        :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
-                                to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
-        :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
-        :return:                new/extended record instance.
-        """
-        aspects = self._aspects
-        if deepness:
-            copied = dict()
-            for asp_key, asp_val in aspects.items():  # type: (str, Any)
-                if asp_key.startswith(FAT_VAL) and deeper(deepness, asp_val):
-                    # FAT_VAL.asp_val is field value of VALUE_TYPES (Value, Records, ...)
-                    copied[asp_key] = asp_val.copy(*idx_path, deepness=deeper(deepness, asp_val), **kwargs)
-                else:
-                    copied[asp_key] = asp_val
-            aspects = copied
-        return _Field(allow_values=True, **aspects)
 
     def find_aspect_key(self, *aspect_types, system='', direction=''):
         keys = list()
@@ -1067,7 +1064,9 @@ class _Field:
         return self
 
     def set_system_root_rec_idx(self, root_rec, root_idx):
-        assert root_rec is not None and root_idx, "root Record and index have to be specified for each _Field instance"
+        if root_rec is None:
+            return self
+
         system = root_rec.system
         direction = root_rec.direction
 
@@ -1075,9 +1074,10 @@ class _Field:
         if FAT_REC not in self._aspects:
             self.set_root_rec(root_rec)     # ensure also root_rec for main/non-sys field value
 
-        self.set_root_idx(root_idx, system=system, direction=direction)
-        if FAT_RCX not in self._aspects:
-            self.set_root_idx(root_idx)
+        if root_idx:
+            self.set_root_idx(root_idx, system=system, direction=direction)
+            if FAT_RCX not in self._aspects:
+                self.set_root_idx(root_idx)
 
         return self
 
@@ -1109,8 +1109,8 @@ class _Field:
     def set_aspect(self, aspect_value, type_or_key, system='', direction='', protect=False, allow_values=False):
         key = aspect_key(type_or_key, system=system, direction=direction)
         if protect:
-            assert key not in self._aspects, "_Field.set_aspect({}, {}, {}, {}, {}): {} already exists in aspects ({})"\
-                .format(aspect_value, type_or_key, system, direction, protect, key, self._aspects)
+            assert key not in self._aspects, "_Field.set_aspect({}, {}, {}, {}, {}, {}): {} already exists as ({})"\
+                .format(aspect_value, type_or_key, system, direction, protect, allow_values, key, self._aspects[key])
         if not allow_values:
             assert not key.startswith(FAT_VAL), \
                 "pass allow_values=True or set values of _Field instances with the methods set_value() or set_val()"
@@ -1168,14 +1168,14 @@ class _Field:
     def set_calculator(self, calculator, system='', direction='', protect=False):
         return self.set_aspect(calculator, FAT_CAL, system=system, direction=direction, protect=protect)
 
-    def _ensure_system_value(self, system, direction='', root_rec=None, root_idx=None):
+    def _ensure_system_value(self, system, direction='', root_rec=None, root_idx=()):
         if not self.aspect_exists(FAT_VAL, system=system, direction=direction):
             self.set_value(Value(), system=system, direction=direction, root_rec=root_rec, root_idx=root_idx)
 
     def validator(self, system='', direction=''):
         return self.aspect_value(FAT_CHK, system=system, direction=direction)
 
-    def set_validator(self, validator, system='', direction='', protect=False, root_rec=None, root_idx=None):
+    def set_validator(self, validator, system='', direction='', protect=False, root_rec=None, root_idx=()):
         assert system != '', "_Field validator can only be set for a given/non-empty system"
         self._ensure_system_value(system, direction=direction, root_rec=root_rec, root_idx=root_idx)
         return self.set_aspect(validator, FAT_CHK, system=system, direction=direction, protect=protect)
@@ -1183,7 +1183,7 @@ class _Field:
     def converter(self, system='', direction=''):
         return self.aspect_value(FAT_CNV, system=system, direction=direction)
 
-    def set_converter(self, converter, system='', direction='', extend=False, root_rec=None, root_idx=None):
+    def set_converter(self, converter, system='', direction='', extend=False, root_rec=None, root_idx=()):
         assert system != '', "_Field converter can only be set for a given/non-empty system"
         self._ensure_system_value(system, direction=direction, root_rec=root_rec, root_idx=root_idx)
         return self.set_aspect(converter, FAT_CNV, system=system, direction=direction, protect=extend)
@@ -1200,17 +1200,14 @@ class _Field:
     def set_sql_expression(self, sql_expression, system='', direction='', protect=False):
         return self.set_aspect(sql_expression, FAT_SQE, system=system, direction=direction, protect=protect)
 
-    def append_record(self, system='', direction=''):
-        value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=True)
-        if isinstance(value, Records):
-            if not isinstance(value, Records):
-                value = Records()
-                init_current_index(value, (0, ), None)
-                self.set_value(value, system=system, direction=direction)
-            rec = Record(system=system, direction=direction)
-            value.append(rec)
-            return True
-        return False
+    def append_record(self, system='', direction='', flex_sys_dir=True, root_rec=None, root_idx=()):
+        value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
+        assert isinstance(value, Records), "append_record() expects Records type but got {}".format(type(value))
+        if root_rec is None:
+            root_rec = self.root_rec(system=system, direction=direction)
+        if not root_idx:
+            root_idx = self.root_idx(system=system, direction=direction)
+        return value.append_record(root_rec=root_rec, root_idx=root_idx)
 
     def clear_vals(self, system='', direction='', flex_sys_dir=True):
         """
@@ -1243,6 +1240,29 @@ class _Field:
                 return None
 
         return val
+
+    def copy(self, deepness=0, root_rec=None, root_idx=(), **kwargs):
+        """
+        copy the aspects (names, indexes, values, ...) of this field
+        :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
+                                to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
+        :param root_rec:        destination root record.
+        :param root_idx:        destination index path (tuple of field names and/or list/Records/Values indexes).
+        :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
+        :return:                new/extended record instance.
+        """
+        aspects = self._aspects
+        if deepness:
+            copied = dict()
+            for asp_key, asp_val in aspects.items():  # type: (str, Any)
+                if asp_key.startswith(FAT_VAL) and deeper(deepness, asp_val):
+                    # FAT_VAL.asp_val is field value of VALUE_TYPES (Value, Records, ...)
+                    copied[asp_key] = asp_val.copy(deepness=deeper(deepness, asp_val),
+                                                   root_rec=root_rec, root_idx=root_idx, **kwargs)
+                elif asp_key not in (FAT_REC, FAT_RCX):
+                    copied[asp_key] = asp_val
+            aspects = copied
+        return _Field(root_rec=root_rec, root_idx=root_idx, allow_values=True, **aspects)
 
     def pull(self, from_system, root_rec, root_idx):
         assert from_system, "_Field.pull() with empty value in from_system is not allowed"
@@ -1292,10 +1312,10 @@ class _Field:
 
     rfv = rec_field_val
 
-    def system_rec_val(self, *idx_path, system='', direction=''):
+    def system_rec_val(self, *idx_path, system='', direction='', use_curr_idx=None):
         root_rec = self.root_rec(system=system, direction=direction)
         if idx_path:
-            field = root_rec.node_child(*idx_path)
+            field = root_rec.node_child(*idx_path, use_curr_idx=use_curr_idx)
         else:
             field = self
         if field:

@@ -1,16 +1,29 @@
+import pytest
 import datetime
 
-from shif import GuestFromSihot, ResFromSihot
-from acif import AcuXmlBuilder  # , AcuClientToSihot, AcuResToSihot
+from shif import ClientFromSihot, ResFromSihot
+from acif import AcuClientToSihot, AcuResToSihot
 from AcuServer import client_to_acu
 
 
+# noinspection PyShadowingNames
+@pytest.fixture()
+def acu_client(console_app_env):
+    return AcuClientToSihot(console_app_env)
+
+
+# noinspection PyShadowingNames
+@pytest.fixture()
+def acu_res(console_app_env):
+    return AcuResToSihot(console_app_env)
+
+
 class TestClientFromAcuToSihot:
-    def test_couple_with_different_surname(self, acu_guest):
-        error_msg = acu_guest.fetch_from_acu_by_cd('E007434')  # Christopher J. Smith & Irene Fitzgerald
+    def test_couple_with_different_surname(self, acu_client):
+        error_msg = acu_client.fetch_from_acu_by_cd('E007434')  # Christopher J. Smith & Irene Fitzgerald
         assert error_msg == ''
         if not error_msg:
-            row = acu_guest.cols
+            row = acu_client.cols
             assert row['CD_CODE'] == 'E007434'
             assert row['CD_CODE2'] == 'E007434P2'
             assert str(row['SIHOT_SALUTATION1']) == '1'
@@ -19,14 +32,14 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'GB'
             assert row['SIHOT_LANG'] == 'EN'
-            error_msg = acu_guest.send_client_to_sihot(row)
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg
 
-    def test_couple_with_same_surname(self, acu_guest):
-        error_msg = acu_guest.fetch_from_acu_by_cd('D496085')  # Nicholas & Anne Smith
+    def test_couple_with_same_surname(self, acu_client):
+        error_msg = acu_client.fetch_from_acu_by_cd('D496085')  # Nicholas & Anne Smith
         assert not error_msg
         if not error_msg:
-            row = acu_guest.cols
+            row = acu_client.cols
             assert row['CD_CODE'] == 'D496085'
             assert row['CD_CODE2'] == 'D496085P2'
             assert str(row['SIHOT_SALUTATION1']) == 'None'
@@ -35,20 +48,20 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'ES'
             assert row['SIHOT_LANG'] == 'ES'
-            error_msg = acu_guest.send_client_to_sihot(row)
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg
 
-    def test_female_client(self, acu_guest):
-        error_msg = acu_guest.fetch_from_acu_by_acu('E119378')       # Marlene Guy - has no T_LOG entries
+    def test_female_client(self, acu_client):
+        error_msg = acu_client.fetch_from_acu_by_acu('E119378')       # Marlene Guy - has no T_LOG entries
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count <= 1
+            assert acu_client.row_count <= 1
 
-        error_msg = acu_guest.fetch_from_acu_by_cd('E119378')
+        error_msg = acu_client.fetch_from_acu_by_cd('E119378')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count == 1
-            row = acu_guest.cols
+            assert acu_client.row_count == 1
+            row = acu_client.cols
             assert row['CD_CODE'] == 'E119378'
             assert row['CD_CODE2'] is None
             assert str(row['SIHOT_SALUTATION1']) == '2'
@@ -57,15 +70,15 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == 'None'
             assert row['SIHOT_COUNTRY'] == 'GB'
             assert row['SIHOT_LANG'] == 'EN'
-            error_msg = acu_guest.send_client_to_sihot(row)
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg
 
-    def test_couple_rci_number_without_res(self, acu_guest):
-        error_msg = acu_guest.fetch_from_acu_by_cd('E128745')  # test Pax2 deletion/change-of-pax1 - has no LOG entry
+    def test_couple_rci_number_without_res(self, acu_client):
+        error_msg = acu_client.fetch_from_acu_by_cd('E128745')  # test Pax2 deletion/change-of-pax1 - has no LOG entry
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count == 1
-            row = acu_guest.cols
+            assert acu_client.row_count == 1
+            row = acu_client.cols
             assert row['CD_CODE'] == 'E128745'
             assert row['CD_CODE2'] == 'E128745P2'
             assert str(row['SIHOT_SALUTATION1']) == '1'
@@ -74,15 +87,15 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'GB'
             assert row['SIHOT_LANG'] == 'EN'
-            error_msg = acu_guest.send_client_to_sihot(row)
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg
 
-    def test_couple_with_rci_without_res(self, acu_guest):
-        error_msg = acu_guest.fetch_from_acu_by_cd('E128746')       # has no log entry
+    def test_couple_with_rci_without_res(self, acu_client):
+        error_msg = acu_client.fetch_from_acu_by_cd('E128746')       # has no log entry
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count == 1
-            row = acu_guest.cols
+            assert acu_client.row_count == 1
+            row = acu_client.cols
             assert row['CD_CODE'] == 'E128746'
             assert row['CD_CODE2'] == 'E128746P2'
             assert str(row['SIHOT_SALUTATION1']) == '1'
@@ -91,16 +104,16 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'GB'
             assert row['SIHOT_LANG'] == 'EN'
-            error_msg = acu_guest.send_client_to_sihot(row)
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg
 
-    def test_pax1_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
-        error_msg = acu_guest.fetch_from_acu_by_acu(acu_id='G561518')
+    def test_pax1_with_doctor_title(self, acu_client):  # G558956/G561518 - same family with future res
+        error_msg = acu_client.fetch_from_acu_by_acu(acu_id='G561518')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count <= 1
-            if acu_guest.row_count:
-                row = acu_guest.cols
+            assert acu_client.row_count <= 1
+            if acu_client.row_count:
+                row = acu_client.cols
                 assert row['CD_CODE'] == 'G561518'
                 assert row['CD_CODE2'] == 'G561518P2'
                 assert str(row['SIHOT_SALUTATION1']) == 'None'
@@ -111,16 +124,16 @@ class TestClientFromAcuToSihot:
                 assert str(row['SIHOT_GUESTTYPE2']) == '0'
                 assert row['SIHOT_COUNTRY'] == 'AT'
                 assert row['SIHOT_LANG'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row)
+                error_msg = acu_client.send_client_to_sihot(row)
                 assert not error_msg
 
-    def test_both_pax_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
-        error_msg = acu_guest.fetch_from_acu_by_acu(acu_id='G558956')
+    def test_both_pax_with_doctor_title(self, acu_client):  # G558956/G561518 - same family with future res
+        error_msg = acu_client.fetch_from_acu_by_acu(acu_id='G558956')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count <= 1
-            if acu_guest.row_count:
-                row = acu_guest.cols
+            assert acu_client.row_count <= 1
+            if acu_client.row_count:
+                row = acu_client.cols
                 assert row['CD_CODE'] == 'G558956'
                 assert row['CD_CODE2'] == 'G558956P2'
                 assert str(row['SIHOT_SALUTATION1']) == 'None'
@@ -131,15 +144,15 @@ class TestClientFromAcuToSihot:
                 assert str(row['SIHOT_GUESTTYPE2']) == '0'
                 assert row['SIHOT_COUNTRY'] == 'AT'
                 assert row['SIHOT_LANG'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row)
+                error_msg = acu_client.send_client_to_sihot(row)
                 assert not error_msg
 
-    def test_both_pax_are_doctors_and_have_salutation(self, acu_guest):  # Y203585/HUN - Name decoded wrongly with ISO
-        error_msg = acu_guest.fetch_from_acu_by_cd('Y203585')
+    def test_both_pax_are_doctors_and_have_salutation(self, acu_client):  # Y203585/HUN - Name decoded wrongly with ISO
+        error_msg = acu_client.fetch_from_acu_by_cd('Y203585')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count == 1
-            row = acu_guest.cols
+            assert acu_client.row_count == 1
+            row = acu_client.cols
             assert row['CD_CODE'] == 'Y203585'
             assert row['CD_CODE2'] == 'Y203585P2'
             assert str(row['SIHOT_SALUTATION1']) == '1'
@@ -150,16 +163,16 @@ class TestClientFromAcuToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['SIHOT_COUNTRY'] == 'HU'
             assert row['SIHOT_LANG'] is None
-            error_msg = acu_guest.send_client_to_sihot(row)
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg
 
-    def test_client_with_10_ext_refs(self, acu_guest):  # E396693 - fetch from unsynced
-        error_msg = acu_guest.fetch_from_acu_by_acu('E396693')
+    def test_client_with_10_ext_refs(self, acu_client):  # E396693 - fetch from unsynced
+        error_msg = acu_client.fetch_from_acu_by_acu('E396693')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count <= 1
-            if acu_guest.row_count:
-                row = acu_guest.cols
+            assert acu_client.row_count <= 1
+            if acu_client.row_count:
+                row = acu_client.cols
                 assert row['CD_CODE'] == 'E396693'
                 # RCI=1442-11521,RCI=1442-55556,RCI=2429-09033,RCI=2429-09777,RCI=2429-12042,RCI=2429-13656,
                 # .. RCI=2429-55556,RCI=2972-00047,RCI=5445-12771,RCIP=5-207931
@@ -167,21 +180,21 @@ class TestClientFromAcuToSihot:
                 assert 'RCI=2972-00047' in row['EXT_REFS']
                 assert 'RCI=5-207931' in row['EXT_REFS']
                 assert len(row['EXT_REFS'].split(',')) >= 12
-                error_msg = acu_guest.send_client_to_sihot(row)
+                error_msg = acu_client.send_client_to_sihot(row)
                 # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
                 assert not error_msg
 
-    def test_client_with_objid_but_deleted_in_sihot(self, acu_guest):  # E610488, ObjId=294
-        error_msg = acu_guest.fetch_from_acu_by_cd('E610488')
+    def test_client_with_objid_but_deleted_in_sihot(self, acu_client):  # E610488, ObjId=294
+        error_msg = acu_client.fetch_from_acu_by_cd('E610488')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.row_count == 1
-            row = acu_guest.cols
+            assert acu_client.row_count == 1
+            row = acu_client.cols
             assert row['CD_CODE'] == 'E610488'
             assert row['CD_CODE2'] is None
             # overwrite objid with not existing one
-            acu_guest.cols['CD_SIHOT_OBJID'] = int(row['CD_SIHOT_OBJID']) + 1 if row['CD_SIHOT_OBJID'] else 99999
-            error_msg = acu_guest.send_client_to_sihot(row)
+            acu_client.cols['CD_SIHOT_OBJID'] = int(row['CD_SIHOT_OBJID']) + 1 if row['CD_SIHOT_OBJID'] else 99999
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg or error_msg.endswith('No guest found.')
 
 
@@ -546,7 +559,7 @@ class TestAcuServerParts:
             '''
 
     def test_client_to_acu(self, console_app_env):
-        xml_parser = GuestFromSihot(console_app_env)
+        xml_parser = ClientFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
 
         error_msg, pk = client_to_acu(xml_parser.acu_fld_vals, console_app_env)
@@ -554,7 +567,7 @@ class TestAcuServerParts:
         assert pk == 'test2'
 
 
-class TestGuestFromSihot:
+class TestClientFromSihot:
     XML_EXAMPLE = '''<?xml version="1.0" encoding="iso-8859-1"?>
     <SIHOT-Document>
         <OC>GUEST-CREATE</OC>
@@ -600,7 +613,7 @@ class TestGuestFromSihot:
     </SIHOT-Document>'''
 
     def test_attributes(self, console_app_env):
-        xml_parser = GuestFromSihot(console_app_env)
+        xml_parser = ClientFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.oc == 'GUEST-CREATE'
         assert xml_parser.tn == '1'
@@ -612,7 +625,7 @@ class TestGuestFromSihot:
         assert xml_parser.error_text == ''
 
     def test_elem_map(self, console_app_env):
-        xml_parser = GuestFromSihot(console_app_env)
+        xml_parser = ClientFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.elem_fld_map['MATCHCODE'].val() == 'test2'
         assert xml_parser.acu_fld_vals['AcId'] == 'test2'
@@ -772,42 +785,14 @@ class TestResFromSihot:
         assert xml_parser.res_list.val(0, 'GDSNO') == '1234567890ABC'
 
 
-class TestAcuXmlBuilder:
-    def test_create_xml_web(self, console_app_env):
-        xml_builder = AcuXmlBuilder(console_app_env, use_kernel=False)
-        xml_builder.beg_xml('TEST_OC')
-        xml_builder.add_tag('EMPTY')
-        xml_builder.add_tag('DEEP', xml_builder.new_tag('DEEPER', 'value'))
-        test_date = xml_builder.convert_value_to_xml_string(datetime.datetime.now())
-        xml_builder.add_tag('DATE', test_date)
-        xml_builder.end_xml()
-        console_app_env.dprint('####  New XML created: ', xml_builder.xml)
-        assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n' + \
-            '<OC>TEST_OC</OC><TN>2</TN><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
-            '<DATE>' + test_date + '</DATE>\n</SIHOT-Document>'
-
-    def test_create_xml_kernel(self, console_app_env):
-        xml_builder = AcuXmlBuilder(console_app_env, use_kernel=True)
-        xml_builder.beg_xml('TEST_OC')
-        xml_builder.add_tag('EMPTY')
-        xml_builder.add_tag('DEEP', xml_builder.new_tag('DEEPER', 'value'))
-        test_date = xml_builder.convert_value_to_xml_string(datetime.datetime.now())
-        xml_builder.add_tag('DATE', test_date)
-        xml_builder.end_xml()
-        console_app_env.dprint('####  New XML created: ', xml_builder.xml)
-        assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n<SIHOT-XML-REQUEST>' + \
-            '\n<REQUEST-TYPE>TEST_OC</REQUEST-TYPE><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
-            '<DATE>' + test_date + '</DATE>\n</SIHOT-XML-REQUEST>\n</SIHOT-Document>'
-
-
 class TestClientToSihot:
-    def test_pax1_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
-        error_msg = acu_guest.fetch_from_acu_by_acu(acu_id='G561518')
+    def test_pax1_with_doctor_title(self, acu_client):  # G558956/G561518 - same family with future res
+        error_msg = acu_client.fetch_from_acu_by_acu(acu_id='G561518')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.rec_count <= 1
-            if acu_guest.rec_count:
-                row = acu_guest
+            assert acu_client.rec_count <= 1
+            if acu_client.rec_count:
+                row = acu_client
                 assert row['AcId'] == 'G561518'
                 assert row['AcId2'] == 'G561518P2'
                 assert str(row['Salutation']) == 'None'
@@ -818,16 +803,16 @@ class TestClientToSihot:
                 assert str(row['SIHOT_GUESTTYPE2']) == '0'
                 assert row['Country'] == 'AT'
                 assert row['Language'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row)
+                error_msg = acu_client.send_client_to_sihot(row)
                 assert not error_msg
 
-    def test_both_pax_with_doctor_title(self, acu_guest):  # G558956/G561518 - same family with future res
-        error_msg = acu_guest.fetch_from_acu_by_acu(acu_id='G558956')
+    def test_both_pax_with_doctor_title(self, acu_client):  # G558956/G561518 - same family with future res
+        error_msg = acu_client.fetch_from_acu_by_acu(acu_id='G558956')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.rec_count <= 1
-            if acu_guest.rec_count:
-                row = acu_guest
+            assert acu_client.rec_count <= 1
+            if acu_client.rec_count:
+                row = acu_client
                 assert row['AcId'] == 'G558956'
                 assert row['AcId2'] == 'G558956P2'
                 assert str(row['Salutation']) == 'None'
@@ -838,15 +823,15 @@ class TestClientToSihot:
                 assert str(row['SIHOT_GUESTTYPE2']) == '0'
                 assert row['Country'] == 'AT'
                 assert row['Language'] == 'DE'
-                error_msg = acu_guest.send_client_to_sihot(row)
+                error_msg = acu_client.send_client_to_sihot(row)
                 assert not error_msg
 
-    def test_both_pax_are_doctors_and_have_salutation(self, acu_guest):  # Y203585/HUN - Name decoded wrongly with ISO
-        error_msg = acu_guest.fetch_from_acu_by_cd('Y203585')
+    def test_both_pax_are_doctors_and_have_salutation(self, acu_client):  # Y203585/HUN - Name decoded wrongly with ISO
+        error_msg = acu_client.fetch_from_acu_by_cd('Y203585')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.rec_count == 1
-            row = acu_guest
+            assert acu_client.rec_count == 1
+            row = acu_client
             assert row['AcId'] == 'Y203585'
             assert row['AcId2'] == 'Y203585P2'
             assert str(row['Salutation']) == '1'
@@ -857,16 +842,16 @@ class TestClientToSihot:
             assert str(row['SIHOT_GUESTTYPE2']) == '0'
             assert row['Country'] == 'HU'
             assert row['Language'] is None
-            error_msg = acu_guest.send_client_to_sihot(row)
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg
 
-    def test_client_with_10_ext_refs(self, acu_guest):  # E396693 - fetch from unsynced
-        error_msg = acu_guest.fetch_from_acu_by_acu('E396693')
+    def test_client_with_10_ext_refs(self, acu_client):  # E396693 - fetch from unsynced
+        error_msg = acu_client.fetch_from_acu_by_acu('E396693')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.rec_count <= 1
-            if acu_guest.rec_count:
-                row = acu_guest
+            assert acu_client.rec_count <= 1
+            if acu_client.rec_count:
+                row = acu_client
                 assert row['AcId'] == 'E396693'
                 # RCI=1442-11521,RCI=1442-55556,RCI=2429-09033,RCI=2429-09777,RCI=2429-12042,RCI=2429-13656,
                 # .. RCI=2429-55556,RCI=2972-00047,RCI=5445-12771,RCIP=5-207931
@@ -874,21 +859,21 @@ class TestClientToSihot:
                 assert 'RCI=2972-00047' in row['ExtRefs']
                 assert 'RCI=5-207931' in row['ExtRefs']
                 assert len(row['ExtRefs'].split(',')) >= 12
-                error_msg = acu_guest.send_client_to_sihot(row)
+                error_msg = acu_client.send_client_to_sihot(row)
                 # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
                 assert not error_msg
 
-    def test_client_with_objid_but_deleted_in_sihot(self, acu_guest):  # E610488, ObjId=294
-        error_msg = acu_guest.fetch_from_acu_by_cd('E610488')
+    def test_client_with_objid_but_deleted_in_sihot(self, acu_client):  # E610488, ObjId=294
+        error_msg = acu_client.fetch_from_acu_by_cd('E610488')
         assert not error_msg
         if not error_msg:
-            assert acu_guest.rec_count == 1
-            row = acu_guest
+            assert acu_client.rec_count == 1
+            row = acu_client
             assert row['AcId'] == 'E610488'
             assert row['AcId2'] is None
             # overwrite objid with not existing one
             row['ShId'] = int(row['ShId']) + 1 if row['ShId'] else 99999
-            error_msg = acu_guest.send_client_to_sihot(row)
+            error_msg = acu_client.send_client_to_sihot(row)
             assert not error_msg or error_msg.endswith('No guest found.')
 
 

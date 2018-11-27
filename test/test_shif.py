@@ -173,14 +173,14 @@ class TestResSender:
                     ResMktSegment='TC', SIHOT_MKT_SEG='TC', ResRateSegment='TC',
                     ResAccount=1,
                     ResSource='A', ResMktGroup='RS',
-                    ResAdults=2, ResChildren=2,
-                    ResPersons1Surname='Tester', ResPersons1Forename='TestY', ResPersons1DOB=today - 1000 * wk1,
-                    ResPersons2Surname='', ResPersons2Forename='',
-                    ResPersons3Surname='Tester', ResPersons3Forename='Chilly', ResPersons3DOB=today - 100 * wk1,
-                    ResPersons3GuestType='2B',
-                    ResPersons4Surname='', ResPersons4Forename='', ResPersons4GuestType='2B',
                     ResFlightArrComment='Flight1234',
-                    ResAllotmentNo=123456)
+                    ResAllotmentNo=123456,
+                    ResAdults=2, ResChildren=2,
+                    ResPersons0Surname='Tester', ResPersons0Forename='TestX', ResPersons0DOB=today - 1000 * wk1,
+                    ResPersons1Surname='Tester', ResPersons1Forename='TestY',
+                    ResPersons2Surname='Tester', ResPersons2Forename='Chilly', ResPersons2GuestType='2B',
+                    ResPersons3Surname='', ResPersons3Forename='', ResPersons3DOB=today - 100 * wk1,
+                    )
         rec = Record(fields=crow)
         err, msg = rs.send_rec(rec)
         if "setDataRoom not available!" in err:     # no error only on first run after TEST replication
@@ -246,7 +246,7 @@ class TestResSender:
         assert '1' == s
 
 
-class TestGuestFromSihot:
+class TestClientFromSihot:
     XML_EXAMPLE = '''<?xml version="1.0" encoding="iso-8859-1"?>
     <SIHOT-Document>
         <OC>GUEST-CREATE</OC>
@@ -292,7 +292,7 @@ class TestGuestFromSihot:
     </SIHOT-Document>'''
 
     def test_attributes(self, console_app_env):
-        xml_parser = GuestFromSihot(console_app_env)
+        xml_parser = ClientFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.oc == 'GUEST-CREATE'
         assert xml_parser.tn == '1'
@@ -304,7 +304,7 @@ class TestGuestFromSihot:
         assert xml_parser.error_text == ''
 
     def test_elem_map(self, console_app_env):
-        xml_parser = GuestFromSihot(console_app_env)
+        xml_parser = ClientFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.guest_list.val(0, 'AcId') == 'test2'
         assert xml_parser.guest_list.val(0, 'MATCHCODE') == 'test2'

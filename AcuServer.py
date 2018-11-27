@@ -16,8 +16,8 @@ from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from acif import add_ac_options
-from sxmlif import Request, RoomChange, GuestFromSihot, SihotXmlBuilder
-from shif import add_sh_options
+from sxmlif import Request, RoomChange, SihotXmlBuilder
+from shif import add_sh_options, ClientFromSihot
 
 __version__ = '0.5'
 
@@ -84,7 +84,7 @@ def oc_client_to_acu(req):
     error_msg, pk = client_to_acu(req.acu_col_values)
     notify("####  Guest inserted or updated within Acumen with pk=" + pk if not error_msg
            else "****  Acumen guest data insert/update error: " + error_msg)
-    resp = SihotXmlBuilder(cae, use_kernel=False, elem_col_map=(), connect_to_acu=False)
+    resp = SihotXmlBuilder(cae, use_kernel=False)
     resp.beg_xml(operation_code=req.oc)
     resp.add_tag('RC', '1' if error_msg else '0')
     resp.add_tag('MATCHCODE', pk)
@@ -139,7 +139,7 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
 
 
 def create_ack_response(req, ret_code, msg='', status=''):
-    resp = SihotXmlBuilder(cae, use_kernel=False, elem_col_map=(), connect_to_acu=False)
+    resp = SihotXmlBuilder(cae, use_kernel=False)
     resp.beg_xml(operation_code='ACK', transaction_number=getattr(req, 'tn', '69'))
     resp.add_tag('RC', ret_code)
     if msg:
@@ -175,8 +175,8 @@ def oc_keep_alive(req):
 # supported operation codes with related request class and operation code handler/processor
 SUPPORTED_OCS = {
     #  old guest sync tests Sihot -> Acumen
-    'GUEST-CREATE': {'reqClass': GuestFromSihot, 'ocProcessor': oc_client_to_acu, },
-    'GUEST-CHANGE': {'reqClass': GuestFromSihot, 'ocProcessor': oc_client_to_acu, },
+    'GUEST-CREATE': {'reqClass': ClientFromSihot, 'ocProcessor': oc_client_to_acu, },
+    'GUEST-CHANGE': {'reqClass': ClientFromSihot, 'ocProcessor': oc_client_to_acu, },
     #  keep alive and other basic SXML interfaces
     'ACK': {'reqClass': Request, 'ocProcessor': oc_keep_alive, },
     'LA': {'reqClass': Request, 'ocProcessor': oc_keep_alive, },

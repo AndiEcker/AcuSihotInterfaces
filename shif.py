@@ -48,7 +48,7 @@ MTI_FLD_CNV_FROM = 4
 MTI_FLD_CNV_ONTO = 5
 
 # mapping element name in tuple item 0 onto field name in [1], hideIf callable in [2] and default field value in [3]
-# default map for GuestFromSihot.elem_fld_map instance and as read-only constant by AcuClientToSihot using the SIHOT
+# default map for ClientFromSihot.elem_fld_map instance and as read-only constant by AcuClientToSihot using the SIHOT
 # .. KERNEL interface because SiHOT WEB V9 has missing fields: initials (CD_INIT1/2) and profession (CD_INDUSTRY1/2)
 MAP_KERNEL_CLIENT = \
     (
@@ -303,6 +303,10 @@ MAP_WEB_RES = \
         # Person Records
         ('PERSON/', None,
          lambda f: f.ina(ACTION_DELETE)),
+        ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'ShId'),
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
+        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcId'),
+         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResPersons', f.crx(), 'ShId')),
         ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'Surname'),
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId'),
          lambda f: "Adult " + str(f.crx() + 1) if f.crx() < f.rfv('ResAdults')
@@ -311,12 +315,9 @@ MAP_WEB_RES = \
          lambda f: f.ina(ACTION_DELETE) or not f.val()
             or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')),
         ('AUTO-GENERATED', None,
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId'),
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')
+            or f.rfv('ResPersons', f.crx(), 'Surname'),
          '1'),
-        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcId'),
-         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResPersons', f.crx(), 'ShId')),
-        ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'ShId'),
-         lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('ROOM-SEQ', None,
          lambda f: f.ina(ACTION_DELETE),
          '0'),
@@ -707,7 +708,7 @@ class FldMapXmlParser(SihotXmlParser):
             idx_path = cf.root_idx(system=SDI_SH, direction=FAD_FROM)
             if idx_path:
                 self._rec.set_val(self._current_data, *idx_path, system=SDI_SH, direction=FAD_FROM,
-                                  root_rec=self._rec, root_idx=idx_path, use_curr_idx=Value((1, )))
+                                  use_curr_idx=Value((1, )))
         self._collected_fields = list()
         super(FldMapXmlParser, self).end(tag)
         for elem_name, *_ in self._elem_map:
@@ -715,15 +716,15 @@ class FldMapXmlParser(SihotXmlParser):
                 self._rec.set_current_system_index(tag, ELEM_PATH_SEP)
 
 
-class GuestFromSihot(FldMapXmlParser):
+class ClientFromSihot(FldMapXmlParser):
     def __init__(self, cae, elem_map=MAP_CLIENT_DEF):
-        super(GuestFromSihot, self).__init__(cae, elem_map)
+        super(ClientFromSihot, self).__init__(cae, elem_map)
         self.guest_list = Records()
 
     # XMLParser interface
 
     def end(self, tag):
-        super(GuestFromSihot, self).end(tag)
+        super(ClientFromSihot, self).end(tag)
         if tag == 'GUEST':  # using tag arg here because self._curr_tag got reset by super method of end()
             self.guest_list.append(deepcopy(self._rec))
             self.clear_rec()
@@ -1002,7 +1003,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         self.elem_fld_rec.clear_vals()
         for k in rec.leaf_indexes():
             if k[0] in self.elem_fld_rec:
-                self.elem_fld_rec.set_val(rec[k].val(), *k, root_rec=rec, root_idx=k)
+                self.elem_fld_rec.set_val(rec[k].val(), *k)     #root_rec=rec
 
     def prepare_map_xml(self, rec, include_empty_values=True):
         self.fill_elem_fld_rec(rec)
@@ -1025,13 +1026,16 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 tag = tag[tag.rfind(ELEM_PATH_SEP) + 1:]
             idx = elem_map_item[MTI_FLD_NAME] if len(elem_map_item) > MTI_FLD_NAME else None
             if idx:
-                field = self.elem_fld_rec.node_child(idx, system=SDI_SH, direction=FAD_ONTO)
-                if field is None:
-                    continue        # skip xml creation for missing field
+                fld = self.elem_fld_rec.node_child(idx, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
+                if fld is None:
+                    fld = self.elem_fld_rec.node_child(idx, system=SDI_SH, direction=FAD_ONTO)  # use template field
+                    if fld is None:
+                        continue        # skip xml creation for missing field (in current and template rec)
+                field = fld
                 idx_path = idx if isinstance(idx, (tuple, list)) else (field_name_idx_path(idx) or (idx, ))
                 val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
-                if val is None:     # if field from empty rec (added for to fulfill pax count)
-                    val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO)   # use template val/cal
+                # if val is None:     # if field from empty rec (added for to fulfill pax count)
+                #     val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO)   # use template val/cal
                 filter_func = field.filter(system=SDI_SH, direction=FAD_ONTO)
             else:
                 if field is None:   # try to use field of last map item (especially for to get crx())
@@ -1215,10 +1219,12 @@ class ResToSihot(FldMapXmlBuilder):
         while True:
             recs_len = len(recs)
             if recs_len >= pax:
-                for _ in range(pax, recs_len):
-                    recs.pop()                                                  # remove recs (from last send)
+                for _ in range(pax, recs_len):  # remove recs (from last send)
+                    recs.pop()
                 break
-            self.elem_fld_rec.set_val('', 'ResPersons', recs_len, 'Forename')    # add rec with empty name
+            # add rec, copied from recs[0]
+            rec = recs.append_record(root_rec=self.elem_fld_rec, root_idx=('ResPersons', ))
+            rec.clear_vals()
 
     def _prepare_res_xml(self, rec):
         self.action = rec.val('ResAction') or ACTION_INSERT
