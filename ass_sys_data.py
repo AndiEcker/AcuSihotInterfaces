@@ -1473,6 +1473,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                 gets returned as sf_data['ReservationOpportunityId'].
         :return:                error message if error occurred, else empty string.
         """
+        ori_sf_id = rgr_sf_id
         sf_args = dict() if sf_data is None else sf_data
         sf_args.update(ReservationOpportunityId=rgr_sf_id)
         ass_id = ass_res_data.get('rgr_order_cl_fk')
@@ -1531,10 +1532,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                        notify=True)
             rgr_sf_id = ''
 
-        if sf_args.get('PersonAccountId') and sf_args['PersonAccountId'] != sf_cl_id \
-                and self.debug_level >= DEBUG_LEVEL_VERBOSE:
+        if not sf_cl_id or not sf_opp_id:
+            self._err("sf_res_upsert({}, {}, {}) SF push returned empty value: PersonAccount.Id={}; ResOppId={}; err={}"
+                      .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_cl_id, sf_opp_id, err_msg))
+        if not err_msg and sf_args.get('PersonAccountId') and sf_args['PersonAccountId'] != sf_cl_id \
+                and self.debug_level >= DEBUG_LEVEL_ENABLED:
             self._err("sf_res_upsert({}, {}, {}) PersonAccount discrepancy {} != {}"
-                      .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_args.get('PersonAccountId'), sf_cl_id))
+                      .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_args.get('PersonAccountId'), sf_cl_id))
 
         if sync_cache:
             if sf_cl_id and ass_id:
@@ -1547,9 +1551,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             col_values = dict() if err_msg else dict(rgr_last_sync=datetime.datetime.now())
             if not rgr_sf_id and sf_opp_id:     # save just (re-)created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
-            elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and rgr_sf_id and sf_opp_id != rgr_sf_id:
+            elif self.debug_level >= DEBUG_LEVEL_ENABLED and sf_opp_id and rgr_sf_id and sf_opp_id != rgr_sf_id:
                 self._err("sf_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
-                          .format(rgr_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, rgr_sf_id))
+                          .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, rgr_sf_id))
 
             if col_values:
                 self.rgr_upsert(col_values, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))

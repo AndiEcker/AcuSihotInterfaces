@@ -10,6 +10,7 @@
     0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
     0.7     reset/resend ResOppId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
     0.8     added SSL to postgres connection.
+    0,9     added email notification on empty return values on res send to SF (from sf_conn.res_upsert()).
 """
 import datetime
 import threading
@@ -24,7 +25,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '0.8'
+__version__ = '0.9'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
