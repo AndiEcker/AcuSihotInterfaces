@@ -5,6 +5,11 @@ or we will use a Workflow, triggered by a record update to send an Outbound Mess
 Outbound Example with twisted: https://salesforce.stackexchange.com/questions/94279/parsing-outbound-message-in-python
 and https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_quickstart_intro.htm
 
+Version History:
+
+0.1     first beta
+0.2     refactored to use ae_sys_data.
+
 
 DISTRIBUTE:
 
@@ -28,7 +33,7 @@ Web-Service server check/prepare:
 
 """
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 # change working dir so bottle.py will be find by next import statement (also for relative paths and template lookup)
 import os
@@ -99,12 +104,13 @@ def push_res(action):
     if action == 'upsert':
         body = res_upsert()
     else:
-        body = "Reservation PUSH with action {} not implemented".format(action)
+        body = "Reservation PUSH with action {} not implemented - use action upsert".format(action)
         add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
     return body
 
 
-@app.route('/res/<action>/<res_id>', method='PUT')
+'''
+'@app.route('/res/<action>/<res_id>', method='PUT')
 def put_res(action, res_id):
     if action == 'upsert':
         body = res_upsert(res_id)
@@ -112,6 +118,7 @@ def put_res(action, res_id):
         body = "Reservation PUT for ID {} with action {} not implemented".format(res_id, action)
         add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
     return body
+'''
 
 
 # -----  HELPER METHODS  -------------------------------------------
@@ -135,16 +142,15 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 # ------  ROUTE/SERVICE HANDLERS  ----------------------------------
 
 
-def res_upsert(res_id=''):
-    # web service parameters are available as dict in request.json
-    res_json = request.json
-    add_log_entry("res_upsert({}): {}".format(res_id, res_json))
+def res_upsert():
+    res_json = request.json     # web service arguments as dict
 
     res_send = ResSender(cae)
     rec = res_send.elem_fld_rec
     for name, value in res_json.items():
         rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
     rec.pull(SDI_SF)
+
     err, msg = res_send.send_rec(rec)
     if err or msg:
         add_log_entry(warning_msg=msg, error_msg=err, importance=3 if err else 2)
@@ -155,6 +161,9 @@ def res_upsert(res_id=''):
         ho_id, res_id, sub_id = res_send.get_res_no()
         # res_dict = dict(Sihot_Hotel_Id=ho_id, Sihot_Res_Id=res_id, Sihot_Sub_Id=sub_id)
         res_dict = dict(HotelIdc=ho_id, Numberc=res_id, SubNumberc=sub_id)
+
+    add_log_entry("res_upsert() call with json arguments: {}, return from SF: {}".format(res_json, res_dict))
+
     return res_dict
 
 

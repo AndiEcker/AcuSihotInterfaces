@@ -142,7 +142,7 @@ each of our clients/guests:
 | DOB | Date | Birthdate of Client/Guest | 15-12-1962 |
 | Email | String | First email address of Client/Guest | john.smith@provider.com |
 | EmailB | String | Second email address of Client/Guest | jim.knopf@company.com |
-| ExtRefs | List(Type, Id) | External Client/Guest Ids/Reference-numbers | ((RCI, 5-67890), (SF, 001234ABC67890QEI1)) |
+| ExtRefs | String or List(Type, Id) | External Client/Guest Ids/Reference-numbers | ((RCI, 5-67890), (SF, 001234ABC67890QEI1)) |
 | ExtRefs<n>Type | String | Type of External Client/Guest Id | RCI, SF, KEYS |
 | ExtRefs<n>Id | String | Id/Reference-number of External Client/Guest Id | 5-67890, 001234ABC67890QEI1 |
 | Fax | String | Fax number of Client/Guest | 004898765432 |
@@ -150,6 +150,7 @@ each of our clients/guests:
 | GuestType | String | Sihot Type of Client/Guest | 1=Individual, 6=Company |
 | HomePhone | String | Home phone number of Client/Guest | 0034678901234, 004987654321 |
 | Language | String | ISO2 Language code of Client/Guest | ES, EN, DE |
+| MarketSource | String | Marketing Source | ? |
 | MobilePhone | String | Main mobile phone number of Client/Guest | 0034678901234 |
 | MobilePhoneB | String | Second mobile phone number of Client/Guest | 0046789012345 |
 | Name | String | Full name of Client/Guest | John Smith |
@@ -157,7 +158,8 @@ each of our clients/guests:
 | Password | String | Password of Client/Guest | secRet12345, MyPassword |
 | POBox | String | Postbox of Client/Guest | 12345, ABC123 |
 | Postal | String | ZIP code of Client/Guest city | A1234, 234567 |
-| RCIRef | String | First/Main RCI reference of Client/Guest | 5-123456, 9876-54321 |
+| ProductTypes | String or List(Char) | Product types owned by this client (O=owner, I=investor, K=keys, E=ELPP) | OIK |
+| RciId | String | First/Main RCI reference of Client/Guest | 5-123456, 9876-54321 |
 | Salutation | String | Client/Guest Salutation | Mr., Mrs, Herr, Fru |
 | SfId | String | Salesforce Client Id | 001ABC234DEF567GHI |
 | ShId | String | Sihot Client/Guest Object Id | 123456789 |
@@ -287,7 +289,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ProTypGroup | RS_SIHOT_GUEST_TYPE | - | - | pt_group |
 | ProTypName | RS_NAME | - | - | pt_name |
 | ProId | WK_CODE | - | - | pr_pk |
-| RCIRef | CD_RCI_REF, CR_REF | RCI_Reference__pc | MATCH-ADM | - |
+| RciId | CD_RCI_REF, CR_REF | RCI_Reference__pc | MATCH-ADM | - |
 | ResAccount | SIHOT_PAYMENT_INST | - | RESERVATION.PAYMENT-INST | rgr_payment_inst |
 | ResAction | RUL_ACTION | - | - | - |
 | ResAdults | RU_ADULTS | Adults__c | RESERVATION.NOPAX, NO | rgr_adults |

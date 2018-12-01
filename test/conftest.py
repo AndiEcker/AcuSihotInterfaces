@@ -106,8 +106,7 @@ def create_test_guest(console_app_env):
 # noinspection PyShadowingNames
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
-    sf_conn, sf_sandbox = prepare_connection(console_app_env)
-    return sf_conn
+    return prepare_connection(console_app_env)
 
 
 ############################################################################

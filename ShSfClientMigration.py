@@ -394,15 +394,15 @@ try:
 
         sf_id, sf_obj = conf_data.sf_conn.find_client(email, phone, sf_dict['FirstName'], sf_dict['LastName'])
         if not sf_id and sf_obj and sf_dict['Email']:
-            sf_id = conf_data.sf_client_id_by_email(sf_dict['Email'], sf_obj=sf_obj)
+            sf_id = conf_data.sf_conn.sf_client_id_by_email(sf_dict['Email'], sf_obj=sf_obj)
         if sf_id:
             sf_dict[AI_SF_ID] = sf_id
             existing_client_ids.append(sf_dict)
-            sf_dict[AI_SF_CURR_DATA] = conf_data.sf_client_field_data(strip_add_info_keys(sf_dict), sf_id,
-                                                                      sf_obj=sf_obj)
-            if conf_data.error_message:
+            sf_dict[AI_SF_CURR_DATA] = conf_data.sf_conn.sf_client_field_data(strip_add_info_keys(sf_dict), sf_id,
+                                                                              sf_obj=sf_obj)
+            if conf_data.sf_conn.error_msg:
                 notification_add_line("SF-FETCH-DATA-ERROR: '{}' of {} ID {}"
-                                      .format(conf_data.error_message, sf_obj, sf_id), is_error=True)
+                                      .format(conf_data.sf_conn.error_msg, sf_obj, sf_id), is_error=True)
 
         rec_type_id = conf_data.sf_conn.record_type_id(sf_obj=sf_obj)
         sf_send = strip_add_info_from_sf_data(sf_dict, check_data=True, record_type_id=rec_type_id, obj_type=sf_obj)

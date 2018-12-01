@@ -29,7 +29,7 @@ if client_code:
         err_msg = acumen_client.fetch_from_acu_by_cd(client_code)
     progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_client.row_count,
                         start_msg='Prepare sending of {total_count} reservation requests' + client_msg,
-                        nothing_to_do_msg='SihotMigration: acumen_req fetch returning no rows')
+                        nothing_to_do_msg='SihotMigration: acumen_req fetch returning no recs')
 
     uprint('####  Sending ...........  ####')
 

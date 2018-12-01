@@ -6,7 +6,7 @@ from copy import deepcopy
 
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
 from ae_db import OraDB
-from ae_sys_data import ACTION_UPDATE, ACTION_DELETE, FAD_FROM
+from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM
 from shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
 from sxmlif import SihotXmlBuilder
 from sys_data_ids import SDI_AC
@@ -21,7 +21,11 @@ AC_ID_2ND_COUPLE_SUFFIX = 'P2'
 FMI_FLD_NAME = 0    # field name
 FMI_COL_NAME = 1    # system view sql column name
 FMI_SQL_EXPR = 2    # system view sql expression
-FMI_CON_FUNC = 3    # field value converter - ONLY USED FOR EXT_REFS
+FMI_CNV_FUNC = 3    # field value converter - ONLY USED FOR EXT_REFS
+
+field_indexes = {FAT_IDX: FMI_FLD_NAME, FAT_IDX + FAD_FROM: FMI_COL_NAME, FAT_SQE + FAD_FROM: FMI_SQL_EXPR,
+                 FAT_CNV + FAD_FROM: FMI_CNV_FUNC}
+
 CLI_FIELD_MAP = [       # client data
     ('AcId', 'CD_CODE',),
     ('SfId', 'SIHOT_SF_ID'),
@@ -51,7 +55,7 @@ CLI_FIELD_MAP = [       # client data
     ('EmailB', 'CD_SIGNUP_EMAIL'),
     ('DOB', 'CD_DOB1'),
     ('Password', 'CD_PASSWORD'),
-    ('RCIRef', 'CD_RCI_REF'),
+    ('RciId', 'CD_RCI_REF'),
     ('ExtRefs', 'EXT_REFS',
      None,
      lambda f, v: f.string_to_records(v, ('Type', 'Id'))),
@@ -126,7 +130,6 @@ for idx in range(1, RES_MAX_CHILDREN + 1):
     FIELD_MAP.append(('ResPerson' + str(idx) + 'DOB', 'SH_CHILD' + str(idx) + '_DOB'))          # ResPersons1DOB
 '''
 
-row_field_name_map = {fmi[FMI_COL_NAME]: fmi[FMI_FLD_NAME] for fmi in CLI_FIELD_MAP + RES_FIELD_MAP}
 
 
 def add_ac_options(cae):
@@ -134,6 +137,9 @@ def add_ac_options(cae):
     cae.add_option('acuPassword', "Acumen/Oracle user account password", '', 'p')
     cae.add_option('acuDSN', "Acumen/Oracle data source name", ACU_DEF_DSN, 'd')
 
+''' migrate to ae_sys_data methods: 
+
+row_field_name_map = {fmi[FMI_COL_NAME]: fmi[FMI_FLD_NAME] for fmi in CLI_FIELD_MAP + RES_FIELD_MAP}
 
 def remap_row_to_field_names(crow):
     fld_vals = dict()
@@ -142,16 +148,7 @@ def remap_row_to_field_names(crow):
             fld_vals[row_field_name_map[k]] = v
     return fld_vals
 
-
-def init_col_names(field_col_map, rec):
-    return [fmi[FMI_COL_NAME] for fmi in field_col_map if fmi[FMI_FLD_NAME] in rec]
-
-
-def init_col_expressions(field_col_map, col_names):
-    return [fmi[FMI_SQL_EXPR] + " as " + fmi[FMI_COL_NAME]
-            if len(fmi) > FMI_SQL_EXPR and fmi[FMI_SQL_EXPR]
-            else fmi[FMI_COL_NAME]
-            for fmi in field_col_map if fmi[FMI_COL_NAME] in col_names]
+'''
 
 
 class AcuDbRows:
@@ -225,20 +222,28 @@ class AcuDbRows:
         self._last_fetch = datetime.datetime.now()
         ret_rows = list()
         plain_rows = self.ora_db.fetch_all()
-        for row in plain_rows:
-            ret_rows.append(dict(zip(col_names, row)))
-        self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} got {}, 1st row: {}"
-                        .format(self._last_fetch, len(ret_rows), ret_rows), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        if self.ora_db.last_err_msg:
+            self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} had error {}"
+                            .format(self._last_fetch, self.ora_db.last_err_msg))
+        else:
+            for row in plain_rows:
+                ret_rows.append(dict(zip(col_names, row)))
+            self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} got {}, 1st row: {}"
+                            .format(self._last_fetch, len(ret_rows), ret_rows), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         return ret_rows
 
 
 class AcuClientToSihot(ClientToSihot):
     def __init__(self, cae):
         super(AcuClientToSihot, self).__init__(cae)
+
+        self.fld_col_rec = self.elem_fld_rec\
+            .copy()\
+            .set_env(system=SDI_AC, direction=FAD_FROM)\
+            .add_system_fields(CLI_FIELD_MAP, sys_fld_indexes=field_indexes)
+        self.recs = Records()
+
         self.acu_db = AcuDbRows(cae)
-        self._col_names = init_col_names(CLI_FIELD_MAP, self.elem_fld_rec)
-        self._col_expressions = init_col_expressions(CLI_FIELD_MAP, self._col_names)
-        self.rows = ()
 
     def __del__(self):
         self.acu_db = None
@@ -248,15 +253,17 @@ class AcuClientToSihot(ClientToSihot):
         if acu_id:
             where_group_order += "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
 
-        err_msg = self.acu_db.ora_db.select(view, self._col_expressions, where_group_order)
-        if err_msg:
-            self.rows = ()
-        else:
-            rows = self.acu_db.fetch_all_from_acu(self._col_names)
+        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_AC), where_group_order)
+
+        self.recs = Records()
+        if not err_msg:
+            rows = self.acu_db.fetch_all_from_acu(self.fld_col_rec.sql_columns(SDI_AC))
             for col_values in rows:
+                rec = self.fld_col_rec.copy(deepness=-1)
                 for col, val in col_values.items():
-                    if col in self.elem_fld_rec:
-                        self.elem_fld_rec.set_val(val, col, system=SDI_AC, direction=FAD_FROM)
+                    if col in rec:
+                        rec.set_val(val, col, system=SDI_AC, direction=FAD_FROM)
+                self.recs.append(rec)
         return err_msg
 
     # use for sync only not for migration because we have clients w/o log entries
@@ -271,49 +278,49 @@ class AcuClientToSihot(ClientToSihot):
     def fetch_from_acu_by_cd(self, acu_id):
         return self._fetch_from_acu('V_ACU_CD_UNFILTERED', acu_id=acu_id)
 
-    def _send_person_to_sihot(self, c_row, first_person=""):  # pass CD_CODE of first person for to send 2nd person
-        err_msg = super()._send_person_to_sihot(remap_row_to_field_names(c_row), first_person=first_person)
+    def _send_person_to_sihot(self, rec, first_person=""):  # pass CD_CODE of first person for to send 2nd person
+        err_msg = super()._send_person_to_sihot(rec, first_person=first_person)
 
         if not err_msg and self.response:
-            err_msg = self.acu_db._store_sihot_objid('CD', first_person or c_row['CD_CODE'], self.response.objid,
+            err_msg = self.acu_db._store_sihot_objid('CD', first_person or rec['CD_CODE'], self.response.objid,
                                                      col_name_suffix="2" if first_person else "")
         return err_msg
 
-    def send_client_to_sihot(self, c_row=None):
-        err_msg = super().send_client_to_sihot(rec=remap_row_to_field_names(c_row))
+    def send_client_to_sihot(self, rec=None):
+        err_msg = super().send_client_to_sihot(rec=rec)
 
         action = self.action
         couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
-        if c_row.get('CD_CODE2') and not err_msg:  # check for second person
-            crow2 = deepcopy(c_row)
-            crow2['CD_CODE'] = c_row['CD_CODE2']
-            crow2['CD_SIHOT_OBJID'] = c_row['CD_SIHOT_OBJID2']
-            crow2['SIHOT_SALUTATION1'] = c_row['SIHOT_SALUTATION2']
-            crow2['SIHOT_TITLE1'] = c_row['SIHOT_TITLE2']
-            crow2['SIHOT_GUESTTYPE1'] = c_row['SIHOT_GUESTTYPE2']
-            crow2['CD_SNAM1'] = c_row['CD_SNAM2']
-            crow2['CD_FNAM1'] = c_row['CD_FNAM2']
-            crow2['CD_DOB1'] = c_row['CD_DOB2']
-            # crow2['CD_INDUSTRY1'] = c_row['CD_INDUSTRY2']
-            err_msg = self._send_person_to_sihot(crow2, c_row['CD_CODE'])
+        if rec.get('CD_CODE2') and not err_msg:  # check for second person
+            crow2 = deepcopy(rec)
+            crow2['CD_CODE'] = rec['CD_CODE2']
+            crow2['CD_SIHOT_OBJID'] = rec['CD_SIHOT_OBJID2']
+            crow2['SIHOT_SALUTATION1'] = rec['SIHOT_SALUTATION2']
+            crow2['SIHOT_TITLE1'] = rec['SIHOT_TITLE2']
+            crow2['SIHOT_GUESTTYPE1'] = rec['SIHOT_GUESTTYPE2']
+            crow2['CD_SNAM1'] = rec['CD_SNAM2']
+            crow2['CD_FNAM1'] = rec['CD_FNAM2']
+            crow2['CD_DOB1'] = rec['CD_DOB2']
+            # crow2['CD_INDUSTRY1'] = rec['CD_INDUSTRY2']
+            err_msg = self._send_person_to_sihot(crow2, rec['CD_CODE'])
             action += '/' + self.action
             couple_linkage = '+P2'
 
-        log_err = self.acu_db._add_to_acumen_sync_log('CD', c_row['CD_CODE'],
+        log_err = self.acu_db._add_to_acumen_sync_log('CD', rec['CD_CODE'],
                                                       action,
                                                       'ERR' + (self.response.server_error() if self.response else '')
                                                       if err_msg else 'SYNCED' + couple_linkage,
                                                       err_msg,
-                                                      c_row.get('CDL_CODE', -966) or -969)
+                                                      rec.get('CDL_CODE', -966) or -969)
         if log_err:
             err_msg += "\n      LogErr=" + log_err
 
         if err_msg:
-            self.cae.dprint("AcuClientToSihot.send_client_to_sihot() error: row={} action-p1/2={} err={}"
-                            .format(c_row, action, err_msg))
+            self.cae.dprint("AcuClientToSihot.send_client_to_sihot() error: rec={} action-p1/2={} err={}"
+                            .format(rec, action, err_msg))
         else:
             self.cae.dprint("AcuClientToSihot.send_client_to_sihot() with client={} RESPONDED OBJID={}/MATCHCODE={}"
-                            .format(c_row['CD_CODE'], self.response.objid, self.response.matchcode),
+                            .format(rec['CD_CODE'], self.response.objid, self.response.matchcode),
                             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return err_msg
@@ -322,10 +329,15 @@ class AcuClientToSihot(ClientToSihot):
 class AcuResToSihot(ResToSihot):
     def __init__(self, cae):
         super(AcuResToSihot, self).__init__(cae)
+
+        self.fld_col_rec = self.elem_fld_rec\
+            .copy()\
+            .set_env(system=SDI_AC, direction=FAD_FROM)\
+            .add_system_fields(RES_FIELD_MAP, sys_fld_indexes=field_indexes)
+
+        self.recs = Records()
+
         self.acu_db = AcuDbRows(cae)
-        self._col_names = init_col_names(RES_FIELD_MAP, self.elem_fld_rec)
-        self._col_expressions = init_col_expressions(RES_FIELD_MAP, self._col_names)
-        self.rows = ()
 
     def __del__(self):
         self.acu_db = None
@@ -347,15 +359,17 @@ class AcuResToSihot(ResToSihot):
         elif date_range == 'F':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE >= trunc(sysdate)"
 
-        err_msg = self.acu_db.ora_db.select(view, self._col_expressions, where_group_order, hints=hints)
-        if err_msg:
-            self.rows = ()
-        else:
-            self.rows = self.acu_db.fetch_all_from_acu(self._col_names)
-            for col_values in self.rows:
+        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_AC), where_group_order, hints=hints)
+        self.recs = Records()
+        if not err_msg:
+            rows = self.acu_db.fetch_all_from_acu(self.fld_col_rec.sql_columns(SDI_AC))
+            for col_values in rows:
+                rec = self.fld_col_rec.copy(deepness=-1)
                 for col, val in col_values.items():
-                    if col in self.elem_fld_rec:
-                        self.elem_fld_rec.set_val(val, col, system=SDI_AC, direction=FAD_FROM)
+                    if col in rec:
+                        rec.set_val(val, col, system=SDI_AC, direction=FAD_FROM)
+                self.recs.append(rec)
+
         return err_msg
 
     def fetch_from_acu_by_aru(self, where_group_order='', date_range=''):
@@ -368,17 +382,17 @@ class AcuResToSihot(ResToSihot):
     def fetch_all_valid_from_acu(self, where_group_order='', date_range=''):
         return self._fetch_from_acu('V_ACU_RES_FILTERED', where_group_order, date_range)
 
-    def _sending_res_to_sihot(self, crow):
-        err_msg, warn_msg = super()._sending_res_to_sihot(remap_row_to_field_names(crow))
+    def _sending_res_to_sihot(self, rec):
+        err_msg, warn_msg = super()._sending_res_to_sihot(rec)
 
         if not err_msg and self.response:
-            err_msg = self.acu_db._store_sihot_objid('RU', crow['RUL_PRIMARY'], self.response.objid)
-        err_msg += self.acu_db._add_to_acumen_sync_log('RU', crow['RUL_PRIMARY'],
-                                                       crow['RUL_ACTION'],
+            err_msg = self.acu_db._store_sihot_objid('RU', rec['RUL_PRIMARY'], self.response.objid)
+        err_msg += self.acu_db._add_to_acumen_sync_log('RU', rec['RUL_PRIMARY'],
+                                                       rec['RUL_ACTION'],
                                                        "ERR" + (self.response.server_error() if self.response else "")
                                                        if err_msg else "SYNCED",
                                                        err_msg + ("W" + warn_msg if warn_msg else ""),
-                                                       crow['RUL_CODE'])
+                                                       rec['RUL_CODE'])
         return err_msg
 
     def _ensure_clients_exist_and_updated(self, fld_vals, ensure_client_mode):
@@ -393,14 +407,14 @@ class AcuResToSihot(ResToSihot):
             else:
                 err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['CD_CODE'])
             if not err_msg:
-                if acu_client.rows:
+                if acu_client.recs:
                     err_msg = acu_client.send_client_to_sihot()
                 elif not client_synced:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): client {} not found"\
                         .format(fld_vals['CD_CODE'])
                 if not err_msg:
                     err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['CD_CODE'])  # re-fetch OBJIDs
-                if not err_msg and not acu_client.rows:
+                if not err_msg and not acu_client.recs:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): IntErr/client: " + fld_vals['CD_CODE']
                 if not err_msg:
                     # transfer just created guest OBJIDs from guest to reservation record
@@ -416,14 +430,14 @@ class AcuResToSihot(ResToSihot):
             else:
                 err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['OC_CODE'])
             if not err_msg:
-                if acu_client.rows:
+                if acu_client.recs:
                     err_msg = acu_client.send_client_to_sihot()
                 elif not client_synced:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): invalid orderer {}"\
                         .format(fld_vals['OC_CODE'])
                 if not err_msg:
                     err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['OC_CODE'])
-                if not err_msg and not acu_client.rows:
+                if not err_msg and not acu_client.recs:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated() error: orderer={} cols={} sync={}"\
                         .format(fld_vals['OC_CODE'], repr(getattr(acu_client, 'cols', "unDef")), client_synced)
                 if not err_msg:
@@ -432,27 +446,26 @@ class AcuResToSihot(ResToSihot):
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
-    def send_res_to_sihot(self, crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
-        err_msg = super().send_res_to_sihot(rec=remap_row_to_field_names(crow),
-                                            ensure_client_mode=ensure_client_mode)
+    def send_res_to_sihot(self, rec, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
+        err_msg = super().send_res_to_sihot(rec=rec, ensure_client_mode=ensure_client_mode)
 
-        if "Could not find a key identifier" in err_msg and (crow['CD_SIHOT_OBJID'] or crow['CD_SIHOT_OBJID2']):
+        if "Could not find a key identifier" in err_msg and (rec['CD_SIHOT_OBJID'] or rec['CD_SIHOT_OBJID2']):
             self.cae.dprint("AcuResToSihot.send_res_to_sihot() ignoring CD_SIHOT_OBJID({}) error: {}"
-                            .format(str(crow['CD_SIHOT_OBJID']) + "/" + str(crow['CD_SIHOT_OBJID2']), err_msg))
-            crow['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead
-            crow['CD_SIHOT_OBJID2'] = None
-            err_msg = self._sending_res_to_sihot(crow)
+                            .format(str(rec['CD_SIHOT_OBJID']) + "/" + str(rec['CD_SIHOT_OBJID2']), err_msg))
+            rec['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead
+            rec['CD_SIHOT_OBJID2'] = None
+            err_msg = self._sending_res_to_sihot(rec)
 
         if err_msg:
             self.cae.dprint("AcuResToSihot.send_res_to_sihot() error: {}".format(err_msg))
         else:
-            self.cae.dprint("AcuResToSihot.send_res_to_sihot() RESPONDED OBJID={} MATCHCODE={}, crow={}"
-                            .format(self.response.objid, self.response.matchcode, crow),
+            self.cae.dprint("AcuResToSihot.send_res_to_sihot() RESPONDED OBJID={} MATCHCODE={}, rec={}"
+                            .format(self.response.objid, self.response.matchcode, rec),
                             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return err_msg
 
-    def send_res_recs_to_sihot(self, break_on_error=True, commit_last_row=True):
+    def send_res_recs_to_sihot(self, break_on_error=True, commit_last_rec=True):
         ret_msg = ""
         for fld_vals in self.recs:
             err_msg = self.send_res_to_sihot(fld_vals)
@@ -461,11 +474,11 @@ class AcuResToSihot(ResToSihot):
                     return err_msg  # BREAK/RETURN first error message
                 ret_msg += "\n" + err_msg
 
-        if commit_last_row:
+        if commit_last_rec:
             if ret_msg:
-                ret_msg += self.ora_db.rollback()
+                ret_msg += self.acu_db.ora_db.rollback()
             else:
-                ret_msg = self.ora_db.commit()
+                ret_msg = self.acu_db.ora_db.commit()
 
         return ret_msg
 

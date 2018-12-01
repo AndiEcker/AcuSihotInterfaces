@@ -28,6 +28,10 @@ ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
 
 
+# default search field for external systems (used by shif.sf_client_field_data())
+SH_DEF_SEARCH_FIELD = 'ShId'
+
+
 ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
@@ -42,8 +46,8 @@ def convert_date_onto_sh(date):
 #  ELEMENT-FIELD-MAP-TUPLE-INDEXES  #################################
 MTI_ELEM_NAME = 0
 MTI_FLD_NAME = 1
-MTI_FLD_FILTER = 2
-MTI_FLD_VAL = 3
+MTI_FLD_VAL = 2
+MTI_FLD_FILTER = 3
 MTI_FLD_CNV_FROM = 4
 MTI_FLD_CNV_ONTO = 5
 
@@ -52,7 +56,7 @@ MTI_FLD_CNV_ONTO = 5
 # .. KERNEL interface because SiHOT WEB V9 has missing fields: initials (CD_INIT1/2) and profession (CD_INDUSTRY1/2)
 MAP_KERNEL_CLIENT = \
     (
-        ('OBJID', 'ShId',
+        ('OBJID', 'ShId', None,
          lambda f: f.ina(ACTION_INSERT) or not f.val()),
         ('MATCHCODE', 'AcId'),
         ('T-SALUTATION', 'Salutation'),  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
@@ -65,11 +69,11 @@ MAP_KERNEL_CLIENT = \
         ('ZIP', 'Postal'),
         ('CITY', 'City'),
         ('T-COUNTRY-CODE', 'Country'),
-        ('T-STATE', 'State',
+        ('T-STATE', 'State', None,
          lambda f: not f.val()),
         ('T-LANGUAGE', 'Language'),
         ('COMMENT', 'Comment'),
-        ('COMMUNICATION/', None,
+        ('COMMUNICATION/', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
         ('PHONE-1', 'HomePhone'),
         ('PHONE-2', 'WorkPhone'),
@@ -78,42 +82,39 @@ MAP_KERNEL_CLIENT = \
         ('EMAIL-2', 'EmailB'),
         ('MOBIL-1', 'MobilePhone'),
         ('MOBIL-2', 'MobilePhoneB'),
-        ('/COMMUNICATION', None,
+        ('/COMMUNICATION', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('ADD-DATA/', None,
+        ('ADD-DATA/', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('T-PERSON-GROUP', None,
-         None,
-         '1A'),
-        ('D-BIRTHDAY', 'DOB',
-         None,
+        ('T-PERSON-GROUP', None, '1A'),
+        ('D-BIRTHDAY', 'DOB', None,
          None, lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
         # 27-09-17: removed b4 migration of BHH/HMC because CD_INDUSTRY1/2 needs first grouping into 3-alphanumeric code
         # ('T-PROFESSION', 'CD_INDUSTRY1'),
         ('INTERNET-PASSWORD', 'Password'),
-        ('MATCH-ADM', 'RCIRef'),
+        ('MATCH-ADM', 'RciId'),
         ('MATCH-SM', 'SfId'),
-        ('/ADD-DATA', None,
+        ('/ADD-DATA', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('L-EXTIDS/', None,
+        ('L-EXTIDS/', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('EXTID/', None,
+        ('EXTID/', None, None,
          lambda f: not f.rfv('ExtRefs')),
-        ('EXTID' + ELEM_PATH_SEP + 'TYPE', ('ExtRefs', 0, 'Type'),
+        ('EXTID' + ELEM_PATH_SEP + 'TYPE', ('ExtRefs', 0, 'Type'), None,
          lambda f: not f.rfv('ExtRefs')),
-        ('EXTID' + ELEM_PATH_SEP + 'ID', ('ExtRefs', 0, 'Id'),
+        ('EXTID' + ELEM_PATH_SEP + 'ID', ('ExtRefs', 0, 'Id'), None,
          lambda f: not f.rfv('ExtRefs')),
-        ('/EXTID', None,
+        ('/EXTID', None, None,
          lambda f: not f.rfv('ExtRefs')),
-        # ('EXTID/', None,
+        # ('EXTID/', None, None,
         #  lambda f: not f.rfv('ExtRefs') or f.rfv('ExtRefs').count(', ') > 1),
-        # ('TYPE', 'ExtRefType2',
+        # ('TYPE', 'ExtRefType2', None,
         #  lambda f: not f.rfv('ExtRefs') or f.rfv('ExtRefs').count(', ') > 1),
-        # ('ID', 'ExtRefId2',
+        # ('ID', 'ExtRefId2', None,
         #  lambda f: not f.rfv('ExtRefs') or f.rfv('ExtRefs').count(', ') > 1),
-        # ('/EXTID', None,
+        # ('/EXTID', None, None,
         #  lambda f: not f.rfv('ExtRefs') or f.rfv('ExtRefs').count(', ') > 1),
-        ('/L-EXTIDS', None,
+        ('/L-EXTIDS', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
     )
 
@@ -121,8 +122,8 @@ MAP_PARSE_KERNEL_CLIENT = \
     (
         ('EXT_REFS', 'ExtRefs'),  # only for elemHideIf expressions
         ('CDLREF', 'CDL_CODE'),
-        # ('STATUS', 'CD_STATUS', 'fldValToAcu': 500),
-        # ('PAF_STAT', 'CD_PAF_STATUS', 'fldValToAcu': 0),
+        # ('STATUS', 'CD_STATUS', 500),
+        # ('PAF_STAT', 'CD_PAF_STATUS', 0),
     )
 
 # Reservation interface mappings
@@ -142,29 +143,28 @@ MAP_WEB_RES = \
         ('RESERVATION/', ),
         # ### main reservation info: orderer, status, external booking references, room/price category, ...
         # ('RESERVATION' + ELEM_PATH_SEP + 'RES-HOTEL', 'ResHotelId'),
-        ('RESERVATION' + ELEM_PATH_SEP + 'RES-NR', 'ResNo',
+        ('RESERVATION' + ELEM_PATH_SEP + 'RES-NR', 'ResNo', None,
          lambda f: not f.val()),
-        ('RESERVATION' + ELEM_PATH_SEP + 'SUB-NR', 'ResSubNo',
+        ('RESERVATION' + ELEM_PATH_SEP + 'SUB-NR', 'ResSubNo', None,
          lambda f: not f.val()),
-        ('RESERVATION' + ELEM_PATH_SEP + 'OBJID', 'ResObjId',
+        ('RESERVATION' + ELEM_PATH_SEP + 'OBJID', 'ResObjId', None,
          lambda f: not f.val()),
         ('GDSNO', 'ResGdsNo'),
-        # ('NN2', 'ResSfId',
+        # ('NN2', 'ResSfId', None,
         # lambda f: not f.val()),
         # MATCHCODE, NAME, COMPANY and GUEST-ID are mutually exclusive
         # MATCHCODE/GUEST-ID needed for DELETE action for to prevent Sihot error:
         # .. "Could not find a key identifier for the client (name, matchcode, ...)"
-        # ('GUEST-ID', 'ShId',
-        #  'elemHideIf':  "not c.get('ShId')"},
-        ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-ID', 'ShId',
+        # ('GUEST-ID', 'ShId', None,
+        #  lambda f: not f.rfv('ShId')},
+        ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-ID', 'ShId', None,
          lambda f: not f.val() and not f.rfv('ShId')),
         ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'AcId'),
-        ('VOUCHERNUMBER', 'ResVoucherNo',
+        ('VOUCHERNUMBER', 'ResVoucherNo', None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('EXT-KEY', 'ResGroupNo',
+        ('EXT-KEY', 'ResGroupNo', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('FLAGS', None,
-         None, 'IGNORE-OVERBOOKING'),  # ;NO-FALLBACK-TO-ERRONEOUS'),
+        ('FLAGS', None, 'IGNORE-OVERBOOKING'),  # ;NO-FALLBACK-TO-ERRONEOUS'),
         ('RT', 'ResStatus'),
         # ResRoomCat results in error 1011 for tk->TC/TK bookings with room move and room with higher/different room
         # .. cat, therefore use price category as room category for Thomas Cook Bookings.
@@ -172,168 +172,143 @@ MAP_WEB_RES = \
         # .. on the 24-05-2018 so finally we replaced the category of the (maybe) allocated room with the cat that
         # .. get determined from the requested room size
         ('CAT', 'ResRoomCat'),  # needed for DELETE action
-        ('PCAT', 'ResPriceCat',
+        ('PCAT', 'ResPriceCat', None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('ALLOTMENT-EXT-NO', 'ResAllotmentNo',
-         lambda f: not f.val(),  ''),
-        ('PAYMENT-INST', 'ResAccount',
+        ('ALLOTMENT-EXT-NO', 'ResAllotmentNo', '',
+         lambda f: not f.val()),
+        ('PAYMENT-INST', 'ResAccount', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('SALES-DATE', 'ResBooked',
+        ('SALES-DATE', 'ResBooked', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('RATE-SEGMENT', 'ResRateSegment',
+        ('RATE-SEGMENT', 'ResRateSegment', None,
          lambda f: not f.val(), ''),
         ('RATE/', ),  # package/arrangement has also to be specified in PERSON:
         ('RATE' + ELEM_PATH_SEP + 'R', 'ResBoard'),
-        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None,
-         None,
-         'Y'),
+        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', 'Y'),
         ('/RATE', ),
-        ('RATE/', None,
+        ('RATE/', None, None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
-        ('R', None,
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', ),
-         'GSC'),
-        ('ISDEFAULT', None,
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', ),
-         'N'),
-        ('/RATE', None,
+        ('R', None, 'GSC',
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
+        ('ISDEFAULT', None, 'N',
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
+        ('/RATE', None, None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
         # The following fallback rate results in error Package TO not valid for hotel 1
         # ('RATE/', ),
         # ('R', 'RO_SIHOT_RATE'},
-        # ('ISDEFAULT', None,
-        #  None,
-        #  'N'),
+        # ('ISDEFAULT', None, 'N'),
         # ('/RATE', ),
         # ### Reservation Channels - used for assignment of reservation to a allotment or to board payment
-        ('RESCHANNELLIST/', None,
+        ('RESCHANNELLIST/', None, None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
-        ('RESCHANNEL/', None,
+        ('RESCHANNEL/', None, None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         # needed for to add RCI booking to RCI allotment
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', ),
-         1),
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', ),
-         'RCI'),
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', ),
-         1),
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None, 1,
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', )),
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None, 'RCI',
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', )),
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None, 1,
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', )),
         # needed for marketing fly buys for board payment bookings
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', ),
-         1),
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', ),
-         'MAR01'),
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', ),
-         1),
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None, 1,
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', )),
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None, 'MAR01',
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', )),
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None, 1,
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', )),
         # needed for owner bookings for to select/use owner allotment
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', ),
-         2),
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', ),
-         'TSP'),
-        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', ),
-         1),
-        ('/RESCHANNEL', None,
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None, 2,
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', )),
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None, 'TSP',
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', )),
+        ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None, 1,
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', )),
+        ('/RESCHANNEL', None, None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
-        ('/RESCHANNELLIST', None,
+        ('/RESCHANNELLIST', None, None,
          lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
         # ### GENERAL RESERVATION DATA: arrival/departure, pax, market sources, comments
-        ('ARR', 'ResArrival',
+        ('ARR', 'ResArrival', None,
          None,
-         None, lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
-        ('DEP', 'ResDeparture',
+         lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
+        ('DEP', 'ResDeparture', None,
          None,
-         None, lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
-        ('NOROOMS', None,
-         None,
-         1),     # mandatory field, also needed for DELETE action
-        # ('NOPAX', None,          # needed for DELETE action
-        #  None,
+         lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
+        ('NOROOMS', None, 1),     # mandatory field, also needed for DELETE action
+        # ('NOPAX', None, None,   # needed for DELETE action
         #  lambda f: f.rfv('ResAdults') + f.rfv('ResChildren'), lambda f, v: int(v), lambda f, v: str(v)),
-        ('NOPAX', 'ResAdults',          # actually NOPAX is number of adults (adults + children)
+        ('NOPAX', 'ResAdults', None,          # actually NOPAX is number of adults (adults + children)
          None,
-         None, lambda f, v: int(v), lambda f, v: str(v)),
-        ('NOCHILDS', 'ResChildren',
+         lambda f, v: int(v) if v else 2, lambda f, v: str(v)),
+        ('NOCHILDS', 'ResChildren', None,
          lambda f: f.ina(ACTION_DELETE),
-         None, lambda f, v: int(v), lambda f, v: str(v)),
-        ('TEC-COMMENT', 'ResLongNote',
+         lambda f, v: int(v) if v else 0, lambda f, v: str(v)),
+        ('TEC-COMMENT', 'ResLongNote', None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('COMMENT', 'ResNote',
+        ('COMMENT', 'ResNote', None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('MARKETCODE-NO', 'ResMktSegment',
+        ('MARKETCODE-NO', 'ResMktSegment', None,
          lambda f: f.ina(ACTION_DELETE)),
         # ('MEDIA', ),
-        ('SOURCE', 'ResSource',
+        ('SOURCE', 'ResSource', None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('NN', 'ResMktGroupNN',
+        ('NN', 'ResMktGroupNN', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('CHANNEL', 'ResMktGroup',
+        ('CHANNEL', 'ResMktGroup', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('EXT-REFERENCE', 'ResFlightArrComment',
+        ('EXT-REFERENCE', 'ResFlightArrComment', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),    # see also currently unused PICKUP-COMMENT-ARRIVAL element
-        ('ARR-TIME', 'ResCheckIn',      # was ResFlightETA (but changed because cannot have duplicate field names)
+        ('ARR-TIME', 'ResCheckIn', None,      # was ResFlightETA (but changed because cannot have duplicate field names)
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PICKUP-TIME-ARRIVAL', 'ResFlightETA',
+        ('PICKUP-TIME-ARRIVAL', 'ResFlightETA', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PICKUP-TYPE-ARRIVAL', None,                       # 1=car, 2=van
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResFlightETA'),
-         1),
+        ('PICKUP-TYPE-ARRIVAL', None, 1,                 # 1=car, 2=van
+         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResFlightETA')),
         # ### PERSON/occupant details
         ('PERS-TYPE-LIST/', ),
         ('PERS-TYPE/', ),
-        ('TYPE', None,
-         None,
-         '1A'),
+        ('TYPE', None, '1A'),
         ('NO', 'ResAdults'),
         ('/PERS-TYPE', ),
         ('PERS-TYPE/', ),
-        ('TYPE', None,
-         None,
-         '2B'),
+        ('TYPE', None, '2B'),
         ('NO', 'ResChildren'),
         ('/PERS-TYPE', ),
         ('/PERS-TYPE-LIST', ),
         # Person Records
-        ('PERSON/', None,
+        ('PERSON/', None, None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'ShId'),
+        ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'ShId'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcId'),
+        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcId'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResPersons', f.crx(), 'ShId')),
-        ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'Surname'),
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId'),
-         lambda f: "Adult " + str(f.crx() + 1) if f.crx() < f.rfv('ResAdults')
-            else "Child " + str(f.crx() - f.rfv('ResAdults') + 1)),
-        ('PERSON' + ELEM_PATH_SEP + 'NAME2', ('ResPersons', 0, 'Forename'),
+        ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'Surname'), lambda f: "Adult " + str(f.crx() + 1)
+            if f.crx() < f.rfv('ResAdults') else "Child " + str(f.crx() - f.rfv('ResAdults') + 1),
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')
+         ),
+        ('PERSON' + ELEM_PATH_SEP + 'NAME2', ('ResPersons', 0, 'Forename'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()
             or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')),
-        ('AUTO-GENERATED', None,
+        ('AUTO-GENERATED', None, '1',
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')
-            or f.rfv('ResPersons', f.crx(), 'Surname'),
-         '1'),
-        ('ROOM-SEQ', None,
-         lambda f: f.ina(ACTION_DELETE),
-         '0'),
-        ('ROOM-PERS-SEQ', None,
+            or f.rfv('ResPersons', f.crx(), 'Surname')),
+        ('ROOM-SEQ', None, '0',
+         lambda f: f.ina(ACTION_DELETE), '0'),
+        ('ROOM-PERS-SEQ', None, None,
          lambda f: f.ina(ACTION_DELETE),
          lambda f: f.crx()),
-        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'GuestType'),
-         lambda f: f.ina(ACTION_DELETE),
-         lambda f: ('1A' if f.crx() < f.rfv('ResAdults') else '2B')),
-        ('PERSON' + ELEM_PATH_SEP + 'RN', ('ResPersons', 0, 'RoomNo'),
-         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResDeparture') < datetime.datetime.now()),
-        ('PERSON' + ELEM_PATH_SEP + 'DOB', ('ResPersons', 0, 'DOB'),
-         lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PERSON' + ELEM_PATH_SEP + 'R', 'ResBoard',
+        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'GuestType'), lambda f: '1A'
+            if f.crx() < f.rfv('ResAdults') else '2B',
          lambda f: f.ina(ACTION_DELETE)),
-        ('/PERSON', None,
+        ('PERSON' + ELEM_PATH_SEP + 'RN', ('ResPersons', 0, 'RoomNo'), None,
+         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResDeparture') < datetime.datetime.now()),
+        ('PERSON' + ELEM_PATH_SEP + 'DOB', ('ResPersons', 0, 'DOB'), None,
+         lambda f: f.ina(ACTION_DELETE) or not f.val()),
+        ('PERSON' + ELEM_PATH_SEP + 'R', 'ResBoard', None,
+         lambda f: f.ina(ACTION_DELETE)),
+        ('/PERSON', None, None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResAdults') <= 0),
         ('/RESERVATION',),
         ('/ARESLIST',),
@@ -537,7 +512,7 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
                 check_out = res.val('ResDeparture')
                 if not check_in or not check_out:
                     reasons.append("incomplete check-in={} check-out={}".format(check_in, check_out))
-                if not (date_from <= check_in <= date_till):
+                if not (date_from.toordinal() <= check_in.toordinal() <= date_till.toordinal()):
                     reasons.append("arrival {} not between {} and {}".format(check_in, date_from, date_till))
                 mkt_src = res.val('ResMktSegment')
                 if mkt_sources and mkt_src not in mkt_sources:
@@ -726,7 +701,9 @@ class ClientFromSihot(FldMapXmlParser):
     def end(self, tag):
         super(ClientFromSihot, self).end(tag)
         if tag == 'GUEST':  # using tag arg here because self._curr_tag got reset by super method of end()
-            self.guest_list.append(deepcopy(self._rec))
+            rec = self._rec.copy(deepness=-1)
+            rec.pull(SDI_SH)
+            self.guest_list.append(rec)
             self.clear_rec()
 
 
@@ -740,7 +717,9 @@ class ResFromSihot(FldMapXmlParser):
     def end(self, tag):
         super(ResFromSihot, self).end(tag)
         if tag == 'RESERVATION':  # using tag because self._curr_tag got reset by super method of end()
-            self.res_list.append(deepcopy(self._rec))
+            rec = self._rec.copy(deepness=-1)
+            rec.pull(SDI_SH)
+            self.res_list.append(rec)
             self.clear_rec()
 
 
@@ -828,11 +807,12 @@ class GuestSearch(SihotXmlBuilder):
         rp = GuestSearchResponse(self.cae)
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
-            ret = self.response.ret_elem_values[0]
-            self.cae.dprint(msg + "xml='{}'; result={}".format(self.xml, ret), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            rec_or_err = self.response.ret_elem_values[0]
+            self.cae.dprint(msg + "xml='{}'; rec={}".format(self.xml, rec_or_err),
+                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         else:
-            ret = msg + "error='{}'".format(err_msg)
-        return ret
+            rec_or_err = msg + "error='{}'".format(err_msg)
+        return rec_or_err
 
     def get_guest_nos_by_matchcode(self, matchcode, exact_matchcode=True):
         search_for = {'MATCHCODE': matchcode,
@@ -1003,7 +983,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         self.elem_fld_rec.clear_vals()
         for k in rec.leaf_indexes():
             if k[0] in self.elem_fld_rec:
-                self.elem_fld_rec.set_val(rec[k].val(), *k)     #root_rec=rec
+                self.elem_fld_rec.set_val(rec[k].val(), *k)
 
     def prepare_map_xml(self, rec, include_empty_values=True):
         self.fill_elem_fld_rec(rec)

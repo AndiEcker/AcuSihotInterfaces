@@ -60,7 +60,7 @@ if cae.get_option('clientsFirst'):
     error_msg = acumen_cd.fetch_all_valid_from_acu()
     progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_cd.row_count,
                         start_msg='Prepare sending of {run_counter} client(s) to Sihot',
-                        nothing_to_do_msg='SihotMigration: acumen_cd fetch returning no rows')
+                        nothing_to_do_msg='SihotMigration: acumen_cd fetch returning no recs')
     if not error_msg:
         for crow in acumen_cd.rows:
             error_msg = acumen_cd.send_client_to_sihot(crow)
@@ -109,7 +109,7 @@ try:
     if not error_msg:
         progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.row_count,
                             start_msg='Prepare the migration of {total_count} reservations to Sihot',
-                            nothing_to_do_msg='SihotMigration: acumen_req.fetch_all_valid_from_acu() returning no rows')
+                            nothing_to_do_msg='SihotMigration: acumen_req.fetch_all_valid_from_acu() returning no recs')
         if include_cxl_res:
             all_rows = acumen_req.recs
         else:

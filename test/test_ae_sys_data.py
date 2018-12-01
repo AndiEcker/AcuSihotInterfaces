@@ -206,10 +206,10 @@ class TestField:
 
     def test_field_name_init(self):
         f = _Field(**{FAT_REC: Record(), FAT_RCX: ('init',)})
-        assert f.name == 'init'
+        assert f.name() == 'init'
         test_name = 'test'
         f.set_name(test_name)
-        assert f.name == test_name
+        assert f.name() == test_name
 
 
 class TestRecord:
@@ -456,11 +456,11 @@ class TestRecord:
             assert i == 0
         for k, v in r.items():
             assert k == 'fnA'
-            assert v.name == 'fnA'
+            assert v.name() == 'fnA'
             assert v.val() == 12
         for i, (k, v) in enumerate(r.items()):
             assert k == 'fnA'
-            assert v.name == 'fnA'
+            assert v.name() == 'fnA'
             assert v.val() == 12
             assert i == 0
 
@@ -521,7 +521,7 @@ class TestRecord:
         assert r.copy() == r
         assert r.copy() is not r
 
-        r2 = r.copy(filter_func=lambda f: f.name == 'fnB')
+        r2 = r.copy(filter_func=lambda f: f.name() == 'fnB')
         assert len(r2) == 1
         assert r2.val('fnB') == 66
 
@@ -559,25 +559,22 @@ class TestRecord:
         SEP = '.'
         d = (
             ('F_CNT', 'Cnt'),
-            ('F/', None),
-            ('F' + SEP + 'NAME', ('fn', 0, 'Surname'),
-             lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('F', 0, 'Id'),
-             lambda f: ("Adult " + str(f.crx()) if f.crx() is None or f.crx() < f.rfv('Cnt')
-                        else "Child " + str(f.crx() - f.rfv('Cnt') + 1))),
+            ('F/', ),
+            ('F' + SEP + 'NAME', ('fn', 0, 'Surname'), lambda f: "Adult " + str(f.crx())
+                if f.crx() is None or f.crx() < f.rfv('Cnt') else "Child " + str(f.crx() - f.rfv('Cnt') + 1),
+             lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('F', 0, 'Id')),
             ('F' + SEP + 'NAME2', ('fn', 0, 'Forename')),
-            ('AUTO-GENERATED', None,
-             lambda f: f.ina(ACTION_DELETE) or (f.rfv('ResAdults') <= 2 and f.rfv('fn', f.crx(), 'Id')),
-             '1'),
+            ('AUTO-GENERATED', None, '1',
+             lambda f: f.ina(ACTION_DELETE) or (f.rfv('ResAdults') <= 2 and f.rfv('fn', f.crx(), 'Id'))),
             ('F' + SEP + 'MATCHCODE', ('fn', 0, 'Id')),
-            ('ROOM-SEQ', None,
-             lambda f: f.ina(ACTION_DELETE),
-             '0'),
-            ('PERS-SEQ', None,
+            ('ROOM-SEQ', None, '0',
+             lambda f: f.ina(ACTION_DELETE)),
+            ('PERS-SEQ', None, None,
              lambda f: f.ina(ACTION_DELETE),
              lambda f: (str(f.crx()))),
-            ('F' + SEP + 'DOB', ('fn', 0, 'DOB'),
+            ('F' + SEP + 'DOB', ('fn', 0, 'DOB'), None,
              lambda f: f.ina(ACTION_DELETE) or not f.val()),
-            ('/F', None,
+            ('/F', None, None,
              lambda f: f.ina(ACTION_DELETE) or f.rfv('Cnt') <= 0),
         )
         sys_r = Record(system=SDI_SH, direction=FAD_ONTO)

@@ -8,16 +8,14 @@
 import pprint
 from collections import OrderedDict
 
+from sys_data_ids import AC_SQL_EXT_REF_TYPE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI, SDI_AC
+from ae_sys_data import Record
 from ae_console_app import ConsoleApp, uprint, to_ascii, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
 from acif import AcuResToSihot, AC_ID_2ND_COUPLE_SUFFIX
-from shif import guest_data
-from sfif import obj_from_id
-from ass_sys_data import (add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone,
-                          field_desc, field_clients_idx,
-                          ac_fld_name, sf_fld_name, sh_fld_value, field_list_to_sf, field_dict_from_sf, client_fields,
-                          AC_SQL_EXT_REF_TYPE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
-                          SF_DEF_SEARCH_FIELD, SH_DEF_SEARCH_FIELD)
+from shif import guest_data, SH_DEF_SEARCH_FIELD, ClientToSihot
+from sfif import obj_from_id, sf_fld_name, field_list_to_sf, field_dict_from_sf, SF_DEF_SEARCH_FIELD
+from ass_sys_data import add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone, client_fields
 
 __version__ = '0.2'
 
@@ -380,7 +378,7 @@ def ac_pull_res_data():
     error_msg = acumen_req.fetch_all_valid_from_acu(date_range='P', where_group_order=where)
     if error_msg:
         return error_msg
-    for crow in acumen_req.rows:
+    for crow in acumen_req.recs:
         # TODO: refactor to use AssSysData.sh_res_change_to_ass()
         # determine orderer
         ord_cl_pk = conf_data.cl_ass_id_by_ac_id(crow['OC_CODE'])
@@ -572,8 +570,8 @@ def sh_pull_clients():
 
     for as_cl in conf_data.clients:
         # ass_id, ac_id, _, sh_id, name, email, _, _, _ = as_cl
-        ass_id = as_cl[field_clients_idx('AssId')]
-        match_val = as_cl[field_clients_idx(match_field)]
+        ass_id = as_cl.val('AssId')
+        match_val = as_cl.val(match_field)
         if not match_val:
             if _debug_level >= DEBUG_LEVEL_VERBOSE:
                 log_warning("{} - AssCache client match field {} is empty: {}".format(ass_id, match_field, as_cl), ctx)
@@ -601,15 +599,14 @@ def sh_pull_clients():
         di = "; REC: ass={} sh={}".format(as_cl, shd) if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
         client_data = dict()
         for fld_name in client_fld_names:
-            desc = field_desc(fld_name)
-            ass_val = as_cl[field_clients_idx(fld_name)]
-            sh_val = sh_fld_value(shd, fld_name)
+            ass_val = as_cl.val(fld_name)
+            sh_val = shd.val(fld_name)
             if not ass_val and not sh_val:
                 continue
             elif isinstance(sh_val, list):
                 if len(sh_val) > 1:
                     log_warning("{} - {} has multiple values - pulling/changing only first one. ass={} sh={}{}"
-                                .format(ass_id, desc, ass_val, sh_val, di), ctx, importance=3)
+                                .format(ass_id, fld_name, ass_val, sh_val, di), ctx, importance=3)
                 sh_val = sh_val[0]
             client_data[fld_name] = sh_val
         cl_pk = conf_data.cl_save(client_data, match_fields=[match_field])
@@ -714,9 +711,9 @@ def ac_push_clients():
             return err_msg
 
     for as_cl in conf_data.clients:
-        match_val = as_cl[field_clients_idx(match_field)]
-        cols = {ac_fld_name(_): as_cl[field_clients_idx(_)] for _ in filter_fields if ac_fld_name(_)}
-        if acu_db.update("T_CD", cols, where="{} = '{}'".format(ac_fld_name(match_field), match_val)):
+        match_val = as_cl.val(match_field)
+        cols = {as_cl[_].name(system=SDI_AC): as_cl.val(_) for _ in filter_fields if as_cl[_].name(system=SDI_AC)}
+        if acu_db.update("T_CD", cols, where="{} = '{}'".format(as_cl[match_field].name(system=SDI_AC), match_val)):
             log_error("ac_push_clients(): Push client Acumen error: " + acu_db.last_err_msg, ctx, importance=4)
 
     return acu_db.commit()
@@ -758,8 +755,8 @@ def sf_push_clients():
 
     errors = list()
     for as_cl in conf_data.clients:
-        cols = {_: as_cl[field_clients_idx(_)] for _ in filter_fields}
-        sf_id, err_msg, msg = conf_data.sf_client_upsert(cols)
+        rec = Record(fields={_: as_cl.val(_) for _ in filter_fields})
+        sf_id, err_msg, msg = conf_data.sf_conn.sf_client_upsert(rec)
         if err_msg:
             log_error("sf_push_clients(): Push client Salesforce error: " + err_msg, ctx, importance=4)
             errors.append(err_msg)
@@ -803,8 +800,8 @@ def sh_push_clients():
 
     errors = list()
     for as_cl in conf_data.clients:
-        cols = {_: as_cl[field_clients_idx(_)] for _ in filter_fields}
-        err_msg = conf_data.sh_client_upsert(cols)
+        rec = Record(fields={_: as_cl.val(_) for _ in filter_fields})
+        err_msg = ClientToSihot(cae).send_client_to_sihot(rec)
         if err_msg:
             log_error("sh_push_clients(): Push client Sihot error: " + err_msg, ctx, importance=4)
             errors.append(err_msg)
@@ -966,25 +963,25 @@ def sf_verify_clients():
                 sf_obj = 'Account'
                 if email:
                     found_by = "Email={}".format(email)
-                    sf_id = conf_data.sf_client_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
+                    sf_id = conf_data.sf_conn.sf_client_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
                 if not sf_id and phone:
                     found_by = "Phone={}".format(phone)
-                    sf_id = conf_data.sf_client_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
+                    sf_id = conf_data.sf_conn.sf_client_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
                 if not sf_id and email:
                     sf_obj = 'Lead'
                     found_by = "Email={}".format(email)
-                    sf_id = conf_data.sf_client_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
+                    sf_id = conf_data.sf_conn.sf_client_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
                 if not sf_id and phone:
                     sf_obj = 'Lead'
                     found_by = "Phone={}".format(phone)
-                    sf_id = conf_data.sf_client_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
+                    sf_id = conf_data.sf_conn.sf_client_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
                 if not sf_id:
                     continue
                 log_warning("{} - AssCache client without ASS SF ID found as {} ID {} via {}; ass={}"
                             .format(ass_id, sf_obj, sf_id, found_by, as_cl), ctx, importance=3)
             search_val = sf_id
         elif match_field in client_fld_names:
-            search_val = as_cl[field_clients_idx(match_field)]
+            search_val = as_cl.val(match_field)
         else:
             err_msg = "sf_verify_clients(): SF client verification match field {} not supported." \
                       " Allowed match fields: {}".format(match_field, [_ for _ in client_fld_names])
@@ -992,8 +989,8 @@ def sf_verify_clients():
             return err_msg
 
         log_warnings = list()
-        sf_fld_vals = conf_data.sf_client_field_data(client_fld_names, search_val, search_field=match_field,
-                                                     log_warnings=log_warnings)
+        sf_fld_vals = conf_data.sf_conn.sf_client_field_data(client_fld_names, search_val, search_field=match_field,
+                                                             log_warnings=log_warnings)
         if not sf_fld_vals:
             if _debug_level >= DEBUG_LEVEL_VERBOSE:
                 for msg in log_warnings:
@@ -1006,10 +1003,9 @@ def sf_verify_clients():
         for fld_name, fld_value in sf_fld_vals.items():
             if fld_name not in filter_fields:
                 continue
-            desc = field_desc(fld_name)
-            ass_val = as_cl[field_clients_idx(fld_name)]
+            ass_val = as_cl.val(fld_name)
             if (ass_val or fld_value) and ass_val != fld_value:
-                log_warning("{} - {} mismatch. ass={} sf={}{}".format(ass_id, desc, ass_val, fld_value, di), ctx)
+                log_warning("{} - {} mismatch. ass={} sf={}{}".format(ass_id, fld_name, ass_val, fld_value, di), ctx)
 
         if 'ExtRefs' in filter_fields:
             ass_ext_refs = [tuple(_.split(EXT_REF_TYPE_ID_SEP)) for _ in ass_ext_refs.split(EXT_REFS_SEP)] \
@@ -1045,8 +1041,8 @@ def sh_verify_clients():
 
     for as_cl in conf_data.clients:
         # ass_id, ac_id, _, sh_id, name, email, _, _, _ = as_cl
-        ass_id = as_cl[field_clients_idx('AssId')]
-        match_val = as_cl[field_clients_idx(match_field)]
+        ass_id = as_cl.val('AssId')
+        match_val = as_cl.val(match_field)
         if not match_val:
             if _debug_level >= DEBUG_LEVEL_VERBOSE:
                 log_warning("{} - AssCache client has empty value within the match field {}: {}"
@@ -1073,17 +1069,17 @@ def sh_verify_clients():
 
             di = "; REC: ass={} sh={}".format(as_cl, shd) if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
             for fld_name in client_fld_names:
-                desc = field_desc(fld_name)
-                ass_val = as_cl[field_clients_idx(fld_name)]
-                sh_val = sh_fld_value(shd, fld_name)
+                ass_val = as_cl.val(fld_name)
+                sh_val = shd.val(fld_name)
                 if not ass_val and not sh_val:
                     continue
                 if isinstance(sh_val, list):
                     sh_values = [to_ascii(_).lower() for _ in sh_val]     # always do a fuzzy compare of Sihot values
                     if to_ascii(ass_val).lower() not in sh_values:
-                        log_warning("{} - {} not found. ass={} sh={}{}".format(ass_id, desc, ass_val, sh_val, di), ctx)
+                        log_warning("{} - {} not found. ass={} sh={}{}".format(ass_id, fld_name, ass_val, sh_val, di),
+                                    ctx)
                 elif to_ascii(ass_val).lower() != to_ascii(sh_val).lower():
-                    log_warning("{} - {} mismatch. ass={} sh={}{}".format(ass_id, desc, ass_val, sh_val, di), ctx)
+                    log_warning("{} - {} mismatch. ass={} sh={}{}".format(ass_id, fld_name, ass_val, sh_val, di), ctx)
 
             if 'ExtRefs' in filter_fields:
                 pass    # NOT IMPLEMENTED

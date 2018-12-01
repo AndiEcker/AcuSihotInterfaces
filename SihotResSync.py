@@ -100,9 +100,9 @@ if cae.get_option('clientsFirst'):
         error_msg = acumen_cd.fetch_from_acu_by_acu()
         progress = Progress(debug_level, start_counter=acumen_cd.row_count,
                             start_msg='Prepare sending of {run_counter} client detail changes to Sihot',
-                            nothing_to_do_msg='SihotResSync: acumen client fetch returning no rows')
+                            nothing_to_do_msg='SihotResSync: acumen client fetch returning no recs')
         if not error_msg:
-            for crow in acumen_cd.rows:
+            for crow in acumen_cd.recs:
                 error_msg = acumen_cd.send_client_to_sihot(crow)
                 cid = crow['CD_CODE'] + '/' + str(crow['CDL_CODE'])
                 progress.next(processed_id=cid, error_msg=error_msg)
@@ -136,15 +136,15 @@ if not error_msg:
                                            mail_to=ADMIN_MAIL_TO_LIST)
         else:
             # 1st pre-run without room allocation - for to allow room swaps in the same batch
-            room_rows = [dict(r) for r in acumen_req.rows if r['RUL_SIHOT_ROOM']
+            room_rows = [dict(r) for r in acumen_req.recs if r['RUL_SIHOT_ROOM']
                          and r['RUL_SIHOT_HOTEL'] == r['RUL_SIHOT_LAST_HOTEL']
                          and r['RUL_ACTION'] != ACTION_DELETE]
             if not migration_mode and room_rows:
-                cae.dprint(" ###  room swap pre-run has {} rows".format(len(room_rows)),
+                cae.dprint(" ###  room swap pre-run has {} recs".format(len(room_rows)),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                 progress = Progress(debug_level, start_counter=len(room_rows),
                                     start_msg=" ###  Prepare sending of {total_count} room swaps to Sihot",
-                                    nothing_to_do_msg=" ***  SihotResSync: room swap fetch returning no rows")
+                                    nothing_to_do_msg=" ***  SihotResSync: room swap fetch returning no recs")
                 for crow in room_rows:
                     crow['RUL_SIHOT_ROOM'] = ''
                     error_msg = acumen_req.send_res_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
@@ -158,15 +158,15 @@ if not error_msg:
                 progress.finished(error_msg=error_msg)
 
             # 2nd pre-run for hotel movements (HOTMOVE) - for to delete/cancel booking in last/old hotel
-            room_rows = [dict(r) for r in acumen_req.rows if r['RUL_SIHOT_HOTEL'] != r['RUL_SIHOT_LAST_HOTEL']
+            room_rows = [dict(r) for r in acumen_req.recs if r['RUL_SIHOT_HOTEL'] != r['RUL_SIHOT_LAST_HOTEL']
                          and str(r['RUL_SIHOT_LAST_HOTEL']) in hotel_ids
                          and r['RUL_ACTION'] == ACTION_UPDATE]
             if not migration_mode and room_rows:
-                cae.dprint(" ###  hotel movement pre-run has {} rows".format(len(room_rows)),
+                cae.dprint(" ###  hotel movement pre-run has {} recs".format(len(room_rows)),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                 progress = Progress(debug_level, start_counter=len(room_rows),
                                     start_msg=" ###  Prepare sending of {total_count} hotel movements to Sihot",
-                                    nothing_to_do_msg=" ***  SihotResSync: hotel movement fetch returning no rows")
+                                    nothing_to_do_msg=" ***  SihotResSync: hotel movement fetch returning no recs")
                 for crow in room_rows:
                     new_hotel = str(crow['RUL_SIHOT_HOTEL'])
                     crow['RUL_SIHOT_HOTEL'] = crow['RUL_SIHOT_LAST_HOTEL']
@@ -194,12 +194,12 @@ if not error_msg:
             synced_ids = list()
             progress = Progress(debug_level, start_counter=acumen_req.row_count,
                                 start_msg=" ###  Prepare sending of {total_count} reservations to Sihot",
-                                nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no rows")
-            if acumen_req.rows:
-                cae.dprint(" ###  full/main run has {} rows"
-                           .format(len([_ for _ in acumen_req.rows if str(_['RUL_SIHOT_HOTEL']) in hotel_ids])),
+                                nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no recs")
+            if acumen_req.recs:
+                cae.dprint(" ###  full/main run has {} recs"
+                           .format(len([_ for _ in acumen_req.recs if str(_['RUL_SIHOT_HOTEL']) in hotel_ids])),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                for crow in acumen_req.rows:
+                for crow in acumen_req.recs:
                     rid = acumen_req.res_id_values(crow)
                     if str(crow['RUL_SIHOT_HOTEL']) not in hotel_ids:
                         synced_ids.append(rid + "(H)")

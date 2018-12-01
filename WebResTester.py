@@ -56,9 +56,9 @@ if client_code or gds_no:
             err_msg = acumen_req.fetch_from_acu_by_cd(client_code)      # UNFILTERED !!! (possibly inactive hotel)
     progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.rec_count,
                         start_msg='####  Prepare sending of {total_count} reservation requests' + client_msg,
-                        nothing_to_do_msg='****  SihotMigration: acumen_req fetch returning no rows')
+                        nothing_to_do_msg='****  SihotMigration: acumen_req fetch returning no recs')
 
-    for crow in acumen_req.rows:
+    for crow in acumen_req.recs:
         err_msg = acumen_req.send_res_to_sihot(crow)
         acumen_req.ora_db.commit()
         progress.next(processed_id=str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']), error_msg=err_msg)

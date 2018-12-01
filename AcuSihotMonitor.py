@@ -136,10 +136,10 @@ def sih_reservation_discrepancies(data_dict):
     if results:
         # error message
         results = (results,)
-    else:   # no error message then process fetched rows
+    else:   # no error message then process fetched recs
         err_sep = '//'
         results = list()
-        for crow in req.rows:
+        for crow in req.recs:
             if crow['SIHOT_GDSNO']:
                 rs = ResSearch(cae)
                 rd = rs.search(gdsno=crow['SIHOT_GDSNO'])

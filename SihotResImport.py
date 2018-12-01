@@ -652,7 +652,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['HomePhone'] = curr_cols[RCI_GUEST_PHONE]
         ext_refs = conf_data.cl_ext_refs_by_idx([curr_cols[RC_OCC_CLIENTS_IDX]])
         if ext_refs:
-            row['RCIRef'] = ext_refs[0]  # first ref coming from Acu.RCIRef and put into Sihot MATCH-ADM element
+            row['RciId'] = ext_refs[0]  # first ref coming from Acu and put into Sihot MATCH-ADM element
 
         # constant values - needed for to be accepted by the Sihot Kernel interface
         row['ShId'] = None
@@ -675,7 +675,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['HomePhone'] = curr_cols[RCI_GUEST_PHONE]
         ext_refs = conf_data.cl_ext_refs_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
         if ext_refs:
-            row['RCIRef'] = ext_refs[0]  # first ref coming from Acu.RCIRef and put into Sihot MATCH-ADM element
+            row['RciId'] = ext_refs[0]  # first ref coming from Acu and put into Sihot MATCH-ADM element
         # constant values - needed for to be accepted by the Sihot Kernel interface
         row['ShId'] = None
         row['GuestType'] = '1'
@@ -830,7 +830,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     def rcip_line_to_occ_client_row(curr_cols):
         row = dict()
         rci_ref = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
-        row['RCIRef'] = rci_ref  # Sihot MATCH-ADM element
+        row['RciId'] = rci_ref  # Sihot MATCH-ADM element
         if curr_cols[RCIP_IS_GUEST] == 'Y':
             row['AcId'] = ''     # dict key needed/used in elemHideIf expressions
             row['Surname'] = curr_cols[RCIP_GUEST_SURNAME]
@@ -1059,7 +1059,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         # re-create resort match codes config value from Acumen data if empty
         if not cae.get_config('ClientRefsResortCodes'):
-            m1 = conf_data.load_view(None, 'T_CD', ["AcId"], "RCIRef in (:rci_refs)",
+            m1 = conf_data.load_view(None, 'T_CD', ["AcId"], "RciId in (:rci_refs)",
                                      {'rci_refs': conf_data.client_refs_add_exclude})
             m2 = conf_data.load_view(None, 'T_CR', ["CR_CDREF"], "CR_TYPE like 'RCI%' and CR_REF in (:rci_refs)",
                                      {'rci_refs': conf_data.client_refs_add_exclude})
