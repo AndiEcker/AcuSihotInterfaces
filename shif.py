@@ -8,7 +8,7 @@ import pprint
 
 from sys_data_ids import SDI_SH
 from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, FAD_FROM, FAD_ONTO, \
-    Record, Records, Values, Value, current_index, set_current_index, field_name_idx_path
+    Record, Records, Value, current_index, set_current_index, field_name_idx_path, LIST_TYPES
 from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder, elem_to_attr,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
@@ -72,9 +72,13 @@ MAP_KERNEL_CLIENT = \
         ('T-STATE', 'State', None,
          lambda f: not f.val()),
         ('T-LANGUAGE', 'Language'),
+        ('T-NATION', 'Nationality', None,
+         lambda f: not f.val()),
         ('COMMENT', 'Comment'),
         ('COMMUNICATION/', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
+        ('T-STANDARD-CURRENCY', 'Currency', None,
+         lambda f: not f.val()),
         ('PHONE-1', 'HomePhone'),
         ('PHONE-2', 'WorkPhone'),
         ('FAX-1', 'Fax'),
@@ -184,7 +188,7 @@ MAP_WEB_RES = \
          lambda f: not f.val(), ''),
         ('RATE/', ),  # package/arrangement has also to be specified in PERSON:
         ('RATE' + ELEM_PATH_SEP + 'R', 'ResBoard'),
-        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', 'Y'),
+        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None, 'Y'),
         ('/RATE', ),
         ('RATE/', None, None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
@@ -646,10 +650,9 @@ class FldMapXmlParser(SihotXmlParser):
         self._elem_map = elem_map
         self._collected_fields = list()
         self._current_data = ''
-        self._rec = Record(system=SDI_SH, direction=FAD_FROM)
 
         # create field data parsing record and mapping dict for all elements having a field value
-        self._rec.add_system_fields(elem_map)
+        self._rec = Record(system=SDI_SH, direction=FAD_FROM).add_system_fields(elem_map)
         self.elem_fld_map = self._rec.system_fields
 
     def clear_rec(self):
@@ -974,7 +977,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         super().__init__(cae, use_kernel=use_kernel)
 
         self.action = ''
-        self.elem_map = deepcopy(elem_map or cae.get_option('mapRes'))
+        self.elem_map = deepcopy(elem_map or cae.get_option('shMapResWeb'))
         self.elem_fld_rec = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(self.elem_map)
 
     # --- rec helpers
@@ -983,7 +986,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         self.elem_fld_rec.clear_vals()
         for k in rec.leaf_indexes():
             if k[0] in self.elem_fld_rec:
-                self.elem_fld_rec.set_val(rec[k].val(), *k)
+                self.elem_fld_rec.set_val(rec[k].val(), *k, system='', direction='')
 
     def prepare_map_xml(self, rec, include_empty_values=True):
         self.fill_elem_fld_rec(rec)
@@ -1006,9 +1009,9 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 tag = tag[tag.rfind(ELEM_PATH_SEP) + 1:]
             idx = elem_map_item[MTI_FLD_NAME] if len(elem_map_item) > MTI_FLD_NAME else None
             if idx:
-                fld = self.elem_fld_rec.node_child(idx, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
+                fld = self.elem_fld_rec.node_child(idx, use_curr_idx=Value((1, )))
                 if fld is None:
-                    fld = self.elem_fld_rec.node_child(idx, system=SDI_SH, direction=FAD_ONTO)  # use template field
+                    fld = self.elem_fld_rec.node_child(idx)  # use template field
                     if fld is None:
                         continue        # skip xml creation for missing field (in current and template rec)
                 field = fld
@@ -1038,7 +1041,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                         root_field = self.elem_fld_rec.node_child(nel[MTI_FLD_NAME][0])
                         if root_field:
                             recs = root_field.value()
-                            if isinstance(recs, (Values, Records)):
+                            if isinstance(recs, LIST_TYPES):
                                 set_current_index(recs, idx=recs.idx_min)
                                 group_i = map_i - 1
                             else:
@@ -1117,7 +1120,7 @@ class ResToSihot(FldMapXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae,
                          use_kernel=cae.get_option('useKernelForRes'),
-                         elem_map=cae.get_config('mapRes') or MAP_WEB_RES)
+                         elem_map=cae.get_config('shMapResWeb') or MAP_WEB_RES)
         self._warning_frags = self.cae.get_config('warningFragments') or list()  # list of warning text fragments
         self._warning_msgs = ""
         self._gds_errors = dict()
@@ -1193,9 +1196,9 @@ class ResToSihot(FldMapXmlBuilder):
 
         super().fill_elem_fld_rec(rec)
 
-        adults = self.elem_fld_rec.val('ResAdults')
-        pax = adults + self.elem_fld_rec.val('ResChildren')
-        recs = self.elem_fld_rec.value('ResPersons')
+        adults = self.elem_fld_rec.val('ResAdults', system='', direction='')
+        pax = adults + self.elem_fld_rec.val('ResChildren', system='', direction='')
+        recs = self.elem_fld_rec.value('ResPersons', flex_sys_dir=True)
         while True:
             recs_len = len(recs)
             if recs_len >= pax:

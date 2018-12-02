@@ -20,6 +20,8 @@ MAP_CLIENT_OBJECTS = \
         ('CD_CODE__pc', 'AcId'),
         ('id', 'SfId'),                      # was Id but test_sfif.py needs lower case id
         ('SihotGuestObjId__pc', 'ShId'),
+        ('LastName', 'Surname'),
+        ('FirstName', 'Forename'),
         ('PersonEmail', 'Email'),
         ('PersonHomePhone', 'Phone'),
         ('RCI_Reference__pc', 'RciId'),
@@ -30,6 +32,8 @@ MAP_CLIENT_OBJECTS = \
         ('PersonMailingPostalCode', 'Postal'),
         ('PersonMailingCountry', 'Country'),
         ('Language__pc', 'Language'),
+        ('Nationality__pc', 'Nationality'),
+        ('CurrencyIsoCode', 'Currency'),
         # ('Marketing_Source__pc', 'MarketSource'),
         # ('Previous_Arrival_Info__pc', 'ArrivalInfo')
      ),
@@ -59,7 +63,27 @@ MAP_CLIENT_OBJECTS = \
      )
      }
 
-# from Sf rec map (used e.g. by SihotServer)
+
+# Salesforce Reservation Object fields
+MAP_RES_OBJECT = (
+    ('HotelId__c', 'ResHotelId'),
+    ('Number__c', 'ResId'),
+    ('SubNumber__c', 'ResSubId'),
+    ('GdsNo__c', 'ResGdsNo'),
+    ('SihotResvObjectId__c', 'ResObjId'),
+    ('Arrival__c', 'ResArrival'),
+    ('Departure__c', 'ResDeparture'),
+    ('RoomNo__c', 'ResRoomNo'),
+    ('RoomCat__c', 'ResRoomCat'),
+    ('Status__c', 'ResStatus'),
+    ('MktGroup__c', 'ResMktGroup'),
+    ('MktSegment__c', 'ResMktSegment'),
+    ('Adults__c', 'ResAdults'),
+    ('Children__c', 'ResChildren'),
+    ('Note__c', 'ResNote'),
+)
+
+# from Sf rec map (used e.g. by SihotServer) - NOT NEEDED BECAUSE SAME FIELD NAMES (see SihotServer.py/sh_res_upsert())
 MAP_RES_FROM_SF = (
     ('ResHotelId', 'ResHotelId'),
     ('ResId', 'ResId'),

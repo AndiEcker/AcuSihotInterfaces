@@ -102,7 +102,7 @@ def get_res_data():
 @app.route('/res/<action>', method='PUSH')
 def push_res(action):
     if action == 'upsert':
-        body = res_upsert()
+        body = sh_res_upsert()
     else:
         body = "Reservation PUSH with action {} not implemented - use action upsert".format(action)
         add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
@@ -113,7 +113,7 @@ def push_res(action):
 '@app.route('/res/<action>/<res_id>', method='PUT')
 def put_res(action, res_id):
     if action == 'upsert':
-        body = res_upsert(res_id)
+        body = sh_res_upsert(res_id)
     else:
         body = "Reservation PUT for ID {} with action {} not implemented".format(res_id, action)
         add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
@@ -142,7 +142,7 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 # ------  ROUTE/SERVICE HANDLERS  ----------------------------------
 
 
-def res_upsert():
+def sh_res_upsert():
     res_json = request.json     # web service arguments as dict
 
     res_send = ResSender(cae)
@@ -162,7 +162,7 @@ def res_upsert():
         # res_dict = dict(Sihot_Hotel_Id=ho_id, Sihot_Res_Id=res_id, Sihot_Sub_Id=sub_id)
         res_dict = dict(HotelIdc=ho_id, Numberc=res_id, SubNumberc=sub_id)
 
-    add_log_entry("res_upsert() call with json arguments: {}, return from SF: {}".format(res_json, res_dict))
+    add_log_entry("sh_res_upsert() call with json arguments: {}, return from SF: {}".format(res_json, res_dict))
 
     return res_dict
 
