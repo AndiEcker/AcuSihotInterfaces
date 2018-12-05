@@ -320,7 +320,7 @@ class TestAssSysDataSh:
 
         rgr_dict = dict()
         asd = AssSysData(console_app_env)
-        asd.sh_res_change_to_ass(res_data, rgr_dict=rgr_dict)
+        asd.sh_res_change_to_ass(res_data, ass_res_rec=rgr_dict)
         assert ho_id == rgr_dict['rgr_ho_fk']
         assert res_id == rgr_dict['rgr_res_id']
         assert sub_id == rgr_dict['rgr_sub_id']
@@ -373,7 +373,7 @@ class TestAssSysDataSh:
                 send_err = "guest_data error - no dict=" + str(cl_fields)
                 break
             sf_data = dict()
-            send_err = sfc.sf_res_upsert(None, cl_fields, res_fields, sf_data=sf_data)
+            send_err = sfc.sf_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
             if send_err:
                 send_err = "sf_res_upsert error " + send_err
                 break

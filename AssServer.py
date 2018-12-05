@@ -19,6 +19,7 @@ from functools import partial
 from traceback import format_exc
 import pprint
 
+from ae_sys_data import Record
 from ae_console_app import ConsoleApp, uprint, missing_requirements, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
@@ -155,7 +156,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         return sh_res
 
     sh_cl = None
-    sh_id = sh_res.val('ShId')     # ==ass_res['rgr_order_cl_fk']
+    sh_id = sh_res.val('ShId')     # ==ass_cache/rgr_order_cl_fk->cl_sh_id
     if sh_id:
         sh_cl = guest_data(cae, sh_id)
     if not isinstance(sh_cl, dict):
@@ -177,8 +178,8 @@ def res_from_sh_to_sf(asd, ass_changed_res):
                     .format(ppf(ass_changed_res), obj_id, asd.error_message),
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
-    ass_res = dict()
-    if asd.sh_res_change_to_ass(sh_res, rgr_dict=ass_res):
+    ass_res = Record()
+    if asd.sh_res_change_to_ass(sh_res, ass_res_rec=ass_res):
         return asd.error_message
 
     # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call

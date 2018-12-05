@@ -6,7 +6,8 @@ from traceback import format_exc
 
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
-from sys_data_ids import EXT_REF_TYPE_RCI
+from ae_sys_data import Record, FAD_ONTO
+from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF
 from ae_console_app import uprint, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 
 # default client salesforce object (was 'Lead' changed to Person-'Account' within sys_data_generic branch)
@@ -16,20 +17,20 @@ DEF_CLIENT_OBJ = 'Account'
 # client data maps for Lead, Contact and Account
 MAP_CLIENT_OBJECTS = \
     {'Account': (
-        ('AssCache_Id__pc', 'AssId'),
-        ('CD_CODE__pc', 'AcId'),
-        ('id', 'SfId'),                      # was Id but test_sfif.py needs lower case id
+        # ('AssCache_Id__pc', 'AssId'),
+        # ('CD_CODE__pc', 'AcId'),
+        ('PersonAccountId', 'SfId'),                      # was Id but test_sfif.py needs lower case id
         ('SihotGuestObjId__pc', 'ShId'),
         ('LastName', 'Surname'),
         ('FirstName', 'Forename'),
         ('PersonEmail', 'Email'),
         ('PersonHomePhone', 'Phone'),
-        ('RCI_Reference__pc', 'RciId'),
-        ('KM_DOB__pc', 'DOB'),
+        # ('RCI_Reference__pc', 'RciId'),
+        # ('KM_DOB__pc', 'DOB'),
         ('PersonMailingStreet', 'Street'),
         ('PersonMailingCity', 'City'),
-        ('PersonMailingState', 'State'),
-        ('PersonMailingPostalCode', 'Postal'),
+        # ('PersonMailingState', 'State'),
+        # ('PersonMailingPostalCode', 'Postal'),
         ('PersonMailingCountry', 'Country'),
         ('Language__pc', 'Language'),
         ('Nationality__pc', 'Nationality'),
@@ -63,13 +64,13 @@ MAP_CLIENT_OBJECTS = \
      )
      }
 
-
-# Salesforce Reservation Object fields
+# Reservation Object fields
 MAP_RES_OBJECT = (
     ('HotelId__c', 'ResHotelId'),
     ('Number__c', 'ResId'),
     ('SubNumber__c', 'ResSubId'),
     ('GdsNo__c', 'ResGdsNo'),
+    ('ReservationOpportunityId', 'ResSfId'),
     ('SihotResvObjectId__c', 'ResObjId'),
     ('Arrival__c', 'ResArrival'),
     ('Departure__c', 'ResDeparture'),
@@ -81,9 +82,22 @@ MAP_RES_OBJECT = (
     ('Adults__c', 'ResAdults'),
     ('Children__c', 'ResChildren'),
     ('Note__c', 'ResNote'),
+    # ('', ('ResPersons', 0, 'AcId')),
+    # ('', ('ResPersons', 0, 'DOB')),
+    # ('', ('ResPersons', 0, 'Forename')),
+    # ('', ('ResPersons', 0, 'GuestType')),
+    # ('', ('ResPersons', 0, 'ShId')),
+    # ('', ('ResPersons', 0, 'Surname')),
 )
 
-# from Sf rec map (used e.g. by SihotServer) - NOT NEEDED BECAUSE SAME FIELD NAMES (see SihotServer.py/sh_res_upsert())
+# Allocation Object fields
+MAP_ROOM_OBJECT = (
+    ('CheckIn__c', 'ResCheckIn'),
+    ('CheckOut__c', 'ResCheckOut'),
+)
+
+# from Sf rec map (used e.g. by SihotServer)
+''' - NOT NEEDED BECAUSE SAME FIELD NAMES (see SihotServer.py/sh_res_upsert())
 MAP_RES_FROM_SF = (
     ('ResHotelId', 'ResHotelId'),
     ('ResId', 'ResId'),
@@ -96,7 +110,7 @@ MAP_RES_FROM_SF = (
     ('ResPriceCat', 'ResPriceCat'),
     ('ResPersons0SurName', ('ResPersons', 0, 'SurName')),
 )
-
+'''
 
 # sf address field type/length - copied from https://developer.salesforce.com/forums/?id=906F00000008ih6IAA
 """
@@ -121,9 +135,6 @@ SF_DEF_SEARCH_FIELD = 'SfId'
 ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
-SF_DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
-
-
 def add_sf_options(cae):
     cae.add_option('sfUser', "Salesforce account user name", '', 'y')
     cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
@@ -132,12 +143,40 @@ def add_sf_options(cae):
     cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
 
 
+SF_DATE_FORMAT = '%Y-%m-%d'
+SF_DATE_TIME_FORMAT_FROM = '%Y-%m-%dT%H:%M:%S.%f%z'
+SF_DATE_TIME_FORMAT_ONTO = '%Y-%m-%d %H:%M:%S'
+SF_TIME_DIFF_FROM = datetime.timedelta(hours=1)
+SF_DATE_ZERO_HOURS = " 00:00:00"
+
+
 def convert_date_from_sf(str_val):
-    return datetime.datetime.strptime(str_val, SF_DATE_FORMAT)
+    if str_val.find(' ') != -1:
+        str_val = str_val.split(' ')[0]
+    elif str_val.find('T') != -1:
+        str_val = str_val.split('T')[0]
+    return (datetime.datetime.strptime(str_val, SF_DATE_FORMAT) + SF_TIME_DIFF_FROM).date()
 
 
 def convert_date_onto_sf(date):
-    return date.strftime(SF_DATE_FORMAT)
+    return date.strftime(SF_DATE_FORMAT) + SF_DATE_ZERO_HOURS
+
+
+def convert_date_time_from_sf(str_val):
+    mask = SF_DATE_TIME_FORMAT_FROM
+    if str_val.find('+') == -1:
+        mask = mask[:-2]        # no timezone specified in str_val, then remove %z from mask
+    if str_val.find('.') == -1:
+        mask = mask[:mask.find('.')]
+    if str_val.find(' ') != -1:
+        mask = mask.replace('T', ' ')
+    elif str_val.find('T') == -1:
+        mask = mask[:mask.find('T')]
+    return datetime.datetime.strptime(str_val, mask).replace(microsecond=0, tzinfo=None) + SF_TIME_DIFF_FROM
+
+
+def convert_date_time_onto_sf(date):
+    return date.strftime(SF_DATE_TIME_FORMAT_ONTO)
 
 
 def convert_date_field_from_sf(_, str_val):
@@ -148,11 +187,22 @@ def convert_date_field_onto_sf(_, date):
     return convert_date_onto_sf(date)
 
 
-field_from_converters = dict(ResArrival=convert_date_field_from_sf, ResDeparture=convert_date_field_from_sf,
-                             ResAdults=lambda f, v: int(v), ResChildren=lambda f, v: int(v))
+def convert_date_time_field_from_sf(_, str_val):
+    return convert_date_time_from_sf(str_val)
 
+
+def convert_date_time_field_onto_sf(_, date):
+    return convert_date_time_onto_sf(date)
+
+
+field_from_converters = dict(ResArrival=convert_date_field_from_sf, ResDeparture=convert_date_field_from_sf,
+                             ResCheckIn=convert_date_time_field_from_sf, ResCheckOut=convert_date_time_field_from_sf,
+                             ResAdults=lambda f, v: int(v), ResChildren=lambda f, v: int(v),
+                             )
 field_onto_converters = dict(ResArrival=convert_date_field_onto_sf, ResDeparture=convert_date_field_onto_sf,
-                             ResAdults=lambda f, v: str(v), ResChildren=lambda f, v: str(v))
+                             ResCheckIn=convert_date_time_field_onto_sf, ResCheckOut=convert_date_time_field_onto_sf,
+                             ResAdults=lambda f, v: str(v), ResChildren=lambda f, v: str(v),
+                             )
 
 
 def obj_from_id(sf_id):
@@ -258,6 +308,8 @@ class SfInterface:
         self._debug_level = debug_level
 
         self.error_msg = ""
+        self.cl_res_rec_onto = Record(system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields(MAP_CLIENT_OBJECTS['Account'] + MAP_RES_OBJECT)
 
     @property
     def is_sandbox(self):
@@ -437,11 +489,16 @@ class SfInterface:
         return rec_type_id
 
     def apex_call(self, function_name, function_args=None):
+        if not self._ensure_lazy_connect():
+            return dict(sfif_apex_error=self.error_msg)
+
         if function_args:
             # don't change callers dict, remove underscore characters from arg names (APEX methods doesn't allow them)
             # .. and convert date/time types into SF apex format
-            function_args = {k.replace('_', ''): convert_date_onto_sf(v)
-                             if isinstance(v, datetime.date) or isinstance(v, datetime.datetime) else v
+            # STRANGE PYTHON: isinstance(datetime_value, date) == True - therefore 1st check for datetime.datetime
+            function_args = {k.replace('_', ''):
+                             convert_date_time_onto_sf(v) if isinstance(v, datetime.datetime) else
+                             (convert_date_onto_sf(v) if isinstance(v, datetime.date) else v)
                              for (k, v) in function_args.items()}
 
         try:
@@ -454,9 +511,6 @@ class SfInterface:
         return result
 
     def find_client(self, email="", phone="", first_name="", last_name=""):
-        if not self._ensure_lazy_connect():
-            return None, None
-
         service_args = dict(email=email, phone=phone, firstName=first_name, lastName=last_name)
         result = self.apex_call('clientsearch', function_args=service_args)
 
@@ -698,30 +752,28 @@ class SfInterface:
                 if k in ('attributes', 'Id', ):
                     continue
                 if k in ('Arrival__c', 'Departure__c', ) and v:
-                    v = datetime.datetime.strptime(v, '%Y-%m-%d').date()
+                    v = convert_date_from_sf(v)
                 ret_val[k] = v
 
         return ret_val
 
-    def res_upsert(self, cl_res_data):
-        if not self._ensure_lazy_connect():
-            return None, None
-
-        result = self.apex_call('reservation_upsert', function_args=cl_res_data)
+    def res_upsert(self, cl_res_rec):
+        sf_args = cl_res_rec.to_dict(system=SDI_SF, direction=FAD_ONTO)
+        result = self.apex_call('reservation_upsert', function_args=sf_args)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("... sfif.res_upsert({}) result={} err='{}'".format(ppf(cl_res_data), ppf(result), self.error_msg))
+            uprint("... sfif.res_upsert({}) result={} err='{}'".format(ppf(cl_res_rec), ppf(result), self.error_msg))
 
         if result.get('ErrorMessage'):
             msg = ppf(result) if self._debug_level >= DEBUG_LEVEL_ENABLED else result['ErrorMessage']
-            self.error_msg += "sfif.res_upsert({}) received error '{}' from SF".format(ppf(cl_res_data), msg)
+            self.error_msg += "sfif.res_upsert({}) received error '{}' from SF".format(ppf(cl_res_rec), msg)
         if not self.error_msg:
-            if not cl_res_data.get('ReservationOpportunityId') and result.get('ReservationOpportunityId'):
-                cl_res_data['ReservationOpportunityId'] = result['ReservationOpportunityId']
-            elif cl_res_data['ReservationOpportunityId'] != result.get('ReservationOpportunityId'):
+            if not cl_res_rec.val('ResSfId') and result.get('ReservationOpportunityId'):
+                cl_res_rec['ResSfId'] = result['ReservationOpportunityId']
+            elif cl_res_rec.val('ResSfId') != result.get('ReservationOpportunityId'):
                 msg = "sfif.res_upsert({}) ResSfId discrepancy; sent={} received={}"\
-                       .format(ppf(cl_res_data),
-                               cl_res_data['ReservationOpportunityId'], result.get('ReservationOpportunityId'))
+                       .format(ppf(cl_res_rec),
+                               cl_res_rec.val('ResSfId'), result.get('ReservationOpportunityId'))
                 uprint(msg)
                 if msg and self._debug_level >= DEBUG_LEVEL_ENABLED:
                     self.error_msg += "\n      " + msg
@@ -729,9 +781,6 @@ class SfInterface:
         return result.get('PersonAccountId'), result.get('ReservationOpportunityId'), self.error_msg
 
     def room_change(self, res_sf_id, check_in, check_out, next_room_id):
-        if not self._ensure_lazy_connect():
-            return None, None
-
         room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out,
                              RoomNo__c=next_room_id)
         result = self.apex_call('reservation_room_move', function_args=room_chg_data)
@@ -788,7 +837,7 @@ class SfInterface:
             del ret['attributes']
             for k, v in ret.items():
                 if k in ('CheckIn__c', 'CheckOut__c') and v:
-                    v = datetime.datetime.strptime(v, '%Y-%m-%dT%H:%M:%S.%f%z').replace(microsecond=0)
+                    v = convert_date_time_from_sf(v)
                 ret_val[k] = v
 
         return ret_val

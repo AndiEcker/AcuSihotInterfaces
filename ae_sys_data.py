@@ -399,8 +399,7 @@ class Record(OrderedDict):
 
     def __repr__(self):
         # return "Record([" + ", ".join("(" + repr(k) + "," + repr(v) + ")" for k, v in self.items()) + "])"
-        return "Record([" + ", ".join("(" + repr(k) + "," + repr(self._fields[k]) + ")"
-                                      for k in self._fields.leaf_indexes()) + "])"
+        return "Record(" + ", ".join(repr(self._fields[k]) for k in self._fields.leaf_indexes()) + ")"
 
     def __contains__(self, idx_path):
         item = self.node_child(idx_path)
@@ -786,6 +785,18 @@ class Record(OrderedDict):
         for field in self._fields.values():
             field.clear_vals(system=system, direction=direction)
 
+    def missing_fields(self, required_fields=()):
+        missing = list()
+        for alt in required_fields:
+            if not isinstance(alt, tuple):
+                alt = (alt, )
+            for idx in alt:
+                if self.val(idx):
+                    break
+            else:
+                missing.append(alt)
+        return missing
+
     def pull(self, from_system):
         assert from_system, "Record.pull() with empty value in from_system is not allowed"
         for idx_path in self.leaf_indexes(system=from_system, direction=FAD_FROM):    # _fields.values():
@@ -799,6 +810,18 @@ class Record(OrderedDict):
         for idx_path in self.leaf_indexes():      # _fields.values():
             self[idx_path].push(onto_system, self, idx_path)
         return self
+
+    def set_current_system_index(self, sys_fld_name_prefix, path_sep, idx_val=None, idx_add=1):
+        prefix = sys_fld_name_prefix + path_sep
+        for sys_path, field in self.system_fields.items():
+            if sys_path.startswith(prefix):
+                rec = field.root_rec(system=self.system, direction=self.direction)
+                idx_path = field.root_idx(system=self.system, direction=self.direction)
+                for off, idx in enumerate(idx_path):
+                    if isinstance(idx, int):
+                        value = rec.value(*idx_path[:off], flex_sys_dir=True)
+                        set_current_index(value, idx=idx_val, add=idx_add)
+                        return self
 
     def set_env(self, system=None, direction=None, action=None, root_rec=None, root_idx=()):
         if system is not None:
@@ -814,30 +837,6 @@ class Record(OrderedDict):
         for idx, field in self._fields.items():
             field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (idx, ))
         return self
-
-    def set_current_system_index(self, sys_fld_name_prefix, path_sep, idx_val=None, idx_add=1):
-        prefix = sys_fld_name_prefix + path_sep
-        for sys_path, field in self.system_fields.items():
-            if sys_path.startswith(prefix):
-                rec = field.root_rec(system=self.system, direction=self.direction)
-                idx_path = field.root_idx(system=self.system, direction=self.direction)
-                for off, idx in enumerate(idx_path):
-                    if isinstance(idx, int):
-                        value = rec.value(*idx_path[:off], flex_sys_dir=True)
-                        set_current_index(value, idx=idx_val, add=idx_add)
-                        return self
-
-    def missing_fields(self, required_fields=()):
-        missing = list()
-        for alt in required_fields:
-            if not isinstance(alt, tuple):
-                alt = (alt, )
-            for idx in alt:
-                if self.val(idx):
-                    break
-            else:
-                missing.append(alt)
-        return missing
 
     def sql_columns(self, from_system):
         """
@@ -869,6 +868,23 @@ class Record(OrderedDict):
                         expr += " AS "
                     column_expressions.append(expr + name)
         return column_expressions
+
+    def to_dict(self, field_names=None, system=None, direction=None):
+        if system is None:
+            system = self.system
+        if direction is None:
+            direction = self.direction
+
+        ret = dict()
+        for idx in self.leaf_indexes(system=system, direction=direction):
+            key = self[idx].name(system=system, direction=direction, flex_sys_dir=False)
+            if key and (not field_names or key in field_names):
+                ret[key] = self.val(idx, system=system, direction=direction)
+        return ret
+
+    def update(self, mapping=(), **kwargs):
+        super(Record, self).update(mapping, **kwargs)
+        return self     # implemented only for to get self as return value
 
     def xml_build(self, system):
         pass
@@ -985,6 +1001,23 @@ class _Field:
             self._aspects[FAT_VAL] = Value()
         if FAT_IDX not in self._aspects:
             self._aspects[FAT_IDX] = self.root_idx()[0]
+
+    def __repr__(self):
+        names = self.name()
+        vals = repr(self.val())
+        sys_dir_names = list()
+        for key, name in self._aspects.items():
+            if key.startswith(FAT_IDX) and len(key) > _ASP_TYPE_LEN:
+                sys_dir_names.append((key, name))
+        ret = ""
+        for idx_key, name in sys_dir_names:
+            val_key = self.aspect_exists(FAT_VAL, aspect_key_system(idx_key), aspect_key_direction(idx_key))
+            if val_key and len(val_key) > _ASP_TYPE_LEN:
+                ret += "{0}={1}".format(name, self._aspects.get(val_key))
+            else:
+                names += "|" + name
+
+        return "{0}={1}{2}".format(names, vals, ("|" + ret if ret else ""))
 
     def __str__(self):
         # return "_Field(" + repr(self._aspects) + ")"
@@ -1244,10 +1277,11 @@ class _Field:
             self.set_aspect(data, key, protect=True, allow_values=allow_values)
         return self
 
-    def name(self, system='', direction=''):
-        return self.aspect_value(FAT_IDX, system=system, direction=direction, flex_sys_dir=True)
+    def name(self, system='', direction='', flex_sys_dir=True):
+        return self.aspect_value(FAT_IDX, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
     def del_name(self, system='', direction=''):
+        assert system, "_Field.del_name() expects to pass at least a non-empty system"
         self.del_aspect(FAT_IDX, system=system, direction=direction)
         return self
 
@@ -1267,7 +1301,7 @@ class _Field:
         self.set_aspect(rec, FAT_REC, system=system, direction=direction)
         return self
 
-    def root_idx(self, system='', direction=''):
+    def root_idx(self, system='', direction='') -> tuple:
         return self.aspect_value(FAT_RCX, system=system, direction=direction, flex_sys_dir=True)
 
     def set_root_idx(self, idx, system='', direction=''):
@@ -1410,7 +1444,7 @@ class _Field:
         fld_root_idx = self.root_idx(system=system, direction=direction)
 
         recs = Records()
-        for rec_idx, rec_str in enumerate(str_val.split(rec_sep)):
+        for rec_idx, rec_str in enumerate(str_val.split(rec_sep)):  # type: (int, str)
             fields = dict()
             for fld_idx, fld_val in enumerate(rec_str.split(fld_sep)):
                 fields[fld_names[fld_idx]] = fld_val
