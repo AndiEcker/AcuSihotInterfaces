@@ -844,6 +844,8 @@ class RoomChange(SihotXmlParser):
         self.osub_nr = None
         self._base_tags.append('GID')       # Sihot guest object id
         self.gid = None
+        self._base_tags.append('MC')        # ae:05-12-2018 - added for to detect and suppress rental reservations
+        self.mc = None
 
 
 class ResChange(SihotXmlParser):

@@ -1532,13 +1532,18 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                        notify=True)
             rgr_sf_id = ''
 
-        if not sf_cl_id or not sf_opp_id:
+        if not err_msg and (not sf_cl_id or not sf_opp_id):
             self._err("sf_res_upsert({}, {}, {}) SF push returned empty value: PersonAccount.Id={}; ResOppId={}; err={}"
                       .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_cl_id, sf_opp_id, err_msg))
         if not err_msg and sf_args.get('PersonAccountId') and sf_args['PersonAccountId'] != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_ENABLED:
-            self._err("sf_res_upsert({}, {}, {}) PersonAccount discrepancy {} != {}"
+            self._err("sf_res_upsert({}, {}, {}) PersonAccountId/SfId discrepancy {} != {}"
                       .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_args.get('PersonAccountId'), sf_cl_id))
+        if not err_msg and sf_args.get('ReservationOpportunityId') and sf_args['ReservationOpportunityId'] != sf_opp_id\
+                and self.debug_level >= DEBUG_LEVEL_ENABLED:
+            self._err("sf_res_upsert({}, {}, {}) Reservation Opportunity Id discrepancy {} != {}"
+                      .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_args['ReservationOpportunityId'],
+                              sf_opp_id))
 
         if sync_cache:
             if sf_cl_id and ass_id:

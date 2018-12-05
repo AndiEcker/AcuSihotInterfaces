@@ -10,7 +10,9 @@
     0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
     0.7     reset/resend ResOppId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
     0.8     added SSL to postgres connection.
-    0,9     added email notification on empty return values on res send to SF (from sf_conn.res_upsert()).
+    0.9     added email notification on empty return values on res send to SF (from sf_conn.res_upsert()) - merged to
+            sys_data_generic branch.
+    1.0     Q&D fix for to not send any rental reservations.
 """
 import datetime
 import threading
@@ -25,7 +27,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '0.9'
+__version__ = '1.0'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -359,6 +361,12 @@ def oc_res_change(asd, req, rec_ctx):
         log_msg(proc_context(rec_ctx) + "res change data={}".format(ppf(req_rgr)),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
+        # QUICK&DIRTY FIX: prevent the send of rental client reservations using roAgencies ini variable (rgr_mkt_group
+        # .. is empty (?!?!?) for most of the rental bookings, but should be 'RS')
+        if req_rgr.get('rgr_mkt_segment', '') in [a[0] for a in asd.ro_agencies]:
+            # rental mkt segment found in CR request via the element path: ['SIHOT-Reservation', 'SIHOT-Person', 'MC']
+            return ""
+
         chk_values = {k: v for k, v in req_rgr.items() if k in ['rgr_res_id', 'rgr_sub_id']}
         chk_values.update(rgr_ho_fk=getattr(req, 'hn', None))
         upd_col_values = chk_values.copy()
@@ -381,6 +389,10 @@ def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
     rec_ctx.update(HotelId=ho_id, ResId=res_no, SubId=sub_no, RoomNo=room_id, extended_oc=oc, action_time=action_time)
     log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, ppf(rec_ctx), req.get_xml()),
             importance=3, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+
+    # QUICK&DIRTY FIX: prevent the send of rental client allocations using roAgencies ini variable
+    if req.mc in [a[0] for a in asd.ro_agencies]:           # rental mkt segment found in MC element of CI/CO/RM request
+        return ""
 
     rgr_sf_id = asd.sh_room_change_to_ass(oc, ho_id, res_no, sub_no, room_id, action_time)
     if rgr_sf_id:
