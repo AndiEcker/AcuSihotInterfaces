@@ -1193,9 +1193,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if val is not None:
                 sf_rec.set_val(val, *idx)
 
-        if not sf_rec.val('ResRoomNo') \
-                and ass_res_data.val('ResPersons') and ass_res_data['ResPersons'][0].val('RoomNo'):
-            sf_rec['ResRoomNo'] = ass_res_data['ResPersons'][0]['RoomNo']
+        if not sf_rec.val('ResRoomNo') and ass_res_data.val('ResPersons', 0, 'RoomNo'):
+            sf_rec['ResRoomNo'] = ass_res_data.val('ResPersons', 0, 'RoomNo')
 
         sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_rec)
         if err_msg and sf_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:

@@ -5,6 +5,7 @@ from traceback import format_exc, print_exc
 from copy import deepcopy
 from textwrap import wrap
 import pprint
+from typing import Union
 
 from sys_data_ids import SDI_SH
 from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, FAD_FROM, FAD_ONTO, \
@@ -906,7 +907,7 @@ class GuestSearch(SihotXmlBuilder):
 
 
 class ResFetch(SihotXmlBuilder):
-    def fetch_res(self, ho_id, gds_no=None, res_id=None, sub_id=None, scope='USEISODATE'):
+    def fetch_res(self, ho_id, gds_no=None, res_id=None, sub_id=None, scope='USEISODATE') -> Union[str, Record]:
         self.beg_xml(operation_code='SS')
         self.add_tag('ID', ho_id)
         if gds_no:

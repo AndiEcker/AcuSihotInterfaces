@@ -93,6 +93,8 @@ def proc_context(rec_ctx):
 
     if 'RoomNo' in rec_ctx:
         ctx_str += rec_ctx['RoomNo'] + ", "
+    elif 'ResRoomNo' in rec_ctx:
+        ctx_str += rec_ctx['ResRoomNo'] + ", "
 
     if 'ResNo' in rec_ctx:
         ctx_str += rec_ctx['ResNo']
@@ -152,7 +154,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     sh_res = ResFetch(cae).fetch_by_res_id(ho_id, res_id, sub_id)
-    if not isinstance(sh_res, dict):
+    if not isinstance(sh_res, Record):
         return sh_res
 
     sh_cl = None

@@ -153,6 +153,26 @@ def init_current_index(value, idx_path, use_curr_idx) -> tuple:
     return (idx, ) + tuple(idx2)
 
 
+def set_current_index(value, idx=None, add=None):
+    allowed_types = (Values, Records, Record)
+    msg = "set_current_index() expects "
+    assert isinstance(value, allowed_types), msg + "value arg of type {}, but got {}".format(allowed_types, type(value))
+    assert isinstance(idx, IDX_TYPES) ^ isinstance(add, int), msg + "either int/str in idx or int in add"
+
+    if idx is None:
+        idx = value.current_idx + add
+
+    value.current_idx = idx
+
+    if isinstance(value, LIST_TYPES):
+        if value.idx_min is None or idx < value.idx_min:
+            value.idx_min = idx
+        if value.idx_max is None or idx > value.idx_max:
+            value.idx_max = idx
+
+    return idx
+
+
 def use_current_index(value, idx_path, use_curr_idx, check_idx_type=False, delta=1):
     msg = "use_current_index() expects "
     assert isinstance(idx_path, (tuple, list)) and len(idx_path), msg + "non-empty idx_path"
@@ -178,24 +198,23 @@ def use_current_index(value, idx_path, use_curr_idx, check_idx_type=False, delta
     return (idx, ) + tuple(idx2)
 
 
-def set_current_index(value, idx=None, add=None):
-    allowed_types = (Values, Records, Record)
-    msg = "set_current_index() expects "
-    assert isinstance(value, allowed_types), msg + "value arg of type {}, but got {}".format(allowed_types, type(value))
-    assert isinstance(idx, IDX_TYPES) ^ isinstance(add, int), msg + "either int/str in idx or int in add"
+def use_rec_default_root_rec_idx(rec, root_rec, idx=(), root_idx=(), met=""):
+    if root_rec is None:
+        root_rec = rec
+        if root_idx is not None:
+            assert root_idx == (),  met + ("(): " if met and not met.endswith(": ") else "") \
+                                    + "root_idx has to be empty if no root_rec specified"
+    if not root_idx and idx is not None:
+        root_idx = idx
+    return root_rec, root_idx
 
-    if idx is None:
-        idx = value.current_idx + add
 
-    value.current_idx = idx
-
-    if isinstance(value, LIST_TYPES):
-        if value.idx_min is None or idx < value.idx_min:
-            value.idx_min = idx
-        if value.idx_max is None or idx > value.idx_max:
-            value.idx_max = idx
-
-    return idx
+def use_rec_default_sys_dir(rec, system, direction):
+    if system is None:
+        system = rec.system
+    if direction is None:
+        direction = rec.direction
+    return system, direction
 
 
 class Value(list):
@@ -386,9 +405,7 @@ class Record(OrderedDict):
         self.system = system
         self.direction = direction
         self.action = action
-        if root_rec is None:
-            root_rec = self
-            assert root_idx == (), "Record.__init__(): root_idx has to be empty if no root_rec specified"
+        root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.__init__")
 
         self.current_idx = None
         if fields:
@@ -460,13 +477,9 @@ class Record(OrderedDict):
                 idx_path = nam_path
                 idx_len = len(idx_path)
 
-        if system is None:
-            system = self.system
-        if direction is None:
-            direction = self.direction
-        if root_rec is None:
-            root_rec = self
-            assert root_idx == (), "Record.set_node_child(): root_idx has to be empty if no root_rec specified"
+        system, direction = use_rec_default_sys_dir(self, system, direction)
+        root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx,
+                                                          met="Record.set_node_child")
 
         fld_idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
         root_idx += (fld_idx, )
@@ -510,26 +523,18 @@ class Record(OrderedDict):
                                root_rec=root_rec, root_idx=idx_path[:-1], use_curr_idx=use_curr_idx)
 
     def value(self, *idx_path, system=None, direction=None, **kwargs):
-        if system is None:
-            system = self.system
-        if direction is None:
-            direction = self.direction
+        system, direction = use_rec_default_sys_dir(self, system, direction)
 
         if len(idx_path) == 0:
             return self
         idx, *idx2 = idx_path
+
         return self._fields[idx].value(*idx2, system=system, direction=direction, **kwargs)
 
     def set_value(self, value, *idx_path, system=None, direction=None, protect=False, root_rec=None, root_idx=(),
                   use_curr_idx=None):
-        if system is None:
-            system = self.system
-        if direction is None:
-            direction = self.direction
-        if root_rec is None:
-            root_rec = self
-            assert root_idx == (), "Record.set_node_child(): root_idx has to be empty if no root_rec specified"
-
+        system, direction = use_rec_default_sys_dir(self, system, direction)
+        root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_value")
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
         root_idx += (idx, )
         self[idx].set_value(value, *idx2, system=system, direction=direction, protect=protect,
@@ -537,10 +542,7 @@ class Record(OrderedDict):
         return self
 
     def val(self, *idx_path, system=None, direction=None, flex_sys_dir=True, use_curr_idx=None, **kwargs):
-        if system is None:
-            system = self.system
-        if direction is None:
-            direction = self.direction
+        system, direction = use_rec_default_sys_dir(self, system, direction)
 
         idx_len = len(idx_path)
         if idx_len == 0:
@@ -560,14 +562,8 @@ class Record(OrderedDict):
     def set_val(self, val, *idx_path, system=None, direction=None, flex_sys_dir=True,
                 protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
         assert len(idx_path), "Record.set_val() expect 2 or more args - missing field name or index"
-
-        if system is None:
-            system = self.system
-        if direction is None:
-            direction = self.direction
-        if root_rec is None:
-            root_rec = self
-            assert root_idx == (), "Record.set_val(): root_idx has to be empty if no root_rec specified"
+        system, direction = use_rec_default_sys_dir(self, system, direction)
+        root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_val")
 
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
         root_idx += (idx, )
@@ -627,9 +623,7 @@ class Record(OrderedDict):
             items = fields.items()
         else:
             items = fields
-        if root_rec is None:
-            root_rec = self
-            assert root_idx == (), "Record.add_fields(): root_idx has to be empty if no root_rec specified"
+        root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.add_fields")
 
         for name, fld_or_val in items:
             idx_path = name if isinstance(name, (tuple, list)) else (field_name_idx_path(name) or (name, ))
@@ -830,9 +824,7 @@ class Record(OrderedDict):
             self.direction = direction
         if action is not None:
             self.action = action
-        if root_rec is None:
-            root_rec = self
-            assert root_idx == (), "Record.set_env(): root_idx has to be empty if no root_rec specified"
+        root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_env")
 
         for idx, field in self._fields.items():
             field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (idx, ))
@@ -869,17 +861,17 @@ class Record(OrderedDict):
                     column_expressions.append(expr + name)
         return column_expressions
 
-    def to_dict(self, field_names=None, system=None, direction=None):
-        if system is None:
-            system = self.system
-        if direction is None:
-            direction = self.direction
+    def to_dict(self, field_names=None, system=None, direction=None, put_system_val=True):
+        system, direction = use_rec_default_sys_dir(self, system, direction)
 
         ret = dict()
         for idx in self.leaf_indexes(system=system, direction=direction):
             key = self[idx].name(system=system, direction=direction, flex_sys_dir=False)
             if key and (not field_names or key in field_names):
-                ret[key] = self.val(idx, system=system, direction=direction)
+                if put_system_val:
+                    ret[key] = self.val(idx, system=system, direction=direction)
+                else:
+                    ret[key] = self.val(idx, system='', direction='')
         return ret
 
     def update(self, mapping=(), **kwargs):
@@ -1097,11 +1089,10 @@ class _Field:
         else:
             fld_sys, fld_dir = system, direction
 
-        if root_rec is None:
-            root_rec = self.root_rec(system=fld_sys, direction=fld_dir)
-            assert root_idx == (), "_Field.set_value(): root_idx has to be empty if no root_rec specified"
-        if not root_idx:
-            root_idx = self.root_idx(system=fld_sys, direction=fld_dir)
+        root_rec, root_idx = use_rec_default_root_rec_idx(self.root_rec(system=fld_sys, direction=fld_dir), root_rec,
+                                                          idx=self.root_idx(system=fld_sys, direction=fld_dir),
+                                                          root_idx=root_idx,
+                                                          met=msg)
         assert root_rec is not None and root_idx, msg + "root Record {} or index {} missing".format(root_rec, root_idx)
 
         key = aspect_key(FAT_VAL, system=fld_sys, direction=fld_dir)
@@ -1201,16 +1192,10 @@ class _Field:
         return self
 
     def set_system_root_rec_idx(self, system=None, direction=None, root_rec=None, root_idx=None):
-        if root_rec is None:
-            root_rec = self.root_rec()
-            assert root_idx == (), "_Field.set_system_root_rec(): root_idx has to be empty if no root_rec specified"
-        if not root_idx:
-            root_idx = self.root_idx()
-
-        if system is None:
-            system = root_rec.system
-        if direction is None:
-            direction = root_rec.direction
+        root_rec, root_idx = use_rec_default_root_rec_idx(self.root_rec(), root_rec,
+                                                          idx=self.root_idx(), root_idx=root_idx,
+                                                          met="_Field.set_system_root_rec")
+        system, direction = use_rec_default_sys_dir(root_rec, system, direction)
 
         self.set_root_rec(root_rec, system=system, direction=direction)
         if FAT_REC not in self._aspects:
@@ -1349,11 +1334,10 @@ class _Field:
     def append_record(self, system='', direction='', flex_sys_dir=True, root_rec=None, root_idx=()):
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         assert isinstance(value, Records), "append_record() expects Records type but got {}".format(type(value))
-        if root_rec is None:
-            root_rec = self.root_rec(system=system, direction=direction)
-            assert root_idx == (), "_Field.append_record(): root_idx has to be empty if no root_rec specified"
-        if not root_idx:
-            root_idx = self.root_idx(system=system, direction=direction)
+        root_rec, root_idx = use_rec_default_root_rec_idx(self.root_rec(system=system, direction=direction), root_rec,
+                                                          idx=self.root_idx(system=system, direction=direction),
+                                                          root_idx=root_idx,
+                                                          met="_Fields.append_record")
         return value.append_record(root_rec=root_rec, root_idx=root_idx)
 
     def clear_vals(self, system='', direction='', flex_sys_dir=True):
