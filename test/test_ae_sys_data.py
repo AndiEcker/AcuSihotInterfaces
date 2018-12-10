@@ -1,7 +1,8 @@
 import pytest
 
 from collections import OrderedDict
-from ae_sys_data import aspect_key, aspect_key_system, aspect_key_direction, deeper, field_name_idx_path, \
+from ae_sys_data import aspect_key, aspect_key_system, aspect_key_direction, deeper, \
+    field_name_idx_path, field_names_idx_paths, idx_path_field_name, \
     Value, Values, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
     FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV
 from sys_data_ids import SDI_SH
@@ -84,10 +85,55 @@ class TestHelperMethods:
         assert field_name_idx_path('FieldName101SubField') == ('FieldName', 101, 'SubField')
         assert field_name_idx_path('FieldName2SubField3SubSubField') == ('FieldName', 2, 'SubField', 3, 'SubSubField')
 
+        assert not field_name_idx_path(3)
+
         assert not field_name_idx_path('3')
         assert field_name_idx_path('Test2') == ('Test', 2)
         assert field_name_idx_path('2Test2') == (2, 'Test', 2)
         assert field_name_idx_path('3Test') == (3, 'Test')
+
+    def test_field_name_idx_path_sep(self):
+        assert field_name_idx_path('Test.test') == ('Test', 'test')
+        assert field_name_idx_path('.Test.test.') == ('Test', 'test')
+
+        assert field_name_idx_path('Test3.test') == ('Test', 3, 'test')
+        assert field_name_idx_path('Test33.test') == ('Test', 33, 'test')
+
+        assert field_name_idx_path('Test.3.test') == ('Test', 3, 'test')
+        assert field_name_idx_path('Test.33.test') == ('Test', 33, 'test')
+
+    def test_field_name_idx_path_ret_root_fields(self):
+        assert field_name_idx_path('test', return_root_fields=True) == ('test', )
+        assert field_name_idx_path('TestTest', return_root_fields=True)
+        assert field_name_idx_path('TestTest', return_root_fields=True) == ('TestTest', )
+        assert field_name_idx_path('test_Test', return_root_fields=True) == ('test_Test', )
+        assert field_name_idx_path('field_name1sub_field', return_root_fields=True) == ('field_name', 1, 'sub_field')
+        assert field_name_idx_path('FieldName1SubField', return_root_fields=True) == ('FieldName', 1, 'SubField')
+        assert field_name_idx_path('3FieldName1SubField', return_root_fields=True) == (3, 'FieldName', 1, 'SubField')
+        assert field_name_idx_path('FieldName101SubField', return_root_fields=True) == ('FieldName', 101, 'SubField')
+        assert field_name_idx_path('FieldName2SubField3SubSubField', return_root_fields=True) \
+            == ('FieldName', 2, 'SubField', 3, 'SubSubField')
+
+        assert field_name_idx_path(3, return_root_fields=True) == (3, )
+
+        assert field_name_idx_path('3', return_root_fields=True) == ('3', )
+        assert field_name_idx_path('Test2', return_root_fields=True) == ('Test', 2)
+        assert field_name_idx_path('2Test2', return_root_fields=True) == (2, 'Test', 2)
+        assert field_name_idx_path('3Test', return_root_fields=True) == (3, 'Test')
+
+    def test_field_names_idx_paths(self):
+        assert field_names_idx_paths(['3Test', ('fn', 0, 'sfn'), 9]) == [(3, 'Test'), ('fn', 0, 'sfn'), (9, )]
+
+    def test_idx_path_field_name(self):
+        assert idx_path_field_name(('test', 'TEST')) == 'test.TEST'
+        assert idx_path_field_name((3, 'tst')) == '3tst'
+        assert idx_path_field_name(('test3no-sub', )) == 'test3no-sub'
+        assert idx_path_field_name(('test', 33)) == 'test33'
+
+        assert idx_path_field_name(('test', 'TEST'), add_sep=True) == 'test.TEST'
+        assert idx_path_field_name((3, 'tst'), add_sep=True) == '3.tst'
+        assert idx_path_field_name(('test3no-sub',), add_sep=True) == 'test3no-sub'
+        assert idx_path_field_name(('test', 33), add_sep=True) == 'test.33'
 
     def test_init_use_current_index(self):
         r = Record()
@@ -425,6 +471,35 @@ class TestRecord:
         with pytest.raises(AssertionError):
             r.set_node_child(999, 'fnB', 0, 'sfnB', protect=True)
         assert r.val('fnB') == 'flat_fld_val'
+
+        r = Record()
+        r.set_node_child(dict(a=1, b=2), 'ab')
+        assert isinstance(r.val('ab'), dict)
+        assert not isinstance(r.val('ab'), Record)
+        assert r.val('ab').get('a') == 1
+        assert r.val('ab').get('b') == 2
+
+        r.set_node_child(dict(x=3, y=4, z=dict(sez="leaf")), 'cd', 'e')
+        assert isinstance(r.value('cd'), Record)
+        assert isinstance(r.value('cd', 'e'), Value)
+        assert isinstance(r.val('cd', 'e'), dict)
+        assert not isinstance(r.val('cd', 'e'), Record)
+        assert r.val('cd', 'e').get('z').get('sez') == "leaf"
+
+    def test_set_node_child_to_rec(self):
+        rp = Record(fields=dict(a=1, b=2))
+        rc = Record(fields=dict(ba=21, bb=22))
+        rp.set_node_child(rc, 'b')
+        assert isinstance(rp.value('b'), Record)
+        assert rp.val('b', 'ba') == 21
+        assert rp.val('b', 'bb') == 22
+
+        rp = Record(fields=dict(a=1, b=2))
+        rc = Record(fields=dict(ba=321, bb=322))
+        rp.set_node_child(rc, 'b', 3)
+        assert isinstance(rp.value('b'), Records)
+        assert rp.val('b', 3, 'ba') == 321
+        assert rp.val('b', 3, 'bb') == 322
 
     def test_set_field_use_curr_idx(self):
         r = Record()
@@ -964,3 +1039,10 @@ class TestSetVal:
         assert rX['fnB', 1, 'sfnBXx'].val() == 'sfB2v'
         assert rX.val('fnB', 1, 'sfnB') == 1
         assert rX.val('fnB', 1, 'sfnBXx') == 1
+
+    def test_values_set_val(self):
+        vus = Values()
+        assert vus.set_val(9, 3).val(3) == 9
+        assert vus.set_val('6', 2).val(2) == '6'
+        vus.set_val([3], 1)
+        assert vus.val(1) == [3]

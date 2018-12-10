@@ -67,6 +67,55 @@ class TestPrepareConnection:
         assert salesforce_connection.is_sandbox
 
 
+class TestSimpleSalesforceObject:
+    def test_lead_obj(self, salesforce_connection):
+        obj = salesforce_connection.ssf_object('Lead')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+    def test_contact_obj(self, salesforce_connection):
+        obj = salesforce_connection.ssf_object('Contact')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+    def test_account_obj(self, salesforce_connection):
+        obj = salesforce_connection.ssf_object('Account')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+    def test_opportunity_obj(self, salesforce_connection):
+        obj = salesforce_connection.ssf_object('Opportunity')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+    def test_ext_refs_obj(self, salesforce_connection):
+        obj = salesforce_connection.ssf_object('External Reference')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+
+class TestRecordTypeId:
+    def test_lead_obj(self, salesforce_connection):
+        obj = salesforce_connection.record_type_id('Lead')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+    def test_contact_obj(self, salesforce_connection):
+        obj = salesforce_connection.record_type_id('Contact')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+    def test_account_obj(self, salesforce_connection):
+        obj = salesforce_connection.record_type_id('Account')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+    def test_opportunity_obj(self, salesforce_connection):
+        obj = salesforce_connection.record_type_id('Opportunity')
+        assert not salesforce_connection.error_msg
+        assert obj
+
+
 ''' find_client is no longer supported by our SF
 
 class TestSfFindClient:
@@ -79,13 +128,13 @@ class TestSfFindClient:
 
     def test_identify_by_email(self, salesforce_connection):
         sfi = salesforce_connection
-        # used for to wipe duplicates of previous failed test runs: 4sfi.client_delete('0012600000niFt6AAE', 'Account')
+        # used for to wipe duplicates of previous failed test runs: 4sfi.cl_delete('0012600000niFt6AAE', 'Account')
 
         fn = "Testy"
         ln = "Tester"
         em = "TestyTester@testr.com"
         so = 'Account'
-        sf_id, err, msg = sfi.sf_client_upsert(rec=dict(FirstName=fn, LastName=ln, PersonEmail=em), sf_obj=so)
+        sf_id, err, msg = sfi.cl_upsert(rec=dict(FirstName=fn, LastName=ln, PersonEmail=em), sf_obj=so)
         print("test_identify_by_email() sf_id={}/err={}/msg={}:".format(sf_id, err, msg))
         assert len(sf_id) == 18
         assert err == ""
@@ -94,7 +143,7 @@ class TestSfFindClient:
         print('Encapsulated APEX REST call result', sf_found_id, sf_obj)
 
         # delete the test client before checking to prevent leftovers for the next test runs
-        err_msg, log_msg = sfi.client_delete(sf_id, so)
+        err_msg, log_msg = sfi.cl_delete(sf_id, so)
         print("Error/Log messages:", err_msg, '/', log_msg)
         assert not err_msg
 
@@ -102,6 +151,162 @@ class TestSfFindClient:
         assert sf_found_id == sf_id
         assert sf_obj == so
 '''
+
+
+class TestClient:
+    def test_client_upsert_lead(self, salesforce_connection):
+        sfc = salesforce_connection
+
+        rec = Record(fields=dict(Forename='testy', Surname='Tst Lead'))
+        sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Lead')
+        assert not err
+        assert sf_id
+        assert msg
+
+        assert sfc.cl_field_data('Forename', sf_id) == 'Testy'  # SF is capitalizing names
+        assert sfc.cl_field_data('Surname', sf_id) == 'Tst Lead'
+
+        err, msg = sfc.cl_delete(sf_id)
+        assert not err
+        assert msg
+
+    def test_client_upsert_contact(self, salesforce_connection):
+        sfc = salesforce_connection
+
+        rec = Record(fields=dict(Forename='testy', Surname='Tst Contact'))
+        sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Contact')
+        assert not err
+        assert sf_id
+        assert msg
+
+        assert sfc.cl_field_data('Forename', sf_id) == 'Testy'  # SF is capitalizing names
+        assert sfc.cl_field_data('Surname', sf_id) == 'Tst Contact'
+
+        err, msg = sfc.cl_delete(sf_id)
+        assert not err
+        assert msg
+
+    def test_client_upsert_account(self, salesforce_connection):
+        sfc = salesforce_connection
+
+        rec = Record(fields=dict(Forename='testy', Surname='Tst Account'))
+        sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
+        assert not err
+        assert sf_id
+        assert msg
+
+        assert sfc.cl_field_data('Forename', sf_id) == 'Testy'  # SF is capitalizing names
+        assert sfc.cl_field_data('Surname', sf_id) == 'Tst Account'
+
+        err, msg = sfc.cl_delete(sf_id)
+        assert not err
+        assert msg
+
+    def test_ext_refs(self, salesforce_connection):
+        sfc = salesforce_connection
+
+        rec = Record(fields=dict(Forename='testy', Surname='Test Ext Ref'))
+        sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
+        assert not err
+        assert sf_id
+
+        sf_er_id1, err, msg = sfc.cl_ext_ref_upsert(sf_id, 'TST-TYPE', 'TST-ID-123')
+        assert not err
+        assert sf_er_id1
+        assert msg
+        sf_er_id2, err, msg = sfc.cl_ext_ref_upsert(sf_id, 'TST-TYPE', 'TST-ID-456')
+        assert not err
+        assert sf_er_id2
+        assert msg
+        sf_er_id3, err, msg = sfc.cl_ext_ref_upsert(sf_id, 'OTHER-TYPE', 'TST-ID-123')
+        assert not err
+        assert sf_er_id3
+        assert msg
+
+        ext_refs = sfc.cl_ext_refs(sf_id, return_obj_id=True)
+        assert not sfc.error_msg
+        assert ext_refs
+        assert len(ext_refs) == 3
+        assert ('TST-TYPE', sf_er_id1) in ext_refs
+        assert ('TST-TYPE', sf_er_id2) in ext_refs
+        assert ('OTHER-TYPE', sf_er_id3) in ext_refs
+
+        ext_refs = sfc.cl_ext_refs(sf_id)
+        assert not sfc.error_msg
+        assert ext_refs
+        assert len(ext_refs) == 3
+        assert ('TST-TYPE', 'TST-ID-123') in ext_refs
+        assert ('TST-TYPE', 'TST-ID-456') in ext_refs
+        assert ('OTHER-TYPE', 'TST-ID-123') in ext_refs
+
+        ext_refs = sfc.cl_ext_refs(sf_id, er_type='TST-TYPE')
+        assert not sfc.error_msg
+        assert ext_refs
+        assert len(ext_refs) == 2
+        assert 'TST-ID-123' in ext_refs
+        assert 'TST-ID-456' in ext_refs
+
+        ext_refs = sfc.cl_ext_refs(sf_id, er_type='OTHER-TYPE')
+        assert not sfc.error_msg
+        assert ext_refs
+        assert len(ext_refs) == 1
+        assert ext_refs[0] == 'TST-ID-123'
+
+        ext_refs = sfc.cl_ext_refs(sf_id, er_id='TST-ID-123')
+        assert not sfc.error_msg
+        assert ext_refs
+        assert len(ext_refs) == 2
+        assert isinstance(ext_refs[0], (tuple, list))
+        assert ext_refs[0][0] in ('TST-TYPE', 'OTHER-TYPE')
+        assert ext_refs[1][0] in ('TST-TYPE', 'OTHER-TYPE')
+        assert ext_refs[0][0] != ext_refs[1][0]
+        assert ext_refs[0][1] == ext_refs[1][1] == 'TST-ID-123'
+
+        err, msg = sfc.cl_delete(sf_id)
+        assert not err
+        assert msg
+
+        ext_refs = sfc.cl_ext_refs(sf_id)
+        assert not sfc.error_msg
+        assert not ext_refs
+        assert len(ext_refs) == 0
+
+    def test_cl_field_data(self, salesforce_connection):
+        sfc = salesforce_connection
+
+    def test_cl_by_rci_id(self, salesforce_connection):
+        sfc = salesforce_connection
+
+        # first clean up SF with all clients with this test RCI Id - from last tests
+        sf_found_id, dup_cl = sfc.cl_by_rci_id('5-987654321')
+        print(sf_found_id, dup_cl)
+        for sf_id in [sf_found_id] + dup_cl:
+            err, msg = sfc.cl_delete(sf_id)
+            assert not err
+            assert msg
+
+        rec = Record(fields=dict(Forename='testy', Surname='Test Main RCI Ref', RciId='5-987654321'))
+        sf_id_main, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
+        assert not err
+        assert sf_id_main
+
+        rec = Record(fields=dict(Forename='testy', Surname='Test RCI Ref'))
+        sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
+        assert not err
+        assert sf_id
+
+        sf_er_id, err, msg = sfc.cl_ext_ref_upsert(sf_id, 'TST-RCI', '5-987654321')
+        assert not err
+        assert sf_er_id
+        assert msg
+
+        sf_found_id, dup_cl = sfc.cl_by_rci_id('5-987654321')
+        print(sf_found_id, dup_cl)
+        assert not sfc.error_msg
+        assert sf_found_id
+        assert sf_found_id == sf_id_main
+        assert len(dup_cl) == 1
+        assert [sf_id] == dup_cl
 
 
 class TestReservation:
@@ -120,7 +325,6 @@ class TestReservation:
 
     def test_sf_apexecute_core_res_upsert(self, salesforce_connection):
         sfc = salesforce_connection
-        assert not sfc.error_msg
         rec = sfc.cl_res_rec_onto\
             .copy(deepness=-1)\
             .update(FirstName='First-Test-Name', LastName='Last-Test-Name', Language__pc='EN',
@@ -136,19 +340,18 @@ class TestReservation:
         assert res_sf_id.startswith('006')
         assert not err_msg
         assert not sfc.error_msg
-        sf_recd = sfc.sf_res_data(res_sf_id)
+        sf_recd = sfc.res_data(res_sf_id)
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
     def test_res_upsert_basic_not_existing_any(self, salesforce_connection):
         sfc = salesforce_connection
-        assert not sfc.error_msg
 
         arr_date = datetime.date.today() + datetime.timedelta(days=18)
         dep_date = arr_date + datetime.timedelta(days=7)
         rec = sfc.cl_res_rec_onto\
             .copy(deepness=-1)\
             .update({'Surname': 'LNam', 'Forename': 'FNam',
-                     'SfId': '123456789', 'AcId': 'E012345',
+                     'ShId': '123456789', 'AcId': 'E012345',
                      'Language': 'EN', 'Country': 'GB',
                      'Email': 't@ts.tst', 'Phone': '0049765432100',
                      'ResHotelId': '999', 'ResId': '999999', 'ResSubId': '9',
@@ -161,20 +364,19 @@ class TestReservation:
         assert res_sf_id
         assert not sfc.error_msg
 
-        sf_recd = sfc.sf_res_data(res_sf_id)
+        sf_recd = sfc.res_data(res_sf_id)
         assert not sfc.error_msg
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
     def test_res_upsert_basic_not_existing_bhc(self, salesforce_connection):
         sfc = salesforce_connection
-        assert not sfc.error_msg
 
         arr_date = datetime.date.today() + datetime.timedelta(days=15)
         dep_date = arr_date + datetime.timedelta(days=7)
         rec = sfc.cl_res_rec_onto\
             .copy(deepness=-1)\
             .update({'Surname': 'LstNam', 'Forename': 'FstNam',
-                     'SfId': '11123456789', 'AcId': 'T111111',
+                     'ShId': '11123456789', 'AcId': 'T111111',
                      'Language': 'EN', 'Country': 'GB',
                      'Email': 't111@ts111.tst', 'Phone': '00491111111',
                      'ResHotelId': '1', 'ResId': '1111111', 'ResSubId': '1',
@@ -186,7 +388,7 @@ class TestReservation:
         assert sf_id
         assert res_sf_id
 
-        sf_recd = sfc.sf_res_data(res_sf_id)
+        sf_recd = sfc.res_data(res_sf_id)
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
     def test_res_upsert_with_unicode_strings(self, salesforce_connection):
@@ -199,7 +401,7 @@ class TestReservation:
         rec = sfc.cl_res_rec_onto\
             .copy(deepness=-1)\
             .update({'Surname': 'Lästñame', 'Forename': 'FírstNümé',
-                     'SfId': '55423456789', 'AcId': 'T555555',
+                     'ShId': '55423456789', 'AcId': 'T555555',
                      'Language': 'ES', 'Country': 'FR',
                      'Email': 't555@ts555.tst', 'Phone': '004955555555',
                      'ResHotelId': '1', 'ResId': '555555', 'ResSubId': '5',
@@ -211,7 +413,7 @@ class TestReservation:
         assert sf_id
         assert res_sf_id
 
-        sf_recd = sfc.sf_res_data(res_sf_id)
+        sf_recd = sfc.res_data(res_sf_id)
         assert not sfc.error_msg
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
@@ -234,18 +436,18 @@ class TestReservation:
 
         err_msg = sfc.room_change(res_sf_id, arr_date, None, '9999')
         assert not err_msg
-        _dict = sfc.sf_room_data(res_sf_id)
+        _dict = sfc.room_data(res_sf_id)
         assert _dict['CheckIn__c'] == arr_date
         assert _dict['CheckOut__c'] is None
 
         err_msg = sfc.room_change(res_sf_id, None, dep_date, '9999')
         assert not err_msg
-        _dict = sfc.sf_room_data(res_sf_id)
+        _dict = sfc.room_data(res_sf_id)
         assert _dict['CheckIn__c'] is None
         assert _dict['CheckOut__c'] == dep_date
 
         err_msg = sfc.room_change(res_sf_id, arr_date, dep_date, '9999')
         assert not err_msg
-        _dict = sfc.sf_room_data(res_sf_id)
+        _dict = sfc.room_data(res_sf_id)
         assert _dict['CheckIn__c'] == arr_date
         assert _dict['CheckOut__c'] == dep_date

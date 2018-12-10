@@ -14,7 +14,7 @@ from ae_console_app import ConsoleApp, uprint, to_ascii, DEBUG_LEVEL_VERBOSE
 from ae_db import PostgresDB
 from acif import AcuResToSihot, AC_ID_2ND_COUPLE_SUFFIX
 from shif import guest_data, SH_DEF_SEARCH_FIELD, ClientToSihot
-from sfif import obj_from_id, sf_fld_name, field_list_to_sf, field_dict_from_sf, SF_DEF_SEARCH_FIELD
+from sfif import obj_from_id, sf_fld_sys_name, field_list_to_sf, field_dict_from_sf, SF_DEF_SEARCH_FIELD
 from ass_sys_data import add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone, client_fields
 
 __version__ = '0.2'
@@ -501,9 +501,9 @@ def sf_pull_clients():
     def _retrieve():
         for c in res['records']:  # list of client OrderedDicts
             ers = list()
-            if c['External_References__r']['records']:
-                ers.extend([(_['Name'], _['Reference_No_or_ID__c']) for _ in c['External_References__r']['records']])
-            rci_id = c[sf_fld_name('RciId', sf_obj)]
+            if c['External_Ref__r']['records']:
+                ers.extend([(_['Name'], _['Reference_No_or_ID__c']) for _ in c['External_Ref__r']['records']])
+            rci_id = c[sf_fld_sys_name('RciId', sf_obj)]
             if rci_id and not [_ for _ in ers if _[0] == EXT_REF_TYPE_RCI and _[1] == rci_id]:
                 ext_refs.append((EXT_REF_TYPE_RCI, rci_id))
             client_tuples.append((field_dict_from_sf(c, sf_obj), ers))
@@ -512,7 +512,7 @@ def sf_pull_clients():
 
     where = act_record_filters.get('C')
     code_fields = ['AssId', 'AcId', 'SfId', 'ShId', 'Name', 'Email', 'Phone',
-                   'RecordType.Id', 'RciId', "(SELECT Name, Reference_No_or_ID__c FROM External_References__r)"]
+                   'RecordType.Id', 'RciId', "(SELECT Name, Reference_No_or_ID__c FROM External_Ref__r)"]
     client_tuples = list()
     sf_obj = 'Account'
     res = _fetch(where)
@@ -756,7 +756,7 @@ def sf_push_clients():
     errors = list()
     for as_cl in conf_data.clients:
         rec = Record(fields={_: as_cl.val(_) for _ in filter_fields})
-        sf_id, err_msg, msg = conf_data.sf_conn.sf_client_upsert(rec)
+        sf_id, err_msg, msg = conf_data.sf_conn.cl_upsert(rec)
         if err_msg:
             log_error("sf_push_clients(): Push client Salesforce error: " + err_msg, ctx, importance=4)
             errors.append(err_msg)
@@ -963,18 +963,18 @@ def sf_verify_clients():
                 sf_obj = 'Account'
                 if email:
                     found_by = "Email={}".format(email)
-                    sf_id = conf_data.sf_conn.sf_client_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
+                    sf_id = conf_data.sf_conn.cl_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
                 if not sf_id and phone:
                     found_by = "Phone={}".format(phone)
-                    sf_id = conf_data.sf_conn.sf_client_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
+                    sf_id = conf_data.sf_conn.cl_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
                 if not sf_id and email:
                     sf_obj = 'Lead'
                     found_by = "Email={}".format(email)
-                    sf_id = conf_data.sf_conn.sf_client_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
+                    sf_id = conf_data.sf_conn.cl_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
                 if not sf_id and phone:
                     sf_obj = 'Lead'
                     found_by = "Phone={}".format(phone)
-                    sf_id = conf_data.sf_conn.sf_client_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
+                    sf_id = conf_data.sf_conn.cl_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
                 if not sf_id:
                     continue
                 log_warning("{} - AssCache client without ASS SF ID found as {} ID {} via {}; ass={}"
@@ -989,8 +989,8 @@ def sf_verify_clients():
             return err_msg
 
         log_warnings = list()
-        sf_fld_vals = conf_data.sf_conn.sf_client_field_data(client_fld_names, search_val, search_field=match_field,
-                                                             log_warnings=log_warnings)
+        sf_fld_vals = conf_data.sf_conn.cl_field_data(client_fld_names, search_val, search_field=match_field,
+                                                      log_warnings=log_warnings)
         if not sf_fld_vals:
             if _debug_level >= DEBUG_LEVEL_VERBOSE:
                 for msg in log_warnings:
@@ -1010,7 +1010,7 @@ def sf_verify_clients():
         if 'ExtRefs' in filter_fields:
             ass_ext_refs = [tuple(_.split(EXT_REF_TYPE_ID_SEP)) for _ in ass_ext_refs.split(EXT_REFS_SEP)] \
                 if ass_ext_refs else list()
-            sf_ext_refs = conf_data.sf_conn.client_ext_refs(sf_id)
+            sf_ext_refs = conf_data.sf_conn.cl_ext_refs(sf_id)
             di = "; REFS ass={} sf={}; REC ass={} sf={}".format(ass_ext_refs, sf_ext_refs, as_cl, sf_fld_vals) \
                 if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
             for er in ass_ext_refs:

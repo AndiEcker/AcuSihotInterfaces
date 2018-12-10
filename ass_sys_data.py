@@ -859,7 +859,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if ext_refs and imp_rci_ref in ext_refs.split(EXT_REFS_SEP):
                 break
         else:
-            sf_id, dup_clients = self.sf_conn.sf_client_by_rci_id(imp_rci_ref)
+            sf_id, dup_clients = self.sf_conn.cl_by_rci_id(imp_rci_ref)
             if self.sf_conn.error_msg:
                 self._err("cl_idx_by_rci_id() Salesforce connect/fetch error " + self.sf_conn.error_msg,
                           file_name, line_num, importance=3)
@@ -884,7 +884,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 ac_id = None
                 rec = Record(fields=fields_dict)
                 rec.set_val(imp_rci_ref, 'RciId')   # also create in Sf an entry in the External_Ref custom object
-                sf_id, err, msg = self.sf_conn.sf_client_upsert(rec)
+                sf_id, err, msg = self.sf_conn.cl_upsert(rec)
                 if err:
                     self._err("cl_idx_by_rci_id() Salesforce upsert error " + self.sf_conn.error_msg,
                               file_name, line_num, importance=3)
@@ -1161,7 +1161,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     # #######################  SF helpers  ######################################################################
 
-    def sf_res_upsert(self, sf_id, sh_cl_data, ass_res_data, sync_cache=True, sf_sent=None):
+    def sf_ass_res_upsert(self, sf_id, sh_cl_data, ass_res_data, sync_cache=True, sf_sent=None):
         """
         convert ass_cache db columns to SF fields, and then push to Salesforce server via APEX method call
 
@@ -1202,21 +1202,21 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             # retry without sf_id if ResOpp got deleted within SF
             sf_rec['ResSfId'] = ''
             sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_rec)
-            self._warn("asd.sf_res_upsert({}, {}, {}) cached ResSfId reset to {}; SF client={}; ori-/err='{}'/'{}'"
+            self._warn("asd.sf_ass_res_upsert({}, {}, {}) cached ResSfId reset to {}; SF client={}; ori-/err='{}'/'{}'"
                        .format(sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
                        notify=True)
             sf_id = ''
 
         if not err_msg and (not sf_cl_id or not sf_opp_id):
-            self._err("sf_res_upsert({}, {}, {}) SF push returned empty value: PersonAccount.Id={}; ResOppId={}; err={}"
-                      .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_cl_id, sf_opp_id, err_msg))
+            self._err("sf_ass_res_upsert({}, {}, {}) got empty Id from SF: PersonAccount.Id={}; ResOppId={}"
+                      .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_cl_id, sf_opp_id))
         if not err_msg and sf_rec.val('SfId') and sf_rec.val('SfId') != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_ENABLED:
-            self._err("sf_res_upsert({}, {}, {}) PersonAccountId/SfId discrepancy {} != {}"
+            self._err("sf_ass_res_upsert({}, {}, {}) PersonAccountId/id/SfId discrepancy {} != {}"
                       .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_rec.val('SfId'), sf_cl_id))
         if not err_msg and sf_rec.val('ResSfId') and sf_rec.val('ResSfId') != sf_opp_id \
                 and self.debug_level >= DEBUG_LEVEL_ENABLED:
-            self._err("sf_res_upsert({}, {}, {}) Reservation Opportunity Id discrepancy {} != {}"
+            self._err("sf_ass_res_upsert({}, {}, {}) Reservation Opportunity Id discrepancy {} != {}"
                       .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_rec.val('ResSfId'), sf_opp_id))
 
         if sync_cache:
@@ -1231,7 +1231,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if not sf_id and sf_opp_id:     # save just (re-)created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
             elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and sf_id and sf_opp_id != sf_id:
-                self._err("sf_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
+                self._err("sf_ass_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
                           .format(sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_id))
 
             if col_values:
@@ -1245,7 +1245,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message += err_msg
         return self.error_message
 
-    def sf_room_change(self, rgr_sf_id, check_in, check_out, next_room_id):
+    def sf_ass_room_change(self, rgr_sf_id, check_in, check_out, next_room_id):
         """
         check room change and if ok then pass to Salesforce Allocation custom object.
         :param rgr_sf_id:       SF Reservation Opportunity object Id.
@@ -1254,7 +1254,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param next_room_id:    newest apartment/room number.
         :return:                empty string if ok, else error message.
         """
-        self._warn("sf_room_change({}, {}, {}, {}) called".format(rgr_sf_id, check_in, check_out, next_room_id),
+        self._warn("sf_ass_room_change({}, {}, {}, {}) called".format(rgr_sf_id, check_in, check_out, next_room_id),
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         err_msg = self.sf_conn.room_change(rgr_sf_id, check_in, check_out, next_room_id)
@@ -1262,7 +1262,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             # reset (set last res change to midnight) to re-sync reservation (to get new ResSfId) and then try again
             self.rgr_upsert(dict(rgr_last_change=datetime.date.today(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
                             multiple_rec_update=True)
-            self._warn("asd.sf_room_change({}, {}, {}, {}) ResSfId reset; ori-/err='{}'/'{}'"
+            self._warn("asd.sf_ass_room_change({}, {}, {}, {}) ResSfId reset; ori-/err='{}'/'{}'"
                        .format(rgr_sf_id, check_in, check_out, next_room_id, err_msg, self.error_message),
                        notify=True)
             self.error_message = ""

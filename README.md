@@ -338,7 +338,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | RinUsedPoints | - | - | - | ri_used_points |
 | RinUsageComment | - | - | -  | ri_usage_comment |   
 | Salutation | F_SIHOT_SALUTATION() | Salutation | T-SALUTATION | - |
-| SfId | CD_SF_ID1/2, MS_SF_ID | PersonAccountId | MATCH-SM | cl_sf_id |
+| SfId | CD_SF_ID1/2, MS_SF_ID | id+PersonAccountId | MATCH-SM | cl_sf_id |
 | ShId | CD_SIHOT_OBJID+OC_SIHOT_OBJID | SihotGuestObjId__pc | OBJID+GUEST-ID | cl_sh_id+rgr_order_cl_fk->cl_sh_id |
 | State | (CD_ADD13) | PersonMailingState | T-STATE | - |
 | Street | CD_ADD11 | PersonMailingStreet | STREET | - |

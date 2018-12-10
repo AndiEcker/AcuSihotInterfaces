@@ -2,10 +2,11 @@
 import datetime
 # import pytest
 
+# from sys_data_ids import CLIENT_REC_TYPE_ID_OWNERS
 from ae_sys_data import Record
 
 from shif import res_search, guest_data, ResFetch
-from ass_sys_data import correct_email, correct_phone, AssSysData, EXT_REFS_SEP, CLIENT_REC_TYPE_ID_OWNERS
+from ass_sys_data import correct_email, correct_phone, AssSysData  #, EXT_REFS_SEP
 
 
 class TestContactValidation:
@@ -361,10 +362,11 @@ class TestAssSysDataSh:
         send_err = ""
         res_count = len(ret)
         assert res_count
+        asd = AssSysData(console_app_env)
         for idx, res in enumerate(ret):
             print("++++  Test reservation {}/{} creation; res={}".format(idx, res_count, res))
             res_fields = dict()
-            send_err = sfc.sh_res_change_to_ass(res, res_fields)
+            send_err = asd.sh_res_change_to_ass(res, ass_res_rec=res_fields)
             if send_err:
                 send_err = "sh_res_change_to_ass error " + send_err
                 break
@@ -373,16 +375,16 @@ class TestAssSysDataSh:
                 send_err = "guest_data error - no dict=" + str(cl_fields)
                 break
             sf_data = dict()
-            send_err = sfc.sf_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
+            send_err = sfc.sf_ass_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
             if send_err:
-                send_err = "sf_res_upsert error " + send_err
+                send_err = "sf_ass_res_upsert error " + send_err
                 break
             sent_res.append(sf_data)
 
         assert not send_err
 
         for sf_sent in sent_res:
-            sf_recd = sfc.sf_res_data(sf_sent['ReservationOpportunityId'])
+            sf_recd = sfc.res_data(sf_sent['ReservationOpportunityId'])
             assert not sfc.error_msg
             assert not self._compare_converted_field_dicts(sf_sent, sf_recd)
 

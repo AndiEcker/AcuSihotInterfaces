@@ -207,7 +207,7 @@ for rec in clients:
         phones_validated += 1
 
     if update_in_sf:
-        _, err_msg, log_msg = conf_data.sf_conn.sf_client_upsert(rec)
+        _, err_msg, log_msg = conf_data.sf_conn.cl_upsert(rec)
         if err_msg:
             add_log_msg(err_msg, is_error=True)
         else:

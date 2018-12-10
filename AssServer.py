@@ -188,8 +188,8 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     # TODO: MERGE WITH NEXT VERSION sys_data_generic BRANCH
     # res_fields = asd.fields_from_sh(sh_cl)
     # res_fields.update(asd.fields_from_ass(ass_res))
-    # err_msg = asd.sf_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
-    err_msg = asd.sf_res_upsert(rgr_sf_id, sh_cl, ass_res)
+    # err_msg = asd.sf_ass_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
+    err_msg = asd.sf_ass_res_upsert(rgr_sf_id, sh_cl, ass_res)
     if err_msg:
         return "res_from_sh_to_sf({}): SF reservation push/update err='{}', rollback='{}'"\
             .format(ppf(ass_changed_res), err_msg, asd.ass_db.rollback())
@@ -209,8 +209,8 @@ def room_change_to_sf(asd, ass_res):
             .format(res_id, sub_id, ho_id, ass_res['rgr_obj_id'], ass_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
-    err_msg = asd.sf_room_change(ass_res['rgr_sf_id'],
-                                 ass_res['rgr_time_in'], ass_res['rgr_time_out'], ass_res['rgr_room_id'])
+    err_msg = asd.sf_ass_room_change(ass_res['rgr_sf_id'],
+                                     ass_res['rgr_time_in'], ass_res['rgr_time_out'], ass_res['rgr_room_id'])
     if err_msg:
         return "room_change_to_sf({}): SF room push/update err='{}'".format(ppf(ass_res), err_msg)
 
@@ -529,25 +529,21 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         org = organization_name(xml_request)
 
         err_messages = list()
-
-        err_code = 0
         try:
             msg = reload_oc_config()
             if msg:
-                msg += " (OC={})".format(oc)
-                err_code = 90
+                err_messages.append((90, msg + " (OC={})".format(oc)))
         except Exception as ex:
-            msg = "load config {} exception: '{}'\n{}".format(oc, ex, format_exc())
-            err_code = 93
-        if msg:
-            err_messages.append((err_code, msg))
+            err_messages.append((93, "load config {} exception: '{}'\n{}".format(oc, ex, format_exc())))
+
+        if err_messages:
+            pass
         elif oc in SUPPORTED_OCS:
             sys_connections = None
             try:
                 sys_connections = AssSysData(cae, err_logger=partial(log_msg, is_error=True), warn_logger=log_msg)
                 if sys_connections.error_message or not sys_connections.ass_db:
-                    err_messages.append((95, "AssSysData initialization error: {}; ass_db={}"
-                                             .format(sys_connections.error_message, sys_connections.ass_db)))
+                    err_messages.append((95, "AssSysData instantiation fail: {}".format(sys_connections.error_message)))
                 else:
                     rec_ctx = dict(procedure='sys_conn')
                     for slot in SUPPORTED_OCS[oc]:

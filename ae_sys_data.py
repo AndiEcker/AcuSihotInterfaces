@@ -30,6 +30,9 @@ ALL_FATS = (FAT_IDX, FAT_VAL, FAT_REC, FAT_RCX, FAT_CAL, FAT_CHK, FAT_CNV, FAT_F
 FAD_FROM = 'From'
 FAD_ONTO = 'Onto'
 
+# separator character used for idx_path values (especially if field has a Record value)
+IDX_PATH_SEP = '.'
+
 # aspect key string lengths/structure
 _ASP_TYPE_LEN = 3
 _ASP_DIR_LEN = 4
@@ -107,18 +110,32 @@ def deeper(deepness, instance):
     return remaining
 
 
-def field_name_idx_path(field_name):
+def field_name_idx_path(field_name, return_root_fields=False):
     """
     converts a field name path string into an index path tuple.
-    :param field_name:  field name or field name path string or int (for Records index: will always return empty tuple).
-    :return:            index path tuple (idx_path) or None if the field name has no deeper path.
+    :param field_name:          field name str or field name path string or field name tuple
+                                or int (for Records index: will always return empty tuple).
+    :param return_root_fields:  pass True to also return len()==1-tuple for fields with no deeper path (def=False).
+    :return:                    index path tuple (idx_path) or empty tuple if the field has no deeper path and
+                                return_root_fields==False.
      """
     if isinstance(field_name, int):
-        return ()
+        return (field_name, ) if return_root_fields else ()
+    elif isinstance(field_name, (tuple, list)):
+        return field_name if return_root_fields or len(field_name) > 1 else None
 
     idx_path = list()
     nam_i = num_i = None
     for ch_i, ch_v in enumerate(field_name):
+        if ch_v == IDX_PATH_SEP:
+            if nam_i is not None:
+                idx_path.append(field_name[nam_i:ch_i])
+                nam_i = None
+            elif num_i is not None:
+                idx_path.append(int(field_name[num_i:ch_i]))
+                num_i = None
+            continue            # simply ignore leading, trailing and duplicate IDX_PATH_SEP chars
+
         if str.isdigit(ch_v):
             if num_i is None:
                 num_i = ch_i
@@ -131,12 +148,40 @@ def field_name_idx_path(field_name):
                 if num_i is not None:
                     idx_path.append(int(field_name[num_i:nam_i]))
                     num_i = None
+
     if idx_path:
         if nam_i is not None:
             idx_path.append(field_name[nam_i:])
         elif num_i is not None:
             idx_path.append(int(field_name[num_i:]))
+    elif return_root_fields:
+        idx_path.append(field_name)
+
     return tuple(idx_path)
+
+
+def field_names_idx_paths(field_names):
+    return [field_name_idx_path(field_name, return_root_fields=True) for field_name in field_names]
+
+
+def idx_path_field_name(idx_path, add_sep=False):
+    """
+    convert index path tuple/list into field name string.
+    :param idx_path:    index path to convert.
+    :param add_sep:     pass True to always separate index with IDX_PATH_SEP. False/Def will only put a separator char
+                        if field value is a Record (for to separate the root field name from the sub field name).
+    :return:            field name string.
+    """
+    assert isinstance(idx_path, (tuple, list)), "idx_field_name(): expects tuple/list, got {}".format(type(idx_path))
+    last_nam_idx = False
+    field_name = ''
+    for idx in idx_path:
+        nam_idx = isinstance(idx, str)
+        if field_name and (last_nam_idx and nam_idx or add_sep):
+            field_name += IDX_PATH_SEP
+        field_name += str(idx)
+        last_nam_idx = nam_idx
+    return field_name
 
 
 def current_index(value):
@@ -293,7 +338,7 @@ class Values(list):                     # type: List[Union[Value, Record]]
             assert not moan, msg + "str or int type in idx_path, got {} in {}".format(type(idx_path), idx_path)
             return None
         else:
-            idx_path = field_name_idx_path(idx_path) or (idx_path, )
+            idx_path = field_name_idx_path(idx_path, return_root_fields=True)
 
         if not idx_path:
             assert not moan, msg + "non-empty tuple or list or index string in idx_path {}".format(idx_path)
@@ -429,7 +474,7 @@ class Record(OrderedDict):
         return child
 
     def __setitem__(self, key, value):
-        idx_path = key if isinstance(key, (tuple, list)) else (field_name_idx_path(key) or (key, ))
+        idx_path = field_name_idx_path(key, return_root_fields=True)
         self.set_node_child(value, *idx_path)
 
     def node_child(self, idx_path, use_curr_idx=None, moan=False):
@@ -438,7 +483,7 @@ class Record(OrderedDict):
             if not isinstance(idx_path, str):
                 assert not moan, msg + "str type in idx_path[0], got {} in {}".format(type(idx_path), idx_path)
                 return None
-            idx_path = field_name_idx_path(idx_path) or (idx_path, )
+            idx_path = field_name_idx_path(idx_path, return_root_fields=True)
 
         if not idx_path:
             assert not moan, msg + "non-empty tuple or list in idx_path {}".format(idx_path)
@@ -626,7 +671,7 @@ class Record(OrderedDict):
         root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.add_fields")
 
         for name, fld_or_val in items:
-            idx_path = name if isinstance(name, (tuple, list)) else (field_name_idx_path(name) or (name, ))
+            idx_path = field_name_idx_path(name, return_root_fields=True)
             if root_rec is None:
                 root_rec = fld_or_val.root_rec() if isinstance(fld_or_val, _Field) else self
             if not root_idx and isinstance(fld_or_val, _Field):
@@ -675,7 +720,7 @@ class Record(OrderedDict):
                 idx_path = field_name
                 field_name = field_name[-1]
             else:
-                idx_path = field_name_idx_path(field_name) or (field_name, )
+                idx_path = field_name_idx_path(field_name, return_root_fields=True)
 
             sys_name = fas[sfi.pop(sys_nam_key)].strip('/')     # strip needed for Sihot elem names only
 
@@ -862,12 +907,13 @@ class Record(OrderedDict):
         return column_expressions
 
     def to_dict(self, field_names=None, system=None, direction=None, put_system_val=True):
+        idx_paths = field_names_idx_paths(field_names) if field_names else None
         system, direction = use_rec_default_sys_dir(self, system, direction)
 
         ret = dict()
         for idx in self.leaf_indexes(system=system, direction=direction):
             key = self[idx].name(system=system, direction=direction, flex_sys_dir=False)
-            if key and (not field_names or key in field_names):
+            if key and (not idx_paths or idx in idx_paths):
                 if put_system_val:
                     ret[key] = self.val(idx, system=system, direction=direction)
                 else:
@@ -878,9 +924,6 @@ class Record(OrderedDict):
         super(Record, self).update(mapping, **kwargs)
         return self     # implemented only for to get self as return value
 
-    def xml_build(self, system):
-        pass
-
 
 class Records(Values):      # type: List[Record]
     def __getitem__(self, key: Union[int, str, tuple]) -> Record:
@@ -890,7 +933,7 @@ class Records(Values):      # type: List[Record]
         return child
 
     def __setitem__(self, key, value):
-        idx_path = key if isinstance(key, (tuple, list)) else (field_name_idx_path(key) or (key, ))
+        idx_path = field_name_idx_path(key, return_root_fields=True)
         self.set_node_child(value, *idx_path)
 
     def set_node_child(self, rec_or_fld_or_val, *idx_path, system='', direction='', protect=False,
@@ -1022,10 +1065,6 @@ class _Field:
             raise KeyError("There is no item with the idx_path '{}' in this _Field ({})".format(key, self))
         return child
 
-    def __setitem__(self, key, value):
-        idx_path = key if isinstance(key, (tuple, list)) else (field_name_idx_path(key) or (key, ))
-        self.set_node_child(value, *idx_path)
-
     def node_child(self, idx_path, use_curr_idx=None, moan=False):
         msg = "_Field.node_child() expects "
         if isinstance(idx_path, (tuple, list)):
@@ -1036,7 +1075,7 @@ class _Field:
             assert not moan, msg + "str or int type in idx_path, got {} in {}".format(type(idx_path), idx_path)
             return None
         else:
-            idx_path = field_name_idx_path(idx_path) or (idx_path, )
+            idx_path = field_name_idx_path(idx_path, return_root_fields=True)
 
         if not idx_path:
             assert not moan, msg + "non-empty tuple or list or index string in idx_path {}".format(idx_path)
@@ -1048,19 +1087,6 @@ class _Field:
             return None
 
         return value.node_child(idx_path, use_curr_idx=use_curr_idx, moan=moan)
-
-    def set_node_child(self, value_or_val, *idx_path, system='', direction='', protect=False,
-                       root_rec=None, root_idx=(), use_curr_idx=None):
-        idx_len = len(idx_path)
-        assert idx_len, "_Field.set_node_child() idx_path {} too short; expected one or more items".format(idx_path)
-
-        if isinstance(value_or_val, VALUE_TYPES):
-            self.set_value(value_or_val, *idx_path, system=system, direction=direction, protect=protect,
-                           root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
-        else:
-            self.set_val(value_or_val, *idx_path, system=system, direction=direction, protect=protect,
-                         root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
-        return self
 
     def value(self, *idx_path, system='', direction='', flex_sys_dir=False):
         value = None

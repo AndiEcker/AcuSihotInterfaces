@@ -29,7 +29,7 @@ ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
 
 
-# default search field for external systems (used by shif.sf_client_field_data())
+# default search field for external systems (used by shif.cl_field_data())
 SH_DEF_SEARCH_FIELD = 'ShId'
 
 
