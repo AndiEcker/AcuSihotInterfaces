@@ -18,7 +18,7 @@ DEF_CLIENT_OBJ = 'Account'
 MAP_CLIENT_OBJECTS = \
     {'Account': (
         # ('AssCache_Id__pc', 'AssId'),
-        # ('CD_CODE__pc', 'AcId'),
+        ('CD_CODE__pc', 'AcId'),
         ('Id', 'SfId'),                      # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
         ('SihotGuestObjId__pc', 'ShId'),
         ('LastName', 'Surname'),
@@ -30,7 +30,7 @@ MAP_CLIENT_OBJECTS = \
         ('PersonMailingStreet', 'Street'),
         ('PersonMailingCity', 'City'),
         # ('PersonMailingState', 'State'),
-        # ('PersonMailingPostalCode', 'Postal'),
+        ('PersonMailingPostalCode', 'Postal'),
         ('PersonMailingCountry', 'Country'),
         ('Language__pc', 'Language'),
         ('Nationality__pc', 'Nationality'),
@@ -166,13 +166,13 @@ def convert_date_onto_sf(date):
 def convert_date_time_from_sf(str_val):
     mask = SF_DATE_TIME_FORMAT_FROM
     if str_val.find('+') == -1:
-        mask = mask[:-2]        # no timezone specified in str_val, then remove %z from mask
+        mask = mask[:-2]                # no timezone specified in str_val, so remove '+%z' from mask
     if str_val.find('.') == -1:
-        mask = mask[:mask.find('.')]
+        mask = mask[:mask.find('.')]    # no microseconds specified in str_val, so remove '.%f' from mask
     if str_val.find(' ') != -1:
-        mask = mask.replace('T', ' ')
+        mask = mask.replace('T', ' ')   # str_val uses space char as date-time-sep, so replace T with space in mask
     elif str_val.find('T') == -1:
-        mask = mask[:mask.find('T')]
+        mask = mask[:mask.find('T')]    # if no T-/space-date-time-sep found in str_val, so remove time from mask
     return datetime.datetime.strptime(str_val, mask).replace(microsecond=0, tzinfo=None) + SF_TIME_DIFF_FROM
 
 
@@ -217,10 +217,12 @@ def ensure_long_id(sf_id):
     :param sf_id:   any valid (15 or 18 character long) SF ID.
     :return:        18 character SF ID if passed in as 15 or 18 character ID - other SF ID lengths/values returns None.
     """
-    if not sf_id or len(sf_id) != 15:
+    if not sf_id:
         return None
     elif len(sf_id) == 18:
         return sf_id
+    elif len(sf_id) != 15:
+        return None
 
     char_map = string.ascii_uppercase + "012345"
     extend = ""
@@ -237,8 +239,9 @@ def prepare_connection(cae, verbose=True):
     debug_level = cae.get_option('debugLevel')
     sf_user = cae.get_option('sfUser')
     if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
-        uprint("sfif.prepare_connection(): skipped because of unspecified credentials")
-        return None, None
+        if verbose:
+            uprint("sfif.prepare_connection(): skipped because of unspecified credentials")
+        return None
     sf_pw = cae.get_option('sfPassword')
     sf_token = cae.get_option('sfToken')
     sf_sandbox = cae.get_option('sfIsSandbox', default_value='test' in sf_user.lower() or 'sdbx' in sf_user.lower())
@@ -282,9 +285,9 @@ def field_dict_from_sf(sf_dict, sf_obj):
     return field_dict
 
 
-def field_list_to_sf(code_list, sf_obj):
+def field_list_to_sf(field_names, sf_obj):
     sf_list = list()
-    for field_name in code_list:
+    for field_name in field_names:
         sf_list.append(sf_fld_sys_name(field_name, sf_obj))
     return sf_list
 
@@ -295,6 +298,14 @@ def rec_to_sf_obj_fld_dict(rec, sf_obj):
         sf_key = sf_fld_sys_name(idx_path_field_name(idx), sf_obj)
         sf_dict[sf_key] = rec.val(idx)
     return sf_dict
+
+
+def _format_exc(ex):    # wrapper because SimpleSalesforce is throwing exception in relation with formatting his objects
+    try:
+        exc_msg = format_exc(ex)
+    except Exception as fex:
+        exc_msg = str(ex) + '\n      ' + str(fex)
+    return exc_msg
 
 
 class SfInterface:
@@ -322,7 +333,7 @@ class SfInterface:
                                     sandbox=self._sb, client_id=self._client)
             uprint("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
         except SalesforceAuthenticationFailed as sf_ex:
-            self.error_msg = "SfInterface.__init__(): Salesforce {} authentication failed with exception: {}" \
+            self.error_msg = "SfInterface._connect(): Salesforce {} authentication failed with exception: {}" \
                 .format('Sandbox' if self._sb else 'Production', sf_ex)
 
     def _ensure_lazy_connect(self, soql_query="SELECT Id from Lead WHERE Name = '__test__'"):
@@ -381,9 +392,9 @@ class SfInterface:
         try:
             result = self._conn.apexecute(function_name, method='POST', data=function_args)
         except Exception as ex:
-            err_msg = "sfif.apex_call({}, {}) exception='{}'\n{}".format(function_name, function_args, ex, format_exc())
-            result = dict(sfif_apex_error=err_msg)
-            self.error_msg = err_msg
+            self.error_msg += "SfInterface.apex_call({}, {}) exception='{}'\n{}"\
+                .format(function_name, function_args, ex, _format_exc(ex))
+            result = dict(sfif_apex_error=self.error_msg)
 
         return result
 
@@ -400,11 +411,11 @@ class SfInterface:
         try:
             response = self._ensure_lazy_connect(soql_query)
         except Exception as sf_ex:
-            self.error_msg = "SfInterface.soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
+            self.error_msg += "SfInterface.soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
         if response is None:
-            self.error_msg = "SfInterface.soql_query_all({}) SimpleSalesforce,query_all() -> None".format(soql_query)
-        elif isinstance(response, dict) and not response['done']:
-            self.error_msg = "SfInterface.soql_query_all(): Salesforce is responding that query {} is NOT done." \
+            self.error_msg += "SfInterface.soql_query_all({}) SimpleSalesforce.query_all() -> None".format(soql_query)
+        elif isinstance(response, dict) and not response.get('done'):
+            self.error_msg += "SfInterface.soql_query_all(): Salesforce is responding that query {} is NOT done." \
                 .format(soql_query)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -501,13 +512,15 @@ class SfInterface:
                 ext_refs.append(c[id_name] if er_type else (c['Name'].split(EXT_REF_TYPE_ID_SEP)[0], c[id_name]))
         return ext_refs
 
-    def cl_ext_ref_upsert(self, sf_client_id, er_type, er_id, sf_obj=None):
+    def cl_ext_ref_upsert(self, sf_client_id, er_type, er_id, sf_obj=None, upd_rec=None):
         """
         insert or update external reference for a client.
         :param sf_client_id:    SF Id of Contact/Account for to upsert external reference.
         :param er_type:         External reference type to insert/update.
         :param er_id:           External reference Id to insert/update.
         :param sf_obj:          SF client object (Contact or Account). Def=determined from sf_client_id.
+        :param upd_rec:         Record with one of the fields Type, Id, which is only used if external reference
+                                specified by sf_client_id+er_type+er_id exists as the new er_type/er_id value.
         :return:
         """
         if not self._ensure_lazy_connect():
@@ -533,6 +546,11 @@ class SfInterface:
             if self._debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
                 uprint("cl_ext_ref_upsert({}): duplicate external refs found: {}".format(sf_client_id, ppf(er_list)))
             sf_er_id = er_list[0]
+            if upd_rec:
+                new_id = upd_rec.val('Id') or sf_dict['Name'].split(EXT_REF_TYPE_ID_SEP)[1]
+                if upd_rec.val('Type'):
+                    sf_dict['Name'] = upd_rec.val('Type') + EXT_REF_TYPE_ID_SEP + new_id
+                sf_dict['Reference_No_or_ID__c'] = new_id
             try:
                 sf_ret = ext_ref_obj.update(sf_er_id, sf_dict)
                 msg = "{} {} updated with {} ret={}".format(er_obj, sf_er_id, ppf(sf_dict), sf_ret)
@@ -564,7 +582,7 @@ class SfInterface:
         :param search_val_deli: delimiter used for to enclose search value within SOQL query.
         :param search_op:       search operator (between search_field and search_value).
         :param search_field:    field name used for to identify client record (def=SF_DEF_SEARCH_FIELD=='SfId').
-        :param sf_obj:          SF object to be searched (def=determined by the passed ID prefix).
+        :param sf_obj:          SF object to be searched (def=determined by the passed SF ID prefix).
         :param log_warnings:    pass list for to append warning log entries on re-search on old/redirected SF IDs.
         :return:                either single field value (if fetch_fields is str) or dict(fld=val) of field values.
         """
@@ -657,7 +675,7 @@ class SfInterface:
 
     def cl_upsert(self, rec, sf_obj=None):
         # check if Id passed in (then this method can determine the sf_obj and will do an update not an insert)
-        sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD), True) if SF_DEF_SEARCH_FIELD in rec \
+        sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD).val(), True) if SF_DEF_SEARCH_FIELD in rec \
             else ('', False)
 
         if sf_obj is None:
@@ -679,7 +697,8 @@ class SfInterface:
                 sf_ret = client_obj.update(sf_id, sf_dict)
                 msg = "{} {} updated with {}, ret={}".format(sf_obj, sf_id, ppf(sf_dict), sf_ret)
             except Exception as ex:
-                err = "{} update() raised exception {}. sent={}".format(sf_obj, format_exc(ex), ppf(sf_dict))
+                err = "{} update() raised exception {}. sent={}".format(sf_obj, _format_exc(ex), ppf(sf_dict))
+                sf_id = None
         else:
             try:
                 sf_ret = client_obj.create(sf_dict)
@@ -688,7 +707,8 @@ class SfInterface:
                     fld_name = sf_fld_sys_name(SF_DEF_SEARCH_FIELD, sf_obj)
                     sf_id = sf_ret.get(fld_name) or sf_ret.get(fld_name.lower())    # TODO: fix UGLY lowercase API name
             except Exception as ex:
-                err = "{} create() exception {}. sent={}".format(sf_obj, format_exc(ex), ppf(sf_dict))
+                err = "{} create() exception {}. sent={}".format(sf_obj, _format_exc(ex), ppf(sf_dict))
+                sf_id = None
 
         if not err and sf_id and 'RciId' in rec:
             _, err, msg = self.cl_ext_ref_upsert(sf_id, EXT_REF_TYPE_RCI, rec.val('RciId'), sf_obj=sf_obj)
@@ -733,7 +753,7 @@ class SfInterface:
         if not owner_rec_types:
             owner_rec_types = list()
         soql_fields = ['SfId', 'AcId', 'RciId', 'ShId', 'RecordType.Id',
-                       "(SELECT Reference_No_or_ID__c FROM External_Ref__r WHERE Name LIKE '{}%')"
+                       "(SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE '{}%')"
                        .format(EXT_REF_TYPE_RCI)]
         sf_fields = field_list_to_sf(soql_fields, sf_obj)
         res = self.soql_query_all("SELECT {} FROM {}".format(", ".join(sf_fields), sf_obj))
@@ -741,10 +761,10 @@ class SfInterface:
         if self.error_msg:
             self.error_msg = "clients_with_rci_id(): " + self.error_msg
         elif res['totalSize'] > 0:
-            for c in res['records']:  # list of client OrderedDicts
+            for c in res['records']:  # filter out clients with RCI ref from SF-list of client OrderedDicts
                 ext_refs = [c[sf_fld_sys_name('RciId', sf_obj)]] if c[sf_fld_sys_name('RciId', sf_obj)] else list()
-                if c['External_Ref__r']:
-                    ext_refs.extend([_['Reference_No_or_ID__c'] for _ in c['External_Ref__r']['records']])
+                if c['External_References__r']:
+                    ext_refs.extend([_['Reference_No_or_ID__c'] for _ in c['External_References__r']['records']])
                 if ext_refs:
                     client_tuples.append((None,
                                           c[sf_fld_sys_name('AcId', sf_obj)],
@@ -762,7 +782,8 @@ class SfInterface:
         """
         ret_val = dict(ReservationOpportunityId=res_opp_id)
         soql_query = '''
-            SELECT Account.Id, Account.FirstName, Account.LastName, Account.PersonEmail, Account.PersonHomePhone,
+            SELECT Id,
+                   Account.Id, Account.FirstName, Account.LastName, Account.PersonEmail, Account.PersonHomePhone,
                    Account.CD_CODE__pc, Account.SihotGuestObjId__pc, 
                    Account.Language__pc, 
                    Account.PersonMailingStreet, Account.PersonMailingPostalCode, Account.PersonMailingCity, 
@@ -780,13 +801,14 @@ class SfInterface:
         elif res['totalSize'] > 0:
             ret_all = res['records'][0]
             ret = dict()
+            ret['ReservationOpportunityId'] = ret_all.get('Id')
             if ret_all['Account']:      # is None if no Account associated
                 ret.update(ret_all['Account'])
                 ret['PersonAccountId'] = ret.get('Id')
             if ret_all['Reservations__r'] and ret_all['Reservations__r']['totalSize'] > 0:
                 ret.update(ret_all['Reservations__r']['records'][0])
                 ret['ReservationId'] = ret.get('Id')
-            del ret['attributes']
+            # del ret['attributes']
             for k, v in ret.items():
                 if k in ('attributes', 'Id', ):
                     continue
@@ -798,7 +820,7 @@ class SfInterface:
 
     def res_upsert(self, cl_res_rec):
         # exclude not implemented parameters like e.g. RciId
-        implemented_args = [_ for _ in cl_res_rec.keys() if _ not in ('RciId', )]
+        implemented_args = [_ for _ in cl_res_rec.keys() if _ not in ('RciId', 'AcId')]
 
         sf_args = cl_res_rec.to_dict(field_names=implemented_args, system=SDI_SF, direction=FAD_ONTO)
         sf_id = sf_args.pop('Id', None)

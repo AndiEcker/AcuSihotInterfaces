@@ -27,7 +27,8 @@ field_indexes = {FAT_IDX: FMI_FLD_NAME, FAT_IDX + FAD_FROM: FMI_COL_NAME, FAT_SQ
                  FAT_CNV + FAD_FROM: FMI_CNV_FUNC}
 
 CLI_FIELD_MAP = [       # client data
-    ('AcId', 'CD_CODE',),
+    ('AcId', 'CD_CODE'),
+    ('AcIdP', 'CD_CODE2'),
     ('SfId', 'SIHOT_SF_ID'),
     ('ShId', 'CD_SIHOT_OBJID'),
     ('Salutation', 'SIHOT_SALUTATION1'),
@@ -36,17 +37,16 @@ CLI_FIELD_MAP = [       # client data
     ('Surname', 'CD_SNAM1'),
     ('Forename', 'CD_FNAM1'),
     ('Street', 'CD_ADD11'),
-    ('POBox', 'CD_ADD12',
-     "nvl(CD_ADD12, CD_ADD13)"),
+    ('POBox', 'CD_ADD12'),          # had sql expression: "nvl(CD_ADD12, CD_ADD13)"), - now CD_ADD13 is 'State' field
+    ('State', 'CD_ADD13'),
     ('Postal', 'CD_POSTAL'),
     ('City', 'CD_CITY'),
     ('Country', 'SIHOT_COUNTRY'),
-    ('State', 'SIHOT_STATE'),
     ('Language', 'SIHOT_LANG'),
     ('Comment', 'SH_COMMENT',
      "SIHOT_GUEST_TYPE || ' ExtRefs=' || EXT_REFS"),
     ('HomePhone', 'CD_HTEL1'),
-    ('WorkPhone', 'CD_WTEL1'
+    ('WorkPhone', 'CD_WTEL1',
      "CD_WTEL1 || CD_WEXT1"),
     ('MobilePhone', 'CD_MOBILE1'),
     ('MobilePhoneB', 'CD_LAST_SMS_TEL'),
@@ -291,7 +291,7 @@ class AcuClientToSihot(ClientToSihot):
 
         action = self.action
         couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
-        if rec.get('CD_CODE2') and not err_msg:  # check for second person
+        if rec.val('CD_CODE2') and not err_msg:  # check for second person
             crow2 = deepcopy(rec)
             crow2['CD_CODE'] = rec['CD_CODE2']
             crow2['CD_SIHOT_OBJID'] = rec['CD_SIHOT_OBJID2']

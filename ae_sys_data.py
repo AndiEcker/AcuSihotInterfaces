@@ -434,7 +434,7 @@ class Record(OrderedDict):
     # isinstance(..., dict) not working if using MutableMapping instead of OrderedDict
     # dict should not be used because **instance will then not work see the answer of Groxx in the stackoverflow
     # .. question https://stackoverflow.com/questions/3387691/how-to-perfectly-override-a-dict/47361653#47361653
-    def __init__(self, fields=None, system='', direction='', action='', root_rec=None, root_idx=()):
+    def __init__(self, fields=None, system='', direction='', action='', root_rec=None, root_idx=(), field_items=False):
         """
         ordered collection of _Field items.
         :param fields:      OrderedDict/dict of _Field instances (field order is not preserved when using dict)
@@ -444,6 +444,7 @@ class Record(OrderedDict):
         :param action:      current action (see ACTION_INSERT, ACTION_SEARCH, ACTION_DELETE, ...)
         :param root_rec:    root record of this record (def=self will be a root record).
         :param root_idx:    root index of this record (def=()).
+        :param field_items  pass True to get Record items - using __getitem__() - as of type _Field (not as val()).
         """
         super(Record, self).__init__()
         self._fields = self     # using internal store of OrderedDict() while keeping code better readable/maintainable
@@ -451,6 +452,7 @@ class Record(OrderedDict):
         self.direction = direction
         self.action = action
         root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.__init__")
+        self.field_items = field_items
 
         self.current_idx = None
         if fields:
@@ -465,13 +467,22 @@ class Record(OrderedDict):
 
     def __contains__(self, idx_path):
         item = self.node_child(idx_path)
+        ''' on executing self.pop() no __delitem__ will be called instead python OrderedDict first pops the item
+            then is calling this method, although super().__contains__() still returns True but then calls __getitem__()
+            (again with this instance where the item got already removed from). So next two lines are not helping:
+        
+        if not item:
+            item = super().__contains__(idx_path)
+            
+            So finally had to over-ride the Record.pop() method.
+        '''
         return bool(item)
 
     def __getitem__(self, key):
         child = self.node_child(key, moan=True)
         if child is None:
             raise KeyError("There is no item with the key '{}' in this Record/OrderedDict ({})".format(key, self))
-        return child
+        return child if self.field_items or not isinstance(child, _Field) else child.val()
 
     def __setitem__(self, key, value):
         idx_path = field_name_idx_path(key, return_root_fields=True)
@@ -574,7 +585,8 @@ class Record(OrderedDict):
             return self
         idx, *idx2 = idx_path
 
-        return self._fields[idx].value(*idx2, system=system, direction=direction, **kwargs)
+        field = self.node_child(idx)
+        return field.value(*idx2, system=system, direction=direction, **kwargs)
 
     def set_value(self, value, *idx_path, system=None, direction=None, protect=False, root_rec=None, root_idx=(),
                   use_curr_idx=None):
@@ -582,8 +594,9 @@ class Record(OrderedDict):
         root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_value")
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
         root_idx += (idx, )
-        self[idx].set_value(value, *idx2, system=system, direction=direction, protect=protect,
-                            root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+        field = self.node_child((idx, ))
+        field.set_value(value, *idx2, system=system, direction=direction, protect=protect,
+                        root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
         return self
 
     def val(self, *idx_path, system=None, direction=None, flex_sys_dir=True, use_curr_idx=None, **kwargs):
@@ -597,7 +610,8 @@ class Record(OrderedDict):
         else:
             idx, *idx2 = use_current_index(self, idx_path, use_curr_idx)
             if idx in self._fields:
-                field = self._fields[idx]
+                # field = self._fields[idx]  ->  field = self._fields.get(idx)   # get() doesn't find sys fld names  ->
+                field = self.node_child(idx)
                 val = field.val(*idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
                                 use_curr_idx=use_curr_idx, **kwargs)
             else:
@@ -617,9 +631,10 @@ class Record(OrderedDict):
             field = _Field(root_rec=root_rec or self, root_idx=root_idx)
             self._add_field(field, idx)
             protect = False
-        self._fields[idx].set_val(val, *idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
-                                  protect=protect, extend=extend, converter=converter,
-                                  root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+        field = self.node_child(idx)
+        field.set_val(val, *idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
+                      protect=protect, extend=extend, converter=converter,
+                      root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
         return self
 
     def leafs(self, system='', direction='', flex_sys_dir=True):
@@ -836,18 +851,26 @@ class Record(OrderedDict):
                 missing.append(alt)
         return missing
 
+    def pop(self, key):
+        item = self.get(key)
+        if item:
+            super().__delitem__(key)
+        return item
+
     def pull(self, from_system):
         assert from_system, "Record.pull() with empty value in from_system is not allowed"
         for idx_path in self.leaf_indexes(system=from_system, direction=FAD_FROM):    # _fields.values():
             if len(idx_path) > 1:
                 set_current_index(self.value(idx_path[0]), idx=idx_path[1])
-            self[idx_path].pull(from_system, self, idx_path)
+            child = self.node_child(idx_path)
+            child.pull(from_system, self, idx_path)
         return self
 
     def push(self, onto_system):
         assert onto_system, "Record.push() with empty value in onto_system is not allowed"
         for idx_path in self.leaf_indexes():      # _fields.values():
-            self[idx_path].push(onto_system, self, idx_path)
+            child = self.node_child(idx_path)
+            child.push(onto_system, self, idx_path)
         return self
 
     def set_current_system_index(self, sys_fld_name_prefix, path_sep, idx_val=None, idx_add=1):
@@ -911,13 +934,14 @@ class Record(OrderedDict):
         system, direction = use_rec_default_sys_dir(self, system, direction)
 
         ret = dict()
-        for idx in self.leaf_indexes(system=system, direction=direction):
-            key = self[idx].name(system=system, direction=direction, flex_sys_dir=False)
-            if key and (not idx_paths or idx in idx_paths):
+        for idx_path in self.leaf_indexes(system=system, direction=direction):
+            child = self.node_child(idx_path)
+            key = child.name(system=system, direction=direction, flex_sys_dir=False)
+            if key and (not idx_paths or idx_path in idx_paths):
                 if put_system_val:
-                    ret[key] = self.val(idx, system=system, direction=direction)
+                    ret[key] = self.val(idx_path, system=system, direction=direction)
                 else:
-                    ret[key] = self.val(idx, system='', direction='')
+                    ret[key] = self.val(idx_path, system='', direction='')
         return ret
 
     def update(self, mapping=(), **kwargs):

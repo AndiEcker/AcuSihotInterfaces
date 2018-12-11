@@ -10,7 +10,7 @@ from sys_data_ids import SDI_SH
 
 @pytest.fixture()
 def rec_2f_2s_incomplete():     # two fields and only partly complete two sub-levels
-    r1 = Record(fields=dict(fnA='', fnB1sfnA='', fnB1sfnB='sfB2v'))
+    r1 = Record(fields=dict(fnA='', fnB1sfnA='', fnB1sfnB='sfB2v'), field_items=True)
     print(r1)
     return r1
 
@@ -19,7 +19,8 @@ def rec_2f_2s_incomplete():     # two fields and only partly complete two sub-le
 def rec_2f_2s_complete():       # two fields and only partly complete two sub-levels
     r1 = Record(fields=(('fnA', ''),
                         ('fnB0sfnA', 'sfA1v'), ('fnB0sfnB', 'sfB1v'),
-                        ('fnB1sfnA', 'sfA2v'), ('fnB1sfnB', 'sfB2v')))
+                        ('fnB1sfnA', 'sfA2v'), ('fnB1sfnB', 'sfB2v')),
+                field_items=True)
     print(r1)
     return r1
 
@@ -272,6 +273,8 @@ class TestRecord:
     def test_field_lookup_standard(self):
         r = Record(fields=dict(test=''))
         print(r)
+        assert r.val('test') == ''
+        r.field_items = True
         assert r['test'].val() == ''
 
     def test_unpacking(self):
@@ -313,14 +316,15 @@ class TestRecord:
     def test_val_use_curr_idx(self):
         r = Record()
         r.set_val('fAv1', 'fnA', 1, 'sfnA')
-        f = r[('fnA', 1, 'sfnA')]
         assert r.val('fnA', 1, 'sfnA') == 'fAv1'
         assert r.val('fnA', 0, 'sfnA') is None
         assert r.val('fnA', 0, 'sfnA', use_curr_idx=Value((1, ))) == 'fAv1'
         assert r.val('fnA', 2, 'sfnA') is None
         assert r.val('fnA', 2, 'sfnA', use_curr_idx=Value((1, ))) == 'fAv1'
-        assert f.val() == 'fAv1'
 
+        r.field_items = True
+        f = r[('fnA', 1, 'sfnA')]
+        assert f.val() == 'fAv1'
         recs = f.parent(value_types=(Records,))
         assert recs is not None
         set_current_index(recs, idx=2)
@@ -342,52 +346,52 @@ class TestRecord:
         assert r.val('fnA', 1, 'sfnA') == 'fAv2'
 
     def test_set_val_root_rec_idx(self):
-        r = Record()
+        r = Record(field_items=True)
         r.set_val('fAv0', 'fnA')
         assert r['fnA'].root_rec() is r
         assert r['fnA'].root_idx() == ('fnA',)
 
-        r = Record()
+        r = Record(field_items=True)
         r.set_node_child('fBv1', 'fnB', 0, 'sfnB')
         assert r['fnB'].root_rec() is r
         assert r['fnB'].root_idx() == ('fnB', )
         assert r[('fnB', 0, 'sfnB')].root_rec() is r
         assert r[('fnB', 0, 'sfnB')].root_idx() == ('fnB', 0, 'sfnB')
 
-        r = Record()
+        r = Record(field_items=True)
         r.set_val('fAv1', 'fnA', 1, 'sfnA')
         assert r['fnA'].root_rec() is r
         assert r['fnA'].root_idx() == ('fnA', )
         assert r[('fnA', 1, 'sfnA')].root_rec() is r
         assert r[('fnA', 1, 'sfnA')].root_idx() == ('fnA', 1, 'sfnA')
 
-        r = Record()
+        r = Record(field_items=True)
         r.set_val('fAv3', 'fnA', root_rec=r)
         assert r['fnA'].root_rec() is r
         assert r['fnA'].root_idx() == ('fnA', )
 
-        r = Record()
+        r = Record(field_items=True)
         r.set_val('fAv2', 'fnA', 1, 'sfnA', root_rec=r)
         assert r['fnA'].root_rec() is r
         assert r['fnA'].root_idx() == ('fnA', )
         assert r[('fnA', 1, 'sfnA')].root_rec() is r    # .. but the sub-field has it
         assert r[('fnA', 1, 'sfnA')].root_idx() == ('fnA', 1, 'sfnA')
 
-        r = Record()
+        r = Record(field_items=True)
         r.set_node_child('fBv1', 'fnB', 0, 'sfnB')
         assert r['fnB'].root_rec() is r
         assert r['fnB'].root_idx() == ('fnB', )
         assert r[('fnB', 0, 'sfnB')].root_rec() is r
         assert r[('fnB', 0, 'sfnB')].root_idx() == ('fnB', 0, 'sfnB')
 
-        r = Record()
+        r = Record(field_items=True)
         r.set_val('fAv3', 'fnA', 1, 'sfnA')
         assert r['fnA'].root_rec() is r
         assert r['fnA'].root_idx() == ('fnA', )
         assert r[('fnA', 1, 'sfnA')].root_rec() is r
         assert r[('fnA', 1, 'sfnA')].root_idx() == ('fnA', 1, 'sfnA')
 
-        r = Record()
+        r = Record(field_items=True)
         r.set_node_child('fBv3', 'fnB', 0, 'sfnB', root_rec=r)
         assert r['fnB'].root_rec() is r
         assert r['fnB'].root_idx() == ('fnB', )
@@ -419,24 +423,26 @@ class TestRecord:
         r = Record()
         r.add_fields(dict(fnA=33, fnB=66))
         assert r.val('fnA') == 33
+        r.field_items = True
         assert r['fnB'].val() == 66
 
         r1 = r
         r = Record()
         r.add_fields(r1)
         assert r.val('fnA') == 33
+        r.field_items = True
         assert r['fnB'].val() == 66
 
         r1 = r
         r = Record()
         r.add_fields(r1.val())
         assert r.val('fnA') == 33
-        assert r['fnB'].val() == 66
+        assert r.val('fnB') == 66
 
         r = Record()
         r.add_fields([('fnA', 33), ('fnB', 66)])
         assert r.val('fnA') == 33
-        assert r['fnB'].val() == 66
+        assert r.val('fnB') == 66
 
     def test_set_node_child(self):
         r = Record()
@@ -546,6 +552,8 @@ class TestRecord:
         with pytest.raises(KeyError):
             _ = r['fnA']
         r.set_node_child(12, 'fnA')
+        assert r.val('fnA') == 12
+        r.field_items = True
         assert r['fnA'].val() == 12
         with pytest.raises(KeyError):
             _ = r['fnMissing']
@@ -560,6 +568,8 @@ class TestRecord:
         assert r.node_child(idx_path).val() == 'sfB2v'
 
         r[('fnB', 1, 'sfnB')] = 11
+        assert r.val('fnB', 1, 'sfnB') == 11
+        r.field_items = True
         r[('fnB', 1, 'sfnB')].set_val(33, system='Xx', direction='From', flex_sys_dir=False)\
             .set_name('sfnB_From_Xx', system='Xx', direction='From')
         assert r[('fnB', 1, 'sfnB')].val() == 11
@@ -573,7 +583,7 @@ class TestRecord:
 
         # replace Records/Record children with Record child in fnB
         r.set_env(system='Xx')
-        sr = Record(dict(sfnB_rec=66))
+        sr = Record(fields=dict(sfnB_rec=66), field_items=True)
         # with pytest.raises(AssertionError):
         #     r['fnB'].set_value(sr, system='Xx')
         with pytest.raises(AssertionError):
@@ -614,8 +624,17 @@ class TestRecord:
         assert len(r2) == 3
         assert r2.val('fnB') == 99
 
+    def test_pop(self):
+        r = Record(fields=dict(a=1, b=2))
+        assert len(r) == 2
+
+        f = r.pop('b')
+        assert isinstance(f, _Field)
+        assert f.val() == 2
+        assert len(r) == 1
+
     def test_pull(self):
-        r = Record(fields=dict(fnA=-1))
+        r = Record(fields=dict(fnA=-1), field_items=True)
         r['fnA'].set_name('fnA_systemXx', system='Xx', direction=FAD_FROM)
         r['fnA'].set_val('33', system='Xx', direction=FAD_FROM, converter=lambda fld, val: int(val))
         r.pull('Xx')
@@ -625,7 +644,7 @@ class TestRecord:
         assert r['fnA'].val(system='Xx') == '33'
 
     def test_push(self):
-        r = Record(fields=dict(fnA=33))
+        r = Record(fields=dict(fnA=33), field_items=True)
         r['fnA'].set_name('fnA_systemXx', system='Xx', direction=FAD_ONTO)
         r['fnA'].set_converter(lambda fld, val: str(val), system='Xx', direction=FAD_ONTO)
         r.push('Xx')
@@ -670,7 +689,7 @@ class TestRecord:
         sys_r.clear_vals()
         for k in data_r.leaf_indexes():
             if k[0] in sys_r:
-                sys_r.set_val(data_r[k].val(), *k, root_rec=data_r)
+                sys_r.set_val(data_r.val(k), *k, root_rec=data_r)
         sys_r.push(SDI_SH)
         assert sys_r.val('Cnt') == 2
         assert data_r.val('fn', 0, 'Surname') is None
@@ -688,6 +707,7 @@ class TestRecord:
         assert sys_r.val('fn', 0, 'Surname') == 'Child 1'   # != changed sys val because of flex_sys_dir=True
         sys_r.set_val('Johnson', 'fn', 0, 'Surname', flex_sys_dir=False)
         assert sys_r.val('fn', 0, 'Surname') == 'Johnson'   # .. now we are having a separate sys val
+        sys_r.field_items = True
         sys_r['fn0Surname'].del_aspect(FAT_VAL, system=SDI_SH, direction=FAD_ONTO)
         assert sys_r.val('fn', 0, 'Surname') == 'Child 1'   # .. after delete of sys val: getting main val/calculator
 
@@ -790,8 +810,8 @@ class TestRecords:
         assert r1.val('fnB', 2, 'sfnB') == 3
 
     def test_append_sub_record_to_foreign_records(self):
-        r1 = Record(fields=dict(fnA=1, fnB0sfnA=2, fnB0sfnB=3))
-        r2 = Record(fields=dict(fnA=7, fnB1sfnA=8, fnB1sfnB=9))
+        r1 = Record(fields=dict(fnA=1, fnB0sfnA=2, fnB0sfnB=3), field_items=True)
+        r2 = Record(fields=dict(fnA=7, fnB1sfnA=8, fnB1sfnB=9), field_items=True)
 
         r2.value('fnB').append_record(from_rec=r1.value('fnB', 0), root_rec=r2, root_idx=('fnB', ))
         assert r2.val('fnB', 2, 'sfnA') == 2
@@ -820,10 +840,12 @@ class TestStructures:
 
         assert isinstance(rec_2f_2s_incomplete[('fnB', 1, 'sfnB')].value(), Value)
 
-        assert isinstance(rec_2f_2s_incomplete['fnB'][1]['sfnB'].value(), Value)
-        assert isinstance(rec_2f_2s_incomplete['fnB'][1].value('sfnB'), Value)
         assert isinstance(rec_2f_2s_incomplete['fnB'].value(1, 'sfnB'), Value)
         assert isinstance(rec_2f_2s_incomplete[('fnB',)].value(1, 'sfnB'), Value)
+        assert isinstance(rec_2f_2s_incomplete['fnB'][1].value('sfnB'), Value)
+
+        rec_2f_2s_incomplete['fnB'][1].field_items = True
+        assert isinstance(rec_2f_2s_incomplete['fnB'][1]['sfnB'].value(), Value)
 
         assert rec_2f_2s_incomplete.val('fnB', 1, 'sfnB') == 'sfB2v'
         assert rec_2f_2s_incomplete['fnB'].value(1, 'sfnB').val() == 'sfB2v'
@@ -858,12 +880,12 @@ class TestCopy:
         r1c = rec_2f_2s_incomplete.copy()
         assert rec_2f_2s_incomplete == r1c
         assert rec_2f_2s_incomplete is not r1c
-        assert rec_2f_2s_incomplete[('fnB', 1, 'sfnB')].val() == 'sfB2v'
-        assert r1c[('fnB', 1, 'sfnB')].val() == 'sfB2v'
+        assert rec_2f_2s_incomplete.val('fnB', 1, 'sfnB') == 'sfB2v'
+        assert r1c.val('fnB', 1, 'sfnB') == 'sfB2v'
 
-        rec_2f_2s_incomplete[('fnB', 1, 'sfnB')].set_val('sfB2v_new')
-        assert rec_2f_2s_incomplete[('fnB', 1, 'sfnB')].val() == 'sfB2v_new'
-        assert r1c[('fnB', 1, 'sfnB')].val() == 'sfB2v_new'
+        rec_2f_2s_incomplete.value('fnB', 1, 'sfnB').set_val('sfB2v_new')
+        assert rec_2f_2s_incomplete.val('fnB', 1, 'sfnB') == 'sfB2v_new'
+        assert r1c.val('fnB', 1, 'sfnB') == 'sfB2v_new'
 
     def test_deep_copy_record(self, rec_2f_2s_incomplete):
         r1c = rec_2f_2s_incomplete.copy(deepness=-1)
@@ -874,9 +896,9 @@ class TestCopy:
         assert id(rec_2f_2s_incomplete['fnA']) != id(r1c['fnA'])
         assert rec_2f_2s_incomplete['fnA'] is not r1c['fnA']
 
-        assert rec_2f_2s_incomplete['fnA'].value() == r1c['fnA'].value()
-        assert id(rec_2f_2s_incomplete['fnA'].value()) != id(r1c['fnA'].value())
-        assert rec_2f_2s_incomplete['fnA'].value() is not r1c['fnA'].value()
+        assert rec_2f_2s_incomplete.value('fnA') == r1c.value('fnA')
+        assert id(rec_2f_2s_incomplete.value('fnA')) != id(r1c.value('fnA'))
+        assert rec_2f_2s_incomplete.value('fnA') is not r1c.value('fnA')
 
         # STRANGE failing until implementation of _Field.__eq__: assert rec_2f_2s_incomplete['fnB'] == r1c['fnB']
         assert id(rec_2f_2s_incomplete['fnB']) != id(r1c['fnB'])
@@ -886,21 +908,27 @@ class TestCopy:
         assert id(rec_2f_2s_incomplete['fnB'][1]) != id(r1c['fnB'][1])
         assert rec_2f_2s_incomplete['fnB'][1] is not r1c['fnB'][1]
 
-        assert id(rec_2f_2s_incomplete['fnB'][1]['sfnB']) != id(r1c['fnB'][1]['sfnB'])
-        assert rec_2f_2s_incomplete['fnB'][1]['sfnB'] is not r1c['fnB'][1]['sfnB']
+        assert id(rec_2f_2s_incomplete.value('fnB', 1, 'sfnB')) != id(r1c.value('fnB', 1, 'sfnB'))
+        assert rec_2f_2s_incomplete.value('fnB', 1, 'sfnB') is not r1c.value('fnB', 1, 'sfnB')
 
-        assert rec_2f_2s_incomplete['fnB'][1]['sfnB'].value() == r1c['fnB'][1]['sfnB'].value()
+        assert rec_2f_2s_incomplete.value('fnB', 1, 'sfnB') == r1c.value('fnB', 1, 'sfnB')
 
         assert rec_2f_2s_incomplete[('fnB', 1, 'sfnB')].val() == 'sfB2v'
-        assert r1c[('fnB', 1, 'sfnB')].val() == 'sfB2v'
+        assert r1c[('fnB', 1, 'sfnB')] == 'sfB2v'
 
-        rec_2f_2s_incomplete[('fnB', 1, 'sfnB')].set_val('sfB2v_new')
+        rec_2f_2s_incomplete.set_val('sfB2v_new', 'fnB', 1, 'sfnB')
         assert rec_2f_2s_incomplete[('fnB', 1, 'sfnB')].val() == 'sfB2v_new'
+        rec_2f_2s_incomplete[('fnB', 1)].field_items = False
+        assert rec_2f_2s_incomplete[('fnB', 1, 'sfnB')].val() == 'sfB2v_new'
+        rec_2f_2s_incomplete.field_items = False
+        assert rec_2f_2s_incomplete[('fnB', 1, 'sfnB')] == 'sfB2v_new'
+        assert r1c[('fnB', 1, 'sfnB')] == 'sfB2v'
+        r1c.field_items = True      # field_items value currently not copied
         assert r1c[('fnB', 1, 'sfnB')].val() == 'sfB2v'
 
     def test_flat_copy_record(self, rec_2f_2s_incomplete):
         # test flattening copy into existing record (r2)
-        r2 = Record(fields={('fnB', 1, 'sfnB'): 'sfB2v_old'})
+        r2 = Record(fields={('fnB', 1, 'sfnB'): 'sfB2v_old'}, field_items=True)
         assert r2[('fnB', 1, 'sfnB')].val() == 'sfB2v_old'
         r3 = r2.copy(onto_rec=rec_2f_2s_incomplete)
         print(r3)
@@ -1021,6 +1049,7 @@ class TestSetVal:
         assert r.val('fnAXx', system='Xx') == 1
         assert r.val('fnA', system='Xx') == 1
 
+        rX.field_items = True
         assert rX['fnA'].val() == ''         # .. also using sys rec does not help if accessed via field
 
         assert rX.val('fnA') == 1            # .. but sys rec val (rX.val()) does - even if using main field name

@@ -23,14 +23,14 @@ class TestClientFromAcuToSihot:
         assert error_msg == ''
         if not error_msg:
             rec = acu_client.recs[0]
-            assert rec['CD_CODE'] == 'E007434'
-            assert rec['CD_CODE2'] == 'E007434P2'
-            assert str(rec['SIHOT_SALUTATION1']) == '1'
-            assert str(rec['SIHOT_SALUTATION2']) == '2'
-            assert str(rec['SIHOT_GUESTTYPE1']) == '1'
-            assert str(rec['SIHOT_GUESTTYPE2']) == '0'
-            assert rec['SIHOT_COUNTRY'] == 'GB'
-            assert rec['SIHOT_LANG'] == 'EN'
+            assert rec.val('CD_CODE') == 'E007434'
+            assert rec.val('CD_CODE2') == 'E007434P2'
+            assert str(rec.val('SIHOT_SALUTATION1')) == '1'
+            assert str(rec.val('SIHOT_SALUTATION2')) == '2'
+            assert str(rec.val('SIHOT_GUESTTYPE1')) == '1'
+            assert str(rec.val('SIHOT_GUESTTYPE2')) == '0'
+            assert rec.val('SIHOT_COUNTRY') == 'GB'
+            assert rec.val('SIHOT_LANG') == 'EN'
             error_msg = acu_client.send_client_to_sihot(rec)
             assert not error_msg
 
@@ -39,14 +39,14 @@ class TestClientFromAcuToSihot:
         assert not error_msg
         if not error_msg:
             rec = acu_client.recs[0]
-            assert rec['CD_CODE'] == 'D496085'
-            assert rec['CD_CODE2'] == 'D496085P2'
-            assert str(rec['SIHOT_SALUTATION1']) == 'None'
-            assert str(rec['SIHOT_SALUTATION2']) == 'None'
-            assert str(rec['SIHOT_GUESTTYPE1']) == '1'
-            assert str(rec['SIHOT_GUESTTYPE2']) == '0'
-            assert rec['SIHOT_COUNTRY'] == 'ES'
-            assert rec['SIHOT_LANG'] == 'ES'
+            assert rec.val('CD_CODE') == 'D496085'
+            assert rec.val('CD_CODE2') == 'D496085P2'
+            assert str(rec.val('SIHOT_SALUTATION1')) == 'None'
+            assert str(rec.val('SIHOT_SALUTATION2')) == 'None'
+            assert str(rec.val('SIHOT_GUESTTYPE1')) == '1'
+            assert str(rec.val('SIHOT_GUESTTYPE2')) == '0'
+            assert rec.val('SIHOT_COUNTRY') == 'ES'
+            assert rec.val('SIHOT_LANG') == 'ES'
             error_msg = acu_client.send_client_to_sihot(rec)
             assert not error_msg
 
@@ -61,14 +61,14 @@ class TestClientFromAcuToSihot:
         if not error_msg:
             assert len(acu_client.recs) == 1
             rec = acu_client.recs[0]
-            assert rec['CD_CODE'] == 'E119378'
-            assert rec['CD_CODE2'] is None
-            assert str(rec['SIHOT_SALUTATION1']) == '2'
-            assert str(rec['SIHOT_SALUTATION2']) == 'None'
-            assert str(rec['SIHOT_GUESTTYPE1']) == '1'
-            assert str(rec['SIHOT_GUESTTYPE2']) == 'None'
-            assert rec['SIHOT_COUNTRY'] == 'GB'
-            assert rec['SIHOT_LANG'] == 'EN'
+            assert rec.val('CD_CODE') == 'E119378'
+            assert rec.val('CD_CODE2') is None
+            assert str(rec.val('SIHOT_SALUTATION1')) == '2'
+            assert str(rec.val('SIHOT_SALUTATION2')) == 'None'
+            assert str(rec.val('SIHOT_GUESTTYPE1')) == '1'
+            assert str(rec.val('SIHOT_GUESTTYPE2')) == 'None'
+            assert rec.val('SIHOT_COUNTRY') == 'GB'
+            assert rec.val('SIHOT_LANG') == 'EN'
             error_msg = acu_client.send_client_to_sihot(rec)
             assert not error_msg
 
@@ -78,14 +78,14 @@ class TestClientFromAcuToSihot:
         if not error_msg:
             assert len(acu_client.recs) == 1
             rec = acu_client.recs[0]
-            assert rec['CD_CODE'] == 'E128745'
-            assert rec['CD_CODE2'] == 'E128745P2'
-            assert str(rec['SIHOT_SALUTATION1']) == '1'
-            assert str(rec['SIHOT_SALUTATION2']) == '2'
-            assert str(rec['SIHOT_GUESTTYPE1']) == '1'
-            assert str(rec['SIHOT_GUESTTYPE2']) == '0'
-            assert rec['SIHOT_COUNTRY'] == 'GB'
-            assert rec['SIHOT_LANG'] == 'EN'
+            assert rec.val('CD_CODE') == 'E128745'
+            assert rec.val('CD_CODE2') == 'E128745P2'
+            assert str(rec.val('SIHOT_SALUTATION1')) == '1'
+            assert str(rec.val('SIHOT_SALUTATION2')) == '2'
+            assert str(rec.val('SIHOT_GUESTTYPE1')) == '1'
+            assert str(rec.val('SIHOT_GUESTTYPE2')) == '0'
+            assert rec.val('SIHOT_COUNTRY') == 'GB'
+            assert rec.val('SIHOT_LANG') == 'EN'
             error_msg = acu_client.send_client_to_sihot(rec)
             assert not error_msg
 
@@ -95,14 +95,14 @@ class TestClientFromAcuToSihot:
         if not error_msg:
             assert len(acu_client.recs) == 1
             rec = acu_client.recs[0]
-            assert rec['CD_CODE'] == 'E128746'
-            assert rec['CD_CODE2'] == 'E128746P2'
-            assert str(rec['SIHOT_SALUTATION1']) == '1'
-            assert str(rec['SIHOT_SALUTATION2']) == '2'
-            assert str(rec['SIHOT_GUESTTYPE1']) == '1'
-            assert str(rec['SIHOT_GUESTTYPE2']) == '0'
-            assert rec['SIHOT_COUNTRY'] == 'GB'
-            assert rec['SIHOT_LANG'] == 'EN'
+            assert rec.val('CD_CODE') == 'E128746'
+            assert rec.val('CD_CODE2') == 'E128746P2'
+            assert str(rec.val('SIHOT_SALUTATION1')) == '1'
+            assert str(rec.val('SIHOT_SALUTATION2')) == '2'
+            assert str(rec.val('SIHOT_GUESTTYPE1')) == '1'
+            assert str(rec.val('SIHOT_GUESTTYPE2')) == '0'
+            assert rec.val('SIHOT_COUNTRY') == 'GB'
+            assert rec.val('SIHOT_LANG') == 'EN'
             error_msg = acu_client.send_client_to_sihot(rec)
             assert not error_msg
 
@@ -113,16 +113,16 @@ class TestClientFromAcuToSihot:
             assert len(acu_client.recs) <= 1
             if len(acu_client.recs):
                 rec = acu_client.recs[0]
-                assert rec['CD_CODE'] == 'G561518'
-                assert rec['CD_CODE2'] == 'G561518P2'
-                assert str(rec['SIHOT_SALUTATION1']) == 'None'
-                assert str(rec['SIHOT_SALUTATION2']) == '1'
-                assert str(rec['SIHOT_TITLE1']) == '1'
-                assert str(rec['SIHOT_TITLE2']) == 'None'
-                assert str(rec['SIHOT_GUESTTYPE1']) == '1'
-                assert str(rec['SIHOT_GUESTTYPE2']) == '0'
-                assert rec['SIHOT_COUNTRY'] == 'AT'
-                assert rec['SIHOT_LANG'] == 'DE'
+                assert rec.val('CD_CODE') == 'G561518'
+                assert rec.val('CD_CODE2') == 'G561518P2'
+                assert str(rec.val('SIHOT_SALUTATION1')) == 'None'
+                assert str(rec.val('SIHOT_SALUTATION2')) == '1'
+                assert str(rec.val('SIHOT_TITLE1')) == '1'
+                assert str(rec.val('SIHOT_TITLE2')) == 'None'
+                assert str(rec.val('SIHOT_GUESTTYPE1')) == '1'
+                assert str(rec.val('SIHOT_GUESTTYPE2')) == '0'
+                assert rec.val('SIHOT_COUNTRY') == 'AT'
+                assert rec.val('SIHOT_LANG') == 'DE'
                 error_msg = acu_client.send_client_to_sihot(rec)
                 assert not error_msg
 
@@ -133,16 +133,16 @@ class TestClientFromAcuToSihot:
             assert len(acu_client.recs) <= 1
             if len(acu_client.recs):
                 rec = acu_client.recs[0]
-                assert rec['CD_CODE'] == 'G558956'
-                assert rec['CD_CODE2'] == 'G558956P2'
-                assert str(rec['SIHOT_SALUTATION1']) == 'None'
-                assert str(rec['SIHOT_SALUTATION2']) == 'None'
-                assert str(rec['SIHOT_TITLE1']) == '1'
-                assert str(rec['SIHOT_TITLE2']) == '1'
-                assert str(rec['SIHOT_GUESTTYPE1']) == '1'
-                assert str(rec['SIHOT_GUESTTYPE2']) == '0'
-                assert rec['SIHOT_COUNTRY'] == 'AT'
-                assert rec['SIHOT_LANG'] == 'DE'
+                assert rec.val('CD_CODE') == 'G558956'
+                assert rec.val('CD_CODE2') == 'G558956P2'
+                assert str(rec.val('SIHOT_SALUTATION1')) == 'None'
+                assert str(rec.val('SIHOT_SALUTATION2')) == 'None'
+                assert str(rec.val('SIHOT_TITLE1')) == '1'
+                assert str(rec.val('SIHOT_TITLE2')) == '1'
+                assert str(rec.val('SIHOT_GUESTTYPE1')) == '1'
+                assert str(rec.val('SIHOT_GUESTTYPE2')) == '0'
+                assert rec.val('SIHOT_COUNTRY') == 'AT'
+                assert rec.val('SIHOT_LANG') == 'DE'
                 error_msg = acu_client.send_client_to_sihot(rec)
                 assert not error_msg
 
@@ -152,16 +152,16 @@ class TestClientFromAcuToSihot:
         if not error_msg:
             assert len(acu_client.recs) == 1
             rec = acu_client.recs[0]
-            assert rec['CD_CODE'] == 'Y203585'
-            assert rec['CD_CODE2'] == 'Y203585P2'
-            assert str(rec['SIHOT_SALUTATION1']) == '1'
-            assert str(rec['SIHOT_SALUTATION2']) == '1'
-            assert str(rec['SIHOT_TITLE1']) == '1'
-            assert str(rec['SIHOT_TITLE2']) == '1'
-            assert str(rec['SIHOT_GUESTTYPE1']) == '1'
-            assert str(rec['SIHOT_GUESTTYPE2']) == '0'
-            assert rec['SIHOT_COUNTRY'] == 'HU'
-            assert rec['SIHOT_LANG'] is None
+            assert rec.val('CD_CODE') == 'Y203585'
+            assert rec.val('CD_CODE2') == 'Y203585P2'
+            assert str(rec.val('SIHOT_SALUTATION1')) == '1'
+            assert str(rec.val('SIHOT_SALUTATION2')) == '1'
+            assert str(rec.val('SIHOT_TITLE1')) == '1'
+            assert str(rec.val('SIHOT_TITLE2')) == '1'
+            assert str(rec.val('SIHOT_GUESTTYPE1')) == '1'
+            assert str(rec.val('SIHOT_GUESTTYPE2')) == '0'
+            assert rec.val('SIHOT_COUNTRY') == 'HU'
+            assert rec.val('SIHOT_LANG') is None
             error_msg = acu_client.send_client_to_sihot(rec)
             assert not error_msg
 
@@ -172,13 +172,13 @@ class TestClientFromAcuToSihot:
             assert len(acu_client.recs) <= 1
             if len(acu_client.recs):
                 rec = acu_client.recs[0]
-                assert rec['CD_CODE'] == 'E396693'
+                assert rec.val('CD_CODE') == 'E396693'
                 # RCI=1442-11521,RCI=1442-55556,RCI=2429-09033,RCI=2429-09777,RCI=2429-12042,RCI=2429-13656,
                 # .. RCI=2429-55556,RCI=2972-00047,RCI=5445-12771,RCIP=5-207931
-                assert 'RCI=1442-11521' in rec['EXT_REFS']
-                assert 'RCI=2972-00047' in rec['EXT_REFS']
-                assert 'RCI=5-207931' in rec['EXT_REFS']
-                assert len(rec['EXT_REFS'].split(',')) >= 12
+                assert 'RCI=1442-11521' in rec.val('EXT_REFS')
+                assert 'RCI=2972-00047' in rec.val('EXT_REFS')
+                assert 'RCI=5-207931' in rec.val('EXT_REFS')
+                assert len(rec.val('EXT_REFS').split(',')) >= 12
                 error_msg = acu_client.send_client_to_sihot(rec)
                 # Sihot is only storing the last ID with the same TYPE - resulting in RCI=5445-12771,RCIP=5-207931?!?!?
                 assert not error_msg
@@ -189,10 +189,11 @@ class TestClientFromAcuToSihot:
         if not error_msg:
             assert len(acu_client.recs) == 1
             rec = acu_client.recs[0]
-            assert rec['CD_CODE'] == 'E610488'
-            assert rec['CD_CODE2'] is None
+            assert rec.val('CD_CODE') == 'E610488'
+            assert rec.val('CD_CODE2') is None
             # overwrite objid with not existing one
-            acu_client.cols['CD_SIHOT_OBJID'] = int(rec['CD_SIHOT_OBJID']) + 1 if rec['CD_SIHOT_OBJID'] else 99999
+            acu_client.cols['CD_SIHOT_OBJID'] = int(rec.val('CD_SIHOT_OBJID')) + 1 if rec.val('CD_SIHOT_OBJID') \
+                else 99999
             error_msg = acu_client.send_client_to_sihot(rec)
             assert not error_msg or error_msg.endswith('No guest found.')
 
@@ -793,7 +794,7 @@ class TestClientToSihot:
             if len(acu_client.recs):
                 rec = acu_client
                 assert rec['AcId'] == 'G561518'
-                assert rec['AcId2'] == 'G561518P2'
+                assert rec['AcIdP'] == 'G561518P2'
                 assert str(rec['Salutation']) == 'None'
                 assert str(rec['SIHOT_SALUTATION2']) == '1'
                 assert str(rec['Title']) == '1'
@@ -813,7 +814,7 @@ class TestClientToSihot:
             if len(acu_client.recs):
                 rec = acu_client
                 assert rec['AcId'] == 'G558956'
-                assert rec['AcId2'] == 'G558956P2'
+                assert rec['AcIdP'] == 'G558956P2'
                 assert str(rec['Salutation']) == 'None'
                 assert str(rec['SIHOT_SALUTATION2']) == 'None'
                 assert str(rec['Title']) == '1'
@@ -832,7 +833,7 @@ class TestClientToSihot:
             assert len(acu_client.recs) == 1
             rec = acu_client
             assert rec['AcId'] == 'Y203585'
-            assert rec['AcId2'] == 'Y203585P2'
+            assert rec['AcIdP'] == 'Y203585P2'
             assert str(rec['Salutation']) == '1'
             assert str(rec['SIHOT_SALUTATION2']) == '1'
             assert str(rec['Title']) == '1'
@@ -869,7 +870,7 @@ class TestClientToSihot:
             assert len(acu_client.recs) == 1
             rec = acu_client
             assert rec['AcId'] == 'E610488'
-            assert rec['AcId2'] is None
+            assert rec['AcIdP'] is None
             # overwrite objid with not existing one
             rec['ShId'] = int(rec['ShId']) + 1 if rec['ShId'] else 99999
             error_msg = acu_client.send_client_to_sihot(rec)
