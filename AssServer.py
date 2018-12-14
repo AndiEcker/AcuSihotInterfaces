@@ -13,6 +13,7 @@
     0.9     added email notification on empty return values on res send to SF (from sf_conn.res_upsert()) - merged to
             sys_data_generic branch.
     1.0     Q&D fix for to not send any rental reservations.
+    1.1     Fixed bug to not store rgr_sf_id into ass_cache.
 """
 import datetime
 import threading
@@ -27,7 +28,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -195,7 +196,8 @@ def res_from_sh_to_sf(asd, ass_changed_res):
 
     # no errors on sync to SF, then set last sync timestamp
     chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
-    if not asd.rgr_upsert(dict(rgr_last_sync=ass_changed_res['rgr_last_sync']), chk_values, commit=True):
+    upd_values = dict(rgr_sf_id=rgr_sf_id, rgr_last_sync=ass_changed_res['rgr_last_sync'])
+    if not asd.rgr_upsert(upd_values, chk_values, commit=True):
         err_msg = "res_from_sh_to_sf({}): last reservation sync timestamp ass_cache update failed"\
                       .format(ppf(ass_changed_res)) + asd.error_message
 
