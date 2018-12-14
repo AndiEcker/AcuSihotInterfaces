@@ -1235,8 +1235,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                           .format(sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_id))
 
             if col_values:
-                self.rgr_upsert(col_values, dict(rgr_ho_fk=sf_rec.val('ResHotelId'), rgr_res_id=sf_rec.val('ResId'),
-                                                 rgr_sub_id=sf_rec.val('ResSubId')))
+                self.rgr_upsert(col_values,
+                                chk_values=dict(rgr_ho_fk=sf_rec.val('ResHotelId'), rgr_res_id=sf_rec.val('ResId'),
+                                                rgr_sub_id=sf_rec.val('ResSubId')),
+                                commit=True)
                 if self.error_message:
                     err_msg += self.error_message
                     self.error_message = ""
