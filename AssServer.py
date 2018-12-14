@@ -367,7 +367,7 @@ def oc_res_change(asd, req, rec_ctx):
         # .. is empty (?!?!?) for most of the rental bookings, but should be 'RS')
         if req_rgr.get('rgr_mkt_segment', '') in [a[0] for a in asd.ro_agencies]:
             # rental mkt segment found in CR request via the element path: ['SIHOT-Reservation', 'SIHOT-Person', 'MC']
-            log_msg(proc_context(rec_ctx) + "RES CHANGE SKIP", importance=4, notify=debug_level >= DEBUG_LEVEL_ENABLED)
+            log_msg(proc_context(rec_ctx) + "RES CHANGE SKIP", importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
             return ""
 
         chk_values = {k: v for k, v in req_rgr.items() if k in ['rgr_res_id', 'rgr_sub_id']}
@@ -395,7 +395,7 @@ def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
 
     # QUICK&DIRTY FIX: prevent the send of rental client allocations using roAgencies ini variable
     if req.mc in [a[0] for a in asd.ro_agencies]:           # rental mkt segment found in MC element of CI/CO/RM request
-        log_msg(proc_context(rec_ctx) + "ROOM CHANGE SKIP", importance=4, notify=debug_level >= DEBUG_LEVEL_ENABLED)
+        log_msg(proc_context(rec_ctx) + "ROOM CHANGE SKIP", importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         return ""
 
     rgr_sf_id = asd.sh_room_change_to_ass(oc, ho_id, res_no, sub_no, room_id, action_time)
