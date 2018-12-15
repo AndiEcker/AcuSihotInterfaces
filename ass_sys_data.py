@@ -903,7 +903,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not rec.val('ShId') or rec.val('ShId') != sh_id:
             if rec.val('ShId'):
                 self._warn("Sihot guest object id changed from {} to {} for Salesforce client {}"
-                           .format(rec.val('ShId'), sh_id, rec.val('SfId')), self._ctx_no_file + 'CompShId', 
+                           .format(rec.val('ShId'), sh_id, rec.val('SfId')), self._ctx_no_file + 'CompShId',
                            importance=1)
             rec.set_val(sh_id, 'ShId')
             self.clients[c_idx] = rec
@@ -1203,7 +1203,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             sf_rec['ResSfId'] = ''
             sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_rec)
             self._warn("asd.sf_ass_res_upsert({}, {}, {}) cached ResSfId reset to {}; SF client={}; ori-/err='{}'/'{}'"
-                       .format(sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
+                       .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
                        notify=True)
             sf_id = ''
 
@@ -1232,7 +1232,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 col_values['rgr_sf_id'] = sf_opp_id
             elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and sf_id and sf_opp_id != sf_id:
                 self._err("sf_ass_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
-                          .format(sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_id))
+                          .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_id))
 
             if col_values:
                 self.rgr_upsert(col_values,
@@ -1428,8 +1428,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message = ""
         else:
             ri_pk = self.ass_db.fetch_value()
+            if self.ass_db.last_err_msg:
+                self._warn("sh_res_change_to_ass(): res inv {}~{} fetch error={}"
+                           .format(apt_wk, year, self.ass_db.last_err_msg))
 
-        error_msg = ""
         ho_id = shd.val('ResHotelId')
         chk_values = dict(rgr_ho_fk=ho_id)
         res_id = shd.val('ResNo')
@@ -1441,9 +1443,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         elif gds_no:
             chk_values.update(rgr_gds_no=gds_no)
         else:
-            error_msg = err_pre + "Incomplete reservation id"
+            return err_pre + "Incomplete reservation id"
 
-        if not error_msg:
+        error_msg = ""
+        with self.ass_db.thread_lock_init('res_groups', chk_values):
             upd_values = chk_values.copy()
             if gds_no and 'rgr_gds_no' not in upd_values:
                 upd_values.update(rgr_gds_no=gds_no)
@@ -1533,11 +1536,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     break
                 ass_res_rec['rgc_list'].append(upd_values)
 
-        if error_msg:
-            self.error_message = error_msg
-            self.ass_db.rollback()
-        else:
-            self.ass_db.commit()
+            if error_msg:
+                self.error_message = error_msg
+                self.ass_db.rollback()
+            else:
+                self.ass_db.commit()
 
         return error_msg
 

@@ -187,7 +187,7 @@ class GenericDB:
             chk_values = dict([next(iter(col_values.items()))])     # use first dict item as pkey check value
         chk_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in chk_values.keys()])
 
-        with NamedLocks(table_name + str(sorted(chk_values.items()))):
+        with self.thread_lock_init(table_name, chk_values):
             self.select(table_name, ["count(*)"], chk_expr, chk_values)
             if self.last_err_msg:
                 self.last_err_msg += "; chk_expr={}; chk_values=".format(chk_expr, chk_values)
@@ -272,6 +272,10 @@ class GenericDB:
             except Exception as ex:
                 self.last_err_msg += self.dsn + " close error: " + str(ex)
         return self.last_err_msg
+
+    @staticmethod
+    def thread_lock_init(table_name, chk_values):
+        return NamedLocks(table_name + str(sorted(chk_values.items())))
 
 
 class OraDB(GenericDB):
