@@ -73,9 +73,9 @@ class TestElemHelpers:
 
     def test_hotel_and_res_id(self):
         assert hotel_and_res_id(Record({'ResHotelId': '4'})) == (None, None)
-        assert hotel_and_res_id(Record({'ResNo': '5'})) == (None, None)
-        assert hotel_and_res_id(Record({'ResHotelId': '4', 'ResNo': '5'})) == ('4', '5@4')
-        assert hotel_and_res_id(Record({'ResHotelId': '4', 'ResNo': '5', 'ResSubNo': 'X'})) == ('4', '5/X@4')
+        assert hotel_and_res_id(Record({'ResId': '5'})) == (None, None)
+        assert hotel_and_res_id(Record({'ResHotelId': '4', 'ResId': '5'})) == ('4', '5@4')
+        assert hotel_and_res_id(Record({'ResHotelId': '4', 'ResId': '5', 'ResSubId': 'X'})) == ('4', '5/X@4')
 
     def test_pax_count(self):
         assert pax_count(Record()) == 0
@@ -141,8 +141,8 @@ class TestIdConverters:
     def test_gds_no_to_obj_ids(self, console_app_env):
         ids = gds_no_to_ids(console_app_env, '4', '899993')
         assert '60544' == ids['ResObjId']
-        assert '33220' == ids['ResNo']
-        assert '1' == ids['ResSubNo']
+        assert '33220' == ids['ResId']
+        assert '1' == ids['ResSubId']
         assert 'ResSfId' in ids
         assert ids['ResSfId'] is None
 

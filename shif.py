@@ -148,9 +148,9 @@ MAP_WEB_RES = \
         ('RESERVATION/', ),
         # ### main reservation info: orderer, status, external booking references, room/price category, ...
         # ('RESERVATION' + ELEM_PATH_SEP + 'RES-HOTEL', 'ResHotelId'),
-        ('RESERVATION' + ELEM_PATH_SEP + 'RES-NR', 'ResNo', None,
+        ('RESERVATION' + ELEM_PATH_SEP + 'RES-NR', 'ResId', None,
          lambda f: not f.val()),
-        ('RESERVATION' + ELEM_PATH_SEP + 'SUB-NR', 'ResSubNo', None,
+        ('RESERVATION' + ELEM_PATH_SEP + 'SUB-NR', 'ResSubId', None,
          lambda f: not f.val()),
         ('RESERVATION' + ELEM_PATH_SEP + 'OBJID', 'ResObjId', None,
          lambda f: not f.val()),
@@ -411,8 +411,8 @@ def elem_path_join(elem_names):
 
 def hotel_and_res_id(shd):
     ho_id = shd.val('ResHotelId')
-    res_nr = shd.val('ResNo')
-    sub_nr = shd.val('ResSubNo')
+    res_nr = shd.val('ResId')
+    sub_nr = shd.val('ResSubId')
     if not ho_id or not res_nr:
         return None, None
     return ho_id, res_nr + (SH_RES_SUB_SEP + sub_nr if sub_nr else '') + '@' + ho_id
@@ -447,8 +447,8 @@ def gds_no_to_ids(cae, hotel_id, gdsno):
     rfr = ResFetch(cae).fetch_by_gds_no(hotel_id, gdsno)
     if isinstance(rfr, Record):
         ids['ResObjId'] = rfr.val('ResObjId')
-        ids['ResNo'] = rfr.val('ResNo')
-        ids['ResSubNo'] = rfr.val('ResSubNo')
+        ids['ResId'] = rfr.val('ResId')
+        ids['ResSubId'] = rfr.val('ResSubId')
         ids['ResSfId'] = rfr.val('ResSfId')
     return ids
 
@@ -458,7 +458,7 @@ def gds_no_to_obj_id(cae, hotel_id, gdsno):
 
 
 def res_no_to_ids(cae, hotel_id, res_id, sub_id):
-    ret = dict(ResHotelId=hotel_id, ResNo=res_id, ResSubNo=sub_id)
+    ret = dict(ResHotelId=hotel_id, ResId=res_id, ResSubId=sub_id)
     rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
     if isinstance(rfr, Record):
         ret['ResObjId'] = rfr.val('ResObjId')
@@ -1267,7 +1267,7 @@ class ResToSihot(FldMapXmlBuilder):
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
     def send_res_to_sihot(self, rec, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
-        missing = rec.missing_fields((('ShId', 'AcId', 'Surname'), 'ResHotelId', ('ResGdsNo', 'ResNo', 'ResObjId'),
+        missing = rec.missing_fields((('ShId', 'AcId', 'Surname'), 'ResHotelId', ('ResGdsNo', 'ResId', 'ResObjId'),
                                       'ResMktSegment', 'ResRoomCat', 'ResArrival', 'ResDeparture'))
         assert not missing, "ResToSihot expects non-empty value in fields {}".format(missing)
 

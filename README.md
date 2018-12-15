@@ -198,11 +198,11 @@ Field Name | Field Type | Description | Example Values |
 | ResGdsNo * | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
 | ResGroupNo | String | Reservation Grouping Info | 345678, <123456> |
 | ResHotelId * | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
+| ResId + | String | Sihot Reservation Number | 123456789' |
 | ResLongNote | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '&#124;CR&#124;' for to separate various comments) |
 | ResMktGroup | String | Sihot Reservation Channel | 'OW'=Owner |
 | ResMktGroupNN | String | Reservation Marketing Group | 'RS'=Rental SP | 
 | ResMktSegment * | String | Sihot Marketing Segment / OTA Channel | 'TO', 'PA', 'TC' |
-| ResNo + | String | Sihot Reservation Number | 123456789' |
 | ResNote | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
 | ResObjId | String | Sihot Internal Reservation Object Id | '123456789' |
 | ResPersons | List | List of Occupants | ((Smith, John, 24-12-1962, ...), (Knopf, Jim, 27-01-1955, ...)) |
@@ -214,7 +214,7 @@ Field Name | Field Type | Description | Example Values |
 | ResPersons<n>Surname | String | Lastname of n-th occupant | Smith |
 | ResPriceCat | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
 | ResSfId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
-| ResSubNo + | String | Sihot Reservation Sub-number | '1' |
+| ResSubId + | String | Sihot Reservation Sub-number | '1' |
 | ResRateSegment | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
 | ResRoomCat * | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
 | ResRoomNo | String | Sihot Room Number (optional) | '0426', 'A112' |
@@ -308,11 +308,11 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResGdsNo | SIHOT_GDSNO | GdsNo__c | GDSNO | rgr_gds_no |
 | ResGroupNo | SIHOT_LINK_GROUP | - | EXT-KEY | - |
 | ResHotelId | RUL_SIHOT_HOTEL | HotelId__c | ID, HN, RES-HOTEL | rgr_ho_fk |
+| ResId | - | Number__c | RES-NR | rgr_res_id |
 | ResLongNote | SIHOT_TEC_NOTE | - | RESERVATION.TEC-COMMENT | rgr_long_comment |
 | ResMktGroup | RO_RES_GROUP | MktGroup__c | RESERVATION.CHANNEL | rgr_mkt_group |
 | ResMktGroupNN | RO_SIHOT_SP_GROUP | - | NN | - |
 | ResMktSegment | SIHOT_MKT_SEG | MktSegment__c (Marketing_Source__pc) | RESERVATION.MARKETCODE, MARKETCODE-NO | rgr_mkt_segment |
-| ResNo | - | Number__c | RES-NR | rgr_res_id |
 | ResNote | SIHOT_NOTE | Note__c | RESERVATION.COMMENT | rgr_comment |
 | ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | RESERVATION.OBJID | rgr_obj_id |
 | ResPersons | - | - | PERSON | res_group_clients |
@@ -329,7 +329,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResSfId | - | ReservationOpportunityId, Opportunity.Id | NN2(?) | rgr_sf_id |
 | ResSource | RU_SOURCE | - | SOURCE | - |
 | ResStatus | SH_RES_TYPE | Status__c | RESERVATION.RT | rgr_status |
-| ResSubNo | - | SubNumber__c | SUB-NR | rgr_sub_id |
+| ResSubId | - | SubNumber__c | SUB-NR | rgr_sub_id |
 | ResVoucherNo | RH_EXT_BOOK_REF | - | RESERVATION.VOUCHERNUMBER | rgr_ext_book_id |
 | RinUsageYear | AOWN_YEAR | - | - | ri_usage_year |
 | RinType | AOWN_ROREF | - | - | ri_inv_type |

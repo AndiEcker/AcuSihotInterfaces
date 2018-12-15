@@ -8,7 +8,7 @@
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
     0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
     0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
-    0.7     reset/resend ResOppId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
+    0.7     reset/resend ResSfId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
     0.8     added SSL to postgres connection.
     0.9     added email notification on empty return values on res send to SF (from sf_conn.res_upsert()) - merged to
             sys_data_generic branch.
@@ -95,17 +95,14 @@ def proc_context(rec_ctx):
         ctx_str += "??"
     ctx_str += ", "
 
-    if 'RoomNo' in rec_ctx:
-        ctx_str += rec_ctx['RoomNo'] + ", "
-    elif 'ResRoomNo' in rec_ctx:
+    if 'ResRoomNo' in rec_ctx:
         ctx_str += rec_ctx['ResRoomNo'] + ", "
-
-    if 'ResNo' in rec_ctx:
-        ctx_str += rec_ctx['ResNo']
-    if "ResSubNo" in rec_ctx:
-        ctx_str += "/" + rec_ctx['ResSubNo']
-    if "HotelId" in rec_ctx:
-        ctx_str += "@" + rec_ctx['HotelId']
+    if 'ResId' in rec_ctx:
+        ctx_str += rec_ctx['ResId']
+    if 'ResSubId' in rec_ctx:
+        ctx_str += "/" + rec_ctx['ResSubId']
+    if 'ResHotelId' in rec_ctx:
+        ctx_str += "@" + rec_ctx['ResHotelId']
 
     ctx_str += "): "
 
@@ -131,12 +128,12 @@ def check_res_change_data(rec_ctx):
     if not rrd['rgr_ho_fk'] == srd.val('ResHotelId') == ard['rgr_ho_fk']:
         log_msg(proc_context(rec_ctx) + "Sihot Hotel Id mismatch req/sh/ass={}/{}/{}"
                 .format(rrd['rgr_ho_fk'], srd.val('ResHotelId'), ard['rgr_ho_fk']), notify=True)
-    if not rrd['rgr_res_id'] == srd.val('ResNo') == ard['rgr_res_id']:
+    if not rrd['rgr_res_id'] == srd.val('ResId') == ard['rgr_res_id']:
         log_msg(proc_context(rec_ctx) + "Sihot Res Id mismatch req/sh/ass={}/{}/{}"
-                .format(rrd['rgr_res_id'], srd.val('ResNo'), ard['rgr_res_id']), notify=True)
-    if not rrd['rgr_sub_id'] == srd.val('ResSubNo') == ard['rgr_sub_id']:
+                .format(rrd['rgr_res_id'], srd.val('ResId'), ard['rgr_res_id']), notify=True)
+    if not rrd['rgr_sub_id'] == srd.val('ResSubId') == ard['rgr_sub_id']:
         log_msg(proc_context(rec_ctx) + "Sihot Res Sub Id mismatch req/sh/ass={}/{}/{}"
-                .format(rrd['rgr_sub_id'], srd.val('ResSubNo'), ard['rgr_sub_id']), notify=True)
+                .format(rrd['rgr_sub_id'], srd.val('ResSubId'), ard['rgr_sub_id']), notify=True)
     if not rrd['rgr_room_id'] == srd.val('ResRoomNo') == ard['rgr_room_id']:
         log_msg(proc_context(rec_ctx) + "Sihot Room No (main) mismatch req/sh/ass={}/{}/{}"
                 .format(rrd['rgr_room_id'], srd.val('ResRoomNo'), ard['rgr_room_id']), notify=True)
@@ -153,7 +150,7 @@ def check_res_change_data(rec_ctx):
 
 def res_from_sh_to_sf(asd, ass_changed_res):
     ho_id, res_id, sub_id = ass_changed_res['rgr_ho_fk'], ass_changed_res['rgr_res_id'], ass_changed_res['rgr_sub_id']
-    log_msg("res_from_sh_to_sf({}/{}@{}): sync reservation from SH ObjID={} to SF ResSfId={}"
+    log_msg("res_from_sh_to_sf({}/{}@{}): sync reservation from SH Object Id={} to SF Opp Id={}"
             .format(res_id, sub_id, ho_id, ass_changed_res['rgr_obj_id'], ass_changed_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
@@ -210,7 +207,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
 
 def room_change_to_sf(asd, ass_res):
     ho_id, res_id, sub_id = ass_res['rgr_ho_fk'], ass_res['rgr_res_id'], ass_res['rgr_sub_id']
-    log_msg("room_change_to_sf({}/{}@{}): sync room change from SH ObjID={} to SF ResSfId={}"
+    log_msg("room_change_to_sf({}/{}@{}): sync room change from SH Object Id={} to SF Opp Id={}"
             .format(res_id, sub_id, ho_id, ass_res['rgr_obj_id'], ass_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
@@ -357,12 +354,11 @@ def oc_res_change(asd, req, rec_ctx):
     rgr_list = req.rgr_list
     for idx, req_rgr in enumerate(rgr_list):
         rec_ctx.update(req_res_data=req_rgr,
-                       ObjId=req_rgr.get('rgr_obj_id', ''),
-                       HotelId=getattr(req, 'hn', None),
+                       ResObjId=req_rgr.get('rgr_obj_id', ''),
+                       ResHotelId=getattr(req, 'hn', None),
                        ResId=req_rgr.get('rgr_res_id', ''),
                        ResSubId=req_rgr.get('rgr_sub_id', ''),
-                       # ResRoomNo=req_rgr.get('rgc_list', [dict(), ])[0].get('rgc_room_id', ''),
-                       RoomNo=req_rgr.get('rgr_room_id', ''),
+                       ResRoomNo=req_rgr.get('rgr_room_id', req_rgr.get('rgc_list', [{}, ])[0].get('rgc_room_id', '')),
                        )
         log_msg(proc_context(rec_ctx) + "res change data={}".format(ppf(req_rgr)),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
@@ -393,7 +389,8 @@ def oc_res_change(asd, req, rec_ctx):
 def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
     ho_id = req.hn
     res_no = req.res_nr
-    rec_ctx.update(HotelId=ho_id, ResId=res_no, ResSubId=sub_no, RoomNo=room_id, extended_oc=oc, action_time=action_time)
+    rec_ctx.update(ResHotelId=ho_id, ResId=res_no, ResSubId=sub_no, ResRoomNo=room_id,
+                   extended_oc=oc, action_time=action_time)
     log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, ppf(rec_ctx), req.get_xml()),
             importance=3, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
@@ -547,7 +544,6 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
         err_messages = list()
 
-        err_code = 0
         try:
             msg = reload_oc_config()
             if msg:

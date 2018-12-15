@@ -465,7 +465,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if self.sf_id_reset_fragments and self.debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint('Error fragments to re-sync res change with reset ResSfId:', self.sf_id_reset_fragments)
 
-        self.mail_re = re.compile('[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+\.[a-zA-Z]{2,4}$')
+        self.mail_re = re.compile(r'[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+\.[a-zA-Z]{2,4}$')
 
         # --- self.clients contains client data from AssCache database like external references/Ids, owner status ...
         self.clients = Records()
@@ -1054,7 +1054,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         '''
         ret = None
         if not chk_values:
-            self.error_message = "rgr_upsert({}, {}): Missing reservation IDs (ObjId, Hotel/ResNo or GdsNo)" \
+            self.error_message = "rgr_upsert({}, {}): Missing reservation IDs (ObjId, Hotel/ResId or GdsNo)" \
                 .format(ppf(col_values), ppf(chk_values))
         elif not multiple_rec_update and not self.rgr_complete_ids(col_values, chk_values):
             self.error_message = "rgr_upsert({}, {}): Incomplete-able res IDs".format(ppf(col_values), ppf(chk_values))
@@ -1208,7 +1208,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             sf_id = ''
 
         if not err_msg and (not sf_cl_id or not sf_opp_id):
-            self._err("sf_ass_res_upsert({}, {}, {}) got empty Id from SF: PersonAccount.Id={}; ResOppId={}"
+            self._err("sf_ass_res_upsert({}, {}, {}) got empty Id from SF: PersonAccount.Id={}; ResSfId={}"
                       .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_cl_id, sf_opp_id))
         if not err_msg and sf_rec.val('SfId') and sf_rec.val('SfId') != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_ENABLED:
@@ -1434,8 +1434,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         ho_id = shd.val('ResHotelId')
         chk_values = dict(rgr_ho_fk=ho_id)
-        res_id = shd.val('ResNo')
-        sub_id = shd.val('ResSubNo')
+        res_id = shd.val('ResId')
+        sub_id = shd.val('ResSubId')
         gds_no = shd.val('ResGdsNo')
         err_pre = "sh_res_change_to_ass() for res-no {}/{}@{} and GDS-No. {}: ".format(res_id, sub_id, ho_id, gds_no)
         if ho_id and res_id and sub_id:

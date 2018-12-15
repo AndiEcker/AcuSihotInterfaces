@@ -62,8 +62,8 @@ CLI_FIELD_MAP = [       # client data
     ]
 RES_FIELD_MAP = [       # reservation data
     ('ResHotelId', 'RUL_SIHOT_HOTEL'),
-    # ('ResNo', ),
-    # ('ResSubNo', ),
+    # ('ResId', ),
+    # ('ResSubId', ),
     ('ResGdsNo', 'SIHOT_GDSNO',
      "nvl(SIHOT_GDSNO, case when RUL_SIHOT_RATE in ('TC', 'TK') then case when RUL_ACTION <> '" + ACTION_UPDATE + "'"
      " then (select 'TC' || RH_EXT_BOOK_REF from T_RH"
