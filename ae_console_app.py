@@ -804,7 +804,7 @@ class NamedLocks:
             if lock_name in self.active_locks:
                 self.active_lock_counters[lock_name] += 1
             else:
-                self.active_locks[lock_name] = threading.Lock()
+                self.active_locks[lock_name] = threading.RLock()
                 self.active_lock_counters[lock_name] = 1
 
         lock_acquired = self.active_locks[lock_name].acquire(*args, **kwargs)

@@ -1806,8 +1806,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message = ""
         else:
             ri_pk = self.ass_db.fetch_value()
+            if self.ass_db.last_err_msg:
+                self._warn("sh_res_change_to_ass(): res inv {}~{} fetch error={}"
+                           .format(apt_wk, year, self.ass_db.last_err_msg))
 
-        error_msg = ""
         ho_id = elem_value(shd, 'RES-HOTEL')    # SS/RES-SEARCH using RES-HOTEL instead of ID xml element
         chk_values = dict(rgr_ho_fk=ho_id)
         res_id = elem_value(shd, 'RES-NR')
@@ -1819,9 +1821,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         elif gds_no:
             chk_values.update(rgr_gds_no=gds_no)
         else:
-            error_msg = err_pre + "Incomplete reservation id"
+            return err_pre + "Incomplete reservation id"
 
-        if not error_msg:
+        error_msg = ""
+        with self.ass_db.thread_lock_init('res_groups', chk_values):
             upd_values = chk_values.copy()
             if gds_no and 'rgr_gds_no' not in upd_values:
                 upd_values.update(rgr_gds_no=gds_no)
@@ -1857,67 +1860,67 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 error_msg = self.ass_db.last_err_msg
             else:
                 rgr_dict.update(upd_values)
-        if not error_msg:
-            rgr_pk = rgr_dict['rgr_pk'] = self.ass_db.fetch_value()
+            if not error_msg:
+                rgr_pk = rgr_dict['rgr_pk'] = self.ass_db.fetch_value()
 
-            rgr_dict['rgc_list'] = list()
-            for arri in range(pax_count(shd)):
-                occ_cl_pk = None
-                sh_id = elem_value(shd, ['PERSON', 'GUEST-ID'], arri=arri)
-                ac_id = elem_value(shd, ['PERSON', 'MATCHCODE'], arri=arri)
-                if sh_id is None and ac_id is None:
-                    self._warn(err_pre + "ignoring unspecified person {}".format(arri + 1),
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                    continue
-                sn = elem_value(shd, ['PERSON', 'NAME'], arri=arri)
-                fn = elem_value(shd, ['PERSON', 'NAME2'], arri=arri)
-                if sh_id or ac_id:
-                    self._warn(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id),
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                    occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id,
-                                                  name=fn + " " + sn if fn and sn else sn or fn)
-                    if occ_cl_pk is None:
-                        self._warn(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
-                                   .format(fn, sn, sh_id, ac_id, self.error_message),
+                rgr_dict['rgc_list'] = list()
+                for arri in range(pax_count(shd)):
+                    occ_cl_pk = None
+                    sh_id = elem_value(shd, ['PERSON', 'GUEST-ID'], arri=arri)
+                    ac_id = elem_value(shd, ['PERSON', 'MATCHCODE'], arri=arri)
+                    if sh_id is None and ac_id is None:
+                        self._warn(err_pre + "ignoring unspecified person {}".format(arri + 1),
                                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                        self.error_message = ""
-                room_seq = elem_value(shd, ['PERSON', 'ROOM-SEQ'], arri=arri)
-                pers_seq = elem_value(shd, ['PERSON', 'ROOM-PERS-SEQ'], arri=arri)
-                if room_seq is None:
-                    self._warn(err_pre + "ignoring unspecified room/person seq {}".format(arri + 1),
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                    continue
-                chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(room_seq), rgc_pers_seq=int(pers_seq))
-                upd_values = chk_values.copy()
-                upd_values\
-                    .update(rgc_surname=sn,
-                            rgc_firstname=fn,
-                            rgc_auto_generated=elem_value(shd, ['PERSON', 'AUTO-GENERATED'], arri=arri),
-                            rgc_occup_cl_fk=occ_cl_pk,
-                            # Sihot offers also PICKUP-TYPE-ARRIVAL(1=car, 2=van), we now use PICKUP-TIME-ARRIVAL
-                            # .. instead of ARR-TIME for the flight arr/dep (pg converts str into time object/value)
-                            rgc_flight_arr_comment=elem_value(shd, ['PERSON', 'PICKUP-COMMENT-ARRIVAL']),
-                            rgc_flight_arr_time=elem_value(shd, ['PERSON', 'PICKUP-TIME-ARRIVAL']),
-                            rgc_flight_dep_comment=elem_value(shd, ['PERSON', 'PICKUP-COMMENT-DEPARTURE']),
-                            rgc_flight_dep_time=elem_value(shd, ['PERSON', 'PICKUP-TIME-DEPARTURE']),
-                            # occupation data
-                            rgc_pers_type=elem_value(shd, ['PERSON', 'PERS-TYPE'], arri=arri),
-                            rgc_sh_pack=elem_value(shd, ['PERSON', 'R'], arri=arri),
-                            rgc_room_id=elem_value(shd, ['PERSON', 'RN'], arri=arri),
-                            )
-                pers_dob = elem_value(shd, ['PERSON', 'DOB'], arri=arri)
-                if pers_dob:
-                    upd_values.update(rgc_dob=datetime.datetime.strptime(pers_dob, SH_DATE_FORMAT))
-                if self.ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
-                    error_msg = self.ass_db.last_err_msg
-                    break
-                rgr_dict['rgc_list'].append(upd_values)
+                        continue
+                    sn = elem_value(shd, ['PERSON', 'NAME'], arri=arri)
+                    fn = elem_value(shd, ['PERSON', 'NAME2'], arri=arri)
+                    if sh_id or ac_id:
+                        self._warn(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id),
+                                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                        occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id,
+                                                      name=fn + " " + sn if fn and sn else sn or fn)
+                        if occ_cl_pk is None:
+                            self._warn(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
+                                       .format(fn, sn, sh_id, ac_id, self.error_message),
+                                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                            self.error_message = ""
+                    room_seq = elem_value(shd, ['PERSON', 'ROOM-SEQ'], arri=arri)
+                    pers_seq = elem_value(shd, ['PERSON', 'ROOM-PERS-SEQ'], arri=arri)
+                    if room_seq is None:
+                        self._warn(err_pre + "ignoring unspecified room/person seq {}".format(arri + 1),
+                                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                        continue
+                    chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(room_seq), rgc_pers_seq=int(pers_seq))
+                    upd_values = chk_values.copy()
+                    upd_values\
+                        .update(rgc_surname=sn,
+                                rgc_firstname=fn,
+                                rgc_auto_generated=elem_value(shd, ['PERSON', 'AUTO-GENERATED'], arri=arri),
+                                rgc_occup_cl_fk=occ_cl_pk,
+                                # Sihot offers also PICKUP-TYPE-ARRIVAL(1=car, 2=van), we now use PICKUP-TIME-ARRIVAL
+                                # .. instead of ARR-TIME for the flight arr/dep (pg converts str into time object/value)
+                                rgc_flight_arr_comment=elem_value(shd, ['PERSON', 'PICKUP-COMMENT-ARRIVAL']),
+                                rgc_flight_arr_time=elem_value(shd, ['PERSON', 'PICKUP-TIME-ARRIVAL']),
+                                rgc_flight_dep_comment=elem_value(shd, ['PERSON', 'PICKUP-COMMENT-DEPARTURE']),
+                                rgc_flight_dep_time=elem_value(shd, ['PERSON', 'PICKUP-TIME-DEPARTURE']),
+                                # occupation data
+                                rgc_pers_type=elem_value(shd, ['PERSON', 'PERS-TYPE'], arri=arri),
+                                rgc_sh_pack=elem_value(shd, ['PERSON', 'R'], arri=arri),
+                                rgc_room_id=elem_value(shd, ['PERSON', 'RN'], arri=arri),
+                                )
+                    pers_dob = elem_value(shd, ['PERSON', 'DOB'], arri=arri)
+                    if pers_dob:
+                        upd_values.update(rgc_dob=datetime.datetime.strptime(pers_dob, SH_DATE_FORMAT))
+                    if self.ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
+                        error_msg = self.ass_db.last_err_msg
+                        break
+                    rgr_dict['rgc_list'].append(upd_values)
 
-        if error_msg:
-            self.error_message = error_msg
-            self.ass_db.rollback()
-        else:
-            self.ass_db.commit()
+            if error_msg:
+                self.error_message = error_msg
+                self.ass_db.rollback()
+            else:
+                self.ass_db.commit()
 
         return error_msg
 

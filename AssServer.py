@@ -14,6 +14,7 @@
             sys_data_generic branch.
     1.0     Q&D fix for to not send any rental reservations.
     1.1     Fixed bug to not store rgr_sf_id into ass_cache.
+    1.2     Changed DB-Locks to RLocks and added outer locking on transaction commit level.
 """
 import datetime
 import threading
@@ -28,7 +29,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '1.1'
+__version__ = '1.2'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
