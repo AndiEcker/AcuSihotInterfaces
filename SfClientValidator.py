@@ -53,7 +53,7 @@ def add_log_msg(msg, is_error=False, importance=2):
 
 
 # fetch rental clients migrated with ShSfClientMigration app for to validate email address and phone numbers
-clients = clients_to_validate(conf_data.sf_conn,
+clients = clients_to_validate(conf_data.used_systems[SDI_SF].connection,
                               filter_sf_clients=filter_sf_clients,
                               filter_sf_rec_types=filter_sf_rec_types,
                               email_validation=email_validation,
@@ -207,7 +207,7 @@ for rec in clients:
         phones_validated += 1
 
     if update_in_sf:
-        _, err_msg, log_msg = conf_data.sf_conn.cl_upsert(rec)
+        _, err_msg, log_msg = conf_data.used_systems[SDI_SF].connection.cl_upsert(rec)
         if err_msg:
             add_log_msg(err_msg, is_error=True)
         else:

@@ -23,11 +23,12 @@ from functools import partial
 from traceback import format_exc
 import pprint
 
-from ae_sys_data import Record
-from ae_console_app import ConsoleApp, uprint, missing_requirements, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_CLIENT_PORT, SDI_ASS
+from ae_sys_data import Record, FAD_ONTO
+from ae_console_app import ConsoleApp, uprint, missing_requirements
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
-from shif import guest_data, ResFetch
+from shif import client_data, ResFetch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '1.2'
@@ -161,7 +162,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     sh_cl = None
     sh_id = sh_res.val('ShId')     # ==ass_cache/rgr_order_cl_fk->cl_sh_id
     if sh_id:
-        sh_cl = guest_data(cae, sh_id)
+        sh_cl = client_data(cae, sh_id)
     if not isinstance(sh_cl, dict):
         log_msg("res_from_sh_to_sf({}): guest not found; objId={}; err='{}'"
                 .format(ppf(ass_changed_res), sh_id, ppf(sh_cl)), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
@@ -181,7 +182,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
                     .format(ppf(ass_changed_res), obj_id, asd.error_message),
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
-    ass_res = Record()
+    ass_res = Record(system=SDI_ASS, direction=FAD_ONTO)
     if asd.sh_res_change_to_ass(sh_res, ass_res_rec=ass_res):
         return asd.error_message
 
@@ -533,7 +534,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
-        xml_enc = cae.get_option('shXmlEncoding')
+        xml_enc = cae.get_option(SDF_SH_XML_ENCODING)
         xml_request = str(xml_from_client, encoding=xml_enc)
         log_msg("AssServer.handle_xml(): req='{}'".format(xml_request), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
@@ -617,8 +618,8 @@ try:
     # ?!?!?: if sihot is connecting as client then our listening server ip has to be either localhost or 127.0.0.1
     # .. and for connect to the Sihot WEB/KERNEL interfaces only the external IP address of the Sihot server is working
     ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
-    uprint("Sihot client IP/port:", ip_addr, cae.get_option('shClientPort'))
-    server = TcpServer(ip_addr, cae.get_option('shClientPort'), SihotRequestXmlHandler, debug_level=debug_level)
+    uprint("Sihot client IP/port:", ip_addr, cae.get_option(SDF_SH_CLIENT_PORT))
+    server = TcpServer(ip_addr, cae.get_option(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 except (OSError, Exception) as tcp_ex:
     log_msg("TCP server could not be started. Exception: {}".format(tcp_ex), is_error=True)

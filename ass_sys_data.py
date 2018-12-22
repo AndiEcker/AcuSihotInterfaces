@@ -2,19 +2,22 @@ import datetime
 import pprint
 import re
 
-from sys_data_ids import SDI_ASS, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI
-from ae_sys_data import Records, Record, FAD_FROM
+from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
+                          EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
+                          DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SF_SANDBOX)
+from ae_sys_data import Records, Record, FAD_FROM, FAD_ONTO, UsedSystems
 from ae_db import OraDB, PostgresDB
-from ae_console_app import uprint, DATE_ISO, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint, DATE_ISO
 from ae_notification import add_notification_options, init_notification
 from acif import add_ac_options
-from sfif import add_sf_options, prepare_connection, ensure_long_id
+from sfif import add_sf_options, ensure_long_id, SfInterface
 from sxmlif import AvailCatInfo
 from shif import (add_sh_options, print_sh_options, pax_count,
                   gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
-                  GuestSearch, ResSearch, ResFetch, ResBulkFetcher, SH_DATE_FORMAT)
+                  ClientSearch, ResSearch, ResFetch, ResBulkFetcher, SH_DATE_FORMAT, ShInterface)
 
 
+'''
 # tuple indexes for Clients data list (ass_cache.clients/AssSysData.clients)
 _ASS_ID = 0
 _AC_ID = 1
@@ -25,6 +28,7 @@ _EMAIL = 5
 _PHONE = 6
 _EXT_REFS = 7
 _PRODUCTS = 8
+'''
 
 # ass_cache client rec map (columns ordered like in the view v_clients_refs_owns)
 ASS_CLIENT_MAP = (
@@ -62,11 +66,11 @@ ASS_RES_MAP = (
     ('rgr_comment', 'ResNote'),
     ('rgr_time_in', 'ResCheckIn'),
     ('rgr_time_out', 'ResCheckOut'),
-    ('rgr_long_comment', ''),
-    ('rgr_room_rate', ''),
-    ('rgr_payment_inst', ''),
-    ('rgr_ext_book_id', ''),
-    ('rgr_ext_book_day', ''),
+    ('rgr_ext_book_id', 'ResVoucherNo'),
+    ('rgr_ext_book_day', 'ResBooked'),
+    ('rgr_long_comment', 'ResLongNote'),
+    ('rgr_room_rate', 'ResRateSegment'),
+    ('rgr_payment_inst', 'ResAccount'),
 )
 
 
@@ -120,19 +124,20 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
     ret_dict = dict()
 
     ret_dict['assSysData'] = conf_data = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger,
-                                                    used_systems_msg_prefix=used_systems_msg_prefix)
+                                                    sys_msg_prefix=used_systems_msg_prefix)
     sys_ids = list()
-    if conf_data.ass_db:
+    if conf_data.used_systems[SDI_ASS].connection:
         uprint('AssCache database name and user:', cae.get_option('assDSN'), cae.get_option('assUser'))
         sys_ids.append(cae.get_option('assDSN'))
-    if conf_data.acu_db:
+    if conf_data.used_systems[SDI_ACU].connection:
         uprint('Acumen database TNS and user:', cae.get_option('acuDSN'), cae.get_option('acuUser'))
         sys_ids.append(cae.get_option('acuDSN'))
-    if conf_data.sf_conn:
-        uprint("Salesforce " + ("sandbox" if conf_data.sf_sandbox else "production") + " user/client-id:",
-               cae.get_option('sfUser'), cae.get_option('sfClientId', default_value=cae.app_name()))
-        sys_ids.append("SBox" if conf_data.sf_sandbox else "Prod")
-    if conf_data.sh_conn:
+    if conf_data.used_systems[SDI_SF].connection:
+        sf_sandbox = SDF_SF_SANDBOX in conf_data.used_systems[SDI_SF].features
+        uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:",
+               cae.get_option('sfUser'))
+        sys_ids.append("SBox" if sf_sandbox else "Prod")
+    if conf_data.used_systems[SDI_SH].connection:
         print_sh_options(cae)
         sys_ids.append(cae.get_option('shServerIP'))
     ret_dict['sysIds'] = sys_ids
@@ -151,6 +156,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
     return ret_dict
 
 
+'''
 # Acumen, Salesforce and Sihot field name re-mappings
 #   AssSysDataClientsIdx    AssSysData.clients columns/fields index (like fetched with view v_clients_refs_owns)
 FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
@@ -195,13 +201,7 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
                                    Account='RecordType.DeveloperName'),
                    )
 
-
-def ac_fld_name(field_name):
-    col_name = ""
-    field_map = FIELD_NAMES.get(field_name)
-    if field_map:
-        col_name = field_map.get('AcDb', field_name)
-    return col_name
+'''
 
 
 def client_fields(exclude_fields=None):
@@ -358,37 +358,32 @@ USED_SYS_ERR_MARKER = "**!"
 
 
 class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
-    def __init__(self, cae, ass_user=None, ass_password=None, acu_user=None, acu_password=None,
-                 err_logger=None, warn_logger=None, ctx_no_file='', used_systems_msg_prefix=""):
+    def __init__(self, cae, err_logger=None, warn_logger=None, ctx_no_file='', sys_msg_prefix="",
+                 **sys_credentials):
+        """
+        initialize and possibly connect all available systems.
+
+        :param cae:             app environment - mainly used for command line args and config file settings.
+        :param err_logger:      method for to display or log error notifications.
+        :param warn_logger:     method for to log warnings.
+        :param ctx_no_file:     str prefix for to mark contexts with no file involved.
+        :param sys_msg_prefix:  prefix str for to display the finally fully-configured/used systems.
+        :param sys_credentials: credentials of all configured systems: ass_user, ass_password, acu_user, acu_password.
+        """
         self.cae = cae
         self._err = err_logger or _dummy_stub
         self._warn = warn_logger or _dummy_stub
         self._ctx_no_file = ctx_no_file
         
-        self.error_message = ""
         self.debug_level = cae.get_option('debugLevel')
-        self.used_systems = list()
 
-        self.ass_db = None
-        self.ass_user = ass_user or cae.get_option('assUser')
-        self.ass_password = ass_password or cae.get_option('assPassword')
-        self.ass_dsn = cae.get_option('assDSN')
-        if self.ass_user and self.ass_password and self.ass_dsn:
-            self.used_systems.append(USED_SYS_ASS_ID)
-            self.connect_ass_db()
-            if not self.ass_db:
-                self.used_systems[-1] += USED_SYS_ERR_MARKER
+        self.used_systems = UsedSystems(cae, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, **sys_credentials)
+        crs = {SDI_ASS: PostgresDB, SDI_ACU: OraDB, SDI_SF: SfInterface, SDI_SH: ShInterface}
+        self.error_message = self.used_systems.connect(crs, app_name=cae.app_name(), debug_level=self.debug_level)
+        if self.error_message:
+            self._err(self.error_message, self._ctx_no_file + 'ConnFailed')
 
-        self.acu_db = None
-        self.acu_user = acu_user or cae.get_option('acuUser')
-        self.acu_password = acu_password or cae.get_option('acuPassword')
-        self.acu_dsn = cae.get_option('acuDSN')
-        if self.acu_user and self.acu_password and self.acu_dsn:
-            self.used_systems.append(USED_SYS_ACU_ID)
-            self.connect_acu_db()
-            if not self.acu_db:
-                self.used_systems[-1] += USED_SYS_ERR_MARKER
-
+        '''
         # if user credentials are specified then prepare Salesforce connection (non-permanent)
         self.sf_conn, self.sf_sandbox = None, True
         if cae.get_option('sfUser') and cae.get_option('sfPassword') and cae.get_option('sfToken'):
@@ -406,14 +401,16 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 return
             self.sf_sandbox = self.sf_conn.is_sandbox
 
-            # Sihot does also not provide permanent connection; at least prepare GuestSearch instance
-        if cae.get_option('shServerIP') and cae.get_option('shServerPort'):
+        # Sihot does also not provide permanent connection; at least prepare ClientSearch instance
+        sh_features = dict()
+        if cae.get_option('shServerIP') and cae.get_option(SDF_SH_WEB_PORT):
+            sh_features[]
             self.used_systems.append(USED_SYS_SHWEB_ID)
-        if cae.get_option('shServerIP') and cae.get_option('shServerKernelPort'):
+        if cae.get_option('shServerIP') and cae.get_option(SDF_SH_KERNEL_PORT):
             self.used_systems.append(USED_SYS_SHKERNEL_ID)
         self.sh_conn = True
-        self._guest_search = GuestSearch(cae)
-
+        self._guest_search = ClientSearch(cae)
+        '''
         # load configuration settings (either from INI file or from Acumen)
         self.hotel_ids = cae.get_config('hotelIds')
         if self.hotel_ids:      # fetch config data from INI/CFG
@@ -421,8 +418,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.ap_cats = cae.get_config('apCats')
             self.ro_agencies = cae.get_config('roAgencies')
             self.room_change_max_days_diff = cae.get_config('roomChangeMaxDaysDiff', default_value=3)
-        else:               # fetch config data from Acumen
-            db = self.acu_db
+        else:                   # fetch config data from Acumen
+            db = self.used_systems[SDI_ACU].connection
             if not db:      # logon/connect error
                 self.error_message = "AssSysData: Missing credentials for to open Acumen database"
                 self._err(self.error_message, self._ctx_no_file + 'InitAcuDb')
@@ -475,57 +472,33 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.res_inv_data = list()
 
         # summary display of used systems
-        if used_systems_msg_prefix or self.debug_level >= DEBUG_LEVEL_ENABLED:
-            uprint((used_systems_msg_prefix or "Used systems") + ":", self.used_systems)
+        if sys_msg_prefix or self.debug_level >= DEBUG_LEVEL_ENABLED:
+            uprint((sys_msg_prefix or "Used systems") + ":", self.used_systems)
 
     def __del__(self):
         self.close_dbs()
 
     def is_test_system(self):
-        return (self.ass_db and 'sihot3v' in self.cae.get_option('assDSN', default_value='')
-                or self.acu_db and '.TEST' in self.cae.get_option('acuDSN', default_value='')
-                or self.sf_conn and self.sf_sandbox
-                or self.sh_conn and 'sihot3v' in self.cae.get_option('shServerIP', default_value='')
+        ass_db = self.used_systems[SDI_ASS].connection
+        acu_db = self.used_systems[SDI_ACU].connection
+        sf_conn = self.used_systems[SDI_SF].connection
+        sh_conn = self.used_systems[SDI_SH].connection
+        return (ass_db and 'sihot3v' in self.cae.get_option('assDSN', default_value='')
+                or acu_db and '.TEST' in self.cae.get_option('acuDSN', default_value='')
+                or sf_conn and SDF_SF_SANDBOX + '=True' in self.used_systems[SDI_SF].features
+                or sh_conn and 'sihot3v' in self.cae.get_option('shServerIP', default_value='')
                 )
 
-    def close_dbs(self, commit=True):
+    def close_dbs(self):
         # ensure to close of DB connections (execution of auto-commits)
-        err_msg = ""
-        if getattr(self, 'acu_db', None):
-            err_msg += self.acu_db.close(commit=commit)
-            self.acu_db = None
-        if getattr(self, 'ass_db', None):
-            err_msg += self.ass_db.close(commit=commit)
-            self.ass_db = None      # postgres connection keeps open w/o, explicit dereference always good style:)
-        return err_msg
-
-    def connect_acu_db(self, force_reconnect=False):
-        if not self.acu_db or force_reconnect:
-            self.acu_db = OraDB(usr=self.acu_user, pwd=self.acu_password, dsn=self.acu_dsn,
-                                app_name=self.cae.app_name(), debug_level=self.debug_level)
-            self.error_message = self.acu_db.connect()
-            if self.error_message:
-                self._err(self.error_message, self._ctx_no_file + 'ConnAcuDb')
-                self.acu_db = None
-        return self.acu_db
-
-    def connect_ass_db(self, force_reconnect=False):
-        if not self.ass_db or force_reconnect:
-            self.ass_db = PostgresDB(usr=self.ass_user, pwd=self.ass_password, dsn=self.ass_dsn,
-                                     app_name=self.cae.app_name(), ssl_args=self.cae.get_config('assSslArgs'),
-                                     debug_level=self.debug_level)
-            self.error_message = self.ass_db.connect()
-            if self.error_message:
-                self._err(self.error_message, self._ctx_no_file + 'ConnAssDb')
-                self.ass_db = None
-        return self.ass_db
+        return self.used_systems.disconnect()
 
     def load_view(self, db_opt, view, cols=None, where="", bind_vars=None):
         if db_opt:      # use existing db connection if passed by caller
             db = db_opt
             self.error_message = ""
         else:
-            db = self.acu_db
+            db = self.used_systems[SDI_ACU].connection
         if not self.error_message:
             self.error_message = db.select(view, cols, where, bind_vars)
         if self.error_message:
@@ -606,14 +579,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     # ############################  client data helpers  #########################################################
 
     def cl_fetch_all(self, where_group_order=""):
+        ass_db = self.used_systems[SDI_ASS].connection
         if "ORDER BY " not in where_group_order.upper():
             where_group_order += ("" if where_group_order else "1=1") + " ORDER BY cl_pk"
-        if self.ass_db.select('v_clients_refs_owns', where_group_order=where_group_order):
-            return self.ass_db.last_err_msg
+        if ass_db.select('v_clients_refs_owns', where_group_order=where_group_order):
+            return ass_db.last_err_msg
 
         self.clients = Records()
-        rows = self.ass_db.fetch_all()
-        err_msg = self.ass_db.last_err_msg
+        rows = ass_db.fetch_all()
+        err_msg = ass_db.last_err_msg
         if not err_msg:
             for row in rows:
                 sys_fields = tuple(t + (row[i], ) for i, t in enumerate(ASS_CLIENT_MAP))
@@ -665,21 +639,22 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # if locked_cols is None:
         #    locked_cols = save_fields.copy()        # uncomment for all fields being locked by default
 
-        if self.ass_db.upsert('clients', col_values, chk_values=chk_values, returning_column='cl_pk', commit=commit,
-                              locked_cols=locked_cols):
+        ass_db = self.used_systems[SDI_ASS].connection
+        if ass_db.upsert('clients', col_values, chk_values=chk_values, returning_column='cl_pk', commit=commit,
+                         locked_cols=locked_cols):
             self.error_message = "cl_save({}, {}, {}) clients upsert error: "\
-                                     .format(ppf(client_data), save_fields, match_fields) + self.ass_db.last_err_msg
+                                     .format(ppf(client_data), save_fields, match_fields) + ass_db.last_err_msg
             return None
 
-        cl_pk = self.ass_db.fetch_value()
+        cl_pk = ass_db.fetch_value()
 
         for er in ext_refs or list():
             col_values = dict(er_cl_fk=cl_pk, er_type=er[0], er_id=er[1])
-            if self.ass_db.upsert('external_refs', col_values, chk_values=col_values, commit=commit):
+            if ass_db.upsert('external_refs', col_values, chk_values=col_values, commit=commit):
                 break
-        if self.ass_db.last_err_msg:
+        if ass_db.last_err_msg:
             self.error_message = "cl_save({}, {}, {}) external_refs upsert error: "\
-                                     .format(ppf(client_data), save_fields, match_fields) + self.ass_db.last_err_msg
+                                     .format(ppf(client_data), save_fields, match_fields) + ass_db.last_err_msg
             return None
 
         if ass_idx is None:
@@ -695,13 +670,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         return cl_pk
 
     def cl_flush(self):
+        ass_db = self.used_systems[SDI_ASS].connection
         for idx in self.clients_changed:
             rec = self.clients[idx]
             cl_pk = self.cl_save(rec, ext_refs=rec.val('ExtRefs').split(EXT_REFS_SEP), ass_idx=idx, commit=True)
             if cl_pk is None:
-                return "cl_flush(): " + self.error_message + " -> roll_back" + self.ass_db.rollback()
+                return "cl_flush(): " + self.error_message + " -> roll_back" + ass_db.rollback()
 
-        return self.ass_db.commit()
+        return ass_db.commit()
 
     def cl_verify_ext_refs(self):
         resort_codes = self.cae.get_config('ClientRefsResortCodes', default_value='').split(',')
@@ -745,11 +721,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 cl_pk = rec.val('AssId')
                 break
         if not cl_pk:
-            if self.ass_db.select('clients', ['cl_pk'], "cl_ac_id = :ac_id", dict(ac_id=ac_id)):
+            ass_db = self.used_systems[SDI_ASS].connection
+            if ass_db.select('clients', ['cl_pk'], "cl_ac_id = :ac_id", dict(ac_id=ac_id)):
                 self.error_message = "cl_ass_id_by_ac_id(): Acumen client ID {} not found in AssCache (err={})"\
-                    .format(ac_id, self.ass_db.last_err_msg)
+                    .format(ac_id, ass_db.last_err_msg)
             else:
-                cl_pk = self.ass_db.fetch_value()
+                cl_pk = ass_db.fetch_value()
         return cl_pk
 
     def cl_ass_id_by_sh_id(self, sh_id):
@@ -763,11 +740,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 cl_pk = rec.val('AssId')
                 break
         if not cl_pk:
-            if self.ass_db.select('clients', ['cl_pk'], "cl_sh_id = :sh_id", dict(sh_id=sh_id)):
+            ass_db = self.used_systems[SDI_ASS].connection
+            if ass_db.select('clients', ['cl_pk'], "cl_sh_id = :sh_id", dict(sh_id=sh_id)):
                 self.error_message = "cl_ass_id_by_sh_id(): Sihot guest object ID {} not found in AssCache (err={})" \
-                    .format(sh_id, self.ass_db.last_err_msg)
+                    .format(sh_id, ass_db.last_err_msg)
             else:
-                cl_pk = self.ass_db.fetch_value()
+                cl_pk = ass_db.fetch_value()
         return cl_pk
 
     def cl_sf_id_by_ass_id(self, ass_id):
@@ -781,11 +759,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 sf_id = rec.val('SfId')
                 break
         if not sf_id:
-            if self.ass_db.select('clients', ['cl_sf_id'], "cl_pk = :ass_id", dict(ass_id=ass_id)):
+            ass_db = self.used_systems[SDI_ASS].connection
+            if ass_db.select('clients', ['cl_sf_id'], "cl_pk = :ass_id", dict(ass_id=ass_id)):
                 self.error_message = "cl_sf_id_by_ass_id(): AssCache client ID {} not found (err={})" \
-                    .format(ass_id, self.ass_db.last_err_msg)
+                    .format(ass_id, ass_db.last_err_msg)
             else:
-                sf_id = self.ass_db.fetch_value()
+                sf_id = ass_db.fetch_value()
         return sf_id
 
     def cl_ensure_id(self, sh_id=None, ac_id=None, name=None, email=None, phone=None):
@@ -807,12 +786,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     cl_pk = rec.val('AssId')
                     break
             if not cl_pk:
-                if self.ass_db.select('clients', ['cl_pk'], "cl_sh_id = :sh_id and cl_ac_id = :ac_id",
-                                      dict(sh_id=sh_id, ac_id=ac_id)):
+                ass_db = self.used_systems[SDI_ASS].connection
+                if ass_db.select('clients', ['cl_pk'], "cl_sh_id = :sh_id and cl_ac_id = :ac_id",
+                                 dict(sh_id=sh_id, ac_id=ac_id)):
                     self.error_message = "cl_ensure_id(): Sihot client {}/{} not found in AssCache (err={})" \
-                        .format(sh_id, ac_id, self.ass_db.last_err_msg)
+                        .format(sh_id, ac_id, ass_db.last_err_msg)
                 else:
-                    cl_pk = self.ass_db.fetch_value()
+                    cl_pk = ass_db.fetch_value()
 
         if not cl_pk and sh_id:
             cl_pk = self.cl_ass_id_by_sh_id(sh_id)
@@ -859,34 +839,35 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if ext_refs and imp_rci_ref in ext_refs.split(EXT_REFS_SEP):
                 break
         else:
-            sf_id, dup_clients = self.sf_conn.cl_by_rci_id(imp_rci_ref)
-            if self.sf_conn.error_msg:
-                self._err("cl_idx_by_rci_id() Salesforce connect/fetch error " + self.sf_conn.error_msg,
+            sf_conn = self.used_systems[SDI_SF].connection
+            sf_id, dup_clients = sf_conn.cl_by_rci_id(imp_rci_ref)
+            if sf_conn.error_msg:
+                self._err("cl_idx_by_rci_id() Salesforce connect/fetch error " + sf_conn.error_msg,
                           file_name, line_num, importance=3)
             if len(dup_clients) > 0:
                 self._err("Found duplicate Salesforce client(s) with main or external RCI ID {}. Used client {}, dup={}"
                           .format(imp_rci_ref, sf_id, dup_clients), file_name, line_num)
             if sf_id:
-                ass_id = self.sf_conn.cl_ass_id_by_idx(sf_id)
-                if self.sf_conn.error_msg:
-                    self._err("cl_idx_by_rci_id() AssCache id fetch error " + self.sf_conn.error_msg,
+                ass_id = sf_conn.cl_ass_id_by_idx(sf_id)
+                if sf_conn.error_msg:
+                    self._err("cl_idx_by_rci_id() AssCache id fetch error " + sf_conn.error_msg,
                               file_name, line_num, importance=3)
-                ac_id = self.sf_conn.cl_ac_id_by_idx(sf_id)
-                if self.sf_conn.error_msg:
-                    self._err("cl_idx_by_rci_id() Acumen id fetch error " + self.sf_conn.error_msg,
+                ac_id = sf_conn.cl_ac_id_by_idx(sf_id)
+                if sf_conn.error_msg:
+                    self._err("cl_idx_by_rci_id() Acumen id fetch error " + sf_conn.error_msg,
                               file_name, line_num, importance=3)
-                sh_id = self.sf_conn.cl_sh_id_by_idx(sf_id)
-                if self.sf_conn.error_msg:
-                    self._err("cl_idx_by_rci_id() Sihot id fetch error " + self.sf_conn.error_msg,
+                sh_id = sf_conn.cl_sh_id_by_idx(sf_id)
+                if sf_conn.error_msg:
+                    self._err("cl_idx_by_rci_id() Sihot id fetch error " + sf_conn.error_msg,
                               file_name, line_num, importance=3)
             else:
                 ass_id = None
                 ac_id = None
                 rec = Record(fields=fields_dict)
                 rec.set_val(imp_rci_ref, 'RciId')   # also create in Sf an entry in the External_Ref custom object
-                sf_id, err, msg = self.sf_conn.cl_upsert(rec)
+                sf_id, err, msg = sf_conn.cl_upsert(rec)
                 if err:
-                    self._err("cl_idx_by_rci_id() Salesforce upsert error " + self.sf_conn.error_msg,
+                    self._err("cl_idx_by_rci_id() Salesforce upsert error " + sf_conn.error_msg,
                               file_name, line_num, importance=3)
                 elif msg and self.debug_level >= DEBUG_LEVEL_VERBOSE:
                     self._warn("cl_idx_by_rci_id() client upsert message: " + msg, file_name, line_num, importance=1)
@@ -920,7 +901,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def ri_fetch_all(self):
         self._warn("Fetching reservation inventory from AssCache (needs some minutes)",
                    self._ctx_no_file + 'FetchResInv', importance=4)
-        self.res_inv_data = self.load_view(self.ass_db, 'res_inventories')
+        self.res_inv_data = self.load_view(self.used_systems[SDI_ASS].connection, 'res_inventories')
         if not self.res_inv_data:
             return self.error_message
 
@@ -1025,11 +1006,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def rgr_fetch_list(self, col_names, chk_values=None, where_group_order=""):
         if chk_values and not where_group_order:
             where_group_order = " AND ".join([k + " = :" + k for k in chk_values.keys()])
-        if self.ass_db.select('res_groups', col_names, where_group_order, bind_vars=chk_values):
-            self.error_message = self.ass_db.last_err_msg
-        ret = self.ass_db.fetch_all()
-        if self.ass_db.last_err_msg:
-            self.error_message += self.ass_db.last_err_msg
+        ass_db = self.used_systems[SDI_ASS].connection
+        if ass_db.select('res_groups', col_names, where_group_order, bind_vars=chk_values):
+            self.error_message = ass_db.last_err_msg
+        ret = ass_db.fetch_all()
+        if ass_db.last_err_msg:
+            self.error_message += ass_db.last_err_msg
         return ret
 
     def rgr_upsert(self, col_values, chk_values=None, commit=False, multiple_rec_update=False, returning_column=''):
@@ -1059,17 +1041,18 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         elif not multiple_rec_update and not self.rgr_complete_ids(col_values, chk_values):
             self.error_message = "rgr_upsert({}, {}): Incomplete-able res IDs".format(ppf(col_values), ppf(chk_values))
         else:
-            self.error_message = self.ass_db.upsert('res_groups', col_values, chk_values,
-                                                    returning_column=returning_column, commit=commit,
-                                                    multiple_row_update=multiple_rec_update)
+            ass_db = self.used_systems[SDI_ASS].connection
+            self.error_message = ass_db.upsert('res_groups', col_values, chk_values,
+                                               returning_column=returning_column, commit=commit,
+                                               multiple_row_update=multiple_rec_update)
             if self.error_message:
                 if commit:
-                    self.error_message += "\n" + self.ass_db.rollback()
-            elif not multiple_rec_update and self.ass_db.curs.rowcount != 1:
+                    self.error_message += "\n" + ass_db.rollback()
+            elif not multiple_rec_update and ass_db.curs.rowcount != 1:
                 self.error_message = "rgr_upsert({}, {}): Invalid affected row count; expected 1 but got {}" \
-                    .format(ppf(col_values), ppf(chk_values), self.ass_db.curs.rowcount)
+                    .format(ppf(col_values), ppf(chk_values), ass_db.curs.rowcount)
             elif returning_column:
-                ret = self.ass_db.fetch_value()
+                ret = ass_db.fetch_value()
             else:
                 ret = chk_values
 
@@ -1089,11 +1072,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if chk_values is None:
             chk_values = {k: v for k, v in col_values.items() if k in ('rgc_rgr_fk', 'rgc_room_seq', 'rgc_pers_seq')}
         if chk_values:
-            self.error_message = self.ass_db.upsert('res_group_clients', col_values, chk_values, commit=commit,
-                                                    multiple_row_update=multiple_rec_update)
-            if not self.error_message and not multiple_rec_update and self.ass_db.curs.rowcount != 1:
+            ass_db = self.used_systems[SDI_ASS].connection
+            self.error_message = ass_db.upsert('res_group_clients', col_values, chk_values, commit=commit,
+                                               multiple_row_update=multiple_rec_update)
+            if not self.error_message and not multiple_rec_update and ass_db.curs.rowcount != 1:
                 self.error_message = "rgc_upsert({}, {}): Invalid affected row count; expected 1 but got {}"\
-                    .format(ppf(col_values), ppf(chk_values), self.ass_db.curs.rowcount)
+                    .format(ppf(col_values), ppf(chk_values), ass_db.curs.rowcount)
         else:
             self.error_message = "rgc_upsert({}): no res-client id (rgr_pk,room_seq,pers_seq)".format(ppf(col_values))
 
@@ -1167,7 +1151,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         :param sf_id:           Reservation Opportunity Id (SF ID with 18 characters). Pass None for to create new-one.
         :param sh_cl_data:      Record with Sihot guest data of the reservation orderer (fetched with
-                                GuestSearch.get_guest()/shif.guest_data()).
+                                ClientSearch.fetch_client()/shif.client_data()).
         :param ass_res_data:    Record with reservation fields (from ass_cache.res_groups).
         :param sync_cache:      True for to update ass_cache/res_groups/rgr_last_sync+rgr_sf_id (opt, def=True).
         :param sf_sent:         Record of sent Account/Reservation object fields (OUT, opt). E.g. the Reservation Opp.
@@ -1196,12 +1180,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not sf_rec.val('ResRoomNo') and ass_res_data.val('ResPersons', 0, 'RoomNo'):
             sf_rec['ResRoomNo'] = ass_res_data.val('ResPersons', 0, 'RoomNo')
 
-        sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_rec)
+        sf_conn = self.used_systems[SDI_SF].connection
+        sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
         if err_msg and sf_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
             ori_err = err_msg
             # retry without sf_id if ResOpp got deleted within SF
             sf_rec['ResSfId'] = ''
-            sf_cl_id, sf_opp_id, err_msg = self.sf_conn.res_upsert(sf_rec)
+            sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
             self._warn("asd.sf_ass_res_upsert({}, {}, {}) cached ResSfId reset to {}; SF client={}; ori-/err='{}'/'{}'"
                        .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
                        notify=True)
@@ -1259,7 +1244,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self._warn("sf_ass_room_change({}, {}, {}, {}) called".format(rgr_sf_id, check_in, check_out, next_room_id),
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-        err_msg = self.sf_conn.room_change(rgr_sf_id, check_in, check_out, next_room_id)
+        err_msg = self.used_systems[SDI_SF].connection.room_change(rgr_sf_id, check_in, check_out, next_room_id)
         if err_msg and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
             # reset (set last res change to midnight) to re-sync reservation (to get new ResSfId) and then try again
             self.rgr_upsert(dict(rgr_last_change=datetime.date.today(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
@@ -1285,12 +1270,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     def sh_guest_ids(self, match_field, match_val):
         ret = None
+        client_search = ClientSearch(self.cae)
         if match_field == 'AcId':
-            ret = self._guest_search.get_objids_by_matchcode(match_val)
+            ret = client_search.search_clients(matchcode=match_val)
         elif match_field == 'Name':
-            ret = self._guest_search.get_objids_by_guest_name(match_val)
+            ret = client_search.search_clients(name=match_val)
         elif match_field == 'Email':
-            ret = self._guest_search.get_objids_by_email(match_val)
+            ret = client_search.search_clients(email=match_val)
         return ret
 
     def sh_avail_rooms(self, hotel_ids=None, room_cat_prefix='', day=None):
@@ -1357,7 +1343,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         count = 0
         res_search = ResSearch(self.cae)
         for hotel_id in hotel_ids:
-            all_recs = res_search.search(hotel_id=hotel_id, from_date=day - res_len_max_timedelta, to_date=day)
+            all_recs = res_search.search_res(hotel_id=hotel_id, from_date=day - res_len_max_timedelta, to_date=day)
             if all_recs and isinstance(all_recs, list):
                 for rec in all_recs:
                     res_type = rec.val('ResStatus')
@@ -1401,11 +1387,16 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         :param shd:         Sihot ResChange dict.
         :param last_change: if not None then set rgr_last_change column value to this passed timestamp.
-        :param ass_res_rec: return reservation data and person/rooming-list (in ass_res_rec['ResPersons']) (opt).
+        :param ass_res_rec: pass in empty Record/dict for to return reservation data and
+                            person/rooming-list (in ass_res_rec['ResPersons']) (opt).
         :return:            ""/empty-string if ok and committed, else error message (and rolled-back).
         """
         if ass_res_rec is None:
-            ass_res_rec = Record()
+            ass_res_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
+        is_rec = isinstance(ass_res_rec, Record)
+        if is_rec:
+            ass_res_rec.add_system_fields(ASS_RES_MAP)
+
         # determine ordering client; RESCHANNELLIST element is situated within RESERVATION xml block
         ord_cl_pk = None
         sh_id = shd.val('ShId')     # was RESCHANNELLIST.RESCHANNEL.OBJID
@@ -1419,18 +1410,18 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                            .format(sh_id, ac_id, self.error_message))
                 self.error_message = ""
 
+        ass_db = self.used_systems[SDI_ASS].connection
         ri_pk = None
         apt_wk, year = self.sh_apt_wk_yr(shd)
-        if self.ass_db.select('res_inventories', ['ri_pk'], "ri_pr_fk = :aw and ri_usage_year = :yr",
-                              dict(aw=apt_wk, yr=year)):
+        if ass_db.select('res_inventories', ['ri_pk'], "ri_pr_fk = :aw and ri_usage_year = :yr",
+                         dict(aw=apt_wk, yr=year)):
             self._warn("sh_res_change_to_ass(): res inv {}~{} not found; (ignored) err={}"
                        .format(apt_wk, year, self.error_message))
             self.error_message = ""
         else:
-            ri_pk = self.ass_db.fetch_value()
-            if self.ass_db.last_err_msg:
-                self._warn("sh_res_change_to_ass(): res inv {}~{} fetch error={}"
-                           .format(apt_wk, year, self.ass_db.last_err_msg))
+            ri_pk = ass_db.fetch_value()
+            if ass_db.last_err_msg:
+                self._warn("sh_res_change_to_ass(): res inv {}~{} error={}".format(apt_wk, year, ass_db.last_err_msg))
 
         ho_id = shd.val('ResHotelId')
         chk_values = dict(rgr_ho_fk=ho_id)
@@ -1442,11 +1433,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             chk_values.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
         elif gds_no:
             chk_values.update(rgr_gds_no=gds_no)
-        else:
+        else:                                               # RETURN
             return err_pre + "Incomplete reservation id"
 
         error_msg = ""
-        with self.ass_db.thread_lock_init('res_groups', chk_values):
+        with ass_db.thread_lock_init('res_groups', chk_values):
             upd_values = chk_values.copy()
             if gds_no and 'rgr_gds_no' not in upd_values:
                 upd_values.update(rgr_gds_no=gds_no)
@@ -1455,7 +1446,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                         rgr_used_ri_fk=ri_pk,
                         # xml path prefix for all elements within RESERVATION block is different for responses of
                         # .. RES-SEARCH (['SIHOT-Document', 'ARESLIST']) and of SS (['SIHOT-Document'])
-                        rgr_obj_id=shd.val('ShId'),
+                        rgr_obj_id=shd.val('ResObjId'),
                         # finally not added next/commented line because IDs should only come from ID generating system
                         # rgr_sf_id=shd.val('ResSfId'),
                         rgr_status=shd.val('ResStatus'),
@@ -1476,14 +1467,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                         )
             if last_change:
                 upd_values.update(rgr_last_change=datetime.datetime.now())
-            if self.ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
-                error_msg = self.ass_db.last_err_msg
+            if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
+                error_msg = ass_db.last_err_msg
             else:
                 ass_res_rec.update(upd_values)
         if not error_msg:
-            rgr_pk = ass_res_rec['rgr_pk'] = self.ass_db.fetch_value()
+            rgr_pk = ass_res_rec['rgr_pk'] = ass_db.fetch_value()
 
             ass_res_rec['ResPersons'] = Records()
+            rgc_idx = 0
             for arri in range(pax_count(shd)):
                 occ_cl_pk = None
                 sh_id = shd.val('ResPersons', arri, 'ShId')
@@ -1531,16 +1523,21 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 pers_dob = shd.val('ResPersons', arri, 'DOB')
                 if pers_dob:
                     upd_values.update(rgc_dob=datetime.datetime.strptime(pers_dob, SH_DATE_FORMAT))
-                if self.ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
-                    error_msg = self.ass_db.last_err_msg
+                if ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
+                    error_msg = ass_db.last_err_msg
                     break
-                ass_res_rec['rgc_list'].append(upd_values)
+
+                if is_rec:
+                    ass_res_rec.set_val(upd_values, 'rgc_list', rgc_idx)
+                else:
+                    ass_res_rec['rgc_list'].append(upd_values)
+                rgc_idx += 1
 
             if error_msg:
                 self.error_message = error_msg
-                self.ass_db.rollback()
+                ass_db.rollback()
             else:
-                self.ass_db.commit()
+                ass_db.commit()
 
         return error_msg
 

@@ -19,7 +19,8 @@ import datetime
 from functools import partial
 from traceback import print_exc
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_CLIENT_PORT
+from ae_console_app import ConsoleApp, uprint
 from sxmlif import PostMessage, ConfigDict, CatRooms
 from acif import AcuResToSihot, AcuServer
 from shif import ResSearch
@@ -111,10 +112,10 @@ def run_check(check_name, data_dict, app_inst):
 
 def _ass_test_method(method):
     global cae
-    old_val = cae.get_option('shClientPort')
-    cae.set_option('shClientPort', 11000, save_to_config=False)
+    old_val = cae.get_option(SDF_SH_CLIENT_PORT)
+    cae.set_option(SDF_SH_CLIENT_PORT, 11000, save_to_config=False)
     ret = method()
-    cae.set_option('shClientPort', old_val, save_to_config=False)
+    cae.set_option(SDF_SH_CLIENT_PORT, old_val, save_to_config=False)
     return ret
 
 
@@ -142,7 +143,7 @@ def sih_reservation_discrepancies(data_dict):
         for crow in req.recs:
             if crow['SIHOT_GDSNO']:
                 rs = ResSearch(cae)
-                rd = rs.search(gdsno=crow['SIHOT_GDSNO'])
+                rd = rs.search_res(gdsno=crow['SIHOT_GDSNO'])
                 row_err = ''
                 if rd and isinstance(rd, list):
                     # compare reservation for errors/discrepancies
@@ -224,7 +225,7 @@ def sih_reservation_search(data_dict):
     rs = ResSearch(cae)
     # available filters: hotel_id, from_date, to_date, matchcode, name, gdsno, flags, scope
     filters = {k[:-len(FILTER_CRITERIA_SUFFIX)]: v for k, v in data_dict.items() if k.endswith(FILTER_CRITERIA_SUFFIX)}
-    rd = rs.search(**filters)
+    rd = rs.search_res(**filters)
     results = list()
     if rd and isinstance(rd, list):
         for row in rd:

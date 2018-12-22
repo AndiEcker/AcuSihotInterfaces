@@ -23,7 +23,9 @@ import json
 import csv
 from traceback import format_exc
 
-from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING, \
+    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
+from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
 from ae_notification import add_notification_options, init_notification
 from sxmlif import ClientToSihot, ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
 from acif import add_ac_options
@@ -52,11 +54,11 @@ notification, warning_notification_emails = init_notification(cae, cae.get_optio
                                                               + '/' + cae.get_option('shServerIP'))
 
 uprint("Acumen DSN:", cae.get_option('acuDSN'))
-uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-       cae.get_option('shServerKernelPort'))
-uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
-uprint("Use Kernel for clients:", "Yes" if cae.get_option('useKernelForClient') else "No (WEB)")
-uprint("Use Kernel for reservations:", "Yes" if cae.get_option('useKernelForRes') else "No (WEB)")
+uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+       cae.get_option(SDF_SH_KERNEL_PORT))
+uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+uprint("Use Kernel for clients:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else "No (WEB)")
+uprint("Use Kernel for reservations:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else "No (WEB)")
 uprint("Break on error:", "Yes" if cae.get_option('breakOnError') else "No")
 if cae.get_config('warningFragments'):
     uprint('Warning Fragments:', cae.get_config('warningFragments'))
@@ -128,8 +130,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     log_import("Acumen Usr: " + acu_user, NO_FILE_PREFIX_CHAR + 'RunImport', importance=4)
 
     # logon to and prepare Acumen, Salesforce, Sihot and config data env
-    conf_data = AssSysData(cae, acu_user=acu_user, acu_password=acu_password,
-                           err_logger=log_error, warn_logger=log_import, ctx_no_file=NO_FILE_PREFIX_CHAR)
+    conf_data = AssSysData(cae, err_logger=log_error, warn_logger=log_import, ctx_no_file=NO_FILE_PREFIX_CHAR,
+                           acu_user=acu_user, acu_password=acu_password)
     if conf_data.error_message:
         log_error(conf_data.error_message, NO_FILE_PREFIX_CHAR + 'UserLogOn', importance=4)
         return

@@ -8,12 +8,13 @@
 import pprint
 from collections import OrderedDict
 
-from sys_data_ids import AC_SQL_EXT_REF_TYPE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI, SDI_AC
+from sys_data_ids import AC_SQL_EXT_REF_TYPE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI, SDI_ACU, \
+    DEBUG_LEVEL_VERBOSE, SDI_ASS, SDI_SF
 from ae_sys_data import Record
-from ae_console_app import ConsoleApp, uprint, to_ascii, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint, to_ascii
 from ae_db import PostgresDB
 from acif import AcuResToSihot, AC_ID_2ND_COUPLE_SUFFIX
-from shif import guest_data, SH_DEF_SEARCH_FIELD, ClientToSihot
+from shif import client_data, SH_DEF_SEARCH_FIELD, ClientToSihot
 from sfif import obj_from_id, sf_fld_sys_name, field_list_to_sf, field_dict_from_sf, SF_DEF_SEARCH_FIELD
 from ass_sys_data import add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone, client_fields
 
@@ -150,14 +151,9 @@ if act_init:
     pg_root_usr = cae.get_config('assRootUsr', default_value='postgres')
     pg_root_dsn = pg_root_usr + ('@' + pg_host if '@' in ass_dsn else '')
     log_warning("creating database {} and user {}".format(ass_dsn, ass_user), 'initCreateDBandUser')
-    pg_db = PostgresDB(usr=pg_root_usr, pwd=cae.get_config('assRootPwd'), dsn=pg_root_dsn,
+    pg_db = PostgresDB(dict(User=pg_root_usr, Password=cae.get_config('assRootPwd'), DSN=pg_root_dsn,
+                            SslArgs=cae.get_config('assSslArgs')),
                        app_name=cae.app_name() + "-CreateDb",
-                       ssl_args=cae.get_config('assSslArgs'
-                                               # , default_value={'sslmode': 'require',
-                                               # 'sslrootcert': 'c:\\src\\set\\root.crt',
-                                               # 'sslcert': 'c:\\src\\set\\postgresql.crt',
-                                               # 'sslkey': 'c:\\src\\set\\postgresql.key'}
-                                               ),
                        debug_level=_debug_level)
     if pg_db.execute_sql("CREATE DATABASE " + pg_dbname + ";", auto_commit=True):  # " LC_COLLATE 'C'"):
         log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72)
@@ -172,14 +168,9 @@ if act_init:
     pg_db.close()
 
     log_warning("creating tables and audit trigger schema/extension", 'initCreateTableAndAudit')
-    pg_db = PostgresDB(usr=cae.get_config('assRootUsr'), pwd=cae.get_config('assRootPwd'), dsn=ass_dsn,
+    pg_db = PostgresDB(dict(User=cae.get_config('assRootUsr'), Password=cae.get_config('assRootPwd'), DSN=ass_dsn,
+                            SslArgs=cae.get_config('assSslArgs')),
                        app_name=cae.app_name() + "-InitTables",
-                       ssl_args=cae.get_config('assSslArgs'
-                                               # , default_value={'sslmode': 'require',
-                                               # 'sslrootcert': 'c:\\src\\set\\root.crt',
-                                               # 'sslcert': 'c:\\src\\set\\postgresql.crt',
-                                               # 'sslkey': 'c:\\src\\set\\postgresql.key'}
-                                               ),
                        debug_level=_debug_level)
     if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO "
                          + ass_user + ";"):
@@ -200,8 +191,8 @@ ass_data = init_ass_data(cae, ass_options)
 conf_data = ass_data['assSysData']
 if conf_data.error_message:
     log_error(conf_data.error_message, 'AssSysDataInit', importance=4, exit_code=9)
-ass_db = conf_data.ass_db
-acu_db = conf_data.acu_db
+ass_db = conf_data.used_systems[SDI_ASS].connection
+acu_db = conf_data.used_systems[SDI_ACU].connection
 notification = ass_data['notification']
 notification_warning_emails = ass_data['warningEmailAddresses']
 
@@ -280,8 +271,8 @@ def ac_pull_clients():
         if ac_cl[6]:
             ext_refs += [(EXT_REF_TYPE_RCI, ac_cl[6])]
 
-        client_data = dict(AcId=ac_cl[0], SfId=ac_cl[1], ShId=ac_cl[2], Name=ac_cl[3], Email=ac_cl[4], Phone=ac_cl[5])
-        cl_pk = conf_data.cl_save(client_data, save_fields=save_fields, match_fields=match_fields, ext_refs=ext_refs)
+        cl_dict = dict(AcId=ac_cl[0], SfId=ac_cl[1], ShId=ac_cl[2], Name=ac_cl[3], Email=ac_cl[4], Phone=ac_cl[5])
+        cl_pk = conf_data.cl_save(cl_dict, save_fields=save_fields, match_fields=match_fields, ext_refs=ext_refs)
         if cl_pk is None:
             break
         if (idx + 1) % 1000 == 0:
@@ -496,7 +487,8 @@ def sf_pull_clients():
         if extra_sql:
             extra_sql = "WHERE " + extra_sql
         sf_fields = field_list_to_sf(code_fields, sf_obj)
-        return conf_data.sf_conn.soql_query_all("SELECT {} FROM {} {}".format(", ".join(sf_fields), sf_obj, extra_sql))
+        sf_conn = conf_data.used_systems[SDI_SF].connection
+        return sf_conn.soql_query_all("SELECT {} FROM {} {}".format(", ".join(sf_fields), sf_obj, extra_sql))
 
     def _retrieve():
         for c in res['records']:  # list of client OrderedDicts
@@ -516,23 +508,23 @@ def sf_pull_clients():
     client_tuples = list()
     sf_obj = 'Account'
     res = _fetch(where)
-    if conf_data.sf_conn.error_msg:
-        conf_data.error_message = "sf_pull_clients(): " + conf_data.sf_conn.error_msg
+    if conf_data.used_systems[SDI_SF].connection.error_msg:
+        conf_data.error_message = "sf_pull_clients(): " + conf_data.used_systems[SDI_SF].connection.error_msg
     elif res['totalSize'] > 0:
         _retrieve()
 
         sf_obj = 'Lead'
         res = _fetch("IsConverted = false" + (" and (" + where + ")" if where else ""))
-        if conf_data.sf_conn.error_msg:
-            conf_data.error_message = "sf_pull_clients(): " + conf_data.sf_conn.error_msg
+        if conf_data.used_systems[SDI_SF].connection.error_msg:
+            conf_data.error_message = "sf_pull_clients(): " + conf_data.used_systems[SDI_SF].connection.error_msg
         elif res['totalSize'] > 0:
             _retrieve()
 
     save_fields = act_field_filters.get('C')
     match_fields = act_match_fields.get('C')
     for idx, cl_data_and_ext_refs in enumerate(client_tuples):
-        client_data, ext_refs = cl_data_and_ext_refs[0], cl_data_and_ext_refs[1].split(EXT_REFS_SEP)
-        cl_pk = conf_data.cl_save(client_data, save_fields=save_fields, match_fields=match_fields, ext_refs=ext_refs)
+        cl_dict, ext_refs = cl_data_and_ext_refs[0], cl_data_and_ext_refs[1].split(EXT_REFS_SEP)
+        cl_pk = conf_data.cl_save(cl_dict, save_fields=save_fields, match_fields=match_fields, ext_refs=ext_refs)
         if cl_pk is None:
             break
         if (idx + 1) % 1000 == 0:
@@ -590,14 +582,14 @@ def sh_pull_clients():
                             .format(ass_id, match_field, match_val, len(sh_ids), as_cl), ctx, importance=3)
                 continue
             sh_id = sh_ids[0]
-        shd = guest_data(cae, sh_id)
+        shd = client_data(cae, sh_id)
         if not shd:
             log_warning("{} - AssCache guest object ID {} does not exits in Sihot: {}".format(ass_id, sh_id, as_cl),
                         ctx, importance=4)
             continue
 
         di = "; REC: ass={} sh={}".format(as_cl, shd) if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
-        client_data = dict()
+        cl_rec = Record()
         for fld_name in client_fld_names:
             ass_val = as_cl.val(fld_name)
             sh_val = shd.val(fld_name)
@@ -608,8 +600,8 @@ def sh_pull_clients():
                     log_warning("{} - {} has multiple values - pulling/changing only first one. ass={} sh={}{}"
                                 .format(ass_id, fld_name, ass_val, sh_val, di), ctx, importance=3)
                 sh_val = sh_val[0]
-            client_data[fld_name] = sh_val
-        cl_pk = conf_data.cl_save(client_data, match_fields=[match_field])
+            cl_rec[fld_name] = sh_val
+        cl_pk = conf_data.cl_save(cl_rec, match_fields=[match_field])
         if cl_pk is None:
             break
 
@@ -712,8 +704,8 @@ def ac_push_clients():
 
     for as_cl in conf_data.clients:
         match_val = as_cl.val(match_field)
-        cols = {as_cl[_].name(system=SDI_AC): as_cl.val(_) for _ in filter_fields if as_cl[_].name(system=SDI_AC)}
-        if acu_db.update("T_CD", cols, where="{} = '{}'".format(as_cl[match_field].name(system=SDI_AC), match_val)):
+        cols = {as_cl[_].name(system=SDI_ACU): as_cl.val(_) for _ in filter_fields if as_cl[_].name(system=SDI_ACU)}
+        if acu_db.update("T_CD", cols, where="{} = '{}'".format(as_cl[match_field].name(system=SDI_ACU), match_val)):
             log_error("ac_push_clients(): Push client Acumen error: " + acu_db.last_err_msg, ctx, importance=4)
 
     return acu_db.commit()
@@ -756,7 +748,7 @@ def sf_push_clients():
     errors = list()
     for as_cl in conf_data.clients:
         rec = Record(fields={_: as_cl.val(_) for _ in filter_fields})
-        sf_id, err_msg, msg = conf_data.sf_conn.cl_upsert(rec)
+        sf_id, err_msg, msg = conf_data.used_systems[SDI_SF].connection.cl_upsert(rec)
         if err_msg:
             log_error("sf_push_clients(): Push client Salesforce error: " + err_msg, ctx, importance=4)
             errors.append(err_msg)
@@ -953,6 +945,7 @@ def sf_verify_clients():
     if not filter_fields:
         filter_fields = client_fields([match_field])
 
+    sf_conn = conf_data.used_systems[SDI_SF].connection
     for as_cl in conf_data.clients:
         ass_id, _, sf_id, _, _, email, phone, ass_ext_refs, _ = as_cl
         if match_field == SF_DEF_SEARCH_FIELD:
@@ -963,18 +956,18 @@ def sf_verify_clients():
                 sf_obj = 'Account'
                 if email:
                     found_by = "Email={}".format(email)
-                    sf_id = conf_data.sf_conn.cl_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
+                    sf_id = sf_conn.cl_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
                 if not sf_id and phone:
                     found_by = "Phone={}".format(phone)
-                    sf_id = conf_data.sf_conn.cl_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
+                    sf_id = sf_conn.cl_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
                 if not sf_id and email:
                     sf_obj = 'Lead'
                     found_by = "Email={}".format(email)
-                    sf_id = conf_data.sf_conn.cl_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
+                    sf_id = sf_conn.cl_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
                 if not sf_id and phone:
                     sf_obj = 'Lead'
                     found_by = "Phone={}".format(phone)
-                    sf_id = conf_data.sf_conn.cl_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
+                    sf_id = sf_conn.cl_field_data('SfId', phone, search_field='Phone', sf_obj=sf_obj)
                 if not sf_id:
                     continue
                 log_warning("{} - AssCache client without ASS SF ID found as {} ID {} via {}; ass={}"
@@ -989,8 +982,8 @@ def sf_verify_clients():
             return err_msg
 
         log_warnings = list()
-        sf_fld_vals = conf_data.sf_conn.cl_field_data(client_fld_names, search_val, search_field=match_field,
-                                                      log_warnings=log_warnings)
+        sf_fld_vals = sf_conn.cl_field_data(client_fld_names, search_val, search_field=match_field,
+                                            log_warnings=log_warnings)
         if not sf_fld_vals:
             if _debug_level >= DEBUG_LEVEL_VERBOSE:
                 for msg in log_warnings:
@@ -1010,7 +1003,7 @@ def sf_verify_clients():
         if 'ExtRefs' in filter_fields:
             ass_ext_refs = [tuple(_.split(EXT_REF_TYPE_ID_SEP)) for _ in ass_ext_refs.split(EXT_REFS_SEP)] \
                 if ass_ext_refs else list()
-            sf_ext_refs = conf_data.sf_conn.cl_ext_refs(sf_id)
+            sf_ext_refs = sf_conn.cl_ext_refs(sf_id)
             di = "; REFS ass={} sf={}; REC ass={} sf={}".format(ass_ext_refs, sf_ext_refs, as_cl, sf_fld_vals) \
                 if _debug_level >= DEBUG_LEVEL_VERBOSE else ""
             for er in ass_ext_refs:
@@ -1061,7 +1054,7 @@ def sh_verify_clients():
                 log_warning("{} - AssCache client Sihot guest id search via {}={} returned multiple/{} guests: {}"
                             .format(ass_id, match_field, match_val, len(sh_ids), as_cl), ctx, importance=3)
         for sh_id in sh_ids:
-            shd = guest_data(cae, sh_id)
+            shd = client_data(cae, sh_id)
             if not shd:
                 log_warning("{} - AssCache guest object ID {} not found in Sihot: {}".format(ass_id, sh_id, as_cl), ctx,
                             importance=4)

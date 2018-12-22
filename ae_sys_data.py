@@ -8,14 +8,16 @@ from collections import OrderedDict
 from typing import Optional, Any, Union, List
 
 # data actions
+from sys_data_ids import SYS_CRED_ITEMS, SYS_FEAT_ITEMS, DEBUG_LEVEL_DISABLED, SYS_CRED_NEEDED, DEBUG_LEVEL_VERBOSE
+
 ACTION_INSERT = 'INSERT'
 ACTION_UPDATE = 'UPDATE'
 ACTION_DELETE = 'DELETE'
 ACTION_SEARCH = 'SEARCH'
 
 # field aspect types/prefixes
-FAT_IDX = 'idx'                 # field name within parent Record or list index within Records/Values
-FAT_VAL = 'vle'                 # field value - storing one of the VALUE_TYPES instance
+FAT_IDX = 'idx'                 # main/system field name within parent Record or list index within Records/Values
+FAT_VAL = 'vle'                 # main/system field value - storing one of the VALUE_TYPES instance
 FAT_REC = 'rrd'                 # root Record instance
 FAT_RCX = 'rrx'                 # field index path (idx_path) from the root Record instance
 FAT_CAL = 'clc'                 # calculator callable
@@ -31,7 +33,8 @@ FAD_FROM = 'From'
 FAD_ONTO = 'Onto'
 
 # separator character used for idx_path values (especially if field has a Record value)
-IDX_PATH_SEP = '.'
+# don't use dot char because this is used e.g. for to separate system field names in xml element name paths.
+IDX_PATH_SEP = '/'
 
 # aspect key string lengths/structure
 _ASP_TYPE_LEN = 3
@@ -50,7 +53,7 @@ def aspect_key(type_or_key, system='', direction=''):
     assert len(type_or_key) >= _ASP_TYPE_LEN, \
         "aspect_key({}, {}, {}): aspect type is too short".format(type_or_key, system, direction)
     assert system == '' or len(system) >= _ASP_SYS_MIN_LEN, \
-        "aspect_key({}, {}, {}): aspect type is too short".format(type_or_key, system, direction)
+        "aspect_key({}, {}, {}): aspect system id is too short".format(type_or_key, system, direction)
     assert direction == '' or len(direction) == _ASP_DIR_LEN, \
         "aspect_key({}, {}, {}): invalid aspect direction length".format(type_or_key, system, direction)
     assert not type_or_key[0].islower() or type_or_key[:_ASP_TYPE_LEN] in ALL_FATS, \
@@ -126,6 +129,7 @@ def field_name_idx_path(field_name, return_root_fields=False):
 
     idx_path = list()
     nam_i = num_i = None
+    last_i = len(field_name) - 1    # for to prevent splitting of indexed sys names, like e.g. NAME-1
     for ch_i, ch_v in enumerate(field_name):
         if ch_v == IDX_PATH_SEP:
             if nam_i is not None:
@@ -136,7 +140,7 @@ def field_name_idx_path(field_name, return_root_fields=False):
                 num_i = None
             continue            # simply ignore leading, trailing and duplicate IDX_PATH_SEP chars
 
-        if str.isdigit(ch_v):
+        if str.isdigit(ch_v) and ch_i < last_i:
             if num_i is None:
                 num_i = ch_i
                 if nam_i is not None:
@@ -458,12 +462,12 @@ class Record(OrderedDict):
         if fields:
             self.add_fields(fields, root_rec=root_rec, root_idx=root_idx)
 
-        self.system_fields = dict()    # map system field name as key to _Field instance (as value).
+        self.sys_name_field_map = dict()    # map system field name as key to _Field instance (as value).
         self.collected_system_fields = list()   # system fields found by collect_system_fields()
 
     def __repr__(self):
         # return "Record([" + ", ".join("(" + repr(k) + "," + repr(v) + ")" for k, v in self.items()) + "])"
-        return "Record(" + ", ".join(repr(self._fields[k]) for k in self._fields.leaf_indexes()) + ")"
+        return "Record(" + ", ".join(repr(self._fields[k]) for k in self.leaf_indexes()) + ")"
 
     def __contains__(self, idx_path):
         item = self.node_child(idx_path)
@@ -505,7 +509,10 @@ class Record(OrderedDict):
             assert not moan, msg + "str (not int) type in 1st idx_path {} item, got {}".format(idx_path, type(idx_path))
             return None     # RETURN item not found (caller doing deep search with integer idx)
 
-        for fld_nam, field in self._fields.items():
+        # defensive programming: using self._fields.keys() although self._fields.items() gets item via get() in 3.5, for
+        # .. to ensure _Field instances independent from self.field_items value (having py-tests for get() not items())
+        for fld_nam in self._fields.keys():
+            field = self._fields.get(fld_nam)
             if fld_nam == idx:
                 if not idx2:
                     break
@@ -605,7 +612,8 @@ class Record(OrderedDict):
         idx_len = len(idx_path)
         if idx_len == 0:
             val = OrderedDict()
-            for idx, field in self._fields.items():
+            for idx in self._fields.keys():
+                field = self._fields.get(idx)
                 val[idx] = field.val(system=system, direction=direction, flex_sys_dir=flex_sys_dir, **kwargs)
         else:
             idx, *idx2 = use_current_index(self, idx_path, use_curr_idx)
@@ -620,7 +628,7 @@ class Record(OrderedDict):
 
     def set_val(self, val, *idx_path, system=None, direction=None, flex_sys_dir=True,
                 protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
-        assert len(idx_path), "Record.set_val() expect 2 or more args - missing field name or index"
+        assert len(idx_path), "Record.set_val() expects value and index path (at least of one field name)"
         system, direction = use_rec_default_sys_dir(self, system, direction)
         root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_val")
 
@@ -638,11 +646,13 @@ class Record(OrderedDict):
         return self
 
     def leafs(self, system='', direction='', flex_sys_dir=True):
-        for idx, field in self._fields.items():
+        for idx in self._fields.keys():
+            field = self._fields.get(idx)
             yield from field.leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
     def leaf_indexes(self, *idx_path, system='', direction='', flex_sys_dir=True):
-        for idx, field in self._fields.items():
+        for idx in self._fields.keys():
+            field = self._fields.get(idx)
             fld_idx = idx_path + (idx, )
             yield from field.leaf_indexes(*fld_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
@@ -662,7 +672,7 @@ class Record(OrderedDict):
         else:
             idx = field.name()
 
-        assert idx not in self._fields, msg + "Record '{}' has already a field with the key '{}'".format(self, idx)
+        assert idx not in self._fields, msg + "Record '{}' has already a field with the name '{}'".format(self, idx)
 
         super().__setitem__(idx, field)     # self._fields[idx] = field
         return self
@@ -776,7 +786,7 @@ class Record(OrderedDict):
                                       root_rec=self, root_idx=idx_path)
             self.set_node_child(field, *idx_path, protect=fld_created, root_rec=self, root_idx=())
 
-            self.system_fields[sys_name] = field
+            self.sys_name_field_map[sys_name] = field
 
         return self
     
@@ -785,24 +795,24 @@ class Record(OrderedDict):
 
         deep_sys_fld_name = sys_fld_name_path[-1]
         full_path = path_sep.join(sys_fld_name_path)
-        for sys_name, field in self.system_fields.items():
+        for sys_name, field in self.sys_name_field_map.items():
             if sys_name == deep_sys_fld_name or sys_name == full_path or full_path.endswith(path_sep + sys_name):
                 if field not in self.collected_system_fields:
                     self.collected_system_fields.append(field)
 
         return self.collected_system_fields
 
-    def copy(self, deepness=0, onto_rec=None, root_rec=None, root_idx=(), filter_func=None, fields_patches=None):
+    def copy(self, deepness=0, root_rec=None, root_idx=(), onto_rec=None, filter_func=None, fields_patches=None):
         """
         copy the fields of this record
         :param deepness:        deep copy level: <0==see deeper(), 0==only copy this record instance, >0==deep copy
                                 to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
-        :param onto_rec:        destination record; pass None to create new Record instance.
         :param root_rec:        destination root record - using onto_rec/new record if not specified.
         :param root_idx:        destination root index (tuple/list with index path items: field names, list indexes).
+        :param onto_rec:        destination record; pass None to create new Record instance.
         :param filter_func:     method called for each copied field (return True to filter/hide/not-include into copy).
         :param fields_patches:  dict with keys as idx_paths and values as dict of aspect keys and values (for to
-                                overwrite aspects in the copied Record instance).
+                                overwrite aspects in each copied _Field instance).
         :return:                new/extended record instance.
         """
         new_rec = onto_rec is None
@@ -812,31 +822,33 @@ class Record(OrderedDict):
             root_rec = onto_rec
         assert onto_rec is not self, "copy() cannot copy to self (same Record instance)"
 
-        for name, field in self._fields.items():
+        for idx in self._fields.keys():
+            field = self._fields.get(idx)
             if filter_func:
                 assert callable(filter_func)
-                if not filter_func(field):
+                if filter_func(field):
                     continue
 
             if deeper(deepness, field):
                 field = field.copy(deepness=deeper(deepness, field), onto_rec=None if new_rec else onto_rec,
-                                   root_rec=root_rec, root_idx=root_idx + (name, ),
+                                   root_rec=root_rec, root_idx=root_idx + (idx, ),
                                    filter_func=filter_func, fields_patches=fields_patches)
-            elif name in onto_rec:
-                field = onto_rec[name]
+            elif idx in onto_rec:
+                field = onto_rec[idx]
 
-            if fields_patches and name in fields_patches:
-                field.set_aspects(**fields_patches[name], allow_values=True)
+            if fields_patches and idx in fields_patches:
+                field.set_aspects(**fields_patches[idx], allow_values=True)
 
             if new_rec:
-                onto_rec._add_field(field, name)
+                onto_rec._add_field(field, idx)
             else:
-                onto_rec[name] = field
+                onto_rec[idx] = field
 
         return onto_rec
 
     def clear_vals(self, system='', direction=''):
-        for field in self._fields.values():
+        for idx in self._fields.keys():
+            field = self._fields.get(idx)
             field.clear_vals(system=system, direction=direction)
 
     def missing_fields(self, required_fields=()):
@@ -875,7 +887,7 @@ class Record(OrderedDict):
 
     def set_current_system_index(self, sys_fld_name_prefix, path_sep, idx_val=None, idx_add=1):
         prefix = sys_fld_name_prefix + path_sep
-        for sys_path, field in self.system_fields.items():
+        for sys_path, field in self.sys_name_field_map.items():
             if sys_path.startswith(prefix):
                 rec = field.root_rec(system=self.system, direction=self.direction)
                 idx_path = field.root_idx(system=self.system, direction=self.direction)
@@ -894,7 +906,8 @@ class Record(OrderedDict):
             self.action = action
         root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_env")
 
-        for idx, field in self._fields.items():
+        for idx in self._fields.keys():
+            field = self._fields.get(idx)
             field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (idx, ))
         return self
 
@@ -905,7 +918,8 @@ class Record(OrderedDict):
         :return:            list of sql column names.
         """
         column_names = list()
-        for field in self._fields.values():
+        for idx in self._fields.keys():
+            field = self._fields.get(idx)
             if len(field.root_idx(system=from_system, direction=FAD_FROM)) == 1:
                 name = field.aspect_value(FAT_IDX, system=from_system, direction=FAD_FROM)
                 if name:
@@ -919,7 +933,8 @@ class Record(OrderedDict):
         :return:            list of sql column names/expressions.
         """
         column_expressions = list()
-        for field in self._fields.values():
+        for idx in self._fields.keys():
+            field = self._fields.get(idx)
             if len(field.root_idx(system=from_system, direction=FAD_FROM)) == 1:
                 name = field.aspect_value(FAT_IDX, system=from_system, direction=FAD_FROM)
                 if name:
@@ -1473,7 +1488,7 @@ class _Field:
             self.set_val(val, system=onto_system, direction=direction, root_rec=root_rec, root_idx=root_idx)
         return self
 
-    def string_to_records(self, str_val, fld_names, rec_sep=',', fld_sep='=', system='', direction=''):
+    def string_to_records(self, str_val, field_names, rec_sep=',', fld_sep='=', system='', direction=''):
         fld_root_rec = self.root_rec(system=system, direction=direction)
         fld_root_idx = self.root_idx(system=system, direction=direction)
 
@@ -1481,7 +1496,7 @@ class _Field:
         for rec_idx, rec_str in enumerate(str_val.split(rec_sep)):  # type: (int, str)
             fields = dict()
             for fld_idx, fld_val in enumerate(rec_str.split(fld_sep)):
-                fields[fld_names[fld_idx]] = fld_val
+                fields[field_names[fld_idx]] = fld_val
             recs.append(Record(fields=fields, root_rec=fld_root_rec, root_idx=fld_root_idx + (rec_idx, )))
             set_current_index(recs, idx=rec_idx)
         return recs
@@ -1538,27 +1553,109 @@ IDX_TYPES = (int, str)
 
 
 class System:
-    def __init__(self, sys_id: str, credentials: dict):
+    def __init__(self, sys_id: str, credentials: dict, features=None):
         """
         define new system
 
         :param sys_id:              unique str for to identify a system (also used as prefix/suffix).
         :param credentials:         dict for to access system, containing e.g. user name, password, token, dsn
+        :param features:            optional list with special features for this system (see SDF_* constants).
         """
         self.sys_id = sys_id
         self.credentials = credentials
+        self.features = features or list()
+
+        self.connection = None
+        self.conn_error = ""
+        self.app_name = ''
+        self.debug_level = DEBUG_LEVEL_DISABLED
+
+    def __repr__(self):
+        ret = self.sys_id
+        if self.conn_error:
+            ret += "!" + self.conn_error
+        if self.debug_level != DEBUG_LEVEL_DISABLED:
+            cre = self.credentials
+            ret += "&" + (repr(cre) if self.debug_level == DEBUG_LEVEL_VERBOSE else cre.get('User'))
+            ret += "_" + repr(self.features)
+            ret += "@" + self.app_name
+        return ret
+
+    def connect(self, connector, app_name='', debug_level=DEBUG_LEVEL_DISABLED, force_reconnect=False):
+        self.conn_error = ""
+        if not self.connection or self.conn_error or force_reconnect:
+            self.connection = connector(self.credentials, features=self.features,
+                                        app_name=app_name, debug_level=debug_level)
+            if callable(getattr(self.connection, 'connect', False)):
+                self.conn_error = self.connection.connect()
+                if self.conn_error:
+                    self.connection = None
+        self.app_name = app_name or 'ae_sys_data'
+        self.debug_level = debug_level
+        return self.conn_error
+
+    def disconnect(self):
+        err_msg = ""
+        if self.connection:
+            if callable(getattr(self.connection, 'close', False)):
+                err_msg = self.connection.close()
+            elif callable(getattr(self.connection, 'disconnect', False)):
+                err_msg = self.connection.disconnect()
+            self.connection = None
+        self.conn_error = err_msg
+        return err_msg
 
 
-class ConfigurationOption:
-    pass
+class UsedSystems(OrderedDict):
+    def __init__(self, cae, *available_systems, **sys_credentials):
+        super(UsedSystems, self).__init__()
+        self._systems = self
+        self._available_systems = available_systems
+        for sys_id in available_systems:
+            credentials = dict()
+            for cred_item in SYS_CRED_ITEMS:
+                sys_cred_item = sys_id.lower() + '_' + cred_item.lower()
+                cae_cred_item = sys_id.lower() + cred_item
+                if sys_cred_item in sys_credentials:
+                    credentials[cred_item] = sys_credentials[sys_cred_item]
+                elif cae.get_option(cae_cred_item):
+                    credentials[cred_item] = cae.get_option(cae_cred_item)
+                elif cae.get_config(cae_cred_item):
+                    credentials[cred_item] = cae.get_config(cae_cred_item)
+            for cred_item in SYS_CRED_NEEDED.get(sys_id):
+                if cred_item not in credentials:
+                    break    # ignore/skip not fully specified system - continue with next available system
+            else:
+                # now collect features for this system with complete credentials
+                features = list()
+                for feat_item in SYS_FEAT_ITEMS:
+                    if feat_item.startswith(sys_id.lower()):
+                        if cae.get_option(feat_item):
+                            feat_item += '=' + str(cae.get_option(feat_item))
+                        elif cae.get_config(feat_item):
+                            feat_item += '=' + str(cae.get_config(feat_item))
+                        features.append(feat_item)
+                # finally add system to this used systems instance
+                self._add_system(sys_id, credentials, features=features)
 
+    def _add_system(self, sys_id, credentials, features=None):
+        assert sys_id in self._available_systems, "UsedSystems._add_system(): unsupported system id {}".format(sys_id)
+        assert sys_id not in self._systems, "UsedSystems._add_system(): system id {} already specified".format(sys_id)
+        system = System(sys_id, credentials, features=features)
+        self._systems[sys_id] = system
 
-class UsedSystems:
-    def __init__(self):
-        self.systems = list()
+    def connect(self, connectors, **connector_args):
+        for sys_id, system in self._systems.items():
+            assert sys_id in connectors, "UsedSystems.connect(): connector for system {} missing".format(sys_id)
+            if system.connect(connectors[sys_id], **connector_args) or not system.connection:
+                return system.conn_error or "UsedSystems.connect(): system {} connection failed".format(sys_id)
+        return ""
 
-    def add_system(self, system: System):
-        self.systems.append(system)
+    def disconnect(self):
+        err_msg = ""
+        for system in self._systems.values():
+            err_msg += system.disconnect()
+        return err_msg
 
 
 def executable_architecture(executable_file):

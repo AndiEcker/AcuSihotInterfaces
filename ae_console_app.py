@@ -11,12 +11,8 @@ import threading
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError
 
-# supported debugging levels
-DEBUG_LEVEL_DISABLED = 0
-DEBUG_LEVEL_ENABLED = 1
-DEBUG_LEVEL_VERBOSE = 2
-DEBUG_LEVEL_TIMESTAMPED = 3
-debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
+from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
+                          debug_levels)
 
 # default name of main config section
 MAIN_SECTION_DEF = 'Settings'

@@ -11,7 +11,9 @@
 """
 from traceback import format_exc
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_TIMEOUT, \
+    SDF_SH_XML_ENCODING
+from ae_console_app import ConsoleApp, uprint
 from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
@@ -30,7 +32,7 @@ if __name__ == "__main__":      # for to allow import of client_to_acu() for tes
 
     debug_level = cae.get_option('debugLevel')
     uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
-    uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+    uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
     notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
 
 
@@ -48,7 +50,7 @@ def client_to_acu(col_values, ca=None):
     else:
         dl = debug_level
         ca = cae
-    ora_db = OraDB(ca.get_option('acuUser'), ca.get_option('acuPassword'), ca.get_option('acuDSN'),
+    ora_db = OraDB(User=ca.get_option('acuUser'), Password=ca.get_option('acuPassword'), DSN=ca.get_option('acuDSN')),
                    app_name=ca.app_name(), debug_level=dl)
     err_msg = ora_db.connect()
     pkey = None
@@ -101,7 +103,8 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
     if old_room_no:
         old_room_no = old_room_no.lstrip('0')
     # move/check in/out guest from/into room_no
-    ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
+    ora_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
+                        DSN=cae.get_option('acuDSN')),
                    app_name=cae.app_name(), debug_level=debug_level)
     err_msg = ora_db.connect()
     extra_info = ''
@@ -204,7 +207,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
-        xml_request = str(xml_from_client, encoding=cae.get_option('shXmlEncoding'))
+        xml_request = str(xml_from_client, encoding=cae.get_option(SDF_SH_XML_ENCODING))
         notify("SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'",
                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         req = Request(cae)
@@ -237,13 +240,13 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                 notify(msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
                 xml_response = create_ack_response(req, '969', msg)
 
-        return bytes(xml_response, cae.get_option('shXmlEncoding'))
+        return bytes(xml_response, cae.get_option(SDF_SH_XML_ENCODING))
 
 
 if __name__ == '__main__':
     ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
-    uprint("Sihot client IP/port:", ip_addr, cae.get_option('shClientPort'))
-    server = TcpServer(ip_addr, cae.get_option('shClientPort'), SihotRequestXmlHandler, debug_level=debug_level)
+    uprint("Sihot client IP/port:", ip_addr, cae.get_option(SDF_SH_CLIENT_PORT))
+    server = TcpServer(ip_addr, cae.get_option(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 
     cae.shutdown()

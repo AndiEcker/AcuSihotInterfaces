@@ -16,7 +16,8 @@ import datetime
 import re
 from traceback import print_exc
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint
 from shif import ResSearch, SH_DATE_FORMAT
 from shif import add_sh_options, print_sh_options
 
@@ -128,7 +129,7 @@ try:
     last_checkout = date_till - datetime.timedelta(days=1)
     # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
     # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
-    all_rows = res_search.search(from_date=first_checkin, to_date=last_checkout, flags=search_flags, scope=search_scope)
+    all_rows = res_search.search_res(from_date=first_checkin, to_date=last_checkout, flags=search_flags, scope=search_scope)
     if all_rows and isinstance(all_rows, str):
         uprint(" ***  Sihot.PMS reservation search error:", all_rows)
         cae.shutdown(21)

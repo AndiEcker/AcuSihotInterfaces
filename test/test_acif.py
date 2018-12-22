@@ -573,7 +573,7 @@ class TestClientFromSihot:
         <OC>GUEST-CREATE</OC>
         <ID>1</ID>
         <TN>1</TN>
-        <GUEST>
+        <GUEST-PROFILE>
             <MATCHCODE>test2</MATCHCODE>
             <PWD>pass56</PWD>
             <ADDRESS></ADDRESS>
@@ -609,7 +609,7 @@ class TestClientFromSihot:
                     <CCHANDLEVALIDUNTIL></CCHANDLEVALIDUNTIL>
                 </CARD>
             </ACARDLIST>
-        </GUEST>
+        </GUEST-PROFILE>
     </SIHOT-Document>'''
 
     def test_attributes(self, console_app_env):

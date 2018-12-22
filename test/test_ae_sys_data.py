@@ -4,7 +4,7 @@ from collections import OrderedDict
 from ae_sys_data import aspect_key, aspect_key_system, aspect_key_direction, deeper, \
     field_name_idx_path, field_names_idx_paths, idx_path_field_name, \
     Value, Values, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
-    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV
+    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP
 from sys_data_ids import SDI_SH
 
 
@@ -73,6 +73,10 @@ class TestHelperMethods:
         assert deeper(-3, Records()) == -3
         assert deeper(-3, None) == -3
 
+    def test_idx_path_sep_valid_char(self):
+        # ensure that IDX_PATH_SEP is not a dot character (would break xml element name paths lookups in shif.py)
+        assert IDX_PATH_SEP != '.'
+
     def test_field_name_idx_path(self):
         assert not field_name_idx_path('test')
         assert field_name_idx_path('test') == tuple()
@@ -88,20 +92,20 @@ class TestHelperMethods:
 
         assert not field_name_idx_path(3)
 
-        assert not field_name_idx_path('3')
-        assert field_name_idx_path('Test2') == ('Test', 2)
-        assert field_name_idx_path('2Test2') == (2, 'Test', 2)
+        assert field_name_idx_path('3') == ()
+        assert field_name_idx_path('Test2') == ()           # index sys name field split exception
+        assert field_name_idx_path('2Test2') == (2, 'Test2')
         assert field_name_idx_path('3Test') == (3, 'Test')
 
     def test_field_name_idx_path_sep(self):
-        assert field_name_idx_path('Test.test') == ('Test', 'test')
-        assert field_name_idx_path('.Test.test.') == ('Test', 'test')
+        assert field_name_idx_path('Test' + IDX_PATH_SEP + 'test') == ('Test', 'test')
+        assert field_name_idx_path(IDX_PATH_SEP + 'Test' + IDX_PATH_SEP + 'test' + IDX_PATH_SEP) == ('Test', 'test')
 
-        assert field_name_idx_path('Test3.test') == ('Test', 3, 'test')
-        assert field_name_idx_path('Test33.test') == ('Test', 33, 'test')
+        assert field_name_idx_path('Test3' + IDX_PATH_SEP + 'test') == ('Test', 3, 'test')
+        assert field_name_idx_path('Test33' + IDX_PATH_SEP + 'test') == ('Test', 33, 'test')
 
-        assert field_name_idx_path('Test.3.test') == ('Test', 3, 'test')
-        assert field_name_idx_path('Test.33.test') == ('Test', 33, 'test')
+        assert field_name_idx_path('Test' + IDX_PATH_SEP + '3' + IDX_PATH_SEP + 'test') == ('Test', 3, 'test')
+        assert field_name_idx_path('Test' + IDX_PATH_SEP + '33' + IDX_PATH_SEP + 'test') == ('Test', 33, 'test')
 
     def test_field_name_idx_path_ret_root_fields(self):
         assert field_name_idx_path('test', return_root_fields=True) == ('test', )
@@ -118,23 +122,23 @@ class TestHelperMethods:
         assert field_name_idx_path(3, return_root_fields=True) == (3, )
 
         assert field_name_idx_path('3', return_root_fields=True) == ('3', )
-        assert field_name_idx_path('Test2', return_root_fields=True) == ('Test', 2)
-        assert field_name_idx_path('2Test2', return_root_fields=True) == (2, 'Test', 2)
+        assert field_name_idx_path('Test2', return_root_fields=True) == ('Test2', )
+        assert field_name_idx_path('2Test2', return_root_fields=True) == (2, 'Test2', )
         assert field_name_idx_path('3Test', return_root_fields=True) == (3, 'Test')
 
     def test_field_names_idx_paths(self):
         assert field_names_idx_paths(['3Test', ('fn', 0, 'sfn'), 9]) == [(3, 'Test'), ('fn', 0, 'sfn'), (9, )]
 
     def test_idx_path_field_name(self):
-        assert idx_path_field_name(('test', 'TEST')) == 'test.TEST'
+        assert idx_path_field_name(('test', 'TEST')) == 'test' + IDX_PATH_SEP + 'TEST'
         assert idx_path_field_name((3, 'tst')) == '3tst'
         assert idx_path_field_name(('test3no-sub', )) == 'test3no-sub'
         assert idx_path_field_name(('test', 33)) == 'test33'
 
-        assert idx_path_field_name(('test', 'TEST'), add_sep=True) == 'test.TEST'
-        assert idx_path_field_name((3, 'tst'), add_sep=True) == '3.tst'
+        assert idx_path_field_name(('test', 'TEST'), add_sep=True) == 'test' + IDX_PATH_SEP + 'TEST'
+        assert idx_path_field_name((3, 'tst'), add_sep=True) == '3' + IDX_PATH_SEP + 'tst'
         assert idx_path_field_name(('test3no-sub',), add_sep=True) == 'test3no-sub'
-        assert idx_path_field_name(('test', 33), add_sep=True) == 'test.33'
+        assert idx_path_field_name(('test', 33), add_sep=True) == 'test' + IDX_PATH_SEP + '33'
 
     def test_init_use_current_index(self):
         r = Record()
@@ -271,11 +275,31 @@ class TestRecord:
         assert eval(repr(Record())) == Record()
 
     def test_field_lookup_standard(self):
-        r = Record(fields=dict(test=''))
+        r = Record(fields=dict(test='xxx'))
         print(r)
-        assert r.val('test') == ''
+
+        assert r['test'] == 'xxx'
+        assert r.val('test') == 'xxx'
+        assert r.get('test').val() == 'xxx'     # get() always gets field (independent of field_items)
+
         r.field_items = True
-        assert r['test'].val() == ''
+        assert r['test'].val() == 'xxx'
+        assert r.val('test') == 'xxx'
+        assert r.get('test').val() == 'xxx'
+
+    def test_field_lookup_sys_name(self):
+        r = Record(fields=dict(test='xxx'), system='Xx', direction=FAD_ONTO)
+        r.add_system_fields((('tsf', 'test'), ))
+        print(r)
+
+        assert r['tsf'] == 'xxx'
+        assert r.val('tsf') == 'xxx'
+        assert r.get('tsf') is None             # get() doesn't find sys names
+
+        r.field_items = True
+        assert r['tsf'].val() == 'xxx'
+        assert r.val('tsf') == 'xxx'
+        assert r.get('tsf') is None
 
     def test_unpacking(self):
         r = Record(fields=dict(testA='', testB=''))
@@ -616,7 +640,7 @@ class TestRecord:
         assert r.copy() == r
         assert r.copy() is not r
 
-        r2 = r.copy(filter_func=lambda f: f.name() == 'fnB')
+        r2 = r.copy(filter_func=lambda f: f.name() != 'fnB')
         assert len(r2) == 1
         assert r2.val('fnB') == 66
 

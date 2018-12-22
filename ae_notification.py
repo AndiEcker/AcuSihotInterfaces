@@ -1,7 +1,8 @@
 from smtplib import SMTP, SMTP_SSL
 from email.mime.text import MIMEText
 
-from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint
 
 
 DEF_ENC_PORT = 25

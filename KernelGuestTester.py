@@ -1,4 +1,5 @@
-from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
+from ae_console_app import ConsoleApp, Progress, uprint
 from sxmlif import SihotXmlBuilder, AcuClientToSihot, SXML_DEF_ENCODING
 from acif import add_ac_options
 from shif import add_sh_options
@@ -13,8 +14,8 @@ add_ac_options(cae)
 cae.add_option('client', 'Send unsynced client identified with this matchcode', '')  # C605765')
 
 
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_KERNEL_PORT))
+uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
 
 err_msg = ''
 client_code = cae.get_option('client')

@@ -1,7 +1,5 @@
 """
-    TODO:
-    - update cx_Oracle V5.2.1 to newest (V6.0.2) and test with oracle client 11.2 and then also have to change
-      the clientinfo kwarg in OraDB.connect() to appcontext=app_ctx.
+    provide database connections - currently supported database are Postgres and Oracle.
 """
 import os
 import datetime
@@ -12,7 +10,8 @@ import cx_Oracle
 import psycopg2
 # from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-from ae_console_app import NamedLocks, uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import NamedLocks, uprint
 
 
 NAMED_BIND_VAR_PREFIX = ':'
@@ -24,12 +23,24 @@ def _locked_col_expr(col, locked_cols):
 
 
 class GenericDB:
-    def __init__(self, usr, pwd, dsn, app_name='ae_db-gen', debug_level=DEBUG_LEVEL_DISABLED):
-        assert usr and pwd, "ae_db.py/GenericDB has empty user name ({}) and/or password".format(usr)
-        self.usr = usr
-        self.pwd = pwd
+    def __init__(self, credentials, features=None, app_name='ae_db-gen', debug_level=DEBUG_LEVEL_DISABLED):
+        """
+        create instance of generic database object (base class for real database like e.g. postgres or oracle).
+        :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
+                            password and DSN=database name and optionally host address (separated with a @ character).
+        :param features:    optional list of features (currently not used for databases).
+        :param app_name:    application name (shown in the server DB session).
+        :param debug_level: debug level.
+        """
+        user = credentials.get('User')
+        password = credentials.get('Password')
+        dsn = credentials.get('DSN')
+        assert user and password, "ae_db.py/GenericDB has empty user name ({}) and/or password".format(user)
+        self.usr = user
+        self.pwd = password
         assert dsn and isinstance(dsn, str), "ae_db.py/GenericDB() has invalid dsn argument {}".format(dsn)
         self.dsn = dsn
+        self._features = features
         self._app_name = app_name
         self.debug_level = debug_level
 
@@ -279,20 +290,25 @@ class GenericDB:
 
 
 class OraDB(GenericDB):
+    def __init__(self, credentials, features=None, app_name='ae_db-ora', debug_level=DEBUG_LEVEL_DISABLED):
+        """
+        create instance of oracle database object
+        :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
+                            password and DSN=database name and optionally host address (separated with a @ character).
+        :param features:    optional list of features (currently not used for databases).
+        :param app_name:    application name (shown in the server DB session).
+        :param debug_level: debug level.
+        """
+        super(OraDB, self).__init__(credentials, features=features, app_name=app_name, debug_level=debug_level)
 
-    def __init__(self, usr='', pwd='', dsn='', app_name='ae_db-ora', debug_level=DEBUG_LEVEL_DISABLED):
-        super(OraDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, app_name=app_name, debug_level=debug_level)
-
-        if dsn.count(':') == 1 and dsn.count('/@') == 1:   # old style format == host:port/@SID
-            host, rest = dsn.split(':')
+        if self.dsn.count(':') == 1 and self.dsn.count('/@') == 1:   # old style format == host:port/@SID
+            host, rest = self.dsn.split(':')
             port, service_id = rest.split('/@')
             self.dsn = cx_Oracle.makedsn(host=host, port=port, sid=service_id)
-        elif dsn.count(':') == 1 and dsn.count('/') == 1:  # old style format == host:port/service_name
-            host, rest = dsn.split(':')
+        elif self.dsn.count(':') == 1 and self.dsn.count('/') == 1:  # old style format == host:port/service_name
+            host, rest = self.dsn.split(':')
             port, service_name = rest.split('/')
             self.dsn = cx_Oracle.makedsn(host=host, port=port, service_name=service_name)
-        else:
-            self.dsn = dsn                                  # TNS name like SP.WORLD
 
         # used for to fix the following unicode encoding error:
         # .. 'charmap' codec can't decode byte 0x90 in position 2: character maps to <undefined>
@@ -353,18 +369,18 @@ class OraDB(GenericDB):
 
 
 class PostgresDB(GenericDB):
-    def __init__(self, usr, pwd, dsn, app_name='ae_db-pg', ssl_args=None, debug_level=DEBUG_LEVEL_DISABLED):
+    def __init__(self, credentials, features=None, app_name='ae_db-pg', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of postgres database object
-        :param usr:         user name.
-        :param pwd:         user password.
-        :param dsn:         database name and optionally host address (separated with a @ character).
+        :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
+                            password, DSN=database name and optionally host address (separated with a @ character) and
+                            SslArgs=dict of SSL arguments (sslmode, sslrootcert, sslcert, sslkey).
+        :param features:    optional list of features (currently not used for databases).
         :param app_name:    application name (shown in the server DB session).
-        :param ssl_args:    dict of SSL arguments sslmode, sslrootcert, sslcert, sslkey.
         :param debug_level: debug level.
         """
-        super(PostgresDB, self).__init__(usr=usr, pwd=pwd, dsn=dsn, app_name=app_name, debug_level=debug_level)
-        self._ssl_args = ssl_args
+        super(PostgresDB, self).__init__(credentials, features=features, app_name=app_name, debug_level=debug_level)
+        self._ssl_args = credentials.get('SslArgs')
         # for "named" PEP-0249 sql will be adapted to fit postgres driver "pyformat" sql bind-var/parameter syntax
         self._param_style = 'pyformat'
 

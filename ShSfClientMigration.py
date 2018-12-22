@@ -13,7 +13,8 @@ import pprint
 
 from copy import deepcopy
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint
 from ae_client_validation import add_validation_options, init_validation
 from ae_notification import add_notification_options, init_notification
 from shif import ResBulkFetcher, hotel_and_res_id
@@ -392,26 +393,26 @@ try:
             uprint("SfInterface.find_client(): phone number corrected to {}. Removed chars: {}".format(phone, removed))
         sf_dict['Phone'] = phone
 
-        sf_id, sf_obj = conf_data.sf_conn.find_client(email, phone, sf_dict['FirstName'], sf_dict['LastName'])
+        sf_id, sf_obj = conf_data.used_systems[SDI_SF].connection.find_client(email, phone, sf_dict['FirstName'], sf_dict['LastName'])
         if not sf_id and sf_obj and sf_dict['Email']:
-            sf_id = conf_data.sf_conn.cl_id_by_email(sf_dict['Email'], sf_obj=sf_obj)
+            sf_id = conf_data.used_systems[SDI_SF].connection.cl_id_by_email(sf_dict['Email'], sf_obj=sf_obj)
         if sf_id:
             sf_dict[AI_SF_ID] = sf_id
             existing_client_ids.append(sf_dict)
-            sf_dict[AI_SF_CURR_DATA] = conf_data.sf_conn.cl_field_data(strip_add_info_keys(sf_dict), sf_id,
+            sf_dict[AI_SF_CURR_DATA] = conf_data.used_systems[SDI_SF].connection.cl_field_data(strip_add_info_keys(sf_dict), sf_id,
                                                                        sf_obj=sf_obj)
-            if conf_data.sf_conn.error_msg:
+            if conf_data.used_systems[SDI_SF].connection.error_msg:
                 notification_add_line("SF-FETCH-DATA-ERROR: '{}' of {} ID {}"
-                                      .format(conf_data.sf_conn.error_msg, sf_obj, sf_id), is_error=True)
+                                      .format(conf_data.used_systems[SDI_SF].connection.error_msg, sf_obj, sf_id), is_error=True)
 
-        rec_type_id = conf_data.sf_conn.record_type_id(sf_obj=sf_obj)
+        rec_type_id = conf_data.used_systems[SDI_SF].connection.record_type_id(sf_obj=sf_obj)
         sf_send = strip_add_info_from_sf_data(sf_dict, check_data=True, record_type_id=rec_type_id, obj_type=sf_obj)
         if not sf_send:
             notification_add_line("Skipped Sihot Res-Id {:12} to be sent because of empty/unchanged Sihot guest data={}"
                                   .format(res_id, sh_pp_data))
             continue
 
-        new_sf_id, err_msg, log_msg = conf_data.sf_conn.client_upsert(sf_send, sf_obj)
+        new_sf_id, err_msg, log_msg = conf_data.used_systems[SDI_SF].connection.client_upsert(sf_send, sf_obj)
         if err_msg:
             send_errors += 1
             notification_add_line(("Error {} in {} {} of Sihot Res-Id {:12} with match score {:6.3}"

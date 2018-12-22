@@ -7,7 +7,8 @@
 import datetime
 from traceback import format_exc
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint
 from ae_db import OraDB, PostgresDB
 from ass_sys_data import add_ass_options, init_ass_data
 
@@ -317,7 +318,8 @@ def fix_ass_discrepancies(od):
 add_log_msg("Fetching reservation/occupation data from {} system".format(correct_system), importance=4)
 try:
     if correct_system == 'Acu':
-        sys_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
+        sys_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
+                            DSN=cae.get_option('acuDSN')),
                        app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
         err_msg = sys_db.connect()
         if not err_msg:
@@ -338,8 +340,9 @@ try:
                                     " order by ARO_EXP_ARRIVE desc",  # order to have old room last for RM
                                     bind_vars=dict(beg=date_from, till=date_till, days=max_days_diff))
     else:
-        sys_db = PostgresDB(cae.get_option('assUser'), cae.get_option('assPassword'), cae.get_option('assDSN'),
-                            app_name=cae.app_name(), ssl_args=cae.get_config('assSslArgs'),
+        sys_db = PostgresDB(dict(User=cae.get_option('assUser'), Password=cae.get_option('assPassword'),
+                                 DSN=cae.get_option('assDSN'), SslArgs=cae.get_config('assSslArgs')),
+                            app_name=cae.app_name(),
                             debug_level=cae.get_option('debugLevel'))
         err_msg = sys_db.connect()
         if not err_msg:
@@ -369,7 +372,7 @@ try:
     # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
     # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
     for chunk_beg, chunk_end in date_range_chunks():
-        chunk_rows = res_search.search(from_date=chunk_beg, to_date=chunk_end, flags=search_flags, scope=search_scope)
+        chunk_rows = res_search.search_res(from_date=chunk_beg, to_date=chunk_end, flags=search_flags, scope=search_scope)
         if chunk_rows and isinstance(chunk_rows, str):
             add_log_msg("Sihot.PMS reservation search error: {}".format(chunk_rows), is_error=True, importance=3)
         elif not chunk_rows or not isinstance(chunk_rows, list):

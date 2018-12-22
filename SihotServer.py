@@ -43,9 +43,9 @@ sys.path.append(os.path.dirname(__file__))
 
 from bottle import default_app, request, response, static_file, template, run
 
-from sys_data_ids import SDI_SF
+from sys_data_ids import SDI_SF, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_sys_data import FAD_FROM
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint
 from sfif import field_from_converters
 from shif import ResSender
 from ass_sys_data import add_ass_options, init_ass_data

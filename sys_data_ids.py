@@ -1,13 +1,41 @@
 """
-System Data IDs
+System Data IDs, needed credentials and Features
 """
 
-SDI_ASS = 'As'
-SDI_AC = 'Ac'
-SDI_SF = 'Sf'
-SDI_SH = 'Sh'   # Sihot Interfaces
-# SDI_SK = 'Sk'   # Sihot Kernel Interfaces
-# SDI_SW = 'Sw'   # Sihot Web interfaces
+SDI_ASS = 'Ass'                             # AssCache Interfaces
+SDI_ACU = 'Acu'                             # Acumen Interfaces
+SDI_SF = 'Sf'                               # Salesforce Interfaces
+SDI_SH = 'Sh'                               # Sihot Interfaces
+
+SYS_CRED_ITEMS = ['User', 'Password', 'DSN', 'Token', 'SslArgs', 'ServerIP']
+SYS_CRED_NEEDED = {SDI_ASS: tuple(SYS_CRED_ITEMS[:3]),
+                   SDI_ACU: tuple(SYS_CRED_ITEMS[:3]),
+                   SDI_SF: tuple(SYS_CRED_ITEMS[:2] + SYS_CRED_ITEMS[3:4]),
+                   SDI_SH: tuple(SYS_CRED_ITEMS[5:6]),
+                   }
+
+SDF_SF_SANDBOX = 'sfIsSandbox'
+SDF_SH_KERNEL_PORT = 'shServerKernelPort'   # Sihot Kernel Interfaces
+SDF_SH_WEB_PORT = 'shServerPort'            # Sihot Web interfaces
+SDF_SH_CLIENT_PORT = 'shClientPort'         # Sihot Server client port
+SDF_SH_TIMEOUT = 'shTimeout'
+SDF_SH_XML_ENCODING = 'shXmlEncoding'
+SDF_SH_USE_KERNEL_FOR_CLIENT = 'shUseKernelForClient'
+SDF_SH_USE_KERNEL_FOR_RES = 'shUseKernelForRes'
+SDF_SH_CLIENT_MAP = 'shMapClient'
+SDF_SH_RES_MAP = 'shMapRes'
+SYS_FEAT_ITEMS = [SDF_SF_SANDBOX,
+                  SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
+                  SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_CLIENT_MAP, SDF_SH_RES_MAP,
+                  ]
+
+
+# supported debugging levels
+DEBUG_LEVEL_DISABLED = 0
+DEBUG_LEVEL_ENABLED = 1
+DEBUG_LEVEL_VERBOSE = 2
+DEBUG_LEVEL_TIMESTAMPED = 3
+debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
 
 
 # OTHER GLOBAL SYSTEM CONSTANTS

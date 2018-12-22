@@ -7,11 +7,13 @@ from textwrap import wrap
 import pprint
 from typing import Union
 
-from sys_data_ids import SDI_SH
-from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, FAD_FROM, FAD_ONTO, \
-    Record, Records, Value, current_index, set_current_index, field_name_idx_path, LIST_TYPES
-from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
-from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder, elem_to_attr,
+from sys_data_ids import (SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED,
+                          SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
+                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
+from ae_sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, FAD_FROM, FAD_ONTO, LIST_TYPES,
+                         Record, Records, Value,  current_index, set_current_index, field_name_idx_path)
+from ae_console_app import uprint, full_stack_trace
+from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
 
 SH_DATE_FORMAT = '%Y-%m-%d'
@@ -147,7 +149,7 @@ MAP_WEB_RES = \
         ('ARESLIST/', ),
         ('RESERVATION/', ),
         # ### main reservation info: orderer, status, external booking references, room/price category, ...
-        # ('RESERVATION' + ELEM_PATH_SEP + 'RES-HOTEL', 'ResHotelId'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'RES-HOTEL', 'ResHotelId'),
         ('RESERVATION' + ELEM_PATH_SEP + 'RES-NR', 'ResId', None,
          lambda f: not f.val()),
         ('RESERVATION' + ELEM_PATH_SEP + 'SUB-NR', 'ResSubId', None,
@@ -163,7 +165,9 @@ MAP_WEB_RES = \
         # ('GUEST-ID', 'ShId', None,
         #  lambda f: not f.rfv('ShId')},
         ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-ID', 'ShId', None,
-         lambda f: not f.val() and not f.rfv('ShId')),
+         lambda f: not f.val()),
+        # GUEST-OBJID used in SS/RES-SEARCH responses instead of GUEST-ID for parsing orderer - always hide in xml build
+        ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-OBJID', 'ShId'),
         ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'AcId'),
         ('VOUCHERNUMBER', 'ResVoucherNo', None,
          lambda f: f.ina(ACTION_DELETE)),
@@ -362,41 +366,49 @@ USE_KERNEL_FOR_RES_DEF = False
 MAP_RES_DEF = MAP_WEB_RES
 
 
+class ShInterface:
+    def __init__(self, credentials, features=None, app_name='', debug_level=DEBUG_LEVEL_DISABLED):
+        self.credentials = credentials
+        self.features = features or list()
+        self.app_name = app_name
+        self.debug_level = debug_level
+
+
 def add_sh_options(cae, client_port=None, add_kernel_port=False, add_maps_and_kernel_usage=False):
     cae.add_option('shServerIP', "IP address of the Sihot WEB/KERNEL server", 'localhost', 'i')
-    cae.add_option('shServerPort', "IP port of the Sihot WEB interface", 14777, 'w')
+    cae.add_option(SDF_SH_WEB_PORT, "IP port of the Sihot WEB interface", 14777, 'w')
     if client_port:
         # default is 14773 for Acumen and 14774 for the Sihot side (always the next higher port number)
-        cae.add_option('shClientPort', "IP port of SXML interface provided by this server for Sihot", client_port, 'm')
+        cae.add_option(SDF_SH_CLIENT_PORT, "IP port of SXML interface of this server for Sihot", client_port, 'm')
     if add_kernel_port:
-        # e.g. for GuestBulkFetcher we need also the kernel interface port of Sihot
-        cae.add_option('shServerKernelPort', "IP port of the KERNEL interface of the Sihot server", 14772, 'k')
-    cae.add_option('shTimeout', "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
-    cae.add_option('shXmlEncoding', "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
+        # e.g. for GuestBulkFetcher we need also the kernel interface server port of Sihot
+        cae.add_option(SDF_SH_KERNEL_PORT, "IP port of the KERNEL interface of the Sihot server", 14772, 'k')
+    cae.add_option(SDF_SH_TIMEOUT, "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
+    cae.add_option(SDF_SH_XML_ENCODING, "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
     if add_maps_and_kernel_usage:
-        cae.add_option('useKernelForClient', "Used interface for clients (0=web, 1=kernel)", USE_KERNEL_FOR_CLIENTS_DEF,
-                       'g', choices=(0, 1))
-        cae.add_option('mapClient', "Guest/Client mapping of xml to db items", MAP_CLIENT_DEF, 'm')
-        cae.add_option('useKernelForRes', "Used interface for reservations (0=web, 1=kernel)", USE_KERNEL_FOR_RES_DEF,
-                       'z', choices=(0, 1))
-        cae.add_option('mapRes', "Reservation mapping of xml to db items", MAP_RES_DEF, 'n')
+        cae.add_option(SDF_SH_USE_KERNEL_FOR_CLIENT, "Used interface for clients (0=web, 1=kernel)",
+                       USE_KERNEL_FOR_CLIENTS_DEF, 'g', choices=(0, 1))
+        cae.add_option(SDF_SH_CLIENT_MAP, "Guest/Client mapping of xml to db items", MAP_CLIENT_DEF, 'm')
+        cae.add_option(SDF_SH_USE_KERNEL_FOR_RES, "Used interface for reservations (0=web, 1=kernel)",
+                       USE_KERNEL_FOR_RES_DEF, 'z', choices=(0, 1))
+        cae.add_option(SDF_SH_RES_MAP, "Reservation mapping of xml to db items", MAP_RES_DEF, 'n')
 
 
 def print_sh_options(cae):
-    uprint("Sihot server IP/WEB-interface-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'))
-    client_port = cae.get_option('shClientPort')
+    uprint("Sihot server IP/WEB-interface-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT))
+    client_port = cae.get_option(SDF_SH_CLIENT_PORT)
     if client_port:
         ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
         uprint("Sihot client IP/port for listening:", ip_addr, client_port)
-    kernel_port = cae.get_option('shServerKernelPort')
+    kernel_port = cae.get_option(SDF_SH_KERNEL_PORT)
     if kernel_port:
         uprint("Sihot server KERNEL-interface-port:", kernel_port)
-    uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+    uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
 
 
-def guest_data(cae, obj_id):
-    guest_search = GuestSearch(cae)
-    ret = guest_search.get_guest(obj_id)
+def client_data(cae, obj_id):
+    client_fetch = ClientFetch(cae)
+    ret = client_fetch.fetch_client(obj_id)
     return ret
 
 
@@ -500,8 +512,8 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
         # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
         # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
         for chunk_beg, chunk_end in date_range_chunks(date_from, date_till, max_los):
-            chunk_rows = rs.search(from_date=chunk_beg, to_date=chunk_end, flags=search_flags,
-                                   scope=search_scope)
+            chunk_rows = rs.search_res(from_date=chunk_beg, to_date=chunk_end, flags=search_flags,
+                                       scope=search_scope)
             if chunk_rows and isinstance(chunk_rows, str):
                 err_msg = "Sihot.PMS reservation search error: {}".format(chunk_rows)
                 break
@@ -565,6 +577,7 @@ def _strip_err_msg(error_msg):
     return error_msg[pos1: max(pos2, pos3)]
 
 
+'''
 class OldGuestSearchResponse(SihotXmlParser):
     def __init__(self, cae, ret_elem_names=None, key_elem_name=None):
         """
@@ -643,6 +656,7 @@ class OldGuestSearchResponse(SihotXmlParser):
                     self.ret_elem_values.append(values)
         # for completeness call also SihotXmlParser.end() and FldMapXmlParser.end()
         return super().end(self._elem_fld_map_parser.end(tag))
+'''
 
 
 class FldMapXmlParser(SihotXmlParser):
@@ -654,7 +668,7 @@ class FldMapXmlParser(SihotXmlParser):
 
         # create field data parsing record and mapping dict for all elements having a field value
         self._rec = Record(system=SDI_SH, direction=FAD_FROM).add_system_fields(elem_map)
-        self.elem_fld_map = self._rec.system_fields
+        self.elem_fld_map = self._rec.sys_name_field_map
 
     def clear_rec(self):
         self._rec.clear_vals(system=self._rec.system, direction=self._rec.direction)
@@ -689,26 +703,28 @@ class FldMapXmlParser(SihotXmlParser):
                 self._rec.set_val(self._current_data, *idx_path, system=SDI_SH, direction=FAD_FROM,
                                   use_curr_idx=Value((1, )))
         self._collected_fields = list()
-        super(FldMapXmlParser, self).end(tag)
+
         for elem_name, *_ in self._elem_map:
             if elem_name == '/' + tag:
                 self._rec.set_current_system_index(tag, ELEM_PATH_SEP)
+
+        return super(FldMapXmlParser, self).end(tag)
 
 
 class ClientFromSihot(FldMapXmlParser):
     def __init__(self, cae, elem_map=MAP_CLIENT_DEF):
         super(ClientFromSihot, self).__init__(cae, elem_map)
-        self.guest_list = Records()
+        self.client_list = Records()
 
     # XMLParser interface
 
     def end(self, tag):
-        super(ClientFromSihot, self).end(tag)
-        if tag == 'GUEST':  # using tag arg here because self._curr_tag got reset by super method of end()
+        if tag == 'GUEST-PROFILE':
             rec = self._rec.copy(deepness=-1)
             rec.pull(SDI_SH)
-            self.guest_list.append(rec)
+            self.client_list.append(rec)
             self.clear_rec()
+        return super(ClientFromSihot, self).end(tag)
 
 
 class ResFromSihot(FldMapXmlParser):
@@ -719,14 +735,15 @@ class ResFromSihot(FldMapXmlParser):
     # XMLParser interface
 
     def end(self, tag):
-        super(ResFromSihot, self).end(tag)
-        if tag == 'RESERVATION':  # using tag because self._curr_tag got reset by super method of end()
+        if tag == 'RESERVATION':
             rec = self._rec.copy(deepness=-1)
             rec.pull(SDI_SH)
             self.res_list.append(rec)
             self.clear_rec()
+        return super(ResFromSihot, self).end(tag)
 
 
+'''
 class GuestSearchResponse(FldMapXmlParser):
     def __init__(self, cae, ret_elem_names=None, key_elem_name=None):
         """
@@ -794,97 +811,95 @@ class GuestSearchResponse(FldMapXmlParser):
                                                    field.val(system=SDI_SH, direction=FAD_FROM))
                     self.ret_elem_values.append(values)
         return super().end(tag)
+'''
 
 
-class GuestSearch(SihotXmlBuilder):
+class ClientFetch(SihotXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae, use_kernel=True)
 
-    def get_guest(self, obj_id):
-        """ return dict with guest data OR str with error message in case of error.
+    def fetch_client(self, obj_id):
+        """ return Record with guest data OR str with error message in case of error.
         """
-        msg = "GuestSearch.get_guest({}) ".format(obj_id)
         self.beg_xml(operation_code='GUEST-GET')
         self.add_tag('GUEST-PROFILE', self.new_tag('OBJID', obj_id))
         self.end_xml()
 
-        rp = GuestSearchResponse(self.cae)
-        err_msg = self.send_to_server(response_parser=rp)
-        if not err_msg and self.response:
-            rec_or_err = self.response.ret_elem_values[0]
-            self.cae.dprint(msg + "xml='{}'; rec={}".format(self.xml, rec_or_err),
-                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        else:
-            rec_or_err = msg + "error='{}'".format(err_msg)
-        return rec_or_err
+        err_msg = self.send_to_server(response_parser=ClientFromSihot(self.cae))
+        if err_msg or not self.response:
+            err_msg = "fetch_client({}) error='{}'".format(obj_id, err_msg or "response is empty")
+        elif len(self.response.client_list) > 1:
+            self.cae.dprint("fetch_client({}): multiple clients found".format(obj_id))
 
-    def get_guest_nos_by_matchcode(self, matchcode, exact_matchcode=True):
-        search_for = {'MATCHCODE': matchcode,
-                      'FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
-                      }
-        return self.search_guests(search_for, ['guest_nr'])
+        return err_msg or self.response.client_list[0]
 
-    def get_objid_by_guest_no(self, guest_no):
-        search_for = {'GUEST-NR': guest_no,
-                      'FLAGS': 'FIND-ALSO-DELETED-GUESTS',
-                      }
-        ret = self.search_guests(search_for, ['objid'])
-        return ret[0] if len(ret) > 0 else None
 
-    def get_objids_by_guest_name(self, name):
-        forename, surname = name.split(' ', maxsplit=1)
-        search_for = {'NAME-1': surname,
-                      'NAME-2': forename,
-                      'FLAGS': 'FIND-ALSO-DELETED-GUESTS',
-                      }
-        return self.search_guests(search_for, ['objid'])
+class ClientSearch(SihotXmlBuilder):
+    def __init__(self, cae):
+        super().__init__(cae, use_kernel=True)
 
-    def get_objids_by_guest_names(self, surname, forename):
-        search_for = {'NAME-1': surname,
-                      'NAME-2': forename,
-                      'FLAGS': 'FIND-ALSO-DELETED-GUESTS',
-                      }
-        return self.search_guests(search_for, ['objid'])
+    def search_clients(self, matchcode='', exact_matchcode=True, name='', forename='', surname='',
+                       guest_no='', email='', client_type='', flags='FIND-ALSO-DELETED-GUESTS', order_by='', limit=0,
+                       field_names=('ShId', )
+                       ) -> Union[str, list, Records]:
+        self.beg_xml(operation_code='GUEST-SEARCH')
+        search_for = ""
+        if matchcode:
+            search_for += self.new_tag('MATCHCODE', matchcode)
+            if exact_matchcode:
+                flags += ';' + 'MATCH-EXACT-MATCHCODE'
+        if name:
+            forename, surname = name.split(' ', maxsplit=1)
+        if forename:
+            search_for += self.new_tag('NAME-2', forename)
+        if surname:
+            search_for += self.new_tag('NAME-1', surname)
 
-    def get_objids_by_email(self, email):
-        search_for = {'EMAIL-1': email,
-                      'FLAGS': 'FIND-ALSO-DELETED-GUESTS',
-                      }
-        return self.search_guests(search_for, ['objid'])
+        if guest_no:    # agencies: 'OTS'=='31', 'SF'=='62', 'TCAG'=='12', 'TCRENT'=='19'
+            search_for += self.new_tag('GUEST-NR', guest_no)
+        if email:
+            search_for += self.new_tag('EMAIL-1', email)
+        if client_type:
+            search_for += self.new_tag('T-GUEST', client_type)
 
-    def get_objids_by_matchcode(self, matchcode, exact_matchcode=True):
-        search_for = {'MATCHCODE': matchcode,
-                      'FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
-                      }
-        return self.search_guests(search_for, ['objid'])
+        if flags:
+            search_for += self.new_tag('FLAGS', flags)
+        if order_by:    # e.g. 'GUEST-NR'
+            search_for += self.new_tag('SORT', order_by)
+        if limit:
+            search_for += self.new_tag('MAX-ELEMENTS', limit)
 
-    def get_objid_by_matchcode(self, matchcode, exact_matchcode=True):
-        search_for = {'MATCHCODE': matchcode,
-                      'FLAGS': 'FIND-ALSO-DELETED-GUESTS' + (';MATCH-EXACT-MATCHCODE' if exact_matchcode else ''),
-                      }
-        ret = self.search_guests(search_for, [':objid'], key_elem_name='matchcode')
-        if ret:
-            return self._check_and_get_objid_of_matchcode_search(ret, matchcode, exact_matchcode)
+        self.add_tag('GUEST-SEARCH-REQUEST', search_for)
+        self.end_xml()
 
-    def search_agencies(self):
-        search_for = {'T-GUEST': 7,     # 1=Guest, 7=Company (numbers wrong documented in Sihot KERNEL PDF)
-                      'FLAGS': 'FIND-ALSO-DELETED-GUESTS',
-                      }
-        return self.search_guests(search_for, ['OBJID', 'MATCHCODE'])
+        err_msg = self.send_to_server(response_parser=ClientFromSihot(self.cae))
+        if err_msg or not self.response:
+            return "search_clients({}) error='{}'".format(self._xml, err_msg or "response not instantiated")
 
-    def search_guests(self, search_for, ret_elem_names, key_elem_name=None):
+        records = self.response.client_list
+        if field_names:
+            if len(field_names) == 1:
+                records = [rec.val(field_names[0]) for rec in records]
+            else:
+                records = records.copy(deepness=2, filter_func=lambda f: f.name() not in field_names)
+
+        return records
+
+    '''
+    def search_clients_old(self, search_for, ret_elem_names, key_elem_name=None):
         """ return dict with search element/attribute value as the dict key if len(ret_elem_names)==1 and if
             ret_elem_names[0][0]==':' (in this case key_elem_name has to provide the search element/attribute name)
             OR return list of values if len(ret_elem_names) == 1
             OR return list of dict with ret_elem_names keys if len(ret_elem_names) >= 2
             OR return None in case of error.
         """
-        msg = "GuestSearch.search_guests({}, {}, {})".format(search_for, ret_elem_names, key_elem_name)
+        msg = "ClientSearch.search_clients({}, {}, {})".format(search_for, ret_elem_names, key_elem_name)
         self.beg_xml(operation_code='GUEST-SEARCH')
         self.add_tag('GUEST-SEARCH-REQUEST', ''.join([self.new_tag(e, v) for e, v in search_for.items()]))
         self.end_xml()
 
-        rp = GuestSearchResponse(self.cae, ret_elem_names, key_elem_name=key_elem_name)
+        # rp = GuestSearchResponse(self.cae, ret_elem_names, key_elem_name=key_elem_name)
+        rp = ClientFromSihot(self.cae)
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
             ret = self.response.ret_elem_values
@@ -893,17 +908,18 @@ class GuestSearch(SihotXmlBuilder):
             uprint(msg + " error: {}".format(err_msg))
             ret = None
         return ret
+    '''
 
-    @staticmethod
-    def _check_and_get_objid_of_matchcode_search(ret_elem_values, key_elem_value, exact_matchcode):
-        s = '\n   ...'
-        if key_elem_value in ret_elem_values:
-            ret = ret_elem_values[key_elem_value]
-        else:
-            ret = s + "OBJID of matchcode {} not found!!!".format(key_elem_value)
-        if len(ret_elem_values) > 1 and not exact_matchcode:
-            ret += s + "Found more than one guest - full Response (all returned values):" + s + str(ret_elem_values)
-        return ret
+    def client_id_by_matchcode(self, matchcode):
+        ids_or_err = self.search_clients(matchcode=matchcode)
+        if isinstance(ids_or_err, str):
+            return ids_or_err
+
+        cnt = len(ids_or_err)
+        if cnt > 1:
+            self.cae.dprint("client_id_by_matchcode({}): multiple clients found".format(matchcode))
+        if cnt:
+            return ids_or_err[0]        # else RETURN None
 
 
 class ResFetch(SihotXmlBuilder):
@@ -923,6 +939,11 @@ class ResFetch(SihotXmlBuilder):
         err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
         # WEB interface return codes (RC): 29==res not found, 1==internal error - see 14.3.5 in WEB interface doc
 
+        if err_msg or not self.response:
+            err_msg = "fetch_res({}) error='{}'".format(self._xml, err_msg or "response is empty")
+        elif len(self.response.res_list) > 1:
+            self.cae.dprint("fetch_res({}): multiple reservations found".format(self._xml))
+
         return err_msg or self.response.res_list[0]
 
     def fetch_by_gds_no(self, ho_id, gds_no, scope='USEISODATE'):
@@ -933,8 +954,8 @@ class ResFetch(SihotXmlBuilder):
 
 
 class ResSearch(SihotXmlBuilder):
-    def search(self, hotel_id=None, from_date=datetime.date.today(), to_date=datetime.date.today(),
-               matchcode=None, name=None, gdsno=None, flags='', scope=None, guest_id=None):
+    def search_res(self, hotel_id=None, from_date=datetime.date.today(), to_date=datetime.date.today(),
+                   matchcode=None, name=None, gdsno=None, flags='', scope=None, guest_id=None):
         self.beg_xml(operation_code='RES-SEARCH')
         if hotel_id:
             self.add_tag('ID', hotel_id)
@@ -957,8 +978,6 @@ class ResSearch(SihotXmlBuilder):
             self.add_tag('CENTRAL-GUEST-ID', guest_id)  # this is not filtering nothing (tried GID)
         self.end_xml()
 
-        err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
-
         """
         20.5 Return Codes (RC):
 
@@ -970,6 +989,9 @@ class ResSearch(SihotXmlBuilder):
             4  == The given search data is not valid
             5  == An (internal) error occurred when searching for reservations.
         """
+        err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
+        if err_msg or not self.response:
+            err_msg = "search_res({}) error='{}'".format(self._xml, err_msg or "response is empty")
         return err_msg or self.response.res_list
 
 
@@ -978,7 +1000,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         super().__init__(cae, use_kernel=use_kernel)
 
         self.action = ''
-        self.elem_map = deepcopy(elem_map or cae.get_option('shMapResWeb'))
+        self.elem_map = deepcopy(elem_map or cae.get_option(SDF_SH_RES_MAP))
         self.elem_fld_rec = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(self.elem_map)
 
     # --- rec helpers
@@ -987,7 +1009,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         self.elem_fld_rec.clear_vals()
         for k in rec.leaf_indexes():
             if k[0] in self.elem_fld_rec:
-                self.elem_fld_rec.set_val(rec[k].val(), *k, system='', direction='')
+                self.elem_fld_rec.set_val(rec.val(k), *k, system='', direction='')
 
     def prepare_map_xml(self, rec, include_empty_values=True):
         self.fill_elem_fld_rec(rec)
@@ -1068,8 +1090,8 @@ class FldMapXmlBuilder(SihotXmlBuilder):
 class ClientToSihot(FldMapXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae,
-                         use_kernel=cae.get_option('useKernelForClient'),
-                         elem_map=cae.get_option('mapClient') or MAP_KERNEL_CLIENT)
+                         use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT),
+                         elem_map=cae.get_option(SDF_SH_CLIENT_MAP) or MAP_KERNEL_CLIENT)
 
     def _prepare_guest_xml(self, rec, fld_name_suffix=''):
         if not self.action:
@@ -1120,8 +1142,8 @@ class ClientToSihot(FldMapXmlBuilder):
 class ResToSihot(FldMapXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae,
-                         use_kernel=cae.get_option('useKernelForRes'),
-                         elem_map=cae.get_config('shMapResWeb') or MAP_WEB_RES)
+                         use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_RES),
+                         elem_map=cae.get_config(SDF_SH_RES_MAP) or MAP_WEB_RES)
         self._warning_frags = self.cae.get_config('warningFragments') or list()  # list of warning text fragments
         self._warning_msgs = ""
         self._gds_errors = dict()
@@ -1352,17 +1374,14 @@ class GuestBulkFetcher(BulkFetcherBase):
     """
     WIP/NotUsed/NoTests: the problem is with GUEST-SEARCH is that there is no way to bulk fetch all guests
     because the search criteria is not providing range search for to split in slices. Fetching all 600k clients
-    is resulting in a timeout error after 30 minutes (the Sihot interface 'shTimeout' option value)
+    is resulting in a timeout error after 30 minutes (the Sihot interface SDF_SH_TIMEOUT/'shTimeout' option value)
     """
     def fetch_all(self):
         cae = self.cae
         self.all_rows = list()
         try:
-            guest_search = GuestSearch(cae)
-            search_criteria = dict(FLAGS='FIND-ALSO-DELETED-GUESTS', SORT='GUEST-NR')
-            search_criteria['MAX-ELEMENTS'] = 600000
             # MATCH-SM (holding the Salesforce/SF client ID) is not available in Kernel GUEST-SEARCH (only GUEST-GET)
-            self.all_rows = guest_search.search_guests(search_criteria, ['MATCHCODE', 'OBJID', 'MATCH-SM'])
+            self.all_rows = ClientSearch(cae).search_clients(order_by='GUEST-NR', limit=600000)
         except Exception as ex:
             uprint(" ***  Sihot interface guest bulk fetch exception:", str(ex))
             print_exc()

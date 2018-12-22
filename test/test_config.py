@@ -1,17 +1,17 @@
 class TestTourOps:
-    def test_missing_agencies_in_sihot(self, db_connected, guest_search):
+    def test_missing_agencies_in_sihot(self, db_connected, client_search):
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
                             "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
-        ags = guest_search.search_agencies()
+        ags = client_search.search_clients(client_type='7', field_names=('AcId', 'ShId'))
 
         failures = list()
         for row in rows:
             assert row[0] > 0, "Acumen Agency object id is not specified for matchcode {}".format(row[1])
             assert row[1], "Acumen Agency match code is not specified for obj-id {}".format(row[0])
             for sha in ags:
-                if sha['OBJID'] == str(row[0]) and sha['MATCHCODE'] == row[1]:
+                if sha['ShId'] == str(row[0]) and sha['AcId'] == row[1]:
                     break
             else:
                 failures.append("Acumen Object-ID {} or Matchcode {} not found in Sihot agencies"
@@ -23,8 +23,8 @@ class TestTourOps:
                 print(f)
         assert not failures
 
-    def test_missing_agencies_in_acumen(self, guest_search, db_connected):
-        ags = guest_search.search_agencies()
+    def test_missing_agencies_in_acumen(self, client_search, db_connected):
+        ags = client_search.search_clients(client_type='7', field_names=('AcId', 'ShId'))
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
                             "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
         rows = db_connected.fetch_all()
@@ -32,15 +32,15 @@ class TestTourOps:
 
         failures = list()
         for sha in ags:
-            if not sha['MATCHCODE']:
+            if not sha['AcId']:
                 continue            # skip guests wrongly configured (missing Matchcode)
-            assert sha['OBJID'], "Sihot Agency object id is not specified for matchcode {}".format(sha['MATCHCODE'])
+            assert sha['ShId'], "Sihot Agency object id is not specified for matchcode {}".format(sha['MATCHCODE'])
             for row in rows:
-                if sha['OBJID'] == str(row[0]) and sha['MATCHCODE'] == row[1]:
+                if sha['ShId'] == str(row[0]) and sha['AcId'] == row[1]:
                     break
             else:
                 failures.append("Sihot Object-ID {} or Matchcode {} not found in Acumen agencies"
-                                .format(sha['OBJID'], sha['MATCHCODE']))
+                                .format(sha['ShId'], sha['AcId']))
         if failures:
             print("Sihot agencies", ags)
             print("Acumen agencies", rows)
@@ -48,51 +48,43 @@ class TestTourOps:
                 print(f)
         assert not failures
 
-    def test_get_thomas_cook_ag_objid_by_matchcode(self, guest_search, db_connected):
+    def test_get_thomas_cook_ag_objid_by_matchcode(self, client_search, db_connected):
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
         rows = db_connected.fetch_all()
         db_connected.close()
         obj_id = str(rows[0][0])
         mc = rows[0][1]                                     # == 'TCAG'
         assert mc == 'TCAG'
-        ret = guest_search.get_objid_by_matchcode(mc)       # tk rental (AG)
+        ret = client_search.client_id_by_matchcode(mc)      # tk rental (AG)
         assert ret == obj_id                                # == '20'
 
-    def test_get_thomas_cook_rental_objid_by_matchcode(self, guest_search, db_connected):
+    def test_get_thomas_cook_rental_objid_by_matchcode(self, client_search, db_connected):
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
         rows = db_connected.fetch_all()
         db_connected.close()
         obj_id = str(rows[0][0])
         mc = rows[0][1]                                     # == 'TCRENT'
         assert mc == 'TCRENT'
-        ret = guest_search.get_objid_by_matchcode(mc)       # TK rentals
+        ret = client_search.client_id_by_matchcode(mc)      # TK rentals
         assert ret == obj_id                                # == '27'
 
-    def test_config_data_get_thomas_cook_agency(self, guest_search, config_data):
+    def test_config_data_get_thomas_cook_agency(self, client_search, config_data):
         mc = config_data.ro_agency_matchcode('TK')
-        obj_id = guest_search.get_objid_by_matchcode(mc)
+        obj_id = client_search.client_id_by_matchcode(mc)
         objid = str(config_data.ro_agency_objid('TK'))
         assert obj_id == objid
 
-    def test_get_thomas_cook_by_surname(self, guest_search):
-        obj_ids = guest_search.get_objids_by_guest_names('Thomas Cook Northern Europe', '')
-        obj_id = guest_search.get_objid_by_matchcode('TCRENT')      # TK rentals
+    def test_get_thomas_cook_by_surname(self, client_search):
+        obj_ids = client_search.search_clients(surname='Thomas Cook Northern Europe')
+        obj_id = client_search.client_id_by_matchcode('TCRENT')      # TK rentals
         assert obj_ids[0] == obj_id
 
-    def test_get_objids_by_email(self, guest_search):
-        obj_ids = guest_search.get_objids_by_email('info@opentravelservice.com')
-        obj_id = guest_search.get_objid_by_matchcode('OTS')         # Open Travel Service AG
+    def test_get_objids_by_email(self, client_search):
+        obj_ids = client_search.search_clients(email='info@opentravelservice.com')
+        obj_id = client_search.client_id_by_matchcode('OTS')         # Open Travel Service AG
         assert obj_id in obj_ids
-        obj_id = guest_search.get_objid_by_matchcode('SF')          # strange: Sumar Ferdir has same email
+        obj_id = client_search.client_id_by_matchcode('SF')          # strange: Sumar Ferdir has same email
         assert obj_id in obj_ids
-
-    def test_get_objid_by_guest_no(self, guest_search):
-        obj_id1 = guest_search.get_objid_by_guest_no(31)
-        obj_id2 = guest_search.get_objid_by_matchcode('OTS')        # Open Travel Service AG
-        assert obj_id1 == obj_id2
-        obj_id1 = guest_search.get_objid_by_guest_no(62)
-        obj_id2 = guest_search.get_objid_by_matchcode('SF')         # Sumar Ferdir
-        assert obj_id1 == obj_id2
 
 
 class TestSystem:

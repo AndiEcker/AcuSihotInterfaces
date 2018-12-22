@@ -1,5 +1,7 @@
 import pprint
-from ae_console_app import ConsoleApp, DEBUG_LEVEL_VERBOSE
+
+from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp
 from simple_salesforce import Salesforce, SalesforceResourceNotFound
 from sfif import add_sf_options
 

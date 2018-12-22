@@ -4,12 +4,13 @@ Acumen interface constants and helpers
 import datetime
 from copy import deepcopy
 
-from ae_console_app import uprint, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint
 from ae_db import OraDB
 from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM
 from shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
 from sxmlif import SihotXmlBuilder
-from sys_data_ids import SDI_AC
+from sys_data_ids import SDI_ACU
 
 ACU_DEF_USR = 'SIHOT_INTERFACE'
 ACU_DEF_DSN = 'SP.TEST'
@@ -157,7 +158,8 @@ class AcuDbRows:
 
         self._last_fetch = None     # store fetch_from_acu timestamp
 
-        self.ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
+        self.ora_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
+                                 DSN=cae.get_option('acuDSN')),
                             app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
         err_msg = self.ora_db.connect()
         if err_msg:
@@ -169,7 +171,7 @@ class AcuDbRows:
         self.cae = cae
         elem_col_map = deepcopy(elem_col_map)
         self.elem_col_map = elem_col_map
-        self.use_kernel_interface = cae.get_option('useKernelForRes') if use_kernel is None else use_kernel
+        self.use_kernel_interface = cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) if use_kernel is None else use_kernel
 
         self.fix_fld_vals = dict()
         self.acu_col_names = list()  # acu_col_names and acu_col_expres need to be in sync
@@ -239,7 +241,7 @@ class AcuClientToSihot(ClientToSihot):
 
         self.fld_col_rec = self.elem_fld_rec\
             .copy()\
-            .set_env(system=SDI_AC, direction=FAD_FROM)\
+            .set_env(system=SDI_ACU, direction=FAD_FROM)\
             .add_system_fields(CLI_FIELD_MAP, sys_fld_indexes=field_indexes)
         self.recs = Records()
 
@@ -253,16 +255,16 @@ class AcuClientToSihot(ClientToSihot):
         if acu_id:
             where_group_order += "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
 
-        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_AC), where_group_order)
+        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_ACU), where_group_order)
 
         self.recs = Records()
         if not err_msg:
-            rows = self.acu_db.fetch_all_from_acu(self.fld_col_rec.sql_columns(SDI_AC))
+            rows = self.acu_db.fetch_all_from_acu(self.fld_col_rec.sql_columns(SDI_ACU))
             for col_values in rows:
                 rec = self.fld_col_rec.copy(deepness=-1)
                 for col, val in col_values.items():
                     if col in rec:
-                        rec.set_val(val, col, system=SDI_AC, direction=FAD_FROM)
+                        rec.set_val(val, col, system=SDI_ACU, direction=FAD_FROM)
                 self.recs.append(rec)
         return err_msg
 
@@ -332,7 +334,7 @@ class AcuResToSihot(ResToSihot):
 
         self.fld_col_rec = self.elem_fld_rec\
             .copy()\
-            .set_env(system=SDI_AC, direction=FAD_FROM)\
+            .set_env(system=SDI_ACU, direction=FAD_FROM)\
             .add_system_fields(RES_FIELD_MAP, sys_fld_indexes=field_indexes)
 
         self.recs = Records()
@@ -359,15 +361,15 @@ class AcuResToSihot(ResToSihot):
         elif date_range == 'F':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE >= trunc(sysdate)"
 
-        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_AC), where_group_order, hints=hints)
+        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_ACU), where_group_order, hints=hints)
         self.recs = Records()
         if not err_msg:
-            rows = self.acu_db.fetch_all_from_acu(self.fld_col_rec.sql_columns(SDI_AC))
+            rows = self.acu_db.fetch_all_from_acu(self.fld_col_rec.sql_columns(SDI_ACU))
             for col_values in rows:
                 rec = self.fld_col_rec.copy(deepness=-1)
                 for col, val in col_values.items():
                     if col in rec:
-                        rec.set_val(val, col, system=SDI_AC, direction=FAD_FROM)
+                        rec.set_val(val, col, system=SDI_ACU, direction=FAD_FROM)
                 self.recs.append(rec)
 
         return err_msg

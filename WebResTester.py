@@ -1,9 +1,10 @@
 import os
 
-from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import SihotXmlBuilder, ResResponse, ResFetch, ResSearch
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
+from ae_console_app import ConsoleApp, Progress, uprint
+from sxmlif import SihotXmlBuilder, ResResponse
 from acif import add_ac_options, AcuResToSihot
-from shif import add_sh_options
+from shif import add_sh_options, ResFetch, ResSearch
 
 __version__ = '0.3'
 
@@ -23,9 +24,9 @@ cae.add_option('client', 'Test reservations of a client identified with matchcod
 
 
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-       cae.get_option('shServerKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+       cae.get_option(SDF_SH_KERNEL_PORT))
+uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
 
 
 client_code = cae.get_option('client')
@@ -124,7 +125,7 @@ if ho_id and gds_no:
 
     uprint("####  ResSearch .............  ####")
     rfs = ResSearch(cae)
-    ret = rfs.search(hotel_id=ho_id, gdsno=gds_no)
+    ret = rfs.search_res(hotel_id=ho_id, gdsno=gds_no)
     if not isinstance(ret, list):
         uprint("***     ResSearch error", ret)
     else:

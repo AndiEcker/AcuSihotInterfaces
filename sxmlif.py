@@ -5,8 +5,10 @@ import pprint
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, \
+    SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
-from ae_console_app import fix_encoding, uprint, round_traditional, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
+from ae_console_app import fix_encoding, uprint, round_traditional
 from ae_tcp import TcpClient
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
@@ -73,9 +75,9 @@ class SihotXmlParser:  # XMLParser interface
         xml_cleaned = xml
         while True:
             try:
+                self._xml = xml_cleaned
                 self._parser = XMLParser(target=self)
                 self._parser.feed(xml_cleaned)
-                self._xml = xml_cleaned
                 break
             except ParseError as pex:
                 xml_cleaned = fix_encoding(xml_cleaned, try_counter=try_counter, pex=pex,
@@ -351,7 +353,7 @@ class SihotXmlBuilder:
         self._indent = 0
 
     def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
-        self._xml = '<?xml version="1.0" encoding="' + self.cae.get_option('shXmlEncoding').lower() + \
+        self._xml = '<?xml version="1.0" encoding="' + self.cae.get_option(SDF_SH_XML_ENCODING).lower() + \
                     '"?>\n<SIHOT-Document>\n'
         if self.use_kernel_interface:
             self._xml += '<SIHOT-XML-REQUEST>\n'
@@ -378,9 +380,9 @@ class SihotXmlBuilder:
 
     def send_to_server(self, response_parser=None):
         sc = TcpClient(self.cae.get_option('shServerIP'),
-                       self.cae.get_option('shServerKernelPort' if self.use_kernel_interface else 'shServerPort'),
-                       timeout=self.cae.get_option('shTimeout'),
-                       encoding=self.cae.get_option('shXmlEncoding'),
+                       self.cae.get_option(SDF_SH_KERNEL_PORT if self.use_kernel_interface else SDF_SH_WEB_PORT),
+                       timeout=self.cae.get_option(SDF_SH_TIMEOUT),
+                       encoding=self.cae.get_option(SDF_SH_XML_ENCODING),
                        debug_level=self.debug_level)
         self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}"
                         .format(response_parser, self.xml), minimum_debug_level=DEBUG_LEVEL_VERBOSE)

@@ -37,12 +37,14 @@ class TestFldMapXmlParser:
         mp = FldMapXmlParser(console_app_env, self.ELEM_MAP)
         assert len(mp.rec) == 2
         assert mp.elem_fld_map['SYS_FNA'].val() == ''
+        mp.rec.field_items = True
         assert mp.rec['fnA'].root_idx(system=SDI_SH) == ('fnA', )
         assert mp.rec['fnB0sfnA'].root_idx(system=SDI_SH) == ('fnB', 0, 'sfnA')
         assert mp.rec[('fnB', 0, 'sfnB')].root_idx(system=SDI_SH) == ('fnB', 0, 'sfnB')
+        mp.rec.field_items = False
 
         mp.parse_xml(self.XML)
-        assert mp.rec['fnA'].val() == 'fnAV'
+        assert mp.rec.val('fnA') == 'fnAV'
         assert mp.rec.val('fnB', 0, 'sfnA', system=SDI_SH) == 'sfnAV0'
         assert mp.rec.val('fnB', 0, 'sfnB') == ''       # not None because created as template field
         assert mp.rec.val('fnB', 1, 'sfnA') == 'sfnAV1'
@@ -53,13 +55,13 @@ class TestFldMapXmlParser:
 
 class TestGuestData:
     def test_guest_data_2443(self, console_app_env):
-        data = guest_data(console_app_env, 2443)
+        data = client_data(console_app_env, 2443)
         assert data
         assert data['OBJID'] == '2443'
         assert data['MATCHCODE'] == 'G425796'
 
     def test_guest_data_260362(self, console_app_env):
-        data = guest_data(console_app_env, 260362)
+        data = client_data(console_app_env, 260362)
         assert data
         assert data['OBJID'] == '260362'
         assert data['MATCHCODE'] == 'G635189'
@@ -252,7 +254,7 @@ class TestClientFromSihot:
         <OC>GUEST-CREATE</OC>
         <ID>1</ID>
         <TN>1</TN>
-        <GUEST>
+        <GUEST-PROFILE>
             <MATCHCODE>test2</MATCHCODE>
             <PWD>pass56</PWD>
             <ADDRESS></ADDRESS>
@@ -288,7 +290,7 @@ class TestClientFromSihot:
                     <CCHANDLEVALIDUNTIL></CCHANDLEVALIDUNTIL>
                 </CARD>
             </ACARDLIST>
-        </GUEST>
+        </GUEST-PROFILE>
     </SIHOT-Document>'''
 
     def test_attributes(self, console_app_env):
@@ -306,10 +308,10 @@ class TestClientFromSihot:
     def test_elem_map(self, console_app_env):
         xml_parser = ClientFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.guest_list.val(0, 'AcId') == 'test2'
-        assert xml_parser.guest_list.val(0, 'MATCHCODE') == 'test2'
-        assert xml_parser.guest_list.val(0, 'City') == 'city'
-        assert xml_parser.guest_list.val(0, 'CITY') == 'city'
+        assert xml_parser.client_list.val(0, 'AcId') == 'test2'
+        assert xml_parser.client_list.val(0, 'MATCHCODE') == 'test2'
+        assert xml_parser.client_list.val(0, 'City') == 'city'
+        assert xml_parser.client_list.val(0, 'CITY') == 'city'
 
 
 class TestResFromSihot:
@@ -472,26 +474,26 @@ class TestResFromSihot:
     def test_fld_map_matchcode(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_MATCHCODE_EXAMPLE)
-        assert xml_parser.res_list[0]['AcId'].val() == 'test2'
-        assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
-        assert xml_parser.res_list[0][('ResPersons', 0, 'AcId')].val() == 'PersonAcId'
+        assert xml_parser.res_list[0].val('AcId') == 'test2'
+        assert xml_parser.res_list[0].val('RESERVATION.MATCHCODE') == 'test2'
+        assert xml_parser.res_list[0].val('ResPersons', 0, 'AcId') == 'PersonAcId'
         assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcId'
 
     def test_fld_map_big(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.res_list.val(0, 'AcId') == 'test2'
-        assert xml_parser.res_list[0]['AcId'].val() == 'test2'
+        assert xml_parser.res_list[0].val('AcId') == 'test2'
         assert xml_parser.res_list.val(0, 'RESERVATION.MATCHCODE') == 'test2'
-        assert xml_parser.res_list[0]['RESERVATION.MATCHCODE'].val() == 'test2'
+        assert xml_parser.res_list[0].val('RESERVATION.MATCHCODE') == 'test2'
         assert xml_parser.res_list.val(0, 'ResPersons', 0, 'AcId') == 'PersonAcId'
-        assert xml_parser.res_list[0]['ResPersons0AcId'].val() == 'PersonAcId'
+        assert xml_parser.res_list[0].val('ResPersons0AcId') == 'PersonAcId'
         assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcId'
-        assert xml_parser.res_list.value(0, 'ResPersons', 0)['PERSON.MATCHCODE'].val() == 'PersonAcId'
+        assert xml_parser.res_list.value(0, 'ResPersons', 0).val('PERSON.MATCHCODE') == 'PersonAcId'
         assert xml_parser.res_list.val(0, 'ResGdsNo') == '1234567890ABC'
-        assert xml_parser.res_list[0]['ResGdsNo'].val() == '1234567890ABC'
+        assert xml_parser.res_list[0].val('ResGdsNo') == '1234567890ABC'
         assert xml_parser.res_list.val(0, 'GDSNO') == '1234567890ABC'
-        assert xml_parser.res_list[0]['GDSNO'].val() == '1234567890ABC'
+        assert xml_parser.res_list[0].val('GDSNO') == '1234567890ABC'
 
 
 class TestClientToSihot:
@@ -505,22 +507,29 @@ class TestClientToSihot:
         assert cli_to.response.objid
 
 
-class TestGuestSearch:
-    def test_get_guest_with_test_client(self, guest_search, create_test_guest):
-        ret = guest_search.get_guest(create_test_guest.objid)
-        assert guest_search.response.objid == create_test_guest.objid     # OBJID passed only to response (ret is empty)
-        # also MATCHCODE element is in response (and empty in ret): assert ret['MATCHCODE']==create_test_guest.matchcode
-        assert guest_search.response.matchcode == create_test_guest.matchcode
-        assert guest_search.response.objid == create_test_guest.objid
-        assert isinstance(ret, dict)
-        assert ret['NAME-1'] == create_test_guest.surname
-        assert ret['NAME-2'] == create_test_guest.forename
-        assert ret['T-GUEST'] == create_test_guest.guest_type
+class TestClientFetchSearch:
+    def test_fetch_client_with_test_client(self, console_app_env, create_test_client):
+        client_fetch = ClientFetch(console_app_env)
+        rec = client_fetch.fetch_client(create_test_client.objid)
+        assert client_fetch.response.objid == create_test_client.objid   # OBJID passed only to response (ret is empty)
+        # also MATCHCODE element is in response (empty in ret): assert ret['MATCHCODE']==create_test_client.matchcode
+        assert client_fetch.response.matchcode == create_test_client.matchcode
+        assert client_fetch.response.objid == create_test_client.objid
+        assert isinstance(rec, Record)
+        assert rec['Surname'] == create_test_client.surname
+        assert rec['Forename'] == create_test_client.forename
+        assert rec['GuestType'] == create_test_client.client_type
 
-    def test_get_guest_with_10_ext_refs(self, guest_search):
-        objid = guest_search.get_objid_by_matchcode('E396693')
+        assert rec.val('NAME-1') == create_test_client.surname
+        assert rec['NAME-1'] == create_test_client.surname  # also rec['NAME-1'] does work (NO split into ('NAME-', 1))
+        assert rec.val('NAME-2') == create_test_client.forename
+        assert rec['NAME-2'] == create_test_client.forename
+        assert rec['T-GUEST'] == create_test_client.client_type
+
+    def test_client_with_10_ext_refs(self, client_search, console_app_env):
+        objid = client_search.client_id_by_matchcode('E396693')
         assert objid
-        ret = guest_search.get_guest(objid)
+        ret = ClientFetch(console_app_env).fetch_client(objid)
         assert isinstance(ret, dict)
         assert ret['MATCH-ADM'] == '4806-00208'
         if ret['COMMENT']:
@@ -528,64 +537,46 @@ class TestGuestSearch:
             assert 'RCI=5445-12771' in ret['COMMENT']
             assert 'RCI=5-207931' in ret['COMMENT']     # RCIP got remapped to RCI
 
-    def test_get_guest_nos_by_matchcode(self, guest_search):
-        guest_nos = guest_search.get_guest_nos_by_matchcode('OTS')
-        assert '31' in guest_nos
-        guest_nos = guest_search.get_guest_nos_by_matchcode('SF')
-        assert '62' in guest_nos
-        guest_nos = guest_search.get_guest_nos_by_matchcode('TCAG')
-        assert '12' in guest_nos
-        guest_nos = guest_search.get_guest_nos_by_matchcode('TCRENT')
-        assert '19' in guest_nos
-
-    def test_get_objid_by_guest_no(self, guest_search):
-        obj_id1 = guest_search.get_objid_by_guest_no(31)
-        obj_id2 = guest_search.get_objid_by_matchcode('OTS')
-        assert obj_id1 == obj_id2
-        obj_id1 = guest_search.get_objid_by_guest_no(62)
-        obj_id2 = guest_search.get_objid_by_matchcode('SF')
-        assert obj_id1 == obj_id2
-        obj_id1 = guest_search.get_objid_by_guest_no(12)
-        obj_id2 = guest_search.get_objid_by_matchcode('TCAG')
-        assert obj_id1 == obj_id2
-        obj_id1 = guest_search.get_objid_by_guest_no('19')
-        obj_id2 = guest_search.get_objid_by_matchcode('TCRENT')
-        assert obj_id1 == obj_id2
-
-    def test_get_objids_by_guest_names(self, guest_search):
-        obj_ids = guest_search.get_objids_by_guest_names('OTS Open Travel Services AG', '')
-        obj_id = guest_search.get_objid_by_matchcode('OTS')
+    def test_get_objids_by_client_names(self, client_search):
+        obj_ids = client_search.search_clients(surname='OTS Open Travel Services AG')
+        obj_id = client_search.client_id_by_matchcode('OTS')
         assert obj_id in obj_ids
-        obj_ids = guest_search.get_objids_by_guest_names('Sumar Ferdir', '')
-        obj_id = guest_search.get_objid_by_matchcode('SF')
+        obj_ids = client_search.search_clients(surname='Sumar Ferdir')
+        obj_id = client_search.client_id_by_matchcode('SF')
         assert obj_id in obj_ids
-        obj_ids = guest_search.get_objids_by_guest_names('Thomas Cook AG', '')
-        obj_id = guest_search.get_objid_by_matchcode('TCAG')
+        obj_ids = client_search.search_clients(surname='Thomas Cook AG')
+        obj_id = client_search.client_id_by_matchcode('TCAG')
         assert obj_id in obj_ids
-        obj_ids = guest_search.get_objids_by_guest_names('Thomas Cook Northern Europe', '')
-        obj_id = guest_search.get_objid_by_matchcode('TCRENT')
+        obj_ids = client_search.search_clients(surname='Thomas Cook Northern Europe')
+        obj_id = client_search.client_id_by_matchcode('TCRENT')
         assert obj_id in obj_ids
 
-    def test_get_objids_by_email(self, guest_search):
-        obj_ids = guest_search.get_objids_by_email('info@opentravelservice.com')
-        obj_id = guest_search.get_objid_by_matchcode('OTS')
+    def test_get_objids_by_email(self, client_search):
+        obj_ids = client_search.search_clients(email='info@opentravelservice.com')
+        obj_id = client_search.client_id_by_matchcode('OTS')
         assert obj_id in obj_ids
-        obj_id = guest_search.get_objid_by_matchcode('SF')
+        obj_id = client_search.client_id_by_matchcode('SF')
         assert obj_id in obj_ids
 
-    def test_get_objid_by_matchcode(self, guest_search):
-        assert guest_search.get_objid_by_matchcode('OTS') == '69'
-        assert guest_search.get_objid_by_matchcode('SF') == '100'
-        assert guest_search.get_objid_by_matchcode('TCAG') == '20'
-        assert guest_search.get_objid_by_matchcode('TCRENT') == '27'
+    def test_client_id_by_matchcode(self, client_search):
+        assert client_search.client_id_by_matchcode('OTS') == '69'
+        assert client_search.client_id_by_matchcode('SF') == '100'
+        assert client_search.client_id_by_matchcode('TCAG') == '20'
+        assert client_search.client_id_by_matchcode('TCRENT') == '27'
 
-    def test_get_objid_by_matchcode2(self, guest_search, create_test_guest):
-        ret = guest_search.get_objid_by_matchcode(create_test_guest.matchcode)
-        assert ret == create_test_guest.objid
+    def test_client_id_by_matchcode2(self, client_search, create_test_client):
+        ret = client_search.client_id_by_matchcode(create_test_client.matchcode)
+        assert ret == create_test_client.objid
 
-    def test_search_agencies(self, guest_search):
-        ags = guest_search.search_agencies()
-        assert [_ for _ in ags if _['MATCHCODE'] == 'OTS' and _['OBJID'] == '69']
-        assert [_ for _ in ags if _['MATCHCODE'] == 'SF' and _['OBJID'] == '100']
-        assert [_ for _ in ags if _['MATCHCODE'] == 'TCAG' and _['OBJID'] == '20']
-        assert [_ for _ in ags if _['MATCHCODE'] == 'TCRENT' and _['OBJID'] == '27']
+    def test_search_agencies(self, client_search):
+        ags = client_search.search_clients(client_type='7')     # 1=Guest, 7=Company (wrong documented in KERNEL PDF)
+        assert [_ for _ in ags if _ == '69']
+        assert [_ for _ in ags if _ == '100']
+        assert [_ for _ in ags if _ == '20']
+        assert [_ for _ in ags if _ == '27']
+
+        ags = client_search.search_clients(client_type='7', field_names=('AcId', 'ShId'))
+        assert [_ for _ in ags if _['AcId'] == 'OTS' and _['ShId'] == '69']
+        assert [_ for _ in ags if _['AcId'] == 'SF' and _['ShId'] == '100']
+        assert [_ for _ in ags if _['AcId'] == 'TCAG' and _['ShId'] == '20']
+        assert [_ for _ in ags if _['AcId'] == 'TCRENT' and _['ShId'] == '27']

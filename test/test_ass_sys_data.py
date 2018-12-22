@@ -3,10 +3,15 @@ import datetime
 # import pytest
 
 # from sys_data_ids import CLIENT_REC_TYPE_ID_OWNERS
-from ae_sys_data import Record
+from ae_sys_data import Record, FAD_ONTO
 
-from shif import res_search, guest_data, ResFetch
-from ass_sys_data import correct_email, correct_phone, AssSysData  #, EXT_REFS_SEP
+from shif import res_search, client_data, ResFetch
+from ass_sys_data import correct_email, correct_phone, AssSysData
+from sys_data_ids import SDI_ASS
+
+
+def test_tmp(console_app_env):
+    pass
 
 
 class TestContactValidation:
@@ -156,7 +161,7 @@ class TestContactValidation:
 
 
 class TestAssSysDataAvailRoomsSep14:
-    def test_avail_rooms_for_all_hotels_and_cats(self, config_data):
+    def test_avail_rooms_for_all_hotels_and_cats(self, config_data):    # SLOW (22 s)
         assert config_data.sh_avail_rooms(day=datetime.date(2017, 9, 14)) == 164  # 165 before Feb2018
 
     def test_avail_rooms_for_bhc_and_all_cats(self, config_data):
@@ -168,7 +173,7 @@ class TestAssSysDataAvailRoomsSep14:
     def test_avail_rooms_for_bhc_pbc_and_all_cats(self, config_data):
         assert config_data.sh_avail_rooms(hotel_ids=['1', '4'], day=datetime.date(2017, 9, 14)) == 74
 
-    def test_avail_studios_for_all_hotels(self, config_data):
+    def test_avail_studios_for_all_hotels(self, config_data):   # SLOW (22 s)
         assert config_data.sh_avail_rooms(room_cat_prefix="S", day=datetime.date(2017, 9, 14)) == 17
 
     def test_avail_studios_for_bhc(self, config_data):
@@ -189,7 +194,7 @@ class TestAssSysDataAvailRoomsSep14:
 
 
 class TestAssSysDataAvailRoomsSep15:
-    def test_avail_rooms_for_all_hotels_and_cats(self, config_data):
+    def test_avail_rooms_for_all_hotels_and_cats(self, config_data):    # SLOW (22 s)
         assert config_data.sh_avail_rooms(day=datetime.date(2017, 9, 15)) == 98  # 99 before Feb2018
 
     def test_avail_rooms_for_bhc_and_all_cats(self, config_data):
@@ -201,7 +206,7 @@ class TestAssSysDataAvailRoomsSep15:
     def test_avail_rooms_for_bhc_pbc_and_all_cats(self, config_data):
         assert config_data.sh_avail_rooms(hotel_ids=['1', '4'], day=datetime.date(2017, 9, 15)) == 55
 
-    def test_avail_studios_for_all_hotels(self, config_data):
+    def test_avail_studios_for_all_hotels(self, config_data):   # SLOW (24 s)
         assert config_data.sh_avail_rooms(room_cat_prefix="S", day=datetime.date(2017, 9, 15)) == 23
 
     def test_avail_studios_for_bhc(self, config_data):
@@ -222,22 +227,22 @@ class TestAssSysDataAvailRoomsSep15:
 
 
 class TestAssSysDataCountRes:
-    def test_count_res_sep14_for_any_and_all_cats(self, config_data):
+    def test_count_res_sep14_for_any_and_all_cats(self, config_data):   # SLOW (22 s)
         assert config_data.sh_count_res(hotel_ids=['999'], day=datetime.date(2017, 9, 14)) == 20
 
-    def test_count_res_sep14_for_any_and_stdo_cats(self, config_data):
+    def test_count_res_sep14_for_any_and_stdo_cats(self, config_data):  # SLOW (21 s)
         assert config_data.sh_count_res(hotel_ids=['999'], room_cat_prefix="STDO", day=datetime.date(2017, 9, 14)) == 16
 
-    def test_count_res_sep14_for_any_and_1jnr_cats(self, config_data):
+    def test_count_res_sep14_for_any_and_1jnr_cats(self, config_data):  # SLOW (22 s)
         assert config_data.sh_count_res(hotel_ids=['999'], room_cat_prefix="1JNR", day=datetime.date(2017, 9, 14)) == 4
 
-    # too slow - needs around 6 minutes
+    # too slow - needs minimum 6 minutes
     # def test_count_res_sep14_all_hotels_and_cats(self, config_data):
     #     assert config_data.sh_count_res(day=datetime.date(2017, 9, 14)) == 906
 
-    # quite slow - needs 1:30 minutes
-    def test_count_res_sep14_for_bhc_and_all_cats(self, config_data):
-        assert config_data.sh_count_res(hotel_ids=['1'], day=datetime.date(2017, 9, 14)) == 207  # 273 before Feb2018
+    # too slow - needs minimum 1:30 minutes (sometimes up to 9 minutes)
+    # def test_count_res_sep14_for_bhc_and_all_cats(self, config_data):
+    #    assert config_data.sh_count_res(hotel_ids=['1'], day=datetime.date(2017, 9, 14)) == 207  # 273 before Feb2018
 
 
 class TestAssSysDataAptWkYr:
@@ -319,7 +324,17 @@ class TestAssSysDataSh:
         arr_date = res_data.val('ResArrival')
         dep_date = res_data.val('ResDeparture')
 
-        rgr_dict = dict()
+        rgr_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
+        asd = AssSysData(console_app_env)
+        asd.sh_res_change_to_ass(res_data, ass_res_rec=rgr_rec)
+        assert ho_id == rgr_rec['rgr_ho_fk']
+        assert res_id == rgr_rec['rgr_res_id']
+        assert sub_id == rgr_rec['rgr_sub_id']
+        assert obj_id == rgr_rec['rgr_obj_id']
+        assert arr_date == rgr_rec['rgr_arrival']
+        assert dep_date == rgr_rec['rgr_departure']
+
+        rgr_dict = dict()       # sh_res_change_to_ass allows also dict
         asd = AssSysData(console_app_env)
         asd.sh_res_change_to_ass(res_data, ass_res_rec=rgr_dict)
         assert ho_id == rgr_dict['rgr_ho_fk']
@@ -338,8 +353,8 @@ class TestAssSysDataSh:
         assert res_id == rgr_dict['rgr_res_id']
         assert sub_id == rgr_dict['rgr_sub_id']
         assert obj_id == rgr_dict['rgr_obj_id']
-        assert arr_date == rgr_dict['rgr_arrival']
-        assert dep_date == rgr_dict['rgr_departure']
+        assert arr_date.toordinal() == rgr_dict['rgr_arrival'].toordinal()
+        assert dep_date.toordinal() == rgr_dict['rgr_departure'].toordinal()
 
         rgr_list = asd.rgr_fetch_list(cols, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
         assert isinstance(rgr_list, list)
@@ -348,13 +363,23 @@ class TestAssSysDataSh:
         assert res_id == rgr_dict['rgr_res_id']
         assert sub_id == rgr_dict['rgr_sub_id']
         assert obj_id == rgr_dict['rgr_obj_id']
-        assert arr_date == rgr_dict['rgr_arrival']
-        assert dep_date == rgr_dict['rgr_departure']
+        assert arr_date.toordinal() == rgr_dict['rgr_arrival'].toordinal()
+        assert dep_date.toordinal() == rgr_dict['rgr_departure'].toordinal()
+
+    @staticmethod
+    def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
+        diffs = [(sk, sv, dict_with_compare_values.get(sk)) for sk, sv in dict_with_compare_keys.items()
+                 if sk not in ('PersonAccountId', 'CurrencyIsoCode', 'Language__pc',
+                               'SihotGuestObjId__pc', 'PersonHomePhone')
+                 and (sv.capitalize() if 'Name' in sk else
+                      sv.lower() if 'Email' in sk else
+                      None if sv == '' else
+                      sv) != dict_with_compare_values.get(sk)]
+        return diffs
 
     def test_sending_resv_of_today(self, salesforce_connection, console_app_env):
         # whole week running 15 minutes on TEST system !!!!!
         sfc = salesforce_connection
-        sent_res = list()
         beg = datetime.date.today()
         end = beg + datetime.timedelta(days=1)
         ret = res_search(console_app_env, beg, date_till=end)
@@ -365,25 +390,21 @@ class TestAssSysDataSh:
         asd = AssSysData(console_app_env)
         for idx, res in enumerate(ret):
             print("++++  Test reservation {}/{} creation; res={}".format(idx, res_count, res))
-            res_fields = dict()
+            res_fields = Record(system=SDI_ASS, direction=FAD_ONTO)
             send_err = asd.sh_res_change_to_ass(res, ass_res_rec=res_fields)
-            if send_err:
-                send_err = "sh_res_change_to_ass error " + send_err
-                break
-            cl_fields = guest_data(console_app_env, res.val('ShId'))
-            if not isinstance(cl_fields, dict):
-                send_err = "guest_data error - no dict=" + str(cl_fields)
-                break
-            sf_data = dict()
-            send_err = sfc.sf_ass_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
-            if send_err:
-                send_err = "sf_ass_res_upsert error " + send_err
-                break
-            sent_res.append(sf_data)
+            print('res_fields:', res_fields)
+            assert not send_err, "sh_res_change_to_ass error " + send_err
 
-        assert not send_err
+            cl_fields = client_data(console_app_env, res.val('ShId'))
+            print('cl_fields', cl_fields)
+            assert isinstance(cl_fields, dict), "client_data error - no dict=" + str(cl_fields)
 
-        for sf_sent in sent_res:
+            sf_data = Record()
+            send_err = asd.sf_ass_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
+            print('sf_data:', sf_data)
+            assert not send_err, "sf_ass_res_upsert error " + send_err
+
+            sf_sent = sf_data.to_dict()
             sf_recd = sfc.res_data(sf_sent['ReservationOpportunityId'])
             assert not sfc.error_msg
             assert not self._compare_converted_field_dicts(sf_sent, sf_recd)

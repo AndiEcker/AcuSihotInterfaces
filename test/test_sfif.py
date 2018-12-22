@@ -1,4 +1,5 @@
 # from ae_sys_data import Record
+from ae_sys_data import UsedSystems
 from sfif import *
 
 
@@ -93,25 +94,33 @@ class TestSfId:
 
 
 class TestConnection:
-    def test_prepare_connection_manual(self, console_app_env):
-        sf_conn = prepare_connection(console_app_env)
+    def test_connection_manual(self, console_app_env):
+        us = UsedSystems(console_app_env, SDI_SF)
+        assert not us.connect({SDI_SF: SfInterface})
+        sf_conn = us[SDI_SF].connection
         assert sf_conn
         assert sf_conn.is_sandbox
 
-    def test_prepare_connection_missing_user(self):
+    def test_connection_missing_user(self):
         class Cae:
             @staticmethod   # only for PyCharm Inspections
             def get_option(*_, **__): return None
-        cae = Cae()
-        sf_conn = prepare_connection(cae, verbose=True)
-        assert sf_conn is None
 
-    def test_prepare_connection_conftest(self, salesforce_connection):
+            @staticmethod
+            def get_config(*_, **__): return None
+        cae = Cae()
+        us = UsedSystems(cae, SDI_SF)
+        assert not us.connect({SDI_SF: SfInterface})
+        assert SDI_SF not in us
+
+    def test_connection_conftest(self, salesforce_connection):
         assert salesforce_connection
         assert salesforce_connection.is_sandbox
 
     def test_connect(self, console_app_env):
-        sf_conn = prepare_connection(console_app_env)
+        us = UsedSystems(console_app_env, SDI_SF)
+        assert not us.connect({SDI_SF: SfInterface})
+        sf_conn = us[SDI_SF].connection
         res = sf_conn.soql_query_all("SELECT Id from Lead WHERE Name = '__test__connect__'")
         assert not sf_conn.error_msg
         assert res['totalSize'] == 0
@@ -123,7 +132,9 @@ class TestConnection:
 
             @staticmethod
             def app_name(): return "app_name"
-        sf_conn = prepare_connection(Cae())
+        us = UsedSystems(Cae(), SDI_SF)
+        assert not us.connect({SDI_SF: SfInterface})
+        sf_conn = us[SDI_SF].connection
         assert sf_conn
         assert not sf_conn.error_msg
         res = sf_conn.soql_query_all("SELECT Id from Lead WHERE Name = '__test__connect__'")

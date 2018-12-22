@@ -1,5 +1,6 @@
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import GuestSearch
+from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint
+from shif import ClientSearch
 
 __version__ = '0.1'
 
@@ -9,9 +10,9 @@ cae.add_option('matchcode', "Guest Matchcode", 'TCRENT')   # tk=TCAG, TK=TCRENT
 
 uprint('####  Preparing .........  ####')
 
-gi = GuestSearch(cae)
+cs = ClientSearch(cae)
 
-oi = gi.get_objid_by_matchcode(cae.get_option('matchcode'))
+oi = cs.client_id_by_matchcode(cae.get_option('matchcode'))
 
 uprint('####  Result ............  ####')
 

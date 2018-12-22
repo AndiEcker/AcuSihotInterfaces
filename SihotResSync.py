@@ -13,7 +13,9 @@
 """
 import datetime
 
-from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING, \
+    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
+from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, full_stack_trace
 from ae_notification import add_notification_options, init_notification
 from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
 
@@ -48,11 +50,11 @@ cae.add_option('syncDateRange', "Restrict sync. of res. to: "
 
 debug_level = cae.get_option('debugLevel')
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-       cae.get_option('shServerKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
-uprint('Use Kernel for clients:', 'Yes' if cae.get_option('useKernelForClient') else 'No (WEB)')
-uprint('Use Kernel for reservations:', 'Yes' if cae.get_option('useKernelForRes') else 'No (WEB)')
+uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+       cae.get_option(SDF_SH_KERNEL_PORT))
+uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+uprint('Use Kernel for clients:', 'Yes' if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else 'No (WEB)')
+uprint('Use Kernel for reservations:', 'Yes' if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else 'No (WEB)')
 last_rt_prefix = cae.get_option('acuDSN')[-4:]
 uprint('Last unfinished run (-1=all finished):  ', cae.get_config(last_rt_prefix + 'lastRt'))
 uprint('Migrate Clients First/Separate:',

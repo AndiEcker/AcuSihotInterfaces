@@ -6,9 +6,10 @@ from traceback import format_exc
 
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
+from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, SDF_SF_SANDBOX
 from ae_sys_data import Record, FAD_ONTO, idx_path_field_name
 from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
-from ae_console_app import uprint, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint
 
 # default client salesforce object (was 'Lead' changed to Person-'Account' within sys_data_generic branch)
 DEF_CLIENT_OBJ = 'Account'
@@ -140,8 +141,7 @@ def add_sf_options(cae):
     cae.add_option('sfUser', "Salesforce account user name", '', 'y')
     cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
     cae.add_option('sfToken', "Salesforce account token string", '', 'o')
-    cae.add_option('sfClientId', "Salesforce client/application name/id", cae.app_name(), 'C')
-    cae.add_option('sfIsSandbox', "Use Salesforce sandbox (instead of production)", True, 's')
+    cae.add_option(SDF_SF_SANDBOX, "Use Salesforce sandbox (instead of production)", True, 's')
 
 
 SF_DATE_FORMAT = '%Y-%m-%d'
@@ -235,26 +235,6 @@ def ensure_long_id(sf_id):
     return sf_id + extend
 
 
-def prepare_connection(cae, verbose=True):
-    debug_level = cae.get_option('debugLevel')
-    sf_user = cae.get_option('sfUser')
-    if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
-        if verbose:
-            uprint("sfif.prepare_connection(): skipped because of unspecified credentials")
-        return None
-    sf_pw = cae.get_option('sfPassword')
-    sf_token = cae.get_option('sfToken')
-    sf_sandbox = cae.get_option('sfIsSandbox', default_value='test' in sf_user.lower() or 'sdbx' in sf_user.lower())
-    sf_client = cae.get_option('sfClientId', default_value=cae.app_name())
-
-    if verbose:
-        uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
-
-    sf_conn = SfInterface(sf_user, sf_pw, sf_token, sf_sandbox, sf_client, debug_level)
-
-    return sf_conn
-
-
 def sf_field_name(sf_fld, sf_obj):
     field_map = MAP_CLIENT_OBJECTS.get(sf_obj, tuple())
     for sys_name, fld_name in field_map:
@@ -309,14 +289,23 @@ def _format_exc(ex):    # wrapper because SimpleSalesforce is throwing exception
 
 
 class SfInterface:
-    def __init__(self, username, password, token, sandbox, client_id, debug_level):
+    def __init__(self, credentials, features=None, app_name='', debug_level=DEBUG_LEVEL_DISABLED):
+        """
+        create instance of generic database object (base class for real database like e.g. postgres or oracle).
+        :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
+                            password and DSN=database name and optionally host address (separated with a @ character).
+        :param features:    optional list of features (currently only used for SDF_SF_SANDBOX/'sfIsSandbox').
+        :param app_name:    application name (shown in the server DB session).
+        :param debug_level: debug level.
+        """
         # store user credentials for lazy Salesforce connect (only if needed) because of connection limits and timeouts
         self._conn = None
-        self._user = username
-        self._pw = password
-        self._tok = token
-        self._sb = sandbox
-        self._client = client_id
+        self._user = credentials.get('User')
+        self._pw = credentials.get('Password')
+        self._tok = credentials.get('Token')
+        self._sb = features and SDF_SF_SANDBOX + '=True' in features \
+            or 'test' in self._user.lower() or 'dbx' in self._user.lower()
+        self._client = app_name
         self._debug_level = debug_level
 
         self.error_msg = ""

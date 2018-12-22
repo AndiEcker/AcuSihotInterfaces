@@ -84,8 +84,6 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | init | Initialize/Recreate AssCache/Postgres database (0=No, 1=Yes) | 0 | I | AssCacheSync |
 | jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
-| mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
-| mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | matchFields | Specify field(s) used for to match/lookup the associated data record | - | Z | AssCacheSync |
 | matchRecords | Restrict processed (dict keys: C=client, P=product, R=reservation) destination records | - | M | AssCacheSync |
@@ -94,24 +92,25 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | AssCacheSync |
 | push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | AssCacheSync |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
-| sfClientId | Salesforce client/application name/id defaulting to cae.app_name() | SignalliaSfInterface/cae.app_name() | C | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfPassword | Salesforce user account password | - | a | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfToken | Salesforce user account token | - | o | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
 | shClientPort | IP port of the Sxml interface of this server | 11000 (AcuServer) or 12000 (AssServer) | m | AcuServer, AssServer |
+| shMapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
+| shMapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, AssCacheSync, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shTimeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shUseKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
+| shUseKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
 | shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
-| useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
-| useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
 | verify | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | AssCacheSync |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
@@ -1003,6 +1002,7 @@ configuration file):
 | Settings | resortCats | Room category defaults and apartment feature overloads for all hotels/resorts |
 | Settings | roAgencies | Agency Sihot/Acumen object Ids and market segment groupings |
 | Settings | roomChangeMaxDaysDiff | Number of days a check-in/-out/room-move can differ from the expected arrival/departure date |
+| Settings | SfIdResetResendFragments | Text fragments of ignorable errors where AssServer will try to resend the reservation data without the currently cached Salesforce Reservation Opportunity Id |
 | Settings | shAdultPersTypes | List of Sihot adult person type categories, e.g. ['1A', '5A'] |
 | Settings | shChildPersTypes | List of Sihot children person type categories, e.g. ['2A', '2B', '2C', '6A', '6B', '6C'] |
 | Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr` or `smtpTo`).
