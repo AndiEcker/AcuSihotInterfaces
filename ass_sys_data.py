@@ -1586,7 +1586,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if err_msg and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
             # reset (set last res change to midnight) to re-sync reservation (to get new ResOppId) and then try again
             self.rgr_upsert(dict(rgr_last_change=datetime.date.today(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
-                            multiple_row_update=True)
+                            multiple_row_update=True, commit=True)
             self._warn("asd.sf_room_change({}, {}, {}, {}) ResOppId reset; ori-/err='{}'/'{}'"
                        .format(rgr_sf_id, check_in, check_out, next_room_id, err_msg, self.error_message),
                        notify=True)
