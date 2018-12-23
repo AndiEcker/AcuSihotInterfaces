@@ -171,11 +171,11 @@ class TestHelperMethods:
         assert use_current_index(r, ('fnB', 0, 'fnBA'), Value((1, ))) == ('fnB', 0, 'fnBA')
 
     def test_set_current_index(self):
-        r = Records()
-        set_current_index(r, idx=2)
-        assert current_index(r) == 2
-        set_current_index(r, add=-1)
-        assert current_index(r) == 1
+        rs = Records()
+        set_current_index(rs, idx=2)
+        assert current_index(rs) == 2
+        set_current_index(rs, add=-1)
+        assert current_index(rs) == 1
 
         r = Record()
         set_current_index(r, idx='fnX')
@@ -203,7 +203,7 @@ class TestValue:
         v.set_val('tvA')
         assert v.value() == ['tvA']
         assert v.val() == 'tvA'
-        v.clear_vals()
+        v.clear_leafs()
         assert v.value() == []
         assert v.val() == ''
 
@@ -710,7 +710,7 @@ class TestRecord:
         assert sys_r.val('Cnt') == ''
 
         data_r = Record(fields=dict(Cnt=2, fn0Forename='John'))
-        sys_r.clear_vals()
+        sys_r.clear_leafs()
         for k in data_r.leaf_indexes():
             if k[0] in sys_r:
                 sys_r.set_val(data_r.val(k), *k, root_rec=data_r)
@@ -750,77 +750,82 @@ class TestRecords:
         assert eval(rec_str) == Records()
 
     def test_set_val_flex_sys(self):
-        r = Records()
-        r.set_val('fAv', 0, 'fnA', 0, 'sfnA')
-        assert r.val(0, 'fnA', 0, 'sfnA') == 'fAv'
-        r.set_val('fAvX', 0, 'fnA', 0, 'sfnA', system='Xx')
-        assert r.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
-        assert r.val(0, 'fnA', 0, 'sfnA') == 'fAvX'
+        rs = Records()
+        rs.set_val('fAv', 0, 'fnA', 0, 'sfnA')
+        assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
+        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', system='Xx')
+        assert rs.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAvX'
 
     def test_set_val_exact_sys(self):
-        r = Records()
-        r.set_val('fAv', 0, 'fnA', 0, 'sfnA')
-        assert r.val(0, 'fnA', 0, 'sfnA') == 'fAv'
-        r.set_val('fAvX', 0, 'fnA', 0, 'sfnA', flex_sys_dir=False, system='Xx')
-        assert r.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
-        assert r.val(0, 'fnA', 0, 'sfnA') == 'fAv'
+        rs = Records()
+        rs.set_val('fAv', 0, 'fnA', 0, 'sfnA')
+        assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
+        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', flex_sys_dir=False, system='Xx')
+        assert rs.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
 
     def test_set_val_sys_converter(self):
-        r = Records()
-        r.set_val('fAv', 0, 'fnA', 0, 'sfnA')
-        assert r.val(0, 'fnA', 0, 'sfnA') == 'fAv'
-        r.set_val('fAvX', 0, 'fnA', 0, 'sfnA', system='Xx', converter=lambda f, v: v)
-        assert r.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
-        assert r.val(0, 'fnA', 0, 'sfnA') == 'fAv'
+        rs = Records()
+        rs.set_val('fAv', 0, 'fnA', 0, 'sfnA')
+        assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
+        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', system='Xx', converter=lambda f, v: v)
+        assert rs.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
 
     def test_val_get(self):
-        r = Records()
-        assert r.val() == list()
-        assert r.val(0) is None
-        assert r.val('test') is None
-        assert r.val(12, 'sub_field') is None
-        assert r.val('sub_field', 12, '2nd_sub_field') is None
+        rs = Records()
+        assert rs.val() == list()
+        assert rs.val(0) is None
+        assert rs.val('test') is None
+        assert rs.val(12, 'sub_field') is None
+        assert rs.val('sub_field', 12, '2nd_sub_field') is None
 
-        r.append(Record())
-        assert r.val(0) == OrderedDict()
+        rs.append(Record())
+        assert rs.val(0) == OrderedDict()
 
     def test_set_field(self):
-        r = Records()
-        r.set_node_child(12, 4, 'fnA', protect=True)
-        assert r.val(4, 'fnA') == 12
-        r.set_node_child(33, 4, 'fnA')
-        assert r.val(4, 'fnA') == 33
+        rs = Records()
+        rs.set_node_child(12, 4, 'fnA', protect=True)
+        assert rs.val(4, 'fnA') == 12
+        rs.set_node_child(33, 4, 'fnA')
+        assert rs.val(4, 'fnA') == 33
 
-        r[2].set_val(99, 'sfnA')
-        assert r.val(2, 'sfnA') == 99
+        rs[2].set_val(99, 'sfnA')
+        assert rs.val(2, 'sfnA') == 99
 
     def test_get_value(self):
-        r = Records()
-        assert not r.value()
-        assert isinstance(r.value(), list)
-        assert isinstance(r.value(), Records)
-        r.append(Record())
-        assert r.value()
-        assert r.value() == Records((Record(), ))
-        assert len(r.value()) == 1
-        r.set_node_child(33, 3, 'fnA')
-        assert len(r.value()) == 4
-        assert r.value(3, 'fnA') == Value((33, ))
+        rs = Records()
+        assert not rs.value()
+        assert isinstance(rs.value(), list)
+        assert isinstance(rs.value(), Records)
+        rs.append(Record())
+        assert rs.value()
+        assert rs.value() == Records((Record(), ))
+        assert len(rs.value()) == 1
+        rs.set_node_child(33, 3, 'fnA')
+        assert len(rs.value()) == 4
+        assert rs.value(3, 'fnA') == Value((33, ))
 
     def test_set_value(self):
-        r = Records()
-        r.set_node_child(33, 3, 'fnA')
-        assert r.value(3, 'fnA').val() == 33
-        r.set_value(Value().set_val(66), 3, 'fnA')
-        assert r.value(3, 'fnA').val() == 66
+        rs = Records()
+        rs.set_node_child(33, 3, 'fnA')
+        assert rs.value(3, 'fnA').val() == 33
+        rs.set_value(Value().set_val(66), 3, 'fnA')
+        assert rs.value(3, 'fnA').val() == 66
 
-    def test_clear_vals(self):
-        r = Records()
-        r.set_node_child(33, 3, 'fnA')
-        assert len(r) == 4
-        r.clear_vals()
-        assert r.value(3, 'fnA').val() == ''
-        assert len(r) == 4
+    def test_clear_leafs(self):
+        rs = Records()
+        rs.set_node_child(33, 3, 'fnA')
+        assert len(rs) == 4
+
+        rs.clear_leafs(reset_lists=False)
+        assert rs.value(3, 'fnA').val() == ''
+        assert len(rs) == 4
+
+        rs.clear_leafs()
+        assert rs.val(3, 'fnA') is None
+        assert len(rs) == 1
 
     def test_append_sub_record(self):
         r1 = Record(fields=dict(fnA=1, fnB0sfnA=2, fnB0sfnB=3))

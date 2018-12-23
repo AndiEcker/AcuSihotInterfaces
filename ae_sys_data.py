@@ -117,7 +117,7 @@ def field_name_idx_path(field_name, return_root_fields=False):
     """
     converts a field name path string into an index path tuple.
     :param field_name:          field name str or field name path string or field name tuple
-                                or int (for Records index: will always return empty tuple).
+                                or int (for Records index).
     :param return_root_fields:  pass True to also return len()==1-tuple for fields with no deeper path (def=False).
     :return:                    index path tuple (idx_path) or empty tuple if the field has no deeper path and
                                 return_root_fields==False.
@@ -318,7 +318,7 @@ class Value(list):
         """
         return Value(super().copy())
 
-    def clear_vals(self, **__):
+    def clear_leafs(self, **__):
         # use self[-1] = '' for to clear only the newest/top val
         self.clear()
         return self
@@ -423,9 +423,11 @@ class Values(list):                     # type: List[Union[Value, Record]]
             ret.append(rec)
         return ret
 
-    def clear_vals(self, system='', direction=''):
+    def clear_leafs(self, system='', direction='', flex_sys_dir=True, reset_lists=True):
+        if reset_lists:
+            self[1:] = []
         for rec in self:
-            rec.clear_vals(system=system, direction=direction)
+            rec.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir, reset_lists=reset_lists)
         if len(self):
             self.current_idx = self.idx_min = 0
             self.idx_max = len(self) - 1
@@ -846,10 +848,20 @@ class Record(OrderedDict):
 
         return onto_rec
 
-    def clear_vals(self, system='', direction=''):
+    def clear_leafs(self, system='', direction='', flex_sys_dir=True, reset_lists=True):
         for idx in self._fields.keys():
             field = self._fields.get(idx)
-            field.clear_vals(system=system, direction=direction)
+            field.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir, reset_lists=reset_lists)
+        return self
+
+    def merge_leafs(self, rec, system='', direction='', flex_sys_dir=True, extend=True):
+        for idx_path in rec.leaf_indexes(system=system, direction=direction, flex_sys_dir=flex_sys_dir):
+            if not extend and idx_path[0] not in self._fields:
+                continue
+            val = rec.val(*idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
+            if val is not None:
+                self.set_val(val, *idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
+        return self
 
     def missing_fields(self, required_fields=()):
         missing = list()
@@ -944,7 +956,16 @@ class Record(OrderedDict):
                     column_expressions.append(expr + name)
         return column_expressions
 
-    def to_dict(self, field_names=None, system=None, direction=None, put_system_val=True):
+    def to_dict(self, field_names=None, system=None, direction=None, key_type=str, put_system_val=True):
+        """
+        copy field values into a dict.
+        :param field_names:     list of field names to be included in returned dict, pass None to include all fields.
+        :param system:          system id for to determine included leaf and field val.
+        :param direction:       direction id for to determine included leaf and field val.
+        :param key_type:        type of dict keys: None=field name, tuple=index path tuple, str=index path string (def).
+        :param put_system_val:  pass False to include/use main field val; def=True for to include system val.
+        :return:                dict with leaf
+        """
         idx_paths = field_names_idx_paths(field_names) if field_names else None
         system, direction = use_rec_default_sys_dir(self, system, direction)
 
@@ -953,6 +974,10 @@ class Record(OrderedDict):
             child = self.node_child(idx_path)
             key = child.name(system=system, direction=direction, flex_sys_dir=False)
             if key and (not idx_paths or idx_path in idx_paths):
+                if key_type == tuple:
+                    key = idx_path
+                elif key_type == str:
+                    key = idx_path_field_name(idx_path)
                 if put_system_val:
                     ret[key] = self.val(idx_path, system=system, direction=direction)
                 else:
@@ -972,8 +997,11 @@ class Records(Values):      # type: List[Record]
         return child
 
     def __setitem__(self, key, value):
-        idx_path = field_name_idx_path(key, return_root_fields=True)
-        self.set_node_child(value, *idx_path)
+        if isinstance(key, slice):
+            super(Records, self).__setitem__(key, value)
+        else:
+            idx_path = field_name_idx_path(key, return_root_fields=True)
+            self.set_node_child(value, *idx_path)
 
     def set_node_child(self, rec_or_fld_or_val, *idx_path, system='', direction='', protect=False,
                        root_rec=None, root_idx=(), use_curr_idx=None):
@@ -1005,8 +1033,8 @@ class Records(Values):      # type: List[Record]
 
     def set_val(self, val, *idx_path, system='', direction='', flex_sys_dir=True,
                 protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
-        idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
-        assert isinstance(idx, int), "Records expects first index of type int, but got {}".format(idx_path)
+        idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)  # type: (int, list)
+        assert isinstance(idx, int), "Records expects first index of type int, but got {}".format(idx)
 
         list_len = len(self)
         if root_idx:
@@ -1019,6 +1047,8 @@ class Records(Values):      # type: List[Record]
 
         if not idx2:
             assert not protect, "Records.set_val() pass protect=False to overwrite {}".format(idx)
+            # noinspection PyTypeChecker
+            # without above: strange PyCharm type hint warning: Type 'int' doesn't have expected attribute '__len__'
             self[idx] = val if isinstance(val, Record) else Record(fields=val, root_rec=root_rec, root_idx=root_idx)
 
         else:
@@ -1405,22 +1435,25 @@ class _Field:
                                                           met="_Fields.append_record")
         return value.append_record(root_rec=root_rec, root_idx=root_idx)
 
-    def clear_vals(self, system='', direction='', flex_sys_dir=True):
+    def clear_leafs(self, system='', direction='', flex_sys_dir=True, reset_lists=True):
         """
-        clear/reset field values
+        clear/reset field values and if reset_lists == True also Records/Values lists to one item.
         :param system:          system of the field value to clear, pass None for to clear all field values.
         :param direction:       direction of the field value to clear.
         :param flex_sys_dir:    if True then also clear field value if system is given and field has no system value.
+        :param reset_lists:     if True/def then also clear Records/lists to one item.
         :return:                self (this _Field instance).
         """
         if system is None:
             for asp_key, asp_val in self._aspects:
                 if asp_key.startswith(FAT_VAL):
-                    asp_val.clear_vals()
+                    asp_val.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir,
+                                        reset_lists=reset_lists)
         else:
             asp_val = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
             if asp_val is not None:
-                asp_val.clear_vals()
+                asp_val.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir,
+                                    reset_lists=reset_lists)
         return self
 
     def convert_and_validate(self, val, system='', direction=''):

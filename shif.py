@@ -671,7 +671,7 @@ class FldMapXmlParser(SihotXmlParser):
         self.elem_fld_map = self._rec.sys_name_field_map
 
     def clear_rec(self):
-        self._rec.clear_vals(system=self._rec.system, direction=self._rec.direction)
+        self._rec.clear_leafs(system=self._rec.system, direction=self._rec.direction)
         return self
 
     @property
@@ -1006,10 +1006,8 @@ class FldMapXmlBuilder(SihotXmlBuilder):
     # --- rec helpers
 
     def fill_elem_fld_rec(self, rec):
-        self.elem_fld_rec.clear_vals()
-        for k in rec.leaf_indexes():
-            if k[0] in self.elem_fld_rec:
-                self.elem_fld_rec.set_val(rec.val(k), *k, system='', direction='')
+        self.elem_fld_rec.clear_leafs()
+        self.elem_fld_rec.merge_leafs(rec, extend=False)
 
     def prepare_map_xml(self, rec, include_empty_values=True):
         self.fill_elem_fld_rec(rec)
@@ -1230,7 +1228,7 @@ class ResToSihot(FldMapXmlBuilder):
                 break
             # add rec, copied from recs[0]
             rec = recs.append_record(root_rec=self.elem_fld_rec, root_idx=('ResPersons', ))
-            rec.clear_vals()
+            rec.clear_leafs()
 
     def _prepare_res_xml(self, rec):
         self.action = rec.val('ResAction') or ACTION_INSERT

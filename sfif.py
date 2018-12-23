@@ -7,7 +7,7 @@ from traceback import format_exc
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
 from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, SDF_SF_SANDBOX
-from ae_sys_data import Record, FAD_ONTO, idx_path_field_name
+from ae_sys_data import Record, FAD_ONTO
 from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
 from ae_console_app import uprint
 
@@ -272,12 +272,14 @@ def field_list_to_sf(field_names, sf_obj):
     return sf_list
 
 
+'''
 def rec_to_sf_obj_fld_dict(rec, sf_obj):
     sf_dict = dict()
     for idx in rec.leaf_indexes():
         sf_key = sf_fld_sys_name(idx_path_field_name(idx), sf_obj)
         sf_dict[sf_key] = rec.val(idx)
     return sf_dict
+'''
 
 
 def _format_exc(ex):    # wrapper because SimpleSalesforce is throwing exception in relation with formatting his objects
@@ -679,7 +681,8 @@ class SfInterface:
             self.error_msg += "\n      +cl_upsert({}, {}): no client object".format(ppf(rec), sf_obj)
             return None, self.error_msg, ""
 
-        sf_dict = rec_to_sf_obj_fld_dict(rec, sf_obj)
+        ''' sf_dict = rec_to_sf_obj_fld_dict(rec, sf_obj) '''
+        sf_dict = rec.to_dict(system=SDI_SF, direction=FAD_ONTO)
         err = msg = ""
         if update_client:
             try:

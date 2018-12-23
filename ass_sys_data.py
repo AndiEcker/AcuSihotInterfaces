@@ -1167,15 +1167,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if sf_cl_id:
                 sf_rec['SfId'] = sf_cl_id
 
-        for idx in sh_cl_data.leaf_indexes():
-            val = sh_cl_data.val(*idx)
-            if val is not None:
-                sf_rec.set_val(val, *idx)
-
-        for idx in ass_res_data.leaf_indexes():
-            val = ass_res_data.val(*idx)
-            if val is not None:
-                sf_rec.set_val(val, *idx)
+        sf_rec.merge_leafs(sh_cl_data)
+        sf_rec.merge_leafs(ass_res_data)
 
         if not sf_rec.val('ResRoomNo') and ass_res_data.val('ResPersons', 0, 'RoomNo'):
             sf_rec['ResRoomNo'] = ass_res_data.val('ResPersons', 0, 'RoomNo')
@@ -1248,7 +1241,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if err_msg and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
             # reset (set last res change to midnight) to re-sync reservation (to get new ResSfId) and then try again
             self.rgr_upsert(dict(rgr_last_change=datetime.date.today(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
-                            multiple_rec_update=True)
+                            multiple_rec_update=True, commit=True)
             self._warn("asd.sf_ass_room_change({}, {}, {}, {}) ResSfId reset; ori-/err='{}'/'{}'"
                        .format(rgr_sf_id, check_in, check_out, next_room_id, err_msg, self.error_message),
                        notify=True)
