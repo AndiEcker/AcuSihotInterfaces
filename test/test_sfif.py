@@ -233,7 +233,9 @@ class TestClient:
     def test_cl_upsert_lead(self, salesforce_connection):
         sfc = salesforce_connection
 
-        rec = Record(fields=dict(Forename='testy', Surname='Tst Lead'))
+        rec = Record(fields=dict(Forename='testy', Surname='Tst Lead'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Lead')
         assert not err
         assert sf_id
@@ -249,7 +251,9 @@ class TestClient:
     def test_cl_upsert_contact(self, salesforce_connection):
         sfc = salesforce_connection
 
-        rec = Record(fields=dict(Forename='testy', Surname='Tst Contact'))
+        rec = Record(fields=dict(Forename='testy', Surname='Tst Contact'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Contact')
         assert not err
         assert sf_id
@@ -265,7 +269,9 @@ class TestClient:
     def test_cl_upsert_account(self, salesforce_connection):
         sfc = salesforce_connection
 
-        rec = Record(fields=dict(Forename='testy', Surname='Tst Account'))
+        rec = Record(fields=dict(Forename='testy', Surname='Tst Account'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id
@@ -274,7 +280,9 @@ class TestClient:
         assert sfc.cl_field_data('Forename', sf_id) == 'Testy'  # SF is capitalizing names
         assert sfc.cl_field_data('Surname', sf_id) == 'Tst Account'
 
-        rec = Record(fields=dict(SfId=sf_id, Forename='Chg_FNam'))
+        rec = Record(fields=dict(SfId=sf_id, Forename='Chg_FNam'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ))
         sf_upd_id, err, msg = sfc.cl_upsert(rec)
         assert not err
         assert sf_upd_id == sf_id
@@ -304,7 +312,9 @@ class TestClient:
     def test_ext_refs(self, salesforce_connection):
         sfc = salesforce_connection
 
-        rec = Record(fields=dict(Forename='testy', Surname='Test Ext Ref'))
+        rec = Record(fields=dict(Forename='testy', Surname='Test Ext Ref'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id
@@ -390,7 +400,10 @@ class TestClient:
 
         rec = Record(fields=dict(   # AssId='123123', NOT IMPLEMENTED IN SF
                                  AcId='T000123', ShId='999123', Email='cl@fld.data',
-                                 Forename='testy', Surname='Test Field Data Fetch'))
+                                 Forename='testy', Surname='Test Field Data Fetch'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields(MAP_CLIENT_OBJECTS['Account'])
+        rec.pop('SfId')     # remove SfId (Id SF field) for to prevent SF create Account error
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id
@@ -415,12 +428,16 @@ class TestClient:
             assert not err
             assert msg
 
-        rec = Record(fields=dict(Forename='testy', Surname='Test Main RCI Ref', RciId='5-987654321'))
+        rec = Record(fields=dict(Forename='testy', Surname='Test Main RCI Ref', RciId='5-987654321'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname'), ('RCI_Reference__pc', 'RciId')))
         sf_id_main, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id_main
 
-        rec = Record(fields=dict(Forename='testy', Surname='Test RCI Ref'))
+        rec = Record(fields=dict(Forename='testy', Surname='Test RCI Ref'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id
@@ -445,12 +462,16 @@ class TestClient:
     def test_clients_with_rci_id(self, salesforce_connection):
         sfc = salesforce_connection
 
-        rec = Record(fields=dict(Forename='testy', Surname='Test Cl main with RCI Ref', RciId='X-678901234'))
+        rec = Record(fields=dict(Forename='testy', Surname='Test Cl main with RCI Ref', RciId='X-678901234'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname'), ('RCI_Reference__pc', 'RciId')))
         sf_id_main, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id_main
 
-        rec = Record(fields=dict(Forename='testy', Surname='Test Cl with RCI Ref'))
+        rec = Record(fields=dict(Forename='testy', Surname='Test Cl with RCI Ref'),
+                     system=SDI_SF, direction=FAD_ONTO)\
+            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         sf_er_id, err, msg = sfc.cl_ext_ref_upsert(sf_id, 'RCI', 'Y-987654321')

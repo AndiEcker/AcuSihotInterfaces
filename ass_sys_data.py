@@ -12,9 +12,8 @@ from ae_notification import add_notification_options, init_notification
 from acif import add_ac_options
 from sfif import add_sf_options, ensure_long_id, SfInterface
 from sxmlif import AvailCatInfo
-from shif import (add_sh_options, print_sh_options, pax_count,
-                  gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
-                  ClientSearch, ResSearch, ResFetch, ResBulkFetcher, SH_DATE_FORMAT, ShInterface)
+from shif import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
+                  ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ShInterface)
 
 
 '''
@@ -47,13 +46,14 @@ ASS_CLIENT_MAP = (
 # ass_cache res_groups/res_group_clients rec map
 ASS_RES_MAP = (
     # ('rgr_pk', ),
+    ('rgr_order_cl_fk', 'AssId'),
+    ('rgr_used_ri_fk', 'RinId'),
     ('rgr_obj_id', 'ResObjId'),
     ('rgr_ho_fk', 'ResHotelId'),
     ('rgr_res_id', 'ResId'),
     ('rgr_sub_id', 'ResSubId'),
     ('rgr_gds_no', 'ResGdsNo'),
     ('rgr_sf_id', 'ResSfId'),
-    ('rgr_order_cl_fk', 'AssId'),
     ('rgr_arrival', 'ResArrival'),
     ('rgr_departure', 'ResDeparture'),
     ('rgr_room_id', 'ResRoomNo'),
@@ -71,6 +71,25 @@ ASS_RES_MAP = (
     ('rgr_long_comment', 'ResLongNote'),
     ('rgr_room_rate', 'ResRateSegment'),
     ('rgr_payment_inst', 'ResAccount'),
+    # ('rgc_rgr_fk', ),
+    ('rgc_occup_cl_fk', ('ResPersons', 0, 'AssId')),
+    ('rgc_room_seq', ('ResPersons', 0, 'RoomSeq')),
+    ('rgc_pers_seq', ('ResPersons', 0, 'RoomPersSeq')),
+    ('rgc_surname', ('ResPersons', 0, 'Surname')),
+    ('rgc_firstname', ('ResPersons', 0, 'Forename')),
+    ('rgc_email', ('ResPersons', 0, 'Email')),
+    ('rgc_phone', ('ResPersons', 0, 'Phone')),
+    ('rgc_language', ('ResPersons', 0, 'Language')),
+    ('rgc_country', ('ResPersons', 0, 'Country')),
+    ('rgc_dob', ('ResPersons', 0, 'DOB')),
+    ('rgc_auto_generated', ('ResPersons', 0, 'AutoGen')),
+    ('rgc_flight_arr_comment', ('ResPersons', 0, 'FlightArrComment')),
+    ('rgc_flight_arr_time', ('ResPersons', 0, 'FlightETA')),
+    ('rgc_flight_dep_comment', ('ResPersons', 0, 'FlightDepComment')),
+    ('rgc_flight_dep_time', ('ResPersons', 0, 'FlightETD')),
+    ('rgc_pers_type', ('ResPersons', 0, 'GuestType')),
+    ('rgc_sh_pack', ('ResPersons', 0, 'Board')),
+    ('rgc_room_id', ('ResPersons', 0, 'RoomNo')),
 )
 
 
@@ -1273,7 +1292,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         return ret
 
     def sh_avail_rooms(self, hotel_ids=None, room_cat_prefix='', day=None):
-        """ accumulating the number of available rooms in all the hotels specified by the hotel_ids list with the room
+        """
+        accumulating the number of available rooms in all the hotels specified by the hotel_ids list with the room
         category matching the first characters of the specified room_cat_prefix string and for a certain day.
 
         All parameters are web-service-query-param-ready (means they could be passed as str).
@@ -1378,7 +1398,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         """
         extract reservation data from sihot ResResponse dict and save it into the ass_cache database.
 
-        :param shd:         Sihot ResChange dict.
+        :param shd:         Sihot ResChange Record.
         :param last_change: if not None then set rgr_last_change column value to this passed timestamp.
         :param ass_res_rec: pass in empty Record/dict for to return reservation data and
                             person/rooming-list (in ass_res_rec['ResPersons']) (opt).
@@ -1429,102 +1449,58 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         else:                                               # RETURN
             return err_pre + "Incomplete reservation id"
 
+        sh_ass_rec = Record(system=SDI_ASS, direction=FAD_ONTO)\
+            .add_system_fields(ASS_RES_MAP)\
+            .merge_leafs(shd, system=SDI_SH, direction=FAD_FROM, extend=False)\
+            .pull(SDI_SH)
+        sh_ass_rec.set_val(ord_cl_pk, 'AssId')
+        sh_ass_rec.set_val(ri_pk, 'RinId')
+        for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons')):
+            sh_id = occ_rec.val('ShId')
+            ac_id = occ_rec.val('AcId')
+            sn = occ_rec.val('Surname')
+            fn = occ_rec.val('Forename')
+            if sh_id is None and ac_id is None:
+                self._warn(err_pre + "ignoring unspecified {}. person: {} {}".format(pers_idx + 1, sn, fn),
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                continue
+            self._warn(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id,
+                                          name=fn + " " + sn if fn and sn else (sn or fn))
+            if occ_cl_pk is None:
+                self._warn(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
+                           .format(fn, sn, sh_id, ac_id, self.error_message),
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                self.error_message = ""
+            else:
+                occ_rec.set_val(occ_cl_pk, 'AssId')
+        sh_ass_rec.push(SDI_ASS)
+
         error_msg = ""
         with ass_db.thread_lock_init('res_groups', chk_values):
-            upd_values = chk_values.copy()
-            if gds_no and 'rgr_gds_no' not in upd_values:
-                upd_values.update(rgr_gds_no=gds_no)
-            upd_values\
-                .update(rgr_order_cl_fk=ord_cl_pk,
-                        rgr_used_ri_fk=ri_pk,
-                        # xml path prefix for all elements within RESERVATION block is different for responses of
-                        # .. RES-SEARCH (['SIHOT-Document', 'ARESLIST']) and of SS (['SIHOT-Document'])
-                        rgr_obj_id=shd.val('ResObjId'),
-                        # finally not added next/commented line because IDs should only come from ID generating system
-                        # rgr_sf_id=shd.val('ResSfId'),
-                        rgr_status=shd.val('ResStatus'),
-                        rgr_adults=shd.val('ResAdults'),
-                        rgr_children=shd.val('ResChildren'),
-                        rgr_arrival=shd.val('ResArrival'),
-                        rgr_departure=shd.val('ResDeparture'),
-                        rgr_mkt_segment=shd.val('ResMktSegment'),
-                        rgr_mkt_group=shd.val('ResMktGroup'),
-                        rgr_room_id=shd.val('ResRoomNo'),
-                        rgr_room_cat_id=shd.val('ResRoomCat'),
-                        rgr_room_rate=shd.val('ResRateSegment'),
-                        rgr_payment_inst=shd.val('ResAccount'),
-                        rgr_ext_book_id=shd.val('ResVoucherNo'),
-                        rgr_ext_book_day=shd.val('ResBooked'),
-                        rgr_comment=shd.val('ResNote'),
-                        rgr_long_comment=shd.val('ResLongNote'),
-                        )
+            upd_values = sh_ass_rec.to_dict(filter_func=lambda f: f.name(system=SDI_ASS, direction=FAD_ONTO)
+                                            .startswith('rgr_'),
+                                            system=SDI_ASS, direction=FAD_ONTO)
             if last_change:
                 upd_values.update(rgr_last_change=datetime.datetime.now())
             if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
                 error_msg = ass_db.last_err_msg
             else:
                 ass_res_rec.update(upd_values)
-        if not error_msg:
-            rgr_pk = ass_res_rec['rgr_pk'] = ass_db.fetch_value()
-
-            ass_res_rec['ResPersons'] = Records()
-            rgc_idx = 0
-            for arri in range(pax_count(shd)):
-                occ_cl_pk = None
-                sh_id = shd.val('ResPersons', arri, 'ShId')
-                ac_id = shd.val('ResPersons', arri, 'AcId')
-                if sh_id is None and ac_id is None:
-                    self._warn(err_pre + "ignoring unspecified person {}".format(arri + 1),
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                    continue
-                sn = shd.val('ResPersons', arri, 'Surname')
-                fn = shd.val('ResPersons', arri, 'Forename')
-                if sh_id or ac_id:
-                    self._warn(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id),
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                    occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id,
-                                                  name=fn + " " + sn if fn and sn else sn or fn)
-                    if occ_cl_pk is None:
-                        self._warn(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
-                                   .format(fn, sn, sh_id, ac_id, self.error_message),
-                                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                        self.error_message = ""
-                room_seq = shd.val('ResPersons', arri, 'PERSON.ROOM-SEQ')
-                pers_seq = shd.val('ResPersons', arri, 'PERSON.ROOM-PERS-SEQ')
-                if room_seq is None:
-                    self._warn(err_pre + "ignoring unspecified room/person seq {}".format(arri + 1),
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                    continue
-                chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(room_seq), rgc_pers_seq=int(pers_seq))
-                upd_values = chk_values.copy()
-                upd_values\
-                    .update(rgc_surname=sn,
-                            rgc_firstname=fn,
-                            rgc_auto_generated=shd.val('ResPersons', arri, 'AUTO-GENERATED'),
-                            rgc_occup_cl_fk=occ_cl_pk,
-                            # Sihot offers also PICKUP-TYPE-ARRIVAL(1=car, 2=van), we now use PICKUP-TIME-ARRIVAL
-                            # .. instead of ARR-TIME for the flight arr/dep (pg converts str into time object/value)
-                            rgc_flight_arr_comment=shd.val('ResPersons', arri, 'PERSON.PICKUP-COMMENT-ARRIVAL'),
-                            rgc_flight_arr_time=shd.val('ResPersons', arri, 'PERSON.PICKUP-TIME-ARRIVAL'),
-                            rgc_flight_dep_comment=shd.val('ResPersons', arri, 'PERSON.PICKUP-COMMENT-DEPARTURE'),
-                            rgc_flight_dep_time=shd.val('ResPersons', arri, 'PERSON.PICKUP-TIME-DEPARTURE'),
-                            # occupation data
-                            rgc_pers_type=shd.val('ResPersons', arri, 'GuestType'),
-                            rgc_sh_pack=shd.val('ResBoard'),    # val('ResPersons', arri, 'PERSON.PERS-RATE.R'),
-                            rgc_room_id=shd.val('ResRoomNo'),   # val('ResPersons', arri, 'PERSON.RN'),
-                            )
-                pers_dob = shd.val('ResPersons', arri, 'DOB')
-                if pers_dob:
-                    upd_values.update(rgc_dob=datetime.datetime.strptime(pers_dob, SH_DATE_FORMAT))
-                if ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
-                    error_msg = ass_db.last_err_msg
-                    break
-
-                if is_rec:
-                    ass_res_rec.set_val(upd_values, 'rgc_list', rgc_idx)
-                else:
-                    ass_res_rec['rgc_list'].append(upd_values)
-                rgc_idx += 1
+            if not error_msg:
+                rgr_pk = ass_res_rec['rgr_pk'] = ass_db.fetch_value()
+                for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons')):
+                    chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(occ_rec.val('RoomSeq')),
+                                      rgc_pers_seq=int(occ_rec.val('RoomPersSeq')))
+                    upd_values = occ_rec.to_dict(system=SDI_ASS, direction=FAD_ONTO)
+                    if ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):
+                        error_msg = ass_db.last_err_msg
+                        break
+                    if is_rec:
+                        ass_res_rec.set_val(upd_values, 'ResPersons', pers_idx)
+                    else:
+                        ass_res_rec['ResPersons'].append(upd_values)
 
             if error_msg:
                 self.error_message = error_msg

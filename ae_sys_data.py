@@ -956,28 +956,30 @@ class Record(OrderedDict):
                     column_expressions.append(expr + name)
         return column_expressions
 
-    def to_dict(self, field_names=None, system=None, direction=None, key_type=str, put_system_val=True):
+    def to_dict(self, filter_func=None, key_type=str, put_system_val=True, system=None, direction=None):
         """
-        copy field values into a dict.
-        :param field_names:     list of field names to be included in returned dict, pass None to include all fields.
+        copy Record leaf values into a dict.
+        :param filter_func:     callable returning True for each field that need to be excluded in returned dict, pass
+                                None to include all fields.
+        :param key_type:        type of dict keys: None=field name, tuple=index path tuple, str=index path string (def).
+        :param put_system_val:  pass False to include/use main field val; def=True for to include system val specified
+                                by the system/direction args.
         :param system:          system id for to determine included leaf and field val.
         :param direction:       direction id for to determine included leaf and field val.
-        :param key_type:        type of dict keys: None=field name, tuple=index path tuple, str=index path string (def).
-        :param put_system_val:  pass False to include/use main field val; def=True for to include system val.
         :return:                dict with leaf
         """
-        idx_paths = field_names_idx_paths(field_names) if field_names else None
         system, direction = use_rec_default_sys_dir(self, system, direction)
 
         ret = dict()
         for idx_path in self.leaf_indexes(system=system, direction=direction):
-            child = self.node_child(idx_path)
-            key = child.name(system=system, direction=direction, flex_sys_dir=False)
-            if key and (not idx_paths or idx_path in idx_paths):
+            field = self.node_child(idx_path)
+            key = field.name(system=system, direction=direction, flex_sys_dir=False)
+            if key and (not filter_func or not filter_func(field)):
                 if key_type == tuple:
                     key = idx_path
                 elif key_type == str:
-                    key = idx_path_field_name(idx_path)
+                    key_path = tuple(idx_path[:-1] + (key, )) if system else idx_path
+                    key = idx_path_field_name(key_path)
                 if put_system_val:
                     ret[key] = self.val(idx_path, system=system, direction=direction)
                 else:

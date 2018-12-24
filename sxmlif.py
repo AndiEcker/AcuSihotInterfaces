@@ -183,9 +183,9 @@ class ResChange(SihotXmlParser):
             return None  # processed by base class
         self.cae.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         if tag == 'SIHOT-Reservation':
-            self.rgr_list.append(dict(rgr_ho_fk=self.hn, rgc_list=list()))
+            self.rgr_list.append(dict(rgr_ho_fk=self.hn, ResPersons=list()))
         elif tag in ('FIRST-Person', 'SIHOT-Person'):       # FIRST-Person only seen in room change (CI) on first occ
-            self.rgr_list[-1]['rgc_list'].append(dict())
+            self.rgr_list[-1]['ResPersons'].append(dict())
 
     def data(self, data):
         if super(ResChange, self).data(data) is None and self._curr_tag not in ('MATCHCODE', 'OBJID'):
@@ -225,26 +225,26 @@ class ResChange(SihotXmlParser):
 
         # rgc/reservation clients elements
         elif self._curr_tag == 'GID':                       # Sihot Guest object ID
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'ShId'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'ShId'
         elif self._curr_tag == 'MATCHCODE':
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'AcId'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'AcId'
         elif self._curr_tag == 'SN':
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_surname'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_surname'
         elif self._curr_tag == 'CN':
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_firstname'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_firstname'
         elif self._curr_tag == 'DOB':
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_dob'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_dob'
         elif self._curr_tag == 'PHONE':
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_phone'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_phone'
         elif self._curr_tag == 'EMAIL':
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_email'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_email'
         elif self._curr_tag == 'LN':
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_language'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_language'
         elif self._curr_tag == 'COUNTRY':
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_country'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_country'
         elif self._curr_tag == 'RN':
             self.rgr_list[-1]['rgr_room_id'] = data     # update also rgr_room_id with same value
-            di, ik = self.rgr_list[-1]['rgc_list'][-1], 'rgc_room_id'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_room_id'
 
         # unsupported elements
         else:

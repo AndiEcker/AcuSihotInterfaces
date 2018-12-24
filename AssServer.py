@@ -138,8 +138,8 @@ def check_res_change_data(rec_ctx):
     if not rrd['rgr_room_id'] == srd.val('ResRoomNo') == ard['rgr_room_id']:
         log_msg(proc_context(rec_ctx) + "Sihot Room No (main) mismatch req/sh/ass={}/{}/{}"
                 .format(rrd['rgr_room_id'], srd.val('ResRoomNo'), ard['rgr_room_id']), notify=True)
-    for idx, rgc in enumerate(rrd['rgc_list']):
-        ard_room = ard.get('rgc_list')
+    for idx, rgc in enumerate(rrd['ResPersons']):
+        ard_room = ard.get('ResPersons')
         if ard_room:
             ard_room = ard_room[min(idx, len(ard_room) - 1)].get('rgc_room_id', '')
         if ard_room == list():
@@ -359,7 +359,7 @@ def oc_res_change(asd, req, rec_ctx):
                        ResHotelId=getattr(req, 'hn', None),
                        ResId=req_rgr.get('rgr_res_id', ''),
                        ResSubId=req_rgr.get('rgr_sub_id', ''),
-                       ResRoomNo=req_rgr.get('rgr_room_id', req_rgr.get('rgc_list', [{}, ])[0].get('rgc_room_id', '')),
+                       ResRoomNo=req_rgr.get('rgr_room_id', req_rgr.get('ResPersons', [{}, ])[0].get('rgc_room_id', '')),
                        )
         log_msg(proc_context(rec_ctx) + "res change data={}".format(ppf(req_rgr)),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)

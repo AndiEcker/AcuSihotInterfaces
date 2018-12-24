@@ -666,7 +666,8 @@ class SfInterface:
 
     def cl_upsert(self, rec, sf_obj=None):
         # check if Id passed in (then this method can determine the sf_obj and will do an update not an insert)
-        sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD).val(), True) if SF_DEF_SEARCH_FIELD in rec \
+        sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD).val(), True) \
+            if SF_DEF_SEARCH_FIELD in rec and rec.val(SF_DEF_SEARCH_FIELD) \
             else ('', False)
 
         if sf_obj is None:
@@ -702,7 +703,7 @@ class SfInterface:
                 err = "{} create() exception {}. sent={}".format(sf_obj, _format_exc(ex), ppf(sf_dict))
                 sf_id = None
 
-        if not err and sf_id and 'RciId' in rec:
+        if not err and sf_id and rec.val('RciId'):
             _, err, msg = self.cl_ext_ref_upsert(sf_id, EXT_REF_TYPE_RCI, rec.val('RciId'), sf_obj=sf_obj)
 
         if err:
@@ -812,9 +813,8 @@ class SfInterface:
 
     def res_upsert(self, cl_res_rec):
         # exclude not implemented parameters like e.g. RciId
-        implemented_args = [_ for _ in cl_res_rec.keys() if _ not in ('RciId', 'AcId')]
-
-        sf_args = cl_res_rec.to_dict(field_names=implemented_args, system=SDI_SF, direction=FAD_ONTO)
+        sf_args = cl_res_rec.to_dict(filter_func=lambda f: f.name() in ('RciId', 'AcId'),
+                                     system=SDI_SF, direction=FAD_ONTO)
         sf_id = sf_args.pop('Id', None)
         if sf_id:
             sf_args['PersonAccountId'] = sf_id
