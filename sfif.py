@@ -19,14 +19,14 @@ DEF_CLIENT_OBJ = 'Account'
 MAP_CLIENT_OBJECTS = \
     {'Account': (
         # ('AssCache_Id__pc', 'AssId'),
-        ('CD_CODE__pc', 'AcId'),
+        ('AcumenClientRef__pc', 'AcId'),
         ('Id', 'SfId'),                      # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
         ('SihotGuestObjId__pc', 'ShId'),
         ('LastName', 'Surname'),
         ('FirstName', 'Forename'),
         ('PersonEmail', 'Email'),
         ('PersonHomePhone', 'Phone'),
-        ('RCI_Reference__pc', 'RciId'),
+        # ('RCI_Reference__pc', 'RciId'),
         # ('KM_DOB__pc', 'DOB'),
         ('PersonMailingStreet', 'Street'),
         ('PersonMailingCity', 'City'),
@@ -774,20 +774,26 @@ class SfInterface:
         :return:            dict with sf_data.
         """
         ret_val = dict(ReservationOpportunityId=res_opp_id)
-        soql_query = '''
-            SELECT Id,
+        ''' -- old SOQL query - now using system names from MAP_CLIENT_OBJECTS/MAP_RES_OBJECT
+            SELECT Id,          -- ResSfId/ReservationOpportunityId
                    Account.Id, Account.FirstName, Account.LastName, Account.PersonEmail, Account.PersonHomePhone,
-                   Account.CD_CODE__pc, Account.SihotGuestObjId__pc, 
+                   Account.AcumenClientRef__pc, Account.SihotGuestObjId__pc, 
                    Account.Language__pc, 
                    Account.PersonMailingStreet, Account.PersonMailingPostalCode, Account.PersonMailingCity, 
                    Account.PersonMailingCountry, 
                    Account.CurrencyIsoCode, Account.Nationality__pc, 
-                   (SELECT Id, HotelId__c, Number__c, SubNumber__c, GdsNo__c, Arrival__c, Departure__c, Status__c,  
+                   (SELECT Id,      -- ReservationId (not ResSfId!) 
+                           HotelId__c, Number__c, SubNumber__c, GdsNo__c, Arrival__c, Departure__c, Status__c,  
                            RoomNo__c, MktSegment__c, MktGroup__c, RoomCat__c, Adults__c, Children__c, Note__c, 
                            SihotResvObjectId__c
                       FROM Reservations__r) 
               FROM Opportunity WHERE Id = '{}'
-              '''.format(res_opp_id)
+        '''     # .format(res_opp_id)
+        soql_query = "SELECT Id, " + ", ".join(["Account." + ('CD_CODE__pc' if sn == 'AcumenClientRef__pc' else sn)
+                                                for sn, fn in MAP_CLIENT_OBJECTS['Account']]) + ", " \
+            + "(SELECT " + ", ".join([sn for sn, fn in MAP_RES_OBJECT if fn != 'ResSfId']) \
+            + " FROM Reservations__r) " \
+            + "FROM Opportunity WHERE Id = '{}'".format(res_opp_id)
         res = self.soql_query_all(soql_query)
         if self.error_msg:
             self.error_msg = "res_data({}): ".format(res_opp_id) + self.error_msg
@@ -798,6 +804,7 @@ class SfInterface:
             if ret_all['Account']:      # is None if no Account associated
                 ret.update(ret_all['Account'])
                 ret['PersonAccountId'] = ret.get('Id')
+                ret['AcumenClientRef__pc'] = ret.pop('CD_CODE__pc')
             if ret_all['Reservations__r'] and ret_all['Reservations__r']['totalSize'] > 0:
                 ret.update(ret_all['Reservations__r']['records'][0])
                 ret['ReservationId'] = ret.get('Id')
@@ -812,8 +819,8 @@ class SfInterface:
         return ret_val
 
     def res_upsert(self, cl_res_rec):
-        # exclude not implemented parameters like e.g. RciId
-        sf_args = cl_res_rec.to_dict(filter_func=lambda f: f.name() in ('RciId', 'AcId'),
+        # exclude not implemented parameters - TODO: add RCI_Reference__pc in SF to SihotRestInterface.doHttpPost()
+        sf_args = cl_res_rec.to_dict(filter_func=lambda f: f.name() in ('RciId', ),
                                      system=SDI_SF, direction=FAD_ONTO)
         sf_id = sf_args.pop('Id', None)
         if sf_id:

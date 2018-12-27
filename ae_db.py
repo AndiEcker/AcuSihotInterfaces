@@ -161,7 +161,14 @@ class GenericDB:
             uprint(self.last_err_msg)
         return val
 
+    def _normalize_col_values(self, col_values):
+        for key, val in col_values.items():
+            if isinstance(val, str) and not val:
+                col_values[key] = None
+        return col_values
+
     def insert(self, table_name, col_values, commit=False, returning_column=''):
+        self._normalize_col_values(col_values)
         sql = "INSERT INTO " + table_name + " (" + ", ".join(col_values.keys()) \
               + ") VALUES (" + ", ".join([NAMED_BIND_VAR_PREFIX + c for c in col_values.keys()]) + ")"
         if returning_column:
@@ -169,6 +176,7 @@ class GenericDB:
         return self.execute_sql(sql, commit=commit, bind_vars=col_values)
 
     def update(self, table_name, col_values, where='', commit=False, bind_vars=None, locked_cols=None):
+        self._normalize_col_values(col_values)
         new_bind_vars = deepcopy(col_values)
         if bind_vars:
             new_bind_vars.update(bind_vars)
@@ -194,6 +202,7 @@ class GenericDB:
         :param multiple_row_update  allow update of multiple records with the same chk_values.
         :return:                    last error message or "" if no errors occurred.
         """
+        self._normalize_col_values(col_values)
         if not chk_values:
             chk_values = dict([next(iter(col_values.items()))])     # use first dict item as pkey check value
         chk_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in chk_values.keys()])

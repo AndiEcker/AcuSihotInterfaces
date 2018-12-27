@@ -10,7 +10,7 @@ from ae_db import OraDB, PostgresDB
 from ae_console_app import uprint, DATE_ISO
 from ae_notification import add_notification_options, init_notification
 from acif import add_ac_options
-from sfif import add_sf_options, ensure_long_id, SfInterface
+from sfif import add_sf_options, ensure_long_id, SfInterface, MAP_RES_OBJECT, MAP_CLIENT_OBJECTS
 from sxmlif import AvailCatInfo
 from shif import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
                   ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ShInterface)
@@ -1110,10 +1110,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def rci_first_week_of_year(self, year):
         rci_wk_01 = self.cae.get_config(str(year), 'RcWeeks')
         if rci_wk_01:
-            ret = datetime.datetime.strptime(rci_wk_01, '%Y-%m-%d')
+            ret = datetime.datetime.strptime(rci_wk_01, '%Y-%m-%d').date()
         else:
             self._warn("AssSysData.rci_first_week_of_year({}): missing RcWeeks config".format(year), notify=True)
-            ret = datetime.datetime(year=year, month=1, day=1)
+            ret = datetime.date(year=year, month=1, day=1)
             # if ret.weekday() != 4:    # is the 1st of January a Friday? if not then add some/0..6 days
             ret += datetime.timedelta(days=(11 - ret.weekday()) % 7)
         return ret
@@ -1173,12 +1173,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                 ClientSearch.fetch_client()/shif.client_data()).
         :param ass_res_data:    Record with reservation fields (from ass_cache.res_groups).
         :param sync_cache:      True for to update ass_cache/res_groups/rgr_last_sync+rgr_sf_id (opt, def=True).
-        :param sf_sent:         Record of sent Account/Reservation object fields (OUT, opt). E.g. the Reservation Opp.
-                                Id gets returned as sf_data['ResSfId'].
+        :param sf_sent:         (OUT, opt) Record(system=SDI_SF, direction=FAD_ONTO) of sent Account+Reservation object
+                                fields; e.g. the Reservation Opportunity Id gets returned as sf_data['ResSfId'].
         :return:                error message if error occurred, else empty string.
         """
         ori_sf_id = sf_id
-        sf_rec = Record() if sf_sent is None else sf_sent
+        sf_rec = Record(system=SDI_SF, direction=FAD_ONTO).add_system_fields(MAP_CLIENT_OBJECTS['Account']
+                                                                             + MAP_RES_OBJECT) \
+            if sf_sent is None else sf_sent
         sf_rec['ResSfId'] = sf_id
         ass_id = ass_res_data.val('AssId')
         if ass_id:
@@ -1322,6 +1324,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 rooms -= self.sh_count_res(hotel_ids=['999'], room_cat_prefix=room_cat_prefix, day=day)
             else:
                 ret = cat_info.avail_rooms(hotel_id=hotel_id, from_date=day, to_date=day)
+                if not isinstance(ret, dict):
+                    self._err("sh_avail_rooms(): call to avail_rooms({}, {}, {}) failed with error {}"
+                              .format(hotel_id, day, day, ret), self._ctx_no_file + "ShAvailRooms")
+                    continue
                 for cat_id, cat_data in ret.items():
                     if cat_id.startswith(room_cat_prefix):  # True for all room cats if room_cat_prefix is empty string
                         rooms += ret[cat_id][day_str]['AVAIL']
@@ -1450,12 +1456,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             return err_pre + "Incomplete reservation id"
 
         sh_ass_rec = Record(system=SDI_ASS, direction=FAD_ONTO)\
-            .add_system_fields(ASS_RES_MAP)\
-            .merge_leafs(shd, system=SDI_SH, direction=FAD_FROM, extend=False)\
+            .merge_leafs(shd, system=SDI_SH, direction=FAD_FROM)\
+            .add_system_fields(ASS_RES_MAP, extend=False)\
             .pull(SDI_SH)
         sh_ass_rec.set_val(ord_cl_pk, 'AssId')
         sh_ass_rec.set_val(ri_pk, 'RinId')
-        for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons')):
+        for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons', flex_sys_dir=True)):
             sh_id = occ_rec.val('ShId')
             ac_id = occ_rec.val('AcId')
             sn = occ_rec.val('Surname')
@@ -1479,18 +1485,18 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         error_msg = ""
         with ass_db.thread_lock_init('res_groups', chk_values):
-            upd_values = sh_ass_rec.to_dict(filter_func=lambda f: f.name(system=SDI_ASS, direction=FAD_ONTO)
+            upd_values = sh_ass_rec.to_dict(filter_func=lambda f: not f.name(system=SDI_ASS, direction=FAD_ONTO)
                                             .startswith('rgr_'),
                                             system=SDI_ASS, direction=FAD_ONTO)
             if last_change:
                 upd_values.update(rgr_last_change=datetime.datetime.now())
-            if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
+            if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk', commit=True):
                 error_msg = ass_db.last_err_msg
             else:
                 ass_res_rec.update(upd_values)
             if not error_msg:
                 rgr_pk = ass_res_rec['rgr_pk'] = ass_db.fetch_value()
-                for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons')):
+                for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons', flex_sys_dir=True)):
                     chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(occ_rec.val('RoomSeq')),
                                       rgc_pers_seq=int(occ_rec.val('RoomPersSeq')))
                     upd_values = occ_rec.to_dict(system=SDI_ASS, direction=FAD_ONTO)
@@ -1500,6 +1506,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     if is_rec:
                         ass_res_rec.set_val(upd_values, 'ResPersons', pers_idx)
                     else:
+                        if 'ResPersons' not in ass_res_rec:
+                            ass_res_rec['ResPersons'] = list()
                         ass_res_rec['ResPersons'].append(upd_values)
 
             if error_msg:

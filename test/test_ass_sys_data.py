@@ -5,13 +5,162 @@ import datetime
 # from sys_data_ids import CLIENT_REC_TYPE_ID_OWNERS
 from ae_sys_data import Record, FAD_ONTO
 
+from sfif import MAP_RES_OBJECT, MAP_CLIENT_OBJECTS
 from shif import res_search, client_data, ResFetch
 from ass_sys_data import correct_email, correct_phone, AssSysData
-from sys_data_ids import SDI_ASS
+from sys_data_ids import SDI_ASS, SDI_SF
 
 
 def test_tmp(console_app_env):
     pass
+
+
+class TestAssSysDataSh:
+    def test_sh_res_change_to_ass_4_33220(self, console_app_env):
+        # use TO reservation with GDS 899993 from 26-Dec-17 to 3-Jan-18
+        ho_id = '4'
+        res_id = '33220'
+        sub_id = '1'
+        obj_id = '60544'
+
+        res_data = ResFetch(console_app_env).fetch_by_res_id(ho_id=ho_id, res_id=res_id, sub_id=sub_id)
+        assert isinstance(res_data, Record)
+        assert ho_id == res_data.val('ResHotelId')
+        assert res_id == res_data.val('ResId')
+        assert sub_id == res_data.val('ResSubId')
+        assert obj_id == res_data.val('ResObjId')
+        arr_date = res_data.val('ResArrival')
+        dep_date = res_data.val('ResDeparture')
+
+        rgr_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
+        asd = AssSysData(console_app_env)
+        asd.sh_res_change_to_ass(res_data, ass_res_rec=rgr_rec)
+        assert ho_id == rgr_rec['rgr_ho_fk']
+        assert res_id == rgr_rec['rgr_res_id']
+        assert sub_id == rgr_rec['rgr_sub_id']
+        assert obj_id == rgr_rec['rgr_obj_id']
+        assert arr_date == rgr_rec['rgr_arrival']
+        assert dep_date == rgr_rec['rgr_departure']
+
+        rgr_dict = dict()       # sh_res_change_to_ass allows also dict
+        asd = AssSysData(console_app_env)
+        asd.sh_res_change_to_ass(res_data, ass_res_rec=rgr_dict)
+        assert ho_id == rgr_dict['rgr_ho_fk']
+        assert res_id == rgr_dict['rgr_res_id']
+        assert sub_id == rgr_dict['rgr_sub_id']
+        assert obj_id == rgr_dict['rgr_obj_id']
+        assert arr_date == rgr_dict['rgr_arrival']
+        assert dep_date == rgr_dict['rgr_departure']
+
+        cols = ['rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_obj_id', 'rgr_arrival', 'rgr_departure']
+
+        rgr_list = asd.rgr_fetch_list(cols, dict(rgr_obj_id=obj_id))
+        assert isinstance(rgr_list, list)
+        rgr_dict = dict(zip(cols, rgr_list[0]))
+        assert ho_id == rgr_dict['rgr_ho_fk']
+        assert res_id == rgr_dict['rgr_res_id']
+        assert sub_id == rgr_dict['rgr_sub_id']
+        assert obj_id == rgr_dict['rgr_obj_id']
+        assert arr_date.toordinal() == rgr_dict['rgr_arrival'].toordinal()
+        assert dep_date.toordinal() == rgr_dict['rgr_departure'].toordinal()
+        assert arr_date == rgr_dict['rgr_arrival']
+        assert dep_date == rgr_dict['rgr_departure']
+
+        rgr_list = asd.rgr_fetch_list(cols, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
+        assert isinstance(rgr_list, list)
+        rgr_dict = dict(zip(cols, rgr_list[0]))
+        assert ho_id == rgr_dict['rgr_ho_fk']
+        assert res_id == rgr_dict['rgr_res_id']
+        assert sub_id == rgr_dict['rgr_sub_id']
+        assert obj_id == rgr_dict['rgr_obj_id']
+        assert arr_date.toordinal() == rgr_dict['rgr_arrival'].toordinal()
+        assert dep_date.toordinal() == rgr_dict['rgr_departure'].toordinal()
+        assert arr_date == rgr_dict['rgr_arrival']
+        assert dep_date == rgr_dict['rgr_departure']
+
+    @staticmethod
+    def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
+        def _normalize_val(key, val):
+            val = val.capitalize() if 'Name' in key else val.lower() if 'Email' in key else None if val == '' else val
+            if isinstance(val, str) and len(val) > 40:
+                val = val[:40].strip()
+            return val
+        diffs = [(sk, _normalize_val(sk, sv), _normalize_val(sk, dict_with_compare_values.get(sk)))
+                 for sk, sv in dict_with_compare_keys.items()
+                 if sk not in ('PersonAccountId', 'CurrencyIsoCode', 'Language__pc',
+                               'SihotGuestObjId__pc', 'PersonHomePhone', 'PersonMailingCountry')
+                 and _normalize_val(sk, sv) != _normalize_val(sk, dict_with_compare_values.get(sk))]
+        return diffs
+
+    def test_sending_resv_of_today(self, salesforce_connection, console_app_env):
+        # whole week running 15 minutes on TEST system !!!!!
+        sfc = salesforce_connection
+        beg = datetime.date.today()
+        end = beg + datetime.timedelta(days=1)
+        ret = res_search(console_app_env, beg, date_till=end)
+        assert isinstance(ret, list)
+        res_count = len(ret)
+        assert res_count
+        asd = AssSysData(console_app_env)
+        for idx, res in enumerate(ret):
+            print("++++  Test reservation {}/{} creation; res={}".format(idx, res_count, res))
+            res_fields = Record(system=SDI_ASS, direction=FAD_ONTO)
+            send_err = asd.sh_res_change_to_ass(res, ass_res_rec=res_fields)
+            print('res_fields:', res_fields)
+            assert not send_err, "sh_res_change_to_ass error " + send_err
+
+            cl_fields = client_data(console_app_env, res.val('ShId'))
+            print('cl_fields', cl_fields)
+            assert isinstance(cl_fields, dict), "client_data error - no dict=" + str(cl_fields)
+
+            sf_data = Record(system=SDI_SF, direction=FAD_ONTO)\
+                .add_system_fields(MAP_CLIENT_OBJECTS['Account'] + MAP_RES_OBJECT)
+            send_err = asd.sf_ass_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
+            print('sf_data:', sf_data)
+            assert not send_err, "sf_ass_res_upsert error " + send_err
+
+            sf_sent = sf_data.to_dict()
+            sf_recd = sfc.res_data(sf_sent['ReservationOpportunityId'])
+            assert not sfc.error_msg
+            assert not self._compare_converted_field_dicts(sf_sent, sf_recd)
+
+    def test_sh_room_change_to_ass_4_33220(self, console_app_env):
+        # use TO reservation with GDS 899993 from 26-Dec-17 to 3-Jan-18
+        ho_id = '4'
+        res_id = '33220'
+        sub_id = '1'
+        obj_id = '60544'
+        room_id = '0999'
+        asd = AssSysData(console_app_env)
+
+        dt_in = datetime.datetime.now().replace(microsecond=0)
+        asd.sh_room_change_to_ass('CI', ho_id=ho_id, res_id=res_id, sub_id=sub_id, room_id=room_id, action_time=dt_in)
+
+        cols = ['rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_obj_id', 'rgr_room_id', 'rgr_time_in', 'rgr_time_out']
+
+        rgr_list = asd.rgr_fetch_list(cols, dict(rgr_obj_id=obj_id))
+        assert isinstance(rgr_list, list)
+        rgr_dict = dict(zip(cols, rgr_list[0]))
+        assert ho_id == rgr_dict['rgr_ho_fk']
+        assert res_id == rgr_dict['rgr_res_id']
+        assert sub_id == rgr_dict['rgr_sub_id']
+        assert obj_id == rgr_dict['rgr_obj_id']
+        assert room_id == rgr_dict['rgr_room_id']
+        assert dt_in == rgr_dict['rgr_time_in']
+        assert rgr_dict['rgr_time_out'] is None
+
+        dt_out = datetime.datetime.now().replace(microsecond=0)
+        asd.sh_room_change_to_ass('CO', ho_id=ho_id, res_id=res_id, sub_id=sub_id, room_id=room_id, action_time=dt_out)
+        rgr_list = asd.rgr_fetch_list(cols, dict(rgr_obj_id=obj_id))
+        assert isinstance(rgr_list, list)
+        rgr_dict = dict(zip(cols, rgr_list[0]))
+        assert ho_id == rgr_dict['rgr_ho_fk']
+        assert res_id == rgr_dict['rgr_res_id']
+        assert sub_id == rgr_dict['rgr_sub_id']
+        assert obj_id == rgr_dict['rgr_obj_id']
+        assert room_id == rgr_dict['rgr_room_id']
+        assert dt_in == rgr_dict['rgr_time_in']
+        assert dt_out == rgr_dict['rgr_time_out']
 
 
 class TestContactValidation:
@@ -249,10 +398,10 @@ class TestAssSysDataAptWkYr:
     def test_apt_wk_yr(self, console_app_env, config_data):
         console_app_env._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
         console_app_env._options['2019'] = '2019-01-04'
-        r = Record(fields=dict(ResArrival=datetime.datetime(2018, 6, 1)))
+        r = Record(fields=dict(ResArrival=datetime.date(2018, 6, 1)))
         assert config_data.sh_apt_wk_yr(r) == ('None-22', 2018)
 
-        r = Record(fields=dict(ResArrival=datetime.datetime(2018, 6, 1), ResRoomNo='A'))
+        r = Record(fields=dict(ResArrival=datetime.date(2018, 6, 1), ResRoomNo='A'))
         assert config_data.sh_apt_wk_yr(r) == ('A-22', 2018)
 
 
@@ -303,146 +452,5 @@ class TestRciHelpers:
     def test_rci_arr_to_year_week(self, console_app_env, config_data):
         console_app_env._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
         console_app_env._options['2019'] = '2019-01-04'
-        d1 = datetime.datetime(2018, 6, 1)
+        d1 = datetime.date(2018, 6, 1)
         assert config_data.rci_arr_to_year_week(d1) == (2018, 22)
-
-
-class TestAssSysDataSh:
-    def test_sh_res_change_to_ass_4_33220(self, console_app_env):
-        # use TO reservation with GDS 899993 from 26-Dec-17 to 3-Jan-18
-        ho_id = '4'
-        res_id = '33220'
-        sub_id = '1'
-        obj_id = '60544'
-
-        res_data = ResFetch(console_app_env).fetch_by_res_id(ho_id=ho_id, res_id=res_id, sub_id=sub_id)
-        assert isinstance(res_data, Record)
-        assert ho_id == res_data.val('ResHotelId')
-        assert res_id == res_data.val('ResId')
-        assert sub_id == res_data.val('ResSubId')
-        assert obj_id == res_data.val('ResObjId')
-        arr_date = res_data.val('ResArrival')
-        dep_date = res_data.val('ResDeparture')
-
-        rgr_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
-        asd = AssSysData(console_app_env)
-        asd.sh_res_change_to_ass(res_data, ass_res_rec=rgr_rec)
-        assert ho_id == rgr_rec['rgr_ho_fk']
-        assert res_id == rgr_rec['rgr_res_id']
-        assert sub_id == rgr_rec['rgr_sub_id']
-        assert obj_id == rgr_rec['rgr_obj_id']
-        assert arr_date == rgr_rec['rgr_arrival']
-        assert dep_date == rgr_rec['rgr_departure']
-
-        rgr_dict = dict()       # sh_res_change_to_ass allows also dict
-        asd = AssSysData(console_app_env)
-        asd.sh_res_change_to_ass(res_data, ass_res_rec=rgr_dict)
-        assert ho_id == rgr_dict['rgr_ho_fk']
-        assert res_id == rgr_dict['rgr_res_id']
-        assert sub_id == rgr_dict['rgr_sub_id']
-        assert obj_id == rgr_dict['rgr_obj_id']
-        assert arr_date == rgr_dict['rgr_arrival']
-        assert dep_date == rgr_dict['rgr_departure']
-
-        cols = ['rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_obj_id', 'rgr_arrival', 'rgr_departure']
-
-        rgr_list = asd.rgr_fetch_list(cols, dict(rgr_obj_id=obj_id))
-        assert isinstance(rgr_list, list)
-        rgr_dict = dict(zip(cols, rgr_list[0]))
-        assert ho_id == rgr_dict['rgr_ho_fk']
-        assert res_id == rgr_dict['rgr_res_id']
-        assert sub_id == rgr_dict['rgr_sub_id']
-        assert obj_id == rgr_dict['rgr_obj_id']
-        assert arr_date.toordinal() == rgr_dict['rgr_arrival'].toordinal()
-        assert dep_date.toordinal() == rgr_dict['rgr_departure'].toordinal()
-
-        rgr_list = asd.rgr_fetch_list(cols, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
-        assert isinstance(rgr_list, list)
-        rgr_dict = dict(zip(cols, rgr_list[0]))
-        assert ho_id == rgr_dict['rgr_ho_fk']
-        assert res_id == rgr_dict['rgr_res_id']
-        assert sub_id == rgr_dict['rgr_sub_id']
-        assert obj_id == rgr_dict['rgr_obj_id']
-        assert arr_date.toordinal() == rgr_dict['rgr_arrival'].toordinal()
-        assert dep_date.toordinal() == rgr_dict['rgr_departure'].toordinal()
-
-    @staticmethod
-    def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
-        diffs = [(sk, sv, dict_with_compare_values.get(sk)) for sk, sv in dict_with_compare_keys.items()
-                 if sk not in ('PersonAccountId', 'CurrencyIsoCode', 'Language__pc',
-                               'SihotGuestObjId__pc', 'PersonHomePhone')
-                 and (sv.capitalize() if 'Name' in sk else
-                      sv.lower() if 'Email' in sk else
-                      None if sv == '' else
-                      sv) != dict_with_compare_values.get(sk)]
-        return diffs
-
-    def test_sending_resv_of_today(self, salesforce_connection, console_app_env):
-        # whole week running 15 minutes on TEST system !!!!!
-        sfc = salesforce_connection
-        beg = datetime.date.today()
-        end = beg + datetime.timedelta(days=1)
-        ret = res_search(console_app_env, beg, date_till=end)
-        assert isinstance(ret, list)
-        send_err = ""
-        res_count = len(ret)
-        assert res_count
-        asd = AssSysData(console_app_env)
-        for idx, res in enumerate(ret):
-            print("++++  Test reservation {}/{} creation; res={}".format(idx, res_count, res))
-            res_fields = Record(system=SDI_ASS, direction=FAD_ONTO)
-            send_err = asd.sh_res_change_to_ass(res, ass_res_rec=res_fields)
-            print('res_fields:', res_fields)
-            assert not send_err, "sh_res_change_to_ass error " + send_err
-
-            cl_fields = client_data(console_app_env, res.val('ShId'))
-            print('cl_fields', cl_fields)
-            assert isinstance(cl_fields, dict), "client_data error - no dict=" + str(cl_fields)
-
-            sf_data = Record()
-            send_err = asd.sf_ass_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
-            print('sf_data:', sf_data)
-            assert not send_err, "sf_ass_res_upsert error " + send_err
-
-            sf_sent = sf_data.to_dict()
-            sf_recd = sfc.res_data(sf_sent['ReservationOpportunityId'])
-            assert not sfc.error_msg
-            assert not self._compare_converted_field_dicts(sf_sent, sf_recd)
-
-    def test_sh_room_change_to_ass_4_33220(self, console_app_env):
-        # use TO reservation with GDS 899993 from 26-Dec-17 to 3-Jan-18
-        ho_id = '4'
-        res_id = '33220'
-        sub_id = '1'
-        obj_id = '60544'
-        room_id = '0999'
-        asd = AssSysData(console_app_env)
-
-        dt_in = datetime.datetime.now().replace(microsecond=0)
-        asd.sh_room_change_to_ass('CI', ho_id=ho_id, res_id=res_id, sub_id=sub_id, room_id=room_id, action_time=dt_in)
-
-        cols = ['rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id', 'rgr_obj_id', 'rgr_room_id', 'rgr_time_in', 'rgr_time_out']
-
-        rgr_list = asd.rgr_fetch_list(cols, dict(rgr_obj_id=obj_id))
-        assert isinstance(rgr_list, list)
-        rgr_dict = dict(zip(cols, rgr_list[0]))
-        assert ho_id == rgr_dict['rgr_ho_fk']
-        assert res_id == rgr_dict['rgr_res_id']
-        assert sub_id == rgr_dict['rgr_sub_id']
-        assert obj_id == rgr_dict['rgr_obj_id']
-        assert room_id == rgr_dict['rgr_room_id']
-        assert dt_in == rgr_dict['rgr_time_in']
-        assert rgr_dict['rgr_time_out'] is None
-
-        dt_out = datetime.datetime.now().replace(microsecond=0)
-        asd.sh_room_change_to_ass('CO', ho_id=ho_id, res_id=res_id, sub_id=sub_id, room_id=room_id, action_time=dt_out)
-        rgr_list = asd.rgr_fetch_list(cols, dict(rgr_obj_id=obj_id))
-        assert isinstance(rgr_list, list)
-        rgr_dict = dict(zip(cols, rgr_list[0]))
-        assert ho_id == rgr_dict['rgr_ho_fk']
-        assert res_id == rgr_dict['rgr_res_id']
-        assert sub_id == rgr_dict['rgr_sub_id']
-        assert obj_id == rgr_dict['rgr_obj_id']
-        assert room_id == rgr_dict['rgr_room_id']
-        assert dt_in == rgr_dict['rgr_time_in']
-        assert dt_out == rgr_dict['rgr_time_out']

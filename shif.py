@@ -10,8 +10,9 @@ from typing import Union
 from sys_data_ids import (SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED,
                           SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
-from ae_sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, FAD_FROM, FAD_ONTO, LIST_TYPES,
-                         Record, Records, Value,  current_index, set_current_index, field_name_idx_path)
+from ae_sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
+                         FAD_FROM, FAD_ONTO, LIST_TYPES,
+                         Record, Records, Value, current_index, set_current_index, field_name_idx_path)
 from ae_console_app import uprint, full_stack_trace
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
@@ -39,11 +40,11 @@ ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
 def convert_date_from_sh(xml_string):
-    return datetime.datetime.strptime(xml_string, '%Y-%m-%d') if xml_string else ''
+    return datetime.datetime.strptime(xml_string, '%Y-%m-%d').date() if xml_string else ''
 
 
 def convert_date_onto_sh(date):
-    return datetime.datetime.strftime(date, '%Y-%m-%d') if date else ''
+    return datetime.date.strftime(date, '%Y-%m-%d') if date else ''
 
 
 #  ELEMENT-FIELD-MAP-TUPLE-INDEXES  #################################
@@ -188,7 +189,8 @@ MAP_WEB_RES = \
         ('PAYMENT-INST', 'ResAccount', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('SALES-DATE', 'ResBooked', None,
-         lambda f: f.ina(ACTION_DELETE) or not f.val()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val(),
+         lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
         ('RATE-SEGMENT', 'ResRateSegment', None,
          lambda f: not f.val(), ''),
         ('RATE/', ),  # package/arrangement has also to be specified in PERSON:
@@ -258,8 +260,10 @@ MAP_WEB_RES = \
          lambda f: f.ina(ACTION_DELETE)),
         ('COMMENT', 'ResNote', None,
          lambda f: f.ina(ACTION_DELETE)),
+        # oc SS/RES-SEARCH have MARKETCODE and RES has MARKETCODE-NO element
         ('MARKETCODE-NO', 'ResMktSegment', None,
          lambda f: f.ina(ACTION_DELETE)),
+        ('MARKETCODE', 'ResMktSegment'),
         # ('MEDIA', ),
         ('SOURCE', 'ResSource', None,
          lambda f: f.ina(ACTION_DELETE)),
@@ -269,8 +273,7 @@ MAP_WEB_RES = \
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('EXT-REFERENCE', 'ResFlightArrComment', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),    # see also currently unused PICKUP-COMMENT-ARRIVAL element
-        ('ARR-TIME', 'ResCheckIn', None,      # was ResFlightETA (but changed because cannot have duplicate field names)
-         lambda f: f.ina(ACTION_DELETE) or not f.val()),
+        ('ARR-TIME', 'ResFlightETA'),
         ('PICKUP-TIME-ARRIVAL', 'ResFlightETA', None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('PICKUP-TYPE-ARRIVAL', None, 1,                 # 1=car, 2=van
@@ -1030,7 +1033,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         self.elem_fld_rec.push(SDI_SH)
 
         old_act = self.elem_fld_rec.action
-        self.elem_fld_rec.action = self.action
+        self.elem_fld_rec.action = self.action or ACTION_BUILD
 
         field = recs = None
         inner_xml = ''

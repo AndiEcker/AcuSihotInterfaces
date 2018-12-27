@@ -275,7 +275,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 
 | Field Name | Acumen Column | Salesforce Field | Sihot Element | AssCache Column |
 | --- | --- | --- | --- | --- |
-| AcId | CD_CODE+OC_CODE | CD_CODE__pc, AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | cl_ac_id+rgr_order_cl_fk->cl_ac_id | 
+| AcId | CD_CODE+OC_CODE | CD_CODE__pc+AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | cl_ac_id+rgr_order_cl_fk->cl_ac_id | 
 | AssId | - | AssCache_Id__pc | - | cl_pk |
 | City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
 | Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |
@@ -325,7 +325,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResLongNote | SIHOT_TEC_NOTE | - | RESERVATION.TEC-COMMENT | rgr_long_comment |
 | ResMktGroup | RO_RES_GROUP | MktGroup__c | RESERVATION.CHANNEL | rgr_mkt_group |
 | ResMktGroupNN | RO_SIHOT_SP_GROUP | - | NN | - |
-| ResMktSegment | SIHOT_MKT_SEG | MktSegment__c (Marketing_Source__pc) | RESERVATION.MARKETCODE, MARKETCODE-NO | rgr_mkt_segment |
+| ResMktSegment | SIHOT_MKT_SEG | MktSegment__c (Marketing_Source__pc) | RESERVATION.MARKETCODE(oc=SS/RES-SEARCH)+MARKETCODE-NO(oc=RES) | rgr_mkt_segment |
 | ResNote | SIHOT_NOTE | Note__c | RESERVATION.COMMENT | rgr_comment |
 | ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | RESERVATION.OBJID | rgr_obj_id |
 | ResPersons | - | - | PERSON | res_group_clients.* |
@@ -835,6 +835,17 @@ hotel 4:
 | 3 BED | - | 3BPB |
 | 3 BED | High Floor/757 | 3BPB |
 | 3 BED | Sea View/Front/781 | 3BPB |
+
+
+#### PMA room category overloads
+
+| Room Size | Requested Apartment Feature | Sihot room category |
+| :---: | --- | :---: |
+| 1 BED | - | 1JNR |
+| 2 BED | - | 2BSU |
+| 2 BED | Duplex/752 | 2DDO |
+| 3 BED | - | 3BPS |
+| 4 BED | - | 4BPS |
 
 
 #### Room specific overloads

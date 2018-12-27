@@ -528,8 +528,6 @@ class TestReservation:
         assert not err_msg
         assert not sfc.error_msg
         sf_recd = sfc.res_data(res_sf_id)
-        sf_recd['AcumenClientRefpc'] = sf_recd.pop('CD_CODE__pc', None)
-        # TODO: rename to CD_CODE__pc in SF.reservation_upsert
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
     def test_res_upsert_basic_not_existing_any(self, salesforce_connection):

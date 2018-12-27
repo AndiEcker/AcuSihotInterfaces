@@ -192,11 +192,11 @@ def _sih_check_all_res(crow, rd, row_err, err_sep):
             row_err += err_sep + 'Res. status mismatch' + \
                        acu_sep + str(crow['SH_RES_TYPE']) + \
                        sih_sep + str(rd[n]['RT'].val())
-        # Marketcode-no is mostly empty in Sihot RES-SEARCH response!!!
-        if rd[n]['MARKETCODE-NO'].val() and rd[n]['MARKETCODE-NO'].val() != crow['RUL_SIHOT_RATE']:
+        # MARKETCODE-NO is mostly empty in Sihot RES-SEARCH response!!!
+        if rd[n]['MARKETCODE'].val() and rd[n]['MARKETCODE'].val() != crow['RUL_SIHOT_RATE']:
             row_err += err_sep + 'Market segment mismatch' + \
                        acu_sep + str(crow['RUL_SIHOT_RATE']) + \
-                       sih_sep + str(rd[n]['MARKETCODE-NO'].val())
+                       sih_sep + str(rd[n]['MARKETCODE'].val())
         # RN can be empty/None - prevent None != '' false posit.
         if (rd[n]['RN'].val() or '') != crow['RUL_SIHOT_ROOM']:
             row_err += err_sep + 'Room no mismatch' + \
