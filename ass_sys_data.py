@@ -1561,7 +1561,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                           .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, rgr_sf_id))
 
             if col_values:
-                self.rgr_upsert(col_values, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id))
+                self.rgr_upsert(col_values, dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id), commit=True)
                 if self.error_message:
                     err_msg += self.error_message
                     self.error_message = ""
