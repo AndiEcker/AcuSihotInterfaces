@@ -1490,7 +1490,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                             system=SDI_ASS, direction=FAD_ONTO)
             if last_change:
                 upd_values.update(rgr_last_change=datetime.datetime.now())
-            if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk', commit=True):
+            if ass_db.upsert('res_groups', upd_values, chk_values=chk_values, returning_column='rgr_pk'):
                 error_msg = ass_db.last_err_msg
             else:
                 ass_res_rec.update(upd_values)
