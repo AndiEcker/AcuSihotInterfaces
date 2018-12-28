@@ -102,27 +102,41 @@ class TestAssSysDataSh:
         res_count = len(ret)
         assert res_count
         asd = AssSysData(console_app_env)
+        errors = list()
         for idx, res in enumerate(ret):
             print("++++  Test reservation {}/{} creation; res={}".format(idx, res_count, res))
             res_fields = Record(system=SDI_ASS, direction=FAD_ONTO)
             send_err = asd.sh_res_change_to_ass(res, ass_res_rec=res_fields)
             print('res_fields:', res_fields)
-            assert not send_err, "sh_res_change_to_ass error " + send_err
+            if send_err:
+                errors.append((idx, "sh_res_change_to_ass error " + send_err, res))
+                continue
 
             cl_fields = client_data(console_app_env, res.val('ShId'))
             print('cl_fields', cl_fields)
-            assert isinstance(cl_fields, dict), "client_data error - no dict=" + str(cl_fields)
+            if not isinstance(cl_fields, dict):
+                errors.append((idx, "client_data error - no dict=" + str(cl_fields), res))
+                continue
 
             sf_data = Record(system=SDI_SF, direction=FAD_ONTO)\
                 .add_system_fields(MAP_CLIENT_OBJECTS['Account'] + MAP_RES_OBJECT)
             send_err = asd.sf_ass_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
             print('sf_data:', sf_data)
-            assert not send_err, "sf_ass_res_upsert error " + send_err
+            if send_err:
+                errors.append((idx, "sf_ass_res_upsert error " + send_err, res))
+                continue
 
             sf_sent = sf_data.to_dict()
             sf_recd = sfc.res_data(sf_sent['ReservationOpportunityId'])
-            assert not sfc.error_msg
-            assert not self._compare_converted_field_dicts(sf_sent, sf_recd)
+            if sfc.error_msg:
+                errors.append((idx, "sfc.res_data() error " + sfc.error_msg, res))
+                continue
+            diff = self._compare_converted_field_dicts(sf_sent, sf_recd)
+            if diff:
+                errors.append((idx, "compare found differences: " + str(diff), res))
+                continue
+        assert not errors, "{} tests had {} fails; collected errors".format(len(ret), len(errors)) \
+                           + str(["\n" + str(e) for e in errors])
 
     def test_sh_room_change_to_ass_4_33220(self, console_app_env):
         # use TO reservation with GDS 899993 from 26-Dec-17 to 3-Jan-18

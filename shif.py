@@ -1135,11 +1135,11 @@ class ClientToSihot(FldMapXmlBuilder):
         return self.send_to_server()
 
     def _send_person_to_sihot(self, rec, first_person=""):  # pass AcId of first person for to send 2nd person
-        self._prepare_guest_xml(rec, fld_name_suffix='_B' if first_person else '')
+        self._prepare_guest_xml(rec, fld_name_suffix='_P' if first_person else '')
         err_msg = self.send_to_server()
         if 'guest exists already' in err_msg and self.action == ACTION_INSERT:
             self.action = ACTION_UPDATE
-            self._prepare_guest_xml(rec, fld_name_suffix='_B' if first_person else '')
+            self._prepare_guest_xml(rec, fld_name_suffix='_P' if first_person else '')
             err_msg = self.send_to_server()
         return err_msg
 

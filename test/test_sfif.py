@@ -623,18 +623,18 @@ class TestReservation:
 
         err_msg = sfc.room_change(res_sf_id, arr_date, None, '9999')
         assert not err_msg
-        _dict = sfc.room_data(res_sf_id)
-        assert _dict['CheckIn__c'] == arr_date
-        assert _dict['CheckOut__c'] is None
+        room_dict = sfc.room_data(res_sf_id)
+        assert room_dict['CheckIn__c'] == arr_date
+        assert room_dict['CheckOut__c'] is None
 
         err_msg = sfc.room_change(res_sf_id, None, dep_date, '9999')
         assert not err_msg
-        _dict = sfc.room_data(res_sf_id)
-        assert _dict['CheckIn__c'] is None
-        assert _dict['CheckOut__c'] == dep_date
+        room_dict = sfc.room_data(res_sf_id)
+        assert room_dict['CheckIn__c'] is None
+        assert room_dict['CheckOut__c'] == dep_date
 
         err_msg = sfc.room_change(res_sf_id, arr_date, dep_date, '9999')
         assert not err_msg
-        _dict = sfc.room_data(res_sf_id)
-        assert _dict['CheckIn__c'] == arr_date
-        assert _dict['CheckOut__c'] == dep_date
+        room_dict = sfc.room_data(res_sf_id)
+        assert room_dict['CheckIn__c'] == arr_date
+        assert room_dict['CheckOut__c'] == dep_date

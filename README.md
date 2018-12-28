@@ -305,18 +305,18 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | RciId | CD_RCI_REF, CR_REF | RCI_Reference__pc | MATCH-ADM | - |
 | ResAccount | SIHOT_PAYMENT_INST | - | RESERVATION.PAYMENT-INST | rgr_payment_inst |
 | ResAction | RUL_ACTION | - | - | - |
-| ResAdults | RU_ADULTS | Adults__c | RESERVATION.NOPAX, NO | rgr_adults |
-| ResAllotmentNo | SIHOT_ALLOTMENT_NO | - | ALLOTMENT-EXT-NO | - | 
+| ResAdults | RU_ADULTS | Adults__c | RESERVATION.NOPAX+NO | rgr_adults |
+| ResAllotmentNo | - | - | ALLOTMENT-EXT-NO(oc=RES)+ALLOTMENT-NO(oc=RES-SEARCH) | - | 
 | ResArrival | ARR_DATE | Arrival__c | RESERVATION.ARR | rgr_arrival |
 | ResBoard | RUL_SIHOT_PACK | - | PERSON.R | rgc_sh_pack |
 | ResBooked | RH_EXT_BOOK_DATE | - | RESERVATION.SALES-DATE | rgr_ext_book_day |
 | ResCheckIn | ARO_TIMEIN | CheckIn__c | ARR-TIME | rgr_time_in |
 | ResCheckOut | ARO_TIMEOUT | CheckOut__c | DEP-TIME | rgr_time_out |
-| ResChildren | RU_CHILDREN | Children__c | RESERVATION.NOCHILDS, NO | rgr_children |
+| ResChildren | RU_CHILDREN | Children__c | RESERVATION.NOCHILDS+NO | rgr_children |
 | ResDeparture | DEP_DATE | Departure__c | RESERVATION.DEP | rgr_departure |
 | ResFlightETA | RU_FLIGHT_LANDS | - | PICKUP-TIME-ARRIVAL | rgc_flight_arr_time |
 | ResFlightETD | - | - | PICKUP-TIME-DEPARTURE | rgc_flight_dep_time |
-| ResFlightArrComment | SH_EXT_REF | - | EXT-REFERENCE, PICKUP-COMMENT-ARRIVAL | rgc_flight_arr_comment |
+| ResFlightArrComment | SH_EXT_REF | - | EXT-REFERENCE+PICKUP-COMMENT-ARRIVAL | rgc_flight_arr_comment |
 | ResFlightDepComment | - | - | PICKUP-COMMENT-DEPARTURE | rgc_flight_dep_comment |
 | ResGdsNo | SIHOT_GDSNO | GdsNo__c | GDSNO | rgr_gds_no |
 | ResGroupNo | SIHOT_LINK_GROUP | - | EXT-KEY | - |

@@ -1164,11 +1164,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     # #######################  SF helpers  ######################################################################
 
-    def sf_ass_res_upsert(self, sf_id, sh_cl_data, ass_res_data, sync_cache=True, sf_sent=None):
+    def sf_ass_res_upsert(self, sf_res_id, sh_cl_data, ass_res_data, sync_cache=True, sf_sent=None):
         """
         convert ass_cache db columns to SF fields, and then push to Salesforce server via APEX method call
 
-        :param sf_id:           Reservation Opportunity Id (SF ID with 18 characters). Pass None for to create new-one.
+        :param sf_res_id:       Reservation Opportunity Id (SF ID with 18 characters). Pass None for to create new-one.
         :param sh_cl_data:      Record with Sihot guest data of the reservation orderer (fetched with
                                 ClientSearch.fetch_client()/shif.client_data()).
         :param ass_res_data:    Record with reservation fields (from ass_cache.res_groups).
@@ -1177,11 +1177,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                 fields; e.g. the Reservation Opportunity Id gets returned as sf_data['ResSfId'].
         :return:                error message if error occurred, else empty string.
         """
-        ori_sf_id = sf_id
+        ori_res_id = sf_res_id
         sf_rec = Record(system=SDI_SF, direction=FAD_ONTO).add_system_fields(MAP_CLIENT_OBJECTS['Account']
                                                                              + MAP_RES_OBJECT) \
             if sf_sent is None else sf_sent
-        sf_rec['ResSfId'] = sf_id
+        sf_rec['ResSfId'] = sf_res_id
         ass_id = ass_res_data.val('AssId')
         if ass_id:
             sf_cl_id = self.cl_sf_id_by_ass_id(ass_id)
@@ -1196,27 +1196,27 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         sf_conn = self.used_systems[SDI_SF].connection
         sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
-        if err_msg and sf_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
+        if err_msg and sf_res_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
             ori_err = err_msg
-            # retry without sf_id if ResOpp got deleted within SF
+            # retry without sf_res_id if ResOpp got deleted within SF
             sf_rec['ResSfId'] = ''
             sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
             self._warn("asd.sf_ass_res_upsert({}, {}, {}) cached ResSfId reset to {}; SF client={}; ori-/err='{}'/'{}'"
-                       .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
+                       .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
                        notify=True)
-            sf_id = ''
+            sf_res_id = ''
 
         if not err_msg and (not sf_cl_id or not sf_opp_id):
             self._err("sf_ass_res_upsert({}, {}, {}) got empty Id from SF: PersonAccount.Id={}; ResSfId={}"
-                      .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_cl_id, sf_opp_id))
+                      .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_cl_id, sf_opp_id))
         if not err_msg and sf_rec.val('SfId') and sf_rec.val('SfId') != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_ENABLED:
             self._err("sf_ass_res_upsert({}, {}, {}) PersonAccountId/id/SfId discrepancy {} != {}"
-                      .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_rec.val('SfId'), sf_cl_id))
+                      .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_rec.val('SfId'), sf_cl_id))
         if not err_msg and sf_rec.val('ResSfId') and sf_rec.val('ResSfId') != sf_opp_id \
                 and self.debug_level >= DEBUG_LEVEL_ENABLED:
             self._err("sf_ass_res_upsert({}, {}, {}) Reservation Opportunity Id discrepancy {} != {}"
-                      .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_rec.val('ResSfId'), sf_opp_id))
+                      .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_rec.val('ResSfId'), sf_opp_id))
 
         if sync_cache:
             if sf_cl_id and ass_id:
@@ -1227,11 +1227,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     self.error_message = ""
 
             col_values = dict() if err_msg else dict(rgr_last_sync=datetime.datetime.now())
-            if not sf_id and sf_opp_id:     # save just (re-)created ID of Reservation Opportunity in AssCache
+            if not sf_res_id and sf_opp_id:     # save just (re-)created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
-            elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and sf_id and sf_opp_id != sf_id:
+            elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and sf_res_id and sf_opp_id != sf_res_id:
                 self._err("sf_ass_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
-                          .format(ori_sf_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_id))
+                          .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_res_id))
 
             if col_values:
                 self.rgr_upsert(col_values,

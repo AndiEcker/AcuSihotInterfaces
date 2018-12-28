@@ -12,7 +12,7 @@
 from traceback import format_exc
 
 from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_TIMEOUT, \
-    SDF_SH_XML_ENCODING
+    SDF_SH_XML_ENCODING, SDF_SH_CLIENT_PORT
 from ae_console_app import ConsoleApp, uprint
 from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB
@@ -23,7 +23,9 @@ from shif import add_sh_options, ClientFromSihot
 
 __version__ = '0.5'
 
+
 cae = debug_level = None  # added for to remove Pycharm warning
+
 if __name__ == "__main__":      # for to allow import of client_to_acu() for testing suite
     cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle", multi_threading=True)
     add_ac_options(cae)
@@ -50,7 +52,8 @@ def client_to_acu(col_values, ca=None):
     else:
         dl = debug_level
         ca = cae
-    ora_db = OraDB(User=ca.get_option('acuUser'), Password=ca.get_option('acuPassword'), DSN=ca.get_option('acuDSN')),
+    ora_db = OraDB(dict(User=ca.get_option('acuUser'), Password=ca.get_option('acuPassword'),
+                        DSN=ca.get_option('acuDSN')),
                    app_name=ca.app_name(), debug_level=dl)
     err_msg = ora_db.connect()
     pkey = None

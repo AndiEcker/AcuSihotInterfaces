@@ -26,7 +26,7 @@ MAP_CLIENT_OBJECTS = \
         ('FirstName', 'Forename'),
         ('PersonEmail', 'Email'),
         ('PersonHomePhone', 'Phone'),
-        # ('RCI_Reference__pc', 'RciId'),
+        ('RCI_Reference__pc', 'RciId'),     # TODO: add RCIReferencepc to SF.SihotRestInterface.doHttpPost()
         # ('KM_DOB__pc', 'DOB'),
         ('PersonMailingStreet', 'Street'),
         ('PersonMailingCity', 'City'),

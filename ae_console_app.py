@@ -773,14 +773,15 @@ class NamedLocks:
     active_locks = {}
     active_lock_counters = {}
 
-    def __init__(self, *lock_names, sys_lock=False):
+    def __init__(self, *lock_names, reentrant_locks=True, sys_lock=False):
         self._lock_names = lock_names
+        self._lock_class = threading.RLock if reentrant_locks else threading.Lock
+        assert not sys_lock, "sys_lock is currently not implemented"
         self._sys_lock = sys_lock
         # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
         self.dprint = _ca_instance.dprint if _ca_instance and getattr(_ca_instance, 'startup_end', False) else dprint
 
         self.dprint("NamedLocks.__init__", lock_names, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        assert not sys_lock, "sys_lock is currently not implemented"
 
     def __enter__(self):
         self.dprint("NamedLocks.__enter__", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -796,27 +797,43 @@ class NamedLocks:
 
     def acquire(self, lock_name, *args, **kwargs):
         self.dprint("NamedLocks.acquire", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        with self.locks_change_lock:
-            if lock_name in self.active_locks:
-                self.active_lock_counters[lock_name] += 1
-            else:
-                self.active_locks[lock_name] = threading.RLock()
-                self.active_lock_counters[lock_name] = 1
 
-        lock_acquired = self.active_locks[lock_name].acquire(*args, **kwargs)
+        while True:     # break at the end - needed for to repeat on add/del of same lock name in threads
+            with self.locks_change_lock:
+                lock_exists = lock_name in self.active_locks
+                lock_instance = self.active_locks[lock_name] if lock_exists else self._lock_class()
+
+            # request the lock - out of locks_change_lock context, for to not block other instances of this class
+            lock_acquired = lock_instance.acquire(*args, **kwargs)
+
+            if lock_acquired:
+                if lock_exists != lock_name in self.active_locks:  # undo of local instance lock and retry is needed
+                    self.dprint("NamedLocks.acquire", lock_name, 'RETRY', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                    lock_instance.release()
+                    continue
+                with self.locks_change_lock:
+                    if lock_exists:
+                        self.active_lock_counters[lock_name] += 1
+                    else:
+                        self.active_locks[lock_name] = lock_instance
+                        self.active_lock_counters[lock_name] = 1
+            break
+
         self.dprint("NamedLocks.acquire", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return lock_acquired
 
     def release(self, lock_name, *args, **kwargs):
         self.dprint("NamedLocks.release", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+
         with self.locks_change_lock:
             if self.active_lock_counters[lock_name] == 1:
-                del self.active_lock_counters[lock_name]
+                self.active_lock_counters.pop(lock_name)
                 lock = self.active_locks.pop(lock_name)
             else:
                 self.active_lock_counters[lock_name] -= 1
                 lock = self.active_locks[lock_name]
 
         lock.release(*args, **kwargs)
+
         self.dprint("NamedLocks.release", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)

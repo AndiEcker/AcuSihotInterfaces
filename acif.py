@@ -2,7 +2,6 @@
 Acumen interface constants and helpers
 """
 import datetime
-from copy import deepcopy
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE
 from ae_console_app import uprint
@@ -29,14 +28,20 @@ field_indexes = {FAT_IDX: FMI_FLD_NAME, FAT_IDX + FAD_FROM: FMI_COL_NAME, FAT_SQ
 
 CLI_FIELD_MAP = [       # client data
     ('AcId', 'CD_CODE'),
-    ('AcIdP', 'CD_CODE2'),
+    ('AcId_P', 'CD_CODE2'),
     ('SfId', 'SIHOT_SF_ID'),
     ('ShId', 'CD_SIHOT_OBJID'),
+    ('ShId_P', 'CD_SIHOT_OBJID2'),
     ('Salutation', 'SIHOT_SALUTATION1'),
+    ('Salutation_P', 'SIHOT_SALUTATION2'),
     ('Title', 'SIHOT_TITLE1'),
+    ('Title_P', 'SIHOT_TITLE2'),
     ('GuestType', 'SIHOT_GUESTTYPE1'),
+    ('GuestType_P', 'SIHOT_GUESTTYPE2'),
     ('Surname', 'CD_SNAM1'),
+    ('Surname_P', 'CD_SNAM2'),
     ('Forename', 'CD_FNAM1'),
+    ('Forename_P', 'CD_FNAM2'),
     ('Street', 'CD_ADD11'),
     ('POBox', 'CD_ADD12'),          # had sql expression: "nvl(CD_ADD12, CD_ADD13)"), - now CD_ADD13 is 'State' field
     ('State', 'CD_ADD13'),
@@ -55,11 +60,14 @@ CLI_FIELD_MAP = [       # client data
     ('Email', 'CD_EMAIL'),
     ('EmailB', 'CD_SIGNUP_EMAIL'),
     ('DOB', 'CD_DOB1'),
+    ('DOB_P', 'CD_DOB2'),
     ('Password', 'CD_PASSWORD'),
     ('RciId', 'CD_RCI_REF'),
     ('ExtRefs', 'EXT_REFS',
      None,
      lambda f, v: f.string_to_records(v, ('Type', 'Id'))),
+    # ('Profession', 'CD_INDUSTRY1'),
+    # ('Profession_P', 'CD_INDUSTRY2'),
     ]
 RES_FIELD_MAP = [       # reservation data
     ('ResHotelId', 'RUL_SIHOT_HOTEL'),
@@ -108,11 +116,11 @@ RES_FIELD_MAP = [       # reservation data
      "trim(RU_FLIGHT_NO || ' ' || RU_FLIGHT_PICKUP || ' ' || RU_FLIGHT_AIRPORT)"),
     ('ResFlightETA', 'RU_FLIGHT_LANDS'),
     ('ResAccount', 'SIHOT_PAYMENT_INST'),
-    ('ResAllotmentNo', 'SIHOT_ALLOTMENT_NO'),
     ('ResAdults', 'RU_ADULTS'),
     ('ResChildren', 'RU_CHILDREN'),
     ('ResGroupNo', 'SIHOT_LINK_GROUP'),
-    # only one room per reservation, so not needed: ('ResRooms', 'SH_ROOMS'),
+    # ('ResAllotmentNo',),  # SIHOT_ALLOTMENT_NO migrated from V_ACU_RES_DATA to CFG file,
+    # ('ResRooms', 'SH_ROOMS'),     # only one room per reservation, so not needed
     # ('ResPersons', )
     ]
 '''
@@ -132,11 +140,11 @@ for idx in range(1, RES_MAX_CHILDREN + 1):
 '''
 
 
-
 def add_ac_options(cae):
     cae.add_option('acuUser', "Acumen/Oracle user account name", ACU_DEF_USR, 'u')
     cae.add_option('acuPassword', "Acumen/Oracle user account password", '', 'p')
     cae.add_option('acuDSN', "Acumen/Oracle data source name", ACU_DEF_DSN, 'd')
+
 
 ''' migrate to ae_sys_data methods: 
 
@@ -197,8 +205,8 @@ class AcuDbRows:
         if self.ora_db:
             self.ora_db.close()
 
-    def _add_to_acumen_sync_log(self, table, primary, action, status, message, logref):
-        self.cae.dprint('AcuDbRows._add_to_acumen_sync_log() fetched/now:', self._last_fetch, datetime.datetime.now(),
+    def add_to_acumen_sync_log(self, table, primary, action, status, message, logref):
+        self.cae.dprint('AcuDbRows.add_to_acumen_sync_log() fetched/now:', self._last_fetch, datetime.datetime.now(),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         return self.ora_db.insert('T_SRSL',
                                   {'SRSL_TABLE': table[:6],
@@ -214,7 +222,7 @@ class AcuDbRows:
                                    'SRSL_DATE': self._last_fetch,
                                    })
 
-    def _store_sihot_objid(self, table, pkey, objid, col_name_suffix=""):
+    def store_sihot_objid(self, table, pkey, objid, col_name_suffix=""):
         obj_id = objid if str(objid) else '-' + (pkey[2:] if table == 'CD' else str(pkey))
         id_col = table + "_SIHOT_OBJID" + col_name_suffix
         pk_col = table + "_CODE"
@@ -284,17 +292,17 @@ class AcuClientToSihot(ClientToSihot):
         err_msg = super()._send_person_to_sihot(rec, first_person=first_person)
 
         if not err_msg and self.response:
-            err_msg = self.acu_db._store_sihot_objid('CD', first_person or rec['CD_CODE'], self.response.objid,
-                                                     col_name_suffix="2" if first_person else "")
+            err_msg = self.acu_db.store_sihot_objid('CD', first_person or rec['CD_CODE'], self.response.objid,
+                                                    col_name_suffix="2" if first_person else "")
         return err_msg
 
-    def send_client_to_sihot(self, rec=None):
+    def send_client_to_sihot(self, rec):
         err_msg = super().send_client_to_sihot(rec=rec)
 
         action = self.action
         couple_linkage = ''  # flag for logging if second person got linked (+P2) or unlinked (-P2)
         if rec.val('CD_CODE2') and not err_msg:  # check for second person
-            crow2 = deepcopy(rec)
+            crow2 = rec.copy(deepness=-1)
             crow2['CD_CODE'] = rec['CD_CODE2']
             crow2['CD_SIHOT_OBJID'] = rec['CD_SIHOT_OBJID2']
             crow2['SIHOT_SALUTATION1'] = rec['SIHOT_SALUTATION2']
@@ -308,12 +316,12 @@ class AcuClientToSihot(ClientToSihot):
             action += '/' + self.action
             couple_linkage = '+P2'
 
-        log_err = self.acu_db._add_to_acumen_sync_log('CD', rec['CD_CODE'],
-                                                      action,
-                                                      'ERR' + (self.response.server_error() if self.response else '')
-                                                      if err_msg else 'SYNCED' + couple_linkage,
-                                                      err_msg,
-                                                      rec.get('CDL_CODE', -966) or -969)
+        log_err = self.acu_db.add_to_acumen_sync_log('CD', rec['CD_CODE'],
+                                                     action,
+                                                     'ERR' + (self.response.server_error() if self.response else '')
+                                                     if err_msg else 'SYNCED' + couple_linkage,
+                                                     err_msg,
+                                                     rec.get('CDL_CODE', -966) or -969)
         if log_err:
             err_msg += "\n      LogErr=" + log_err
 
@@ -388,13 +396,13 @@ class AcuResToSihot(ResToSihot):
         err_msg, warn_msg = super()._sending_res_to_sihot(rec)
 
         if not err_msg and self.response:
-            err_msg = self.acu_db._store_sihot_objid('RU', rec['RUL_PRIMARY'], self.response.objid)
-        err_msg += self.acu_db._add_to_acumen_sync_log('RU', rec['RUL_PRIMARY'],
-                                                       rec['RUL_ACTION'],
-                                                       "ERR" + (self.response.server_error() if self.response else "")
-                                                       if err_msg else "SYNCED",
-                                                       err_msg + ("W" + warn_msg if warn_msg else ""),
-                                                       rec['RUL_CODE'])
+            err_msg = self.acu_db.store_sihot_objid('RU', rec['RUL_PRIMARY'], self.response.objid)
+        err_msg += self.acu_db.add_to_acumen_sync_log('RU', rec['RUL_PRIMARY'],
+                                                      rec['RUL_ACTION'],
+                                                      "ERR" + (self.response.server_error() if self.response else "")
+                                                      if err_msg else "SYNCED",
+                                                      err_msg + ("W" + warn_msg if warn_msg else ""),
+                                                      rec['RUL_CODE'])
         return err_msg
 
     def _ensure_clients_exist_and_updated(self, fld_vals, ensure_client_mode):
@@ -410,7 +418,7 @@ class AcuResToSihot(ResToSihot):
                 err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['CD_CODE'])
             if not err_msg:
                 if acu_client.recs:
-                    err_msg = acu_client.send_client_to_sihot()
+                    err_msg = acu_client.send_client_to_sihot(acu_client.recs[0])
                 elif not client_synced:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): client {} not found"\
                         .format(fld_vals['CD_CODE'])
@@ -420,8 +428,8 @@ class AcuResToSihot(ResToSihot):
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): IntErr/client: " + fld_vals['CD_CODE']
                 if not err_msg:
                     # transfer just created guest OBJIDs from guest to reservation record
-                    fld_vals['OC_SIHOT_OBJID'] = fld_vals['CD_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
-                    fld_vals['CD_SIHOT_OBJID2'] = acu_client.cols['CD_SIHOT_OBJID2']
+                    fld_vals['OC_SIHOT_OBJID'] = fld_vals['CD_SIHOT_OBJID'] = acu_client.recs.val(0, 'CD_SIHOT_OBJID')
+                    fld_vals['CD_SIHOT_OBJID2'] = acu_client.recs.val(0, 'CD_SIHOT_OBJID2')
 
         if not err_msg and 'OC_CODE' in fld_vals and fld_vals['OC_CODE'] \
                 and len(fld_vals['OC_CODE']) == 7:  # exclude pseudo client like TCAG/TCRENT
@@ -433,7 +441,7 @@ class AcuResToSihot(ResToSihot):
                 err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['OC_CODE'])
             if not err_msg:
                 if acu_client.recs:
-                    err_msg = acu_client.send_client_to_sihot()
+                    err_msg = acu_client.send_client_to_sihot(acu_client.recs[0])
                 elif not client_synced:
                     err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): invalid orderer {}"\
                         .format(fld_vals['OC_CODE'])
@@ -444,7 +452,7 @@ class AcuResToSihot(ResToSihot):
                         .format(fld_vals['OC_CODE'], repr(getattr(acu_client, 'cols', "unDef")), client_synced)
                 if not err_msg:
                     # transfer just created guest OBJIDs from guest to reservation record
-                    fld_vals['OC_SIHOT_OBJID'] = acu_client.cols['CD_SIHOT_OBJID']
+                    fld_vals['OC_SIHOT_OBJID'] = acu_client.recs.val(0, 'CD_SIHOT_OBJID')
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 

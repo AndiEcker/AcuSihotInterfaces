@@ -779,12 +779,12 @@ class Record(OrderedDict):
             sys_name = fas[sfi.pop(sys_nam_key)].strip('/')     # strip needed for Sihot elem names only
 
             records = self.value(idx_path[0], system='', direction='')
-            if len(idx_path) > 2 and isinstance(idx_path[1], int) and records:
-                # also add sys name to each sub Record
+            if len(idx_path) > 2 and isinstance(idx_path[1], int) and idx_path[1] == 0 and records:
+                # if template sub-record then also add sys name/converter/calculator/... to each sub Record
                 idx_paths = [(idx_path[0], idx, ) + idx_path[2:] for idx in range(len(records))]
             else:
                 idx_paths = (idx_path, )
-            for idx_path in idx_paths:
+            for path_idx, idx_path in enumerate(idx_paths):
                 field = self.node_child(idx_path)
                 field_created = not bool(field)
                 if not field:
@@ -817,7 +817,7 @@ class Record(OrderedDict):
                             field.set_aspect(fas[fi], fa, system=self.system, direction=self.direction, protect=True)
                         elif callable(fas[fi]):     # is a calculator specified in value/FAT_VAL item
                             field.set_calculator(fas[fi], system=self.system, direction=self.direction, protect=True)
-                        else:
+                        elif path_idx == 0:
                             field.set_val(fas[fi], system=self.system, direction=self.direction, protect=True,
                                           root_rec=self, root_idx=idx_path)
                 self.set_node_child(field, *idx_path, protect=field_created, root_rec=self, root_idx=())
@@ -1468,7 +1468,7 @@ class _Field:
     def set_converter(self, converter, system='', direction='', extend=False, root_rec=None, root_idx=()):
         assert system != '', "_Field converter can only be set for a given/non-empty system"
         self._ensure_system_value(system, direction=direction, root_rec=root_rec, root_idx=root_idx)
-        return self.set_aspect(converter, FAT_CNV, system=system, direction=direction, protect=extend)
+        return self.set_aspect(converter, FAT_CNV, system=system, direction=direction, protect=not extend)
 
     def filter(self, system='', direction=''):
         return self.aspect_value(FAT_FLT, system=system, direction=direction)
