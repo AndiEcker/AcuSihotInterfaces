@@ -528,6 +528,7 @@ class TestReservation:
         assert not err_msg
         assert not sfc.error_msg
         sf_recd = sfc.res_data(res_sf_id)
+        assert not sfc.error_msg
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
     def test_res_upsert_basic_not_existing_any(self, salesforce_connection):
@@ -576,6 +577,7 @@ class TestReservation:
         assert res_sf_id
 
         sf_recd = sfc.res_data(res_sf_id)
+        assert not sfc.error_msg
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
     def test_res_upsert_with_unicode_strings(self, salesforce_connection):

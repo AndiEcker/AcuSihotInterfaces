@@ -1,4 +1,4 @@
-# tests of AssSysData methods - some of them also done by the config settings tests (see test_config.py/conf_data)
+# tests of AssSysData methods - some of them also done by the config settings tests (see test_config.py/asd)
 import datetime
 # import pytest
 

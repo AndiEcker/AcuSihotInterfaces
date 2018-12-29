@@ -368,12 +368,14 @@ def _dummy_stub(msg, *args, **kwargs):
            .format(msg, args, kwargs))
 
 
+'''
 USED_SYS_ASS_ID = 'Ass'
 USED_SYS_ACU_ID = 'Acu'
 USED_SYS_SF_ID = 'Sf'
 USED_SYS_SHWEB_ID = 'Shweb'
 USED_SYS_SHKERNEL_ID = 'Shkernel'
 USED_SYS_ERR_MARKER = "**!"
+'''
 
 
 class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
@@ -465,8 +467,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                               "RO_SIHOT_AGENCY_OBJID is not NULL")
 
             self.room_change_max_days_diff = self.load_view(db, 'dual',
-                                                            ["F_CONST_VALUE_NUM('k.SihotRoomChangeMaxDaysDiff')"],
-                                                            '')[0][0]
+                                                            ["F_CONST_VALUE_NUM('k.SihotRoomChangeMaxDaysDiff')"])[0][0]
 
             db.close()
 

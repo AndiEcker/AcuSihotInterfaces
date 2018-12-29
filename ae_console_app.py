@@ -798,7 +798,7 @@ class NamedLocks:
     def acquire(self, lock_name, *args, **kwargs):
         self.dprint("NamedLocks.acquire", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-        while True:     # break at the end - needed for to repeat on add/del of same lock name in threads
+        while True:     # break at the end - needed for to retry after conflicted add/del of same lock name in threads
             with self.locks_change_lock:
                 lock_exists = lock_name in self.active_locks
                 lock_instance = self.active_locks[lock_name] if lock_exists else self._lock_class()
@@ -807,11 +807,11 @@ class NamedLocks:
             lock_acquired = lock_instance.acquire(*args, **kwargs)
 
             if lock_acquired:
-                if lock_exists != lock_name in self.active_locks:  # undo of local instance lock and retry is needed
-                    self.dprint("NamedLocks.acquire", lock_name, 'RETRY', minimum_debug_level=DEBUG_LEVEL_ENABLED)
-                    lock_instance.release()
-                    continue
                 with self.locks_change_lock:
+                    if lock_exists != lock_name in self.active_locks:  # if lock state has changed, then redo/retry
+                        self.dprint("NamedLocks.acquire", lock_name, 'RETRY', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                        lock_instance.release()
+                        continue
                     if lock_exists:
                         self.active_lock_counters[lock_name] += 1
                     else:
@@ -827,7 +827,10 @@ class NamedLocks:
         self.dprint("NamedLocks.release", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         with self.locks_change_lock:
-            if self.active_lock_counters[lock_name] == 1:
+            if lock_name not in self.active_lock_counters or lock_name not in self.active_locks:
+                self.dprint("NamedLocks.release", lock_name, 'IDX-ERR', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                return
+            elif self.active_lock_counters[lock_name] == 1:
                 self.active_lock_counters.pop(lock_name)
                 lock = self.active_locks.pop(lock_name)
             else:

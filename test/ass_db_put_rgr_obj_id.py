@@ -50,9 +50,9 @@ def log_warning(msg, ctx, importance=2):
 
 # logon to and prepare AssCache db
 '''
-conf_data = AssSysData(cae, err_logger=log_error, warn_logger=log_warning)
-if conf_data.error_message:
-    log_error(conf_data.error_message, 'AssSysDataInit', importance=4, exit_code=9)
+asd = AssSysData(cae, err_logger=log_error, warn_logger=log_warning)
+if asd.error_message:
+    log_error(asd.error_message, 'AssSysDataInit', importance=4, exit_code=9)
 '''
 # prepare ass_cache database
 ass_db = PostgresDB(dict(User=ass_user, Password=ass_pw, DSN=ass_dsn, SslArgs=cae.get_config('assSslArgs')),

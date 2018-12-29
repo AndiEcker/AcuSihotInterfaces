@@ -26,7 +26,7 @@ MAP_CLIENT_OBJECTS = \
         ('FirstName', 'Forename'),
         ('PersonEmail', 'Email'),
         ('PersonHomePhone', 'Phone'),
-        ('RCI_Reference__pc', 'RciId'),     # TODO: add RCIReferencepc to SF.SihotRestInterface.doHttpPost()
+        ('RCI_Reference__pc', 'RciId'),     # TODO: add RCI_Reference__pc to SF.SihotRestInterface.doHttpPost()
         # ('KM_DOB__pc', 'DOB'),
         ('PersonMailingStreet', 'Street'),
         ('PersonMailingCity', 'City'),
@@ -396,7 +396,7 @@ class SfInterface:
         query and doing a connection expiration check at the same time.
 
         :param soql_query:      SOQL query as string.
-        :return:                response from Salesforce.
+        :return:                response dict from Salesforce or None on error.
         """
         response = None
         try:
@@ -477,8 +477,8 @@ class SfInterface:
         :param sf_client_id:    Salesforce Id of client record (Lead, Contact, Account, PersonAccount, ...).
         :param er_type:         Type of external reference (e.g. EXT_REF_TYPE_RCI), pass None/nothing for all types.
         :param er_id:           External reference No or Id string, pass None for to get all external reference Ids.
-        :param sf_obj:          Salesforce object of the client passed into sf_client_id (Lead, Contact, Account, ...).
         :param return_obj_id:   Pass True to get the SF Ids of the External_Ref object (Def=External Reference Ids).
+        :param sf_obj:          Salesforce object of the client passed into sf_client_id (Lead, Contact, Account, ...).
         :return:                If er_type get passed in then: list of SF_IDs
                                 Else: list of tuples of found external ref type and SF_IDs;
                                 If return_obj_id==False then: SF_IDs will be the external reference Ids

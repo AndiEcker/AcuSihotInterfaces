@@ -12,7 +12,7 @@
     1.0     June-18: refactoring and clean-up
 
     TODO:
-    - use new config sections (for each hotel and ANY) or AssCache instead of Acumen conf_data.
+    - use new config sections (for each hotel and ANY) or AssCache instead of Acumen asd.
 """
 import sys
 import os
