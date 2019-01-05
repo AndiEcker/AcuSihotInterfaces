@@ -334,7 +334,8 @@ try:
                                      " and RU_FROM_DATE < least(ARO_EXP_DEPART, trunc(:till) + :days)"
                                      " and RU_FROM_DATE + RU_DAYS > greatest(ARO_EXP_ARRIVE, trunc(:beg) - :days))"
                                      " as GDS_NOS"],
-                                    "ARO_EXP_ARRIVE < trunc(:till) + :days and ARO_EXP_DEPART > trunc(:beg) - :days"
+                                    where_group_order="ARO_EXP_ARRIVE < trunc(:till) + :days"
+                                    " and ARO_EXP_DEPART > trunc(:beg) - :days"
                                     " and ARO_STATUS <> 120 and F_RESORT(ARO_APREF)"
                                     " in (select LU_ID from T_LU where LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1)"
                                     " order by ARO_EXP_ARRIVE desc",  # order to have old room last for RM
@@ -351,7 +352,7 @@ try:
                                      'rgr_arrival::timestamp', 'rgr_departure::timestamp', "rgr_room_id",
                                      'rgr_status', 'rgr_time_in', 'rgr_time_out', 'rgr_mkt_segment', "rgr_gds_no",
                                      'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id'],
-                                    "rgr_arrival < date(:till) + integer ':days'"
+                                    where_group_order="rgr_arrival < date(:till) + integer ':days'"
                                     " and rgr_departure > date(:beg) - integer ':days'"
                                     " and rgr_status <> 'S'"
                                     " order by rgr_arrival desc",  # order to have old room last for RM

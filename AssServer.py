@@ -111,7 +111,7 @@ def proc_context(rec_ctx):
 
 
 def check_res_change_data(rec_ctx):
-    """ TODO: migrate as field checker to AssCacheSync or as generic ass_sys_data method for system comparing/checking
+    """ TODO: migrate as field checker to SysDataMan or as generic ass_sys_data method for system comparing/checking
     Compare data from SXML request (OCs: CR, CI, CO and RM) with reservation data loaded directly from Sihot/ResFetch.
 
     :param rec_ctx:     current rec context dict with:

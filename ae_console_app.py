@@ -330,18 +330,21 @@ INI_EXT = '.ini'
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
                  log_file_def='', config_eval_vars=None, additional_cfg_files=None, log_max_size=20,
-                 multi_threading=False, suppress_stdout=False):
+                 multi_threading=False, suppress_stdout=False, formatter_class=None, epilog=""):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
-            :param app_version          application version.
-            :param app_desc             application description.
-            :param debug_level_def      default debug level (DEBUG_LEVEL_DISABLED).
-            :param log_file_def         default log file name.
-            :param config_eval_vars     dict of additional application specific data values that are used in eval
+            :param app_version:         application version.
+            :param app_desc:            application description.
+            :param debug_level_def:     default debug level (DEBUG_LEVEL_DISABLED).
+            :param log_file_def:        default log file name.
+            :param config_eval_vars:    dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
-            :param additional_cfg_files list of additional CFG/INI file names (opt. incl. abs/rel. path).
-            :param log_max_size         maximum size in MBytes of a log file.
-            :param multi_threading      pass True if instance is used in multi-threading app.
-            :param suppress_stdout      pass True (for wsgi apps) for to prevent any python print outputs to stdout.
+            :param additional_cfg_files: list of additional CFG/INI file names (opt. incl. abs/rel. path).
+            :param log_max_size:        maximum size in MBytes of a log file.
+            :param multi_threading:     pass True if instance is used in multi-threading app.
+            :param suppress_stdout:     pass True (for wsgi apps) for to prevent any python print outputs to stdout.
+            :param formatter_class:     alternative formatter class passed onto ArgumentParser instantiation.
+            :param epilog:              optional epilog text for command line arguments/options help text (passed onto
+                                        ArgumentParser instantiation).
         """
         """
             :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
@@ -417,7 +420,7 @@ class ConsoleApp:
         self.load_config()
 
         # prepare argument parser
-        self._arg_parser = ArgumentParser(description=app_desc)
+        self._arg_parser = ArgumentParser(description=app_desc, formatter_class=formatter_class, epilog=epilog)
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
                         choices=debug_levels.keys())
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')

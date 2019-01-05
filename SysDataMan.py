@@ -1,48 +1,62 @@
 """
-    AssCacheSync is a tool for to initialize, pull, verify or push the ass_cache PostGreSQL data against Acumen, Sihot
-    and/or Salesforce.
+    SysDataMan is a tool for to initialize, pull, compare or push data between the available systems (like Acumen,
+    AssCache, Sihot and/or Salesforce.
 
     0.1     first beta.
     0.2     refactored using add_ass_options() and init_ass_data().
+    0.3     renamed (from AssCacheSync) into SysDataMan, refactoring to use AssCache as fourth system, migration of
+            system data pull/push/compare actions onto ass_sys_data/ae_sys_data module methods and refactoring/move of
+            command line options filterRecords, filterFields, matchRecords and matchFields into the pull/push/compare
+            command line options.
 """
+import argparse
 import pprint
-from collections import OrderedDict
+from traceback import format_exc
 
-from sys_data_ids import AC_SQL_EXT_REF_TYPE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI, SDI_ACU, \
-    DEBUG_LEVEL_VERBOSE, SDI_ASS, SDI_SF
-from ae_sys_data import Record
-from ae_console_app import ConsoleApp, uprint, to_ascii
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES, SRT_ID_LEN
+from ae_sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
+from ae_console_app import ConsoleApp, uprint
 from ae_db import PostgresDB
-from acif import AcuResToSihot, AC_ID_2ND_COUPLE_SUFFIX
-from shif import client_data, SH_DEF_SEARCH_FIELD, ClientToSihot
-from sfif import obj_from_id, sf_fld_sys_name, field_list_to_sf, field_dict_from_sf, SF_DEF_SEARCH_FIELD
-from ass_sys_data import add_ass_options, init_ass_data, ensure_long_id, correct_email, correct_phone, client_fields
+from ass_sys_data import add_ass_options, init_ass_data
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
 
-cae = ConsoleApp(__version__, "Initialize, pull, verify or push AssCache data against Acumen, Sihot and/or Salesforce")
+cae = ConsoleApp(__version__, "Initialize, pull, compare or push AssCache data against Acumen, Sihot and/or Salesforce",
+                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                 epilog="A dictionary holding additional key-word-arguments can be appended"
+                        " directly after the system and record type ids"
+                        " for each of the three action options: pull, push and compare."
+                        "\n\nThe following key-word-arguments are supported:\n"
+                        "\n\tcol_names: list of used system field names (default=use all fields)"
+                        "\n\tchk_values: dict of system field values for record filtering (default=all records)"
+                        "\n\twhere_group_order: WHERE clause suffix of data SELECT (only available on database systems)"
+                        "\n\tbind_values: dict with system bind variable names and values (only on database systems)"
+                        "\n\tfield_names: list of used field names (default=use all fields)"
+                        "\n\tfilter_records: callable for record filtering (default=all records)"
+                        "\n\tmatch_fields: list of field names used for to lookup and merge in record sets")
 
 cae.add_option('init', "Initialize/Wipe/Recreate ass_cache database (0=No, 1=Yes)", 0, 'I')
 
-opt_choices = ('acC', 'acP', 'acR', 'shC', 'shR', 'sfC', 'sfP', 'sfR')
-cae.add_option('pull', "Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) data"
-                       " into AssCache, e.g. shC is pulling Client data from Sihot",
+opt_choices = tuple([s + rt for s in ALL_AVAILABLE_SYSTEMS.keys() for rt in ALL_AVAILABLE_RECORD_TYPES.keys()])
+cae.add_option('pull', "Pull record type (e.g. {}) from system (e.g. {}, e.g. shC is pulling Client data from Sihot"
+               .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
                [], 'S', choices=opt_choices, multiple=True)
-cae.add_option('push', "Update (ac=Acumen, sh=Sihot, sf=Salesforce) with (C=Clients, P=Products, R=Reservations) data"
-                       "from AssCache, e.g. acC is pushing/fixing Client data within Acumen",
+cae.add_option('push', "Push data of type (e.g. {}) from system (e.g. {}, e.g. sfR pushes Reservations to Salesforce"
+               .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
                [], 'W', choices=opt_choices, multiple=True)
-cae.add_option('verify', "Verify/Check AssCache data against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, "
-                         "P=Products, R=Reservations), e.g. acR is verifying AssCache reservations against Acumen",
+cae.add_option('compare', "Compare/Check pulled data ({}) against {}, e.g. asP checks pulled Products against AssCache"
+               .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
                [], 'V', choices=opt_choices, multiple=True)
 
+'''
 cae.add_option('filterRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) source records,"
                                 " e.g. {'C':\\\"cl_ac_id='E123456'\\\"} pushes only the client with Acu ID E123456",
                {}, 'X')
 cae.add_option('filterFields', "Restrict processed (dict keys: C=client, P=product, R=reservation) data fields,"
-                               " e.g. {'C':['Phone']} processes (pull/verify/push) only the client field Phone",
+                               " e.g. {'C':['Phone']} processes (pull/compare/push) only the client field Phone",
                {}, 'Y')
 cae.add_option('matchRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) destination records,"
                                " e.g. {'C':'cl_phone is NULL'} pulls only client data with empty phone",
@@ -50,6 +64,7 @@ cae.add_option('matchRecords', "Filter to restrict (dict keys: C=client, P=produ
 cae.add_option('matchFields', "Specify (dict keys: C=client, P=product, R=reservation) fields for to match/lookup the "
                               "associated record e.g. {'C':['Phone']} is using Phone for to associate client records",
                {}, 'Z')
+'''
 
 ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True, bulk_fetcher='Res')
 
@@ -58,43 +73,45 @@ notification = None             # declare early/here to ensure proper shutdown a
 _debug_level = cae.get_option('debugLevel')
 
 # ACTIONS, ACTION-FILTERS AND ACTION-MATCHES
-systems = dict(ac='Acumen', sh='Sihot', sf='Salesforce')
-types = dict(C='Clients', P='Products', R='Reservations')
 actions = list()
 act_init = cae.get_option('init')
 if act_init:
     actions.append("Initialize")
 act_pulls = cae.get_option('pull')
 for act_pull in act_pulls:
-    actions.append("Pull/Load " + types[act_pull[2:]] + " from " + systems[act_pull[:2]])
-act_veris = cae.get_option('verify')
-for act_veri in act_veris:
-    actions.append("Verify/Check " + types[act_veri[2:]] + " against " + systems[act_veri[:2]])
+    actions.append("Pull/Load " + ALL_AVAILABLE_RECORD_TYPES[act_pull[2:3]]
+                   + " from " + ALL_AVAILABLE_SYSTEMS[act_pull[:2]])
+act_compares = cae.get_option('compare')
+for act_compare in act_compares:
+    actions.append("Compare/Check " + ALL_AVAILABLE_RECORD_TYPES[act_compare[2:3]]
+                   + " against " + ALL_AVAILABLE_SYSTEMS[act_compare[:2]])
 act_pushes = cae.get_option('push')
 for act_push in act_pushes:
-    actions.append("Push/Fix " + types[act_push[2:]] + " onto " + systems[act_push[:2]])
+    actions.append("Push/Fix " + ALL_AVAILABLE_RECORD_TYPES[act_push[2:3]]
+                   + " onto " + ALL_AVAILABLE_SYSTEMS[act_push[:2]])
 if not actions:
-    uprint("\nNo Action option specified (using command line options init, pull, push and/or verify)\n")
+    uprint("\nNo Action option specified (using command line options init, pull, push and/or compare)\n")
     cae.show_help()
     cae.shutdown()
 uprint("Actions: " + "\n         ".join(actions))
+'''
 act_record_filters = cae.get_option('filterRecords')
 if not isinstance(act_record_filters, dict) or not act_record_filters:
-    act_record_filters = {k: act_record_filters or "" for (k, v) in types.items()}
+    act_record_filters = {k: act_record_filters or "" for (k, v) in ALL_AVAILABLE_RECORD_TYPES.items()}
 uprint("Source record filtering:", act_record_filters)
 act_field_filters = cae.get_option('filterFields')
 if not isinstance(act_field_filters, dict) or not act_field_filters:
-    act_field_filters = {k: act_field_filters or "" for (k, v) in types.items()}
+    act_field_filters = {k: act_field_filters or "" for (k, v) in ALL_AVAILABLE_RECORD_TYPES.items()}
 uprint("Filtered/Used data fields:", act_field_filters)
 act_record_matches = cae.get_option('matchRecords')
 if not isinstance(act_record_matches, dict) or not act_record_matches:
-    act_record_matches = {k: act_record_matches or "" for (k, v) in types.items()}
+    act_record_matches = {k: act_record_matches or "" for (k, v) in ALL_AVAILABLE_RECORD_TYPES.items()}
 uprint("Destination record filtering:", act_record_matches)
 act_match_fields = cae.get_option('matchFields')
 if not isinstance(act_match_fields, dict) or not act_match_fields:
-    act_match_fields = {k: act_match_fields or "" for (k, v) in types.items()}
+    act_match_fields = {k: act_match_fields or "" for (k, v) in ALL_AVAILABLE_RECORD_TYPES.items()}
 uprint("User-defined/Processed match fields:", act_match_fields)
-
+'''
 
 # LOGGING AND NOTIFICATION HELPERS
 error_log = list()
@@ -103,50 +120,67 @@ notification = notification_warning_emails = None
 
 
 def send_notification(exit_code=0):
-    if notification:
-        subject = "AssCacheSync Protocol"
-        mail_body = "\n\n".join(warn_log)
-        send_err = notification.send_notification(mail_body, subject=subject)
+    global warn_log, error_log
+    all_warnings = all_errors = ""
+    if warn_log:
+        all_warnings = "WARNINGS:\n\n{}".format("\n\n".join(warn_log))
+        uprint(all_warnings)
+        warn_log = list()
+    if error_log:
+        all_errors = "ERRORS:\n\n{}".format("\n\n".join(error_log))
+        uprint(all_errors)
+        error_log = list()
+
+    if notification and all_warnings:
+        subject = "SysDataMan Warnings"
+        send_err = notification.send_notification(all_warnings, subject=subject, mail_to=notification_warning_emails)
         if send_err:
-            uprint("****  {} send error: {}. mail-body='{}'.".format(subject, send_err, mail_body))
+            uprint("****  {} send error: {}. warnings='{}'.".format(subject, send_err, all_warnings))
             if not exit_code:
                 exit_code = 36
-        if notification_warning_emails and error_log:
-            mail_body = "ERRORS:\n\n" + ("\n\n".join(error_log) if error_log else "NONE") \
-                + "\n\nPROTOCOL:\n\n" + ("\n\n".join(warn_log) if warn_log else "NONE")
-            subject = "AssCacheSync Errors"
-            send_err = notification.send_notification(mail_body, subject=subject, mail_to=notification_warning_emails)
-            if send_err:
-                uprint("****  {} warning send error: {}. mail-body='{}'.".format(subject, send_err, mail_body))
-                if not exit_code:
-                    exit_code = 39
+    if notification and all_errors:
+        subject = "SysDataMan Errors"
+        send_err = notification.send_notification(all_errors, subject=subject)
+        if send_err:
+            uprint("****  {} send error: {}. errors='{}'.".format(subject, send_err, all_errors))
+            if not exit_code:
+                exit_code = 39
+
     return exit_code
 
 
-def log_error(msg, ctx, importance=2, exit_code=0, dbs=None):
+def log_error(msg, ctx, *args, importance=2, exit_code=0, **kwargs):
     msg = " " * (4 - importance) + "*" * importance + "  " + ctx + "   " + msg
+    if args and _debug_level >= DEBUG_LEVEL_VERBOSE:
+        msg += "; extra log_error args={}".format(args)
+    if kwargs and _debug_level >= DEBUG_LEVEL_VERBOSE:
+        msg += "; extra log_error kwargs={}".format(kwargs)
     error_log.append(msg)
     warn_log.append(msg)
     uprint(msg)
-    for db in dbs or list():
-        if db:
-            db.close()
-    if exit_code:
-        cae.shutdown(send_notification(exit_code))
+    if exit_code or importance > 2:
+        exit_code = send_notification(exit_code)
+        if ass_data['breakOnErrors']:
+            asd.close_dbs()
+            cae.shutdown(exit_code)
 
 
-def log_warning(msg, ctx, importance=2):
+def log_warning(msg, ctx, *args, importance=2, **kwargs):
     seps = '\n' * (importance - 2)
     msg = seps + " " * (4 - importance) + "#" * importance + "  " + ctx + "   " + msg
+    if args and _debug_level >= DEBUG_LEVEL_VERBOSE:
+        msg += "; extra log_warning args={}".format(args)
+    if kwargs and _debug_level >= DEBUG_LEVEL_VERBOSE:
+        msg += "; extra log_warning kwargs={}".format(kwargs)
     warn_log.append(msg)
     uprint(msg)
 
 
 # check for to (re-)create and initialize PG database - HAS TO BE DONE BEFORE AssSysData init because pg user not exists
-ass_user = cae.get_option('assUser')
-ass_pw = cae.get_option('assPassword')
-ass_dsn = cae.get_option('assDSN')
 if act_init:
+    ass_user = cae.get_option('assUser')
+    ass_pw = cae.get_option('assPassword')
+    ass_dsn = cae.get_option('assDSN')
     pg_dbname, pg_host = ass_dsn.split('@') if '@' in ass_dsn else (ass_dsn, '')
     pg_root_usr = cae.get_config('assRootUsr', default_value='postgres')
     pg_root_dsn = pg_root_usr + ('@' + pg_host if '@' in ass_dsn else '')
@@ -158,7 +192,8 @@ if act_init:
     if pg_db.execute_sql("CREATE DATABASE " + pg_dbname + ";", auto_commit=True):  # " LC_COLLATE 'C'"):
         log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72)
 
-    if pg_db.select('pg_user', ['count(*)'], "usename = :ass_user", dict(ass_user=ass_user)):
+    if pg_db.select('pg_user', ['count(*)'], where_group_order="usename = :ass_user",
+                    bind_vars=dict(ass_user=ass_user)):
         log_error(pg_db.last_err_msg, 'initCheckUser', exit_code=81)
     if not pg_db.fetch_value():
         if pg_db.execute_sql("CREATE USER " + ass_user + " WITH PASSWORD '" + ass_pw + "';", commit=True):
@@ -187,31 +222,66 @@ if act_init:
 
 
 # logon to and prepare AssCache and config data env, optional also connect to Acumen, Salesforce, Sihot
-ass_data = init_ass_data(cae, ass_options)
+ass_data = init_ass_data(cae, ass_options, err_logger=log_error, warn_logger=log_warning)
 asd = ass_data['assSysData']
 if asd.error_message:
     log_error(asd.error_message, 'AssSysDataInit', importance=4, exit_code=9)
-ass_db = asd.used_systems[SDI_ASS].connection
-acu_db = asd.used_systems[SDI_ACU].connection
-sf_conn = asd.used_systems[SDI_SF].connection
-
 notification = ass_data['notification']
 notification_warning_emails = ass_data['warningEmailAddresses']
+break_on_error = ass_data['breakOnError']
+
+
+def parse_action_args(args_str):
+    str_i = args_str.find('{')
+    if str_i >= 0:
+        arg_dict_str = args_str[str_i:]
+        kwargs = eval(arg_dict_str)
+    else:
+        str_i = len(args_str)
+        kwargs = dict()
+    str_i -= SRT_ID_LEN
+    rec_type = args_str[str_i:str_i + SRT_ID_LEN]
+    system = args_str[:str_i - 1]
+    return system, rec_type, kwargs
+
+
+# process requested actions
+for action, option_args in [(ACTION_PULL, a) for a in act_pulls] \
+                           + [(ACTION_PUSH, a) for a in act_pushes] \
+                           + [(ACTION_COMPARE, a) for a in act_compares]:
+    try:
+        sid, rty, kwa = parse_action_args(option_args)
+        asd.system_records_action(system=sid, rec_type=rty, action=action, **kwa)
+    except Exception as ex:
+        uprint("Exception {} while processing {} action with {}:\n{}".format(ex, action, option_args, format_exc(ex)))
+        if break_on_error:
+            break
+
+
+# shutdown application and notify users if there were any warnings and/or errors
+cae.shutdown(send_notification(42 if error_log else 0))
+
+
+'''
+
+ass_db = asd.connection(SDI_ASS)
+acu_db = asd.connection(SDI_ACU)
+sf_conn = asd.connection(SDI_SF)
 
 
 # ACTION HELPERS
 def sh_match_field_init(ctx):
-    supported_match_fields = [SH_DEF_SEARCH_FIELD, 'AcId', 'Name', 'Email']
+    supported_match_fields = [SH_DEF_SEARCH_FIELD, 'AcuId', 'Name', 'Email']
 
     match_fields = act_match_fields.get('C')
     if match_fields:
         match_field = match_fields[0]
         if len(match_fields) > 1:
-            err_msg = "sh_verify_clients(): Sihot client verification only allows a single match field"
+            err_msg = "sh_match_field_init(): Sihot client comparision only allows a single match field"
             log_error(err_msg, ctx, importance=4)
             return err_msg
         elif match_field not in supported_match_fields:
-            err_msg = "sh_verify_clients(): Sihot only allows the match fields {} (so {} is not supported)"\
+            err_msg = "sh_match_field_init(): Sihot only allows the match fields {} (so {} is not supported)"\
                 .format(supported_match_fields, match_field)
             log_error(err_msg, ctx, importance=4)
             return err_msg
@@ -221,20 +291,6 @@ def sh_match_field_init(ctx):
     return match_field
 
 
-# column expression SQL for to fetch client data from Acumen
-AC_SQL_AC_ID1 = "CD_CODE"
-AC_SQL_AC_ID2 = "CD_CODE || '" + AC_ID_2ND_COUPLE_SUFFIX + "'"
-AC_SQL_SF_ID1 = "nvl(CD_SF_ID1, (select max(MS_SF_ID) from T_ML, T_MS" \
-                " where ML_CODE = MS_MLREF and MS_SF_ID is not NULL and ML_CDREF = CD_CODE))"
-AC_SQL_SF_ID2 = "CD_SF_ID2"
-AC_SQL_SH_ID1 = "to_char(CD_SIHOT_OBJID)"
-AC_SQL_SH_ID2 = "to_char(CD_SIHOT_OBJID2)"
-AC_SQL_NAME1 = "CD_FNAM1 || ' ' || CD_SNAM1"
-AC_SQL_NAME2 = "CD_FNAM2 || ' ' || CD_SNAM2"
-AC_SQL_EMAIL1 = "F_EMAIL_CLEANED(CD_EMAIL)"
-AC_SQL_EMAIL2 = "F_EMAIL_CLEANED(CD_EMAIL, 1)"
-AC_SQL_PHONE1 = "nvl(CD_HTEL1, nvl(CD_MOBILE1, CD_WTEL1 || CD_WEXT1))"
-AC_SQL_MAIN_RCI = "CD_RCI_REF"
 
 
 def ac_pull_clients():
@@ -273,7 +329,7 @@ def ac_pull_clients():
         if ac_cl[6]:
             ext_refs += [(EXT_REF_TYPE_RCI, ac_cl[6])]
 
-        cl_dict = dict(AcId=ac_cl[0], SfId=ac_cl[1], ShId=ac_cl[2], Name=ac_cl[3], Email=ac_cl[4], Phone=ac_cl[5])
+        cl_dict = dict(AcuId=ac_cl[0], SfId=ac_cl[1], ShId=ac_cl[2], Name=ac_cl[3], Email=ac_cl[4], Phone=ac_cl[5])
         cl_pk = asd.cl_save(cl_dict, save_fields=save_fields, match_fields=match_fields, ext_refs=ext_refs)
         if cl_pk is None:
             break
@@ -386,8 +442,8 @@ def ac_pull_res_data():
         # determine used reservation inventory
         year, week = asd.rci_arr_to_year_week(crow['ARR_DATE'])
         apt_wk = "{}-{:0>2}".format(crow['RUL_SIHOT_ROOM'], week)
-        if ass_db.select('res_inventories', ['ri_pk'], "ri_pr_fk = :aw AND ri_usage_year = :y",
-                         dict(aw=apt_wk, y=year)):
+        if ass_db.select('res_inventories', ['ri_pk'], where_group_order="ri_pr_fk = :aw AND ri_usage_year = :y",
+                         bind_vars=dict(aw=apt_wk, y=year)):
             error_msg = ass_db.last_err_msg
             break
         ri_pk = ass_db.fetch_value()
@@ -489,7 +545,7 @@ def sf_pull_clients():
         if where_sql:
             where_sql = "WHERE " + where_sql
         rel_name = 'External_References__pr' if obj == 'Account' else 'External_References__r'
-        code_fields = ['AssId', 'AcId', 'SfId', 'ShId', 'Name', 'Email', 'Phone',
+        code_fields = ['AssId', 'AcuId', 'SfId', 'ShId', 'Name', 'Email', 'Phone',
                        'RecordType.Id', 'RciId',
                        "(SELECT Name, Reference_No_or_ID__c FROM {})".format(rel_name)]
         sf_fields = field_list_to_sf(code_fields, obj)
@@ -550,14 +606,12 @@ def sf_pull_res_data():
 
     res_all = sf_conn.soql_query_all("SELECT Id FROM Opportunity" + (" WHERE " + where if where else ""))
     if not res_all or sf_conn.error_msg:
-        log_error("ResData cache load error: " + sf_conn.error_msg, 'pullSfResDataPrepErr', importance=3, exit_code=150,
-                  dbs=[ass_db, acu_db])
+        log_error("ResData cache load error: " + sf_conn.error_msg, 'pullSfResDataPrepErr', importance=3, exit_code=150)
     for res in res_all:
         sf_res_id = res['Id']
         err_msg = sf_conn.res_data(sf_res_id)
         if err_msg:
-            log_error("ResData processing error: " + err_msg, 'pullSfResDataProcErr', importance=3, exit_code=153,
-                      dbs=[ass_db, acu_db])
+            log_error("ResData processing error: " + err_msg, 'pullSfResDataProcErr', importance=3, exit_code=153)
         asd.rgr_upsert()
 
     if ass_db.last_err_msg:
@@ -579,15 +633,14 @@ def sh_pull_clients():
 
     if not asd.clients:
         # fetch all clients from AssCache
-        err_msg = asd.cl_fetch_all(where_group_order=act_record_matches.get('C'))
+        err_msg = asd.as_clients_pull(where_group_order=act_record_matches.get('C'))
         if err_msg:
-            log_error("Client cache load error: " + err_msg, 'pullShClientsPrepErr', importance=3, exit_code=300,
-                      dbs=[ass_db, acu_db])
+            log_error("Client cache load error: " + err_msg, 'pullShClientsPrepErr', importance=3, exit_code=300)
 
     match_field = sh_match_field_init(ctx)
     filter_fields = act_field_filters.get('C')
     if not filter_fields:
-        filter_fields = client_fields([match_field])
+        filter_fields = rec_tpl.leaf_names(exclude_fields=[match_field])
     client_fld_names = list(_ for _ in filter_fields if _ not in ('AssId', 'ExtRefs', 'Products'))
 
     for as_cl in asd.clients:
@@ -667,48 +720,47 @@ def sh_pull_res_data():
 
 for act_pull in act_pulls:
     if act_pull[:2] == 'ac':
-        if act_pull[2:] == 'C':
+        if act_pull[2:3] == 'C':
             err = ac_pull_clients()
             if err:
-                log_error(err, 'pullAcuClients', importance=3, exit_code=111, dbs=[ass_db, acu_db])
-        elif act_pull[2:] == 'P':
+                log_error(err, 'pullAcuClients', importance=3, exit_code=111)
+        elif act_pull[2:3] == 'P':
             err = ac_pull_products()
             if err:
-                log_error(err, 'pullAcuProductTypes', importance=3, exit_code=114, dbs=[ass_db, acu_db])
-        elif act_pull[2:] == 'R':
+                log_error(err, 'pullAcuProductTypes', importance=3, exit_code=114)
+        elif act_pull[2:3] == 'R':
             err = ac_pull_res_inv()  # load reservation inventory data
             if err:
-                log_error(err, 'pullAcuResInv', importance=3, exit_code=117, dbs=[ass_db, acu_db])
+                log_error(err, 'pullAcuResInv', importance=3, exit_code=117)
             err = ac_pull_res_data()
             if err:
-                log_error(err, 'pullAcuResData', importance=3, exit_code=120, dbs=[ass_db, acu_db])
+                log_error(err, 'pullAcuResData', importance=3, exit_code=120)
         else:
-            log_error("Acumen pull not implemented", 'pullAcuNotImp', importance=3, exit_code=129, dbs=[ass_db, acu_db])
+            log_error("Acumen pull not implemented", 'pullAcuNotImp', importance=3, exit_code=129)
 
     elif act_pull[:2] == 'sf':
-        if act_pull[2:] == 'C':
+        if act_pull[2:3] == 'C':
             err = sf_pull_clients()
             if err:
-                log_error(err, 'pullSfClients', importance=3, exit_code=141, dbs=[ass_db, acu_db])
-        elif act_pull[2:] == 'R':
+                log_error(err, 'pullSfClients', importance=3, exit_code=141)
+        elif act_pull[2:3] == 'R':
             err = sf_pull_res_data()
             if err:
-                log_error(err, 'pullSfResData', importance=3, exit_code=142, dbs=[ass_db, acu_db])
+                log_error(err, 'pullSfResData', importance=3, exit_code=142)
         else:
-            log_error("Salesforce pull not implemented", 'pullSfNotImpl', importance=3, exit_code=149,
-                      dbs=[ass_db, acu_db])
+            log_error("Salesforce pull not implemented", 'pullSfNotImpl', importance=3, exit_code=149)
 
     elif act_pull[:2] == 'sh':
-        if act_pull[2:] == 'C':
+        if act_pull[2:3] == 'C':
             err = sh_pull_clients()
             if err:
-                log_error(err, 'pullShClients', importance=3, exit_code=151, dbs=[ass_db, acu_db])
-        elif act_pull[2:] == 'R':
+                log_error(err, 'pullShClients', importance=3, exit_code=151)
+        elif act_pull[2:3] == 'R':
             err = sh_pull_res_data()
             if err:
-                log_error(err, 'pullShResData', importance=3, exit_code=152, dbs=[ass_db, acu_db])
+                log_error(err, 'pullShResData', importance=3, exit_code=152)
         else:
-            log_error("Sihot pull not implemented", 'pullShNotImpl', importance=3, exit_code=159, dbs=[ass_db, acu_db])
+            log_error("Sihot pull not implemented", 'pullShNotImpl', importance=3, exit_code=159)
 
 
 def ac_push_clients():
@@ -718,7 +770,7 @@ def ac_push_clients():
     """
     ctx = 'acPushCl'
     unsupported_fld_names = ['AssId', 'Name', 'ExtRefs', 'Products']
-    client_fld_names = client_fields(unsupported_fld_names)
+    client_fld_names = rec_tpl.leaf_names(exclude_fields=unsupported_fld_names)
 
     match_fields = act_match_fields.get('C')
     if match_fields:
@@ -731,11 +783,11 @@ def ac_push_clients():
                 .format(client_fld_names, match_field)
             log_warning(err_msg, ctx, importance=4)
     else:
-        match_field = 'AcId'
+        match_field = 'AcuId'
 
     filter_fields = act_field_filters.get('C')
     if not filter_fields:
-        filter_fields = client_fields(unsupported_fld_names + [match_field])
+        filter_fields = rec_tpl.leaf_names(exclude_fields=unsupported_fld_names + [match_field])
     for filter_fld in filter_fields:
         if filter_fld not in client_fld_names or filter_fld in unsupported_fld_names:
             err_msg = "ac_push_clients(): Acumen client push uses invalid filter field {}".format(filter_fld)
@@ -758,7 +810,7 @@ def sf_push_clients():
     """
     ctx = 'sfPushCl'
     unsupported_fld_names = ['ExtRefs', 'Products']
-    client_fld_names = client_fields(unsupported_fld_names)
+    client_fld_names = rec_tpl.leaf_names(exclude_fields=unsupported_fld_names)
 
     match_fields = act_match_fields.get('C')
     if match_fields:
@@ -775,7 +827,7 @@ def sf_push_clients():
 
     filter_fields = act_field_filters.get('C')
     if not filter_fields:
-        filter_fields = client_fields(unsupported_fld_names + [match_field])
+        filter_fields = rec_tpl.leaf_names(exclude_fields=unsupported_fld_names + [match_field])
     for filter_fld in filter_fields:
         if filter_fld not in client_fld_names or filter_fld in unsupported_fld_names:
             err_msg = "sf_push_clients(): Salesforce client push uses invalid filter field {}".format(filter_fld)
@@ -788,7 +840,7 @@ def sf_push_clients():
     errors = list()
     for as_cl in asd.clients:
         rec = Record(fields={_: as_cl.val(_) for _ in filter_fields})
-        sf_id, err_msg, msg = asd.used_systems[SDI_SF].connection.cl_upsert(rec)
+        sf_id, err_msg, msg = asd.connection(SDI_SF).cl_upsert(rec)
         if err_msg:
             log_error("sf_push_clients(): Push client Salesforce error: " + err_msg, ctx, importance=4)
             errors.append(err_msg)
@@ -803,7 +855,7 @@ def sh_push_clients():
     """
     ctx = 'shPushCl'
     unsupported_fld_names = ['ExtRefs', 'Products']
-    client_fld_names = client_fields(unsupported_fld_names)
+    client_fld_names = rec_tpl.leaf_names(exclude_fields=unsupported_fld_names)
 
     match_fields = act_match_fields.get('C')
     if match_fields:
@@ -820,7 +872,7 @@ def sh_push_clients():
 
     filter_fields = act_field_filters.get('C')
     if not filter_fields:
-        filter_fields = client_fields(unsupported_fld_names + [match_field])
+        filter_fields = rec_tpl.leaf_names(exclude_fields=unsupported_fld_names + [match_field])
     for filter_fld in filter_fields:
         if filter_fld not in client_fld_names or filter_fld in unsupported_fld_names:
             err_msg = "sh_push_clients(): Sihot client push uses invalid filter field {}".format(filter_fld)
@@ -841,46 +893,42 @@ def sh_push_clients():
     return "\n".join(errors)
 
 
-if [_ for _ in act_pushes if _[2:] == 'C']:
+if [_ for _ in act_pushes if _[2:3] == 'C']:
     log_warning("Preparing client data push and fix", 'pushClientPrepare', importance=4)
     # fetch all (filtered) clients from AssCache if not loaded by a previous pull
     if not asd.clients:
-        err = asd.cl_fetch_all(where_group_order=act_record_filters.get('C'))
+        err = asd.as_clients_pull(where_group_order=act_record_filters.get('C'))
         if err:
-            log_error("Client cache load error: " + err, 'pushClientPrepErr', importance=3, exit_code=600,
-                      dbs=[ass_db,  acu_db])
+            log_error("Client cache load error: " + err, 'pushClientPrepErr', importance=3, exit_code=600)
 for act_push in act_pushes:
     if act_push[:2] == 'ac':
-        if act_push[2:] == 'C':
+        if act_push[2:3] == 'C':
             err = ac_push_clients()
             if err:
-                log_error(err, 'pushAcClients', importance=3, exit_code=303, dbs=[ass_db, acu_db])
-        elif act_push[2:] == 'P':
-            log_error("Acumen Product Fix not implemented", 'pushAcProd', importance=3, exit_code=630,
-                      dbs=[ass_db,  acu_db])
-        elif act_push[2:] == 'R':
-            log_error("Acumen Reservation Fix not implemented", 'pushAcRes', importance=3, exit_code=660,
-                      dbs=[ass_db,  acu_db])
+                log_error(err, 'pushAcClients', importance=3, exit_code=303)
+        elif act_push[2:3] == 'P':
+            log_error("Acumen Product Fix not implemented", 'pushAcProd', importance=3, exit_code=630)
+        elif act_push[2:3] == 'R':
+            log_error("Acumen Reservation Fix not implemented", 'pushAcRes', importance=3, exit_code=660)
 
     elif act_push[:2] == 'sf':
-        if act_push[2:] == 'C':
+        if act_push[2:3] == 'C':
             err = sf_push_clients()
             if err:
-                log_error(err, 'pushSfClientErr', importance=3, exit_code=801, dbs=[ass_db, acu_db])
+                log_error(err, 'pushSfClientErr', importance=3, exit_code=801)
         else:
-            log_error("Salesforce fix not implemented", 'pushSfNotImpl', importance=3, exit_code=891,
-                      dbs=[ass_db,  acu_db])
+            log_error("Salesforce fix not implemented", 'pushSfNotImpl', importance=3, exit_code=891)
 
     elif act_push[:2] == 'sh':
-        if act_push[2:] == 'C':
+        if act_push[2:3] == 'C':
             err = sh_push_clients()
             if err:
-                log_error(err, 'pushShClients', importance=3, exit_code=702, dbs=[ass_db, acu_db])
+                log_error(err, 'pushShClients', importance=3, exit_code=702)
         else:
-            log_error("Sihot fix not implemented", 'pushShNotImpl', importance=3, exit_code=795, dbs=[ass_db, acu_db])
+            log_error("Sihot fix not implemented", 'pushShNotImpl', importance=3, exit_code=795)
 
 
-def ac_verify_clients():
+def ac_compare_clients():
     where = act_record_matches.get('C')
     if where:
         where = "(" + where + ") and "
@@ -966,15 +1014,15 @@ def ac_verify_clients():
     return ""
 
 
-def sf_verify_clients():
+def sf_compare_clients():
     ctx = 'sfChkCl'
     cnt = len(warn_log)
-    client_fld_names = client_fields(['ExtRefs', 'Products'])
+    client_fld_names = rec_tpl.leaf_names(exclude_fields=['ExtRefs', 'Products'])
 
     match_fields = act_match_fields.get('C')
     if match_fields:
         if len(match_fields) != 1:
-            err_msg = "sf_verify_clients(): SF client verification only allows a single match field"
+            err_msg = "sf_compare_clients(): SF client comparision only allows a single match field"
             log_error(err_msg, ctx, importance=4)
             return err_msg
         match_field = match_fields[0]
@@ -983,7 +1031,7 @@ def sf_verify_clients():
 
     filter_fields = act_field_filters.get('C')
     if not filter_fields:
-        filter_fields = client_fields([match_field])
+        filter_fields = rec_tpl.leaf_names(exclude_fields=[match_field])
 
     for as_cl in asd.clients:
         ass_id, _, sf_id, _, _, email, phone, ass_ext_refs, _ = as_cl
@@ -1015,7 +1063,7 @@ def sf_verify_clients():
         elif match_field in client_fld_names:
             search_val = as_cl.val(match_field)
         else:
-            err_msg = "sf_verify_clients(): SF client verification match field {} not supported." \
+            err_msg = "sf_compare_clients(): SF client comparision match field {} not supported." \
                       " Allowed match fields: {}".format(match_field, [_ for _ in client_fld_names])
             log_error(err_msg, ctx, importance=4)
             return err_msg
@@ -1061,14 +1109,14 @@ def sf_verify_clients():
     return ""
 
 
-def sh_verify_clients():
+def sh_compare_clients():
     ctx = 'shChkCl'
     cnt = len(warn_log)
 
     match_field = sh_match_field_init(ctx)
     filter_fields = act_field_filters.get('C')
     if not filter_fields:
-        filter_fields = client_fields([match_field])
+        filter_fields = rec_tpl.leaf_names(exclude_fields=[match_field])
     client_fld_names = list(_ for _ in filter_fields if _ not in ('AssId', 'ExtRefs', 'Products'))
 
     for as_cl in asd.clients:
@@ -1124,50 +1172,41 @@ def sh_verify_clients():
     return ""
 
 
-if [_ for _ in act_veris if _[2:] == 'C']:
-    log_warning("Preparing client data check/verification", 'veriPrep', importance=4)
+if [_ for _ in act_compares if _[2:3] == 'C']:
+    log_warning("Preparing client data check/compare", 'veriPrep', importance=4)
     # fetch all (filtered) clients from AssCache if not loaded by a previous pull
     if not asd.clients:
-        err = asd.cl_fetch_all(where_group_order=act_record_filters.get('C'))
+        err = asd.as_clients_pull(where_group_order=act_record_filters.get('C'))
         if err:
-            log_error("Clients load error: " + err, 'veriPrepErr', importance=3, exit_code=300, dbs=[ass_db, acu_db])
-for act_veri in act_veris:
-    if act_veri[:2] == 'ac':
-        if act_veri[2:] == 'C':
-            err = ac_verify_clients()
+            log_error("Clients load error: " + err, 'veriPrepErr', importance=3, exit_code=300)
+for act_compare in act_compares:
+    if act_compare[:2] == 'ac':
+        if act_compare[2:3] == 'C':
+            err = ac_compare_clients()
             if err:
-                log_error(err, 'veriAcClients', importance=3, exit_code=303, dbs=[ass_db, acu_db])
-        elif act_veri[2:] == 'P':
-            log_error("Acumen Product Verification not implemented", 'veriAcProdNotImpl', importance=3, exit_code=330,
-                      dbs=[ass_db,  acu_db])
-        elif act_veri[2:] == 'R':
-            log_error("Acumen Reservation Verification not implemented", 'veriAcRes', importance=3, exit_code=360,
-                      dbs=[ass_db,  acu_db])
+                log_error(err, 'veriAcClients', importance=3, exit_code=303)
+        elif act_compare[2:3] == 'P':
+            log_error("Acumen Product Verification not implemented", 'veriAcProdNotImpl', importance=3, exit_code=330)
+        elif act_compare[2:3] == 'R':
+            log_error("Acumen Reservation Verification not implemented", 'veriAcRes', importance=3, exit_code=360)
 
-    elif act_veri[:2] == 'sh':
-        if act_veri[2:] == 'C':
-            err = sh_verify_clients()
+    elif act_compare[:2] == 'sh':
+        if act_compare[2:3] == 'C':
+            err = sh_compare_clients()
             if err:
-                log_error(err, 'veriShClients', importance=3, exit_code=402, dbs=[ass_db, acu_db])
+                log_error(err, 'veriShClients', importance=3, exit_code=402)
         else:
-            log_error("Sihot Prod/Res verification not implemented", 'veriShNotImpl', importance=3, exit_code=495,
-                      dbs=[ass_db,  acu_db])
+            log_error("Sihot Prod/Res verification not implemented", 'veriShNotImpl', importance=3, exit_code=495)
 
-    elif act_veri[:2] == 'sf':
-        if act_veri[2:] == 'C':
-            err = sf_verify_clients()
+    elif act_compare[:2] == 'sf':
+        if act_compare[2:3] == 'C':
+            err = sf_compare_clients()
             if err:
-                log_error(err, 'veriSfClients', importance=3, exit_code=501, dbs=[ass_db, acu_db])
+                log_error(err, 'veriSfClients', importance=3, exit_code=501)
         else:
-            log_error("Salesforce Prod/Res verification not implemented", 'veriSfNotImpl', importance=3, exit_code=591,
-                      dbs=[ass_db,  acu_db])
-if [_ for _ in act_veris if _[2:] == 'C'] and not act_record_filters.get('C') and not act_record_matches.get('C'):
-    # if no record filters set, then also check/verify client external references integrity within the AssCache database
-    asd.cl_verify_ext_refs()
+            log_error("Salesforce Prod/Res verification not implemented", 'veriSfNotImpl', importance=3, exit_code=591)
+if [_ for _ in act_compares if _[2:3] == 'C'] and not act_record_filters.get('C') and not act_record_matches.get('C'):
+    # if no record filters set, then also check/compare client external references integrity within the AssCache db
+    asd.cl_compare_ext_refs()
 
-
-if acu_db:
-    acu_db.close()
-if ass_db:
-    ass_db.close()
-cae.shutdown(send_notification(42 if error_log else 0))
+'''

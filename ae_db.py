@@ -115,12 +115,24 @@ class GenericDB:
 
         return self.last_err_msg
 
-    def select(self, from_join, cols=None, where_group_order='', bind_vars=None, hints=''):
+    def select(self, from_join, cols=None, chk_values=None, where_group_order='', bind_vars=None, hints=''):
         if not cols:
             cols = list('*')
+
+        if chk_values:
+            extra_where = " AND ".join([k + " = :" + k for k in chk_values.keys()])
+            if where_group_order:
+                where_group_order = "(" + extra_where + ") AND " + where_group_order
+            if bind_vars:
+                bind_vars.update(chk_values)
+            else:
+                bind_vars = chk_values
+
         if not where_group_order:
             where_group_order = '1=1'
+
         sql = "SELECT {} {} FROM {} WHERE {}".format(hints, ','.join(cols), from_join, where_group_order)
+
         return self.execute_sql(sql, bind_vars=bind_vars)
 
     def cursor_description(self):
@@ -208,7 +220,7 @@ class GenericDB:
         chk_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in chk_values.keys()])
 
         with self.thread_lock_init(table_name, chk_values):
-            self.select(table_name, ["count(*)"], chk_expr, chk_values)
+            self.select(table_name, ["count(*)"], where_group_order=chk_expr, bind_vars=chk_values)
             if self.last_err_msg:
                 self.last_err_msg += "; chk_expr={}; chk_values=".format(chk_expr, chk_values)
             else:
@@ -224,7 +236,8 @@ class GenericDB:
                         if self.last_err_msg:
                             self.last_err_msg += "; chk_expr={}, bind_vars={}".format(chk_expr, bind_vars)
                         elif returning_column:
-                            self.select(table_name, [returning_column], chk_expr, chk_values)
+                            self.select(table_name, [returning_column], where_group_order=chk_expr,
+                                        bind_vars=chk_values)
                     elif count == 0:
                         col_values.update(chk_values)
                         self.insert(table_name, col_values, commit=commit, returning_column=returning_column)

@@ -1,7 +1,7 @@
 import pytest
 
 from collections import OrderedDict
-from ae_sys_data import aspect_key, aspect_key_system, aspect_key_direction, deeper, \
+from ae_sys_data import aspect_key, aspect_key_system, aspect_key_direction, correct_email, correct_phone, deeper, \
     field_name_idx_path, field_names_idx_paths, idx_path_field_name, \
     Value, Values, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
     FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP
@@ -640,7 +640,7 @@ class TestRecord:
         assert r.copy() == r
         assert r.copy() is not r
 
-        r2 = r.copy(filter_func=lambda f: f.name() != 'fnB')
+        r2 = r.copy(filter_fields=lambda f: f.name() != 'fnB')
         assert len(r2) == 1
         assert r2.val('fnB') == 66
 
@@ -1104,3 +1104,149 @@ class TestSetVal:
         assert vus.set_val('6', 2).val(2) == '6'
         vus.set_val([3], 1)
         assert vus.val(1) == [3]
+
+
+class TestContactValidation:
+    def test_correct_email(self):
+        # edge cases: empty string or None as email
+        r = list()
+        assert correct_email('', removed=r) == ('', False)
+        assert r == []
+        r = list()
+        assert correct_email(None, removed=r) == (None, False)
+        assert r == []
+        # special characters !#$%&'*+-/=?^_`{|}~; are allowed in local part
+        r = list()
+        assert correct_email('john_smith@example.com', removed=r) == ('john_smith@example.com', False)
+        assert r == []
+        r = list()
+        assert correct_email('john?smith@example.com', removed=r) == ('john?smith@example.com', False)
+        assert r == []
+
+        # dot is not the first or last character unless quoted, and does not appear consecutively unless quoted
+        r = list()
+        assert correct_email(".john.smith@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["0:."]
+        r = list()
+        assert correct_email("john.smith.@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["10:."]
+        r = list()
+        assert correct_email("john..smith@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["5:."]
+        r = list()
+        assert correct_email('"john..smith"@example.com', removed=r) == ('"john..smith"@example.com', False)
+        assert r == []
+        r = list()
+        assert correct_email("john.smith@example..com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["19:."]
+
+        # space and "(),:;<>@[\] characters are allowed with restrictions (they are only allowed inside a quoted string,
+        # as described in the paragraph below, and in addition, a backslash or double-quote must be preceded
+        # by a backslash);
+        r = list()
+        assert correct_email(" john.smith@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["0: "]
+        r = list()
+        assert correct_email("john .smith@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["4: "]
+        r = list()
+        assert correct_email("john.smith @example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["10: "]
+        r = list()
+        assert correct_email("john.smith@ example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["11: "]
+        r = list()
+        assert correct_email("john.smith@ex ample.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["13: "]
+        r = list()
+        assert correct_email("john.smith@example .com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["18: "]
+        r = list()
+        assert correct_email("john.smith@example. com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["19: "]
+        r = list()
+        assert correct_email("john.smith@example.com  ", removed=r) == ("john.smith@example.com", True)
+        assert r == ["22: ", "23: "]
+        r = list()
+        assert correct_email('john(smith@example.com', removed=r) == ('johnsmith@example.com', True)
+        assert r == ["4:("]
+        r = list()
+        assert correct_email('"john(smith"@example.com', removed=r) == ('"john(smith"@example.com', False)
+        assert r == []
+
+        # comments at begin or end of local and domain part
+        r = list()
+        assert correct_email("john.smith(comment)@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["10:(comment)"]
+        r = list()
+        assert correct_email("(comment)john.smith@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["0:(comment)"]
+        r = list()
+        assert correct_email("john.smith@example.com(comment)", removed=r) == ("john.smith@example.com", True)
+        assert r == ["22:(comment)"]
+        r = list()
+        assert correct_email("john.smith@(comment)example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["11:(comment)"]
+        r = list()
+        assert correct_email(".john.smith@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["0:."]
+        r = list()
+        assert correct_email("john.smith.@example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["10:."]
+        r = list()
+        assert correct_email("john.smith@.example.com", removed=r) == ("john.smith@example.com", True)
+        assert r == ["11:."]
+        r = list()
+        assert correct_email("john.smith@example.com.", removed=r) == ("john.smith@example.com", True)
+        assert r == ["22:."]
+
+        # international characters above U+007F
+        r = list()
+        assert correct_email('Heinz.Hübner@example.com', removed=r) == ('Heinz.Hübner@example.com', False)
+        assert r == []
+
+        # quoted may exist as a dot separated entity within the local-part, or it may exist when the outermost
+        # .. quotes are the outermost characters of the local-part
+        r = list()
+        assert correct_email('abc."def".xyz@example.com', removed=r) == ('abc."def".xyz@example.com', False)
+        assert r == []
+        assert correct_email('"abc"@example.com', removed=r) == ('"abc"@example.com', False)
+        assert r == []
+        assert correct_email('abc"def"xyz@example.com', removed=r) == ('abcdefxyz@example.com', True)
+        assert r == ['3:"', '7:"']
+
+        # tests from https://en.wikipedia.org/wiki/Email_address
+        r = list()
+        assert correct_email('ex-indeed@strange-example.com', removed=r) == ('ex-indeed@strange-example.com', False)
+        assert r == []
+        r = list()
+        assert correct_email("#!$%&'*+-/=?^_`{}|~@example.org", removed=r) == ("#!$%&'*+-/=?^_`{}|~@example.org", False)
+        assert r == []
+        r = list()
+        assert correct_email('"()<>[]:,;@\\\\"!#$%&\'-/=?^_`{}| ~.a"@e.org', removed=r) \
+            == ('"()<>[]:,;@\\\\"!#$%&\'-/=?^_`{}| ~.a"@e.org', False)
+        assert r == []
+
+        r = list()
+        assert correct_email("A@e@x@ample.com", removed=r) == ("A@example.com", True)
+        assert r == ["3:@", "5:@"]
+        r = list()
+        assert correct_email('this\ is\"not\\allowed@example.com', removed=r) == ('thisisnotallowed@example.com', True)
+        assert r == ["4:\\", "5: ", '8:"', '12:\\']
+
+    def test_correct_phone(self):
+        r = list()
+        assert correct_phone('+4455667788', removed=r) == ('004455667788', True)
+        assert r == ["0:+"]
+
+        r = list()
+        assert correct_phone(' +4455667788', removed=r) == ('004455667788', True)
+        assert r == ["0: ", "1:+"]
+
+        r = list()
+        assert correct_phone('+004455667788', removed=r) == ('004455667788', True)
+        assert r == ["0:+"]
+
+        r = list()
+        assert correct_phone(' 44 5566/7788', removed=r) == ('4455667788', True)
+        assert r == ["0: ", "3: ", "8:/"]

@@ -219,7 +219,7 @@ SELECT audit.audit_table('res_group_clients');
 
 ------ VIEWS
 ---- CLIENT VIEWS
--- view for AssSysDate.cl_fetch_all() extending clients table with external refs and pt_group aggregates
+-- view for AssSysDate.as_clients_pull()/cl_fetch_list() extending clients with external refs and pt_group aggregates
 -- EXT_REF_TYPE_ID_SEP cannot be imported here from ass_sys_data.py, therefore using hard-coded literal '='
 CREATE OR REPLACE VIEW v_clients_refs_owns AS
   SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id, cl_name, cl_email, cl_phone
@@ -235,7 +235,7 @@ COMMENT ON VIEW v_clients_refs_owns IS 'clients extended by external_refs and ow
 -- .. therefore providing a separate view for each type of external reference: Acumen, Sf, Sihot, Email, Phone
 CREATE OR REPLACE VIEW v_client_duplicates_ac AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
@@ -248,7 +248,7 @@ COMMENT ON VIEW v_client_duplicates_ac IS 'clients with duplicate Acumen client 
 
 CREATE OR REPLACE VIEW v_client_duplicates_sf AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
@@ -261,7 +261,7 @@ COMMENT ON VIEW v_client_duplicates_sf IS 'clients with duplicate Salesforce ID'
 
 CREATE OR REPLACE VIEW v_client_duplicates_sh AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
@@ -274,7 +274,7 @@ COMMENT ON VIEW v_client_duplicates_sh IS 'clients with duplicate Sihot guest ob
 
 CREATE OR REPLACE VIEW v_client_duplicates_email AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
@@ -287,7 +287,7 @@ COMMENT ON VIEW v_client_duplicates_email IS 'clients with duplicate email addre
 
 CREATE OR REPLACE VIEW v_client_duplicates_phone AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END

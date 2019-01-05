@@ -81,10 +81,10 @@ last_rt_prefix = cae.get_option('acuDSN')[-4:]
 
 
 ass_data = init_ass_data(cae, ass_options, used_systems_msg_prefix="Active Sys Env Checks")
-conf_data = ass_data['assSysData']
-if conf_data.error_message:
-    uprint("WatchPupPy startup error: ", conf_data.error_message)
-    conf_data.close_dbs()
+asd = ass_data['assSysData']
+if asd.error_message:
+    uprint("WatchPupPy startup error: ", asd.error_message)
+    asd.close_dbs()
     cae.shutdown(exit_code=9)
 
 
@@ -93,7 +93,7 @@ notification = ass_data['notification']
 send_output = 1 if notification and cae.get_option('sendOutput') else 0
 uprint("Send Output (subprocess call method: 1=check_output, 0=check_call)", send_output)
 
-is_test = conf_data.is_test_system()
+is_test = asd.is_test_system()
 max_sync_outage_delta = exe_name.startswith(('AcuServer', 'SihotResSync')) \
                         and datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS * (9 if is_test else 1))
 
@@ -201,25 +201,26 @@ while True:
             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # check environment and connections: AssCache, Acu/Oracle, Salesforce, Sihot servers and interfaces
-        if SDI_ASS in conf_data.used_systems:
-            if not conf_data.used_systems[SDI_ASS].connection or conf_data.used_systems[SDI_ASS].connection.select('pg_tables'):
-                conf_data.connect_ass_db(force_reconnect=True)
-            if not conf_data.used_systems[SDI_ASS].connection:
-                errors.append("AssCache environment check connection error: " + conf_data.error_message)
+        if SDI_ASS in asd.used_systems:
+            if not asd.connection(SDI_ASS) or asd.connection(SDI_ASS).select('pg_tables'):
+                asd.connect_ass_db(force_reconnect=True)
+            if not asd.connection(SDI_ASS):
+                errors.append("AssCache environment check connection error: " + asd.error_message)
             else:
-                ass_db = conf_data.used_systems[SDI_ASS].connection
+                ass_db = asd.connection(SDI_ASS)
                 err_msg = ass_db.select('hotels', ['ho_pk', 'ho_ac_id'])
                 if err_msg:
                     errors.append("AssCache table hotels selection error: " + err_msg)
 
-        if SDI_ACU in conf_data.used_systems:
-            if not conf_data.used_systems[SDI_ACU].connection or conf_data.used_systems[SDI_ACU].connection.select('dual', ['sysdate']):
-                conf_data.connect_acu_db(force_reconnect=True)
-            if not conf_data.used_systems[SDI_ACU].connection:
-                errors.append("Acumen environment check connection error: " + conf_data.error_message)
+        if SDI_ACU in asd.used_systems:
+            if not asd.connection(SDI_ACU) or asd.connection(SDI_ACU).select('dual', ['sysdate']):
+                asd.connect_acu_db(force_reconnect=True)
+            if not asd.connection(SDI_ACU):
+                errors.append("Acumen environment check connection error: " + asd.error_message)
             else:
-                ora_db = conf_data.used_systems[SDI_ACU].connection
-                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
+                ora_db = asd.connection(SDI_ACU)
+                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
+                                        where_group_order="RO_CODE = 'TK'")
                 if err_msg:
                     errors.append("Acumen environment T_RO/TK selection error: " + err_msg)
                 else:
@@ -230,7 +231,8 @@ while True:
                         tc_sc_id = str(rows[0][0])  # == DEF_TC_SC_ID
                         tc_sc_mc = rows[0][1]       # == DEF_TC_SC_MC
 
-                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
+                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
+                                        where_group_order="RO_CODE = 'tk'")
                 if err_msg:
                     errors.append("Acumen environment T_RO/tk selection error: " + err_msg)
                 else:
@@ -276,11 +278,11 @@ while True:
             tc_ag_id = DEF_TC_AG_ID
             tc_ag_mc = DEF_TC_AG_MC
 
-        if SDI_SF in conf_data.used_systems:
-            if not conf_data.used_systems[SDI_SF].connection.record_type_id('Contact'):
-                errors.append("Salesforce environment record type fetch error: " + conf_data.used_systems[SDI_SF].connection.error_msg)
+        if SDI_SF in asd.used_systems:
+            if not asd.connection(SDI_SF).record_type_id('Contact'):
+                errors.append("Salesforce environment record type fetch error: " + asd.connection(SDI_SF).error_msg)
 
-        if SDI_SH in conf_data.used_systems and SDF_SH_KERNEL_PORT in conf_data.used_systems[SDI_SH].features:
+        if SDI_SH in asd.used_systems and SDF_SH_KERNEL_PORT in asd.used_systems[SDI_SH].features:
             gi = ClientSearch(cae)
             tc_sc_obj_id2 = gi.client_id_by_matchcode(tc_sc_mc)
             if tc_sc_id != tc_sc_obj_id2:
@@ -291,7 +293,7 @@ while True:
                 errors.append("Sihot kernel check found Thomas Cook AG/U.K. matchcode discrepancy: expected={} got={}."
                               .format(tc_ag_id, tc_ag_obj_id2))
 
-        if SDI_SH in conf_data.used_systems and SDF_SH_WEB_PORT in conf_data.used_systems[SDI_SH].features:
+        if SDI_SH in asd.used_systems and SDF_SH_WEB_PORT in asd.used_systems[SDI_SH].features:
             pm = PostMessage(cae)
             err_msg = pm.post_message("WatchPupPy Sihot WEB check for command {}".format(exe_name))
             if err_msg:
@@ -368,8 +370,8 @@ while True:
         errors.append("WatchPupPy loop exception: " + full_stack_trace(ex))
 
 progress.finished(error_msg=err_msg)
-if conf_data:
-    conf_data.close_dbs()
+if asd:
+    asd.close_dbs()
 uprint("####  WatchPupPy exit - successfully run {} of {} times the command {}".format(run_ends, run_starts, exe_name))
 if err_count:
     uprint("****  {} runs failed".format(err_count))

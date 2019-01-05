@@ -127,9 +127,9 @@ if not error_msg:
     try:
         uprint("####  Sync Req/ARU Changes  ####")
 
-        config_data = AssSysData(cae)
-        hotel_ids = config_data.ho_id_list()     # determine active/valid Sihot-hotels
-        config_data.close_dbs()
+        asd = AssSysData(cae)
+        hotel_ids = asd.ho_id_list()     # determine active/valid Sihot-hotels
+        asd.close_dbs()
 
         acumen_req = AcuResToSihot(cae)
         error_msg = acumen_req.fetch_from_acu_by_aru(date_range=sync_date_range)

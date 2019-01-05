@@ -1,11 +1,13 @@
 import datetime
 import pprint
 import re
+from traceback import format_exc
 
 from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
-                          DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SF_SANDBOX)
-from ae_sys_data import Records, Record, FAD_FROM, FAD_ONTO, UsedSystems
+                          DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SF_SANDBOX,
+                          ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS)
+from ae_sys_data import correct_email, correct_phone, Records, Record, FAD_FROM, FAD_ONTO, UsedSystems
 from ae_db import OraDB, PostgresDB
 from ae_console_app import uprint, DATE_ISO
 from ae_notification import add_notification_options, init_notification
@@ -32,7 +34,7 @@ _PRODUCTS = 8
 # ass_cache client rec map (columns ordered like in the view v_clients_refs_owns)
 ASS_CLIENT_MAP = (
     ('cl_pk', 'AssId'),
-    ('cl_ac_id', 'AcId'),
+    ('cl_ac_id', 'AcuId'),
     ('cl_sf_id', 'SfId'),
     ('cl_sh_id', 'ShId'),
     ('cl_name', 'Name'),
@@ -142,21 +144,21 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
     """
     ret_dict = dict()
 
-    ret_dict['assSysData'] = conf_data = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger,
-                                                    sys_msg_prefix=used_systems_msg_prefix)
+    ret_dict['assSysData'] = asd = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger,
+                                              sys_msg_prefix=used_systems_msg_prefix)
     sys_ids = list()
-    if conf_data.used_systems[SDI_ASS].connection:
+    if asd.connection(SDI_ASS):
         uprint('AssCache database name and user:', cae.get_option('assDSN'), cae.get_option('assUser'))
         sys_ids.append(cae.get_option('assDSN'))
-    if conf_data.used_systems[SDI_ACU].connection:
+    if asd.connection(SDI_ACU):
         uprint('Acumen database TNS and user:', cae.get_option('acuDSN'), cae.get_option('acuUser'))
         sys_ids.append(cae.get_option('acuDSN'))
-    if conf_data.used_systems[SDI_SF].connection:
-        sf_sandbox = SDF_SF_SANDBOX in conf_data.used_systems[SDI_SF].features
+    if asd.connection(SDI_SF):
+        sf_sandbox = SDF_SF_SANDBOX in asd.used_systems[SDI_SF].features
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:",
                cae.get_option('sfUser'))
         sys_ids.append("SBox" if sf_sandbox else "Prod")
-    if conf_data.used_systems[SDI_SH].connection:
+    if asd.connection(SDI_SH):
         print_sh_options(cae)
         sys_ids.append(cae.get_option('shServerIP'))
     ret_dict['sysIds'] = sys_ids
@@ -182,7 +184,7 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
                               AssDb='cl_pk',
                               Lead='AssCache_Id__c', Contact='AssCache_Id__c', Account='AssCache_Id__pc',
                               Sihot=''),
-                   AcId=dict(AssSysDataClientsIdx=_AC_ID,
+                   AcuId=dict(AssSysDataClientsIdx=_AC_ID,
                              AssDb='cl_ac_id', AcDb='CD_CODE', Lead='Acumen_Client_Reference__c', Contact='CD_CODE__c',
                              Account='CD_CODE__pc', Sihot='MATCHCODE'),
                    SfId=dict(AssSysDataClientsIdx=_SF_ID,
@@ -221,146 +223,6 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
                    )
 
 '''
-
-
-def client_fields(exclude_fields=None):
-    return list(k for _, k in ASS_CLIENT_MAP if k not in exclude_fields)
-
-
-def correct_email(email, changed=False, removed=None):
-    """ check and correct email address from a user input (removing all comments)
-
-    Special conversions that are not returned as changed/corrected are: the domain part of an email will be corrected
-    to lowercase characters, additionally emails with all letters in uppercase will be converted into lowercase.
-
-    Regular expressions are not working for all edge cases (see the answer to this SO question:
-    https://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address) because RFC822
-    is very complex (even the reg expression recommended by RFC 5322 is not complete; there is also a
-    more readable form given in the informational RFC 3696). Additionally a regular expression
-    does not allow corrections. Therefore this function is using a procedural approach (using recommendations from
-    RFC 822 and https://en.wikipedia.org/wiki/Email_address).
-
-    :param email:       email address
-    :param changed:     (optional) flag if email address got changed (before calling this function) - will be returned
-                        unchanged if email did not get corrected.
-    :param removed:     (optional) list declared by caller for to pass back all the removed characters including
-                        the index in the format "<index>:<removed_character(s)>".
-    :return:            tuple of (possibly corrected email address, flag if email got changed/corrected)
-    """
-    if email is None:
-        return None, False
-
-    if removed is None:
-        removed = list()
-
-    in_local_part = True
-    in_quoted_part = False
-    in_comment = False
-    all_upper_case = True
-    local_part = ""
-    domain_part = ""
-    domain_beg_idx = -1
-    domain_end_idx = len(email) - 1
-    comment = ''
-    last_ch = ''
-    ch_before_comment = ''
-    for idx, ch in enumerate(email):
-        if ch.islower():
-            all_upper_case = False
-        next_ch = email[idx + 1] if idx + 1 < domain_end_idx else ''
-        if in_comment:
-            comment += ch
-            if ch == ')':
-                in_comment = False
-                removed.append(comment)
-                last_ch = ch_before_comment
-            continue
-        elif ch == '(' and not in_quoted_part \
-                and (idx == 0 or email[idx:].find(')@') >= 0 if in_local_part
-                     else idx == domain_beg_idx or email[idx:].find(')') == domain_end_idx - idx):
-            comment = str(idx) + ':('
-            ch_before_comment = last_ch
-            in_comment = True
-            changed = True
-            continue
-        elif ch == '"' \
-                and (not in_local_part
-                     or last_ch != '.' and idx and not in_quoted_part
-                     or next_ch not in ('.', '@') and last_ch != '\\' and in_quoted_part):
-            removed.append(str(idx) + ':' + ch)
-            changed = True
-            continue
-        elif ch == '@' and in_local_part and not in_quoted_part:
-            in_local_part = False
-            domain_beg_idx = idx + 1
-        elif ch.isalnum():
-            pass    # uppercase and lowercase Latin letters A to Z and a to z
-        elif ord(ch) > 127 and in_local_part:
-            pass    # international characters above U+007F
-        elif ch == '.' and in_local_part and not in_quoted_part and last_ch != '.' and idx and next_ch != '@':
-            pass    # if not the first or last unless quoted, and does not appear consecutively unless quoted
-        elif ch in ('-', '.') and not in_local_part and (last_ch != '.' or ch == '-') \
-                and idx not in (domain_beg_idx, domain_end_idx):
-            pass    # if not duplicated dot and not the first or last character in domain part
-        elif (ch in ' (),:;<>@[]' or ch in '\\"' and last_ch == '\\' or ch == '\\' and next_ch == '\\') \
-                and in_quoted_part:
-            pass    # in quoted part and in addition, a backslash or double-quote must be preceded by a backslash
-        elif ch == '"' and in_local_part:
-            in_quoted_part = not in_quoted_part
-        elif (ch in "!#$%&'*+-/=?^_`{|}~" or ch == '.'
-              and (last_ch and last_ch != '.' and next_ch != '@' or in_quoted_part)) \
-                and in_local_part:
-            pass    # special characters (in local part only and not at beg/end and no dup dot outside of quoted part)
-        else:
-            removed.append(str(idx) + ':' + ch)
-            changed = True
-            continue
-
-        if in_local_part:
-            local_part += ch
-        else:
-            domain_part += ch.lower()
-        last_ch = ch
-
-    if all_upper_case:
-        local_part = local_part.lower()
-
-    return local_part + domain_part, changed
-
-
-def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
-    """ check and correct phone number from a user input (removing all invalid characters including spaces)
-
-    :param phone:           phone number
-    :param changed:         (optional) flag if phone got changed (before calling this function) - will be returned
-                            unchanged if phone did not get corrected.
-    :param removed:         (optional) list declared by caller for to pass back all the removed characters including
-                            the index in the format "<index>:<removed_character(s)>".
-    :param keep_1st_hyphen  (optional, def=False) pass True for to keep at least the first occurring hyphen character.
-    :return:                tuple of (possibly corrected phone number, flag if phone got changed/corrected)
-    """
-
-    if phone is None:
-        return None, False
-
-    if removed is None:
-        removed = list()
-
-    corr_phone = ''
-    got_hyphen = False
-    for idx, ch in enumerate(phone):
-        if ch.isdigit():
-            corr_phone += ch
-        elif keep_1st_hyphen and ch == '-' and not got_hyphen:
-            got_hyphen = True
-            corr_phone += ch
-        else:
-            if ch == '+' and not corr_phone and not phone[idx + 1:].startswith('00'):
-                corr_phone = '00'
-            removed.append(str(idx) + ':' + ch)
-            changed = True
-
-    return corr_phone, changed
 
 
 def _dummy_stub(msg, *args, **kwargs):
@@ -440,7 +302,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.ro_agencies = cae.get_config('roAgencies')
             self.room_change_max_days_diff = cae.get_config('roomChangeMaxDaysDiff', default_value=3)
         else:                   # fetch config data from Acumen
-            db = self.used_systems[SDI_ACU].connection
+            db = self.connection(SDI_ACU)
             if not db:      # logon/connect error
                 self.error_message = "AssSysData: Missing credentials for to open Acumen database"
                 self._err(self.error_message, self._ctx_no_file + 'InitAcuDb')
@@ -484,11 +346,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self.mail_re = re.compile(r'[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+\.[a-zA-Z]{2,4}$')
 
-        # --- self.clients contains client data from AssCache database like external references/Ids, owner status ...
+        # --- contains pulled client data
         self.clients = Records()
         self.clients_changed = list()      # list indexes of changed records within self.clients
 
-        # --- res_inv_data is caching banking/swap/grant info
+        # --- contains pulled reservation data
+        self.res_data = Records()
+
+        # --- caching banking/swap/grant info
         self.res_inv_data = list()
 
         # summary display of used systems
@@ -499,10 +364,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.close_dbs()
 
     def is_test_system(self):
-        ass_db = self.used_systems[SDI_ASS].connection
-        acu_db = self.used_systems[SDI_ACU].connection
-        sf_conn = self.used_systems[SDI_SF].connection
-        sh_conn = self.used_systems[SDI_SH].connection
+        ass_db = self.connection(SDI_ASS)
+        acu_db = self.connection(SDI_ACU)
+        sf_conn = self.connection(SDI_SF)
+        sh_conn = self.connection(SDI_SH)
         return (ass_db and 'sihot3v' in self.cae.get_option('assDSN', default_value='')
                 or acu_db and '.TEST' in self.cae.get_option('acuDSN', default_value='')
                 or sf_conn and SDF_SF_SANDBOX + '=True' in self.used_systems[SDI_SF].features
@@ -513,14 +378,27 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # ensure to close of DB connections (execution of auto-commits)
         return self.used_systems.disconnect()
 
+    def connection(self, system):
+        msg = "AssSysData.connection({}): ".format(system)
+        if not system:
+            uprint(msg + "empty system id")
+        elif system not in ALL_AVAILABLE_SYSTEMS:
+            uprint(msg + "invalid system id")
+        elif system not in self.used_systems:
+            uprint(msg + "unknown/unused system id")
+        elif not self.used_systems[system].connection:
+            uprint(msg + "system is not connected/initialized")
+        else:
+            return self.used_systems[system].connection
+
     def load_view(self, db_opt, view, cols=None, where="", bind_vars=None):
         if db_opt:      # use existing db connection if passed by caller
             db = db_opt
             self.error_message = ""
         else:
-            db = self.used_systems[SDI_ACU].connection
+            db = self.connection(SDI_ACU)
         if not self.error_message:
-            self.error_message = db.select(view, cols, where, bind_vars)
+            self.error_message = db.select(view, cols, where_group_order=where, bind_vars=bind_vars)
         if self.error_message:
             self._err(self.error_message, self._ctx_no_file + 'LoadView')
             ret = None
@@ -598,23 +476,20 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     # ############################  client data helpers  #########################################################
 
-    def cl_fetch_all(self, where_group_order=""):
-        ass_db = self.used_systems[SDI_ASS].connection
+    def cl_fetch_list(self, col_names=(), chk_values=None, where_group_order="", bind_values=None):
         if "ORDER BY " not in where_group_order.upper():
             where_group_order += ("" if where_group_order else "1=1") + " ORDER BY cl_pk"
-        if ass_db.select('v_clients_refs_owns', where_group_order=where_group_order):
-            return ass_db.last_err_msg
 
-        self.clients = Records()
-        rows = ass_db.fetch_all()
-        err_msg = ass_db.last_err_msg
-        if not err_msg:
-            for row in rows:
-                sys_fields = tuple(t + (row[i], ) for i, t in enumerate(ASS_CLIENT_MAP))
-                rec = Record(system=SDI_ASS, direction=FAD_FROM).add_system_fields(sys_fields)
-                self.clients.append(rec)
-
-        return err_msg
+        ass_db = self.connection(SDI_ASS)
+        if ass_db.select('v_clients_refs_owns', col_names, chk_values=chk_values,
+                         where_group_order=where_group_order, bind_vars=bind_values):
+            self.error_message = ass_db.last_err_msg
+            rows = tuple()
+        else:
+            rows = ass_db.fetch_all()
+            if ass_db.last_err_msg:
+                self.error_message += ass_db.last_err_msg
+        return rows
 
     def cl_save(self, client_data, save_fields=None, match_fields=None, ext_refs=None, ass_idx=None,
                 commit=False, locked_cols=None):
@@ -623,7 +498,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         :param client_data:     Record or dict of client data (using generic field names).
         :param save_fields:     list of generic field names to be saved in AssCache db (def=all fields in client_data).
-        :param match_fields:    list of generic field names for rec match/lookup (def=non-empty AssId/AcId/SfId/ShId).
+        :param match_fields:    list of generic field names for rec match/lookup (def=non-empty AssId/AcuId/SfId/ShId).
         :param ext_refs:        list of external reference tuples (type, id) to save.
         :param ass_idx:         self.clients list index of client record. If None/default then determine for to update
                                 the self.clients cache list.
@@ -650,7 +525,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         col_values = {f.name(system=SDI_ASS): f.val() for k, f in client_data.items() if k in save_fields}
         if not match_fields:
             # default to non-empty, external system references (k.endswith('Id') and len(k) <= 5 and k != 'RciId')
-            match_fields = [k for k, f in client_data.items() if k in ('AssId', 'AcId', 'SfId', 'ShId') and f.val()]
+            match_fields = [k for k, f in client_data.items() if k in ('AssId', 'AcuId', 'SfId', 'ShId') and f.val()]
         chk_values = {f.name(system=SDI_ASS): f.val() for k, f in client_data.items() if k in match_fields}
         if not col_values or not chk_values:
             self.error_message = "AssSysData.cl_save({}, {}, {}) called without data or non-empty foreign system id"\
@@ -659,7 +534,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # if locked_cols is None:
         #    locked_cols = save_fields.copy()        # uncomment for all fields being locked by default
 
-        ass_db = self.used_systems[SDI_ASS].connection
+        ass_db = self.connection(SDI_ASS)
         if ass_db.upsert('clients', col_values, chk_values=chk_values, returning_column='cl_pk', commit=commit,
                          locked_cols=locked_cols):
             self.error_message = "cl_save({}, {}, {}) clients upsert error: "\
@@ -690,7 +565,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         return cl_pk
 
     def cl_flush(self):
-        ass_db = self.used_systems[SDI_ASS].connection
+        ass_db = self.connection(SDI_ASS)
         for idx in self.clients_changed:
             rec = self.clients[idx]
             cl_pk = self.cl_save(rec, ext_refs=rec.val('ExtRefs').split(EXT_REFS_SEP), ass_idx=idx, commit=True)
@@ -699,7 +574,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return ass_db.commit()
 
-    def cl_verify_ext_refs(self):
+    def cl_compare_ext_refs(self):
         resort_codes = self.cae.get_config('ClientRefsResortCodes', default_value='').split(',')
         found_ids = dict()
         for rec in self.clients:
@@ -707,14 +582,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 for rci_id in rec.val('ExtRefs').split(EXT_REFS_SEP):
                     if rci_id not in found_ids:
                         found_ids[rci_id] = [rec]
-                    elif [_ for _ in found_ids[rci_id] if _.val('AcId') != rec.val('AcId')]:
+                    elif [_ for _ in found_ids[rci_id] if _.val('AcuId') != rec.val('AcuId')]:
                         found_ids[rci_id].append(rec)
-                    if rec.val('AcId'):
-                        if rci_id in self.client_refs_add_exclude and rec.val('AcId') not in resort_codes:
-                            self._warn("Resort RCI ID {} found in client {}".format(rci_id, rec.val('AcId')),
+                    if rec.val('AcuId'):
+                        if rci_id in self.client_refs_add_exclude and rec.val('AcuId') not in resort_codes:
+                            self._warn("Resort RCI ID {} found in client {}".format(rci_id, rec.val('AcuId')),
                                        self._ctx_no_file + 'CheckClientsDataResortId')
-                        elif rec.val('AcId') in resort_codes and rci_id not in self.client_refs_add_exclude:
-                            self._warn("Resort {} is missing RCI ID {}".format(rec.val('AcId'), rci_id),
+                        elif rec.val('AcuId') in resort_codes and rci_id not in self.client_refs_add_exclude:
+                            self._warn("Resort {} is missing RCI ID {}".format(rec.val('AcuId'), rci_id),
                                        self._ctx_no_file + 'CheckClientsDataResortId')
         # prepare found duplicate ids, prevent duplicate printouts and re-order for to separate RCI refs from others
         dup_ids = list()
@@ -723,7 +598,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 dup_ids.append("Duplicate external {} ref {} found in clients: {}"
                                .format(ref.split(EXT_REF_TYPE_ID_SEP)[0] if EXT_REF_TYPE_ID_SEP in ref
                                        else EXT_REF_TYPE_RCI,
-                                       repr(ref), ';'.join([_.val('AcId') for _ in recs])))
+                                       repr(ref), ';'.join([_.val('AcuId') for _ in recs])))
         for dup in sorted(dup_ids):
             self._warn(dup, self._ctx_no_file + 'CheckClientsDataExtRefDuplicates')
 
@@ -737,12 +612,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         """
         cl_pk = None
         for rec in self.clients:
-            if rec.val('AcId') == ac_id:
+            if rec.val('AcuId') == ac_id:
                 cl_pk = rec.val('AssId')
                 break
         if not cl_pk:
-            ass_db = self.used_systems[SDI_ASS].connection
-            if ass_db.select('clients', ['cl_pk'], "cl_ac_id = :ac_id", dict(ac_id=ac_id)):
+            ass_db = self.connection(SDI_ASS)
+            if ass_db.select('clients', ['cl_pk'], where_group_order="cl_ac_id = :ac_id", bind_vars=dict(ac_id=ac_id)):
                 self.error_message = "cl_ass_id_by_ac_id(): Acumen client ID {} not found in AssCache (err={})"\
                     .format(ac_id, ass_db.last_err_msg)
             else:
@@ -760,8 +635,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 cl_pk = rec.val('AssId')
                 break
         if not cl_pk:
-            ass_db = self.used_systems[SDI_ASS].connection
-            if ass_db.select('clients', ['cl_pk'], "cl_sh_id = :sh_id", dict(sh_id=sh_id)):
+            ass_db = self.connection(SDI_ASS)
+            if ass_db.select('clients', ['cl_pk'], where_group_order="cl_sh_id = :sh_id", bind_vars=dict(sh_id=sh_id)):
                 self.error_message = "cl_ass_id_by_sh_id(): Sihot guest object ID {} not found in AssCache (err={})" \
                     .format(sh_id, ass_db.last_err_msg)
             else:
@@ -779,8 +654,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 sf_id = rec.val('SfId')
                 break
         if not sf_id:
-            ass_db = self.used_systems[SDI_ASS].connection
-            if ass_db.select('clients', ['cl_sf_id'], "cl_pk = :ass_id", dict(ass_id=ass_id)):
+            ass_db = self.connection(SDI_ASS)
+            if ass_db.select('clients', ['cl_sf_id'], where_group_order="cl_pk = :ass_id",
+                             bind_vars=dict(ass_id=ass_id)):
                 self.error_message = "cl_sf_id_by_ass_id(): AssCache client ID {} not found (err={})" \
                     .format(ass_id, ass_db.last_err_msg)
             else:
@@ -802,13 +678,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         cl_pk = None
         if sh_id and ac_id:
             for rec in self.clients:
-                if rec.val('ShId') == sh_id and rec.val('AcId') == ac_id:
+                if rec.val('ShId') == sh_id and rec.val('AcuId') == ac_id:
                     cl_pk = rec.val('AssId')
                     break
             if not cl_pk:
-                ass_db = self.used_systems[SDI_ASS].connection
-                if ass_db.select('clients', ['cl_pk'], "cl_sh_id = :sh_id and cl_ac_id = :ac_id",
-                                 dict(sh_id=sh_id, ac_id=ac_id)):
+                ass_db = self.connection(SDI_ASS)
+                if ass_db.select('clients', ['cl_pk'], where_group_order="cl_sh_id = :sh_id and cl_ac_id = :ac_id",
+                                 bind_vars=dict(sh_id=sh_id, ac_id=ac_id)):
                     self.error_message = "cl_ensure_id(): Sihot client {}/{} not found in AssCache (err={})" \
                         .format(sh_id, ac_id, ass_db.last_err_msg)
                 else:
@@ -823,7 +699,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not cl_pk:   # create client record?
             cl_data = dict()
             if ac_id:
-                cl_data['AcId'] = ac_id
+                cl_data['AcuId'] = ac_id
             if sh_id:
                 cl_data['ShId'] = sh_id
             if name:
@@ -832,12 +708,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 cl_data['Email'] = email
             if phone:
                 cl_data['Phone'] = phone
-            cl_pk = self.cl_save(cl_data, locked_cols=['AcId', 'ShId', 'Name', 'Email', 'Phone'])
+            cl_pk = self.cl_save(cl_data, locked_cols=['AcuId', 'ShId', 'Name', 'Email', 'Phone'])
 
         return cl_pk
 
     def cl_ac_id_by_idx(self, index):
-        return self.clients[index].val('AcId')
+        return self.clients[index].val('AcuId')
 
     def cl_sh_id_by_idx(self, index):
         return self.clients[index].val('ShId')
@@ -859,7 +735,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if ext_refs and imp_rci_ref in ext_refs.split(EXT_REFS_SEP):
                 break
         else:
-            sf_conn = self.used_systems[SDI_SF].connection
+            sf_conn = self.connection(SDI_SF)
             sf_id, dup_clients = sf_conn.cl_by_rci_id(imp_rci_ref)
             if sf_conn.error_msg:
                 self._err("cl_idx_by_rci_id() Salesforce connect/fetch error " + sf_conn.error_msg,
@@ -914,14 +790,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         return [i for i, _ in enumerate(self.clients) if _.val('ShId')]
 
     def cl_list_by_ac_id(self, ac_id):
-        return [_ for _ in self.clients if _.val('AcId') == ac_id]
+        return [_ for _ in self.clients if _.val('AcuId') == ac_id]
 
     # =================  res_inv_data  =========================================================================
 
     def ri_fetch_all(self):
         self._warn("Fetching reservation inventory from AssCache (needs some minutes)",
                    self._ctx_no_file + 'FetchResInv', importance=4)
-        self.res_inv_data = self.load_view(self.used_systems[SDI_ASS].connection, 'res_inventories')
+        self.res_inv_data = self.load_view(self.connection(SDI_ASS), 'res_inventories')
         if not self.res_inv_data:
             return self.error_message
 
@@ -1023,16 +899,17 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return ret
 
-    def rgr_fetch_list(self, col_names, chk_values=None, where_group_order=""):
-        if chk_values and not where_group_order:
-            where_group_order = " AND ".join([k + " = :" + k for k in chk_values.keys()])
-        ass_db = self.used_systems[SDI_ASS].connection
-        if ass_db.select('res_groups', col_names, where_group_order, bind_vars=chk_values):
+    def rgr_fetch_list(self, col_names, chk_values=None, where_group_order="", bind_values=None):
+        ass_db = self.connection(SDI_ASS)
+        if ass_db.select('res_groups', col_names, chk_values=chk_values, where_group_order=where_group_order,
+                         bind_vars=bind_values):
             self.error_message = ass_db.last_err_msg
-        ret = ass_db.fetch_all()
-        if ass_db.last_err_msg:
-            self.error_message += ass_db.last_err_msg
-        return ret
+            rows = tuple()
+        else:
+            rows = ass_db.fetch_all()
+            if ass_db.last_err_msg:
+                self.error_message += ass_db.last_err_msg
+        return rows
 
     def rgr_upsert(self, col_values, chk_values=None, commit=False, multiple_rec_update=False, returning_column=''):
         """
@@ -1061,7 +938,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         elif not multiple_rec_update and not self.rgr_complete_ids(col_values, chk_values):
             self.error_message = "rgr_upsert({}, {}): Incomplete-able res IDs".format(ppf(col_values), ppf(chk_values))
         else:
-            ass_db = self.used_systems[SDI_ASS].connection
+            ass_db = self.connection(SDI_ASS)
             self.error_message = ass_db.upsert('res_groups', col_values, chk_values,
                                                returning_column=returning_column, commit=commit,
                                                multiple_row_update=multiple_rec_update)
@@ -1078,6 +955,16 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return ret
 
+    def rgc_fetch_list(self, col_names, chk_values=None, where_group_order="", bind_values=None):
+        ass_db = self.connection(SDI_ASS)
+        if ass_db.select('res_group_clients', col_names, chk_values=chk_values, where_group_order=where_group_order,
+                         bind_vars=bind_values):
+            self.error_message = ass_db.last_err_msg
+        ret = ass_db.fetch_all()
+        if ass_db.last_err_msg:
+            self.error_message += ass_db.last_err_msg
+        return ret
+
     def rgc_upsert(self, col_values, chk_values=None, commit=False, multiple_rec_update=False):
         """
         upsert into ass_cache.res_group_clients
@@ -1092,7 +979,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if chk_values is None:
             chk_values = {k: v for k, v in col_values.items() if k in ('rgc_rgr_fk', 'rgc_room_seq', 'rgc_pers_seq')}
         if chk_values:
-            ass_db = self.used_systems[SDI_ASS].connection
+            ass_db = self.connection(SDI_ASS)
             self.error_message = ass_db.upsert('res_group_clients', col_values, chk_values, commit=commit,
                                                multiple_row_update=multiple_rec_update)
             if not self.error_message and not multiple_rec_update and ass_db.curs.rowcount != 1:
@@ -1195,7 +1082,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not sf_rec.val('ResRoomNo') and ass_res_data.val('ResPersons', 0, 'RoomNo'):
             sf_rec['ResRoomNo'] = ass_res_data.val('ResPersons', 0, 'RoomNo')
 
-        sf_conn = self.used_systems[SDI_SF].connection
+        sf_conn = self.connection(SDI_SF)
         sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
         if err_msg and sf_res_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
             ori_err = err_msg
@@ -1259,7 +1146,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self._warn("sf_ass_room_change({}, {}, {}, {}) called".format(rgr_sf_id, check_in, check_out, next_room_id),
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-        err_msg = self.used_systems[SDI_SF].connection.room_change(rgr_sf_id, check_in, check_out, next_room_id)
+        err_msg = self.connection(SDI_SF).room_change(rgr_sf_id, check_in, check_out, next_room_id)
         if err_msg and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
             # reset (set last res change to midnight) to re-sync reservation (to get new ResSfId) and then try again
             self.rgr_upsert(dict(rgr_last_change=datetime.date.today(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
@@ -1286,7 +1173,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def sh_guest_ids(self, match_field, match_val):
         ret = None
         client_search = ClientSearch(self.cae)
-        if match_field == 'AcId':
+        if match_field == 'AcuId':
             ret = client_search.search_clients(matchcode=match_val)
         elif match_field == 'Name':
             ret = client_search.search_clients(name=match_val)
@@ -1420,7 +1307,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # determine ordering client; RESCHANNELLIST element is situated within RESERVATION xml block
         ord_cl_pk = None
         sh_id = shd.val('ShId')     # was RESCHANNELLIST.RESCHANNEL.OBJID
-        ac_id = shd.val('AcId')     # was RESCHANNELLIST.RESCHANNEL.MATCHCODE
+        ac_id = shd.val('AcuId')     # was RESCHANNELLIST.RESCHANNEL.MATCHCODE
         if sh_id or ac_id:
             self._warn("sh_res_change_to_ass(): create new client record for orderer {}/{}".format(sh_id, ac_id),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -1430,11 +1317,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                            .format(sh_id, ac_id, self.error_message))
                 self.error_message = ""
 
-        ass_db = self.used_systems[SDI_ASS].connection
+        ass_db = self.connection(SDI_ASS)
         ri_pk = None
         apt_wk, year = self.sh_apt_wk_yr(shd)
-        if ass_db.select('res_inventories', ['ri_pk'], "ri_pr_fk = :aw and ri_usage_year = :yr",
-                         dict(aw=apt_wk, yr=year)):
+        if ass_db.select('res_inventories', ['ri_pk'], where_group_order="ri_pr_fk = :aw and ri_usage_year = :yr",
+                         bind_vars=dict(aw=apt_wk, yr=year)):
             self._warn("sh_res_change_to_ass(): res inv {}~{} not found; (ignored) err={}"
                        .format(apt_wk, year, self.error_message))
             self.error_message = ""
@@ -1464,7 +1351,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         sh_ass_rec.set_val(ri_pk, 'RinId')
         for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons', flex_sys_dir=True)):
             sh_id = occ_rec.val('ShId')
-            ac_id = occ_rec.val('AcId')
+            ac_id = occ_rec.val('AcuId')
             sn = occ_rec.val('Surname')
             fn = occ_rec.val('Forename')
             if sh_id is None and ac_id is None:
@@ -1486,7 +1373,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         error_msg = ""
         with ass_db.thread_lock_init('res_groups', chk_values):
-            upd_values = sh_ass_rec.to_dict(filter_func=lambda f: not f.name(system=SDI_ASS, direction=FAD_ONTO)
+            upd_values = sh_ass_rec.to_dict(filter_fields=lambda f: not f.name(system=SDI_ASS, direction=FAD_ONTO)
                                             .startswith('rgr_'),
                                             system=SDI_ASS, direction=FAD_ONTO)
             if last_change:
@@ -1546,3 +1433,195 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                         commit=True, returning_column='rgr_sf_id')
 
         return rgr_sf_id
+
+    # #######################  push/pull/compare action helpers  #######################################################
+
+    def system_records_action(self, system, rec_type, action, **kwargs):
+        msg = "AssSysData.system_records_action({}, {}, {}, {}): ".format(system, rec_type, action, kwargs)
+        type_name = ALL_AVAILABLE_RECORD_TYPES.get(rec_type)
+        if not type_name:
+            self._err(msg + "Unknown record type {}".format(rec_type))
+        else:
+            method_name = system.lower() + '_' + type_name.lower() + '_' + action.lower()
+            method = getattr(self, method_name, None)
+            if method:
+                self._warn(msg + "Processing {} action against {}/{} system for record type {}"
+                           .format(action, ALL_AVAILABLE_SYSTEMS.get(system), system, rec_type))
+                try:
+                    method(**kwargs)
+                except Exception as ex:
+                    self._err(msg + "Executing method {} failed with exception {}\n{}"
+                              .format(method_name, ex, format_exc(ex)))
+            else:
+                self._err(msg + "{} action method {} is not implemented for system {} and record type {}"
+                          .format(action, method_name, system, rec_type))
+
+    def _ac_clients_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
+                         field_names=(), filter_records=None):
+        AC_CLIENT_MAP1 = (
+            # ('', 'AssId'),
+            ('CODE', 'AcuId'),
+            ('SF_ID', 'SfId'),
+            ('SH_ID', 'ShId'),
+            ('NAME', 'Name'),
+            ('EMAIL', 'Email'),
+            ('PHONE', 'Phone'),
+            ('EXT_REFS', 'ExtRefs'),
+            ('OWNS', 'ProductTypes'),
+        )
+
+        # column expression SQL for to fetch client data from Acumen - now migrated into V_CLIENTS_REFS_OWNS
+        '''
+        AC_SQL_AC_ID1 = "CD_CODE"
+        AC_SQL_AC_ID2 = "CD_CODE || '" + AC_ID_2ND_COUPLE_SUFFIX + "'"
+        AC_SQL_SF_ID1 = "nvl(CD_SF_ID1, (select max(MS_SF_ID) from T_ML, T_MS" \
+                        " where ML_CODE = MS_MLREF and MS_SF_ID is not NULL and ML_CDREF = CD_CODE))"
+        AC_SQL_SF_ID2 = "CD_SF_ID2"
+        AC_SQL_SH_ID1 = "to_char(CD_SIHOT_OBJID)"
+        AC_SQL_SH_ID2 = "to_char(CD_SIHOT_OBJID2)"
+        AC_SQL_NAME1 = "CD_FNAM1 || ' ' || CD_SNAM1"
+        AC_SQL_NAME2 = "CD_FNAM2 || ' ' || CD_SNAM2"
+        AC_SQL_EMAIL1 = "F_EMAIL_CLEANED(CD_EMAIL)"
+        AC_SQL_EMAIL2 = "F_EMAIL_CLEANED(CD_EMAIL, 1)"
+        AC_SQL_PHONE1 = "nvl(CD_HTEL1, nvl(CD_MOBILE1, CD_WTEL1 || CD_WEXT1))"
+        AC_SQL_MAIN_RCI = "CD_RCI_REF"
+        '''
+
+        rec_tpl = Record(system=SDI_ACU, direction=FAD_FROM).add_system_fields(AC_CLIENT_MAP1)
+        if field_names:
+            col_names += rec_tpl.leaf_names(system=SDI_ACU, direction=FAD_FROM, field_names=field_names)
+        if not col_names:
+            col_names = rec_tpl.leaf_names(system=SDI_ACU, direction=FAD_FROM)
+
+        acu_db = self.connection(SDI_ACU)
+        if acu_db.select('V_CLIENTS_REFS_OWNS', cols=col_names, chk_values=chk_values,
+                         where_group_order=where_group_order, bind_vars=bind_values):
+            self.error_message = acu_db.last_err_msg
+            return ()
+        rows = acu_db.fetch_all()
+        if acu_db.last_err_msg:
+            self.error_message = acu_db.last_err_msg
+            return ()
+
+        recs = Records()
+        for idx, col_values in enumerate(rows):
+            rec = rec_tpl.copy(deepness=-1)
+            for col_idx, val in enumerate(col_values):
+                rec.set_val(val, col_names[col_idx], system=SDI_ACU, direction=FAD_FROM)
+            if not callable(filter_records) or not filter_records(rec):
+                rec.pull(from_system=SDI_ASS)
+                recs.append(rec)
+
+        return recs
+
+    def ac_clients_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
+                        field_names=(), filter_records=None, match_fields=()):
+        recs = self._ac_clients_pull(col_names=col_names, chk_values=chk_values, where_group_order=where_group_order,
+                                     bind_values=bind_values, field_names=field_names, filter_records=filter_records)
+        self.clients.merge_records(recs, match_fields=match_fields)
+
+    def _as_clients_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
+                         field_names=(), filter_records=None):
+        rec_tpl = Record(system=SDI_ASS, direction=FAD_FROM).add_system_fields(ASS_CLIENT_MAP)
+        if field_names:
+            col_names += rec_tpl.leaf_names(system=SDI_ASS, direction=FAD_FROM, field_names=field_names)
+        if not col_names:
+            col_names = rec_tpl.leaf_names(system=SDI_ASS, direction=FAD_FROM)
+        # field_names = rec_tpl.leaf_names(sys_names=col_names)
+
+        rows = self.cl_fetch_list(col_names=col_names, chk_values=chk_values, where_group_order=where_group_order,
+                                  bind_values=bind_values)
+        recs = Records()
+        for col_values in rows:
+            rec = rec_tpl.copy(deepness=-1)
+            for col_idx, val in enumerate(col_values):
+                rec.set_val(val, col_names[col_idx], system=SDI_ASS, direction=FAD_FROM)
+            rec.pull(from_system=SDI_ASS)
+            if not callable(filter_records) or not filter_records(rec):
+                recs.append(rec)
+        return recs
+
+    def as_clients_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
+                        field_names=(), filter_records=None, match_fields=()):
+        recs = self._as_clients_pull(col_names=col_names, chk_values=chk_values, where_group_order=where_group_order,
+                                     bind_values=bind_values, field_names=field_names, filter_records=filter_records)
+        self.clients.merge_records(recs, match_fields=match_fields)
+
+    def as_clients_push(self, field_names=(), filter_records=None, match_fields=()):
+        recs = self.clients
+        for rec in recs:
+            if not callable(filter_records) or not filter_records(rec):
+                self.cl_save(rec, save_fields=field_names, match_fields=match_fields, ext_refs=rec.val('ExtRefs'))
+
+    def as_clients_compare(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
+                           field_names=(), filter_records=None, match_fields=()):
+        if not match_fields:
+            match_fields = ['AssId']
+        dif = list()
+
+        pulled = self._as_clients_pull(col_names=col_names, chk_values=chk_values, where_group_order=where_group_order,
+                                       bind_values=bind_values, field_names=field_names, filter_records=filter_records)
+        pulled.index_match_fields(match_fields)
+        processed_match_keys = list()
+
+        for rec in self.clients:
+            match_key = rec.match_key(match_fields)
+            if match_key in pulled.match_index:
+                for p_rec in pulled.match_index[match_key]:
+                    dif.extend(rec.compare_leafs(p_rec, warn_logger=self._warn))
+                processed_match_keys.append(match_key)
+            else:
+                msg = "Pulled client identified by {} not found in compare data; rec={}".format(match_key, rec)
+                dif.append(msg)
+                self._warn(msg)
+
+        for match_key, p_recs in pulled.match_index.items():
+            if match_key in processed_match_keys:
+                continue
+            for p_rec in p_recs:
+                msg = "Client to compare identified by {} not found in pulled clients; rec={}".format(match_key, p_rec)
+                dif.append(msg)
+                self._warn(msg)
+
+        return pulled, dif
+
+    def _as_reservations_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
+                              field_names=(), filter_records=None):
+        rec_tpl = Record(system=SDI_ASS, direction=FAD_FROM).add_system_fields(MAP_RES_OBJECT)
+        if field_names:
+            col_names += rec_tpl.leaf_names(system=SDI_ASS, direction=FAD_FROM, field_names=field_names)
+        if not col_names:
+            col_names = rec_tpl.leaf_names(system=SDI_ASS, direction=FAD_FROM)
+        # field_names = rec_tpl.leaf_names(sys_names=col_names)
+
+        rgr_cols = [cn for cn in col_names if cn.startswith('rgr_')]
+        rgc_cols = [cn for cn in col_names if cn.startswith('rgc_')]
+        if rgc_cols and 'rgr_pk' not in rgr_cols:
+            rgr_cols.append('rgr_pk')
+
+        rows = self.rgr_fetch_list(col_names=rgr_cols, chk_values=chk_values, where_group_order=where_group_order,
+                                   bind_values=bind_values)
+        recs = Records()
+        for rgr_values in rows:
+            rec = rec_tpl.copy(deepness=-1)
+            for col_idx, val in enumerate(rgr_values):
+                rec.set_val(val, rgr_cols[col_idx], system=SDI_ASS, direction=FAD_FROM)
+            if rgc_cols:
+                rgr_pk = rgr_values[rgr_cols.index('rgr_pk')]
+                rgc_rows = self.rgc_fetch_list(col_names=rgc_cols, chk_values=dict(rgc_rgr_fk=rgr_pk),
+                                               where_group_order="ORDER BY rgc_room_seq, rgc_pers_seq")
+                for row_idx, rgc_values in enumerate(rgc_rows):
+                    for col_idx, val in enumerate(rgc_values):
+                        idx_path = ('ResPersons', row_idx, rgc_cols[col_idx])
+                        rec.set_val(val, *idx_path, system=SDI_ASS, direction=FAD_FROM)
+            rec.pull(from_system=SDI_ASS)
+            if not callable(filter_records) or not filter_records(rec):
+                recs.append(rec)
+        return recs
+
+    def as_reservations_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
+                             field_names=(), filter_records=None, match_fields=()):
+        recs = self._as_reservations_pull(col_names=col_names, chk_values=chk_values,
+                                          where_group_order=where_group_order, bind_values=bind_values,
+                                          field_names=field_names, filter_records=filter_records)
+        self.res_data.merge_records(recs, match_fields=match_fields)

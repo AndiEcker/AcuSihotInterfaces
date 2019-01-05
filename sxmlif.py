@@ -227,7 +227,7 @@ class ResChange(SihotXmlParser):
         elif self._curr_tag == 'GID':                       # Sihot Guest object ID
             di, ik = self.rgr_list[-1]['ResPersons'][-1], 'ShId'
         elif self._curr_tag == 'MATCHCODE':
-            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'AcId'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'AcuId'
         elif self._curr_tag == 'SN':
             di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_surname'
         elif self._curr_tag == 'CN':

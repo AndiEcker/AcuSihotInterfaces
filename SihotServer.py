@@ -56,7 +56,7 @@ ass_options = add_ass_options(cae)
 
 debug_level = cae.get_option('debugLevel')
 ass_data = init_ass_data(cae, ass_options)
-conf_data = ass_data['assSysData']
+asd = ass_data['assSysData']
 notification = ass_data['notification']
 
 # app and application will be used when used as server plug-in in apache/nginx
@@ -83,7 +83,7 @@ def get_page(page_name):       # return a page that has been rendered using a te
 @app.route('/avail_rooms')
 def get_avail_rooms():
     rd = request.json
-    rooms = conf_data.sh_avail_rooms(hotel_ids=rd['hotel_ids'], room_cat_prefix=rd['room_cat_prefix'], day=rd['day'])
+    rooms = asd.sh_avail_rooms(hotel_ids=rd['hotel_ids'], room_cat_prefix=rd['room_cat_prefix'], day=rd['day'])
     return str(rooms)
 
 
@@ -91,12 +91,12 @@ def get_avail_rooms():
 def get_res_count():
     rqi = " ".join([k + "=" + str(v) for k, v in request.query.items()])
     return "Number of reservations" + (" with " + rqi if len(rqi) else "") \
-           + " is " + str(conf_data.sh_count_res(**request.query))
+           + " is " + str(asd.sh_count_res(**request.query))
 
 
 @app.route('/res/get')
 def get_res_data():
-    return conf_data.sh_res_data(**request.query)
+    return asd.sh_res_data(**request.query)
 
 
 @app.route('/res/<action>', method='PUSH')

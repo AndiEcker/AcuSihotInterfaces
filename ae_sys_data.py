@@ -1,11 +1,12 @@
 """
 manage data for to interface from and onto other/external systems
 """
+import datetime
 import os
 import struct
 import keyword
 from collections import OrderedDict
-from typing import Optional, Any, Union, List
+from typing import Optional, Any, Union, List, Dict, Tuple
 
 # data actions
 from sys_data_ids import SYS_CRED_ITEMS, SYS_FEAT_ITEMS, DEBUG_LEVEL_DISABLED, SYS_CRED_NEEDED, DEBUG_LEVEL_VERBOSE
@@ -17,6 +18,9 @@ ACTION_DELETE = 'DELETE'
 ACTION_SEARCH = 'SEARCH'
 ACTION_PARSE = 'PARSE'
 ACTION_BUILD = 'BUILD'
+ACTION_PULL = 'PULL'
+ACTION_PUSH = 'PUSH'
+ACTION_COMPARE = 'COMPARE'
 
 
 # field aspect types/prefixes
@@ -100,6 +104,142 @@ def aspect_key_direction(key):
     """
     direction = key[_ASP_TYPE_LEN:_ASP_TYPE_LEN + _ASP_DIR_LEN]
     return direction if direction in (FAD_FROM, FAD_ONTO) else ''
+
+
+def correct_email(email, changed=False, removed=None):
+    """ check and correct email address from a user input (removing all comments)
+
+    Special conversions that are not returned as changed/corrected are: the domain part of an email will be corrected
+    to lowercase characters, additionally emails with all letters in uppercase will be converted into lowercase.
+
+    Regular expressions are not working for all edge cases (see the answer to this SO question:
+    https://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address) because RFC822
+    is very complex (even the reg expression recommended by RFC 5322 is not complete; there is also a
+    more readable form given in the informational RFC 3696). Additionally a regular expression
+    does not allow corrections. Therefore this function is using a procedural approach (using recommendations from
+    RFC 822 and https://en.wikipedia.org/wiki/Email_address).
+
+    :param email:       email address
+    :param changed:     (optional) flag if email address got changed (before calling this function) - will be returned
+                        unchanged if email did not get corrected.
+    :param removed:     (optional) list declared by caller for to pass back all the removed characters including
+                        the index in the format "<index>:<removed_character(s)>".
+    :return:            tuple of (possibly corrected email address, flag if email got changed/corrected)
+    """
+    if email is None:
+        return None, False
+
+    if removed is None:
+        removed = list()
+
+    in_local_part = True
+    in_quoted_part = False
+    in_comment = False
+    all_upper_case = True
+    local_part = ""
+    domain_part = ""
+    domain_beg_idx = -1
+    domain_end_idx = len(email) - 1
+    comment = ''
+    last_ch = ''
+    ch_before_comment = ''
+    for idx, ch in enumerate(email):
+        if ch.islower():
+            all_upper_case = False
+        next_ch = email[idx + 1] if idx + 1 < domain_end_idx else ''
+        if in_comment:
+            comment += ch
+            if ch == ')':
+                in_comment = False
+                removed.append(comment)
+                last_ch = ch_before_comment
+            continue
+        elif ch == '(' and not in_quoted_part \
+                and (idx == 0 or email[idx:].find(')@') >= 0 if in_local_part
+                     else idx == domain_beg_idx or email[idx:].find(')') == domain_end_idx - idx):
+            comment = str(idx) + ':('
+            ch_before_comment = last_ch
+            in_comment = True
+            changed = True
+            continue
+        elif ch == '"' \
+                and (not in_local_part
+                     or last_ch != '.' and idx and not in_quoted_part
+                     or next_ch not in ('.', '@') and last_ch != '\\' and in_quoted_part):
+            removed.append(str(idx) + ':' + ch)
+            changed = True
+            continue
+        elif ch == '@' and in_local_part and not in_quoted_part:
+            in_local_part = False
+            domain_beg_idx = idx + 1
+        elif ch.isalnum():
+            pass    # uppercase and lowercase Latin letters A to Z and a to z
+        elif ord(ch) > 127 and in_local_part:
+            pass    # international characters above U+007F
+        elif ch == '.' and in_local_part and not in_quoted_part and last_ch != '.' and idx and next_ch != '@':
+            pass    # if not the first or last unless quoted, and does not appear consecutively unless quoted
+        elif ch in ('-', '.') and not in_local_part and (last_ch != '.' or ch == '-') \
+                and idx not in (domain_beg_idx, domain_end_idx):
+            pass    # if not duplicated dot and not the first or last character in domain part
+        elif (ch in ' (),:;<>@[]' or ch in '\\"' and last_ch == '\\' or ch == '\\' and next_ch == '\\') \
+                and in_quoted_part:
+            pass    # in quoted part and in addition, a backslash or double-quote must be preceded by a backslash
+        elif ch == '"' and in_local_part:
+            in_quoted_part = not in_quoted_part
+        elif (ch in "!#$%&'*+-/=?^_`{|}~" or ch == '.'
+              and (last_ch and last_ch != '.' and next_ch != '@' or in_quoted_part)) \
+                and in_local_part:
+            pass    # special characters (in local part only and not at beg/end and no dup dot outside of quoted part)
+        else:
+            removed.append(str(idx) + ':' + ch)
+            changed = True
+            continue
+
+        if in_local_part:
+            local_part += ch
+        else:
+            domain_part += ch.lower()
+        last_ch = ch
+
+    if all_upper_case:
+        local_part = local_part.lower()
+
+    return local_part + domain_part, changed
+
+
+def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
+    """ check and correct phone number from a user input (removing all invalid characters including spaces)
+
+    :param phone:           phone number
+    :param changed:         (optional) flag if phone got changed (before calling this function) - will be returned
+                            unchanged if phone did not get corrected.
+    :param removed:         (optional) list declared by caller for to pass back all the removed characters including
+                            the index in the format "<index>:<removed_character(s)>".
+    :param keep_1st_hyphen  (optional, def=False) pass True for to keep at least the first occurring hyphen character.
+    :return:                tuple of (possibly corrected phone number, flag if phone got changed/corrected)
+    """
+
+    if phone is None:
+        return None, False
+
+    if removed is None:
+        removed = list()
+
+    corr_phone = ''
+    got_hyphen = False
+    for idx, ch in enumerate(phone):
+        if ch.isdigit():
+            corr_phone += ch
+        elif keep_1st_hyphen and ch == '-' and not got_hyphen:
+            got_hyphen = True
+            corr_phone += ch
+        else:
+            if ch == '+' and not corr_phone and not phone[idx + 1:].startswith('00'):
+                corr_phone = '00'
+            removed.append(str(idx) + ':' + ch)
+            changed = True
+
+    return corr_phone, changed
 
 
 def deeper(deepness, instance):
@@ -208,6 +348,15 @@ def init_current_index(value, idx_path, use_curr_idx) -> tuple:
         set_current_index(value, idx)
 
     return (idx, ) + tuple(idx2)
+
+
+def template_idx_path(idx_path, is_sub_rec=False):
+    if len(idx_path) < 2:
+        return not is_sub_rec
+    for idx in idx_path:
+        if isinstance(idx, int) and idx == 0:
+            return True
+    return False
 
 
 def set_current_index(value, idx=None, add=None):
@@ -779,7 +928,7 @@ class Record(OrderedDict):
             sys_name = fas[sfi.pop(sys_nam_key)].strip('/')     # strip needed for Sihot elem names only
 
             records = self.value(idx_path[0], system='', direction='')
-            if len(idx_path) > 2 and isinstance(idx_path[1], int) and idx_path[1] == 0 and records:
+            if template_idx_path(idx_path, is_sub_rec=True) and records:
                 # if template sub-record then also add sys name/converter/calculator/... to each sub Record
                 idx_paths = [(idx_path[0], idx, ) + idx_path[2:] for idx in range(len(records))]
             else:
@@ -839,7 +988,51 @@ class Record(OrderedDict):
 
         return self.collected_system_fields
 
-    def copy(self, deepness=0, root_rec=None, root_idx=(), onto_rec=None, filter_func=None, fields_patches=None):
+    def compare_leafs(self, rec, warn_logger=None):
+        dif = list()
+        found_idx = list()
+        for idx_path in self.leaf_indexes():
+            found_idx.append(idx_path)
+            if idx_path not in rec:
+                dif.append("Field {}={} does not exist in the other Record".format(idx_path, self.val(*idx_path)))
+            else:
+                this_val = self.compare_val(*idx_path)
+                that_val = rec.compare_val(*idx_path)
+                if this_val != that_val:
+                    dif.append("Different values in Field {}: {} != {}".format(idx_path, this_val, that_val))
+
+        for idx_path in rec.leaf_indexes():
+            if idx_path not in found_idx:
+                dif.append("Field {}={} does not exist in this Record".format(idx_path, rec.val(*idx_path)))
+
+        if warn_logger and dif:
+            warn_logger("Differences between this Record {} and the other {}".format(self, rec), importance=3)
+            for dl in dif:
+                warn_logger(dl)
+
+        return dif
+
+    def compare_val(self, *idx_path):
+        idx = self.node_child(idx_path).name()
+        val = self.val(*idx_path)
+
+        if isinstance(val, str):
+            if 'name' in idx.lower():
+                val = val.capitalize()
+            if 'Email' in idx:
+                val, _ = correct_email(val.lower())
+            elif 'Phone' in idx:
+                val, _ = correct_phone(val)
+            if val is not None and len(val) > 40:
+                val = val[:40].strip()
+            if val == '':
+                val = None
+        elif isinstance(val, (datetime.date, datetime.datetime)):
+            val = val.toordinal()
+
+        return val
+
+    def copy(self, deepness=0, root_rec=None, root_idx=(), onto_rec=None, filter_fields=None, fields_patches=None):
         """
         copy the fields of this record
         :param deepness:        deep copy level: <0==see deeper(), 0==only copy this record instance, >0==deep copy
@@ -847,7 +1040,7 @@ class Record(OrderedDict):
         :param root_rec:        destination root record - using onto_rec/new record if not specified.
         :param root_idx:        destination root index (tuple/list with index path items: field names, list indexes).
         :param onto_rec:        destination record; pass None to create new Record instance.
-        :param filter_func:     method called for each copied field (return True to filter/hide/not-include into copy).
+        :param filter_fields:   method called for each copied field (return True to filter/hide/not-include into copy).
         :param fields_patches:  dict with keys as idx_paths and values as dict of aspect keys and values (for to
                                 overwrite aspects in each copied _Field instance).
         :return:                new/extended record instance.
@@ -861,15 +1054,15 @@ class Record(OrderedDict):
 
         for idx in self._fields.keys():
             field = self._fields.get(idx)
-            if filter_func:
-                assert callable(filter_func)
-                if filter_func(field):
+            if filter_fields:
+                assert callable(filter_fields)
+                if filter_fields(field):
                     continue
 
             if deeper(deepness, field):
                 field = field.copy(deepness=deeper(deepness, field), onto_rec=None if new_rec else onto_rec,
                                    root_rec=root_rec, root_idx=root_idx + (idx, ),
-                                   filter_func=filter_func, fields_patches=fields_patches)
+                                   filter_fields=filter_fields, fields_patches=fields_patches)
             elif idx in onto_rec:
                 field = onto_rec[idx]
 
@@ -889,6 +1082,25 @@ class Record(OrderedDict):
             field.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir, reset_lists=reset_lists)
         return self
 
+    def leaf_names(self, system='', direction='', field_names=(), sys_names=(), exclude_fields=()):
+        names = list()
+        for field in self.leafs(system=system, direction=direction, flex_sys_dir=False):
+            idx_path = field.root_idx(system=system, direction=direction)
+            if not template_idx_path(idx_path):
+                continue
+            fld_name = field.name()
+            sys_name = field.name(system=system, direction=direction, flex_sys_dir=False)
+            root_name = idx_path_field_name(idx_path)
+            if field_names and fld_name not in field_names and root_name not in field_names:
+                continue
+            if sys_names and sys_name not in sys_names:
+                continue
+            if fld_name in exclude_fields or root_name in exclude_fields:
+                continue
+            names.append(root_name if len(idx_path) > 1 and idx_path[0] == fld_name
+                         else (sys_name if system else fld_name))
+        return tuple(names)
+
     def merge_leafs(self, rec, system='', direction='', flex_sys_dir=True, extend=True):
         for idx_path in rec.leaf_indexes(system=system, direction=direction, flex_sys_dir=flex_sys_dir):
             if not extend and idx_path[0] not in self._fields:
@@ -901,6 +1113,9 @@ class Record(OrderedDict):
             elif extend:
                 self.set_node_child(src_field, *idx_path, system='', direction='')
         return self
+
+    def match_key(self, match_fields):
+        return tuple([self.val(fn) for fn in match_fields])
 
     def merge_vals(self, rec, system='', direction='', flex_sys_dir=True, extend=True):
         for idx_path in rec.leaf_indexes(system=system, direction=direction, flex_sys_dir=flex_sys_dir):
@@ -1005,11 +1220,11 @@ class Record(OrderedDict):
                     column_expressions.append(expr + name)
         return column_expressions
 
-    def to_dict(self, filter_func=None, key_type=str, put_system_val=True, put_empty_val=False,
+    def to_dict(self, filter_fields=None, key_type=str, put_system_val=True, put_empty_val=False,
                 system=None, direction=None):
         """
         copy Record leaf values into a dict.
-        :param filter_func:     callable returning True for each field that need to be excluded in returned dict, pass
+        :param filter_fields:   callable returning True for each field that need to be excluded in returned dict, pass
                                 None to include all fields (if put_empty_val == True).
         :param key_type:        type of dict keys: None=field name, tuple=index path tuple, str=index path string (def).
         :param put_system_val:  pass False to include/use main field val; def=True for to include system val specified
@@ -1025,7 +1240,7 @@ class Record(OrderedDict):
         for idx_path in self.leaf_indexes(system=system, direction=direction):
             field = self.node_child(idx_path)
             key = field.name(system=system, direction=direction, flex_sys_dir=False)
-            if key and (not filter_func or not filter_func(field)):
+            if key and (not filter_fields or not filter_fields(field)):
                 if key_type == tuple:
                     key = idx_path
                 elif key_type == str:
@@ -1044,7 +1259,11 @@ class Record(OrderedDict):
         return self     # implemented only for to get self as return value
 
 
-class Records(Values):      # type: List[Record]
+class Records(Values):              # type: List[Record]
+    def __init__(self, seq=()):
+        super().__init__(seq)
+        self.match_index = dict()   # type: Dict[Tuple, List[Record]]
+
     def __getitem__(self, key: Union[int, str, tuple]) -> Record:
         child = self.node_child(key, moan=True)
         if child is None:
@@ -1121,9 +1340,9 @@ class Records(Values):      # type: List[Record]
             yield from item.leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
     def leaf_indexes(self, *idx_path, system='', direction='', flex_sys_dir=True):
-        for idx, item in enumerate(self):
+        for idx, rec in enumerate(self):
             item_idx = idx_path + (idx, )
-            yield from item.leaf_indexes(*item_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
+            yield from rec.leaf_indexes(*item_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
     def append_record(self, from_rec=None, root_rec=None, root_idx=()):
         recs_len = len(self)
@@ -1134,6 +1353,30 @@ class Records(Values):      # type: List[Record]
         new_rec = from_rec.copy(deepness=-1, root_rec=root_rec, root_idx=root_idx + (recs_len,))
         self.append(new_rec)
         return new_rec
+
+    def index_match_fields(self, match_fields):
+        for idx, rec in enumerate(self):
+            match_key = rec.match_key(match_fields)
+            if match_key in self.match_index:
+                self.match_index[match_key].append(self[idx])
+            else:
+                self.match_index[match_key] = [self[idx]]
+        return self
+
+    def merge_records(self, records, match_fields=()):
+        if len(self) == 0 or not match_fields:
+            self.extend(records)
+        else:
+            if not self.match_index:
+                self.index_match_fields(match_fields)
+            for rec in records:
+                match_key = rec.match_key(match_fields)
+                if match_key in self.match_index:
+                    for this_rec in self.match_index[match_key]:
+                        this_rec.update(rec)
+                else:
+                    self.append(rec)
+        return self
 
     def set_env(self, system='', direction='', root_rec=None, root_idx=()):
         for idx, rec in enumerate(self):
@@ -1473,8 +1716,8 @@ class _Field:
     def filter(self, system='', direction=''):
         return self.aspect_value(FAT_FLT, system=system, direction=direction)
 
-    def set_filter(self, filter_func, system='', direction='', protect=False):
-        return self.set_aspect(filter_func, FAT_FLT, system=system, direction=direction, protect=protect)
+    def set_filter(self, filter_fields, system='', direction='', protect=False):
+        return self.set_aspect(filter_fields, FAT_FLT, system=system, direction=direction, protect=protect)
 
     def sql_expression(self, system='', direction=''):
         return self.aspect_value(FAT_SQE, system=system, direction=direction)

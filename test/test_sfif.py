@@ -399,7 +399,7 @@ class TestClient:
         sfc = salesforce_connection
 
         rec = Record(fields=dict(   # AssId='123123', NOT IMPLEMENTED IN SF
-                                 AcId='T000123', ShId='999123', Email='cl@fld.data',
+                                 AcuId='T000123', ShId='999123', Email='cl@fld.data',
                                  Forename='testy', Surname='Test Field Data Fetch'),
                      system=SDI_SF, direction=FAD_ONTO)\
             .add_system_fields(MAP_CLIENT_OBJECTS['Account'])
@@ -539,7 +539,7 @@ class TestReservation:
         rec = sfc.cl_res_rec_onto\
             .copy(deepness=-1)\
             .update({'Surname': 'LNam', 'Forename': 'FNam',
-                     'ShId': '123456789', 'AcId': 'E012345',
+                     'ShId': '123456789', 'AcuId': 'E012345',
                      'Language': 'EN', 'Country': 'GB',
                      'Email': 't@ts.tst', 'Phone': '0049765432100',
                      'ResHotelId': '999', 'ResId': '999999', 'ResSubId': '9',
@@ -564,7 +564,7 @@ class TestReservation:
         rec = sfc.cl_res_rec_onto\
             .copy(deepness=-1)\
             .update({'Surname': 'LstNam', 'Forename': 'FstNam',
-                     'ShId': '11123456789', 'AcId': 'T111111',
+                     'ShId': '11123456789', 'AcuId': 'T111111',
                      'Language': 'EN', 'Country': 'GB',
                      'Email': 't111@ts111.tst', 'Phone': '00491111111',
                      'ResHotelId': '1', 'ResId': '1111111', 'ResSubId': '1',
@@ -590,7 +590,7 @@ class TestReservation:
         rec = sfc.cl_res_rec_onto\
             .copy(deepness=-1)\
             .update({'Surname': 'Lästñame', 'Forename': 'FírstNümé',
-                     'ShId': '55423456789', 'AcId': 'T555555',
+                     'ShId': '55423456789', 'AcuId': 'T555555',
                      'Language': 'ES', 'Country': 'FR',
                      'Email': 't555@ts555.tst', 'Phone': '004955555555',
                      'ResHotelId': '1', 'ResId': '555555', 'ResSubId': '5',

@@ -12,7 +12,6 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | :--- | :--- | :---: |
 | AcuServer | Synchronize room status changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| [AssCacheSync](#asscachesync-application) | Initialize, pull, verify or push AssCache data against Acumen, Salesforce and/or Sihot | Web |
 | [AssServer](#assserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
@@ -23,6 +22,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | [SihotOccLogChecker](#sihotocclogchecker-application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
 | [SihotResImport](#sihotresimport-application) | Create/Update/Cancel reservations from CSV/TXT/JSON files within Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
+| [SysDataMan](#sysdataman-application) | Initialize, pull, compare or push data against Acumen, AssCache, Salesforce and/or Sihot | Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
 | [WatchPupPy](#watchpuppy-application) | Supervise always running servers or periodically execute command | Kernel, Web |
 | WebRestTester | Reservation interface testing tool | Web |
@@ -56,16 +56,17 @@ are case-sensitive. The following table is listing them sorted by the option nam
 
 | Option | Description | Default | Short option | Commands |
 | --- | --- | --- | --- | --- |
-| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfClientValidator |
-| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | AssCacheSync, AssServer |
-| assPassword | User account password for the AssCache/Postgres database | - | P | AssCacheSync, AssServer |
-| assDSN | Database name of the AssCache/Postgres database | ass_cache | N | AssCacheSync, AssServer |
+| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | SysDataMan, AssServer |
+| assPassword | User account password for the AssCache/Postgres database | - | P | SysDataMan, AssServer |
+| assDSN | Database name of the AssCache/Postgres database | ass_cache | N | SysDataMan, AssServer |
 | breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
+| compare | Compare/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | SysDataMan |
 | correctSystem | Correct/Fix data for system (Acu=Acumen, Ass=AssCache) | - | A | SihotOccLogChecker |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
 | cmdInterval | synchronization interval in seconds | 3600 | l | AssServer, WatchPupPy |
@@ -75,52 +76,47 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfClientValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
-| filterFields | Filter to restrict used fields of (C=clients, P=products, R=reservations) | - | Y | AssCacheSync |
-| filterRecords | Filter to restrict processed (C=client, P=product, R=reservation) records | - | X | AssCacheSync |
 | filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | W | SfClientValidator |
 | filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfClientValidator |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
-| init | Initialize/Recreate AssCache/Postgres database (0=No, 1=Yes) | 0 | I | AssCacheSync |
+| init | Initialize/Recreate AssCache/Postgres database (0=No, 1=Yes) | 0 | I | SysDataMan |
 | jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
-| matchFields | Specify field(s) used for to match/lookup the associated data record | - | Z | AssCacheSync |
-| matchRecords | Restrict processed (dict keys: C=client, P=product, R=reservation) destination records | - | M | AssCacheSync |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfClientValidator |
-| pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | AssCacheSync |
-| push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | AssCacheSync |
+| pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | SysDataMan |
+| push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | SysDataMan |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
-| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
-| sfPassword | Salesforce user account password | - | a | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
-| sfToken | Salesforce user account token | - | o | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
-| sfUser | Salesforce account user name | - | y | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfPassword | Salesforce user account password | - | a | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfToken | Salesforce user account token | - | o | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfUser | Salesforce account user name | - | y | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
 | shClientPort | IP port of the Sxml interface of this server | 11000 (AcuServer) or 12000 (AssServer) | m | AcuServer, AssServer |
 | shMapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
 | shMapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
-| shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, AssCacheSync, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shTimeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, SysDataMan, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, SysDataMan, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shTimeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, SysDataMan, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shUseKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | shUseKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, SysDataMan, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpFrom | SMTP Sender/From address | - | f | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SysDataMan, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SysDataMan, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SysDataMan, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
-| verify | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | AssCacheSync |
-| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
+| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SysDataMan, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are
 hard-coded by python (like e.g. the -h switch for to show the help screen). The upper case character options -D and -L
 are hard-coded by the ae_console_app module. Some options like -m are used and interpreted differently in several
 command line applications.
 
-The following lower case letters could be used more easily as short options than others (for to prevent duplicates/conflicts)
-for future/upcoming command line options with less conflicts: | l | m | n | q |.
+The following lower case letters could be used more easily as short options than others (for to prevent
+duplicates/conflicts) for future/upcoming command line options with less conflicts: | l | m | n | q | M | X | Y | Z |.
 
 
 ### System Data Fields
@@ -132,7 +128,7 @@ each of our clients/guests:
 
  Field Name | Field Type | Description | Example Values |
 | --- | --- | --- | --- |
-| AcId | String | Acumen Client Reference, Sihot Matchcode | X123456, E234567 |
+| AcuId | String | Acumen Client Reference, Sihot Matchcode | X123456, E234567 |
 | AssId | Integer | Primary key value of ass_cache.clients table | 123456789 |
 | City | String | City name of Client/Guest | Madrid, London, Berlin |
 | Comment | String | Client/Guest Comment | Disabled, Wheel Chair, Has Kids, Has Pets |
@@ -173,7 +169,7 @@ each of our clients/guests:
 
 The table underneath is showing all the fields that can be used to specify a reservation created within Sihot. Only the
 fields marked with an asterisk (*) are mandatory, with the extension that the reservation orderer has to be specified
-by at least one of the client fields `ShId`, `AcId` or `Surname`. The fields names marked with an plus character (+) are
+by at least one of the client fields `ShId`, `AcuId` or `Surname`. The fields names marked with an plus character (+) are
 optional only if the reservation gets sent the first time to Sihot, so for every change/update of an already existing
 reservation these fields need to be included in the send to Sihot:
 
@@ -205,7 +201,7 @@ Field Name | Field Type | Description | Example Values |
 | ResNote | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
 | ResObjId | String | Sihot Internal Reservation Object Id | '123456789' |
 | ResPersons | List | List of Occupants | ((Smith, John, 24-12-1962, ...), (Knopf, Jim, 27-01-1955, ...)) |
-| ResPersons<n>AcId | String | Sihot Occupant Matchcode | E123456 |
+| ResPersons<n>AcuId | String | Sihot Occupant Matchcode | E123456 |
 | ResPersons<n>AssId | Integer | Sihot Occupant AssCache clients primary key | 123456 |
 | ResPersons<n>AutoGen | String | Autogenerated entry | '1' if auto-generated else '0' |
 | ResPersons<n>Board | String | Board-Rate | 'RO'=room only |
@@ -275,7 +271,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 
 | Field Name | Acumen Column | Salesforce Field | Sihot Element | AssCache Column |
 | --- | --- | --- | --- | --- |
-| AcId | CD_CODE+OC_CODE | CD_CODE__pc+AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | cl_ac_id+rgr_order_cl_fk->cl_ac_id | 
+| AcuId | CD_CODE+OC_CODE | CD_CODE__pc+AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | cl_ac_id+rgr_order_cl_fk->cl_ac_id | 
 | AssId | - | AssCache_Id__pc | - | cl_pk |
 | City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
 | Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |
@@ -329,7 +325,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResNote | SIHOT_NOTE | Note__c | RESERVATION.COMMENT | rgr_comment |
 | ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | RESERVATION.OBJID | rgr_obj_id |
 | ResPersons | - | - | PERSON | res_group_clients.* |
-| ResPersons<n>AcId | CD_CODE | - | PERSON.MATCHCODE | rgc_occup_cl_fk->cl_ac_id |
+| ResPersons<n>AcuId | CD_CODE | - | PERSON.MATCHCODE | rgc_occup_cl_fk->cl_ac_id |
 | ResPersons<n>AssId | CD_CODE | - | PERSON.MATCHCODE | rgc_occup_cl_fk |
 | ResPersons<n>AutoGen | - | - | PERSON.AUTO-GENERATED | rgc_auto_generated |
 | ResPersons<n>Board | - | - | PERSON.PERS-RATE.R | rgc_sh_pack |
@@ -380,32 +376,32 @@ AcuSihotMonitor is a kivy application for Windows, Linux, Mac OS X, Android and 
 the correct functionality of the Salesforce, Acumen and Sihot servers and interfaces.
 
 
-### AssCacheSync Application
+### SysDataMan Application
 
-AssCacheSync is a command line tool for to synchronize and verify data between our three systems (Acumen, Salesforce
-and Sihot). The actions performed by this tool get specified by the [command line options --pull, --push and --verify](#action-command-line-options),
-which can be specify multiple times. The [command line options --filterRecords and --filterFields](#filter-command-line-options) allow to filter the
-processed data records and fields. The way how two data records will be associated for to be verified or synchronized
-can be specified with the [command line options --matchFields and --matchRecords](#match-command-line-options).
+SysDataMan is a command line tool for to synchronize and compare data between our four systems (acu=Acumen ass=AssCache
+sf=Salesforce and sh=Sihot). The actions performed by this tool get specified by the 
+[command line options --pull, --push and --compare](#action-command-line-options),
+which can be specify multiple times.
 
-All command line options can be specified in any order, because AssCacheSync is always first doing all the pull actions.
-After the pull any push actions are performed (if specified/given) and finally the verify actions are processed. So if
-you want to run a verification before any pull/push action then you have to execute AssCacheSync twice (the first run
-with the --verify option and the second run with the pull/push and optionally another verify action).
+All command line options can be specified in any order, because SysDataMan is always first doing all the pull actions.
+After the pull any push actions are performed (if specified/given) and finally the compare actions are processed.
+
+For to run a compare before any additional pull/push action simply execute SysDataMan twice (the first run
+with the --compare option and the second run with the pull/push and optionally another compare action).
  
-The postgres database AssCache is used for to temporarily store the data pulled from one of our three
-systems (the source system) for to be either verified against or pushed onto another system (the destination system).
+The postgres database AssCache (ass) can be used for to temporarily store the data pulled from one of our three
+systems (the source system) for to speed up large data synchronization tasks.
 
 #### Supported Data Fields
 
 The following client data fields can be used for to optionally specify the fields that are used within the 
-command line options --filterFields and --matchFields, although not all of them are implemented for all our three systems
-(e.g. Sihot only supports the ShId field for filtering and matching):
+`field_names` key-word-arguments of the action command line options `pull`, `push` and `compare`, although not all of
+them are implemented for all our three systems (e.g. Sihot only supports the ShId field for filtering and matching):
 
 | Field Name | Description |
 | --- | --- |
 | AssId | AssCache client primary key |
-| AcId | Acumen client reference |
+| AcuId | Acumen client reference |
 | SfId | Salesforce client (lead/contact/account) id |  
 | ShId | Sihot guest object id |
 | Name | Client forename and surname (separated by one space character) |
@@ -414,84 +410,107 @@ command line options --filterFields and --matchFields, although not all of them 
 
 #### Action Command Line Options
 
-Each run of the AssCacheSync tool has to specify at least one (mostly more than one) valid action (which are given with
-the --pull, --push and/or the --verify command line option). Each action value consists of a two character system identifier
-followed by a one character data type identifier. The supported system identifiers are:
+Each run of the SysDataMan tool has to specify at least one (mostly more than one) valid action (which are given with
+the --pull, --push and/or the --compare command line option). The option value of these actions consists of a system
+identifier followed by a record/data type identifier (one character). The supported system identifiers are:
 
 | System Identifier | Description |
 | --- | --- |
-| ac | Acumen |
+| acu | Acumen |
+| ass | AssCache |
 | sh | Sihot |
 | sf | Salesforce |
 
-The supported data identifiers are:
+The supported record/data type identifiers are:
 
-| Data Identifier | Description |
+| Record Type Identifier | Description |
 | --- | --- |
 | C | Clients |
 | P | Products |
 | R | Reservations |
 
-So for to verify/compare client data (C) between Acumen (ac) and Salesforce (sf) you could use the following
-action command line options:
+So for to compare/compare all client record data (C) from the Acumen (acu) against Salesforce (sf) system, use the
+following action command line options:
 
-    `--pull=acC --verify=shC`
+    `--pull=acuC --compare=sfC`
 
-This will first pull client data from Acumen and then compare it to the same clients within Salesforce. A similar verify
-run could be done with:
+This will first pull client data from Acumen and then compare it to the same clients within Salesforce. A similar
+compare run could be done with:
 
-    `--pull=shC --verify=acC`
+    `--pull=sfC --compare=acuC`
 
-The difference is that the first verify run will pull (and optionally filter) the clients from the (source) Acumen system and
-then compare the found clients against the (destination) Salesforce system. In contrary the second verify run will pull the clients from
-Salesforce (source) and then compare the found clients with associated clients on the Acumen (destination) system. 
+The difference is that the first compare run will pull (and optionally filter) the clients from the (source) system
+Acumen and then compare the found clients against the (destination) system Salesforce. In contrary the second example
+will first pull all the clients from Salesforce (source) and then compare the found clients with associated clients from
+the Acumen (destination) system. 
 
-A combination of the --pull and --push command line options allows to synchronize the data between two systems.
-For example for to synchronize client data from Acumen to Salesforce you have to specify the following two action
+A combination of the --pull and --push command line options allows to synchronize data between several systems.
+For example for to synchronize client data from Acumen to Sihot and Salesforce you have to specify the following action
 command line arguments:
 
-    `--pull=acC --push=sfC`
+    `--pull=acuC --push=sfC --push=shC`
 
-#### Filter Command Line Options
+Multiple options of the same action will be processed in the given order, but only within the same action type. So first
+all pull actions (in the given order), then all push actions and finally all compare actions. So on multiple push
+actions a field will have the value from the system which last pull action included this field.
 
-In most cases you want to restrict the synchronized/verified data from the source system to a small amount of 
-data-records and/or -fields. Not specifying any filters will result in a verification/synchronization run that
-needs more than 3 days only for to process all of our client data records.
+#### Additional Action Command Line Options
 
-The --filterRecords option allows you to specify a filter expression that will reduce the amount of (source) data from the
-system where the data get pulled from (specified by the --pull option). In case of pulling Acumen client data this filter
-expression will be used in the `WHERE` clause of the SQL that is used for to fetch this client data from the Acumen table
-`CLIENT_DETAILS` (T_CD). So the following command line option will pull only Acumen client data with a non-empty email
-address and verify them against Salesforce:
+In most cases you want to restrict the synchronized/compared data from the source system to a small amount of 
+data-records and/or -fields and for to prevent heavy data and system loads.
 
-    `--pull=acC --filterRecords="CD_EMAIL is not NULL" --verify=sfC`
+Filters and other input parameters can be specified directly after the system and record type of each Action command
+line option as a python dictionary literal of action arguments. The key is identifying the argument type, e.g. 
+sql clauses or a list of matching field names. The following dictionary keys are available:
 
-Additionally you can restrict the synchronized/verified fields with the --filterFields option. If no --filterFields
-option is specified then AssCacheSync is processing all [data fields](#supported-data-fields) that are supported by
-the system you are pulling from. So for to restrict the last example to only verify the client's email address and
+* col_names
+* chk_values
+* where_group_order
+* bind_values
+* filter_records
+* field_names
+* match_fields
+
+The `filter_records` key-word-argument specifies a callable that can filter/reduce the amount of data. E.g. in case of
+pulling client data (using the --pull option) this callable can be used instead of the `where_group_order` SQL for
+to filter/restrict data from a system.
+
+The following command line option - using `where_group_order` - will pull only
+Acumen client data with a non-empty email address and compare them against Salesforce:
+
+    `--pull="acuC{'where_group_order':\"CD_EMAIL is not NULL\"} --compare=sfC`
+
+The same can be achieved by using `filter_records` with:
+
+    `--pull="acuC{'filter_records': lambda r: not r.val('Email')}" --compare=sfC`
+
+Additionally you can restrict the synchronized/compared fields with the key-word-arguments `col_names` or `field_names`.
+If none of these are specified then SysDataMan is processing all [data fields](#supported-data-fields) supported by
+the system you are pulling from. So for to restrict the last example to only compare the client's email address and
 phone number you have to specify the following command line options:
 
-    `--pull=acC --filterFields=['Email','Phone'] --filterRecords="CD_EMAIL is not NULL" --verify=sfC`
+    `--pull="acuC{'field_names': ['Email','Phone'], 'filter_records': lambda r: not r.val('Email')}" --compare=sfC`
 
-#### Match Command Line Options
 
-The --matchFields and --matchRecord options are used for to restrict the fields and records of the destination system
-(the system pushed-to or verified-against).
+#### Additional Matching Action Command Line Options
 
-Normally the primary key of each system is used for to lookup/associate the matching data record in the destination
-system. But in the case where you cannot rely on the primary key value you can a specify with the 
-command line option --matchFields a different field (or a list of fields) for this lookup/association.
+The `match_fields` and `filter_records` key-word-arguments are also restricting the fields and records of the
+destination system (the system pushed-to or compared-against).
+
+The primary key of each system is used by default for to lookup/associate the matching data record in the destination
+system. But in the case where you the primary key value is not available in both systems you can a specify with the 
+command line option `match_fields` a different field (or a list of fields) for this lookup/association.
 So e.g. for to compare the client data between Acumen and Salesforce by using the Email and Phone data for to match 
 the client record within Salesforce the following command line options have to be specified:
 
-    `--pull=acC --matchFields=['Email','Phone'] --verify=sfC`
+    `--pull=acuC --compare=sfC{'match_fields':['Email','Phone']}`
 
-And with the --matchRecords option you can further restrict the processed/synchronized/verified data records on the
-destination system. The following example is verifying the source client data from Sihot against the (destination)
+The `filter_records` argument allows to restrict the processed/synchronized/compared data records on the
+destination system. The following example is comparing the source client data from Sihot against the (destination)
 client data within Acumen, restricted to Acumen client data where the email address and the phone number are not
 empty:  
 
-    `--pull=shC --matchRecords="CD_EMAIL is not NULL and CD_HTEL1 is not NULL" --verify=acC`
+    `--pull=shC --compare="acC{'filter_records':lambda r: not r.val('Email') or not r.val('Phone')"`
 
 
 ### AssServer Application
@@ -651,12 +670,13 @@ The provided command line options are documented above in the section
 for to specify the import path and file mask for OTA JSON files - this value defaults to `C:/JSON_Import/*.json`.
 
 For to run this application in console mode (headless without any user interface), simply specify a valid 
-Acumen user name (acuUser) and password (acuPassword) as command line parameters (or via one of supported config/INI files).
+Acumen user name (acuUser) and password (acuPassword) as command line parameters (or via one of supported config/INI 
+files).
 
-There are four command line parameters specifying the used Sihot server (production or test): `shServerIP` is the DNS name
-or IP address of the SIHOT interface server, `shServerPort` is the IP port of the used WEB interface and optionally
-you can specify via `shTimeout` the timeout value in seconds for TCP/IP connections (default=69.3) and via `shXmlEncoding`
-the charset encoding used for the xml data (default='cp1252').
+There are four command line parameters specifying the used Sihot server (production or test): `shServerIP` is the DNS 
+name or IP address of the SIHOT interface server, `shServerPort` is the IP port of the used WEB interface and optionally
+you can specify via `shTimeout` the timeout value in seconds for TCP/IP connections (default=69.3) and 
+via `shXmlEncoding` the charset encoding used for the xml data (default='cp1252').
 
 Meanwhile and for to check the client data against our Salesforce system this application needs also a user account for
 the Salesforce system. If you start this application using E:\AcuServer\ of the Sihot production system as the current
@@ -676,8 +696,8 @@ if an error occurs in one of the JSON files.
 
 Reservation details of each booking coming via email from OTA channels and are not supported/included by Siteminder
 can be imported from a json file (the tool to convert each email into the json format is written in C#.NET by Nitesh).
-The available json field names are documented in the section [Available Reservation Fields](#available-reservation-fields)
-above. 
+The available json field names are documented in the 
+section [Available Reservation Fields](#available-reservation-fields) above. 
 
 
 
@@ -1053,15 +1073,11 @@ configuration file):
 
 ## System Synchronizations
 
-Because lots of different data (like clients, reservations, reservation inventory, ownerships, sales inventory) need to be
-available redundantly in several of our systems (Acumen, Salesforce and Sihot) we have to ensure that any
+Because lots of different data (like clients, reservations, reservation inventory, ownerships, sales inventory) need to
+be available redundantly in several of our systems (Acumen, Salesforce and Sihot) we have to ensure that any
 changes of this data in one of the system will be propagated to other systems.
 
-For each type of data there should be defined a master system where the data get changed and validated exclusively, but because
-of the plan to replace Acumen with Salesforce and Sihot some types of data are maintained currently in several systems. Another
-exception is coming from the Reservation department because apart from the synchronization of reservations from Salesforce
-to Sihot they requested to synchronize also to synchronize any changes done within Sihot on the reservation data back to
-Salesforce (see the Owner reservations data type in the table underneath). 
+Each type of data (record set or field) must have a master which is the system where the data is most accurate. 
 
 | Type of data | Future Master System -> Synchronized onto | Current Master System(s) -> Synchronized onto |
 | --- | --- | --- |
@@ -1074,8 +1090,8 @@ Salesforce (see the Owner reservations data type in the table underneath).
 | Sales inventory | Salesforce->Sihot | Acumen->None, Salesforce->None |
 
 Whereas the synchronization from/to Acumen and Salesforce can be done in various ways because we even can access the
-internal data structures (Oracle tables and Salesforce objects) directly, our Sihot system is (like most commercial systems)
-only providing an access via several APIs, which are much more restricted than a direct data access.
+internal data structures (Oracle tables and Salesforce objects) directly, our Sihot system is (like most commercial
+systems) only providing an access via several APIs, which are much more restricted than a direct data access.
 
 Sihot is providing the following pull interfaces:
 
@@ -1088,7 +1104,7 @@ Additionally Sihot is providing the following live/push interfaces (via the Siho
 * Guest Changes
 * Occupation Changes
 
-The [AssCacheSync application](#asscachesync-application) can be used for to manually synchronize and verify client
+The [SysDataMan application](#sysdataman-application) can be used for to manually synchronize and/or compare client
 and reservation data between our three systems (Acumen, Salesforce and Sihot).
 
 
@@ -1099,7 +1115,7 @@ will by associated by the Sihot guest object id. This id will be stored for each
 record in the two new columns `CD_SIHOT_OBJID` and `CD_SIHOT_OBJID2`. Client data is currently only synchronized
 from Acumen to Sihot together with the reservation synchronization.
 
-The two Acumen/Oracle log tables [Requested Unit Log](#requested-unit-log) and [Synchronization Log](#synchronization-log)
+The two Acumen log tables [Requested Unit Log](#requested-unit-log) and [Synchronization Log](#synchronization-log)
 are used for to detect any changes done in Acumen on the client/reservation data. The SihotResSync application is used
 to periodically pass any reservation changes from Acumen to Sihot.
 

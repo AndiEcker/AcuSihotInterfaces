@@ -1,11 +1,19 @@
 """
-System Data IDs, needed credentials and Features
+System Data IDs, record types, needed credentials and Features
 """
 
 SDI_ASS = 'Ass'                             # AssCache Interfaces
 SDI_ACU = 'Acu'                             # Acumen Interfaces
 SDI_SF = 'Sf'                               # Salesforce Interfaces
 SDI_SH = 'Sh'                               # Sihot Interfaces
+ALL_AVAILABLE_SYSTEMS = {SDI_ASS: 'AssCache', SDI_ACU: 'Acumen', SDI_SF: 'Salesforce', SDI_SH: 'Sihot'}
+
+SRT_ID_LEN = 1
+SRT_CLIENTS = 'C'
+SRT_RES_DATA = 'R'
+SRT_PRODUCTS = 'P'
+# SRT_RES_INV = 'I'
+ALL_AVAILABLE_RECORD_TYPES = {SRT_CLIENTS: 'Clients', SRT_RES_DATA: 'Reservations', SRT_PRODUCTS: 'Products'}
 
 SYS_CRED_ITEMS = ['User', 'Password', 'DSN', 'Token', 'SslArgs', 'ServerIP']
 SYS_CRED_NEEDED = {SDI_ASS: tuple(SYS_CRED_ITEMS[:3]),

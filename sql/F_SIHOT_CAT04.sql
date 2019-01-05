@@ -21,6 +21,10 @@ IS
       from T_RU, V_ACU_RES_LOG
      where RU_CODE = RUL_PRIMARY(+)
        and RU_CODE = lnRUCode;
+  
+  cursor cARL is
+    select RUL_SIHOT_CAT from V_ACU_RES_LOG
+     where RUL_PRIMARY = lnRUCode;
 
   cursor cLU_AFT_CATS is
     select LU_CHAR from T_LU
@@ -48,15 +52,21 @@ BEGIN
       fetch cRL into lcResort, lcAtGeneric, lcAftSuffix;
       close cRL;
     end if;
-    if lcAftSuffix is not NULL then
-      open  cLU_AFT_CATS;
-      fetch cLU_AFT_CATS into lcSihotCat;
-      close cLU_AFT_CATS;
-    end if;
-    if lcSihotCat is NULL then
-      open  cLU_CATS;
-      fetch cLU_CATS into lcSihotCat;
-      close cLU_CATS;
+    if lcAtGeneric is NULL then   -- RU already deleted then determine room category directly from last sync log entry
+      open  cARL;
+      fetch cARL into lcSihotCat;
+      close cARL;
+    else
+      if lcAftSuffix is not NULL then
+        open  cLU_AFT_CATS;
+        fetch cLU_AFT_CATS into lcSihotCat;
+        close cLU_AFT_CATS;
+      end if;
+      if lcSihotCat is NULL then
+        open  cLU_CATS;
+        fetch cLU_CATS into lcSihotCat;
+        close cLU_CATS;
+      end if;
     end if;
   else
     lnPos := instr(pcAptOrGenAtRs, '@');
@@ -91,6 +101,7 @@ END
   ae:28-11-16 V01: added optional apartment feature check and allowing to pass RU code alternatively.
   ae:16-12-16 V02: removed T_RUL overload check from RU<RU_CODE> call (but kept as alternative R_<RU_CODE> call - currently unused).
   ae:11-03-17 V03: added ltrim(,'0') around RUL_SIHOT_ROOM after refactoring (now RUL_SIHOT_ROOM holding the Sihot room number - with leading zero for 3-digit PBC rooms).
+  ae:30-05-18 V04: added fallback if RU record got deleted (mostly FBs in ANY resort) by checking V_ACU_RES_LOG.
 */;
 /
 

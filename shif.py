@@ -62,7 +62,7 @@ MAP_KERNEL_CLIENT = \
     (
         ('OBJID', 'ShId', None,
          lambda f: f.ina(ACTION_INSERT) or not f.val()),
-        ('MATCHCODE', 'AcId'),
+        ('MATCHCODE', 'AcuId'),
         ('T-SALUTATION', 'Salutation'),  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
         ('T-TITLE', 'Title'),
         ('T-GUEST', 'GuestType'),
@@ -169,7 +169,7 @@ MAP_WEB_RES = \
          lambda f: not f.val()),
         # GUEST-OBJID used in SS/RES-SEARCH responses instead of GUEST-ID for parsing orderer - always hide in xml build
         ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-OBJID', 'ShId'),
-        ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'AcId'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'AcuId'),
         ('VOUCHERNUMBER', 'ResVoucherNo', None,
          lambda f: f.ina(ACTION_DELETE)),
         ('EXT-KEY', 'ResGroupNo', None,
@@ -294,17 +294,17 @@ MAP_WEB_RES = \
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'ShId'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcId'), None,
+        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcuId'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResPersons', f.crx(), 'ShId')),
         ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'Surname'), lambda f: "Adult " + str(f.crx() + 1)
             if f.crx() < f.rfv('ResAdults') else "Child " + str(f.crx() - f.rfv('ResAdults') + 1),
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcuId') or f.rfv('ResPersons', f.crx(), 'ShId')
          ),
         ('PERSON' + ELEM_PATH_SEP + 'NAME2', ('ResPersons', 0, 'Forename'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()
-            or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')),
+            or f.rfv('ResPersons', f.crx(), 'AcuId') or f.rfv('ResPersons', f.crx(), 'ShId')),
         ('PERSON' + ELEM_PATH_SEP + 'AUTO-GENERATED', ('ResPersons', 0, 'AutoGen'), '1',
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcId') or f.rfv('ResPersons', f.crx(), 'ShId')
+         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcuId') or f.rfv('ResPersons', f.crx(), 'ShId')
             or f.rfv('ResPersons', f.crx(), 'Surname')),
         ('PERSON' + ELEM_PATH_SEP + 'ROOM-SEQ', ('ResPersons', 0, 'RoomSeq'), '0',
          lambda f: f.ina(ACTION_DELETE)),
@@ -351,7 +351,7 @@ MAP_PARSE_WEB_RES = \
         # ('RU_OBJID', 'RU_SIHOT_OBJID'),
         ('RU_OBJID', 'RUL_SIHOT_OBJID'),
         # ('RO_AGENCY_OBJID', 'RO_SIHOT_AGENCY_OBJID'),
-        ('OC_CODE', 'AcId'),
+        ('OC_CODE', 'AcuId'),
         ('OC_OBJID', 'ShId'),
         ('RES_GROUP', 'ResMktGroup'),  # needed for elemHideIf
         ('RES_OCC', 'ResMktSegment'),  # needed for res_id_values
@@ -900,7 +900,7 @@ class ClientSearch(SihotXmlBuilder):
             if len(field_names) == 1:
                 records = [rec.val(field_names[0]) for rec in records]
             else:
-                records = records.copy(deepness=2, filter_func=lambda f: f.name() not in field_names)
+                records = records.copy(deepness=2, filter_fields=lambda f: f.name() not in field_names)
 
         return records
 
@@ -1059,17 +1059,17 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
                 # if val is None:     # if field from empty rec (added for to fulfill pax count)
                 #     val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO)   # use template val/cal
-                filter_func = field.filter(system=SDI_SH, direction=FAD_ONTO)
+                filter_fields = field.filter(system=SDI_SH, direction=FAD_ONTO)
             else:
                 if field is None:   # try to use field of last map item (especially for to get crx())
                     field = next(iter(self.elem_fld_rec.values()))
                 val = elem_map_item[MTI_FLD_VAL] if len(elem_map_item) > MTI_FLD_VAL else ''
                 if callable(val):
                     val = val(field)
-                filter_func = elem_map_item[MTI_FLD_FILTER] if len(elem_map_item) > MTI_FLD_FILTER else None
-            if filter_func:
-                assert callable(filter_func), "filter aspect {} has to be a callable".format(filter_func)
-                if filter_func(field):
+                filter_fields = elem_map_item[MTI_FLD_FILTER] if len(elem_map_item) > MTI_FLD_FILTER else None
+            if filter_fields:
+                assert callable(filter_fields), "filter aspect {} has to be a callable".format(filter_fields)
+                if filter_fields(field):
                     continue
 
             if tag.endswith('/'):
@@ -1134,7 +1134,7 @@ class ClientToSihot(FldMapXmlBuilder):
         self._prepare_guest_link_xml(pk1, pk2)
         return self.send_to_server()
 
-    def _send_person_to_sihot(self, rec, first_person=""):  # pass AcId of first person for to send 2nd person
+    def _send_person_to_sihot(self, rec, first_person=""):  # pass AcuId of first person for to send 2nd person
         self._prepare_guest_xml(rec, fld_name_suffix='_P' if first_person else '')
         err_msg = self.send_to_server()
         if 'guest exists already' in err_msg and self.action == ACTION_INSERT:
@@ -1150,7 +1150,7 @@ class ClientToSihot(FldMapXmlBuilder):
             self.cae.dprint(msg + "; err='{}'".format(err_msg))
         else:
             self.cae.dprint(msg + "; client={} RESPONDED OBJID={} MATCHCODE={}"
-                            .format(rec.val('AcId'), self.response.objid, self.response.matchcode),
+                            .format(rec.val('AcuId'), self.response.objid, self.response.matchcode),
                             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return err_msg
@@ -1199,7 +1199,7 @@ class ResToSihot(FldMapXmlBuilder):
         """
         complete reservation data row (rec) with the default values (specified in default_values underneath), while
         the following fields are mandatory:
-            ShId or AcId or Surname (to specify the orderer of the reservation), ResHotelId, ResArrival, ResDeparture,
+            ShId or AcuId or Surname (to specify the orderer of the reservation), ResHotelId, ResArrival, ResDeparture,
             ResRoomCat, ResMktSegment, ResGdsNo.
 
         :param rec:     reservation data Record instance.
@@ -1288,7 +1288,7 @@ class ResToSihot(FldMapXmlBuilder):
         err_msg = ""
 
         # check main Occupant
-        if rec.val('AcId'):
+        if rec.val('AcuId'):
             client = ClientToSihot(self.cae)
             err_msg = client.send_client_to_sihot(rec)
             if not err_msg:
@@ -1296,7 +1296,7 @@ class ResToSihot(FldMapXmlBuilder):
                 rec.set_val(client.response.objid, 'ShId')
 
         # check also Orderer but exclude OTAs like TCAG/TCRENT with a MATCHCODE that is no normal Acumen-CDREF
-        if not err_msg and rec.val('AcId') and len(rec.val('AcId')) == 7:
+        if not err_msg and rec.val('AcuId') and len(rec.val('AcuId')) == 7:
             client = ClientToSihot(self.cae)
             err_msg = client.send_client_to_sihot(rec)
             if not err_msg:
@@ -1306,7 +1306,7 @@ class ResToSihot(FldMapXmlBuilder):
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
     def send_res_to_sihot(self, rec, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
-        missing = rec.missing_fields((('ShId', 'AcId', 'Surname'), 'ResHotelId', ('ResGdsNo', 'ResId', 'ResObjId'),
+        missing = rec.missing_fields((('ShId', 'AcuId', 'Surname'), 'ResHotelId', ('ResGdsNo', 'ResId', 'ResObjId'),
                                       'ResMktSegment', 'ResRoomCat', 'ResArrival', 'ResDeparture'))
         assert not missing, "ResToSihot expects non-empty value in fields {}".format(missing)
 
@@ -1344,7 +1344,7 @@ class ResToSihot(FldMapXmlBuilder):
     def res_id_values(rec):
         return str(rec.val('ResGdsNo')) + \
                "/" + str(rec.val('ResVoucherNo')) + \
-               "/" + str(rec.val('AcId')) + "/" + str(rec.val('ResMktSegment'))
+               "/" + str(rec.val('AcuId')) + "/" + str(rec.val('ResMktSegment'))
 
     def res_id_desc(self, rec, error_msg, separator="\n\n"):
         indent = 8

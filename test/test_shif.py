@@ -6,7 +6,7 @@ class TestResToSihot:
 
     def test_basic_build_and_send(self, console_app_env):
         res_to = ResToSihot(console_app_env)
-        fld_vals = dict(AcId='E578973',
+        fld_vals = dict(AcuId='E578973',
                         ResHotelId='1', ResGdsNo='TEST-123456789',
                         ResArrival=datetime.date(year=2019, month=12, day=24),
                         ResDeparture=datetime.date(year=2019, month=12, day=30),
@@ -169,7 +169,7 @@ class TestResSender:
                     ResGdsNo=gdsno, ResVoucherNo='Voucher1234567890',
                     ResBooked=today, ResArrival=today + wk1, ResDeparture=today + wk1 + wk1,
                     ResRoomCat=cat, ResPriceCat=cat, ResRoomNo='3220',
-                    ShId='27', AcId='TCRENT',
+                    ShId='27', AcuId='TCRENT',
                     ResNote='test short note', ResLongNote='test large TEC note',
                     ResBoard='RO',    # room only (no board/meal-plan)
                     ResMktSegment='TC', SIHOT_MKT_SEG='TC', ResRateSegment='TC',
@@ -211,7 +211,7 @@ class TestResSender:
 
         rs = ResSender(console_app_env)
         crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
-                    AcId='TCRENT', ResGdsNo=gdsno)
+                    AcuId='TCRENT', ResGdsNo=gdsno)
         err, msg = rs.send_rec(Record(fields=crow))
 
         assert not err
@@ -308,7 +308,7 @@ class TestClientFromSihot:
     def test_elem_map(self, console_app_env):
         xml_parser = ClientFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.client_list.val(0, 'AcId') == 'test2'
+        assert xml_parser.client_list.val(0, 'AcuId') == 'test2'
         assert xml_parser.client_list.val(0, 'MATCHCODE') == 'test2'
         assert xml_parser.client_list.val(0, 'City') == 'city'
         assert xml_parser.client_list.val(0, 'CITY') == 'city'
@@ -320,7 +320,7 @@ class TestResFromSihot:
         <ARESLIST>
         <RESERVATION>
         <PERSON>
-            <MATCHCODE>PersonAcId</MATCHCODE>
+            <MATCHCODE>PersonAcuId</MATCHCODE>
         </PERSON>
         <RESCHANNELLIST>
             <RESCHANNEL>
@@ -372,7 +372,7 @@ class TestResFromSihot:
             <MATCHCODE-ADM/>
             <EXT-REFERENCE/>
             <VOUCHERNUMBER/>
-            <MATCHCODE>PersonAcId</MATCHCODE>
+            <MATCHCODE>PersonAcuId</MATCHCODE>
         </PERSON>
         <RESCHANNELLIST>
             <RESCHANNEL>
@@ -474,22 +474,22 @@ class TestResFromSihot:
     def test_fld_map_matchcode(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_MATCHCODE_EXAMPLE)
-        assert xml_parser.res_list[0].val('AcId') == 'test2'
+        assert xml_parser.res_list[0].val('AcuId') == 'test2'
         assert xml_parser.res_list[0].val('RESERVATION.MATCHCODE') == 'test2'
-        assert xml_parser.res_list[0].val('ResPersons', 0, 'AcId') == 'PersonAcId'
-        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcId'
+        assert xml_parser.res_list[0].val('ResPersons', 0, 'AcuId') == 'PersonAcuId'
+        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcuId'
 
     def test_fld_map_big(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.res_list.val(0, 'AcId') == 'test2'
-        assert xml_parser.res_list[0].val('AcId') == 'test2'
+        assert xml_parser.res_list.val(0, 'AcuId') == 'test2'
+        assert xml_parser.res_list[0].val('AcuId') == 'test2'
         assert xml_parser.res_list.val(0, 'RESERVATION.MATCHCODE') == 'test2'
         assert xml_parser.res_list[0].val('RESERVATION.MATCHCODE') == 'test2'
-        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'AcId') == 'PersonAcId'
-        assert xml_parser.res_list[0].val('ResPersons0AcId') == 'PersonAcId'
-        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcId'
-        assert xml_parser.res_list.value(0, 'ResPersons', 0).val('PERSON.MATCHCODE') == 'PersonAcId'
+        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'AcuId') == 'PersonAcuId'
+        assert xml_parser.res_list[0].val('ResPersons0AcuId') == 'PersonAcuId'
+        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcuId'
+        assert xml_parser.res_list.value(0, 'ResPersons', 0).val('PERSON.MATCHCODE') == 'PersonAcuId'
         assert xml_parser.res_list.val(0, 'ResGdsNo') == '1234567890ABC'
         assert xml_parser.res_list[0].val('ResGdsNo') == '1234567890ABC'
         assert xml_parser.res_list.val(0, 'GDSNO') == '1234567890ABC'
@@ -500,7 +500,7 @@ class TestClientToSihot:
 
     def test_basic_build_and_send(self, console_app_env):
         cli_to = ClientToSihot(console_app_env)
-        fld_vals = dict(AcId='T111222', Title='1', GuestType='1', Country='AT', Language='DE',
+        fld_vals = dict(AcuId='T111222', Title='1', GuestType='1', Country='AT', Language='DE',
                         ExtRefs='RCI=123,XXX=456')
         err_msg = cli_to.send_client_to_sihot(Record(fields=fld_vals))
         assert not err_msg
@@ -575,8 +575,8 @@ class TestClientFetchSearch:
         assert [_ for _ in ags if _ == '20']
         assert [_ for _ in ags if _ == '27']
 
-        ags = client_search.search_clients(client_type='7', field_names=('AcId', 'ShId'))
-        assert [_ for _ in ags if _['AcId'] == 'OTS' and _['ShId'] == '69']
-        assert [_ for _ in ags if _['AcId'] == 'SF' and _['ShId'] == '100']
-        assert [_ for _ in ags if _['AcId'] == 'TCAG' and _['ShId'] == '20']
-        assert [_ for _ in ags if _['AcId'] == 'TCRENT' and _['ShId'] == '27']
+        ags = client_search.search_clients(client_type='7', field_names=('AcuId', 'ShId'))
+        assert [_ for _ in ags if _['AcuId'] == 'OTS' and _['ShId'] == '69']
+        assert [_ for _ in ags if _['AcuId'] == 'SF' and _['ShId'] == '100']
+        assert [_ for _ in ags if _['AcuId'] == 'TCAG' and _['ShId'] == '20']
+        assert [_ for _ in ags if _['AcuId'] == 'TCRENT' and _['ShId'] == '27']

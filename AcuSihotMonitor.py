@@ -51,7 +51,7 @@ ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True)
 
 # logon to and prepare AssCache and config data env, optional also connect to Acumen, Salesforce, Sihot
 ass_data = init_ass_data(cae, ass_options)
-config_data = ass_data['assSysData']        # public instance for config/data fetches, could be redefined by logon
+asd = ass_data['assSysData']        # public instance for config/data fetches, could be redefined by logon
 
 
 """ KIVY IMPORTS - done here for (1) prevent PyCharm import inspection warning and (2) remove command line options """
@@ -170,7 +170,7 @@ def sih_reservation_discrepancies(data_dict):
 
 
 def _sih_check_all_res(crow, rd, row_err, err_sep):
-    max_offset = datetime.timedelta(days=config_data.room_change_max_days_diff)
+    max_offset = datetime.timedelta(days=asd.room_change_max_days_diff)
     acu_sep = ' AC='
     sih_sep = ' SH='
     for n in range(len(rd)):
@@ -261,18 +261,18 @@ def sih_test_notification():
 
 
 def cfg_agency_match_codes():
-    agencies = config_data.ro_agencies
+    agencies = asd.ro_agencies
     ret = ""
     for agency in agencies:
-        ret += ", " + agency[0] + "=" + config_data.get_ro_agency_matchcode(agency[0])
+        ret += ", " + agency[0] + "=" + asd.get_ro_agency_matchcode(agency[0])
     return ret[2:]
 
 
 def cfg_agency_obj_ids():
-    agencies = config_data.ro_agencies
+    agencies = asd.ro_agencies
     ret = ""
     for agency in agencies:
-        ret += ", " + agency[0] + "=" + str(config_data.get_ro_agency_objid(agency[0]))
+        ret += ", " + agency[0] + "=" + str(asd.get_ro_agency_objid(agency[0]))
     return ret[2:]
 
 
@@ -284,7 +284,7 @@ def cfg_room_cat_discrepancies(data_dict, app_inst):
     column_names.append("Discrepancies__69")
     discrepancies = list()
     sihot_cat_apts = dict()
-    for hotel_id in config_data.ho_id_list(data_dict['resort_criteria']):
+    for hotel_id in asd.ho_id_list(data_dict['resort_criteria']):
         hotel_cat_apts = app_inst.cat_rooms.get_cat_rooms(hotel_id=hotel_id)
         for cat, apts in hotel_cat_apts.items():
             prev_apts = sihot_cat_apts.get(cat, list())
@@ -316,7 +316,7 @@ def cfg_room_cat_discrepancies(data_dict, app_inst):
 def db_fetch(data_dict, from_join_name='from_join'):
     bind_vars = {_[:-len(FILTER_CRITERIA_SUFFIX)]: data_dict[_] for _ in data_dict
                  if _.endswith(FILTER_CRITERIA_SUFFIX)}
-    acu_db = config_data.acu_db
+    acu_db = asd.acu_db
     err_msg = acu_db.select(from_join=data_dict[from_join_name], cols=data_dict['cols'],
                             where_group_order=data_dict.get('where_group_order'), bind_vars=bind_vars)
     if err_msg:
@@ -440,10 +440,10 @@ class AcuSihotMonitorApp(App):
 
     @staticmethod
     def init_config_data(user_name, user_pass):
-        global config_data
-        config_data = AssSysData(cae, acu_user=user_name, acu_password=user_pass)
-        if config_data.error_message:
-            pu = Popup(title='Logon Error', content=Label(text=config_data.error_message), size_hint=(.9, .3))
+        global asd
+        asd = AssSysData(cae, acu_user=user_name, acu_password=user_pass)
+        if asd.error_message:
+            pu = Popup(title='Logon Error', content=Label(text=asd.error_message), size_hint=(.9, .3))
             pu.open()
             return False
         return True
@@ -652,7 +652,7 @@ class AcuSihotMonitorApp(App):
                 if filter_name + FILTER_SELECTION_SUFFIX in board_dict:
                     filter_selection = board_dict[filter_name + FILTER_SELECTION_SUFFIX]
                     if isinstance(filter_selection, dict) and 'from_join' in filter_selection:
-                        acu_db = config_data.acu_db
+                        acu_db = asd.acu_db
                         err_msg = acu_db.select(from_join=filter_selection['from_join'],
                                                 cols=filter_selection['fields'],
                                                 where_group_order=filter_selection.get('where_group_order'),

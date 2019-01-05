@@ -628,7 +628,7 @@ class TestClientFromSihot:
         xml_parser = ClientFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.elem_fld_map['MATCHCODE'].val() == 'test2'
-        assert xml_parser.rec['AcId'] == 'test2'
+        assert xml_parser.rec['AcuId'] == 'test2'
         assert xml_parser.elem_fld_map['CITY'].val() == 'city'
         assert xml_parser.rec['City'] == 'city'
 
@@ -779,7 +779,7 @@ class TestResFromSihot:
     def test_fld_map(self, console_app_env):
         xml_parser = ResFromSihot(console_app_env)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        assert xml_parser.res_list.val(0, 'AcId') == 'test2'
+        assert xml_parser.res_list.val(0, 'AcuId') == 'test2'
         assert xml_parser.res_list.val(0, 'MATCHCODE') == 'test2'
         assert xml_parser.res_list.val(0, 'ResGdsNo') == '1234567890ABC'
         assert xml_parser.res_list.val(0, 'GDSNO') == '1234567890ABC'
@@ -793,8 +793,8 @@ class TestClientToSihot:
             assert len(acu_client.recs) <= 1
             if len(acu_client.recs):
                 rec = acu_client
-                assert rec['AcId'] == 'G561518'
-                assert rec['AcIdP'] == 'G561518P2'
+                assert rec['AcuId'] == 'G561518'
+                assert rec['AcuIdP'] == 'G561518P2'
                 assert str(rec['Salutation']) == 'None'
                 assert str(rec['SIHOT_SALUTATION2']) == '1'
                 assert str(rec['Title']) == '1'
@@ -813,8 +813,8 @@ class TestClientToSihot:
             assert len(acu_client.recs) <= 1
             if len(acu_client.recs):
                 rec = acu_client
-                assert rec['AcId'] == 'G558956'
-                assert rec['AcIdP'] == 'G558956P2'
+                assert rec['AcuId'] == 'G558956'
+                assert rec['AcuIdP'] == 'G558956P2'
                 assert str(rec['Salutation']) == 'None'
                 assert str(rec['SIHOT_SALUTATION2']) == 'None'
                 assert str(rec['Title']) == '1'
@@ -832,8 +832,8 @@ class TestClientToSihot:
         if not error_msg:
             assert len(acu_client.recs) == 1
             rec = acu_client
-            assert rec['AcId'] == 'Y203585'
-            assert rec['AcIdP'] == 'Y203585P2'
+            assert rec['AcuId'] == 'Y203585'
+            assert rec['AcuIdP'] == 'Y203585P2'
             assert str(rec['Salutation']) == '1'
             assert str(rec['SIHOT_SALUTATION2']) == '1'
             assert str(rec['Title']) == '1'
@@ -852,7 +852,7 @@ class TestClientToSihot:
             assert len(acu_client.recs) <= 1
             if len(acu_client.recs):
                 rec = acu_client
-                assert rec['AcId'] == 'E396693'
+                assert rec['AcuId'] == 'E396693'
                 # RCI=1442-11521,RCI=1442-55556,RCI=2429-09033,RCI=2429-09777,RCI=2429-12042,RCI=2429-13656,
                 # .. RCI=2429-55556,RCI=2972-00047,RCI=5445-12771,RCIP=5-207931
                 assert 'RCI=1442-11521' in rec['ExtRefs']
@@ -869,8 +869,8 @@ class TestClientToSihot:
         if not error_msg:
             assert len(acu_client.recs) == 1
             rec = acu_client
-            assert rec['AcId'] == 'E610488'
-            assert rec['AcIdP'] is None
+            assert rec['AcuId'] == 'E610488'
+            assert rec['AcuIdP'] is None
             # overwrite objid with not existing one
             rec['ShId'] = int(rec['ShId']) + 1 if rec['ShId'] else 99999
             error_msg = acu_client.send_client_to_sihot(rec)
@@ -881,35 +881,35 @@ class TestResToSihot:
 
     def test_client_with_sp_usage(self, acu_res):
         # Silverpoint Usage 2016 - 884 request on 29-09-16 but not synced because of resOcc/RO_SIHOT_RATE filter
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E578973'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'E578973'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count == 0
 
     def test_client_with_reforma_res(self, acu_res):
         # --E420545: 371 / 27 = Reforma Reforma(~330 Arr < 5.7.16 - checked on 23.7.) - Not synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E420545'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'E420545'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count == 0
 
     def test_fx_vuelo_res(self, acu_res):
         # --E599377: 130 / 0 - later 4 FX Vuelo(~180 Arr:6.5. - 23.6.16) - Not synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E599377'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'E599377'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count == 0
 
     def test_disney_res(self, acu_res):
         # --E558549: 167 / 83 - later 437 = Inventory Disney(8 Arr:12.8. - 30.12.16) - not synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E558549'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'E558549'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count == 0
 
     def test_pax1_with_doctor_title(self, acu_res):
         # G558956/G561518 - same family with future res - 13 res in HMC - not synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'G558956'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'G558956'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count == 0
@@ -917,7 +917,7 @@ class TestResToSihot:
     """
     def _old_test_excluded_rental_ota_res_occ(self, acu_res):
         # 1 RR request in PBC arriving 13-10-16
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E610488'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'E610488'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count == 0
@@ -932,7 +932,7 @@ class TestResToSihot:
 
     def test_guest_booking_in_the_past(self, acu_res):
         # 2 guest requests (1 PBC, 1 BHC) on behave of owner E113650
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E421535'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'E421535'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count in (0, 1)
@@ -941,7 +941,7 @@ class TestResToSihot:
 
     def test_tc_booking_with_kids_in_the_future(self, acu_res):
         # 1 request in PBC on behave of thomas cook
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'N616715'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'N616715'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count in (0, 1)
@@ -950,7 +950,7 @@ class TestResToSihot:
 
     def test_remove_past_no_room_and_future_cxl(self, acu_res):
         # 23 PBC requests (2 future) - 21 req synced
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'F385312'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'F385312'")
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.rec_count <= 23
@@ -959,7 +959,7 @@ class TestResToSihot:
 
     def test_remove_res_occ_and_cancelled(self, acu_res):
         # 20 PBC requests, 2 excluded because BK resOcc or cancelled/past/no-room
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'Z007184'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'Z007184'")
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.rec_count <= 20
@@ -968,7 +968,7 @@ class TestResToSihot:
 
     def test_exclude_cancelled_with_break_and_rec_commit(self, acu_res):
         # 21 PBC requests
-        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcId = 'E499163'")
+        error_msg = acu_res.fetch_from_acu_by_aru(where_group_order="AcuId = 'E499163'")
         assert not error_msg
         if not error_msg:
             assert 0 <= acu_res.rec_count <= 21
@@ -977,7 +977,7 @@ class TestResToSihot:
 
     """
     def _old_test_15_requests_by_cd(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'Z136231'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'Z136231'")
         assert not error_msg
         if not error_msg:
             assert acu_res.rec_count == 15
@@ -987,7 +987,7 @@ class TestResToSihot:
     def _old_test_res_with_euro_char_fetched_by_cd(self, acu_res):
         # 20 PBC reservations and one with Euro-sign (in reservation comment of transfer on 10-10-2014)
         # .. and some with wrong/different arrival client id - e.g. E436263 is 1st RU within 3-4 wk requests/RH
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'E374408'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'E374408'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -998,7 +998,7 @@ class TestResToSihot:
 
     # FB examples with board: F468913, F614205, V576425, I615916
     def _old_test_fb_with_board1(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'F468913'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'F468913'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1009,7 +1009,7 @@ class TestResToSihot:
                 assert not error_msg
 
     def _old_test_fb_with_board2(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'F614205'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'F614205'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1018,7 +1018,7 @@ class TestResToSihot:
             assert not error_msg
 
     def _old_test_fb_with_board3(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'V576425'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'V576425'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1028,7 +1028,7 @@ class TestResToSihot:
     """
 
     def test_fb_with_board4(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'I615916'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'I615916'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1038,7 +1038,7 @@ class TestResToSihot:
 
     # test ER/External Rental: G522633, E588450, E453121, Z124997
     def test_external_rental1(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'G522633'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'G522633'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1050,7 +1050,7 @@ class TestResToSihot:
                         or "has Check-Ins" in error_msg or 'This reservation has been settled already!' in error_msg)
 
     def test_external_rental2(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'E588450'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'E588450'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1059,7 +1059,7 @@ class TestResToSihot:
             assert not error_msg
 
     def test_external_rental3(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'E453121'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'E453121'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1069,7 +1069,7 @@ class TestResToSihot:
 
     """
     def test_external_rental4(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'Z124997'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'Z124997'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1078,7 +1078,7 @@ class TestResToSihot:
             assert not error_msg
 
     def _old_test_any_resort1(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'C612158'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'C612158'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs
@@ -1087,7 +1087,7 @@ class TestResToSihot:
             assert not error_msg
 
     def _old_test_any_resort2(self, acu_res):
-        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcId = 'E543935'")
+        error_msg = acu_res.fetch_all_valid_from_acu(where_group_order="AcuId = 'E543935'")
         assert not error_msg
         if not error_msg:
             recs = acu_res.recs

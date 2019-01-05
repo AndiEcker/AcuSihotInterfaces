@@ -19,7 +19,7 @@ DEF_CLIENT_OBJ = 'Account'
 MAP_CLIENT_OBJECTS = \
     {'Account': (
         # ('AssCache_Id__pc', 'AssId'),
-        ('AcumenClientRef__pc', 'AcId'),
+        ('AcumenClientRef__pc', 'AcuId'),
         ('Id', 'SfId'),                      # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
         ('SihotGuestObjId__pc', 'ShId'),
         ('LastName', 'Surname'),
@@ -41,7 +41,7 @@ MAP_CLIENT_OBJECTS = \
      ),
      'Contact': (
          ('AssCache_Id__c', 'AssId'),
-         ('CD_CODE__c', 'AcId'),
+         ('CD_CODE__c', 'AcuId'),
          ('Id', 'SfId'),  # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
          ('Sihot_Guest_Object_Id__c', 'ShId'),
          ('LastName', 'Surname'),
@@ -57,7 +57,7 @@ MAP_CLIENT_OBJECTS = \
      ),
      'Lead': (
          ('AssCache_Id__c', 'AssId'),
-         ('Acumen_Client_Reference__c', 'AcId'),
+         ('Acumen_Client_Reference__c', 'AcuId'),
          ('Id', 'SfId'),  # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
          ('Sihot_Guest_Object_Id__c', 'ShId'),
          ('LastName', 'Surname'),
@@ -87,7 +87,7 @@ MAP_RES_OBJECT = (
     ('Adults__c', 'ResAdults'),
     ('Children__c', 'ResChildren'),
     ('Note__c', 'ResNote'),
-    # ('', ('ResPersons', 0, 'AcId')),
+    # ('', ('ResPersons', 0, 'AcuId')),
     # ('', ('ResPersons', 0, 'DOB')),
     # ('', ('ResPersons', 0, 'Forename')),
     # ('', ('ResPersons', 0, 'GuestType')),
@@ -656,7 +656,7 @@ class SfInterface:
         return self.cl_field_data('AssId', sf_client_id, sf_obj=sf_obj)
 
     def cl_ac_id(self, sf_client_id, sf_obj=None):
-        return self.cl_field_data('AcId', sf_client_id, sf_obj=sf_obj)
+        return self.cl_field_data('AcuId', sf_client_id, sf_obj=sf_obj)
 
     def cl_sh_id(self, sf_client_id, sf_obj=None):
         return self.cl_field_data('ShId', sf_client_id, sf_obj=sf_obj)
@@ -745,7 +745,7 @@ class SfInterface:
     def clients_with_rci_id(self, ext_refs_sep=EXT_REFS_SEP, owner_rec_types=None, sf_obj=DEF_CLIENT_OBJ):
         if not owner_rec_types:
             owner_rec_types = list()
-        soql_fields = ['SfId', 'AcId', 'RciId', 'ShId', 'RecordType.Id',
+        soql_fields = ['SfId', 'AcuId', 'RciId', 'ShId', 'RecordType.Id',
                        "(SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE '{}%')"
                        .format(EXT_REF_TYPE_RCI)]
         sf_fields = field_list_to_sf(soql_fields, sf_obj)
@@ -760,7 +760,7 @@ class SfInterface:
                     ext_refs.extend([_['Reference_No_or_ID__c'] for _ in c['External_References__r']['records']])
                 if ext_refs:
                     client_tuples.append((None,
-                                          c[sf_fld_sys_name('AcId', sf_obj)],
+                                          c[sf_fld_sys_name('AcuId', sf_obj)],
                                           c[sf_fld_sys_name(SF_DEF_SEARCH_FIELD, sf_obj)],
                                           c[sf_fld_sys_name('ShId', sf_obj)],
                                           ext_refs_sep.join(ext_refs),
@@ -820,7 +820,7 @@ class SfInterface:
 
     def res_upsert(self, cl_res_rec):
         # exclude not implemented parameters - TODO: add RCI_Reference__pc in SF to SihotRestInterface.doHttpPost()
-        sf_args = cl_res_rec.to_dict(filter_func=lambda f: f.name() in ('RciId', ),
+        sf_args = cl_res_rec.to_dict(filter_fields=lambda f: f.name() in ('RciId', ),
                                      system=SDI_SF, direction=FAD_ONTO)
         sf_id = sf_args.pop('Id', None)
         if sf_id:

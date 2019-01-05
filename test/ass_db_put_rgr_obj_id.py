@@ -62,7 +62,7 @@ if ass_db.connect():
 
 
 log_warning("Fetching records with empty object id", 'FetchAssInvalids', importance=3)
-if ass_db.select('res_groups', ["rgr_ho_fk", "rgr_res_id", "rgr_sub_id"], "rgr_obj_id is NULL"):
+if ass_db.select('res_groups', ["rgr_ho_fk", "rgr_res_id", "rgr_sub_id"], where_group_order="rgr_obj_id is NULL"):
     log_error("SELECT from res_groups failed with error " + ass_db.last_err_msg, 'FetchAssError', exit_code=15)
 
 rgr_records = ass_db.fetch_all()

@@ -36,7 +36,7 @@ def db_connected(console_app_env):
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def config_data(console_app_env):
+def ass_sys_data(console_app_env):
     return AssSysData(console_app_env)
 
 
@@ -83,7 +83,7 @@ def create_test_client(console_app_env):
             if 'fldName' not in col_map:
                 continue
             col = col_map['fldName']
-            if col == 'AcId':
+            if col == 'AcuId':
                 col_values[col] = mc
             elif col == 'Surname':
                 col_values[col] = sn

@@ -74,7 +74,7 @@ def client_to_acu(col_values, ca=None):
                     pkey = col_values['CD_CODE'] = prefix + seq
 
     if not err_msg:
-        err_msg = ora_db.select('T_CD', ['count(*)'], "CD_CODE = '" + pkey + "'")
+        err_msg = ora_db.select('T_CD', ['count(*)'], where_group_order="CD_CODE = '" + pkey + "'")
         if not err_msg:
             acu_col_values = {k: col_values[k] for k in col_values.keys() if k.startswith('CD_')}
             if ora_db.fetch_value() > 0:

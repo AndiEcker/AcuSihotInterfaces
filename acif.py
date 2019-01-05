@@ -27,8 +27,8 @@ field_indexes = {FAT_IDX: FMI_FLD_NAME, FAT_IDX + FAD_FROM: FMI_COL_NAME, FAT_SQ
                  FAT_CNV + FAD_FROM: FMI_CNV_FUNC}
 
 CLI_FIELD_MAP = [       # client data
-    ('AcId', 'CD_CODE'),
-    ('AcId_P', 'CD_CODE2'),
+    ('AcuId', 'CD_CODE'),
+    ('AcuId_P', 'CD_CODE2'),
     ('SfId', 'SIHOT_SF_ID'),
     ('ShId', 'CD_SIHOT_OBJID'),
     ('ShId_P', 'CD_SIHOT_OBJID2'),
@@ -94,7 +94,7 @@ RES_FIELD_MAP = [       # reservation data
     ('ResPriceCat', 'SH_PRICE_CAT',
      "F_SIHOT_CAT('RU' || RUL_PRIMARY)"),
     ('ResRoomNo', 'RUL_SIHOT_ROOM'),
-    ('AcId', 'OC_CODE',
+    ('AcuId', 'OC_CODE',
      "nvl(OC_CODE, CD_CODE)"),
     ('ShId', 'OC_SIHOT_OBJID',
      "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))"),
@@ -263,7 +263,8 @@ class AcuClientToSihot(ClientToSihot):
         if acu_id:
             where_group_order += "CD_CODE " + ("like" if '_' in acu_id or '%' in acu_id else "=") + " '" + acu_id + "'"
 
-        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_ACU), where_group_order)
+        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_ACU),
+                                            where_group_order=where_group_order)
 
         self.recs = Records()
         if not err_msg:
@@ -369,7 +370,8 @@ class AcuResToSihot(ResToSihot):
         elif date_range == 'F':
             where_group_order += (" and " if where_group_order else "") + "ARR_DATE >= trunc(sysdate)"
 
-        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_ACU), where_group_order, hints=hints)
+        err_msg = self.acu_db.ora_db.select(view, self.fld_col_rec.sql_select(SDI_ACU),
+                                            where_group_order=where_group_order, hints=hints)
         self.recs = Records()
         if not err_msg:
             rows = self.acu_db.fetch_all_from_acu(self.fld_col_rec.sql_columns(SDI_ACU))

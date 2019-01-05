@@ -7,12 +7,14 @@
 """
 import pprint
 
+from sys_data_ids import SDI_SF
+from ae_sys_data import correct_email, correct_phone
 from ae_console_app import ConsoleApp, uprint
 from ae_notification import add_notification_options, init_notification
-from sfif import add_sf_options
-from ass_sys_data import correct_email, correct_phone, AssSysData
 from ae_client_validation import (add_validation_options, init_validation, clients_to_validate,
                                   EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED)
+from sfif import add_sf_options
+from ass_sys_data import AssSysData
 
 __version__ = '0.2'
 
@@ -30,12 +32,12 @@ email_validation, email_validator, \
     default_email_address, invalid_email_fragments, ignore_case_fields, changeable_fields = init_validation(cae)
 
 
-conf_data = AssSysData(cae)
-if conf_data.error_message:
-    uprint("AssSysData initialization error: " + conf_data.error_message)
+asd = AssSysData(cae)
+if asd.error_message:
+    uprint("AssSysData initialization error: " + asd.error_message)
     cae.shutdown(20)
 
-notification, warning_notification_emails = init_notification(cae, "SF " + ("sdbx" if conf_data.sf_sandbox else "prod"))
+notification, warning_notification_emails = init_notification(cae, "SF " + ("sdbx" if asd.sf_sandbox else "prod"))
 
 
 log_items = list()              # log entries with warnings and errors
@@ -53,7 +55,7 @@ def add_log_msg(msg, is_error=False, importance=2):
 
 
 # fetch rental clients migrated with ShSfClientMigration app for to validate email address and phone numbers
-clients = clients_to_validate(conf_data.used_systems[SDI_SF].connection,
+clients = clients_to_validate(asd.connection(SDI_SF),
                               filter_sf_clients=filter_sf_clients,
                               filter_sf_rec_types=filter_sf_rec_types,
                               email_validation=email_validation,
@@ -207,7 +209,7 @@ for rec in clients:
         phones_validated += 1
 
     if update_in_sf:
-        _, err_msg, log_msg = conf_data.used_systems[SDI_SF].connection.cl_upsert(rec)
+        _, err_msg, log_msg = asd.connection(SDI_SF).cl_upsert(rec)
         if err_msg:
             add_log_msg(err_msg, is_error=True)
         else:
@@ -227,7 +229,7 @@ if skipped_email_ids:
                     .format(len(id_list), frag, pprint.pformat(id_list, indent=9, compact=True)))
 
 if notification:
-    subject = "Salesforce Client Validation protocol" + (" (sandbox/test system)" if conf_data.sf_sandbox else "")
+    subject = "Salesforce Client Validation protocol" + (" (sandbox/test system)" if asd.sf_sandbox else "")
     mail_body = "\n\n".join(log_items)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
@@ -235,7 +237,7 @@ if notification:
         cae.shutdown(36)
     if warning_notification_emails and log_errors:
         mail_body = "\n\n".join(log_errors)
-        subject = "Salesforce Client Validation errors/discrepancies" + (" (sandbox)" if conf_data.sf_sandbox else "")
+        subject = "Salesforce Client Validation errors/discrepancies" + (" (sandbox)" if asd.sf_sandbox else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
             uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
