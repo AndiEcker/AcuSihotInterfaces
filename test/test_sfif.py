@@ -402,7 +402,7 @@ class TestClient:
                                  AcuId='T000123', ShId='999123', Email='cl@fld.data',
                                  Forename='testy', Surname='Test Field Data Fetch'),
                      system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields(MAP_CLIENT_OBJECTS['Account'])
+            .add_system_fields(SF_CLIENT_MAPS['Account'])
         rec.pop('SfId')     # remove SfId (Id SF field) for to prevent SF create Account error
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
@@ -527,7 +527,7 @@ class TestReservation:
         assert res_sf_id.startswith('006')
         assert not err_msg
         assert not sfc.error_msg
-        sf_recd = sfc.res_data(res_sf_id)
+        sf_recd = sfc.res_dict(res_sf_id)
         assert not sfc.error_msg
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
@@ -552,7 +552,7 @@ class TestReservation:
         assert res_sf_id
         assert not sfc.error_msg
 
-        sf_recd = sfc.res_data(res_sf_id)
+        sf_recd = sfc.res_dict(res_sf_id)
         assert not sfc.error_msg
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
@@ -576,7 +576,7 @@ class TestReservation:
         assert sf_id
         assert res_sf_id
 
-        sf_recd = sfc.res_data(res_sf_id)
+        sf_recd = sfc.res_dict(res_sf_id)
         assert not sfc.error_msg
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 
@@ -602,7 +602,7 @@ class TestReservation:
         assert sf_id
         assert res_sf_id
 
-        sf_recd = sfc.res_data(res_sf_id)
+        sf_recd = sfc.res_dict(res_sf_id)
         assert not sfc.error_msg
         assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
 

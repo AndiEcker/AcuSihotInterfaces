@@ -7,7 +7,7 @@
     0.5     removed Booking.com imports and added RCI booking imports (using Acumen reservation inventory data).
     0.6     31-03-17: removed hyphen and sub-booking-id from GDSNO and dup-exec/-startup lock (lastRt).
     0.7     30-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
-    0.8     15-07-17: refactoring moving clients and res_inv_data to ass_sys_data.py.
+    0.8     15-07-17: refactoring moving clients and reservation_inventories to ass_sys_data.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
     1.0     June-18: refactoring and clean-up
 
@@ -1072,7 +1072,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             match_codes = sorted(list(set([_[0] for _ in m1 + m2])))
             cae.set_config('ClientRefsResortCodes', EXT_REFS_SEP.join(match_codes))
 
-        error_msg = asd.as_clients_pull()      # load clients data
+        error_msg = asd.ass_clients_pull()      # load clients data
         if error_msg:
             log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciClientDataFetch', importance=3)
             return

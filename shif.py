@@ -58,7 +58,7 @@ MTI_FLD_CNV_ONTO = 5
 # mapping element name in tuple item 0 onto field name in [1], hideIf callable in [2] and default field value in [3]
 # default map for ClientFromSihot.elem_fld_map instance and as read-only constant by AcuClientToSihot using the SIHOT
 # .. KERNEL interface because SiHOT WEB V9 has missing fields: initials (CD_INIT1/2) and profession (CD_INDUSTRY1/2)
-MAP_KERNEL_CLIENT = \
+SH_CLIENT_MAP = \
     (
         ('OBJID', 'ShId', None,
          lambda f: f.ina(ACTION_INSERT) or not f.val()),
@@ -126,7 +126,7 @@ MAP_KERNEL_CLIENT = \
          lambda f: f.ina(ACTION_SEARCH)),
     )
 
-MAP_PARSE_KERNEL_CLIENT = \
+SH_CLIENT_PARSE_MAP = \
     (
         ('EXT_REFS', 'ExtRefs'),  # only for elemHideIf expressions
         ('CDLREF', 'CDL_CODE'),
@@ -144,7 +144,7 @@ MAP_PARSE_KERNEL_CLIENT = \
     With reservations from external systems is <PRICE-TOTAL> a mandatory field. With reservations for SIHOT.PMS,
     <MATCHCODE> and <PWD> are mandatory fields.
 """
-MAP_WEB_RES = \
+SH_RES_MAP = \
     (
         ('ID', 'ResHotelId'),  # ID elem or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
         ('ARESLIST/', ),
@@ -379,10 +379,7 @@ MAP_PARSE_WEB_RES = \
 # default values for used interfaces (see email from Sascha Scheer from 28 Jul 2016 13:48 with answers from JBerger):
 # .. use kernel for clients and web for reservations
 USE_KERNEL_FOR_CLIENTS_DEF = True
-MAP_CLIENT_DEF = MAP_KERNEL_CLIENT
-
 USE_KERNEL_FOR_RES_DEF = False
-MAP_RES_DEF = MAP_WEB_RES
 
 
 class ShInterface:
@@ -391,6 +388,22 @@ class ShInterface:
         self.features = features or list()
         self.app_name = app_name
         self.debug_level = debug_level
+
+    @staticmethod
+    def clients_match_field_init(match_fields):
+        msg = "ShInterface.clients_match_field_init({}) expects ".format(match_fields)
+        supported_match_fields = [SH_DEF_SEARCH_FIELD, 'AcuId', 'Name', 'Email']
+
+        if match_fields:
+            match_field = match_fields[0]
+            if len(match_fields) > 1:
+                return msg + "single match field"
+            elif match_field not in supported_match_fields:
+                return "only one of the match fields {} (not {})".format(supported_match_fields, match_field)
+        else:
+            match_field = SH_DEF_SEARCH_FIELD
+
+        return match_field
 
 
 def add_sh_options(cae, client_port=None, add_kernel_port=False, add_maps_and_kernel_usage=False):
@@ -407,10 +420,10 @@ def add_sh_options(cae, client_port=None, add_kernel_port=False, add_maps_and_ke
     if add_maps_and_kernel_usage:
         cae.add_option(SDF_SH_USE_KERNEL_FOR_CLIENT, "Used interface for clients (0=web, 1=kernel)",
                        USE_KERNEL_FOR_CLIENTS_DEF, 'g', choices=(0, 1))
-        cae.add_option(SDF_SH_CLIENT_MAP, "Guest/Client mapping of xml to db items", MAP_CLIENT_DEF, 'm')
+        cae.add_option(SDF_SH_CLIENT_MAP, "Guest/Client mapping of xml to db items", SH_CLIENT_MAP, 'm')
         cae.add_option(SDF_SH_USE_KERNEL_FOR_RES, "Used interface for reservations (0=web, 1=kernel)",
                        USE_KERNEL_FOR_RES_DEF, 'z', choices=(0, 1))
-        cae.add_option(SDF_SH_RES_MAP, "Reservation mapping of xml to db items", MAP_RES_DEF, 'n')
+        cae.add_option(SDF_SH_RES_MAP, "Reservation mapping of xml to db items", SH_RES_MAP, 'n')
 
 
 def print_sh_options(cae):
@@ -610,14 +623,14 @@ class OldGuestSearchResponse(SihotXmlParser):
                                 more than one item then self.ret_elem_values will be a dict where the ret_elem_names
                                 are used as keys. If the ret_elem_names list is empty (or None) then the returned
                                 self.ret_elem_values list of dicts will provide all elements that are returned by the
-                                Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
+                                Sihot interface and defined within the used map (SH_CLIENT_MAP).
         :param key_elem_name:   element name used for the search (only needed if self._return_value_as_key==True).
         """
         super().__init__(cae)
         self._base_tags.append('GUEST-NR')
         self.guest_nr = None
 
-        full_map = MAP_KERNEL_CLIENT + MAP_PARSE_KERNEL_CLIENT
+        full_map = SH_CLIENT_MAP + SH_CLIENT_PARSE_MAP
 
         self._key_elem_name = key_elem_name
         if not ret_elem_names:
@@ -731,7 +744,7 @@ class FldMapXmlParser(SihotXmlParser):
 
 
 class ClientFromSihot(FldMapXmlParser):
-    def __init__(self, cae, elem_map=MAP_CLIENT_DEF):
+    def __init__(self, cae, elem_map=SH_CLIENT_MAP):
         super(ClientFromSihot, self).__init__(cae, elem_map)
         self.client_list = Records()
 
@@ -748,7 +761,7 @@ class ClientFromSihot(FldMapXmlParser):
 
 class ResFromSihot(FldMapXmlParser):
     def __init__(self, cae):
-        super(ResFromSihot, self).__init__(cae, MAP_RES_DEF)
+        super(ResFromSihot, self).__init__(cae, SH_RES_MAP)
         self.res_list = Records()
 
     # XMLParser interface
@@ -776,10 +789,10 @@ class GuestSearchResponse(FldMapXmlParser):
                                 more than one item then self.ret_elem_values will be a dict where the ret_elem_names
                                 are used as keys. If the ret_elem_names list is empty (or None) then the returned
                                 self.ret_elem_values list of dicts will provide all elements that are returned by the
-                                Sihot interface and defined within the used map (MAP_KERNEL_CLIENT).
+                                Sihot interface and defined within the used map (SH_CLIENT_MAP).
         :param key_elem_name:   element name used for the search (only needed if self._return_value_as_key==True).
         """
-        full_map = MAP_KERNEL_CLIENT + MAP_PARSE_KERNEL_CLIENT
+        full_map = SH_CLIENT_MAP + SH_CLIENT_PARSE_MAP
         super().__init__(cae, full_map)
         self._base_tags.append('GUEST-NR')
         self.guest_nr = None
@@ -859,8 +872,11 @@ class ClientSearch(SihotXmlBuilder):
 
     def search_clients(self, matchcode='', exact_matchcode=True, name='', forename='', surname='',
                        guest_no='', email='', client_type='', flags='FIND-ALSO-DELETED-GUESTS', order_by='', limit=0,
-                       field_names=('ShId', )
+                       field_names=('ShId', ), **kwargs
                        ) -> Union[str, list, Records]:
+        if kwargs:
+            return "ClientSearch.search_clients() does not support the argument(s) {}".format(kwargs)
+
         self.beg_xml(operation_code='GUEST-SEARCH')
         search_for = ""
         if matchcode:
@@ -893,7 +909,7 @@ class ClientSearch(SihotXmlBuilder):
 
         err_msg = self.send_to_server(response_parser=ClientFromSihot(self.cae))
         if err_msg or not self.response:
-            return "search_clients({}) error='{}'".format(self._xml, err_msg or "response not instantiated")
+            return "search_clients() error='{}'; xml='{}'".format(err_msg or "response not instantiated", self._xml)
 
         records = self.response.client_list
         if field_names:
@@ -1010,7 +1026,7 @@ class ResSearch(SihotXmlBuilder):
         """
         err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
         if err_msg or not self.response:
-            err_msg = "search_res({}) error='{}'".format(self._xml, err_msg or "response is empty")
+            err_msg = "search_res() error='{}'; xml='{}'".format(err_msg or "response is empty", self._xml)
         return err_msg or self.response.res_list
 
 
@@ -1108,7 +1124,7 @@ class ClientToSihot(FldMapXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae,
                          use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT),
-                         elem_map=cae.get_option(SDF_SH_CLIENT_MAP) or MAP_KERNEL_CLIENT)
+                         elem_map=cae.get_option(SDF_SH_CLIENT_MAP) or SH_CLIENT_MAP)
 
     def _prepare_guest_xml(self, rec, fld_name_suffix=''):
         if not self.action:
@@ -1160,7 +1176,7 @@ class ResToSihot(FldMapXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae,
                          use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_RES),
-                         elem_map=cae.get_config(SDF_SH_RES_MAP) or MAP_WEB_RES)
+                         elem_map=cae.get_config(SDF_SH_RES_MAP) or SH_RES_MAP)
         self._warning_frags = self.cae.get_config('warningFragments') or list()  # list of warning text fragments
         self._warning_msgs = ""
         self._gds_errors = dict()
@@ -1391,7 +1407,7 @@ class GuestBulkFetcher(BulkFetcherBase):
     """
     WIP/NotUsed/NoTests: the problem is with GUEST-SEARCH is that there is no way to bulk fetch all guests
     because the search criteria is not providing range search for to split in slices. Fetching all 600k clients
-    is resulting in a timeout error after 30 minutes (the Sihot interface SDF_SH_TIMEOUT/'shTimeout' option value)
+    is resulting in a timeout error after 30 minutes (see Sihot interface SDF_SH_TIMEOUT/'shTimeout' option value)
     """
     def fetch_all(self):
         cae = self.cae

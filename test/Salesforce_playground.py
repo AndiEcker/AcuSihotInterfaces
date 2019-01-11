@@ -594,3 +594,128 @@ if result['done'] and result['totalSize'] > 0:
 # params = dict(email="test@test.test", phone="0034922777888", firstName="Testy", lastName="Tester")
 # result = sb.apexecute('clientsearch', method='POST', data=params)
 # print('APEX REST call result', result)
+
+
+# noinspection SpellCheckingInspection
+'''
+BACKUP of working SOQL queries (from Developer Console):
+
+SELECT Id, Name, (select Contact.Name from Account.Contacts) C 
+  FROM Account
+ WHERE Id IN (select ConvertedAccountId from Lead where Id = '00Q0O000010Rfb2UAC')
+
+SELECT Id, Name, 
+       (select Contact.Id, Contact.Name from Account.Contacts), 
+       (select Lead.Id, Lead.Name from Account.Leads__r)
+  FROM Account where Id = '0010O00001sm5pyQAA'
+
+SELECT Id, Name, Reference_No_or_ID__c, Contact__c, Account__c 
+  FROM External_Ref__c
+
+SELECT id, Name, 
+       (SELECT Name, Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE 'RCI%') 
+  FROM Account
+
+select Id, RecordTypeId, RecordType.DeveloperName 
+  FROM Opportunity where RecordType.DeveloperName in ('Sihot_Generated', 'Service_Center_Booking')
+
+SELECT Id, AccountId, Name, Resort__c, Room_Number__c, REQ_Acm_Arrival_Date__c, REQ_Acm_Departure_Date__c, 
+       RecordType.name
+  FROM Opportunity where resort__c != null
+
+SELECT Id, 
+       (SELECT CreatedDate, HotelId__c, Number__c, SubNumber__c, GdsNo__c, Arrival__c, Departure__c, Status__c, 
+               RoomNo__c, MktSegment__c, MktGroup__c, RoomCat__c, Adults__c, Children__c, Note__c, SihotResvObjectId__c 
+          FROM Reservations__r) 
+  FROM Opportunity, Opportunity.Account 
+ WHERE Opportunity.Account.Id = '0010O00001sKdq1QAC'
+
+SELECT Id, 
+       (SELECT Id, CreatedDate, HotelId__c, Number__c, SubNumber__c, GdsNo__c, Arrival__c, Departure__c, Status__c, 
+               RoomNo__c, MktSegment__c, MktGroup__c, RoomCat__c, Adults__c, Children__c, Note__c, SihotResvObjectId__c
+          FROM Reservations__r) 
+  FROM Opportunity WHERE Id = '006...'
+
+SELECT Id, 
+       (SELECT Id, CheckIn__c, CheckOut__c, RoomNumbers__c from Allocations__r), 
+       CreatedDate, HotelId__c, Number__c, 
+       SubNumber__c, GdsNo__c, Arrival__c, Departure__c, Status__c, RoomNo__c, MktSegment__c, MktGroup__c, 
+       RoomCat__c, Adults__c, Children__c, Note__c, SihotResvObjectId__c 
+  FROM Reservation__c WHERE Id = 'a8G0O000000YEstUAG'
+
+SELECT id, number__c, 
+       (select id from Allocations__r) 
+  FROM Reservation__c where id = 'a8G0O000000YXBtUAO'
+
+SELECT Account__r.Id, Account__r.PersonEmail, Account__r.PersonHomePhone, Account__r.Language__pc,
+       Opportunity__c,
+       Id,
+       HotelId__c, Number__c, SubNumber__c, 
+       GdsNo__c, Arrival__c, Departure__c, Status__c,
+       Adults__c,
+       (SELECT Id, CheckIn__c from Allocations__r) 
+  FROM Reservation__c 
+ WHERE HotelId__c = '3'
+   AND Arrival__c = 2018-09-21
+   AND Adults__c = 2
+   AND Account__r.FirstName LIKE 'John%'
+
+SELECT Account__r.Id, Account__r.Name, Account__r.PersonEmail, Account__r.PersonHomePhone, Account__r.Language__pc,
+       Opportunity__c,
+       Id,
+       HotelId__c, Number__c, SubNumber__c, 
+       (SELECT CheckIn__c from Allocations__r WHERE CheckIn__c >= 2019-09-21T00:03:54.000+0000)
+  FROM Reservation__c 
+ WHERE HotelId__c = '3'
+   AND Arrival__c = 2018-09-21
+   AND Adults__c >= 2
+   AND Account__r.FirstName LIKE 'John%'
+
+SELECT Account__r.Id, 
+       Id, 
+       Reservation__r.id, Reservation__r.number__c
+  FROM Allocation__c
+ WHERE Account__r.Id != null and Reservation__r.Id != null
+ 
+SELECT Id, CheckIn__c,
+       Reservation__r.id, Reservation__r.number__c, Reservation__r.Arrival__c,
+       Reservation__r.Opportunity__c, Reservation__r.Opportunity__r.RecordTypeId,
+       Reservation__r.Account__c,
+       Account__r.Id
+  FROM Allocation__c
+ WHERE Account__r.Id != null and Reservation__r.Id != null and Reservation__r.Opportunity__c != null
+
+SELECT Account__r.Id, 
+       Account__r.CD_CODE__pc,  -- ==.AcumenClientRef__pc 
+       Account__r.SihotGuestObjId__pc, 
+       Account__r.FirstName, Account__r.LastName, Account__r.PersonEmail, Account__r.PersonHomePhone,
+       Account__r.Language__pc, 
+       Account__r.PersonMailingStreet, Account__r.PersonMailingPostalCode, Account__r.PersonMailingCity, 
+       Account__r.PersonMailingCountry, 
+       Account__r.CurrencyIsoCode, Account__r.Nationality__pc, 
+       Reservation__r.Opportunity__c,
+       Reservation__r.Id,
+       Reservation__r.HotelId__c, Reservation__r.Number__c, Reservation__r.SubNumber__c, 
+       Reservation__r.GdsNo__c, Reservation__r.Arrival__c, Reservation__r.Departure__c, Reservation__r.Status__c,  
+       Reservation__r.RoomNo__c, Reservation__r.MktSegment__c, Reservation__r.MktGroup__c, Reservation__r.RoomCat__c, 
+       Reservation__r.Adults__c, Reservation__r.Children__c, Reservation__r.Note__c, 
+       Reservation__r.SihotResvObjectId__c,
+       CheckIn__c
+  FROM Allocation__c 
+ WHERE Id = 'a9H0O000000XhejUAC'
+
+SELECT Account__r.Id, Account__r.PersonEmail, Account__r.PersonHomePhone, Account__r.Language__pc,
+       Reservation__r.Opportunity__c,
+       Reservation__r.Id,
+       Reservation__r.HotelId__c, Reservation__r.Number__c, Reservation__r.SubNumber__c, 
+       Reservation__r.GdsNo__c, Reservation__r.Arrival__c, Reservation__r.Departure__c, Reservation__r.Status__c,
+       Reservation__r.Adults__c,  
+       CheckIn__c
+  FROM Allocation__c 
+ WHERE CheckIn__c = 2018-09-28T08:19:54.000+0000
+   AND Reservation__r.HotelId__c = '3'
+   AND Reservation__r.Arrival__c = 2018-09-21
+   AND Reservation__r.Adults__c = 2
+   AND Account__r.FirstName LIKE 'John%'
+
+'''

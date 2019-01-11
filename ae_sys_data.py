@@ -988,10 +988,12 @@ class Record(OrderedDict):
 
         return self.collected_system_fields
 
-    def compare_leafs(self, rec, warn_logger=None):
+    def compare_leafs(self, rec, exclude_fields=()):
         dif = list()
         found_idx = list()
         for idx_path in self.leaf_indexes():
+            if idx_path[-1] in exclude_fields:
+                continue
             found_idx.append(idx_path)
             if idx_path not in rec:
                 dif.append("Field {}={} does not exist in the other Record".format(idx_path, self.val(*idx_path)))
@@ -1002,13 +1004,10 @@ class Record(OrderedDict):
                     dif.append("Different values in Field {}: {} != {}".format(idx_path, this_val, that_val))
 
         for idx_path in rec.leaf_indexes():
+            if idx_path[-1] in exclude_fields:
+                continue
             if idx_path not in found_idx:
                 dif.append("Field {}={} does not exist in this Record".format(idx_path, rec.val(*idx_path)))
-
-        if warn_logger and dif:
-            warn_logger("Differences between this Record {} and the other {}".format(self, rec), importance=3)
-            for dl in dif:
-                warn_logger(dl)
 
         return dif
 
@@ -1017,9 +1016,11 @@ class Record(OrderedDict):
         val = self.val(*idx_path)
 
         if isinstance(val, str):
-            if 'name' in idx.lower():
+            if idx == 'SfId':
+                val = val[:15]
+            elif 'name' in idx.lower():
                 val = val.capitalize()
-            if 'Email' in idx:
+            elif 'Email' in idx:
                 val, _ = correct_email(val.lower())
             elif 'Phone' in idx:
                 val, _ = correct_phone(val)
@@ -1082,7 +1083,7 @@ class Record(OrderedDict):
             field.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir, reset_lists=reset_lists)
         return self
 
-    def leaf_names(self, system='', direction='', field_names=(), sys_names=(), exclude_fields=()):
+    def leaf_names(self, system='', direction='', col_names=(), field_names=(), exclude_fields=(), name_type=None):
         names = list()
         for field in self.leafs(system=system, direction=direction, flex_sys_dir=False):
             idx_path = field.root_idx(system=system, direction=direction)
@@ -1093,12 +1094,26 @@ class Record(OrderedDict):
             root_name = idx_path_field_name(idx_path)
             if field_names and fld_name not in field_names and root_name not in field_names:
                 continue
-            if sys_names and sys_name not in sys_names:
+            if col_names and sys_name not in col_names:
                 continue
             if fld_name in exclude_fields or root_name in exclude_fields:
                 continue
-            names.append(root_name if len(idx_path) > 1 and idx_path[0] == fld_name
-                         else (sys_name if system else fld_name))
+
+            if name_type == 'f':
+                ret_name = fld_name
+            elif name_type == 's':
+                ret_name = sys_name
+            elif name_type == 'r':
+                ret_name = idx_path_field_name(idx_path)
+            elif name_type == 'T':
+                ret_name = idx_path
+            elif name_type == 'R':
+                ret_name = tuple(idx_path[:-1]) + (sys_name, )
+            else:
+                ret_name = root_name if len(idx_path) > 1 and idx_path[0] == fld_name \
+                    else (sys_name if system else fld_name)
+            names.append(ret_name)
+
         return tuple(names)
 
     def merge_leafs(self, rec, system='', direction='', flex_sys_dir=True, extend=True):
@@ -1182,9 +1197,11 @@ class Record(OrderedDict):
             self.action = action
         root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_env")
 
-        for idx in self._fields.keys():
-            field = self._fields.get(idx)
-            field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (idx, ))
+        # for idx in self._fields.keys():
+        #    field = self._fields.get(idx)
+        #    field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (idx,))
+        for field in self.leafs():
+            field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (field.name(), ))
         return self
 
     def sql_columns(self, from_system):
@@ -1354,6 +1371,30 @@ class Records(Values):              # type: List[Record]
         self.append(new_rec)
         return new_rec
 
+    def compare_records(self, records, match_fields, exclude_fields=(), record_comparator=None):
+        records.index_match_fields(match_fields)
+        processed_match_keys = list()
+
+        dif = list()
+        for rec in self:
+            match_key = rec.match_key(match_fields)
+            if match_key in records.match_index:
+                for p_rec in records.match_index[match_key]:
+                    dif.extend(rec.compare_leafs(p_rec, exclude_fields=exclude_fields))
+                    if record_comparator:
+                        dif.extend(record_comparator(rec, p_rec))
+                processed_match_keys.append(match_key)
+            else:
+                dif.append("Pulled client identified by {} not found in compare data; rec={}".format(match_key, rec))
+
+        for match_key, p_recs in records.match_index.items():
+            if match_key in processed_match_keys:
+                continue
+            for p_rec in p_recs:
+                dif.append("Client identified by {} not found in pulled clients; rec={}".format(match_key, p_rec))
+
+        return dif
+
     def index_match_fields(self, match_fields):
         for idx, rec in enumerate(self):
             match_key = rec.match_key(match_fields)
@@ -1380,7 +1421,9 @@ class Records(Values):              # type: List[Record]
 
     def set_env(self, system='', direction='', root_rec=None, root_idx=()):
         for idx, rec in enumerate(self):
-            rec.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (idx, ))
+            if root_idx:    # only extend with Records/list index if there is a Record above this Records instance
+                root_idx += (idx, )
+            rec.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx)
         return self
 
 

@@ -219,7 +219,7 @@ SELECT audit.audit_table('res_group_clients');
 
 ------ VIEWS
 ---- CLIENT VIEWS
--- view for AssSysDate.as_clients_pull()/cl_fetch_list() extending clients with external refs and pt_group aggregates
+-- view for AssSysDate.ass_clients_pull()/cl_fetch_list() extending clients with external refs and pt_group aggregates
 -- EXT_REF_TYPE_ID_SEP cannot be imported here from ass_sys_data.py, therefore using hard-coded literal '='
 CREATE OR REPLACE VIEW v_clients_refs_owns AS
   SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id, cl_name, cl_email, cl_phone

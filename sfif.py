@@ -16,7 +16,7 @@ DEF_CLIENT_OBJ = 'Account'
 
 
 # client data maps for Lead, Contact and Account
-MAP_CLIENT_OBJECTS = \
+SF_CLIENT_MAPS = \
     {'Account': (
         # ('AssCache_Id__pc', 'AssId'),
         ('AcumenClientRef__pc', 'AcuId'),
@@ -70,7 +70,7 @@ MAP_CLIENT_OBJECTS = \
      }
 
 # Reservation Object fields
-MAP_RES_OBJECT = (
+SF_RES_MAP = (
     ('HotelId__c', 'ResHotelId'),
     ('Number__c', 'ResId'),
     ('SubNumber__c', 'ResSubId'),
@@ -96,7 +96,7 @@ MAP_RES_OBJECT = (
 )
 
 # Allocation Object fields
-MAP_ROOM_OBJECT = (
+SF_ROOM_MAP = (
     ('CheckIn__c', 'ResCheckIn'),
     ('CheckOut__c', 'ResCheckOut'),
 )
@@ -144,6 +144,7 @@ def add_sf_options(cae):
     cae.add_option(SDF_SF_SANDBOX, "Use Salesforce sandbox (instead of production)", True, 's')
 
 
+# date/datetime formats used for calling interface and SOQL queries (SOQL queries are using different format!!!)
 SF_DATE_FORMAT = '%Y-%m-%d'
 SF_DATE_TIME_FORMAT_FROM = '%Y-%m-%dT%H:%M:%S.%f%z'
 SF_DATE_TIME_FORMAT_ONTO = '%Y-%m-%d %H:%M:%S'
@@ -206,6 +207,18 @@ field_onto_converters = dict(ResArrival=convert_date_field_onto_sf, ResDeparture
                              )
 
 
+def soql_value_literal(val):
+    if isinstance(val, datetime.date):
+        val = val.strftime(SF_DATE_FORMAT)
+    elif isinstance(val, datetime.datetime):
+        val = convert_date_time_onto_sf(val)
+    elif isinstance(val, int):
+        val = str(val)
+    else:
+        val = "'" + str(val) + "'"
+    return val
+
+
 def obj_from_id(sf_id):
     return ID_PREFIX_OBJECTS.get(sf_id[:3], DEF_CLIENT_OBJ)
 
@@ -236,7 +249,7 @@ def ensure_long_id(sf_id):
 
 
 def sf_field_name(sf_fld, sf_obj):
-    field_map = MAP_CLIENT_OBJECTS.get(sf_obj, tuple())
+    field_map = SF_CLIENT_MAPS.get(sf_obj, tuple())
     for sys_name, fld_name in field_map:
         if sys_name == sf_fld:
             field_name = fld_name
@@ -247,7 +260,7 @@ def sf_field_name(sf_fld, sf_obj):
 
 
 def sf_fld_sys_name(field_name, sf_obj):
-    field_map = MAP_CLIENT_OBJECTS.get(sf_obj, tuple())
+    field_map = SF_CLIENT_MAPS.get(sf_obj, tuple())
     for sys_name, fld_name in field_map:
         if fld_name == field_name:
             fld_name = sys_name
@@ -312,7 +325,7 @@ class SfInterface:
 
         self.error_msg = ""
         self.cl_res_rec_onto = Record(system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields(MAP_CLIENT_OBJECTS['Account'] + MAP_RES_OBJECT)
+            .add_system_fields(SF_CLIENT_MAPS['Account'] + SF_RES_MAP)
 
     @property
     def is_sandbox(self):
@@ -664,7 +677,7 @@ class SfInterface:
     def cl_id_by_email(self, email, sf_obj=DEF_CLIENT_OBJ):
         return self.cl_field_data('SfId', email, search_field='Email', sf_obj=sf_obj)
 
-    def cl_upsert(self, rec, sf_obj=None):
+    def cl_upsert(self, rec, sf_obj=None, filter_fields=None):
         # check if Id passed in (then this method can determine the sf_obj and will do an update not an insert)
         sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD).val(), True) \
             if SF_DEF_SEARCH_FIELD in rec and rec.val(SF_DEF_SEARCH_FIELD) \
@@ -672,7 +685,7 @@ class SfInterface:
 
         if sf_obj is None:
             if not sf_id:
-                self.error_msg = "cl_upsert({}, {}): client object cannot be determined without Id"\
+                self.error_msg = "cl_upsert({}, {}): client object cannot be upserted without Id"\
                     .format(ppf(rec), sf_obj)
                 return None, self.error_msg, ""
             sf_obj = obj_from_id(sf_id)
@@ -683,7 +696,7 @@ class SfInterface:
             return None, self.error_msg, ""
 
         ''' sf_dict = rec_to_sf_obj_fld_dict(rec, sf_obj) '''
-        sf_dict = rec.to_dict(system=SDI_SF, direction=FAD_ONTO)
+        sf_dict = rec.to_dict(system=SDI_SF, direction=FAD_ONTO, filter_fields=filter_fields)
         err = msg = ""
         if update_client:
             try:
@@ -767,56 +780,64 @@ class SfInterface:
                                           1 if c['RecordType']['Id'] in owner_rec_types else 0))
         return client_tuples
 
-    def res_data(self, res_opp_id):
+    def res_dict(self, res_opp_id):
         """
         fetch client+res data from SF Reservation Opportunity object (identified by res_opp_id)
-        :param res_opp_id:  value for to identify client record.
+        :param res_opp_id:  Reservation Opportunity Id value for to identify client reservation records.
         :return:            dict with sf_data.
         """
-        ret_val = dict(ReservationOpportunityId=res_opp_id)
-        ''' -- old SOQL query - now using system names from MAP_CLIENT_OBJECTS/MAP_RES_OBJECT
-            SELECT Id,          -- ResSfId/ReservationOpportunityId
-                   Account.Id, Account.FirstName, Account.LastName, Account.PersonEmail, Account.PersonHomePhone,
-                   Account.AcumenClientRef__pc, Account.SihotGuestObjId__pc, 
-                   Account.Language__pc, 
-                   Account.PersonMailingStreet, Account.PersonMailingPostalCode, Account.PersonMailingCity, 
-                   Account.PersonMailingCountry, 
-                   Account.CurrencyIsoCode, Account.Nationality__pc, 
-                   (SELECT Id,      -- ReservationId (not ResSfId!) 
-                           HotelId__c, Number__c, SubNumber__c, GdsNo__c, Arrival__c, Departure__c, Status__c,  
-                           RoomNo__c, MktSegment__c, MktGroup__c, RoomCat__c, Adults__c, Children__c, Note__c, 
-                           SihotResvObjectId__c
-                      FROM Reservations__r) 
-              FROM Opportunity WHERE Id = '{}'
-        '''     # .format(res_opp_id)
-        soql_query = "SELECT Id, " + ", ".join(["Account." + ('CD_CODE__pc' if sn == 'AcumenClientRef__pc' else sn)
-                                                for sn, fn in MAP_CLIENT_OBJECTS['Account']]) + ", " \
-            + "(SELECT " + ", ".join([sn for sn, fn in MAP_RES_OBJECT if fn != 'ResSfId']) \
-            + " FROM Reservations__r) " \
-            + "FROM Opportunity WHERE Id = '{}'".format(res_opp_id)
+        res_list = self.res_fetch_list(chk_values=dict(ReservationOpportunityId=res_opp_id))
+        if res_list:
+            return res_list[0]
+
+    def res_fetch_list(self, col_names=(), chk_values=None, where_group_order=""):
+        msg = "res_fetch_list({}, {}, {}) ".format(col_names, chk_values, where_group_order)
+
+        if not col_names:
+            col_names = tuple([sn for sn, *_ in SF_CLIENT_MAPS['Account'] + SF_RES_MAP + SF_ROOM_MAP])
+
+        cli_cols = ", ".join(["Account__r." + ('CD_CODE__pc' if sn == 'AcumenClientRef__pc' else sn)
+                             for sn, *_ in SF_CLIENT_MAPS['Account'] if sn in col_names])
+        res_cols = ", ".join([sn for sn, *_ in SF_RES_MAP if sn in col_names])
+        alo_cols = ", ".join([sn for sn, *_ in SF_ROOM_MAP if sn in col_names])
+        where = " AND ".join([('Opportunity__c' if k == 'ReservationOpportunityId' else k)
+                              + " = " + soql_value_literal(v) for k, v in chk_values.items()])
+        where += (" AND " if where else "") + ("(" + where_group_order + ")" if where_group_order else "")
+
+        soql_query = "SELECT Id, Opportunity__c" \
+                     + (", " + cli_cols if cli_cols else "") \
+                     + (", " + res_cols if res_cols else "") \
+                     + (", " + "(SELECT Id" + ", " + alo_cols + " FROM Allocations__r)" if alo_cols else "") \
+                     + " FROM Reservation__c" \
+                     + (" WHERE " + where if where else "")
+
+        res_list = list()
         res = self.soql_query_all(soql_query)
         if self.error_msg:
-            self.error_msg = "res_data({}): ".format(res_opp_id) + self.error_msg
+            self.error_msg = msg + "error: {}".format(self.error_msg)
         elif res['totalSize'] > 0:
-            ret_all = res['records'][0]
-            ret = dict()
-            ret['ReservationOpportunityId'] = ret_all.get('Id')
-            if ret_all['Account']:      # is None if no Account associated
-                ret.update(ret_all['Account'])
-                ret['PersonAccountId'] = ret.get('Id')
-                ret['AcumenClientRef__pc'] = ret.pop('CD_CODE__pc')
-            if ret_all['Reservations__r'] and ret_all['Reservations__r']['totalSize'] > 0:
-                ret.update(ret_all['Reservations__r']['records'][0])
-                ret['ReservationId'] = ret.get('Id')
-            # del ret['attributes']
-            for k, v in ret.items():
-                if k in ('attributes', 'Id', ):
-                    continue
-                if k in ('Arrival__c', 'Departure__c', ) and v:
-                    v = convert_date_from_sf(v)
-                ret_val[k] = v
+            for sf_res_dict in res['records']:
+                ret = dict()
+                ret['ReservationId'] = sf_res_dict.pop('Id')
+                ret['ReservationOpportunityId'] = sf_res_dict.pop('Opportunity__c')
+                sf_res_dict.pop('attributes', None)
 
-        return ret_val
+                if cli_cols and sf_res_dict['Account']:      # is None if no Account associated
+                    ret['PersonAccountId'] = ret.pop('Id', None)
+                    sf_res_dict['Account'].pop('attributes', None)
+                    ret.update(sf_res_dict['Account'])
+                    ret['AcumenClientRef__pc'] = ret.pop('CD_CODE__pc', None)
+                sf_res_dict.pop('Account', None)
+
+                if alo_cols and sf_res_dict['Allocations__r'] and sf_res_dict['Allocations__r']['totalSize'] > 0:
+                    ret.update(sf_res_dict['Allocations__r']['records'][0])
+                    ret['AllocationId'] = ret.pop('Id')
+                sf_res_dict.pop('Allocations__r', None)
+
+                ret.update(sf_res_dict)
+                res_list.append(ret)
+
+        return res_list
 
     def res_upsert(self, cl_res_rec):
         # exclude not implemented parameters - TODO: add RCI_Reference__pc in SF to SihotRestInterface.doHttpPost()
@@ -868,7 +889,7 @@ class SfInterface:
         :param res_opp_id:  value for to identify client record.
         :return:            dict with sf_data.
         """
-        sf_data = self.res_data(res_opp_id)
+        sf_data = self.res_dict(res_opp_id)
 
         # TODO: implement generic sf_field_data() method for to be called by this method and cl_field_data()
         # UNTIL THEN HARDCODED SOQL QUERIES

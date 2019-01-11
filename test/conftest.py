@@ -4,12 +4,14 @@ import datetime
 import pytest
 
 from configparser import ConfigParser
+
+from ae_console_app import Setting
 from ae_db import OraDB
 from ass_sys_data import AssSysData
 from sxmlif import PostMessage, ConfigDict, CatRooms, AvailCatInfo
 from sfif import SfInterface
 from shif import ClientSearch, ClientToSihot, \
-    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF, USE_KERNEL_FOR_RES_DEF, MAP_RES_DEF
+    USE_KERNEL_FOR_CLIENTS_DEF, SH_CLIENT_MAP, USE_KERNEL_FOR_RES_DEF, SH_RES_MAP
 from sys_data_ids import SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SF_SANDBOX, SDF_SH_CLIENT_PORT
 
 
@@ -165,8 +167,8 @@ class ConsoleApp:
                              shServerPort=cfg.get('Settings', SDF_SH_WEB_PORT, fallback=14777),
                              shServerKernelPort=cfg.get('Settings', SDF_SH_KERNEL_PORT, fallback=14772),
                              shTimeout=369.0, shXmlEncoding='utf8',
-                             shUseKernelForClient=USE_KERNEL_FOR_CLIENTS_DEF, shMapClient=MAP_CLIENT_DEF,
-                             shUseKernelForRes=USE_KERNEL_FOR_RES_DEF, shMapRes=MAP_RES_DEF,
+                             shUseKernelForClient=USE_KERNEL_FOR_CLIENTS_DEF, shMapClient=SH_CLIENT_MAP,
+                             shUseKernelForRes=USE_KERNEL_FOR_RES_DEF, shMapRes=SH_RES_MAP,
                              warningFragments='',
                              )
         for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):
@@ -183,7 +185,11 @@ class ConsoleApp:
         elif name in self._options:
             ret = self._options[name]
         elif section is None or section != 'Settings':
-            ret = self._env_cfg.get(section or 'Settings', name, fallback=default_value)
+            # does not convert config value into list/dict:
+            # .. ret = self._env_cfg.get(section or 'Settings', name, fallback=default_value)
+            s = Setting(name=name, value=default_value, value_type=type(default_value))  # used only for conversion/eval
+            s.value = self._env_cfg.get(section or 'Settings', name, fallback=s.value)
+            ret = s.value
         else:
             ret = default_value
         uprint('ConsoleAppMock.get_config', name, '=', ret, 'section=' + str(section))

@@ -94,8 +94,8 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | sfToken | Salesforce user account token | - | o | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
 | shClientPort | IP port of the Sxml interface of this server | 11000 (AcuServer) or 12000 (AssServer) | m | AcuServer, AssServer |
-| shMapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
-| shMapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
+| shMapClient | Guest/Client mapping of xml to db items | SH_CLIENT_MAP | m | SihotResImport, SihotResSync |
+| shMapRes | Reservation mapping of xml to db items | SH_RES_MAP | n | SihotResImport, SihotResSync |
 | shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, SysDataMan, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, SysDataMan, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
@@ -378,8 +378,8 @@ the correct functionality of the Salesforce, Acumen and Sihot servers and interf
 
 ### SysDataMan Application
 
-SysDataMan is a command line tool for to synchronize and compare data between our four systems (acu=Acumen ass=AssCache
-sf=Salesforce and sh=Sihot). The actions performed by this tool get specified by the 
+SysDataMan is a command line tool for to synchronize and compare data between our four systems (Acu=Acumen Ass=AssCache
+Sf=Salesforce and Sh=Sihot). The actions performed by this tool get specified by the 
 [command line options --pull, --push and --compare](#action-command-line-options),
 which can be specify multiple times.
 
@@ -389,7 +389,7 @@ After the pull any push actions are performed (if specified/given) and finally t
 For to run a compare before any additional pull/push action simply execute SysDataMan twice (the first run
 with the --compare option and the second run with the pull/push and optionally another compare action).
  
-The postgres database AssCache (ass) can be used for to temporarily store the data pulled from one of our three
+The postgres database AssCache (Ass) can be used for to temporarily store the data pulled from one of our three
 systems (the source system) for to speed up large data synchronization tasks.
 
 #### Supported Data Fields
@@ -412,14 +412,16 @@ them are implemented for all our three systems (e.g. Sihot only supports the ShI
 
 Each run of the SysDataMan tool has to specify at least one (mostly more than one) valid action (which are given with
 the --pull, --push and/or the --compare command line option). The option value of these actions consists of a system
-identifier followed by a record/data type identifier (one character). The supported system identifiers are:
+identifier (two or three characters long) followed by a record/data type identifier (one character).
+
+The supported system identifiers are:
 
 | System Identifier | Description |
 | --- | --- |
-| acu | Acumen |
-| ass | AssCache |
-| sh | Sihot |
-| sf | Salesforce |
+| Acu | Acumen |
+| Ass | AssCache |
+| Sh | Sihot |
+| Sf | Salesforce |
 
 The supported record/data type identifiers are:
 
@@ -429,15 +431,15 @@ The supported record/data type identifiers are:
 | P | Products |
 | R | Reservations |
 
-So for to compare/compare all client record data (C) from the Acumen (acu) against Salesforce (sf) system, use the
+So for to compare/compare all client record data (C) from the Acumen (Acu) against Salesforce (Sf) system, use the
 following action command line options:
 
-    `--pull=acuC --compare=sfC`
+    `--pull=AcuC --compare=SfC`
 
 This will first pull client data from Acumen and then compare it to the same clients within Salesforce. A similar
 compare run could be done with:
 
-    `--pull=sfC --compare=acuC`
+    `--pull=SfC --compare=AcuC`
 
 The difference is that the first compare run will pull (and optionally filter) the clients from the (source) system
 Acumen and then compare the found clients against the (destination) system Salesforce. In contrary the second example
@@ -448,7 +450,7 @@ A combination of the --pull and --push command line options allows to synchroniz
 For example for to synchronize client data from Acumen to Sihot and Salesforce you have to specify the following action
 command line arguments:
 
-    `--pull=acuC --push=sfC --push=shC`
+    `--pull=AcuC --push=SfC --push=ShC`
 
 Multiple options of the same action will be processed in the given order, but only within the same action type. So first
 all pull actions (in the given order), then all push actions and finally all compare actions. So on multiple push
@@ -478,18 +480,18 @@ to filter/restrict data from a system.
 The following command line option - using `where_group_order` - will pull only
 Acumen client data with a non-empty email address and compare them against Salesforce:
 
-    `--pull="acuC{'where_group_order':\"CD_EMAIL is not NULL\"} --compare=sfC`
+    `--pull="AcuC{'where_group_order':\"CD_EMAIL is not NULL\"} --compare=SfC`
 
 The same can be achieved by using `filter_records` with:
 
-    `--pull="acuC{'filter_records': lambda r: not r.val('Email')}" --compare=sfC`
+    `--pull="AcuC{'filter_records': lambda r: not r.val('Email')}" --compare=SfC`
 
 Additionally you can restrict the synchronized/compared fields with the key-word-arguments `col_names` or `field_names`.
 If none of these are specified then SysDataMan is processing all [data fields](#supported-data-fields) supported by
 the system you are pulling from. So for to restrict the last example to only compare the client's email address and
 phone number you have to specify the following command line options:
 
-    `--pull="acuC{'field_names': ['Email','Phone'], 'filter_records': lambda r: not r.val('Email')}" --compare=sfC`
+    `--pull="AcuC{'field_names': ['Email','Phone'], 'filter_records': lambda r: not r.val('Email')}" --compare=SfC`
 
 
 #### Additional Matching Action Command Line Options
@@ -503,14 +505,14 @@ command line option `match_fields` a different field (or a list of fields) for t
 So e.g. for to compare the client data between Acumen and Salesforce by using the Email and Phone data for to match 
 the client record within Salesforce the following command line options have to be specified:
 
-    `--pull=acuC --compare=sfC{'match_fields':['Email','Phone']}`
+    `--pull=AcuC --compare=SfC{'match_fields':['Email','Phone']}`
 
 The `filter_records` argument allows to restrict the processed/synchronized/compared data records on the
 destination system. The following example is comparing the source client data from Sihot against the (destination)
 client data within Acumen, restricted to Acumen client data where the email address and the phone number are not
 empty:  
 
-    `--pull=shC --compare="acC{'filter_records':lambda r: not r.val('Email') or not r.val('Phone')"`
+    `--pull=ShC --compare="AcuC{'filter_records':lambda r: not r.val('Email') or not r.val('Phone')"`
 
 
 ### AssServer Application
