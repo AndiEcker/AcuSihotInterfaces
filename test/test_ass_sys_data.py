@@ -3,7 +3,7 @@ import datetime
 # import pytest
 
 # from sys_data_ids import CLIENT_REC_TYPE_ID_OWNERS
-from ae_sys_data import Record, FAD_ONTO
+from ae_sys_data import Record, FAD_ONTO, Records
 
 from sfif import SF_RES_MAP, SF_CLIENT_MAPS
 from shif import res_search, client_data, ResFetch
@@ -13,40 +13,29 @@ from sys_data_ids import SDI_ASS, SDI_SF
 
 def test_tmp(console_app_env, ass_sys_data):
     asd = ass_sys_data
-    assert not asd.clients
-    # needs 3 minutes because full T_CD fetch: asd.acu_clients_pull(filter_records=lambda r: len(r.val('ExtRefs')) < 69)
-    # Using WHERE filter needs 2 minutes, and with additional CD_CODE filter finally needs only 8 seconds
-    asd.acu_clients_pull(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
-    assert asd.clients
-    cnt = len(asd.clients)
-    acc = asd.clients.copy(deepness=-1)
-    assert repr(acc) == repr(asd.clients)
+    cl_rec = Record(fields=dict(AssId=None, AcuId='T000369', SfId=None, ShId=None, RciId="1234-6789012",
+                                Surname="Tester-Surname", Forename="Tester-Forename", Name=None,
+                                Email="tester-surname@tester-host.com", Phone="001234567890123",
+                                DOB=datetime.date(year=1962, month=6, day=15),
+                                Street="Tester-street 36", City="Tester City", Postal="123456",
+                                Country="UK", Language="EN", Nationality="DE", Currency="EUR",
+                                ExtRefs=Records((Record(fields=dict(Type="ABC", Id="abc-def/ghi")),
+                                                 Record(fields=dict(Type="RCI", Id="1234-6789345")),
+                                                 Record(fields=dict(Type="xyz", Id="1a 234-xzy")),
+                                                 )),
+                                ProductTypes=None))
 
-    recs, dif = asd.acu_clients_compare(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
-    assert len(recs) == cnt == len(asd.clients)
-    assert not dif
-    assert repr(acc) == repr(asd.clients)
-    assert repr(acc) == repr(recs)
-
-    # mark pulled test records for to be compared and deleted at the end
-    for rec in asd.clients:
-        rec.set_val(('TST_TMP_' + rec.val('Name'))[:39], 'Name')
-
+    asd.clients.append(cl_rec)
     asd.ass_clients_push(match_fields=['AcuId'])
+    assert not asd.error_message
+    assert cl_rec.val('AssId')
 
-    # using where_group_order="substr(cl_ac_id, 1, 1) = 'F' and (SELECT list_agg(er_type || '=' || er_id... TOO COMPLEX
-    recs, dif = asd.ass_clients_compare(filter_records=lambda r: not r.val('Name')
-                                        or not r.val('Name').startswith('TST_TMP_'),
-                                        match_fields=['AcuId'])
-    assert len(recs) == cnt == len(asd.clients)
+    recs, dif = asd.ass_clients_compare(chk_values=dict(cl_ac_id='T000369'))
+    assert not asd.error_message
+    assert len(recs) == 1 == len(asd.clients)
+    assert not dif
+    assert repr(recs) == repr(asd.clients)
 
-    # TEARDOWN not working because AssInterface user has no rights to delete clients
-    '''
-    ass_conn = asd.connection(SDI_ASS)
-    ass_conn.execute_sql("DELETE FROM clients WHERE cl_name LIKE 'TST_TMP_%'")
-    assert not ass_conn.last_err_msg
-    assert ass_conn.get_row_count() == cnt
-    '''
     print()
 
 
@@ -58,12 +47,14 @@ class TestSysDataActions:
         # .. asd.acu_clients_pull(filter_records=lambda r: len(r.val('ExtRefs')) < 69)
         # Using WHERE filter needs 2 minutes, and with additional CD_CODE filter finally needs only 8 seconds
         asd.acu_clients_pull(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
+        assert not asd.error_message
         assert asd.clients
         cnt = len(asd.clients)
         acc = asd.clients.copy(deepness=-1)
         assert repr(acc) == repr(asd.clients)
 
         recs, dif = asd.acu_clients_compare(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
+        assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
         assert not dif
         assert repr(acc) == repr(asd.clients)
@@ -73,18 +64,22 @@ class TestSysDataActions:
         asd = ass_sys_data
         assert not asd.clients
         asd.ass_clients_pull(filter_records=lambda r: r.val('AssId') > 69)
+        assert not asd.error_message
         assert asd.clients
         cnt = len(asd.clients)
         asd.ass_clients_pull(filter_records=lambda r: r.val('AssId') > 69)
+        assert not asd.error_message
         assert len(asd.clients) == cnt * 2
 
         asd.clients.clear()
         assert not asd.clients
         asd.ass_clients_pull(field_names=['AssId', 'AcuId', 'ShId', 'Name'],
                              filter_records=lambda r: r.val('AssId') > 69)
+        assert not asd.error_message
         assert cnt == len(asd.clients)
         asd.ass_clients_pull(match_fields=['AssId'],
                              filter_records=lambda r: r.val('AssId') > 69)
+        assert not asd.error_message
         assert cnt == len(asd.clients)
 
     def test_ass_clients_pull_field_col_names(self, ass_sys_data):
@@ -92,6 +87,7 @@ class TestSysDataActions:
         assert not asd.clients
         asd.ass_clients_pull(col_names=['cl_pk', 'cl_ac_id', 'cl_sh_id', 'cl_phone', 'cl_email'],
                              filter_records=lambda r: r.val('AssId') > 69)
+        assert not asd.error_message
         assert asd.clients
         cnt = len(asd.clients)
         for rec in asd.clients:
@@ -101,6 +97,7 @@ class TestSysDataActions:
         assert not asd.clients
         asd.ass_clients_pull(field_names=['AssId', 'AcuId', 'ShId', 'Phone', 'Email'],
                              filter_records=lambda r: r.val('AssId') > 69)
+        assert not asd.error_message
         assert cnt == len(asd.clients)
         for rec in asd.clients:
             assert not rec.val('Name')
@@ -110,6 +107,7 @@ class TestSysDataActions:
         assert not asd.clients
         asd.ass_clients_pull(filter_records=lambda r: r.val('AssId') > 69,
                              field_names=['AssId', 'AcuId', 'ShId', 'Phone', 'Email'])
+        assert not asd.error_message
         assert asd.clients
         cnt = len(asd.clients)
         acc = asd.clients.copy(deepness=-1)
@@ -119,10 +117,12 @@ class TestSysDataActions:
         asd.ass_clients_push(filter_records=lambda r: r.val('AssId') > 69,
                              field_names=['AssId', 'AcuId', 'ShId', 'Phone', 'Email'],
                              match_fields=['AssId'])
+        assert not asd.error_message
         assert repr(acc) == repr(asd.clients)
 
         recs, dif = asd.ass_clients_compare(filter_records=lambda r: r.val('AssId') > 69,
                                             field_names=['AssId', 'AcuId', 'ShId', 'Phone', 'Email'])
+        assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
         assert not dif
         assert repr(acc) == repr(asd.clients)
@@ -135,12 +135,14 @@ class TestSysDataActions:
         # .. asd.acu_clients_pull(filter_records=lambda r: len(r.val('ExtRefs')) < 69)
         # Using WHERE filter needs 2 minutes, and with additional CD_CODE filter finally needs only 8 seconds
         asd.acu_clients_pull(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
+        assert not asd.error_message
         assert asd.clients
         cnt = len(asd.clients)
         acc = asd.clients.copy(deepness=-1)
         assert repr(acc) == repr(asd.clients)
 
         recs, dif = asd.acu_clients_compare(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
+        assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
         assert not dif
         assert repr(acc) == repr(asd.clients)
@@ -151,11 +153,13 @@ class TestSysDataActions:
             rec.set_val(('TST_TMP_' + rec.val('Name'))[:39], 'Name')
 
         asd.ass_clients_push(match_fields=['AcuId'])
+        assert not asd.error_message
 
         # using where_group_order="substr(cl_ac_id, 1, 1) = 'F' and (SELECT list_agg(er_type || '=' || er_i==TOO COMPLEX
         recs, dif = asd.ass_clients_compare(filter_records=lambda r: not r.val('Name')
                                             or not r.val('Name').startswith('TST_TMP_'),
                                             match_fields=['AcuId'])
+        assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
 
         # TEARDOWN not working because AssInterface user has no rights to delete clients
@@ -171,17 +175,20 @@ class TestSysDataActions:
         assert not asd.clients
         asd.ass_clients_pull(col_names=['cl_pk', 'cl_ac_id', 'cl_sh_id', 'cl_phone', 'cl_email'],
                              filter_records=lambda r: r.val('AssId') > 69)
+        assert not asd.error_message
         assert asd.clients
         cnt = len(asd.clients)
 
         recs, dif = asd.ass_clients_compare(field_names=['AssId', 'AcuId', 'ShId', 'Phone', 'Email'],
                                             filter_records=lambda r: r.val('AssId') > 69,
                                             match_fields=['AssId'])
+        assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
         assert not dif
 
         recs, dif = asd.ass_clients_compare(field_names=['AssId', 'AcuId', 'ShId', 'Phone', 'Email'],
                                             filter_records=lambda r: r.val('AssId') > 69)
+        assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
         assert not dif
 

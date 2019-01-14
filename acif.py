@@ -23,7 +23,9 @@ FMI_COL_NAME = 1    # system view sql column name
 FMI_SQL_EXPR = 2    # system view sql expression
 FMI_CNV_FUNC = 3    # field value converter - ONLY USED FOR EXT_REFS
 
-field_indexes = {FAT_IDX: FMI_FLD_NAME, FAT_IDX + FAD_FROM: FMI_COL_NAME, FAT_SQE + FAD_FROM: FMI_SQL_EXPR,
+field_indexes = {FAT_IDX: FMI_FLD_NAME,
+                 FAT_IDX + FAD_FROM: FMI_COL_NAME,
+                 FAT_SQE + FAD_FROM: FMI_SQL_EXPR,
                  FAT_CNV + FAD_FROM: FMI_CNV_FUNC}
 
 CLI_FIELD_MAP = [       # client data

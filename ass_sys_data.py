@@ -522,9 +522,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 client_data[k], _ = correct_phone(f.val())
         # process and check parameters
         if not save_fields:
-            save_fields = [k for k in client_data.keys() if k not in ('ExtRefs', 'ProductTypes')]
+            save_fields = [k for k in client_data.keys() if k not in ('AssId', 'ExtRefs', 'ProductTypes')]
         col_values = {f.name(system=SDI_ASS): f.val() for k, f in client_data.items()
-                      if k in save_fields and k not in ('ExtRefs', 'ProductTypes')}
+                      if k in save_fields and k not in ('AssId', 'ExtRefs', 'ProductTypes')}
         if not match_fields:
             # default to non-empty, external system references (k.endswith('Id') and len(k) <= 5 and k != 'RciId')
             match_fields = [k for k, f in client_data.items() if k in ('AssId', 'AcuId', 'SfId', 'ShId') and f.val()]
@@ -569,6 +569,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 self.clients.append(rec)
             else:
                 self.clients[ass_idx]['AssId'] = cl_pk
+        client_data.set_val(cl_pk, 'AssId')
 
         return cl_pk
 
@@ -585,11 +586,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     @staticmethod
     def cl_compare_ext_refs(this_rec, that_rec):
         dif = list()
-        this_has = 'ExtRefs' in this_rec
-        that_has = 'ExtRefs' in that_rec
+        this_has = this_rec.val('ExtRefs')
+        that_has = that_rec.val('ExtRefs')
         if this_has and that_has:
-            this_val = set(this_rec.val('ExtRefs').split(EXT_REFS_SEP))
-            that_val = set(that_rec.val('ExtRefs').split(EXT_REFS_SEP))
+            this_val = set(this_has.split(EXT_REFS_SEP) if isinstance(this_has, str)
+                           else [r.val('Type') + EXT_REF_TYPE_ID_SEP + r.val('Id') for r in this_has])
+            that_val = set(that_has.split(EXT_REFS_SEP) if isinstance(that_has, str)
+                           else [r.val('Type') + EXT_REF_TYPE_ID_SEP + r.val('Id') for r in that_has])
             set_dif = this_val - that_val
             if set_dif:
                 dif.append("External references {} in {} not found in {}".format(set_dif, this_rec, that_rec))
@@ -1343,8 +1346,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # determine ordering client; RESCHANNELLIST element is situated within RESERVATION xml block
         ord_cl_pk = None
-        sh_id = shd.val('ShId')     # was RESCHANNELLIST.RESCHANNEL.OBJID
-        ac_id = shd.val('AcuId')     # was RESCHANNELLIST.RESCHANNEL.MATCHCODE
+        sh_id = shd.val('ShId')         # was RESCHANNELLIST.RESCHANNEL.OBJID
+        ac_id = shd.val('AcuId')        # was RESCHANNELLIST.RESCHANNEL.MATCHCODE
         if sh_id or ac_id:
             self._warn("sh_res_change_to_ass(): create new client record for orderer {}/{}".format(sh_id, ac_id),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -1610,14 +1613,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def ass_clients_push(self, field_names=(), filter_records=None, match_fields=()):
         self._warn("Pushing client data onto AssCache", 'pushAssClientData', importance=4)
 
-        if not field_names and self.clients:
-            field_names = self.clients[0].leaf_names(system=SDI_ASS, direction=FAD_ONTO, name_type='f')
-
         recs = self.clients
         recs.set_env(system=SDI_ASS, direction=FAD_ONTO)
         for rec in recs:
             rec.add_system_fields(ASS_CLIENT_MAP)
             if not callable(filter_records) or not filter_records(rec):
+                if not field_names:     # leaf_names() has to be called after add_system_fields()
+                    field_names = rec.leaf_names(system=SDI_ASS, direction=FAD_ONTO,
+                                                 col_names=rec.sys_name_field_map.keys(), name_type='f')
                 if not self.cl_save(rec, save_fields=field_names, match_fields=match_fields, commit=True):
                     self._err("AssCache client push error: '{}'".format(self.error_message))
                     if self.cae.get_option('breakOnError'):
@@ -1765,15 +1768,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self._warn("Pushing client data onto Salesforce", 'pushSfClientData', importance=4)
 
-        if not field_names and self.clients:
-            field_names = self.clients[0].leaf_names(system=SDI_SF, direction=FAD_ONTO, name_type='f')
-
         sf_conn = self.connection(SDI_SF)
         recs = self.clients
         recs.set_env(system=SDI_SF, direction=FAD_ONTO)
         for rec in recs:
             rec.add_system_fields(SF_CLIENT_MAPS['Account'])
             if not callable(filter_records) or not filter_records(rec):
+                if not field_names:     # leaf_names() has to be called after add_system_fields()
+                    field_names = rec.leaf_names(system=SDI_SF, direction=FAD_ONTO,
+                                                 col_names=rec.sys_name_field_map.keys(), name_type='f')
                 sf_id, err, msg = sf_conn.cl_upsert(rec, filter_fields=lambda f: f.name() not in field_names)
                 if err:
                     if self.cae.get_option('breakOnError'):

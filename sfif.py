@@ -3,6 +3,7 @@ import string
 import datetime
 import pprint
 from traceback import format_exc
+from typing import Tuple, Dict, Any
 
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
@@ -27,7 +28,8 @@ SF_CLIENT_MAPS = \
         ('PersonEmail', 'Email'),
         ('PersonHomePhone', 'Phone'),
         ('RCI_Reference__pc', 'RciId'),     # TODO: add RCI_Reference__pc to SF.SihotRestInterface.doHttpPost()
-        # ('KM_DOB__pc', 'DOB'),
+        # ('KM_DOB__pc', 'DOB', None, None,
+        #  lambda f, v: convert_date_from_sf(v), lambda f, v: convert_date_onto_sf(v)),
         ('PersonMailingStreet', 'Street'),
         ('PersonMailingCity', 'City'),
         # ('PersonMailingState', 'State'),
@@ -47,7 +49,8 @@ SF_CLIENT_MAPS = \
          ('LastName', 'Surname'),
          ('FirstName', 'Forename'),
          ('RCI_Reference__c', 'RciId'),
-         ('DOB1__c', 'DOB'),
+         ('DOB1__c', 'DOB', None, None,
+          lambda f, v: convert_date_from_sf(v), lambda f, v: convert_date_onto_sf(v)),
          ('MailingStreet', 'Street'),
          ('MailingCity', 'City'),
          ('Country__c', 'Country'),
@@ -62,12 +65,15 @@ SF_CLIENT_MAPS = \
          ('Sihot_Guest_Object_Id__c', 'ShId'),
          ('LastName', 'Surname'),
          ('FirstName', 'Forename'),
-         ('DOB1__c', 'DOB'),
+         ('DOB1__c', 'DOB', None, None,
+          lambda f, v: convert_date_from_sf(v), lambda f, v: convert_date_onto_sf(v)),
          ('Nationality__c', 'Language'),
          # ('Market_Source__c', 'MarketSource'),
          # ('Previous_Arrivals__c', 'ArrivalInfo')
      )
-     }
+     }  # type: Dict[str, Tuple[Tuple[Any]]]
+# X-type: Dict[str, Iterable[Iterable[str, ...]]]
+# X-type: Dict[str, Tuple[Tuple[str, ...], ...]]
 
 # Reservation Object fields
 SF_RES_MAP = (
@@ -77,15 +83,19 @@ SF_RES_MAP = (
     ('GdsNo__c', 'ResGdsNo'),
     ('ReservationOpportunityId', 'ResSfId'),
     ('SihotResvObjectId__c', 'ResObjId'),
-    ('Arrival__c', 'ResArrival'),
-    ('Departure__c', 'ResDeparture'),
+    ('Arrival__c', 'ResArrival', None, None,
+     lambda f, v: convert_date_from_sf(v), lambda f, v: convert_date_onto_sf(v)),
+    ('Departure__c', 'ResDeparture', None, None,
+     lambda f, v: convert_date_from_sf(v), lambda f, v: convert_date_onto_sf(v)),
     ('RoomNo__c', 'ResRoomNo'),
     ('RoomCat__c', 'ResRoomCat'),
     ('Status__c', 'ResStatus'),
     ('MktGroup__c', 'ResMktGroup'),
     ('MktSegment__c', 'ResMktSegment'),
-    ('Adults__c', 'ResAdults'),
-    ('Children__c', 'ResChildren'),
+    ('Adults__c', 'ResAdults', None, None,
+     lambda f, v: int(v)),
+    ('Children__c', 'ResChildren', None, None,
+     lambda f, v: int(v)),
     ('Note__c', 'ResNote'),
     # ('', ('ResPersons', 0, 'AcuId')),
     # ('', ('ResPersons', 0, 'DOB')),
@@ -93,13 +103,14 @@ SF_RES_MAP = (
     # ('', ('ResPersons', 0, 'GuestType')),
     # ('', ('ResPersons', 0, 'ShId')),
     # ('', ('ResPersons', 0, 'Surname')),
-)
+)  # type: Tuple[Tuple[Any]]
 
 # Allocation Object fields
 SF_ROOM_MAP = (
-    ('CheckIn__c', 'ResCheckIn'),
+    ('CheckIn__c', 'ResCheckIn', None, None,
+     lambda f, v: convert_date_time_from_sf(v), lambda f, v: convert_date_time_onto_sf(v)),
     ('CheckOut__c', 'ResCheckOut'),
-)
+)  # type: Tuple[Tuple[Any]]
 
 # from Sf rec map (used e.g. by SihotServer)
 ''' - NOT NEEDED BECAUSE SAME FIELD NAMES (see SihotServer.py/sh_res_upsert())
@@ -263,6 +274,9 @@ def sf_fld_sys_name(field_name, sf_obj):
     field_map = SF_CLIENT_MAPS.get(sf_obj, tuple())
     for sys_name, fld_name in field_map:
         if fld_name == field_name:
+            if sys_name.startswith('AcumenClientRef__'):
+                # TODO: remove after renaming of CD_CODE__c/CD_CODE__pc into AcumenClientRef__c
+                sys_name = 'CD_CODE__' + sys_name[len('AcumenClientRef__'):]
             fld_name = sys_name
             break
     else:
@@ -679,9 +693,8 @@ class SfInterface:
 
     def cl_upsert(self, rec, sf_obj=None, filter_fields=None):
         # check if Id passed in (then this method can determine the sf_obj and will do an update not an insert)
-        sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD).val(), True) \
-            if SF_DEF_SEARCH_FIELD in rec and rec.val(SF_DEF_SEARCH_FIELD) \
-            else ('', False)
+        sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD).val(), True) if rec.val(SF_DEF_SEARCH_FIELD) else \
+            ('', False)
 
         if sf_obj is None:
             if not sf_id:
@@ -697,6 +710,10 @@ class SfInterface:
 
         ''' sf_dict = rec_to_sf_obj_fld_dict(rec, sf_obj) '''
         sf_dict = rec.to_dict(system=SDI_SF, direction=FAD_ONTO, filter_fields=filter_fields)
+        if 'AcumenClientRef__c' in sf_dict:     # TODO: remove after renaming of CD_CODE__c into AcumenClientRef__c
+            sf_dict['CD_CODE__c'] = sf_dict.pop('AcumenClientRef__c')       # temp fix until SF CD_CODE__pc field rename
+        elif 'AcumenClientRef__pc' in sf_dict:  # TODO: remove after renaming of CD_CODE__pc into AcumenClientRef_pc
+            sf_dict['CD_CODE__pc'] = sf_dict.pop('AcumenClientRef__pc')     # temp fix until SF CD_CODE__pc field rename
         err = msg = ""
         if update_client:
             try:
@@ -716,8 +733,11 @@ class SfInterface:
                 err = "{} create() exception {}. sent={}".format(sf_obj, _format_exc(ex), ppf(sf_dict))
                 sf_id = None
 
-        if not err and sf_id and rec.val('RciId'):
-            _, err, msg = self.cl_ext_ref_upsert(sf_id, EXT_REF_TYPE_RCI, rec.val('RciId'), sf_obj=sf_obj)
+        if not err and sf_id:
+            if not rec.val(SF_DEF_SEARCH_FIELD):
+                rec.set_val(sf_id, SF_DEF_SEARCH_FIELD)
+            if rec.val('RciId'):
+                _, err, msg = self.cl_ext_ref_upsert(sf_id, EXT_REF_TYPE_RCI, rec.val('RciId'), sf_obj=sf_obj)
 
         if err:
             self.error_msg = err
@@ -798,11 +818,11 @@ class SfInterface:
 
         cli_cols = ", ".join(["Account__r." + ('CD_CODE__pc' if sn == 'AcumenClientRef__pc' else sn)
                              for sn, *_ in SF_CLIENT_MAPS['Account'] if sn in col_names])
-        res_cols = ", ".join([sn for sn, *_ in SF_RES_MAP if sn in col_names])
+        res_cols = ", ".join([sn for sn, *_ in SF_RES_MAP if sn != 'ReservationOpportunityId' and sn in col_names])
         alo_cols = ", ".join([sn for sn, *_ in SF_ROOM_MAP if sn in col_names])
         where = " AND ".join([('Opportunity__c' if k == 'ReservationOpportunityId' else k)
                               + " = " + soql_value_literal(v) for k, v in chk_values.items()])
-        where += (" AND " if where else "") + ("(" + where_group_order + ")" if where_group_order else "")
+        where += " AND " + "(" + where_group_order + ")" if where_group_order else ""
 
         soql_query = "SELECT Id, Opportunity__c" \
                      + (", " + cli_cols if cli_cols else "") \
@@ -822,12 +842,12 @@ class SfInterface:
                 ret['ReservationOpportunityId'] = sf_res_dict.pop('Opportunity__c')
                 sf_res_dict.pop('attributes', None)
 
-                if cli_cols and sf_res_dict['Account']:      # is None if no Account associated
+                if cli_cols and sf_res_dict.get('Account__r'):      # 'Account' does not exist if no Account associated
+                    sf_res_dict['Account__r'].pop('attributes', None)
+                    ret.update(sf_res_dict['Account__r'])
                     ret['PersonAccountId'] = ret.pop('Id', None)
-                    sf_res_dict['Account'].pop('attributes', None)
-                    ret.update(sf_res_dict['Account'])
                     ret['AcumenClientRef__pc'] = ret.pop('CD_CODE__pc', None)
-                sf_res_dict.pop('Account', None)
+                sf_res_dict.pop('Account__r', None)
 
                 if alo_cols and sf_res_dict['Allocations__r'] and sf_res_dict['Allocations__r']['totalSize'] > 0:
                     ret.update(sf_res_dict['Allocations__r']['records'][0])
@@ -856,7 +876,7 @@ class SfInterface:
             self.error_msg += "sfif.res_upsert({}) received error '{}' from SF".format(ppf(cl_res_rec), msg)
         if not self.error_msg:
             if not cl_res_rec.val('ResSfId') and result.get('ReservationOpportunityId'):
-                cl_res_rec['ResSfId'] = result['ReservationOpportunityId']
+                cl_res_rec.set_val(result['ReservationOpportunityId'], 'ResSfId')
             elif cl_res_rec.val('ResSfId') != result.get('ReservationOpportunityId'):
                 msg = "sfif.res_upsert({}) ResSfId discrepancy; sent={} received={}"\
                        .format(ppf(cl_res_rec),
@@ -921,10 +941,7 @@ class SfInterface:
             ret = dict(ReservationId=ret_all['Id'])
             ret.update(ret_all['Allocations__r']['records'][0])
             ret['AllocationId'] = ret.pop('Id')
-            del ret['attributes']
-            for k, v in ret.items():
-                if k in ('CheckIn__c', 'CheckOut__c') and v:
-                    v = convert_date_time_from_sf(v)
-                ret_val[k] = v
+            ret.pop('attributes', None)
+            ret_val.update(ret)
 
         return ret_val

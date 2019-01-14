@@ -1173,7 +1173,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                             if not error_msg:
                                 if debug_level >= DEBUG_LEVEL_VERBOSE:
                                     log_import("Sent " + which_client + "/client: " + str(client_row), fn, idx)
-                                client_row['ShId'] = client_send.response.objid
+                                # already done by ClientToSihot: client_row['ShId'] = client_send.response.objid
                                 asd.cl_complete_with_sh_id(clients_idx, client_row['ShId'])
                                 sent_clients.append(clients_idx)
                         except Exception as ex:

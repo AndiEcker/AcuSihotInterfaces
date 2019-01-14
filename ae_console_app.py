@@ -9,7 +9,7 @@ import unicodedata
 import threading
 
 from configparser import ConfigParser
-from argparse import ArgumentParser, ArgumentError
+from argparse import ArgumentParser, ArgumentError, HelpFormatter
 
 from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
                           debug_levels)
@@ -330,7 +330,8 @@ INI_EXT = '.ini'
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
                  log_file_def='', config_eval_vars=None, additional_cfg_files=None, log_max_size=20,
-                 multi_threading=False, suppress_stdout=False, formatter_class=None, epilog=""):
+                 multi_threading=False, suppress_stdout=False,
+                 formatter_class=HelpFormatter, epilog=""):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version:         application version.
             :param app_desc:            application description.
@@ -811,7 +812,7 @@ class NamedLocks:
 
             if lock_acquired:
                 with self.locks_change_lock:
-                    if lock_exists != lock_name in self.active_locks:  # if lock state has changed, then redo/retry
+                    if lock_exists != (lock_name in self.active_locks):  # if lock state has changed, then redo/retry
                         self.dprint("NamedLocks.acquire", lock_name, 'RETRY', minimum_debug_level=DEBUG_LEVEL_ENABLED)
                         lock_instance.release()
                         continue

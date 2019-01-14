@@ -48,6 +48,8 @@ def convert_date_onto_sh(date):
 
 
 #  ELEMENT-FIELD-MAP-TUPLE-INDEXES  #################################
+# mapping element name in tuple item [0] onto field name in [1], default field value in [2], hideIf callable in [3],
+# .. from-converter in [4] and onto-converter in [5]
 MTI_ELEM_NAME = 0
 MTI_FLD_NAME = 1
 MTI_FLD_VAL = 2
@@ -55,7 +57,6 @@ MTI_FLD_FILTER = 3
 MTI_FLD_CNV_FROM = 4
 MTI_FLD_CNV_ONTO = 5
 
-# mapping element name in tuple item 0 onto field name in [1], hideIf callable in [2] and default field value in [3]
 # default map for ClientFromSihot.elem_fld_map instance and as read-only constant by AcuClientToSihot using the SIHOT
 # .. KERNEL interface because SiHOT WEB V9 has missing fields: initials (CD_INIT1/2) and profession (CD_INDUSTRY1/2)
 SH_CLIENT_MAP = \
@@ -1157,6 +1158,8 @@ class ClientToSihot(FldMapXmlBuilder):
             self.action = ACTION_UPDATE
             self._prepare_guest_xml(rec, fld_name_suffix='_P' if first_person else '')
             err_msg = self.send_to_server()
+        if not err_msg and self.response and self.response.objid and not rec.val('ShId'):
+            rec.set_val(self.response.objid, 'ShId')
         return err_msg
 
     def send_client_to_sihot(self, rec):
@@ -1284,6 +1287,9 @@ class ResToSihot(FldMapXmlBuilder):
         self._prepare_res_xml(rec)
 
         err_msg, warn_msg = self._handle_error(rec, self.send_to_server(response_parser=ResResponse(self.cae)))
+        if not err_msg and not rec.val('ResObjId'):
+            rec.set_val(self.response.objid, 'ResObjId')
+
         return err_msg, warn_msg
 
     def _handle_error(self, rec, err_msg):
@@ -1307,17 +1313,11 @@ class ResToSihot(FldMapXmlBuilder):
         if rec.val('AcuId'):
             client = ClientToSihot(self.cae)
             err_msg = client.send_client_to_sihot(rec)
-            if not err_msg:
-                # get client/occupant objid directly from client.response
-                rec.set_val(client.response.objid, 'ShId')
 
         # check also Orderer but exclude OTAs like TCAG/TCRENT with a MATCHCODE that is no normal Acumen-CDREF
         if not err_msg and rec.val('AcuId') and len(rec.val('AcuId')) == 7:
             client = ClientToSihot(self.cae)
             err_msg = client.send_client_to_sihot(rec)
-            if not err_msg:
-                # get orderer objid directly from client.response
-                rec.set_val(client.response.objid, 'ShId')
 
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 

@@ -502,9 +502,11 @@ class TestClientToSihot:
         cli_to = ClientToSihot(console_app_env)
         fld_vals = dict(AcuId='T111222', Title='1', GuestType='1', Country='AT', Language='DE',
                         ExtRefs='RCI=123,XXX=456')
-        err_msg = cli_to.send_client_to_sihot(Record(fields=fld_vals))
+        rec = Record(fields=fld_vals)
+        err_msg = cli_to.send_client_to_sihot(rec=rec)
         assert not err_msg
         assert cli_to.response.objid
+        assert cli_to.response.objid == rec.val('ShId')
 
 
 class TestClientFetchSearch:

@@ -516,8 +516,8 @@ class TestReservation:
             .copy(deepness=-1)\
             .update(FirstName='First-Test-Name', LastName='Last-Test-Name', Language__pc='EN',
                     PersonEmail='TestName@test.tst', AcumenClientRefpc='T987654',
-                    Arrival__c=datetime.date(year=2018, month=3, day=1),
-                    Departure__c=datetime.date(year=2018, month=3, day=8),
+                    Arrival__c='2018-03-01',
+                    Departure__c='2018-03-08',
                     HotelId__c='4', Number__c='12345', SubNumber__c='1', Status__c='1',
                     Adults__c=2, Children__c=1, Note__c="core test no checks",
                     )
@@ -543,7 +543,7 @@ class TestReservation:
                      'Language': 'EN', 'Country': 'GB',
                      'Email': 't@ts.tst', 'Phone': '0049765432100',
                      'ResHotelId': '999', 'ResId': '999999', 'ResSubId': '9',
-                     'ResArrival': arr_date, 'ResDeparture': dep_date,
+                     'ResArrival': convert_date_onto_sf(arr_date), 'ResDeparture': convert_date_onto_sf(dep_date),
                      'ResAdults': 1, 'ResChildren': 0,
                      })
         sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
@@ -568,7 +568,7 @@ class TestReservation:
                      'Language': 'EN', 'Country': 'GB',
                      'Email': 't111@ts111.tst', 'Phone': '00491111111',
                      'ResHotelId': '1', 'ResId': '1111111', 'ResSubId': '1',
-                     'ResArrival': arr_date, 'ResDeparture': dep_date,
+                     'ResArrival': convert_date_onto_sf(arr_date), 'ResDeparture': dep_date,
                      'ResAdults': 1, 'ResChildren': 0,
                      })
         sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
