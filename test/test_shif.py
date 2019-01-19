@@ -37,6 +37,7 @@ class TestFldMapXmlParser:
         mp = FldMapXmlParser(console_app_env, self.ELEM_MAP)
         assert len(mp.rec) == 2
         assert mp.elem_fld_map['SYS_FNA'].val() == ''
+
         mp.rec.field_items = True
         assert mp.rec['fnA'].root_idx(system=SDI_SH) == ('fnA', )
         assert mp.rec['fnB0sfnA'].root_idx(system=SDI_SH) == ('fnB', 0, 'sfnA')
@@ -49,7 +50,7 @@ class TestFldMapXmlParser:
         assert mp.rec.val('fnB', 0, 'sfnB') == ''       # not None because created as template field
         assert mp.rec.val('fnB', 1, 'sfnA') == 'sfnAV1'
         assert mp.rec.val('fnB', 1, 'sfnB') == 'sfnBV1'
-        assert mp.rec.val('fnB', 2, 'sfnA') is None
+        assert mp.rec.val('fnB', 2, 'sfnA') == ''
         assert mp.rec.val('fnB', 2, 'sfnB') == 'sfnBV2'
 
 

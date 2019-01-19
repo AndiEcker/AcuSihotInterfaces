@@ -5,6 +5,7 @@ import pytest
 
 from configparser import ConfigParser
 
+from ae_sys_data import Record
 from ae_console_app import Setting
 from ae_db import OraDB
 from ass_sys_data import AssSysData
@@ -80,11 +81,8 @@ def create_test_client(console_app_env):
         client = cs
     else:
         client = ClientToSihot(console_app_env)
-        col_values = dict()
-        for col_map in client.elem_fld_rec:
-            if 'fldName' not in col_map:
-                continue
-            col = col_map['fldName']
+        col_values = Record()
+        for col in client.elem_fld_rec.keys():
             if col == 'AcuId':
                 col_values[col] = mc
             elif col == 'Surname':

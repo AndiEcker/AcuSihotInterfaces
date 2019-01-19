@@ -3,29 +3,187 @@ from ae_sys_data import UsedSystems
 from sfif import *
 
 
+class TestReservation:
+    sf_id_of_rci_id = dict()
+
+    @staticmethod
+    def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
+        def _normalize_val(sv, sk):
+            return (sv.capitalize() if isinstance(sv, str) and 'Name' in sk else
+                    sv.lower() if isinstance(sv, str) and 'Email' in sk else
+                    sv[:2] if isinstance(sv, str) and sk == 'Language__pc' else
+                    # no longer needed since using Date.valueOf() in SF:
+                    # .. sv[:-9] if isinstance(sv, str) and sv.endswith(SF_DATE_ZERO_HOURS) else
+                    None if isinstance(sv, str) and sv == '' else
+                    sv)
+        diffs = [(sk, sv, _normalize_val(dict_with_compare_values.get(sk), sk))
+                 for sk, sv in dict_with_compare_keys.items()
+                 if sk not in ('xxPersonAccountId', 'xxCurrencyIsoCode', 'xxLanguage__pc',
+                               'xxSihotGuestObjId__pc', 'xxPersonHomePhone')
+                 and _normalize_val(sv, sk) != _normalize_val(dict_with_compare_values.get(sk), sk)]
+        return diffs
+
+    def test_sf_apexecute_core_res_upsert(self, salesforce_connection):
+        sfc = salesforce_connection
+        rec = sfc.cl_res_rec_onto\
+            .copy(deepness=-1)\
+            .update(FirstName='First-Test-Name', LastName='Last-Test-Name', Language__pc='EN',
+                    PersonEmail='TestName@test.tst', AcumenClientRefpc='T987654',
+                    Arrival__c='2018-03-01',  # no longer needed since using Date.valueOf() in SF: + SF_DATE_ZERO_HOURS
+                    Departure__c='2018-03-08',  # no longer needed since using Date.valueOf(): + SF_DATE_ZERO_HOURS
+                    HotelId__c='4', Number__c='12345', SubNumber__c='1', Status__c='1',
+                    Adults__c=2, Children__c=1, Note__c="core test no checks",
+                    )
+        # returns (PersonAccountId, ReservationOpportunityId, ErrorMessage)
+        sf_id, res_sf_id, err_msg = sfc.res_upsert(rec, push_onto=False)
+        print(sf_id, res_sf_id, err_msg)
+        assert sf_id.startswith('001')
+        assert res_sf_id.startswith('006')
+        assert not err_msg
+        assert not sfc.error_msg
+        sf_recd = sfc.res_dict(res_sf_id)
+        assert not sfc.error_msg
+        assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO, push_onto=False),
+                                                       sf_recd)
+
+    def test_res_upsert_basic_not_existing_bhc(self, salesforce_connection):
+        sfc = salesforce_connection
+
+        arr_date = datetime.date.today() + datetime.timedelta(days=15)
+        dep_date = arr_date + datetime.timedelta(days=7)
+        rec = sfc.cl_res_rec_onto\
+            .copy(deepness=-1)\
+            .update({'Surname': 'LstNam111', 'Forename': 'FstNam111',
+                     'ShId': '11123456711', 'AcuId': 'TST1111',
+                     'Language': 'EN', 'Country': 'GB',
+                     'Email': 't11111@ts11111.tst', 'Phone': '0049111111111',
+                     'ResHotelId': '1', 'ResId': '111111', 'ResSubId': '11',
+                     'ResArrival': arr_date, 'ResDeparture': dep_date,
+                     'ResAdults': 1, 'ResChildren': 0,
+                     })
+        sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
+        print(sf_id, res_sf_id, err_msg)
+        assert not err_msg
+        assert sf_id
+        assert res_sf_id
+
+        sf_recd = sfc.res_dict(res_sf_id)
+        assert not sfc.error_msg
+        assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
+
+    def test_res_upsert_basic_not_existing_any(self, salesforce_connection):
+        sfc = salesforce_connection
+
+        arr_date = datetime.date.today() + datetime.timedelta(days=18)
+        dep_date = arr_date + datetime.timedelta(days=7)
+        rec = sfc.cl_res_rec_onto\
+            .copy(deepness=-1)\
+            .update({'Surname': 'LNam222', 'Forename': 'FNam222',
+                     'ShId': '2222222', 'AcuId': 'TST2222',
+                     'Language': 'EN', 'Country': 'GB',
+                     'Email': 't222@ts2222.tst', 'Phone': '00492222222',
+                     'ResHotelId': '999', 'ResId': '22222', 'ResSubId': '2',
+                     'ResArrival': arr_date, 'ResDeparture': dep_date,
+                     'ResAdults': 2, 'ResChildren': 0,
+                     })
+        sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
+        print(sf_id, res_sf_id, err_msg)
+        assert not err_msg
+        assert sf_id
+        assert res_sf_id
+        assert not sfc.error_msg
+
+        sf_recd = sfc.res_dict(res_sf_id)
+        assert not sfc.error_msg
+        assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
+
+    def test_res_upsert_with_unicode_strings(self, salesforce_connection):
+        # because HTTP is not supporting UNICODE we actually have to encode them as latin1/iso-8859-1 before sending
+        # .. and decode back to unicode on receive, s.a. PEP333/3 at https://www.python.org/dev/peps/pep-3333/
+        sfc = salesforce_connection
+
+        arr_date = datetime.date.today() + datetime.timedelta(days=4)
+        dep_date = arr_date + datetime.timedelta(days=7)
+        rec = sfc.cl_res_rec_onto\
+            .copy(deepness=-1)\
+            .update({'Surname': 'Lästñame', 'Forename': 'FírstNümé',
+                     'ShId': '55423456755', 'AcuId': 'TST5555',
+                     'Language': 'FR', 'Country': 'FR',
+                     'Email': 't5555@ts5555.tst', 'Phone': '0049555555555',
+                     'ResHotelId': '1', 'ResId': '55555', 'ResSubId': '5',
+                     'ResArrival': arr_date, 'ResDeparture': dep_date,
+                     'ResAdults': 1, 'ResChildren': 0,
+                     })
+        sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
+        print(sf_id, res_sf_id, err_msg)
+        assert not err_msg
+        assert sf_id
+        assert res_sf_id
+
+        sf_recd = sfc.res_dict(res_sf_id)
+        assert not sfc.error_msg
+        assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
+
+    def test_room_change(self, salesforce_connection):
+        sfc = salesforce_connection
+
+        arr_date = (datetime.datetime.now() + datetime.timedelta(days=9)).replace(microsecond=0, tzinfo=None)
+        dep_date = (arr_date + datetime.timedelta(days=7)).replace(microsecond=0, tzinfo=None)
+        rec = sfc.cl_res_rec_onto\
+            .copy(deepness=-1)\
+            .update({'Surname': 'Surname_RC_test', 'Forename': 'Forename_RC_test',
+                     'ResHotelId': '999', 'ResId': '999999', 'ResSubId': '9', 'ResStatus': '1',
+                     'ResArrival': arr_date, 'ResDeparture': dep_date,
+                     'ResAdults': 1, 'ResChildren': 0,
+                     })
+        cl_sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
+        assert not err_msg
+        assert cl_sf_id
+        assert res_sf_id
+
+        err_msg = sfc.room_change(res_sf_id, arr_date, None, '9999')
+        assert not err_msg
+        room_dict = sfc.room_data(res_sf_id)
+        assert convert_date_time_from_sf(room_dict['CheckIn__c']) == arr_date
+        assert room_dict['CheckOut__c'] is None
+
+        err_msg = sfc.room_change(res_sf_id, None, dep_date, '9999')
+        assert not err_msg
+        room_dict = sfc.room_data(res_sf_id)
+        assert room_dict['CheckIn__c'] is None
+        assert convert_date_time_from_sf(room_dict['CheckOut__c']) == dep_date
+
+        err_msg = sfc.room_change(res_sf_id, arr_date, dep_date, '9999')
+        assert not err_msg
+        room_dict = sfc.room_data(res_sf_id)
+        assert convert_date_time_from_sf(room_dict['CheckIn__c']) == arr_date
+        assert convert_date_time_from_sf(room_dict['CheckOut__c']) == dep_date
+
+
 class TestConverter:
     def test_date_converters(self):
         d = datetime.date(2018, 1, 2)
         s_ugly = "2018-1-2"
         s_nice = "2018-01-02"
-        s_0_hours = s_nice + SF_DATE_ZERO_HOURS
+        # s_0_hours = s_nice  # no longer needed since using Date.valueOf() in SF: + SF_DATE_ZERO_HOURS
         s_any_hours = s_ugly + " 12:13:14"
         s_T_sep = s_ugly + "T12:13:14"
         micro_sec = ".12345"
 
-        assert convert_date_from_sf(s_ugly) - SF_TIME_DIFF_FROM == d
-        assert convert_date_from_sf(s_nice) - SF_TIME_DIFF_FROM == d
-        assert convert_date_from_sf(s_0_hours) - SF_TIME_DIFF_FROM == d
-        assert convert_date_from_sf(s_any_hours) - SF_TIME_DIFF_FROM == d
-        assert convert_date_from_sf(s_T_sep) - SF_TIME_DIFF_FROM == d
-        assert convert_date_from_sf(s_0_hours + micro_sec) - SF_TIME_DIFF_FROM == d
-        assert convert_date_from_sf(s_any_hours + micro_sec) - SF_TIME_DIFF_FROM == d
-        assert convert_date_from_sf(s_T_sep + micro_sec) - SF_TIME_DIFF_FROM == d
+        # no longer needed since changed company+user time zone to GMT+0: - SF_TIME_DIFF_FROM == d
+        assert convert_date_from_sf(s_ugly) == d
+        assert convert_date_from_sf(s_nice) == d
+        ''' assert convert_date_from_sf(s_0_hours) == d '''
+        assert convert_date_from_sf(s_any_hours) == d
+        assert convert_date_from_sf(s_T_sep) == d
+        ''' assert convert_date_from_sf(s_0_hours + micro_sec) == d '''
+        assert convert_date_from_sf(s_any_hours + micro_sec) == d
+        assert convert_date_from_sf(s_T_sep + micro_sec) == d
 
-        assert convert_date_onto_sf(d) == s_0_hours
+        assert convert_date_onto_sf(d) == s_nice
 
-        assert convert_date_field_from_sf(None, s_ugly) - SF_TIME_DIFF_FROM == d
-        assert convert_date_field_onto_sf(None, d) == s_0_hours
+        assert convert_date_field_from_sf(None, s_ugly) == d
+        assert convert_date_field_onto_sf(None, d) == s_nice
 
     def test_date_time_converters(self):
         d = datetime.datetime(2018, 1, 2, 13, 12, 11)
@@ -34,15 +192,16 @@ class TestConverter:
         s_T_sep = "2018-01-02T13:12:11"
         micro_sec = ".12345"
 
-        assert convert_date_time_from_sf(s_ugly) - SF_TIME_DIFF_FROM == d
-        assert convert_date_time_from_sf(s_nice) - SF_TIME_DIFF_FROM == d
-        assert convert_date_time_from_sf(s_T_sep) - SF_TIME_DIFF_FROM == d
-        assert convert_date_time_from_sf(s_nice + micro_sec) - SF_TIME_DIFF_FROM == d
-        assert convert_date_time_from_sf(s_T_sep + micro_sec) - SF_TIME_DIFF_FROM == d
+        # no longer needed since changed company+user time zone to GMT+0: - SF_TIME_DIFF_FROM == d
+        assert convert_date_time_from_sf(s_ugly) == d
+        assert convert_date_time_from_sf(s_nice) == d
+        assert convert_date_time_from_sf(s_T_sep) == d
+        assert convert_date_time_from_sf(s_nice + micro_sec) == d
+        assert convert_date_time_from_sf(s_T_sep + micro_sec) == d
 
         assert convert_date_time_onto_sf(d) == s_nice
 
-        assert convert_date_time_field_from_sf(None, s_ugly) - SF_TIME_DIFF_FROM == d
+        assert convert_date_time_field_from_sf(None, s_ugly) == d
         assert convert_date_time_field_onto_sf(None, d) == s_nice
 
     def test_field_converters(self):
@@ -494,149 +653,3 @@ class TestClient:
         assert not err
         err, msg = sfc.cl_delete(sf_id_main)
         assert not err
-
-
-class TestReservation:
-    sf_id_of_rci_id = dict()
-
-    @staticmethod
-    def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
-        diffs = [(sk, sv, dict_with_compare_values.get(sk)) for sk, sv in dict_with_compare_keys.items()
-                 if sk not in ('PersonAccountId', 'CurrencyIsoCode', 'Language__pc',
-                               'SihotGuestObjId__pc', 'PersonHomePhone')
-                 and (sv.capitalize() if 'Name' in sk else
-                      sv.lower() if 'Email' in sk else
-                      None if sv == '' else
-                      sv) != dict_with_compare_values.get(sk)]
-        return diffs
-
-    def test_sf_apexecute_core_res_upsert(self, salesforce_connection):
-        sfc = salesforce_connection
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update(FirstName='First-Test-Name', LastName='Last-Test-Name', Language__pc='EN',
-                    PersonEmail='TestName@test.tst', AcumenClientRefpc='T987654',
-                    Arrival__c='2018-03-01',
-                    Departure__c='2018-03-08',
-                    HotelId__c='4', Number__c='12345', SubNumber__c='1', Status__c='1',
-                    Adults__c=2, Children__c=1, Note__c="core test no checks",
-                    )
-        sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)   # (PersonAccountId, ReservationOpportunityId, ErrorMessage)
-        print(sf_id, res_sf_id, err_msg)
-        assert sf_id.startswith('001')
-        assert res_sf_id.startswith('006')
-        assert not err_msg
-        assert not sfc.error_msg
-        sf_recd = sfc.res_dict(res_sf_id)
-        assert not sfc.error_msg
-        assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
-
-    def test_res_upsert_basic_not_existing_any(self, salesforce_connection):
-        sfc = salesforce_connection
-
-        arr_date = datetime.date.today() + datetime.timedelta(days=18)
-        dep_date = arr_date + datetime.timedelta(days=7)
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update({'Surname': 'LNam', 'Forename': 'FNam',
-                     'ShId': '123456789', 'AcuId': 'E012345',
-                     'Language': 'EN', 'Country': 'GB',
-                     'Email': 't@ts.tst', 'Phone': '0049765432100',
-                     'ResHotelId': '999', 'ResId': '999999', 'ResSubId': '9',
-                     'ResArrival': convert_date_onto_sf(arr_date), 'ResDeparture': convert_date_onto_sf(dep_date),
-                     'ResAdults': 1, 'ResChildren': 0,
-                     })
-        sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
-        assert not err_msg
-        assert sf_id
-        assert res_sf_id
-        assert not sfc.error_msg
-
-        sf_recd = sfc.res_dict(res_sf_id)
-        assert not sfc.error_msg
-        assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
-
-    def test_res_upsert_basic_not_existing_bhc(self, salesforce_connection):
-        sfc = salesforce_connection
-
-        arr_date = datetime.date.today() + datetime.timedelta(days=15)
-        dep_date = arr_date + datetime.timedelta(days=7)
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update({'Surname': 'LstNam', 'Forename': 'FstNam',
-                     'ShId': '11123456789', 'AcuId': 'T111111',
-                     'Language': 'EN', 'Country': 'GB',
-                     'Email': 't111@ts111.tst', 'Phone': '00491111111',
-                     'ResHotelId': '1', 'ResId': '1111111', 'ResSubId': '1',
-                     'ResArrival': convert_date_onto_sf(arr_date), 'ResDeparture': dep_date,
-                     'ResAdults': 1, 'ResChildren': 0,
-                     })
-        sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
-        assert not err_msg
-        assert sf_id
-        assert res_sf_id
-
-        sf_recd = sfc.res_dict(res_sf_id)
-        assert not sfc.error_msg
-        assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
-
-    def test_res_upsert_with_unicode_strings(self, salesforce_connection):
-        # because HTTP is not supporting UNICODE we actually have to encode them as latin1/iso-8859-1 before sending
-        # .. and decode back to unicode on receive, s.a. PEP333/3 at https://www.python.org/dev/peps/pep-3333/
-        sfc = salesforce_connection
-
-        arr_date = datetime.date.today() + datetime.timedelta(days=4)
-        dep_date = arr_date + datetime.timedelta(days=7)
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update({'Surname': 'Lästñame', 'Forename': 'FírstNümé',
-                     'ShId': '55423456789', 'AcuId': 'T555555',
-                     'Language': 'ES', 'Country': 'FR',
-                     'Email': 't555@ts555.tst', 'Phone': '004955555555',
-                     'ResHotelId': '1', 'ResId': '555555', 'ResSubId': '5',
-                     'ResArrival': arr_date, 'ResDeparture': dep_date,
-                     'ResAdults': 1, 'ResChildren': 0,
-                     })
-        sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
-        assert not err_msg
-        assert sf_id
-        assert res_sf_id
-
-        sf_recd = sfc.res_dict(res_sf_id)
-        assert not sfc.error_msg
-        assert not self._compare_converted_field_dicts(rec.to_dict(system=SDI_SF, direction=FAD_ONTO), sf_recd)
-
-    def test_room_change(self, salesforce_connection):
-        sfc = salesforce_connection
-
-        arr_date = (datetime.datetime.now() + datetime.timedelta(days=9)).replace(microsecond=0, tzinfo=None)
-        dep_date = (arr_date + datetime.timedelta(days=7)).replace(microsecond=0, tzinfo=None)
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update({'Surname': 'Surname_RC_test', 'Forename': 'Forename_RC_test',
-                     'ResHotelId': '999', 'ResId': '999999', 'ResSubId': '9', 'ResStatus': '1',
-                     'ResArrival': arr_date, 'ResDeparture': dep_date,
-                     'ResAdults': 1, 'ResChildren': 0,
-                     })
-        cl_sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
-        assert not err_msg
-        assert cl_sf_id
-        assert res_sf_id
-
-        err_msg = sfc.room_change(res_sf_id, arr_date, None, '9999')
-        assert not err_msg
-        room_dict = sfc.room_data(res_sf_id)
-        assert room_dict['CheckIn__c'] == arr_date
-        assert room_dict['CheckOut__c'] is None
-
-        err_msg = sfc.room_change(res_sf_id, None, dep_date, '9999')
-        assert not err_msg
-        room_dict = sfc.room_data(res_sf_id)
-        assert room_dict['CheckIn__c'] is None
-        assert room_dict['CheckOut__c'] == dep_date
-
-        err_msg = sfc.room_change(res_sf_id, arr_date, dep_date, '9999')
-        assert not err_msg
-        room_dict = sfc.room_data(res_sf_id)
-        assert room_dict['CheckIn__c'] == arr_date
-        assert room_dict['CheckOut__c'] == dep_date

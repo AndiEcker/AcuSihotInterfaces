@@ -11,7 +11,7 @@ from ae_console_app import uprint
 
 # import time         # needed only for testing
 
-TCP_CONNECTION_BROKEN_MSG = "RequestXmlHandler.handle(): socket connection broken!"
+TCP_CONNECTION_BROKEN_MSG = "socket connection broken!"
 
 TCP_MAXBUFLEN = 8192
 TCP_END_OF_MSG_CHAR = b'\x04'
@@ -40,7 +40,7 @@ class RequestXmlHandler(socketserver.BaseRequestHandler, metaclass=ABCMeta):
             while xml_recv[-1:] != TCP_END_OF_MSG_CHAR:
                 chunk = self.request.recv(TCP_MAXBUFLEN)
                 if not chunk:  # socket connection broken, see https://docs.python.org/3/howto/sockets.html#socket-howto
-                    self.error_message = TCP_CONNECTION_BROKEN_MSG
+                    self.error_message = "RequestXmlHandler.handle(): " + TCP_CONNECTION_BROKEN_MSG
                     self.notify()
                     return
                 xml_recv += chunk
@@ -135,21 +135,29 @@ class TcpClient:
         return self.error_message
 
     def _receive_response(self, sock):
+        def _handle_err_gracefully(extra_msg=""):
+            # socket connection broken, see https://docs.python.org/3/howto/sockets.html#socket-howto
+            # .. and for 100054 see https://stackoverflow.com/questions/35542404
+            self.error_message = "TcpClient._receive_response(): " + TCP_CONNECTION_BROKEN_MSG + extra_msg
+            if self.debug_level:
+                uprint(self.error_message)
         xml_recv = b""
         try:
             while xml_recv[-1:] != TCP_END_OF_MSG_CHAR:
                 chunk = sock.recv(TCP_MAXBUFLEN)
-                if not chunk:  # socket connection broken, see https://docs.python.org/3/howto/sockets.html#socket-howto
-                    self.error_message = "TcpClient._receive_response(): socket connection broken!"
-                    if self.debug_level:
-                        uprint(self.error_message)
+                if not chunk:
+                    _handle_err_gracefully()
                     break
                 xml_recv += chunk
             xml_recv = xml_recv[:-1]        # remove TCP_END_OF_MSG_CHAR
 
         except Exception as ex:
-            self.error_message = "TcpClient._receive_response() err: " + str(ex) \
-                                 + (" (received XML=" + str(xml_recv, self.encoding) + ")" + "\n" + format_exc()
-                                    if self.debug_level else "")
+            if 10054 in ex.args:
+                # [Errno|WinError 10054] An existing connection was forcibly closed by the remote host
+                _handle_err_gracefully(" ErrNo=10054 (data loss is possible)")
+            else:
+                self.error_message = "TcpClient._receive_response() err: " + str(ex) \
+                                     + (" (received XML=" + str(xml_recv, self.encoding) + ")" + "\n" + format_exc()
+                                        if self.debug_level else "")
 
         return str(xml_recv, self.encoding)

@@ -43,7 +43,7 @@ SF_CLIENT_MAPS = \
      ),
      'Contact': (
          ('AssCache_Id__c', 'AssId'),
-         ('CD_CODE__c', 'AcuId'),
+         ('AcumenClientRef__c', 'AcuId'),
          ('Id', 'SfId'),  # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
          ('Sihot_Guest_Object_Id__c', 'ShId'),
          ('LastName', 'Surname'),
@@ -62,7 +62,6 @@ SF_CLIENT_MAPS = \
          ('AssCache_Id__c', 'AssId'),
          ('Acumen_Client_Reference__c', 'AcuId'),
          ('Id', 'SfId'),  # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
-         ('Sihot_Guest_Object_Id__c', 'ShId'),
          ('LastName', 'Surname'),
          ('FirstName', 'Forename'),
          ('DOB1__c', 'DOB', None, None,
@@ -72,8 +71,6 @@ SF_CLIENT_MAPS = \
          # ('Previous_Arrivals__c', 'ArrivalInfo')
      )
      }  # type: Dict[str, Tuple[Tuple[Any]]]
-# X-type: Dict[str, Iterable[Iterable[str, ...]]]
-# X-type: Dict[str, Tuple[Tuple[str, ...], ...]]
 
 # Reservation Object fields
 SF_RES_MAP = (
@@ -159,8 +156,10 @@ def add_sf_options(cae):
 SF_DATE_FORMAT = '%Y-%m-%d'
 SF_DATE_TIME_FORMAT_FROM = '%Y-%m-%dT%H:%M:%S.%f%z'
 SF_DATE_TIME_FORMAT_ONTO = '%Y-%m-%d %H:%M:%S'
-SF_TIME_DIFF_FROM = datetime.timedelta(hours=1)
-SF_DATE_ZERO_HOURS = " 00:00:00"
+''' TODO: remove on code-clean-up
+# no longer needed since changed company+user time zone to GMT+0: SF_TIME_DIFF_FROM = datetime.timedelta(hours=1)
+# no longer needed since using Date.valueOf() in SF: SF_DATE_ZERO_HOURS = " 00:00:00"
+'''
 
 
 def convert_date_from_sf(str_val):
@@ -168,11 +167,12 @@ def convert_date_from_sf(str_val):
         str_val = str_val.split(' ')[0]
     elif str_val.find('T') != -1:
         str_val = str_val.split('T')[0]
-    return (datetime.datetime.strptime(str_val, SF_DATE_FORMAT) + SF_TIME_DIFF_FROM).date()
+    return (datetime.datetime.strptime(str_val, SF_DATE_FORMAT)).date()
+    # no longer needed since changed company+user time zone to GMT+0: + SF_TIME_DIFF_FROM).date()
 
 
 def convert_date_onto_sf(date):
-    return date.strftime(SF_DATE_FORMAT) + SF_DATE_ZERO_HOURS
+    return date.strftime(SF_DATE_FORMAT)    # no longer needed since using Date.valueOf() in SF: + SF_DATE_ZERO_HOURS
 
 
 def convert_date_time_from_sf(str_val):
@@ -185,7 +185,8 @@ def convert_date_time_from_sf(str_val):
         mask = mask.replace('T', ' ')   # str_val uses space char as date-time-sep, so replace T with space in mask
     elif str_val.find('T') == -1:
         mask = mask[:mask.find('T')]    # if no T-/space-date-time-sep found in str_val, so remove time from mask
-    return datetime.datetime.strptime(str_val, mask).replace(microsecond=0, tzinfo=None) + SF_TIME_DIFF_FROM
+    return datetime.datetime.strptime(str_val, mask).replace(microsecond=0, tzinfo=None)
+    # no longer needed since changed company+user time zone to GMT+0: + SF_TIME_DIFF_FROM
 
 
 def convert_date_time_onto_sf(date):
@@ -272,11 +273,8 @@ def sf_field_name(sf_fld, sf_obj):
 
 def sf_fld_sys_name(field_name, sf_obj):
     field_map = SF_CLIENT_MAPS.get(sf_obj, tuple())
-    for sys_name, fld_name in field_map:
+    for sys_name, fld_name, *_ in field_map:
         if fld_name == field_name:
-            if sys_name.startswith('AcumenClientRef__'):
-                # TODO: remove after renaming of CD_CODE__c/CD_CODE__pc into AcumenClientRef__c
-                sys_name = 'CD_CODE__' + sys_name[len('AcumenClientRef__'):]
             fld_name = sys_name
             break
     else:
@@ -710,10 +708,6 @@ class SfInterface:
 
         ''' sf_dict = rec_to_sf_obj_fld_dict(rec, sf_obj) '''
         sf_dict = rec.to_dict(system=SDI_SF, direction=FAD_ONTO, filter_fields=filter_fields)
-        if 'AcumenClientRef__c' in sf_dict:     # TODO: remove after renaming of CD_CODE__c into AcumenClientRef__c
-            sf_dict['CD_CODE__c'] = sf_dict.pop('AcumenClientRef__c')       # temp fix until SF CD_CODE__pc field rename
-        elif 'AcumenClientRef__pc' in sf_dict:  # TODO: remove after renaming of CD_CODE__pc into AcumenClientRef_pc
-            sf_dict['CD_CODE__pc'] = sf_dict.pop('AcumenClientRef__pc')     # temp fix until SF CD_CODE__pc field rename
         err = msg = ""
         if update_client:
             try:
@@ -737,7 +731,14 @@ class SfInterface:
             if not rec.val(SF_DEF_SEARCH_FIELD):
                 rec.set_val(sf_id, SF_DEF_SEARCH_FIELD)
             if rec.val('RciId'):
-                _, err, msg = self.cl_ext_ref_upsert(sf_id, EXT_REF_TYPE_RCI, rec.val('RciId'), sf_obj=sf_obj)
+                _, err, er_msg = self.cl_ext_ref_upsert(sf_id, EXT_REF_TYPE_RCI, rec.val('RciId'), sf_obj=sf_obj)
+                msg += ("\n      " if msg else "") + er_msg
+            if not err and rec.val('ExtRefs'):
+                for er_rec in rec.val('ExtRefs'):
+                    _, err, er_msg = self.cl_ext_ref_upsert(sf_id, er_rec.val('Type'), er_rec.val('Id'), sf_obj=sf_obj)
+                    if err:
+                        break
+                    msg += ("\n      " if msg else "") + er_msg
 
         if err:
             self.error_msg = err
@@ -816,8 +817,7 @@ class SfInterface:
         if not col_names:
             col_names = tuple([sn for sn, *_ in SF_CLIENT_MAPS['Account'] + SF_RES_MAP + SF_ROOM_MAP])
 
-        cli_cols = ", ".join(["Account__r." + ('CD_CODE__pc' if sn == 'AcumenClientRef__pc' else sn)
-                             for sn, *_ in SF_CLIENT_MAPS['Account'] if sn in col_names])
+        cli_cols = ", ".join(["Account__r." + sn for sn, *_ in SF_CLIENT_MAPS['Account'] if sn in col_names])
         res_cols = ", ".join([sn for sn, *_ in SF_RES_MAP if sn != 'ReservationOpportunityId' and sn in col_names])
         alo_cols = ", ".join([sn for sn, *_ in SF_ROOM_MAP if sn in col_names])
         where = " AND ".join([('Opportunity__c' if k == 'ReservationOpportunityId' else k)
@@ -846,7 +846,6 @@ class SfInterface:
                     sf_res_dict['Account__r'].pop('attributes', None)
                     ret.update(sf_res_dict['Account__r'])
                     ret['PersonAccountId'] = ret.pop('Id', None)
-                    ret['AcumenClientRef__pc'] = ret.pop('CD_CODE__pc', None)
                 sf_res_dict.pop('Account__r', None)
 
                 if alo_cols and sf_res_dict['Allocations__r'] and sf_res_dict['Allocations__r']['totalSize'] > 0:
@@ -859,9 +858,11 @@ class SfInterface:
 
         return res_list
 
-    def res_upsert(self, cl_res_rec):
-        # exclude not implemented parameters - TODO: add RCI_Reference__pc in SF to SihotRestInterface.doHttpPost()
-        sf_args = cl_res_rec.to_dict(filter_fields=lambda f: f.name() in ('RciId', ),
+    def res_upsert(self, cl_res_rec, filter_fields=None, push_onto=True, put_system_val=True):
+        sf_args = cl_res_rec.to_dict(filter_fields=lambda f: (filter_fields(f) if filter_fields else False)
+                                     # TODO: add RCI_Reference__pc to SihotRestInterface.doHttpPost(), then remove:
+                                     or f.name() in ('RciId', ),
+                                     push_onto=push_onto, put_system_val=put_system_val,
                                      system=SDI_SF, direction=FAD_ONTO)
         sf_id = sf_args.pop('Id', None)
         if sf_id:

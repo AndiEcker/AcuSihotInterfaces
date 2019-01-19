@@ -180,6 +180,7 @@ Field Name | Field Type | Description | Example Values |
 | ResAdults | Integer | Number of Adults | 1, 2, 4 |
 | ResAllotmentNo | Integer | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
 | ResArrival * | Date | Arrival Date | 28-02-2017 |
+| ResAssId | Integer | Primary key of AssCache.res_groups table (auto-incrementing value) | 12345 |
 | ResBoard | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
 | ResBooked | Date | Sihot Reservation Booking Date | 24-12-2016 |
 | ResCheckIn | Datetime | Room Check-/Move-In date and time | 01-02-2018 10:11:12 |
@@ -271,7 +272,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 
 | Field Name | Acumen Column | Salesforce Field | Sihot Element | AssCache Column |
 | --- | --- | --- | --- | --- |
-| AcuId | CD_CODE+OC_CODE | CD_CODE__pc+AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | cl_ac_id+rgr_order_cl_fk->cl_ac_id | 
+| AcuId | CD_CODE+OC_CODE | AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | cl_ac_id+rgr_order_cl_fk->cl_ac_id | 
 | AssId | - | AssCache_Id__pc | - | cl_pk |
 | City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
 | Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |

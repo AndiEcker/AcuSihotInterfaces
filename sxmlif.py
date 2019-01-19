@@ -416,7 +416,7 @@ class SihotXmlBuilder:
     def convert_value_to_xml_string(value):
         # ret = str(val) if val else ''  # not working with zero value
         ret = '' if value is None else str(value)  # convert None to empty string
-        if type(value) is datetime.datetime and ret.endswith(' 00:00:00'):
+        if isinstance(value, (datetime.datetime, datetime.date)) and ret.endswith(' 00:00:00'):
             ret = ret[:-9]
         # escape special characters while preserving already escaped characters - by first un-escape then escape again
         for key, val in [('&amp;', '&'), ('&lt;', '<'), ('&gt;', '>'), ('&', '&amp;'), ('<', '&lt;'), ('>', '&gt;')]:

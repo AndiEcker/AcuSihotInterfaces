@@ -183,7 +183,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     ass_res = Record(system=SDI_ASS, direction=FAD_ONTO)
-    if asd.sh_res_change_to_ass(sh_res, ass_res_rec=ass_res):
+    if asd.res_save(sh_res, ass_res_rec=ass_res):
         return asd.error_message
 
     # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call

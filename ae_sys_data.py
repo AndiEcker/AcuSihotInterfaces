@@ -998,11 +998,12 @@ class Record(OrderedDict):
 
         return self.collected_system_fields
 
-    def compare_leafs(self, rec, exclude_fields=()):
+    def compare_leafs(self, rec, field_names=(), exclude_fields=()):
         dif = list()
         found_idx = list()
         for idx_path in self.leaf_indexes():
-            if idx_path[-1] in exclude_fields:
+            if (field_names and idx_path[0] not in field_names and idx_path[-1] not in field_names) \
+                    or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields):
                 continue
             found_idx.append(idx_path)
             if idx_path not in rec:
@@ -1014,7 +1015,8 @@ class Record(OrderedDict):
                     dif.append("Different values in Field {}: {} != {}".format(idx_path, this_val, that_val))
 
         for idx_path in rec.leaf_indexes():
-            if idx_path[-1] in exclude_fields:
+            if (field_names and idx_path[0] not in field_names and idx_path[-1] not in field_names) \
+                    or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields):
                 continue
             if idx_path not in found_idx:
                 dif.append("Field {}={} does not exist in this Record".format(idx_path, rec.val(*idx_path)))
@@ -1034,8 +1036,8 @@ class Record(OrderedDict):
                 val, _ = correct_email(val.lower())
             elif 'Phone' in idx:
                 val, _ = correct_phone(val)
-            if val is not None and len(val) > 40:
-                val = val[:40].strip()
+            if val is not None and len(val) > 39:
+                val = val[:39].strip()
             if val == '':
                 val = None
         elif isinstance(val, (datetime.date, datetime.datetime)):
@@ -1099,7 +1101,8 @@ class Record(OrderedDict):
             idx_path = field.root_idx(system=system, direction=direction)
             if not template_idx_path(idx_path):
                 continue
-            sys_name = field.name(system=system, direction=direction, flex_sys_dir=False)
+            sys_name = field.name(system=system or self.system, direction=direction or self.direction,
+                                  flex_sys_dir=False)
             if col_names and sys_name not in col_names:
                 continue
             fld_name = field.name()
@@ -1248,12 +1251,13 @@ class Record(OrderedDict):
                     column_expressions.append(expr + name)
         return column_expressions
 
-    def to_dict(self, filter_fields=None, key_type=str, put_system_val=True, put_empty_val=False,
+    def to_dict(self, filter_fields=None, key_type=str, push_onto=True, put_system_val=True, put_empty_val=False,
                 system=None, direction=None):
         """
         copy Record leaf values into a dict.
         :param filter_fields:   callable returning True for each field that need to be excluded in returned dict, pass
                                 None to include all fields (if put_empty_val == True).
+        :param push_onto:       pass False to prevent self.push(system).
         :param key_type:        type of dict keys: None=field name, tuple=index path tuple, str=index path string (def).
         :param put_system_val:  pass False to include/use main field val; def=True for to include system val specified
                                 by the system/direction args.
@@ -1263,7 +1267,7 @@ class Record(OrderedDict):
         :return:                dict with leaf
         """
         system, direction = use_rec_default_sys_dir(self, system, direction)
-        if not put_system_val and system:
+        if push_onto and system:
             self.push(system)
 
         ret = dict()
@@ -1384,27 +1388,27 @@ class Records(Values):              # type: List[Record]
         self.append(new_rec)
         return new_rec
 
-    def compare_records(self, records, match_fields, exclude_fields=(), record_comparator=None):
+    def compare_records(self, records, match_fields, field_names=(), exclude_fields=(), record_comparator=None):
         records.index_match_fields(match_fields)
         processed_match_keys = list()
 
         dif = list()
-        for rec in self:
+        for idx, rec in enumerate(self):
             match_key = rec.match_key(match_fields)
             if match_key in records.match_index:
                 for p_rec in records.match_index[match_key]:
-                    dif.extend(rec.compare_leafs(p_rec, exclude_fields=exclude_fields))
+                    dif.extend(rec.compare_leafs(p_rec, field_names=field_names, exclude_fields=exclude_fields))
                     if record_comparator:
                         dif.extend(record_comparator(rec, p_rec))
                 processed_match_keys.append(match_key)
             else:
-                dif.append("Pulled client identified by {} not found in compare data; rec={}".format(match_key, rec))
+                dif.append("Record {} of this Records instance not found via {}; rec={}".format(idx, match_key, rec))
 
         for match_key, p_recs in records.match_index.items():
             if match_key in processed_match_keys:
                 continue
             for p_rec in p_recs:
-                dif.append("Client identified by {} not found in pulled clients; rec={}".format(match_key, p_rec))
+                dif.append("Pulled Record not found in this Records instance via {}; rec={}".format(match_key, p_rec))
 
         return dif
 

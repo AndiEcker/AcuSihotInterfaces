@@ -25,6 +25,7 @@ print('Top-level objects describe:', pprint.pformat(sb.describe(), indent=3, com
 
 print('Account metadata:', pprint.pformat(sb.Account.metadata(), indent=3, compact=True))
 print('Contact metadata:', pprint.pformat(sb.Contact.metadata(), indent=3, compact=True))
+print('Lead metadata:', pprint.pformat(sb.Lead.metadata(), indent=3, compact=True))
 print('Opportunity metadata:', pprint.pformat(sb.Opportunity.metadata(), indent=3, compact=True))
 print('Reservation metadata:', pprint.pformat(sb.Reservation__c.metadata(), indent=3, compact=True))
 print('Allocation metadata:', pprint.pformat(sb.Allocation__c.metadata(), indent=3, compact=True))
@@ -39,6 +40,11 @@ describe_txt = pprint.pformat(sb.Contact.describe(), indent=3, compact=True)
 with open('describe_contact.log', 'w') as f:
     f.write(describe_txt)
 print('Contact describe:', describe_txt)
+
+describe_txt = pprint.pformat(sb.Lead.describe(), indent=3, compact=True)
+with open('describe_lead.log', 'w') as f:
+    f.write(describe_txt)
+print('Lead describe:', describe_txt)
 
 describe_txt = pprint.pformat(sb.Opportunity.describe(), indent=3, compact=True)
 with open('describe_opportunity.log', 'w') as f:
@@ -270,12 +276,13 @@ print('SOSL ext refs custom object search for RCI ref:', c_with_rci)
 c_with_acu = sb.search("FIND {E624857}")
 print('SOSL custom field search for Acumen ref E624857:', c_with_acu)
 
-c_data2 = sb.Contact.get_by_custom_id('CD_CODE__c', 'E624857')
+c_data2 = sb.Contact.get_by_custom_id('AcumenClientRef__c', 'E624857')
 print('Contact data by Acumen ref. custom field:', c_data2)
 
 # ERROR 12/2018:
-# {'message': 'Provided external ID field does not exist or is not accessible: CD_CODE__pc', 'errorCode': 'NOT_FOUND'}
-# a_data2 = sb.Account.get_by_custom_id('CD_CODE__pc', 'E624857')
+# {'message': 'Provided external ID field does not exist or is not accessible:
+# .. AcumenClientRef__pc', 'errorCode': 'NOT_FOUND'}
+# a_data2 = sb.Account.get_by_custom_id('AcumenClientRef__pc', 'E624857')
 # print('Account data by Acumen ref. custom field:', a_data2)
 
 # the RCI_Reference__c custom field is NOT an External ID
@@ -460,10 +467,10 @@ if result['done'] and result['totalSize'] > 0:
     print("    Account Ids with main RCI Refs of last SOQL query:", ids)
 
 # next query results in error: Semi join sub-selects are not allowed with the 'OR' operator
-# result = sb.query_all("SELECT Id, CD_CODE__c, RCI_Reference__c FROM Contact WHERE RCI_Reference__c != NULL"
+# result = sb.query_all("SELECT Id, AcumenClientRef__c, RCI_Reference__c FROM Contact WHERE RCI_Reference__c != NULL"
 #                      " or Id in (SELECT Contact__c FROM External_Ref__c WHERE Name LIKE 'RCI%')")
 # .. do using different approach:
-result = sb.query_all("SELECT Id, CD_CODE__c, RCI_Reference__c,"
+result = sb.query_all("SELECT Id, AcumenClientRef__c, RCI_Reference__c,"
                       " (SELECT Reference_No_or_ID__c, Name FROM External_References__r)"
                       " FROM Contact"
                       " WHERE RCI_Reference__c != NULL")
@@ -476,7 +483,7 @@ if result['done'] and result['totalSize'] > 0:
 
 # .. same as above restricted to external RCI refs
 # .. and without duplicates (but SF doesn't support GROUP BY Reference_No_or_ID__c in sub-query)
-result = sb.query_all("SELECT Id, CD_CODE__c, RCI_Reference__c,"
+result = sb.query_all("SELECT Id, AcumenClientRef__c, RCI_Reference__c,"
                       " (SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE 'RCI%')"
                       " FROM Contact"
                       " WHERE RCI_Reference__c != NULL"
@@ -492,17 +499,21 @@ if result['done'] and result['totalSize'] > 0:
 
 
 # .. same as above but for Account
-result = sb.query_all("SELECT Id, CD_CODE__pc, RCI_Reference__pc,"
-                      " (SELECT Reference_No_or_ID__c FROM External_References__pr WHERE Name LIKE 'RCI%')"
+result = sb.query_all("SELECT Id, AcumenClientRef__pc, RCI_Reference__pc"
+                      ", (SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE 'RCI%')"
+                      ", (SELECT Reference_No_or_ID__c FROM External_References__pr WHERE Name LIKE 'RCI%')"
                       " FROM Account"
                       " WHERE RCI_Reference__pc != NULL"
                       )
 print('SOQL querying Account data with unique main or external RCI Ids', result)
 if result['done'] and result['totalSize'] > 0:
     records = result['records']  # list of OrderedDict with external ref no
+    ids = [_['Id'] + '=' + e['Reference_No_or_ID__c'] for _ in records if _['External_References__r']
+           for e in _['External_References__r']['records']]
+    print('    Ext Ref Ids of unique Contact/Account-related SOQL query:', ids)
     ids = [_['Id'] + '=' + e['Reference_No_or_ID__c'] for _ in records if _['External_References__pr']
            for e in _['External_References__pr']['records']]
-    print('    Ext Ref Ids of unique Account-related SOQL query:', ids)
+    print('    Ext Ref Ids of unique PersonAccount-related SOQL query:', ids)
 
 
 # SOQL query to include record type of Contact
@@ -686,7 +697,7 @@ SELECT Id, CheckIn__c,
  WHERE Account__r.Id != null and Reservation__r.Id != null and Reservation__r.Opportunity__c != null
 
 SELECT Account__r.Id, 
-       Account__r.CD_CODE__pc,  -- ==.AcumenClientRef__pc 
+       Account__r.AcumenClientRef__pc 
        Account__r.SihotGuestObjId__pc, 
        Account__r.FirstName, Account__r.LastName, Account__r.PersonEmail, Account__r.PersonHomePhone,
        Account__r.Language__pc, 
@@ -717,5 +728,15 @@ SELECT Account__r.Id, Account__r.PersonEmail, Account__r.PersonHomePhone, Accoun
    AND Reservation__r.Arrival__c = 2018-09-21
    AND Reservation__r.Adults__c = 2
    AND Account__r.FirstName LIKE 'John%'
+
+Detect Opportunities with more than one reservation associated (LIMIT not needed in full sandbox)
+
+SELECT Opportunity__c, COUNT(Id)
+  FROM Reservation__c
+WHERE Opportunity__r.RecordType.Name like 'Sihot%'
+GROUP BY Opportunity__c
+HAVING COUNT(Id) > 1
+ORDER BY COUNT(Id) desc
+LIMIT 1000
 
 '''

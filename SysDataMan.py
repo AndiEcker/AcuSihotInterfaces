@@ -362,7 +362,7 @@ def ac_pull_res_data():
     if error_msg:
         return error_msg
     for crow in acumen_req.recs:
-        # TODO: refactor to use AssSysData.sh_res_change_to_ass()
+        # TODO: refactor to use AssSysData.res_save()
         # determine orderer
         ord_cl_pk = asd.cl_ass_id_by_ac_id(crow['OC_CODE'])
         if ord_cl_pk is None:

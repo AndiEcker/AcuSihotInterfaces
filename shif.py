@@ -66,7 +66,7 @@ SH_CLIENT_MAP = \
         ('MATCHCODE', 'AcuId'),
         ('T-SALUTATION', 'Salutation'),  # also exists T-ADDRESS/T-PERSONAL-SALUTATION
         ('T-TITLE', 'Title'),
-        ('T-GUEST', 'GuestType'),
+        ('T-GUEST', 'GuestType', '1'),
         ('NAME-1', 'Surname'),
         ('NAME-2', 'Forename'),
         ('STREET', 'Street'),
@@ -105,26 +105,19 @@ SH_CLIENT_MAP = \
         ('MATCH-SM', 'SfId'),
         ('/ADD-DATA', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('L-EXTIDS/', None, None,
-         lambda f: f.ina(ACTION_SEARCH)),
-        ('EXTID/', None, None,
-         lambda f: not f.rfv('ExtRefs')),
-        ('EXTID' + ELEM_PATH_SEP + 'TYPE', ('ExtRefs', 0, 'Type'), None,
-         lambda f: not f.rfv('ExtRefs')),
-        ('EXTID' + ELEM_PATH_SEP + 'ID', ('ExtRefs', 0, 'Id'), None,
-         lambda f: not f.rfv('ExtRefs')),
-        ('/EXTID', None, None,
-         lambda f: not f.rfv('ExtRefs')),
+        # uncomment/implement ExtRefs after Sihot allowing multiple identical TYPE values (e.g. for RCI)
+        # ('L-EXTIDS/', None, None,
+        #  lambda f: f.ina(ACTION_SEARCH)),
         # ('EXTID/', None, None,
-        #  lambda f: not f.rfv('ExtRefs') or f.rfv('ExtRefs').count(', ') > 1),
-        # ('TYPE', 'ExtRefType2', None,
-        #  lambda f: not f.rfv('ExtRefs') or f.rfv('ExtRefs').count(', ') > 1),
-        # ('ID', 'ExtRefId2', None,
-        #  lambda f: not f.rfv('ExtRefs') or f.rfv('ExtRefs').count(', ') > 1),
+        #  lambda f: not f.rfv('ExtRefs')),
+        # ('EXTID' + ELEM_PATH_SEP + 'TYPE', ('ExtRefs', 0, 'Type'), None,
+        #  lambda f: not f.rfv('ExtRefs') or not f.srv()),
+        # ('EXTID' + ELEM_PATH_SEP + 'ID', ('ExtRefs', 0, 'Id'), None,
+        #  lambda f: not f.rfv('ExtRefs') or not f.srv()),
         # ('/EXTID', None, None,
-        #  lambda f: not f.rfv('ExtRefs') or f.rfv('ExtRefs').count(', ') > 1),
-        ('/L-EXTIDS', None, None,
-         lambda f: f.ina(ACTION_SEARCH)),
+        #  lambda f: not f.rfv('ExtRefs')),
+        # ('/L-EXTIDS', None, None,
+        #  lambda f: f.ina(ACTION_SEARCH)),
     )
 
 SH_CLIENT_PARSE_MAP = \
@@ -166,8 +159,7 @@ SH_RES_MAP = \
         # .. "Could not find a key identifier for the client (name, matchcode, ...)"
         # ('GUEST-ID', 'ShId', None,
         #  lambda f: not f.rfv('ShId')},
-        ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-ID', 'ShId', None,
-         lambda f: not f.val()),
+        ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-ID', 'ShId'),   # , None, lambda f: not f.val()),
         # GUEST-OBJID used in SS/RES-SEARCH responses instead of GUEST-ID for parsing orderer - always hide in xml build
         ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-OBJID', 'ShId'),
         ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'AcuId'),
@@ -1052,7 +1044,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         old_act = self.elem_fld_rec.action
         self.elem_fld_rec.action = self.action or ACTION_BUILD
 
-        field = recs = None
+        recs = None
         inner_xml = ''
         map_i = group_i = -1
         while True:
@@ -1078,8 +1070,9 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 #     val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO)   # use template val/cal
                 filter_fields = field.filter(system=SDI_SH, direction=FAD_ONTO)
             else:
-                if field is None:   # try to use field of last map item (especially for to get crx())
-                    field = next(iter(self.elem_fld_rec.values()))
+                # field recycling has buggy side effects because last map item can refer to different/changed record:
+                # if field is None:   # try to use field of last map item (especially for to get crx())
+                field = next(iter(self.elem_fld_rec.values()))
                 val = elem_map_item[MTI_FLD_VAL] if len(elem_map_item) > MTI_FLD_VAL else ''
                 if callable(val):
                     val = val(field)
