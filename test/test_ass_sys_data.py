@@ -33,9 +33,9 @@ res_test_rec = Record(fields=dict(AssId=None, AcuId='T963369', SfId=None, ShId=N
                                   GuestType='1',
                                   RinId=None,
                                   ResAssId=None,
-                                  ResHotelId='4', ResId=None, ResSubId=None, ResObjId=None, ResGdsNo='TEST-9876543333',
+                                  ResHotelId='3', ResId=None, ResSubId=None, ResObjId=None, ResGdsNo='TEST-9876543333',
                                   ResArrival=res_test_arr, ResDeparture=res_test_arr + datetime.timedelta(days=9),
-                                  ResRoomNo=None, ResRoomCat='STDO', ResPriceCat=None,
+                                  ResRoomNo=None, ResRoomCat='STDS', ResPriceCat=None,
                                   ResStatus='1',
                                   ResMktGroup='TO', ResMktSegment='TO',
                                   ResSource=None, ResGroupNo=None, ResMktGroupNN=None,
@@ -49,11 +49,11 @@ res_test_rec = Record(fields=dict(AssId=None, AcuId='T963369', SfId=None, ShId=N
                                   ResPersons=Records((Record(fields=dict(AssId=None, RoomSeq=None, PersSeq=None,
                                                                          SurName="Tester-Res-Surname", Forename="",
                                                                          DOB=datetime.date(year=1962, month=6, day=3),
-                                                                         GuestType='1A')),
+                                                                         PersonType='1A')),
                                                       Record(fields=dict(AssId=None, RoomSeq=None, PersSeq=None,
                                                                          SurName="", Forename="John-Boy",
                                                                          DOB=datetime.date(year=2019, month=1, day=3),
-                                                                         GuestType='2A')),
+                                                                         PersonType='2A')),
                                                       )),
                                   ResAction=None,
                                   ))
@@ -71,6 +71,12 @@ def test_tmp(console_app_env, ass_sys_data):
     print(rec.val('ResObjId'))
     assert rec.val('ResObjId')
     assert rec.val('ResObjId') == asd.reservations[0].val('ResObjId')
+    print(rec.val('ResId'))
+    assert rec.val('ResId')
+    assert rec.val('ResId') == asd.reservations[0].val('ResId')
+    print(rec.val('ResSubId'))
+    assert rec.val('ResSubId')
+    assert rec.val('ResSubId') == asd.reservations[0].val('ResSubId')
     # .. so now we can test the push to AssCache
     asd.ass_reservations_push()
     assert not asd.error_message
@@ -79,14 +85,19 @@ def test_tmp(console_app_env, ass_sys_data):
     assert rec.val('ResAssId') == asd.reservations[0].val('ResAssId')
 
     # added field_names arg for to only compare AssCache.clients fields
-    recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')))
+    recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')),
+                                             exclude_fields=['ResAssId', 'ResSource', 'ResAction', 'ResBoard',
+                                                             'ResPriceCat',
+                                                             'AssId', 'GuestType'])   # , 'Email', 'Phone', 'ShId'
     assert not asd.error_message
     print(recs)
-    assert len(recs) == 1 == len(asd.clients)
+    assert len(recs) == 1 == len(asd.reservations)
     print(dif)
-    assert not dif
+    clean_dif = [_ for _ in dif if not _.endswith('does not exist in the other Record')]
+    print(clean_dif)
+    assert not clean_dif
     # will always be False because asd.reservations has more fields than in AssCache:
-    # assert repr(recs) == repr(asd.clients)
+    # assert repr(recs) == repr(asd.reservations)
     print(repr(recs))
     print(repr(asd.clients))
 
@@ -127,7 +138,7 @@ class TestSysDataActions:
 
         asd.clients.clear()
         assert not asd.clients
-        asd.ass_clients_pull(field_names=['AssId', 'AcuId', 'ShId', 'Name'],
+        asd.ass_clients_pull(field_names=['AssId', 'AcuId', 'ShId', 'Surname', 'Forename'],
                              filter_records=lambda r: r.val('AssId') > 69)
         assert not asd.error_message
         assert cnt == len(asd.clients)
@@ -145,7 +156,8 @@ class TestSysDataActions:
         assert asd.clients
         cnt = len(asd.clients)
         for rec in asd.clients:
-            assert not rec.val('Name')
+            assert rec.val('AssId')
+            assert not rec.val('Surname')
 
         asd.clients.clear()
         assert not asd.clients
@@ -154,7 +166,8 @@ class TestSysDataActions:
         assert not asd.error_message
         assert cnt == len(asd.clients)
         for rec in asd.clients:
-            assert not rec.val('Name')
+            assert rec.val('AssId')
+            assert not rec.val('Surname')
 
     def test_ass_clients_push_count_equal(self, ass_sys_data):
         asd = ass_sys_data
@@ -204,14 +217,14 @@ class TestSysDataActions:
 
         # mark pulled test records for to be compared and deleted at the end
         for rec in asd.clients:
-            rec.set_val(('TST_TMP_' + rec.val('Name'))[:39], 'Name')
+            rec.set_val(('TST_TMP_' + rec.val('Surname'))[:39], 'Surname')
 
         asd.ass_clients_push(match_fields=['AcuId'])
         assert not asd.error_message
 
         # using where_group_order="substr(cl_ac_id, 1, 1) = 'F' and (SELECT list_agg(er_type || '=' || er_i==TOO COMPLEX
-        recs, dif = asd.ass_clients_compare(filter_records=lambda r: not r.val('Name')
-                                            or not r.val('Name').startswith('TST_TMP_'),
+        recs, dif = asd.ass_clients_compare(filter_records=lambda r: not r.val('Surname')
+                                            or not r.val('Surname').startswith('TST_TMP_'),
                                             match_fields=['AcuId'])
         assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
@@ -259,7 +272,7 @@ class TestSysDataActions:
         # added field_names arg for to only compare AssCache.clients fields
         recs, dif = asd.ass_clients_compare(chk_values=dict(cl_pk=rec.val('AssId'), cl_ac_id='T000369'),
                                             match_fields=('AcuId',),
-                                            field_names=[fn for sn, fn in ASS_CLIENT_MAP])
+                                            field_names=[fn for sn, fn, *_ in ASS_CLIENT_MAP])
         assert not asd.error_message
         assert len(recs) == 1 == len(asd.clients)
         assert not dif
@@ -304,9 +317,9 @@ class TestSysDataActions:
         assert rec.val('ShId') == asd.clients[0].val('ShId')
 
         # added field_names arg for to only compare AssCache.clients fields
-        recs, dif = asd.sh_clients_compare(chk_values=dict(OBJID=rec.val('ShId'), MATCHCODE='T000369'),
+        recs, dif = asd.sh_clients_compare(chk_values=dict(obj_id=rec.val('ShId'), matchcode='T000369'),
                                            match_fields=('AcuId',),
-                                           field_names=[fn for sn, fn, *_ in SH_CLIENT_MAP] + ['ExtRefs'])
+                                           field_names=[fn for sn, fn, *_ in SH_CLIENT_MAP])  # + ['ExtRefs'])
         assert not asd.error_message
         print(recs)
         assert len(recs) == 1 == len(asd.clients)
@@ -384,19 +397,20 @@ class TestAssSysDataSh:
     @staticmethod
     def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
         def _normalize_val(key, val):
-            val = val.capitalize() if 'Name' in key else val.lower() if 'Email' in key else None if val == '' else val
-            if isinstance(val, str) and len(val) > 40:
-                val = val[:40].strip()
+            val = val.capitalize() if 'name' in key else val.lower() if 'Email' in key else None if val == '' else val
+            if isinstance(val, str):
+                if len(val) > 40:
+                    val = val[:40]
+                val = val.strip()
             return val
         diffs = [(sk, _normalize_val(sk, sv), _normalize_val(sk, dict_with_compare_values.get(sk)))
                  for sk, sv in dict_with_compare_keys.items()
-                 if sk not in ('PersonAccountId', 'CurrencyIsoCode', 'Language__pc',
+                 if sk not in ('PersonAccountId', 'CurrencyIsoCode', 'Language__pc', 'RCI_Reference__pc',
                                'SihotGuestObjId__pc', 'PersonHomePhone', 'PersonMailingCountry')
                  and _normalize_val(sk, sv) != _normalize_val(sk, dict_with_compare_values.get(sk))]
         return diffs
 
     def test_sending_resv_of_today(self, salesforce_connection, console_app_env):
-        # whole week running 15 minutes on TEST system !!!!!
         sfc = salesforce_connection
         beg = datetime.date.today()
         end = beg + datetime.timedelta(days=1)
@@ -407,6 +421,9 @@ class TestAssSysDataSh:
         asd = AssSysData(console_app_env)
         errors = list()
         for idx, res in enumerate(ret):
+            # whole week running 15 minutes on TEST system, even one day needs some minutes - therefore limit to 99 res
+            # if idx >= 99:     # FINALLY removed because most of the time is used by res_search() (no LIMIT available)
+            #    break
             print("++++  Test reservation {}/{} creation; res={}".format(idx, res_count, res))
             res_fields = Record(system=SDI_ASS, direction=FAD_ONTO)
             send_err = asd.res_save(res, ass_res_rec=res_fields)

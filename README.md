@@ -175,7 +175,7 @@ reservation these fields need to be included in the send to Sihot:
 
 Field Name | Field Type | Description | Example Values |
 | --- | --- | --- | --- |
-| ResAccount | Integer | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
+| ResAccount | String | Sihot Payment Instructions | '0'=Guest Account, '1'=Group Account, '3'=Client Account |
 | ResAction | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
 | ResAdults | Integer | Number of Adults | 1, 2, 4 |
 | ResAllotmentNo | Integer | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
@@ -214,7 +214,7 @@ Field Name | Field Type | Description | Example Values |
 | ResPersons<n>FlightDepComment | String | Flight Departure Comment | 'Flight-no, Airport' |
 | ResPersons<n>FlightETD | Datetime | Flight estimated time of departure | 18-12-2022 18:19 |
 | ResPersons<n>Forename | String | Firstname of n-th occupant | John |
-| ResPersons<n>GuestType | String | GuestType of n-th occupant | '1A', '2B' |
+| ResPersons<n>PersonType | String | Age/Type of n-th occupant | '1A', '2B' |
 | ResPersons<n>Language | String | Language/Nationality code (ISO2/3) | 'DE', 'EN' |
 | ResPersons<n>Phone | String | Phone number of occupant | '00234568899822' |
 | ResPersons<n>RoomNo | String | Room number of occupant | 'A234' |
@@ -285,13 +285,12 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ExtRefs<n>Type | CR_TYPE+CD_RCI_REF+CD_SF_ID1 | - | EXTID.TYPE | er_type | 
 | ExtRefs<n>Id | CR_REF | - | EXTID.ID | er_id |
 | Fax | CD_FAX | Fax | FAX-1 | - |
-| Forename | CD_FNAM1 | FirstName | NAME-2 | rgc_firstname |
+| Forename | CD_FNAM1 | FirstName | NAME-2 | rgc_firstname+cl_name |
 | GuestType | - | - | T-GUEST | - |
 | HomePhone | CD_HTEL1 | PersonHomePhone | PHONE-1+PHONE+PERSON.PHONE | cl_phone+rgc_phone |
 | Language | CD_LGREF | Language__pc | T-LANGUAGE+LANG+PERSON.LANG | rgc_language |
 | MobilePhone | CD_MOBILE1 | PersonMobilePhone | MOBIL-1, MOBIL | - |
 | MobilePhoneB | - | - | MOBIL-2 | - |
-| Name | - | - | - | cl_name |
 | Nationality | CD_LGREF | Nationality__pc | T-NATION | - |
 | Password | CD_PASSWORD | - | INTERNET-PASSWORD | - |
 | POBox | CD_ADD12 | - | PO-BOX | - |
@@ -338,7 +337,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResPersons<n>FlightDepComment | - | - | PERSON.PICKUP-COMMENT-DEPARTURE | rgc_flight_dep_comment |
 | ResPersons<n>FlightETD | - | - | PERSON.PICKUP-TIME-DEPARTURE | rgc_flight_dep_time |
 | ResPersons<n>Forename | CD_FNAM1, CD_FNAM2 | - | PERSON.NAME2 | rgc_firstname |
-| ResPersons<n>GuestType | - | - | PERSON.PERS-TYPE | rgc_pers_type |
+| ResPersons<n>PersonType | - | - | PERSON.PERS-TYPE | rgc_pers_type |
 | ResPersons<n>Language | - | - | PERSON.LANG | rgc_language |
 | ResPersons<n>Phone | - | - | PERSON.PHONE | rgc_phone |
 | ResPersons<n>RoomNo | - | - | PERSON.RN | rgc_room_id |
@@ -366,7 +365,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ShId | CD_SIHOT_OBJID+OC_SIHOT_OBJID | SihotGuestObjId__pc | OBJID+GUEST-ID | cl_sh_id+rgr_order_cl_fk->cl_sh_id |
 | State | (CD_ADD13) | PersonMailingState | T-STATE | - |
 | Street | CD_ADD11 | PersonMailingStreet | STREET | - |
-| Surname | CD_SNAM1 | LastName | NAME-1 | rgc_surname |
+| Surname | CD_SNAM1 | LastName | NAME-1 | rgc_surname+cl_name |
 | Title | CD_TITL1 | PersonTitle | T-TITLE | - |
 | WorkPhone | CD_WTEL1+CD_WEXT1 | Work_Phone__pc | PHONE-2 | - |
 
@@ -462,9 +461,9 @@ actions a field will have the value from the system which last pull action inclu
 In most cases you want to restrict the synchronized/compared data from the source system to a small amount of 
 data-records and/or -fields and for to prevent heavy data and system loads.
 
-Filters and other input parameters can be specified directly after the system and record type of each Action command
-line option as a python dictionary literal of action arguments. The key is identifying the argument type, e.g. 
-sql clauses or a list of matching field names. The following dictionary keys are available:
+Filters and other input parameters can be specified as action arguments directly after the system and record type of
+each Action command line option as a python dictionary literal. The key is identifying the argument type, e.g. 
+sql clauses or a list of matching field names. The following action argument dictionary keys are available:
 
 * col_names
 * chk_values
@@ -472,6 +471,7 @@ sql clauses or a list of matching field names. The following dictionary keys are
 * bind_values
 * filter_records
 * field_names
+* exclude_fields
 * match_fields
 
 The `filter_records` key-word-argument specifies a callable that can filter/reduce the amount of data. E.g. in case of
@@ -487,13 +487,26 @@ The same can be achieved by using `filter_records` with:
 
     `--pull="AcuC{'filter_records': lambda r: not r.val('Email')}" --compare=SfC`
 
-Additionally you can restrict the synchronized/compared fields with the key-word-arguments `col_names` or `field_names`.
-If none of these are specified then SysDataMan is processing all [data fields](#supported-data-fields) supported by
-the system you are pulling from. So for to restrict the last example to only compare the client's email address and
-phone number you have to specify the following command line options:
+Additionally you can restrict the processed (synchronized/compared) fields with the key-word-arguments `col_names`, 
+`field_names` and/or `exclude_fields`. If none of these are specified then SysDataMan is processing all 
+[data fields](#supported-data-fields) supported by the system you are working with. So for to restrict the last 
+example to only compare the client's email address and phone number you have to specify the following 
+command line options:
 
-    `--pull="AcuC{'field_names': ['Email','Phone'], 'filter_records': lambda r: not r.val('Email')}" --compare=SfC`
+    `--pull="AcuC{'field_names': ['Email','Phone']}" --compare=SfC`
 
+The same action is done by specifying the system column names of the email and phone fields with the `col_names`
+action argument:
+
+    `--pull="AcuC{'col_names': ['CD_EMAIL','CD_HTEL1']}" --compare=SfC`
+
+In contrary the `exclude_fields` action argument is excluding fields from the action, so all the field names
+in this list will not be used for this action. E.g. the following command is pulling all fields apart from the
+email address:
+
+    `--pull="AcuC{'exclude_fields': ['Email']}" --compare=SfC`
+
+Please note that there is currently no action argument available to exclude fields using the system field names.
 
 #### Additional Matching Action Command Line Options
 

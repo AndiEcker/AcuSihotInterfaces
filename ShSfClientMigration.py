@@ -277,10 +277,9 @@ try:
         mkt_group = row_dict.val('ResMktGroup')
         for arr_index in arr_indexes:
             mail_changes = list()
-            email, mail_changed = correct_email(row_dict.val(arr_index, 'Email'), changed=False, removed=mail_changes)
+            email, mail_changed = correct_email(row_dict.val(arr_index, 'Email'), removed=mail_changes)
             phone_changes = list()
-            phone, phone_changed = correct_phone(row_dict.val(arr_index, 'HomePhone'),
-                                                 changed=False, removed=phone_changes)
+            phone, phone_changed = correct_phone(row_dict.val(arr_index, 'HomePhone'), removed=phone_changes)
             surname = row_dict.val(arr_index, 'Surname')
             forename = row_dict.val(arr_index, 'Forename')
             mkt_src = row_dict.val('ResMktSegment')

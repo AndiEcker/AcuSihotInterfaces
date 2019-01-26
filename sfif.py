@@ -97,7 +97,7 @@ SF_RES_MAP = (
     # ('', ('ResPersons', 0, 'AcuId')),
     # ('', ('ResPersons', 0, 'DOB')),
     # ('', ('ResPersons', 0, 'Forename')),
-    # ('', ('ResPersons', 0, 'GuestType')),
+    # ('', ('ResPersons', 0, 'PersonType')),
     # ('', ('ResPersons', 0, 'ShId')),
     # ('', ('ResPersons', 0, 'Surname')),
 )  # type: Tuple[Tuple[Any]]

@@ -77,7 +77,7 @@ for rec in clients:
                 break
         else:
             email_changes = list()
-            rec['Email'], email_changed = correct_email(rec['Email'], changed=False, removed=email_changes)
+            rec['Email'], email_changed = correct_email(rec['Email'], removed=email_changes)
             if email_changed:
                 add_log_msg("{Id} email {Email} corrected; removed 'index:char'={chg}".format(chg=email_changes, **rec))
                 update_in_sf = True

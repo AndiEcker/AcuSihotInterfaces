@@ -263,8 +263,8 @@ class ResResponse(SihotXmlParser):  # response xml parser for kernel or web inte
     def __init__(self, cae):
         super(ResResponse, self).__init__(cae)
         # web and kernel (guest/client and reservation) interface response elements
-        self._base_tags.append('GDSNO')
-        self.gdsno = None
+        self._base_tags.extend(['GDSNO', 'RES-NR', 'SUB-NR'])
+        self.gdsno = self.res_nr = self.sub_nr = None
 
 
 class AvailCatInfoResponse(SihotXmlParser):

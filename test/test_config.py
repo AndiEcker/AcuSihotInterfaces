@@ -4,7 +4,7 @@ class TestTourOps:
                             "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
-        ags = client_search.search_clients(client_type='7', field_names=('AcuId', 'ShId'))
+        ags = client_search.search_clients(guest_type='7', field_names=('AcuId', 'ShId'))
 
         failures = list()
         for row in rows:
@@ -24,7 +24,7 @@ class TestTourOps:
         assert not failures
 
     def test_missing_agencies_in_acumen(self, client_search, db_connected):
-        ags = client_search.search_clients(client_type='7', field_names=('AcuId', 'ShId'))
+        ags = client_search.search_clients(guest_type='7', field_names=('AcuId', 'ShId'))
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
                             "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
         rows = db_connected.fetch_all()

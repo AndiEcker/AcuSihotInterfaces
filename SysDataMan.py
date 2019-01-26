@@ -481,7 +481,7 @@ def ac_push_clients():
     :return: error message or "" in case of no errors.
     """
     ctx = 'acPushCl'
-    unsupported_fld_names = ['AssId', 'Name', 'ExtRefs', 'Products']
+    unsupported_fld_names = ['AssId', 'Surname', 'ExtRefs', 'Products']
     client_fld_names = rec_tpl.leaf_names(exclude_fields=unsupported_fld_names)
 
     match_fields = act_match_fields.get('C')

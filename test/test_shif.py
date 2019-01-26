@@ -174,14 +174,14 @@ class TestResSender:
                     ResNote='test short note', ResLongNote='test large TEC note',
                     ResBoard='RO',    # room only (no board/meal-plan)
                     ResMktSegment='TC', SIHOT_MKT_SEG='TC', ResRateSegment='TC',
-                    ResAccount=1,
+                    ResAccount='1',
                     ResSource='A', ResMktGroup='RS',
                     ResFlightArrComment='Flight1234',
                     ResAllotmentNo=123456,
                     ResAdults=2, ResChildren=2,
                     ResPersons0Surname='Tester', ResPersons0Forename='TestX', ResPersons0DOB=today - 1000 * wk1,
                     ResPersons1Surname='Tester', ResPersons1Forename='TestY',
-                    ResPersons2Surname='Tester', ResPersons2Forename='Chilly', ResPersons2GuestType='2B',
+                    ResPersons2Surname='Tester', ResPersons2Forename='Chilly', ResPersons2PersonType='2B',
                     ResPersons3Surname='', ResPersons3Forename='', ResPersons3DOB=today - 100 * wk1,
                     )
         rec = Record(fields=crow)
@@ -572,13 +572,13 @@ class TestClientFetchSearch:
         assert ret == create_test_client.objid
 
     def test_search_agencies(self, client_search):
-        ags = client_search.search_clients(client_type='7')     # 1=Guest, 7=Company (wrong documented in KERNEL PDF)
+        ags = client_search.search_clients(guest_type='7')     # 1=Guest, 7=Company (wrong documented in KERNEL PDF)
         assert [_ for _ in ags if _ == '69']
         assert [_ for _ in ags if _ == '100']
         assert [_ for _ in ags if _ == '20']
         assert [_ for _ in ags if _ == '27']
 
-        ags = client_search.search_clients(client_type='7', field_names=('AcuId', 'ShId'))
+        ags = client_search.search_clients(guest_type='7', field_names=('AcuId', 'ShId'))
         assert [_ for _ in ags if _['AcuId'] == 'OTS' and _['ShId'] == '69']
         assert [_ for _ in ags if _['AcuId'] == 'SF' and _['ShId'] == '100']
         assert [_ for _ in ags if _['AcuId'] == 'TCAG' and _['ShId'] == '20']

@@ -72,6 +72,7 @@ INSERT INTO hotels VALUES ('1', 'BHC');
 INSERT INTO hotels VALUES ('2', 'BHH');
 INSERT INTO hotels VALUES ('3', 'HMC');
 INSERT INTO hotels VALUES ('4', 'PBC');
+INSERT INTO hotels VALUES ('107', 'PMA');
 INSERT INTO hotels VALUES ('999', 'ANY');
 COMMIT;
 
@@ -221,8 +222,13 @@ SELECT audit.audit_table('res_group_clients');
 ---- CLIENT VIEWS
 -- view for AssSysDate.ass_clients_pull()/cl_fetch_list() extending clients with external refs and pt_group aggregates
 -- EXT_REF_TYPE_ID_SEP cannot be imported here from ass_sys_data.py, therefore using hard-coded literal '='
+-- Added DROP statement because postgres view cannot be recreated after column name change (cl_name -> cl_surname/...)
+DROP VIEW v_clients_refs_owns;
 CREATE OR REPLACE VIEW v_clients_refs_owns AS
-  SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id, cl_name, cl_email, cl_phone
+  SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id
+       -- , cl_name
+       , substr(cl_name, strpos(cl_name, ' ') + 1) as cl_surname, split_part(cl_name, ' ', 1) as cl_firstname
+       , cl_email, cl_phone
        , (select string_agg(er_type || '=' || er_id, ',') FROM external_refs WHERE er_cl_fk = cl_pk) as ext_refs
        , (select string_agg(pt_group, '') FROM client_products
           INNER JOIN products ON cp_pr_fk = pr_pk INNER JOIN product_types ON pr_pt_fk = pt_pk

@@ -7,7 +7,7 @@ from textwrap import wrap
 import pprint
 from typing import Union
 
-from sys_data_ids import (SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED,
+from sys_data_ids import (SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, FORE_SURNAME_SEP,
                           SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
 from ae_sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
@@ -82,8 +82,9 @@ SH_CLIENT_MAP = \
         ('COMMENT', 'Comment'),
         ('COMMUNICATION/', None, None,
          lambda f: f.ina(ACTION_SEARCH)),
-        ('T-STANDARD-CURRENCY', 'Currency', None,
-         lambda f: not f.val()),
+        # both currency fields are greyed out in Sihot UI (can be sent but does not be returned by Kernel interface)
+        # ('T-STANDARD-CURRENCY', 'Currency', None,     # alternatively use T-PROFORMA-CURRENCY
+        # lambda f: not f.val()),
         ('PHONE-1', 'HomePhone'),
         ('PHONE-2', 'WorkPhone'),
         ('FAX-1', 'Fax'),
@@ -140,7 +141,7 @@ SH_CLIENT_PARSE_MAP = \
 """
 SH_RES_MAP = \
     (
-        ('ID', 'ResHotelId'),  # ID elem or use [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
+        ('SIHOT-Document' + ELEM_PATH_SEP + 'ID', 'ResHotelId'),  # [RES-]HOTEL/IDLIST/MANDATOR-NO/EXTERNAL-SYSTEM-ID
         ('ARESLIST/', ),
         ('RESERVATION/', ),
         # ### main reservation info: orderer, status, external booking references, room/price category, ...
@@ -303,7 +304,7 @@ SH_RES_MAP = \
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'ROOM-PERS-SEQ', ('ResPersons', 0, 'RoomPersSeq'), None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'GuestType'), lambda f: '1A'
+        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'PersonType'), lambda f: '1A'
             if f.crx() < f.rfv('ResAdults') else '2B',
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'RN', ('ResPersons', 0, 'RoomNo'), None,
@@ -385,7 +386,7 @@ class ShInterface:
     @staticmethod
     def clients_match_field_init(match_fields):
         msg = "ShInterface.clients_match_field_init({}) expects ".format(match_fields)
-        supported_match_fields = [SH_DEF_SEARCH_FIELD, 'AcuId', 'Name', 'Email']
+        supported_match_fields = [SH_DEF_SEARCH_FIELD, 'AcuId', 'Surname', 'Email']
 
         if match_fields:
             match_field = match_fields[0]
@@ -843,20 +844,24 @@ class ClientFetch(SihotXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae, use_kernel=True)
 
-    def fetch_client(self, obj_id):
+    def fetch_client(self, obj_id, field_names=()):
         """ return Record with guest data OR str with error message in case of error.
         """
         self.beg_xml(operation_code='GUEST-GET')
         self.add_tag('GUEST-PROFILE', self.new_tag('OBJID', obj_id))
         self.end_xml()
 
+        rec = None
         err_msg = self.send_to_server(response_parser=ClientFromSihot(self.cae))
         if err_msg or not self.response:
             err_msg = "fetch_client({}) error='{}'".format(obj_id, err_msg or "response is empty")
-        elif len(self.response.client_list) > 1:
-            self.cae.dprint("fetch_client({}): multiple clients found".format(obj_id))
+        elif self.response.client_list:
+            recs = self.response.client_list
+            if len(recs) > 1:
+                self.cae.dprint("fetch_client({}): multiple clients found: {}".format(obj_id, recs))
+            rec = recs[0].copy(deepness=2, filter_fields=lambda f: f.name() not in field_names if field_names else None)
 
-        return err_msg or self.response.client_list[0]
+        return err_msg or rec
 
 
 class ClientSearch(SihotXmlBuilder):
@@ -864,9 +869,8 @@ class ClientSearch(SihotXmlBuilder):
         super().__init__(cae, use_kernel=True)
 
     def search_clients(self, matchcode='', exact_matchcode=True, name='', forename='', surname='',
-                       guest_no='', email='', client_type='', flags='FIND-ALSO-DELETED-GUESTS', order_by='', limit=0,
-                       field_names=('ShId', ), **kwargs
-                       ) -> Union[str, list, Records]:
+                       guest_no='', email='', guest_type='', flags='FIND-ALSO-DELETED-GUESTS', order_by='', limit=0,
+                       field_names=('ShId', ), **kwargs) -> Union[str, list, Records]:
         if kwargs:
             return "ClientSearch.search_clients() does not support the argument(s) {}".format(kwargs)
 
@@ -877,7 +881,7 @@ class ClientSearch(SihotXmlBuilder):
             if exact_matchcode:
                 flags += ';' + 'MATCH-EXACT-MATCHCODE'
         if name:
-            forename, surname = name.split(' ', maxsplit=1)
+            forename, surname = name.split(FORE_SURNAME_SEP, maxsplit=1)
         if forename:
             search_for += self.new_tag('NAME-2', forename)
         if surname:
@@ -887,8 +891,8 @@ class ClientSearch(SihotXmlBuilder):
             search_for += self.new_tag('GUEST-NR', guest_no)
         if email:
             search_for += self.new_tag('EMAIL-1', email)
-        if client_type:
-            search_for += self.new_tag('T-GUEST', client_type)
+        if guest_type:
+            search_for += self.new_tag('T-GUEST', guest_type)
 
         if flags:
             search_for += self.new_tag('FLAGS', flags)
@@ -1180,7 +1184,7 @@ class ResToSihot(FldMapXmlBuilder):
     def _add_sihot_configs(self, rec):
         mkt_seg = rec.val('ResMktSegment')
         hotel_id = rec.val('ResHotelId')
-        arr_date = rec.val('ResArrival')
+        arr_date = rec.val('ResArrival', system='', direction='')   # system/direction needed for to get date type
         today = datetime.datetime.today()
         cf = self.cae.get_config
 
@@ -1230,7 +1234,7 @@ class ResToSihot(FldMapXmlBuilder):
                               ResBooked=datetime.datetime.today(),
                               ResPriceCat=rec.val('ResRoomCat'),
                               ResBoard='RO',  # room only (no board/meal-plan)
-                              ResAccount=1,
+                              ResAccount='1',
                               ResSource='A',
                               ResRateSegment=rec.val('ResMktSegment'),
                               ResMktGroup='RS',
@@ -1280,8 +1284,19 @@ class ResToSihot(FldMapXmlBuilder):
         self._prepare_res_xml(rec)
 
         err_msg, warn_msg = self._handle_error(rec, self.send_to_server(response_parser=ResResponse(self.cae)))
-        if not err_msg and not rec.val('ResObjId'):
-            rec.set_val(self.response.objid, 'ResObjId')
+        if not err_msg:
+            if not rec.val('ResObjId'):
+                rec.set_val(self.response.objid, 'ResObjId')
+            elif rec.val('ResObjId') != self.response.objid:
+                warn_msg += "\n      Sihot ResObjId mismatch: {} != {}".format(rec.val('ResObjId'), self.response.objid)
+            if not rec.val('ResId'):
+                rec.set_val(self.response.res_nr, 'ResId')
+            elif rec.val('ResId') != self.response.res_nr:
+                warn_msg += "\n      Sihot ResId mismatch: {} != {}".format(rec.val('ResId'), self.response.res_nr)
+            if not rec.val('ResSubId'):
+                rec.set_val(self.response.sub_nr, 'ResSubId')
+            elif rec.val('ResSubId') != self.response.sub_nr:
+                warn_msg += "\n     Sihot ResSubId mismatch: {} != {}".format(rec.val('ResSubId'), self.response.sub_nr)
 
         return err_msg, warn_msg
 

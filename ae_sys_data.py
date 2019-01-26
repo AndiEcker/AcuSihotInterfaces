@@ -127,7 +127,7 @@ def correct_email(email, changed=False, removed=None):
     :return:            tuple of (possibly corrected email address, flag if email got changed/corrected)
     """
     if email is None:
-        return None, False
+        return "", False
 
     if removed is None:
         removed = list()
@@ -220,7 +220,7 @@ def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
     """
 
     if phone is None:
-        return None, False
+        return "", False
 
     if removed is None:
         removed = list()
@@ -1006,26 +1006,29 @@ class Record(OrderedDict):
                     or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields):
                 continue
             found_idx.append(idx_path)
-            if idx_path not in rec:
-                dif.append("Field {}={} does not exist in the other Record".format(idx_path, self.val(*idx_path)))
-            else:
-                this_val = self.compare_val(*idx_path)
+            this_val = self.compare_val(*idx_path)
+            if idx_path in rec:
                 that_val = rec.compare_val(*idx_path)
                 if this_val != that_val:
-                    dif.append("Different values in Field {}: {} != {}".format(idx_path, this_val, that_val))
+                    dif.append("Different values in Field {}: {}:{} != {}:{}"
+                               .format(idx_path, self.system, this_val, rec.system, that_val))
+            elif this_val:  # silently skip/ignore fields with empty value in this record if field doesn't exist in rec
+                dif.append("Field {}:{}={} does not exist in the other Record"
+                           .format(self.system, idx_path, self.val(*idx_path)))
 
         for idx_path in rec.leaf_indexes():
             if (field_names and idx_path[0] not in field_names and idx_path[-1] not in field_names) \
                     or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields):
                 continue
             if idx_path not in found_idx:
-                dif.append("Field {}={} does not exist in this Record".format(idx_path, rec.val(*idx_path)))
+                dif.append("Field {}:{}={} does not exist in this Record"
+                           .format(rec.system, idx_path, rec.val(*idx_path)))
 
         return dif
 
     def compare_val(self, *idx_path):
         idx = self.node_child(idx_path).name()
-        val = self.val(*idx_path)
+        val = self.val(*idx_path, system='', direction='')
 
         if isinstance(val, str):
             if idx == 'SfId':
@@ -1036,7 +1039,8 @@ class Record(OrderedDict):
                 val, _ = correct_email(val.lower())
             elif 'Phone' in idx:
                 val, _ = correct_phone(val)
-            if val is not None and len(val) > 39:
+            val = val.strip()
+            if len(val) > 39:
                 val = val[:39].strip()
             if val == '':
                 val = None
@@ -1398,7 +1402,7 @@ class Records(Values):              # type: List[Record]
             if match_key in records.match_index:
                 for p_rec in records.match_index[match_key]:
                     dif.extend(rec.compare_leafs(p_rec, field_names=field_names, exclude_fields=exclude_fields))
-                    if record_comparator:
+                    if callable(record_comparator):
                         dif.extend(record_comparator(rec, p_rec))
                 processed_match_keys.append(match_key)
             else:
@@ -1888,12 +1892,13 @@ class _Field:
         fld_root_idx = self.root_idx(system=system, direction=direction)
 
         recs = Records()
-        for rec_idx, rec_str in enumerate(str_val.split(rec_sep)):  # type: (int, str)
-            fields = dict()
-            for fld_idx, fld_val in enumerate(rec_str.split(fld_sep)):
-                fields[field_names[fld_idx]] = fld_val
-            recs.append(Record(fields=fields, root_rec=fld_root_rec, root_idx=fld_root_idx + (rec_idx, )))
-            set_current_index(recs, idx=rec_idx)
+        if str_val:
+            for rec_idx, rec_str in enumerate(str_val.split(rec_sep)):  # type: (int, str)
+                fields = dict()
+                for fld_idx, fld_val in enumerate(rec_str.split(fld_sep)):
+                    fields[field_names[fld_idx]] = fld_val
+                recs.append(Record(fields=fields, root_rec=fld_root_rec, root_idx=fld_root_idx + (rec_idx, )))
+                set_current_index(recs, idx=rec_idx)
         return recs
 
     def rec_field_val(self, *idx_path, system='', direction=''):

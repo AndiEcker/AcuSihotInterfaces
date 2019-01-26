@@ -3,7 +3,8 @@ create or replace view LOBBY.CLIENTS_REFS_OWNS
 select CD_CODE as CODE
      , nvl(CD_SF_ID1, (select max(MS_SF_ID) from T_ML, T_MS where ML_CODE = MS_MLREF and MS_SF_ID is not NULL and ML_CDREF = CD_CODE)) as SF_ID
      , to_char(CD_SIHOT_OBJID) as SH_ID
-     , CD_FNAM1 || ' ' || CD_SNAM1 as NAME
+     , CD_SNAM1 as SURNAME
+     , CD_FNAM1 as FORENAME
      , F_EMAIL_CLEANED(CD_EMAIL) as EMAIL
      , nvl(CD_HTEL1, nvl(CD_MOBILE1, CD_WTEL1 || CD_WEXT1)) as PHONE
      , CD_RCI_REF as RCI_REF
@@ -24,7 +25,8 @@ UNION ALL
 select CD_CODE || 'P2' as CODE
      , CD_SF_ID2 as SF_ID
      , to_char(CD_SIHOT_OBJID2) as SH_ID
-     , CD_FNAM2 || ' ' || CD_SNAM2 as NAME
+     , CD_SNAM2 as SURNAME
+     , CD_FNAM2 as FORENAME
      , F_EMAIL_CLEANED(CD_EMAIL, 1) as EMAIL
      , NULL as PHONE
      , NULL as RCI_REF

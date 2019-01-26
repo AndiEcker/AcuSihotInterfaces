@@ -9,7 +9,7 @@ class TestReservation:
     @staticmethod
     def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
         def _normalize_val(sv, sk):
-            return (sv.capitalize() if isinstance(sv, str) and 'Name' in sk else
+            return (sv.capitalize() if isinstance(sv, str) and 'name' in sk else
                     sv.lower() if isinstance(sv, str) and 'Email' in sk else
                     sv[:2] if isinstance(sv, str) and sk == 'Language__pc' else
                     # no longer needed since using Date.valueOf() in SF:

@@ -23,8 +23,8 @@ import json
 import csv
 from traceback import format_exc
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING, \
-    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
+    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, FORE_SURNAME_SEP
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
 from ae_notification import add_notification_options, init_notification
 from sxmlif import ClientToSihot, ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
@@ -492,7 +492,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             # add pax name(s) and person sequence number
             for i, full_name in enumerate(curr_cols[BKC_GUEST_NAMES].split(',')):
                 name_col = 'ResPerson' + str(i + 1) + 'Surname'
-                fore_name, last_name = full_name.strip().split(' ', maxsplit=1)
+                fore_name, last_name = full_name.strip().split(FORE_SURNAME_SEP, maxsplit=1)
                 if last_name:
                     row[name_col] = last_name
                 if fore_name:
@@ -625,11 +625,11 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = False
             cid = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
-            fields_dict = dict(name=curr_cols[RCI_GUEST_FORENAME] + ' ' + curr_cols[RCI_GUEST_SURNAME],
+            fields_dict = dict(name=curr_cols[RCI_GUEST_FORENAME] + FORE_SURNAME_SEP + curr_cols[RCI_GUEST_SURNAME],
                                email=curr_cols[RCI_GUEST_EMAIL], phone=curr_cols[RCI_GUEST_PHONE])
             curr_cols[RC_OCC_CLIENTS_IDX] = asd.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
             cid = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
-            fields_dict = dict(name=curr_cols[RCI_CLIENT_FORENAME] + ' ' + curr_cols[RCI_CLIENT_SURNAME],
+            fields_dict = dict(name=curr_cols[RCI_CLIENT_FORENAME] + FORE_SURNAME_SEP + curr_cols[RCI_CLIENT_SURNAME],
                                email=curr_cols[RCI_CLIENT_EMAIL])
             # sometimes resort is the "owner", e.g. 2429-55555/2429-99928 for HMC - in Sihot we are not hiding resort
             # if cid in client_refs_add_exclude:
@@ -752,8 +752,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         row['ResBoard'] = 'RO'
 
-        comments.append("Owner/Club=" + own_rci_ref + ' '
-                        + curr_cols[RCI_OWNER_SURNAME] + ', ' + curr_cols[RCI_OWNER_FORENAME])
+        comments.append("Owner/Club=" + own_rci_ref + ', '
+                        + curr_cols[RCI_OWNER_SURNAME] + FORE_SURNAME_SEP + curr_cols[RCI_OWNER_FORENAME])
 
         row['ResNote'] = ";".join(comments)
         row['ResLongNote'] = "|CR|".join(comments)
@@ -823,7 +823,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = True
             cid = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
-            fields_dict = dict(name=curr_cols[RCIP_GUEST_FORENAME] + ' ' + curr_cols[RCIP_GUEST_SURNAME],
+            fields_dict = dict(name=curr_cols[RCIP_GUEST_FORENAME] + FORE_SURNAME_SEP + curr_cols[RCIP_GUEST_SURNAME],
                                email=curr_cols[RCIP_GUEST_EMAIL], phone=curr_cols[RCIP_GUEST_PHONE])
             curr_cols[RC_OCC_CLIENTS_IDX] = asd.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
             curr_cols[RC_OWN_CLIENTS_IDX] = -1  # does not exists for points but needed for generic client send check

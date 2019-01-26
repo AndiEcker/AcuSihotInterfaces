@@ -64,3 +64,5 @@ _EXT_REF_TYPE_RCIP = 'RCIP'      # only used in Acumen
 # SQL column expression merging wrongly classified Acumen external ref types holding RCI member IDs
 AC_SQL_EXT_REF_TYPE = "CASE WHEN CR_TYPE in ('" + _EXT_REF_TYPE_RCIP + "', 'SPX')" \
     " then '" + EXT_REF_TYPE_RCI + "' else CR_TYPE end"
+
+FORE_SURNAME_SEP = ' '
