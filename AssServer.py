@@ -15,6 +15,7 @@
     1.0     Q&D fix for to not send any rental reservations.
     1.1     Fixed bug to not store rgr_sf_id into ass_cache.
     1.2     Changed DB-Locks to RLocks and added outer locking on transaction commit level.
+    1.3     Fixed bug to not overwrite rgr_sf_id.
 """
 import datetime
 import threading
@@ -29,7 +30,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder, ResFetch
 from shif import elem_value, guest_data
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '1.2'
+__version__ = '1.3'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -167,7 +168,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
                 .format(ppf(ass_changed_res), sh_id, ppf(sh_cl)), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sh_cl = dict()
 
-    rgr_sf_id = ass_changed_res['rgr_sf_id']
+    rgr_sf_id = ass_res_sf_id = ass_changed_res['rgr_sf_id']
     if not rgr_sf_id:
         # try to determine SF Reservation Opportunity ID from Acumen
         obj_id = ass_changed_res['rgr_obj_id']
@@ -197,7 +198,9 @@ def res_from_sh_to_sf(asd, ass_changed_res):
 
     # no errors on sync to SF, then set last sync timestamp
     chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
-    upd_values = dict(rgr_sf_id=rgr_sf_id, rgr_last_sync=ass_changed_res['rgr_last_sync'])
+    upd_values = dict(rgr_last_sync=ass_changed_res['rgr_last_sync'])
+    if not ass_res_sf_id and rgr_sf_id:
+        upd_values['rgr_sf_id'] = rgr_sf_id
     if not asd.rgr_upsert(upd_values, chk_values, commit=True):
         err_msg = "res_from_sh_to_sf({}): last reservation sync timestamp ass_cache update failed"\
                       .format(ppf(ass_changed_res)) + asd.error_message
