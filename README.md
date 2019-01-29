@@ -228,7 +228,7 @@ Field Name | Field Type | Description | Example Values |
 | ResRateSegment | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
 | ResRoomCat * | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
 | ResRoomNo | String | Sihot Room Number (optional) | '0426', 'A112' |
-| ResSource | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
+| ResSource | Char | Sihot Reservation Source | 'A'=Admin, 'S'=Sales, 'T'=Tour Operator |
 | ResStatus | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
 | ResVoucherNo | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
 
@@ -285,7 +285,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ExtRefs<n>Type | CR_TYPE+CD_RCI_REF+CD_SF_ID1 | - | EXTID.TYPE | er_type | 
 | ExtRefs<n>Id | CR_REF | - | EXTID.ID | er_id |
 | Fax | CD_FAX | Fax | FAX-1 | - |
-| Forename | CD_FNAM1 | FirstName | NAME-2 | rgc_firstname+cl_name |
+| Forename | CD_FNAM1 | FirstName | NAME-2 | cl_firstname+rgc_firstname |
 | GuestType | - | - | T-GUEST | - |
 | HomePhone | CD_HTEL1 | PersonHomePhone | PHONE-1+PHONE+PERSON.PHONE | cl_phone+rgc_phone |
 | Language | CD_LGREF | Language__pc | T-LANGUAGE+LANG+PERSON.LANG | rgc_language |
@@ -304,7 +304,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResAdults | RU_ADULTS | Adults__c | RESERVATION.NOPAX+NO | rgr_adults |
 | ResAllotmentNo | - | - | ALLOTMENT-EXT-NO(oc=RES)+ALLOTMENT-NO(oc=RES-SEARCH) | - | 
 | ResArrival | ARR_DATE | Arrival__c | RESERVATION.ARR | rgr_arrival |
-| ResBoard | RUL_SIHOT_PACK | - | PERSON.R | rgc_sh_pack |
+| ResBoard | RUL_SIHOT_PACK | - | PERSON.R | rgr_sh_pack |
 | ResBooked | RH_EXT_BOOK_DATE | - | RESERVATION.SALES-DATE | rgr_ext_book_day |
 | ResCheckIn | ARO_TIMEIN | CheckIn__c | ARR-TIME | rgr_time_in |
 | ResCheckOut | ARO_TIMEOUT | CheckOut__c | DEP-TIME | rgr_time_out |
@@ -315,7 +315,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResFlightArrComment | SH_EXT_REF | - | EXT-REFERENCE+PICKUP-COMMENT-ARRIVAL | rgc_flight_arr_comment |
 | ResFlightDepComment | - | - | PICKUP-COMMENT-DEPARTURE | rgc_flight_dep_comment |
 | ResGdsNo | SIHOT_GDSNO | GdsNo__c | GDSNO | rgr_gds_no |
-| ResGroupNo | SIHOT_LINK_GROUP | - | EXT-KEY | - |
+| ResGroupNo | SIHOT_LINK_GROUP | - | EXT-KEY | rgr_group_no |
 | ResHotelId | RUL_SIHOT_HOTEL | HotelId__c | ID, HN, RES-HOTEL | rgr_ho_fk |
 | ResId | - | Number__c | RES-NR | rgr_res_id |
 | ResLongNote | SIHOT_TEC_NOTE | - | RESERVATION.TEC-COMMENT | rgr_long_comment |
@@ -350,7 +350,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
 | ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgr_room_id, rgc_room_id |
 | ResSfId | - | ReservationOpportunityId, Opportunity.Id | NN2(?) | rgr_sf_id |
-| ResSource | RU_SOURCE | - | SOURCE | - |
+| ResSource | RU_SOURCE | - | SOURCE | rgr_source |
 | ResStatus | SH_RES_TYPE | Status__c | RESERVATION.RT | rgr_status |
 | ResSubId | - | SubNumber__c | SUB-NR | rgr_sub_id |
 | ResVoucherNo | RH_EXT_BOOK_REF | - | RESERVATION.VOUCHERNUMBER | rgr_ext_book_id |
@@ -365,7 +365,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ShId | CD_SIHOT_OBJID+OC_SIHOT_OBJID | SihotGuestObjId__pc | OBJID+GUEST-ID | cl_sh_id+rgr_order_cl_fk->cl_sh_id |
 | State | (CD_ADD13) | PersonMailingState | T-STATE | - |
 | Street | CD_ADD11 | PersonMailingStreet | STREET | - |
-| Surname | CD_SNAM1 | LastName | NAME-1 | rgc_surname+cl_name |
+| Surname | CD_SNAM1 | LastName | NAME-1 | cl_surname+rgc_surname |
 | Title | CD_TITL1 | PersonTitle | T-TITLE | - |
 | WorkPhone | CD_WTEL1+CD_WEXT1 | Work_Phone__pc | PHONE-2 | - |
 

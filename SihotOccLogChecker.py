@@ -348,7 +348,7 @@ try:
         err_msg = sys_db.connect()
         if not err_msg:
             err_msg = sys_db.select('res_groups LEFT OUTER JOIN clients ON rgr_order_cl_fk = cl_pk',
-                                    ['rgr_pk', 'cl_ac_id', 'cl_name',
+                                    ['rgr_pk', 'cl_ac_id', 'cl_surname', 'cl_firstname',
                                      'rgr_arrival::timestamp', 'rgr_departure::timestamp', "rgr_room_id",
                                      'rgr_status', 'rgr_time_in', 'rgr_time_out', 'rgr_mkt_segment', "rgr_gds_no",
                                      'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id'],

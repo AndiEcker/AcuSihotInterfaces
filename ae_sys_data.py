@@ -1107,7 +1107,7 @@ class Record(OrderedDict):
                 continue
             sys_name = field.name(system=system or self.system, direction=direction or self.direction,
                                   flex_sys_dir=False)
-            if col_names and sys_name not in col_names:
+            if not sys_name or (col_names and sys_name not in col_names):
                 continue
             fld_name = field.name()
             root_name = idx_path_field_name(idx_path)

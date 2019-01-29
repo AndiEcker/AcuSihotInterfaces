@@ -5,7 +5,7 @@ from traceback import format_exc
 from typing import Dict, Any, Union, Tuple
 
 from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
-                          EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI, FORE_SURNAME_SEP,
+                          EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
                           DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SF_SANDBOX,
                           ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS)
 from ae_sys_data import correct_email, correct_phone, Records, Record, FAD_FROM, FAD_ONTO, UsedSystems
@@ -40,10 +40,10 @@ ASS_CLIENT_MAP = (
     ('cl_ac_id', 'AcuId'),
     ('cl_sf_id', 'SfId'),
     ('cl_sh_id', 'ShId'),
-    ('cl_surname', 'Surname'),
-    ('cl_firstname', 'Forename'),
     ('cl_email', 'Email'),
     ('cl_phone', 'Phone'),
+    ('cl_surname', 'Surname'),
+    ('cl_firstname', 'Forename'),
     ('ext_refs', 'ExtRefs', None,
      None,
      lambda f, v: f.string_to_records(v, ('Type', 'Id'), rec_sep=EXT_REFS_SEP, fld_sep=EXT_REF_TYPE_ID_SEP)),
@@ -62,13 +62,16 @@ ASS_RES_MAP = (
     ('rgr_gds_no', 'ResGdsNo'),
     ('rgr_sf_id', 'ResSfId'),
     ('rgr_obj_id', 'ResObjId'),
+    ('rgr_status', 'ResStatus'),
+    ('rgr_source', 'ResSource'),
     ('rgr_arrival', 'ResArrival'),
     ('rgr_departure', 'ResDeparture'),
     ('rgr_room_id', 'ResRoomNo'),
     ('rgr_room_cat_id', 'ResRoomCat'),
-    ('rgr_status', 'ResStatus'),
     ('rgr_mkt_group', 'ResMktGroup'),
     ('rgr_mkt_segment', 'ResMktSegment'),
+    ('rgr_group_no', 'ResGroupNo'),
+    ('rgr_sh_pack', 'ResBoard'),
     ('rgr_adults', 'ResAdults'),
     ('rgr_children', 'ResChildren'),
     ('rgr_comment', 'ResNote'),
@@ -538,9 +541,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not save_fields:
             save_fields = [k for k in client_data.keys() if k not in ('AssId', 'ExtRefs', 'ProductTypes')]
         col_values = {f.name(system=SDI_ASS): f.val() for k, f in client_data.items()
-                      if k in save_fields and k not in ('AssId', 'ExtRefs', 'ProductTypes', 'Surname', 'Forename')}
-        if 'Surname' in save_fields or 'Forename' in save_fields:
-            col_values['cl_name'] = client_data.val('Forename') + FORE_SURNAME_SEP + client_data.val('Surname')
+                      if k in save_fields and k not in ('AssId', 'ExtRefs', 'ProductTypes')}
+        # cl_name got DEPRECATED in sys_data_generic branch and replaced by cl_firstname, cl_surname
+        # if 'Surname' in save_fields or 'Forename' in save_fields:
+        #    col_values['cl_name'] = client_data.val('Forename') + FORE_SURNAME_SEP + client_data.val('Surname')
         if not match_fields:
             # default to non-empty, external system references (k.endswith('Id') and len(k) <= 5 and k != 'RciId')
             match_fields = [k for k, f in client_data.items() if k in ('AssId', 'AcuId', 'SfId', 'ShId') and f.val()]

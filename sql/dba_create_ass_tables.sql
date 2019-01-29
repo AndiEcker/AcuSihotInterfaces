@@ -8,9 +8,11 @@ CREATE TABLE clients
                                             -- .. E127673D1P2, Z000020D1P2, I127633D1P2, but also refs like MAINTENANC
   cl_sf_id                VARCHAR(18),
   cl_sh_id                VARCHAR(15),
-  cl_name                 VARCHAR(81),
+  --cl_name                 VARCHAR(81),    -- deprecated - now using cl_surname/cl_firstname
   cl_email                VARCHAR(69),
   cl_phone                VARCHAR(42),
+  cl_surname              VARCHAR(42),
+  cl_firstname            VARCHAR(42),
   UNIQUE (cl_ac_id, cl_sf_id, cl_sh_id),
   CHECK (cl_ac_id is not NULL or cl_sf_id is not NULL or cl_sh_id is not NULL)
 );
@@ -101,7 +103,6 @@ SELECT audit.audit_table('res_inventories');
 
 -- reservations
 /* .. columns not included from V_ACU_RES_DATA/_UNSYNCED or indirectly included via clients table
-    RU_SOURCE	15	VARCHAR2 (1 Byte)	Y
     RO_RES_GROUP	17	VARCHAR2 (40 Byte)	Y
     RO_RES_CLASS	18	VARCHAR2 (12 Byte)	Y
     RO_SP_GROUP	19	VARCHAR2 (40 Byte)	Y
@@ -114,7 +115,6 @@ SELECT audit.audit_table('res_inventories');
     CD_RCI_REF	30	VARCHAR2 (10 Byte)	Y
     OC_SIHOT_OBJID	32	NUMBER	Y
     OC_CODE	33	VARCHAR2 (10 Byte)	Y
-    SIHOT_LINK_GROUP	35	VARCHAR2 (97 Byte)	Y
     SIHOT_RES_TYPE	38	CHAR (1 Byte)	Y
     RUL_*  (apart from RUL_SIHOT_PACK)
    .. columns not included from Esther's Reservation_Fields_Salesforce spreadsheet:
@@ -141,12 +141,15 @@ CREATE TABLE res_groups
   rgr_gds_no              VARCHAR(24),
   rgr_sf_id               VARCHAR(18),
   rgr_status              VARCHAR(3),
+  rgr_source              VARCHAR(3),   -- added later in branch sys_data_generic
   rgr_adults              INTEGER,
   rgr_children            INTEGER,
   rgr_arrival             DATE,
   rgr_departure           DATE,
   rgr_mkt_segment         VARCHAR(3),
   rgr_mkt_group           VARCHAR(3),
+  rgr_group_no            VARCHAR(96),  -- added later in branch sys_data_generic
+  rgr_sh_pack             VARCHAR(3),   -- added later in branch sys_data_generic
   rgr_room_id             VARCHAR(6),
   rgr_room_cat_id         VARCHAR(6),
   rgr_room_rate           VARCHAR(3),
@@ -227,7 +230,7 @@ DROP VIEW v_clients_refs_owns;
 CREATE OR REPLACE VIEW v_clients_refs_owns AS
   SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id
        -- , cl_name
-       , substr(cl_name, strpos(cl_name, ' ') + 1) as cl_surname, split_part(cl_name, ' ', 1) as cl_firstname
+       , cl_surname, cl_firstname
        , cl_email, cl_phone
        , (select string_agg(er_type || '=' || er_id, ',') FROM external_refs WHERE er_cl_fk = cl_pk) as ext_refs
        , (select string_agg(pt_group, '') FROM client_products
@@ -239,8 +242,9 @@ COMMENT ON VIEW v_clients_refs_owns IS 'clients extended by external_refs and ow
 
 -- the query for a view for to show clients with all duplicate external references is too slow (needs more than 24h)
 -- .. therefore providing a separate view for each type of external reference: Acumen, Sf, Sihot, Email, Phone
+DROP VIEW v_client_duplicates_ac;
 CREATE OR REPLACE VIEW v_client_duplicates_ac AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
@@ -252,8 +256,9 @@ CREATE OR REPLACE VIEW v_client_duplicates_ac AS
 
 COMMENT ON VIEW v_client_duplicates_ac IS 'clients with duplicate Acumen client reference';
 
+DROP VIEW v_client_duplicates_sf;
 CREATE OR REPLACE VIEW v_client_duplicates_sf AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
@@ -265,8 +270,9 @@ CREATE OR REPLACE VIEW v_client_duplicates_sf AS
 
 COMMENT ON VIEW v_client_duplicates_sf IS 'clients with duplicate Salesforce ID';
 
+DROP VIEW v_client_duplicates_sh;
 CREATE OR REPLACE VIEW v_client_duplicates_sh AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
@@ -278,8 +284,9 @@ CREATE OR REPLACE VIEW v_client_duplicates_sh AS
 
 COMMENT ON VIEW v_client_duplicates_sh IS 'clients with duplicate Sihot guest object ID';
 
+DROP VIEW v_client_duplicates_email;
 CREATE OR REPLACE VIEW v_client_duplicates_email AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
@@ -291,8 +298,9 @@ CREATE OR REPLACE VIEW v_client_duplicates_email AS
 
 COMMENT ON VIEW v_client_duplicates_email IS 'clients with duplicate email address';
 
+DROP VIEW v_client_duplicates_phone;
 CREATE OR REPLACE VIEW v_client_duplicates_phone AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END

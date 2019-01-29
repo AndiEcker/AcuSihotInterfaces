@@ -61,23 +61,29 @@ res_test_rec = Record(fields=dict(AssId=None, AcuId='T963369', SfId=None, ShId=N
 
 def test_tmp(console_app_env, ass_sys_data):
     asd = ass_sys_data
-    rec = res_test_rec.copy(deepness=-1)
-
-    asd.reservations.append(rec)
 
     # first need to be pushed/created within Sihot, because AssCache.res_groups needs non-empty the ResObjId/rgr_obj_id
+    r = res_test_rec.copy(deepness=-1)
+    asd.reservations.append(r)
     asd.sh_reservation_push()
     assert not asd.error_message
-    print(rec.val('ResObjId'))
-    assert rec.val('ResObjId')
-    assert rec.val('ResObjId') == asd.reservations[0].val('ResObjId')
-    print(rec.val('ResId'))
-    assert rec.val('ResId')
-    assert rec.val('ResId') == asd.reservations[0].val('ResId')
-    print(rec.val('ResSubId'))
-    assert rec.val('ResSubId')
-    assert rec.val('ResSubId') == asd.reservations[0].val('ResSubId')
-    # .. so now we can test the push to AssCache
+    print(r.val('ResObjId'))
+    assert r.val('ResObjId')
+    assert r.val('ResObjId') == asd.reservations[0].val('ResObjId')
+    print(r.val('ResId'))
+    assert r.val('ResId')
+    assert r.val('ResId') == asd.reservations[0].val('ResId')
+    print(r.val('ResSubId'))
+    assert r.val('ResSubId')
+    assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
+
+    # .. so now we can reset everything and put the Sihot res Ids for to test the push to AssCache
+    asd.reservations = Records()
+    rec = res_test_rec.copy(deepness=-1)
+    rec['ResId'] = r['ResId']
+    rec['ResSubId'] = r['ResSubId']
+    rec['ResObjId'] = r['ResObjId']
+    asd.reservations.append(rec)
     asd.ass_reservations_push()
     assert not asd.error_message
     print(rec.val('ResAssId'))
@@ -86,7 +92,7 @@ def test_tmp(console_app_env, ass_sys_data):
 
     # added field_names arg for to only compare AssCache.clients fields
     recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')),
-                                             exclude_fields=['ResAssId', 'ResSource', 'ResAction', 'ResBoard',
+                                             exclude_fields=['ResAssId', 'ResSource', 'ResAction',  # 'ResBoard',
                                                              'ResPriceCat',
                                                              'AssId', 'GuestType'])   # , 'Email', 'Phone', 'ShId'
     assert not asd.error_message
@@ -232,7 +238,7 @@ class TestSysDataActions:
         # TEARDOWN not working because AssInterface user has no rights to delete clients
         '''
         ass_conn = asd.connection(SDI_ASS)
-        ass_conn.execute_sql("DELETE FROM clients WHERE cl_name LIKE 'TST_TMP_%'")
+        ass_conn.execute_sql("DELETE FROM clients WHERE cl_surname LIKE 'TST_TMP_%'")
         assert not ass_conn.last_err_msg
         assert ass_conn.get_row_count() == cnt
         '''
