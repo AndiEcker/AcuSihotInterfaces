@@ -53,7 +53,7 @@ ASS_CLIENT_MAP = (
 
 # ass_cache res_groups/res_group_clients rec map
 ASS_RES_MAP = (
-    # ('rgr_pk', 'ResAssId'),
+    ('rgr_pk', 'ResAssId'),
     ('rgr_order_cl_fk', 'AssId'),
     ('rgr_used_ri_fk', 'RinId'),
     ('rgr_ho_fk', 'ResHotelId'),
@@ -83,22 +83,22 @@ ASS_RES_MAP = (
     ('rgr_room_rate', 'ResRateSegment'),
     ('rgr_payment_inst', 'ResAccount'),
     # ('rgc_rgr_fk', 'ResAssId'),
-    ('rgc_occup_cl_fk', ('ResPersons', 0, 'AssId')),
+    ('rgc_occup_cl_fk', ('ResPersons', 0, 'PersAssId')),
     ('rgc_room_seq', ('ResPersons', 0, 'RoomSeq')),
     ('rgc_pers_seq', ('ResPersons', 0, 'RoomPersSeq')),
-    ('rgc_surname', ('ResPersons', 0, 'Surname')),
-    ('rgc_firstname', ('ResPersons', 0, 'Forename')),
-    ('rgc_email', ('ResPersons', 0, 'Email')),
-    ('rgc_phone', ('ResPersons', 0, 'Phone')),
-    ('rgc_language', ('ResPersons', 0, 'Language')),
-    ('rgc_country', ('ResPersons', 0, 'Country')),
-    ('rgc_dob', ('ResPersons', 0, 'DOB')),
+    ('rgc_surname', ('ResPersons', 0, 'PersSurname')),
+    ('rgc_firstname', ('ResPersons', 0, 'PersForename')),
+    ('rgc_email', ('ResPersons', 0, 'PersEmail')),
+    ('rgc_phone', ('ResPersons', 0, 'PersPhone')),
+    ('rgc_language', ('ResPersons', 0, 'PersLanguage')),
+    ('rgc_country', ('ResPersons', 0, 'PersCountry')),
+    ('rgc_dob', ('ResPersons', 0, 'PersDOB')),
     ('rgc_auto_generated', ('ResPersons', 0, 'AutoGen')),
     ('rgc_flight_arr_comment', ('ResPersons', 0, 'FlightArrComment')),
     ('rgc_flight_arr_time', ('ResPersons', 0, 'FlightETA')),
     ('rgc_flight_dep_comment', ('ResPersons', 0, 'FlightDepComment')),
     ('rgc_flight_dep_time', ('ResPersons', 0, 'FlightETD')),
-    ('rgc_pers_type', ('ResPersons', 0, 'PersonType')),
+    ('rgc_pers_type', ('ResPersons', 0, 'TypeOfPerson')),
     ('rgc_sh_pack', ('ResPersons', 0, 'Board')),
     ('rgc_room_id', ('ResPersons', 0, 'RoomNo')),
 )  # type: Tuple[Tuple[Any]]
@@ -509,19 +509,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 self.error_message += ass_db.last_err_msg
         return rows
 
-    def cl_save(self, client_data, save_fields=None, match_fields=None, ass_idx=None,
+    def cl_save(self, client_data, field_names=None, match_fields=None, ass_idx=None,
                 commit=False, locked_cols=None):
         """
         save/upsert client data into AssCache database.
 
         :param client_data:     Record or dict of client data (using generic field names).
-        :param save_fields:     list of generic field names to be saved in AssCache db (def=all fields in client_data).
+        :param field_names:     list of generic field names to be saved in AssCache db (def=all fields in client_data).
         :param match_fields:    list of generic field names for rec match/lookup (def=non-empty AssId/AcuId/SfId/ShId).
         :param ass_idx:         self.clients list index of client record. If None/default then determine for to update
                                 the self.clients cache list.
         :param commit:          boolean flag if AssCache data changes should be committed (def=False).
         :param locked_cols:     list of generic field names where the cl_ column value will be preserved if not empty.
-        :return:                PKey of upserted AssCache client record or None on error (see self.error_message).
+        :return:                PKey/cl_pk of upserted AssCache client record or None on error (see self.error_message).
         """
         # normalize field values
         if not isinstance(client_data, Record):
@@ -530,20 +530,20 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         for k, f in client_data.items():
             if k == 'SfId' and f.val():
                 client_data[k] = ensure_long_id(f.val())
-            elif k == 'Email' and f.val():
+            elif 'Email' in k and f.val():
                 if self.email_is_valid(f.val()):
                     client_data[k], _ = correct_email(f.val())
                 else:
                     client_data[k] = ""
-            elif k == 'Phone' and f.val():
+            elif 'Phone' in k and f.val():
                 client_data[k], _ = correct_phone(f.val())
         # process and check parameters
-        if not save_fields:
-            save_fields = [k for k in client_data.keys() if k not in ('AssId', 'ExtRefs', 'ProductTypes')]
+        if not field_names:
+            field_names = [k for k in client_data.keys() if k not in ('AssId', 'ExtRefs', 'ProductTypes')]
         col_values = {f.name(system=SDI_ASS): f.val() for k, f in client_data.items()
-                      if k in save_fields and k not in ('AssId', 'ExtRefs', 'ProductTypes')}
+                      if k in field_names and k not in ('AssId', 'ExtRefs', 'ProductTypes')}
         # cl_name got DEPRECATED in sys_data_generic branch and replaced by cl_firstname, cl_surname
-        # if 'Surname' in save_fields or 'Forename' in save_fields:
+        # if 'Surname' in field_names or 'Forename' in field_names:
         #    col_values['cl_name'] = client_data.val('Forename') + FORE_SURNAME_SEP + client_data.val('Surname')
         if not match_fields:
             # default to non-empty, external system references (k.endswith('Id') and len(k) <= 5 and k != 'RciId')
@@ -551,16 +551,16 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         chk_values = {f.name(system=SDI_ASS): f.val() for k, f in client_data.items() if k in match_fields}
         if not col_values or not chk_values or not match_fields:
             self.error_message = "AssSysData.cl_save({}, {}, {}) called without data or with a non-empty system id"\
-                .format(ppf(client_data), save_fields, match_fields)
+                .format(ppf(client_data), field_names, match_fields)
             return None
         # if locked_cols is None:
-        #    locked_cols = save_fields.copy()        # uncomment for all fields being locked by default
+        #    locked_cols = field_names.copy()        # uncomment for all fields being locked by default
 
         ass_db = self.connection(SDI_ASS)
         if ass_db.upsert('clients', col_values, chk_values=chk_values, returning_column='cl_pk', commit=commit,
                          locked_cols=locked_cols):
             self.error_message = "cl_save({}, {}, {}) clients upsert error: "\
-                                     .format(ppf(client_data), save_fields, match_fields) + ass_db.last_err_msg
+                                     .format(ppf(client_data), field_names, match_fields) + ass_db.last_err_msg
             return None
 
         cl_pk = ass_db.fetch_value()
@@ -576,7 +576,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     break
         if ass_db.last_err_msg:
             self.error_message = "cl_save({}, {}, {}) external_refs upsert error: "\
-                                     .format(ppf(client_data), save_fields, match_fields) + ass_db.last_err_msg
+                                     .format(ppf(client_data), field_names, match_fields) + ass_db.last_err_msg
             return None
 
         if 'AssId' in client_data and not client_data.val('AssId'):
@@ -1056,34 +1056,33 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def res_idx_by_match_fields(self, match_fields, match_values):
         return list_idx_by_match_fields(self.reservations, match_fields, match_values)
 
-    def res_save(self, res_data, save_fields=(), match_fields=(), ass_idx=None, commit=False, last_change=None,
+    def res_save(self, res_rec, field_names=(), match_fields=(), ass_idx=None, commit=False, last_change=None,
                  ass_res_rec=None):
         """
         extract reservation data from sihot ResResponse Record and save it into the ass_cache database.
 
-        :param res_data:        Reservation data Record or dict.
-        :param save_fields:     list of generic field names to be saved in AssCache db (def=all fields in res_data).
-        :param match_fields:    list of generic field names for rec match/lookup (def=non-empty AssId/AcuId/SfId/ShId).
+        :param res_rec:         Reservation data Record.
+        :param field_names:     list of field names to be saved in AssCache db (def=all fields in res_data).
+        :param match_fields:    list of field names for rec lookup (def=non-empty ResHotelId/ResId/ResSubId/ResGdsNo).
         :param ass_idx:         Records index of self.reservations record. If None/default then determine for to update
                                 the self.reservations cache list.
         :param commit:          boolean flag if AssCache data changes should be committed (def=False).
         :param last_change:     if not None then set rgr_last_change column value to this passed timestamp.
         :param ass_res_rec:     pass in empty Record/dict for to return reservation data, including the
                                 person/rooming-list (in the Records value of ass_res_rec['ResPersons'])
-        :return:                ""/empty-string if ok and committed, else error message (and rolled-back).
+        :return:                primary key of saved reservation (rgr_pk) or None on error (see self.error_message).
         """
-        if not save_fields:
-            save_fields = [k for k in res_data.keys()]
-        col_values = {f.name(system=SDI_ASS): f.val() for k, f in res_data.items() if k in save_fields}
+        if not field_names:
+            field_names = res_rec.leaf_names()  # [k for k in res_rec.keys()]
         if not match_fields:
             # default to non-empty, system references
-            match_fields = [k for k, f in res_data.items()
+            match_fields = [k for k, f in res_rec.items()
                             if k in ('ResHotelId', 'ResId', 'ResSubId', 'ResGdsNo') and f.val()]
-        chk_values = {f.name(system=SDI_ASS): f.val() for k, f in res_data.items() if k in match_fields}
-        if not col_values or not chk_values or not match_fields:
+        chk_values = {f.name(system=SDI_ASS): f.val(system=SDI_ASS) for k, f in res_rec.items() if k in match_fields}
+        if not field_names or not chk_values or not match_fields:
             self.error_message = "AssSysData.res_save({}, {}, {}) called without data or with a non-empty system id"\
-                .format(ppf(res_data), save_fields, match_fields)
-            return self.error_message
+                .format(ppf(res_rec), field_names, match_fields)
+            return None
 
         if ass_res_rec is None:
             ass_res_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
@@ -1093,8 +1092,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # determine ordering client; RESCHANNELLIST element is situated within RESERVATION xml block
         ord_cl_pk = None
-        sh_id = res_data.val('ShId')         # was RESCHANNELLIST.RESCHANNEL.OBJID
-        ac_id = res_data.val('AcuId')        # was RESCHANNELLIST.RESCHANNEL.MATCHCODE
+        sh_id = res_rec.val('ShId')         # was RESCHANNELLIST.RESCHANNEL.OBJID
+        ac_id = res_rec.val('AcuId')        # was RESCHANNELLIST.RESCHANNEL.MATCHCODE
         if sh_id or ac_id:
             self._warn("res_save(): create new client record for orderer {}/{}".format(sh_id, ac_id),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -1106,7 +1105,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         ass_db = self.connection(SDI_ASS)
         ri_pk = None
-        apt_wk, year = self.sh_apt_wk_yr(res_data)
+        apt_wk, year = self.sh_apt_wk_yr(res_rec)
         if ass_db.select('res_inventories', ['ri_pk'], where_group_order="ri_pr_fk = :aw and ri_usage_year = :yr",
                          bind_vars=dict(aw=apt_wk, yr=year)):
             self._warn("res_save(): res inv {}~{} not found; (ignored) err={}"
@@ -1117,11 +1116,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if ass_db.last_err_msg:
                 self._warn("res_save(): res inv {}~{} error={}".format(apt_wk, year, ass_db.last_err_msg))
 
-        ho_id = res_data.val('ResHotelId')
+        ho_id = res_rec.val('ResHotelId')
         chk_values = dict(rgr_ho_fk=ho_id)
-        res_id = res_data.val('ResId')
-        sub_id = res_data.val('ResSubId')
-        gds_no = res_data.val('ResGdsNo')
+        res_id = res_rec.val('ResId')
+        sub_id = res_rec.val('ResSubId')
+        gds_no = res_rec.val('ResGdsNo')
         err_pre = "res_save() for res-no {}/{}@{} and GDS-No. {}: ".format(res_id, sub_id, ho_id, gds_no)
         if ho_id and res_id and sub_id:
             chk_values.update(rgr_res_id=res_id, rgr_sub_id=sub_id)
@@ -1129,19 +1128,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             chk_values.update(rgr_gds_no=gds_no)
         else:                                               # RETURN
             self.error_message = err_pre + "Incomplete reservation id"
-            return self.error_message
+            return None
 
-        sh_ass_rec = Record(system=SDI_ASS, direction=FAD_ONTO)\
-            .merge_leafs(res_data, system=SDI_SH, direction=FAD_FROM)\
-            .add_system_fields(ASS_CLIENT_MAP + ASS_RES_MAP, extend=False)\
-            .pull(SDI_SH)
+        sh_ass_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
+        sh_ass_rec.merge_leafs(res_rec, system=SDI_SH, direction=FAD_FROM)
+        sh_ass_rec.add_system_fields(ASS_CLIENT_MAP + ASS_RES_MAP, extend=False)
+        sh_ass_rec.pull(SDI_SH)
         sh_ass_rec.set_val(ord_cl_pk, 'AssId')
         sh_ass_rec.set_val(ri_pk, 'RinId')
         for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons', flex_sys_dir=True)):
-            sh_id = occ_rec.val('ShId')
-            ac_id = occ_rec.val('AcuId')
-            sn = occ_rec.val('Surname')
-            fn = occ_rec.val('Forename')
+            sh_id = occ_rec.val('PersShId')
+            ac_id = occ_rec.val('PersAcuId')
+            sn = occ_rec.val('PersSurname')
+            fn = occ_rec.val('PersForename')
             if sh_id is None and ac_id is None:
                 self._warn(err_pre + "ignoring unspecified {}. person: {} {}".format(pers_idx + 1, sn, fn),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -1155,24 +1154,34 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                 self.error_message = ""
             else:
-                occ_rec.set_val(occ_cl_pk, 'AssId')
+                occ_rec.set_val(occ_cl_pk, 'PersAssId')
         sh_ass_rec.push(SDI_ASS)
 
         with ass_db.thread_lock_init('res_groups', chk_values):
-            upd_values = sh_ass_rec.to_dict(filter_fields=lambda f: not f.name(system=SDI_ASS, direction=FAD_ONTO)
-                                            .startswith('rgr_'),
-                                            system=SDI_ASS, direction=FAD_ONTO)
+            def _filter_rgr_cols(f):
+                fld_name = f.name()
+                sys_name = f.name(system=SDI_ASS, direction=FAD_ONTO)
+                return not sys_name.startswith('rgr_') or fld_name not in field_names
+
+            def _filter_rgc_cols(f):
+                fld_name = f.name()
+                sys_name = f.name(system=SDI_ASS, direction=FAD_ONTO)
+                return not sys_name.startswith('rgc_') or fld_name not in field_names
+
+            upd_values = sh_ass_rec.to_dict(filter_fields=_filter_rgr_cols, system=SDI_ASS, direction=FAD_ONTO)
             if last_change:
                 upd_values.update(rgr_last_change=datetime.datetime.now())
 
             rgr_pk = self.rgr_upsert(upd_values, chk_values=chk_values, commit=commit, returning_column='rgr_pk')
             if not self.error_message:
                 ass_res_rec.update(upd_values)
-                ass_res_rec['rgr_pk'] = rgr_pk
+                ass_res_rec['ResAssId'] = rgr_pk
+                next_rs = next_ps = '0'
                 for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons', flex_sys_dir=True)):
-                    room_seq, pers_seq = occ_rec.val('RoomSeq') or '0', occ_rec.val('RoomPersSeq') or '0'
+                    room_seq, pers_seq = occ_rec.val('RoomSeq') or next_rs, occ_rec.val('RoomPersSeq') or next_ps
                     chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(room_seq), rgc_pers_seq=int(pers_seq))
-                    upd_values = occ_rec.to_dict(system=SDI_ASS, direction=FAD_ONTO)
+                    occ_rec.update(chk_values)
+                    upd_values = occ_rec.to_dict(filter_fields=_filter_rgc_cols, system=SDI_ASS, direction=FAD_ONTO)
                     if self.rgc_upsert(upd_values, chk_values=chk_values, commit=commit):
                         break
                     if is_rec:
@@ -1181,24 +1190,25 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                         if 'ResPersons' not in ass_res_rec:
                             ass_res_rec['ResPersons'] = list()
                         ass_res_rec['ResPersons'].append(upd_values)
+                    next_rs, next_ps = room_seq, str(int(pers_seq) + 1) if room_seq == next_rs else '0'
 
             if self.error_message:
                 ass_db.rollback()
-            else:
-                ass_db.commit()
+                return None
+            ass_db.commit()
 
-        if 'ResAssId' in res_data and not res_data.val('ResAssId'):
-            res_data.set_val(rgr_pk, 'ResAssId')
+        if 'ResAssId' in res_rec and not res_rec.val('ResAssId'):
+            res_rec.set_val(rgr_pk, 'ResAssId')
         if ass_idx is None:
-            ass_idx = self.res_idx_by_match_fields(match_fields, res_data.match_key(match_fields))
+            ass_idx = self.res_idx_by_match_fields(match_fields, res_rec.match_key(match_fields))
         if ass_idx is None:
-            rec = res_data.copy().set_env(system=SDI_ASS, direction=FAD_ONTO)
+            rec = res_rec.copy().set_env(system=SDI_ASS, direction=FAD_ONTO)
             rec.set_val(rgr_pk, 'ResAssId')
             self.reservations.append(rec)
         else:
             self.reservations[ass_idx].set_val(rgr_pk, 'ResAssId')
 
-        return self.error_message
+        return rgr_pk
 
     # =================  RCI data conversion  ==================================================
 
@@ -1690,7 +1700,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 field_names = rec.leaf_names(system=SDI_ASS, direction=FAD_ONTO,
                                              field_names=field_names, exclude_fields=exclude_fields,
                                              col_names=rec.sys_name_field_map.keys(), name_type='f')
-                if not self.cl_save(rec, save_fields=field_names, match_fields=match_fields, commit=True):
+                if not self.cl_save(rec, field_names=field_names, match_fields=match_fields, commit=True):
                     msg = "ass_clients_push() error: '{}'".format(self.error_message)
                     if self.cae.get_option('breakOnError'):
                         self._err(msg)
@@ -1792,7 +1802,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 field_names = rec.leaf_names(system=SDI_ASS, direction=FAD_ONTO,
                                              field_names=field_names, exclude_fields=exclude_fields,
                                              col_names=rec.sys_name_field_map.keys(), name_type='f')
-                if self.res_save(rec, save_fields=field_names, match_fields=match_fields, commit=True):
+                if not self.res_save(rec, field_names=field_names, match_fields=match_fields, commit=True):
                     msg = "ass_reservations_push() error: '{}'".format(self.error_message)
                     if self.cae.get_option('breakOnError'):
                         self._err(msg)
@@ -2070,7 +2080,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     ignored_errors += 1
                     self._warn("Ignoring/skipping " + err, importance=3)
                 elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    self._warn("sf_reservations_push(): reservation {} upserted; client=[}; rec={}"
+                    self._warn("sf_reservations_push(): reservation {} upserted; client={}; rec={}"
                                .format(res_id, cl_id, rec))
         if ignored_errors:
             self._err("Finished SF reservation push with {} skipped/ignored errors".format(ignored_errors))

@@ -125,7 +125,7 @@ if ho_id and gds_no:
 
     uprint("####  ResSearch .............  ####")
     rfs = ResSearch(cae)
-    ret = rfs.search_res(hotel_id=ho_id, gdsno=gds_no)
+    ret = rfs.search_res(hotel_id=ho_id, gds_no=gds_no)
     if not isinstance(ret, list):
         uprint("***     ResSearch error", ret)
     else:

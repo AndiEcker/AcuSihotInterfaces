@@ -128,10 +128,12 @@ class GenericDB:
 
         if chk_values:
             extra_where = " AND ".join([k + " = :" + k for k in chk_values.keys()])
-            if where_group_order:
-                where_group_order = "(" + extra_where + ") AND " + where_group_order
-            else:       # if extra_where:
+            if not where_group_order:
                 where_group_order = extra_where
+            elif where_group_order.upper().startswith(('GROUP BY', 'ORDER BY')):
+                where_group_order = extra_where + " " + where_group_order
+            else:
+                where_group_order = "(" + extra_where + ") AND " + where_group_order
             if bind_vars:
                 bind_vars.update(chk_values)
             else:

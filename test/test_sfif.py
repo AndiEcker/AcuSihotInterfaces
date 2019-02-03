@@ -9,7 +9,7 @@ class TestReservation:
     @staticmethod
     def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
         def _normalize_val(sv, sk):
-            return (sv.capitalize() if isinstance(sv, str) and 'name' in sk else
+            return (sv.capitalize() if isinstance(sv, str) and 'name' in sk.lower() else
                     sv.lower() if isinstance(sv, str) and 'Email' in sk else
                     sv[:2] if isinstance(sv, str) and sk == 'Language__pc' else
                     # no longer needed since using Date.valueOf() in SF:
@@ -25,15 +25,14 @@ class TestReservation:
 
     def test_sf_apexecute_core_res_upsert(self, salesforce_connection):
         sfc = salesforce_connection
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update(FirstName='First-Test-Name', LastName='Last-Test-Name', Language__pc='EN',
-                    PersonEmail='TestName@test.tst', AcumenClientRefpc='T987654',
-                    Arrival__c='2018-03-01',  # no longer needed since using Date.valueOf() in SF: + SF_DATE_ZERO_HOURS
-                    Departure__c='2018-03-08',  # no longer needed since using Date.valueOf(): + SF_DATE_ZERO_HOURS
-                    HotelId__c='4', Number__c='12345', SubNumber__c='1', Status__c='1',
-                    Adults__c=2, Children__c=1, Note__c="core test no checks",
-                    )
+        rec = sfc.cl_res_rec_onto.copy(deepness=-1)
+        rec.update(FirstName='First-Test-Name', LastName='Last-Test-Name', Language__pc='EN',
+                   PersonEmail='TestName@test.tst', AcumenClientRefpc='T987654',
+                   Arrival__c='2018-03-01',  # no longer needed since using Date.valueOf() in SF: + SF_DATE_ZERO_HOURS
+                   Departure__c='2018-03-08',  # no longer needed since using Date.valueOf(): + SF_DATE_ZERO_HOURS
+                   HotelId__c='4', Number__c='12345', SubNumber__c='1', Status__c='1',
+                   Adults__c=2, Children__c=1, Note__c="core test no checks",
+                   )
         # returns (PersonAccountId, ReservationOpportunityId, ErrorMessage)
         sf_id, res_sf_id, err_msg = sfc.res_upsert(rec, push_onto=False)
         print(sf_id, res_sf_id, err_msg)
@@ -51,16 +50,15 @@ class TestReservation:
 
         arr_date = datetime.date.today() + datetime.timedelta(days=15)
         dep_date = arr_date + datetime.timedelta(days=7)
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update({'Surname': 'LstNam111', 'Forename': 'FstNam111',
-                     'ShId': '11123456711', 'AcuId': 'TST1111',
-                     'Language': 'EN', 'Country': 'GB',
-                     'Email': 't11111@ts11111.tst', 'Phone': '0049111111111',
-                     'ResHotelId': '1', 'ResId': '111111', 'ResSubId': '11',
-                     'ResArrival': arr_date, 'ResDeparture': dep_date,
-                     'ResAdults': 1, 'ResChildren': 0,
-                     })
+        rec = sfc.cl_res_rec_onto.copy(deepness=-1)
+        rec.update({'Surname': 'LstNam111', 'Forename': 'FstNam111',
+                    'ShId': '11123456711', 'AcuId': 'TST1111',
+                    'Language': 'EN', 'Country': 'GB',
+                    'Email': 't11111@ts11111.tst', 'Phone': '0049111111111',
+                    'ResHotelId': '1', 'ResId': '111111', 'ResSubId': '11',
+                    'ResArrival': arr_date, 'ResDeparture': dep_date,
+                    'ResAdults': 1, 'ResChildren': 0,
+                    })
         sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
         print(sf_id, res_sf_id, err_msg)
         assert not err_msg
@@ -76,16 +74,15 @@ class TestReservation:
 
         arr_date = datetime.date.today() + datetime.timedelta(days=18)
         dep_date = arr_date + datetime.timedelta(days=7)
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update({'Surname': 'LNam222', 'Forename': 'FNam222',
-                     'ShId': '2222222', 'AcuId': 'TST2222',
-                     'Language': 'EN', 'Country': 'GB',
-                     'Email': 't222@ts2222.tst', 'Phone': '00492222222',
-                     'ResHotelId': '999', 'ResId': '22222', 'ResSubId': '2',
-                     'ResArrival': arr_date, 'ResDeparture': dep_date,
-                     'ResAdults': 2, 'ResChildren': 0,
-                     })
+        rec = sfc.cl_res_rec_onto.copy(deepness=-1)
+        rec.update({'Surname': 'LNam222', 'Forename': 'FNam222',
+                    'ShId': '2222222', 'AcuId': 'TST2222',
+                    'Language': 'EN', 'Country': 'GB',
+                    'Email': 't222@ts2222.tst', 'Phone': '00492222222',
+                    'ResHotelId': '999', 'ResId': '22222', 'ResSubId': '2',
+                    'ResArrival': arr_date, 'ResDeparture': dep_date,
+                    'ResAdults': 2, 'ResChildren': 0,
+                    })
         sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
         print(sf_id, res_sf_id, err_msg)
         assert not err_msg
@@ -104,16 +101,15 @@ class TestReservation:
 
         arr_date = datetime.date.today() + datetime.timedelta(days=4)
         dep_date = arr_date + datetime.timedelta(days=7)
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update({'Surname': 'Lästñame', 'Forename': 'FírstNümé',
-                     'ShId': '55423456755', 'AcuId': 'TST5555',
-                     'Language': 'FR', 'Country': 'FR',
-                     'Email': 't5555@ts5555.tst', 'Phone': '0049555555555',
-                     'ResHotelId': '1', 'ResId': '55555', 'ResSubId': '5',
-                     'ResArrival': arr_date, 'ResDeparture': dep_date,
-                     'ResAdults': 1, 'ResChildren': 0,
-                     })
+        rec = sfc.cl_res_rec_onto.copy(deepness=-1)
+        rec.update({'Surname': 'Lästñame', 'Forename': 'FírstNümé',
+                    'ShId': '55423456755', 'AcuId': 'TST5555',
+                    'Language': 'FR', 'Country': 'FR',
+                    'Email': 't5555@ts5555.tst', 'Phone': '0049555555555',
+                    'ResHotelId': '1', 'ResId': '55555', 'ResSubId': '5',
+                    'ResArrival': arr_date, 'ResDeparture': dep_date,
+                    'ResAdults': 1, 'ResChildren': 0,
+                    })
         sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
         print(sf_id, res_sf_id, err_msg)
         assert not err_msg
@@ -129,13 +125,12 @@ class TestReservation:
 
         arr_date = (datetime.datetime.now() + datetime.timedelta(days=9)).replace(microsecond=0, tzinfo=None)
         dep_date = (arr_date + datetime.timedelta(days=7)).replace(microsecond=0, tzinfo=None)
-        rec = sfc.cl_res_rec_onto\
-            .copy(deepness=-1)\
-            .update({'Surname': 'Surname_RC_test', 'Forename': 'Forename_RC_test',
-                     'ResHotelId': '999', 'ResId': '999999', 'ResSubId': '9', 'ResStatus': '1',
-                     'ResArrival': arr_date, 'ResDeparture': dep_date,
-                     'ResAdults': 1, 'ResChildren': 0,
-                     })
+        rec = sfc.cl_res_rec_onto.copy(deepness=-1)
+        rec.update({'Surname': 'Surname_RC_test', 'Forename': 'Forename_RC_test',
+                    'ResHotelId': '999', 'ResId': '999999', 'ResSubId': '9', 'ResStatus': '1',
+                    'ResArrival': arr_date, 'ResDeparture': dep_date,
+                    'ResAdults': 1, 'ResChildren': 0,
+                    })
         cl_sf_id, res_sf_id, err_msg = sfc.res_upsert(rec)
         assert not err_msg
         assert cl_sf_id
@@ -392,9 +387,8 @@ class TestClient:
     def test_cl_upsert_lead(self, salesforce_connection):
         sfc = salesforce_connection
 
-        rec = Record(fields=dict(Forename='testy', Surname='Tst Lead'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
+        rec = Record(fields=dict(Forename='testy', Surname='Tst Lead'), system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Lead')
         assert not err
         assert sf_id
@@ -411,8 +405,8 @@ class TestClient:
         sfc = salesforce_connection
 
         rec = Record(fields=dict(Forename='testy', Surname='Tst Contact'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
+                     system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Contact')
         assert not err
         assert sf_id
@@ -429,8 +423,8 @@ class TestClient:
         sfc = salesforce_connection
 
         rec = Record(fields=dict(Forename='testy', Surname='Tst Account'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
+                     system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id
@@ -439,9 +433,8 @@ class TestClient:
         assert sfc.cl_field_data('Forename', sf_id) == 'Testy'  # SF is capitalizing names
         assert sfc.cl_field_data('Surname', sf_id) == 'Tst Account'
 
-        rec = Record(fields=dict(SfId=sf_id, Forename='Chg_FNam'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ))
+        rec = Record(fields=dict(SfId=sf_id, Forename='Chg_FNam'), system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ))
         sf_upd_id, err, msg = sfc.cl_upsert(rec)
         assert not err
         assert sf_upd_id == sf_id
@@ -472,8 +465,8 @@ class TestClient:
         sfc = salesforce_connection
 
         rec = Record(fields=dict(Forename='testy', Surname='Test Ext Ref'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
+                     system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id
@@ -560,8 +553,8 @@ class TestClient:
         rec = Record(fields=dict(   # AssId='123123', NOT IMPLEMENTED IN SF
                                  AcuId='T000123', ShId='999123', Email='cl@fld.data',
                                  Forename='testy', Surname='Test Field Data Fetch'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields(SF_CLIENT_MAPS['Account'])
+                     system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields(SF_CLIENT_MAPS['Account'])
         rec.pop('SfId')     # remove SfId (Id SF field) for to prevent SF create Account error
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
@@ -588,15 +581,14 @@ class TestClient:
             assert msg
 
         rec = Record(fields=dict(Forename='testy', Surname='Test Main RCI Ref', RciId='5-987654321'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname'), ('RCI_Reference__pc', 'RciId')))
+                     system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname'), ('RCI_Reference__pc', 'RciId')))
         sf_id_main, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id_main
 
-        rec = Record(fields=dict(Forename='testy', Surname='Test RCI Ref'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
+        rec = Record(fields=dict(Forename='testy', Surname='Test RCI Ref'), system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id
@@ -622,15 +614,14 @@ class TestClient:
         sfc = salesforce_connection
 
         rec = Record(fields=dict(Forename='testy', Surname='Test Cl main with RCI Ref', RciId='X-678901234'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname'), ('RCI_Reference__pc', 'RciId')))
+                     system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname'), ('RCI_Reference__pc', 'RciId')))
         sf_id_main, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id_main
 
-        rec = Record(fields=dict(Forename='testy', Surname='Test Cl with RCI Ref'),
-                     system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
+        rec = Record(fields=dict(Forename='testy', Surname='Test Cl with RCI Ref'), system=SDI_SF, direction=FAD_ONTO)
+        rec.add_system_fields((('FirstName', 'Forename'), ('LastName', 'Surname')))
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         sf_er_id, err, msg = sfc.cl_ext_ref_upsert(sf_id, 'RCI', 'Y-987654321')

@@ -12,7 +12,8 @@ from sys_data_ids import (SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, FOR
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
 from ae_sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
                          FAD_FROM, FAD_ONTO, LIST_TYPES,
-                         Record, Records, Value, current_index, set_current_index, field_name_idx_path)
+                         Record, Records, Value, current_index, set_current_index, field_name_idx_path, FAT_IDX,
+                         ALL_FIELDS, CALLABLE_SUFFIX)
 from ae_console_app import uprint, full_stack_trace
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
@@ -85,7 +86,7 @@ SH_CLIENT_MAP = \
         # both currency fields are greyed out in Sihot UI (can be sent but does not be returned by Kernel interface)
         # ('T-STANDARD-CURRENCY', 'Currency', None,     # alternatively use T-PROFORMA-CURRENCY
         # lambda f: not f.val()),
-        ('PHONE-1', 'HomePhone'),
+        ('PHONE-1', 'Phone'),
         ('PHONE-2', 'WorkPhone'),
         ('FAX-1', 'Fax'),
         ('EMAIL-1', 'Email'),
@@ -286,39 +287,44 @@ SH_RES_MAP = \
         # Person Records
         ('PERSON/', None, None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'ShId'), None,
+        ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'PersShId'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'AcuId'), None,
-         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResPersons', f.crx(), 'ShId')),
-        ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'Surname'), lambda f: "Adult " + str(f.crx() + 1)
-            if f.crx() < f.rfv('ResAdults') else "Child " + str(f.crx() - f.rfv('ResAdults') + 1),
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcuId') or f.rfv('ResPersons', f.crx(), 'ShId')
-         ),
-        ('PERSON' + ELEM_PATH_SEP + 'NAME2', ('ResPersons', 0, 'Forename'), None,
+        ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'PersAcuId'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()
-            or f.rfv('ResPersons', f.crx(), 'AcuId') or f.rfv('ResPersons', f.crx(), 'ShId')),
+            or f.rfv('ResPersons', f.crx(), 'PersShId')),
+        ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'PersSurname'), lambda f: "Adult " + str(f.crx() + 1)
+            if f.crx() < f.rfv('ResAdults') else "Child " + str(f.crx() - f.rfv('ResAdults') + 1),
+         lambda f: f.ina(ACTION_DELETE)
+            or f.rfv('ResPersons', f.crx(), 'PersAcuId')
+            or f.rfv('ResPersons', f.crx(), 'PersShId')),
+        ('PERSON' + ELEM_PATH_SEP + 'NAME2', ('ResPersons', 0, 'PersForename'), None,
+         lambda f: f.ina(ACTION_DELETE) or not f.val()
+            or f.rfv('ResPersons', f.crx(), 'PersAcuId') or f.rfv('ResPersons', f.crx(), 'PersShId')),
         ('PERSON' + ELEM_PATH_SEP + 'AUTO-GENERATED', ('ResPersons', 0, 'AutoGen'), '1',
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResPersons', f.crx(), 'AcuId') or f.rfv('ResPersons', f.crx(), 'ShId')
-            or f.rfv('ResPersons', f.crx(), 'Surname')),
+         lambda f: f.ina(ACTION_DELETE)
+            or f.rfv('ResPersons', f.crx(), 'PersAcuId')
+            or f.rfv('ResPersons', f.crx(), 'PersShId')
+            or f.rfv('ResPersons', f.crx(), 'PersSurname')
+            or f.rfv('ResPersons', f.crx(), 'PersForename')),
         ('PERSON' + ELEM_PATH_SEP + 'ROOM-SEQ', ('ResPersons', 0, 'RoomSeq'), '0',
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'ROOM-PERS-SEQ', ('ResPersons', 0, 'RoomPersSeq'), None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'PersonType'), lambda f: '1A'
+        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'TypeOfPerson'), lambda f: '1A'
             if f.crx() < f.rfv('ResAdults') else '2B',
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'RN', ('ResPersons', 0, 'RoomNo'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResDeparture') < datetime.datetime.now()),
-        ('PERSON' + ELEM_PATH_SEP + 'DOB', ('ResPersons', 0, 'DOB'), None,
+        ('PERSON' + ELEM_PATH_SEP + 'DOB', ('ResPersons', 0, 'PersDOB'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val(),
          lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
-        ('PERSON' + ELEM_PATH_SEP + 'COUNTRY-CODE', ('ResPersons', 0, 'Country'), None,
+        ('PERSON' + ELEM_PATH_SEP + 'COUNTRY-CODE', ('ResPersons', 0, 'PersCountry'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PERSON' + ELEM_PATH_SEP + 'EMAIL', ('ResPersons', 0, 'Email'), None,
+        ('PERSON' + ELEM_PATH_SEP + 'EMAIL', ('ResPersons', 0, 'PersEmail'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PERSON' + ELEM_PATH_SEP + 'LANG', ('ResPersons', 0, 'Language'), None,
+        ('PERSON' + ELEM_PATH_SEP + 'LANG', ('ResPersons', 0, 'PersLanguage'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
-        ('PERSON' + ELEM_PATH_SEP + 'PHONE', ('ResPersons', 0, 'Phone'), None,
+        ('PERSON' + ELEM_PATH_SEP + 'PHONE', ('ResPersons', 0, 'PersPhone'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('PERSON' + ELEM_PATH_SEP + 'PERS-RATE' + ELEM_PATH_SEP + 'R', ('ResPersons', 0, 'Board'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
@@ -480,9 +486,9 @@ def date_range_chunks(date_from, date_till, fetch_max_days):
         yield chunk_from, chunk_till
 
 
-def gds_no_to_ids(cae, hotel_id, gdsno):
-    ids = dict(ResHotelId=hotel_id, ResGdsNo=gdsno)
-    rfr = ResFetch(cae).fetch_by_gds_no(hotel_id, gdsno)
+def gds_no_to_ids(cae, hotel_id, gds_no):
+    ids = dict(ResHotelId=hotel_id, ResGdsNo=gds_no)
+    rfr = ResFetch(cae).fetch_by_gds_no(hotel_id, gds_no)
     if isinstance(rfr, Record):
         ids['ResObjId'] = rfr.val('ResObjId')
         ids['ResId'] = rfr.val('ResId')
@@ -491,8 +497,8 @@ def gds_no_to_ids(cae, hotel_id, gdsno):
     return ids
 
 
-def gds_no_to_obj_id(cae, hotel_id, gdsno):
-    return gds_no_to_ids(cae, hotel_id, gdsno).get('ResObjId')
+def gds_no_to_obj_id(cae, hotel_id, gds_no):
+    return gds_no_to_ids(cae, hotel_id, gds_no).get('ResObjId')
 
 
 def res_no_to_ids(cae, hotel_id, res_id, sub_id):
@@ -525,13 +531,13 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
     :param search_flags:    string with search flag words (separated with semicolon).
     :param search_scope:    string with search scope words (separated with semicolon).
     :param chunk_pause:     integer with seconds to pause between fetch of date range chunks.
-    :return:                string with error message if error or list of Sihot reservations.
+    :return:                string with error message if error or Records/list of Sihot reservations (Record instances).
     """
     if not date_till:
         date_till = date_from
 
     err_msg = ""
-    all_rows = list()
+    all_rows = Records()
     try:
         rs = ResSearch(cae)
         # the from/to date range filter of WEB ResSearch filters the arrival date only (not date range/departure)
@@ -548,26 +554,26 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
                 break
             cae.dprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
                        .format(len(chunk_rows), chunk_beg, chunk_end, search_flags, search_scope))
-            valid_rows = list()
-            for res in chunk_rows:
+            valid_rows = Records()
+            for res_rec in chunk_rows:
                 reasons = list()
-                check_in = res.val('ResArrival')
-                check_out = res.val('ResDeparture')
+                check_in = res_rec.val('ResArrival')
+                check_out = res_rec.val('ResDeparture')
                 if not check_in or not check_out:
                     reasons.append("incomplete check-in={} check-out={}".format(check_in, check_out))
                 if not (date_from.toordinal() <= check_in.toordinal() <= date_till.toordinal()):
                     reasons.append("arrival {} not between {} and {}".format(check_in, date_from, date_till))
-                mkt_src = res.val('ResMktSegment')
+                mkt_src = res_rec.val('ResMktSegment')
                 if mkt_sources and mkt_src not in mkt_sources:
                     reasons.append("disallowed market source {}".format(mkt_src))
-                mkt_group = res.val('ResMktGroup')
+                mkt_group = res_rec.val('ResMktGroup')
                 if mkt_groups and mkt_group not in mkt_groups:
                     reasons.append("disallowed market group/channel {}".format(mkt_group))
                 if reasons:
-                    cae.dprint("  ##  Skipped Sihot reservation:", res, " reason(s):", reasons,
+                    cae.dprint("  ##  Skipped Sihot reservation:", res_rec, " reason(s):", reasons,
                                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     continue
-                valid_rows.append(res)
+                valid_rows.append(res_rec)
 
             all_rows.extend(valid_rows)
             time.sleep(chunk_pause)
@@ -987,7 +993,7 @@ class ResFetch(SihotXmlBuilder):
 
 class ResSearch(SihotXmlBuilder):
     def search_res(self, hotel_id=None, from_date=datetime.date.today(), to_date=datetime.date.today(),
-                   matchcode=None, name=None, gdsno=None, flags='', scope=None, guest_id=None):
+                   matchcode=None, name=None, gds_no=None, flags='', scope=None, guest_id=None):
         self.beg_xml(operation_code='RES-SEARCH')
         if hotel_id:
             self.add_tag('ID', hotel_id)
@@ -999,8 +1005,8 @@ class ResSearch(SihotXmlBuilder):
             self.add_tag('MATCHCODE', matchcode)
         if name:
             self.add_tag('NAME', name)
-        if gdsno:
-            self.add_tag('GDSNO', gdsno)
+        if gds_no:
+            self.add_tag('GDSNO', gds_no)
         if flags:
             self.add_tag('FLAGS', flags if flags[0] != ';' else flags[1:])
         if scope:
@@ -1038,7 +1044,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
     # --- rec helpers
 
     def fill_elem_fld_rec(self, rec):
-        self.elem_fld_rec.clear_leafs()
+        self.elem_fld_rec.clear_leafs()     # and reestablish default values
         self.elem_fld_rec.merge_leafs(rec, extend=False)
 
     def prepare_map_xml(self, rec, include_empty_values=True):
@@ -1225,8 +1231,8 @@ class ResToSihot(FldMapXmlBuilder):
             ResRoomNo, ResNote, ResLongNote, ResFlightArrComment (flight no...), ResAllotmentNo, ResVoucherNo.
 
         optional fields:
-            ResPersons1Surname and ResPersons1Forename (surname and forename)
-            ResPersons2Surname and ResPersons2Forename ( ... )
+            ResPersons0PersSurname and ResPersons0PersForename (surname and forename)
+            ResPersons1PersSurname and ResPersons1PersForename ( ... )
         optional auto-populated fields (see default_values dict underneath).
         """
         default_values = dict(ResStatus='1',
@@ -1247,10 +1253,10 @@ class ResToSihot(FldMapXmlBuilder):
         return rec
 
     def fill_elem_fld_rec(self, rec):
+        super().fill_elem_fld_rec(rec)
+
         self._add_sihot_configs(rec)
         self._complete_res_data(rec)
-
-        super().fill_elem_fld_rec(rec)
 
         adults = self.elem_fld_rec.val('ResAdults', system='', direction='')
         pax = adults + self.elem_fld_rec.val('ResChildren', system='', direction='')
@@ -1317,10 +1323,18 @@ class ResToSihot(FldMapXmlBuilder):
             return ""
         err_msg = ""
 
-        # check main Occupant
-        if rec.val('AcuId'):
-            client = ClientToSihot(self.cae)
-            err_msg = client.send_client_to_sihot(rec)
+        # check occupants that are already registered (having a client reference)
+        if rec.val('ResPersons'):
+            for occ_rec in rec.value('ResPersons', flex_sys_dir=True):
+                if occ_rec.val('PersAcuId'):
+                    client = ClientToSihot(self.cae)
+                    crc = occ_rec.copy(filter_fields=lambda f: not f.name().startswith('Pers'),
+                                       fields_patches={ALL_FIELDS: {FAT_IDX + CALLABLE_SUFFIX: lambda f: f.name()[4:]}})
+                    err_msg = client.send_client_to_sihot(crc)
+                    if err_msg:
+                        break
+                    if crc.val('ShId') and not rec.val('ShId') and crc.val('AcuId') == rec.val('AcuId'):
+                        rec.set_val(crc.val('ShId'), 'ShId')     # pass new Guest Object Id to orderer
 
         # check also Orderer but exclude OTAs like TCAG/TCRENT with a MATCHCODE that is no normal Acumen-CDREF
         if not err_msg and rec.val('AcuId') and len(rec.val('AcuId')) == 7:

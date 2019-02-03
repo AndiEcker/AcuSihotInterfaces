@@ -13,7 +13,6 @@ from sys_data_ids import SDI_ASS, SDI_SF
 
 cl_test_rec = Record(fields=dict(AssId=None, AcuId='T000369', SfId=None, ShId=None, RciId="1234-6789012",
                                  Surname="Tester-Surname", Forename="Tester-Forename",
-                                 Name="Tester-Forename Tester-Surname",
                                  Salutation=None, Title=None,
                                  Email="tester-surname@tester-host.com", Phone="001234567890123",
                                  DOB=datetime.date(year=1962, month=6, day=15),
@@ -24,20 +23,18 @@ cl_test_rec = Record(fields=dict(AssId=None, AcuId='T000369', SfId=None, ShId=No
                                                   Record(fields=dict(Type="RCI", Id="1234-6789345")),
                                                   Record(fields=dict(Type="xyz", Id="1a 234-xzy")),
                                                   )),
-                                 GuestType='1', ProductTypes=None))
-res_test_arr = datetime.date(year=datetime.date.today().year + 1, month=12, day=9)
+                                 ProductTypes=None))
+res_arr = datetime.date(year=datetime.date.today().year + 1, month=12, day=9)
 res_test_rec = Record(fields=dict(AssId=None, AcuId='T963369', SfId=None, ShId=None,
                                   Surname="Tester-Res-Surname", Forename="Tester-Res-Forename",
-                                  Name="Tester-Res-Forename Tester-Res-Surname",
                                   Email="tester-res-surname@tester-res-host.com", Phone="00321098765432",
-                                  GuestType='1',
                                   RinId=None,
                                   ResAssId=None,
                                   ResHotelId='3', ResId=None, ResSubId=None, ResObjId=None, ResGdsNo='TEST-9876543333',
-                                  ResArrival=res_test_arr, ResDeparture=res_test_arr + datetime.timedelta(days=9),
+                                  ResArrival=res_arr, ResDeparture=res_arr + datetime.timedelta(days=9),
                                   ResRoomNo=None, ResRoomCat='STDS', ResPriceCat=None,
                                   ResStatus='1',
-                                  ResMktGroup='TO', ResMktSegment='TO',
+                                  ResMktGroup='OW', ResMktSegment='TO',
                                   ResSource=None, ResGroupNo=None, ResMktGroupNN=None,
                                   ResAdults=1, ResChildren=1,
                                   ResBoard=None,
@@ -46,14 +43,17 @@ res_test_rec = Record(fields=dict(AssId=None, AcuId='T963369', SfId=None, ShId=N
                                   ResVoucherNo=None,
                                   ResBooked=None, ResLongNote="test_ass_sys_data res_test_rec ResLongNote",
                                   ResRateSegment=None, ResAccount=None,
-                                  ResPersons=Records((Record(fields=dict(AssId=None, RoomSeq=None, PersSeq=None,
-                                                                         SurName="Tester-Res-Surname", Forename="",
-                                                                         DOB=datetime.date(year=1962, month=6, day=3),
-                                                                         PersonType='1A')),
-                                                      Record(fields=dict(AssId=None, RoomSeq=None, PersSeq=None,
-                                                                         SurName="", Forename="John-Boy",
-                                                                         DOB=datetime.date(year=2019, month=1, day=3),
-                                                                         PersonType='2A')),
+                                  ResPersons=Records((Record(fields=dict(PersAssId=None, RoomSeq=None, RoomPersSeq=None,
+                                                                         PersAcuId='T963369',
+                                                                         PersSurname="Tester-Res-PersSurname",
+                                                                         PersForename="",
+                                                                         PersDOB=datetime.date(year=1962, month=6,
+                                                                                               day=3),
+                                                                         TypeOfPerson='1A')),
+                                                      Record(fields=dict(PersAssId=None, RoomSeq=None, RoomPersSeq=None,
+                                                                         PersSurname="", PersForename="John-Boy",
+                                                                         PersDOB=res_arr-datetime.timedelta(days=6*365),
+                                                                         TypeOfPerson='2A')),
                                                       )),
                                   ResAction=None,
                                   ))
@@ -62,55 +62,143 @@ res_test_rec = Record(fields=dict(AssId=None, AcuId='T963369', SfId=None, ShId=N
 def test_tmp(console_app_env, ass_sys_data):
     asd = ass_sys_data
 
-    # first need to be pushed/created within Sihot, because AssCache.res_groups needs non-empty the ResObjId/rgr_obj_id
-    r = res_test_rec.copy(deepness=-1)
-    asd.reservations.append(r)
+    rec = res_test_rec.copy(deepness=-1)
+    asd.reservations.append(rec)
     asd.sh_reservation_push()
     assert not asd.error_message
-    print(r.val('ResObjId'))
-    assert r.val('ResObjId')
-    assert r.val('ResObjId') == asd.reservations[0].val('ResObjId')
-    print(r.val('ResId'))
-    assert r.val('ResId')
-    assert r.val('ResId') == asd.reservations[0].val('ResId')
-    print(r.val('ResSubId'))
-    assert r.val('ResSubId')
-    assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
+    print(rec.val('ResObjId'))
+    assert rec.val('ResObjId')
+    assert rec.val('ResObjId') == asd.reservations[0].val('ResObjId')
+    print(rec.val('ResHotelId'))
+    assert rec.val('ResHotelId')
+    assert rec.val('ResHotelId') == asd.reservations[0].val('ResHotelId')
+    print(rec.val('ResId'))
+    assert rec.val('ResId')
+    assert rec.val('ResId') == asd.reservations[0].val('ResId')
+    print(rec.val('ResSubId'))
+    assert rec.val('ResSubId')
+    assert rec.val('ResSubId') == asd.reservations[0].val('ResSubId')
+    print(rec.val('ResGdsNo'))
+    assert rec.val('ResGdsNo')
+    assert rec.val('ResGdsNo') == asd.reservations[0].val('ResGdsNo')
 
-    # .. so now we can reset everything and put the Sihot res Ids for to test the push to AssCache
-    asd.reservations = Records()
-    rec = res_test_rec.copy(deepness=-1)
-    rec['ResId'] = r['ResId']
-    rec['ResSubId'] = r['ResSubId']
-    rec['ResObjId'] = r['ResObjId']
-    asd.reservations.append(rec)
-    asd.ass_reservations_push()
-    assert not asd.error_message
-    print(rec.val('ResAssId'))
-    assert rec.val('ResAssId')
-    assert rec.val('ResAssId') == asd.reservations[0].val('ResAssId')
-
-    # added field_names arg for to only compare AssCache.clients fields
-    recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')),
-                                             exclude_fields=['ResAssId', 'ResSource', 'ResAction',  # 'ResBoard',
-                                                             'ResPriceCat',
-                                                             'AssId', 'GuestType'])   # , 'Email', 'Phone', 'ShId'
+    orderer_fields = [fn for sn, fn, *_ in SH_CLIENT_MAP]
+    recs, dif = asd.sh_reservations_compare(chk_values=dict(hotel_id=rec.val('ResHotelId'), gds_no=rec.val('ResGdsNo')),
+                                            exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
+                                                            # 'ResAccount',
+                                                            ] + orderer_fields
+                                            )
     assert not asd.error_message
     print(recs)
     assert len(recs) == 1 == len(asd.reservations)
     print(dif)
-    clean_dif = [_ for _ in dif if not _.endswith('does not exist in the other Record')]
-    print(clean_dif)
-    assert not clean_dif
+    assert not dif
     # will always be False because asd.reservations has more fields than in AssCache:
     # assert repr(recs) == repr(asd.reservations)
     print(repr(recs))
-    print(repr(asd.clients))
+    print(repr(asd.reservations))
 
     print()
 
 
-class TestSysDataActions:
+class TestSysDataResActions:
+    def test_ass_res_compare(self, ass_sys_data):
+        asd = ass_sys_data
+
+        # first need to be pushed/created within Sihot, because AssCache.res_groups needs non-empty ResObjId/rgr_obj_id
+        r = res_test_rec.copy(deepness=-1)
+        asd.reservations.append(r)
+        asd.sh_reservation_push()
+        assert not asd.error_message
+        print(r.val('ResObjId'))
+        assert r.val('ResObjId')
+        assert r.val('ResObjId') == asd.reservations[0].val('ResObjId')
+        print(r.val('ResId'))
+        assert r.val('ResId')
+        assert r.val('ResId') == asd.reservations[0].val('ResId')
+        print(r.val('ResSubId'))
+        assert r.val('ResSubId')
+        assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
+
+        # .. so now we can reset everything and put the Sihot res Ids for to test the push to AssCache
+        asd.reservations = Records()
+        rec = res_test_rec.copy(deepness=-1)
+        rec['ResId'] = r['ResId']
+        rec['ResSubId'] = r['ResSubId']
+        rec['ResObjId'] = r['ResObjId']
+        rec['ResRateSegment'] = r['ResRateSegment']
+        asd.reservations.append(rec)
+
+        asd.ass_reservations_push()
+        assert not asd.error_message
+        print(rec.val('ResAssId'))
+        assert rec.val('ResAssId')
+        assert rec.val('ResAssId') == asd.reservations[0].val('ResAssId')
+
+        orderer_fields = [fn for sn, fn, *_ in ASS_CLIENT_MAP]
+        recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')),
+                                                 exclude_fields=['ResAssId', 'ResSource', 'ResAction', 'ResPriceCat',
+                                                                 'ResAccount',
+                                                                 'AutoGen',
+                                                                 ] + orderer_fields
+                                                 )
+        assert not asd.error_message
+        print(recs)
+        assert len(recs) == 1 == len(asd.reservations)
+        print(dif)
+        assert not dif
+
+    def test_sf_res_compare(self, ass_sys_data):
+        asd = ass_sys_data
+
+        # first need to be pushed/created within Sihot, because SF needs non-empty ResId/ResSubId
+        r = res_test_rec.copy(deepness=-1)
+        asd.reservations.append(r)
+        asd.sh_reservation_push()
+        assert not asd.error_message
+        print(r.val('ResObjId'))
+        assert r.val('ResObjId')
+        assert r.val('ResObjId') == asd.reservations[0].val('ResObjId')
+        print(r.val('ResId'))
+        assert r.val('ResId')
+        assert r.val('ResId') == asd.reservations[0].val('ResId')
+        print(r.val('ResSubId'))
+        assert r.val('ResSubId')
+        assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
+
+        # .. so now we can reset everything and put the Sihot res Ids for to test the push to SF
+        asd.reservations = Records()
+        rec = res_test_rec.copy(deepness=-1)
+        rec['ResId'] = r['ResId']
+        rec['ResSubId'] = r['ResSubId']
+        # rec['ResObjId'] = r['ResObjId']
+        # rec['ResRateSegment'] = r['ResRateSegment']
+        asd.reservations.append(rec)
+
+        asd.sf_reservations_push()
+        assert not asd.error_message
+        print(rec.val('ResSfId'))
+        assert rec.val('ResSfId')
+        assert rec.val('ResSfId') == asd.reservations[0].val('ResSfId')
+
+        orderer_fields = [fn for sn, fn, *_ in SF_CLIENT_MAPS['Account']]
+        recs, dif = asd.sf_reservations_compare(chk_values=dict(ReservationOpportunityId=rec.val('ResSfId')),
+                                                exclude_fields=['ResAssId', 'ResSource', 'ResAction', 'ResPriceCat',
+                                                                'ResAccount', 'ResLongNote',
+                                                                'ReservationId',
+                                                                'TypeOfPerson',
+                                                                'PersDOB', 'PersSurname', 'PersForename',
+                                                                'AutoGen',
+                                                                ] + orderer_fields
+                                                )
+        assert not asd.error_message
+        print(recs)
+        assert len(recs) == 1 == len(asd.reservations)
+        print(dif)
+        assert not dif
+
+
+class TestSysDataClientActions:
     def test_acu_clients_compare(self, ass_sys_data):
         asd = ass_sys_data
         assert not asd.clients
@@ -432,10 +520,10 @@ class TestAssSysDataSh:
             #    break
             print("++++  Test reservation {}/{} creation; res={}".format(idx, res_count, res))
             res_fields = Record(system=SDI_ASS, direction=FAD_ONTO)
-            send_err = asd.res_save(res, ass_res_rec=res_fields)
-            print('res_fields:', res_fields)
-            if send_err:
-                errors.append((idx, "res_save error " + send_err, res))
+            rgr_pk = asd.res_save(res, ass_res_rec=res_fields)
+            print('got rgr_pk {} after sending res_fields {}'.format(rgr_pk, res_fields))
+            if asd.error_message:
+                errors.append((idx, "res_save() error {}".format(asd.error_message), res))
                 continue
 
             cl_fields = client_data(console_app_env, res.val('ShId'))
@@ -444,8 +532,8 @@ class TestAssSysDataSh:
                 errors.append((idx, "client_data error - no dict=" + str(cl_fields), res))
                 continue
 
-            sf_data = Record(system=SDI_SF, direction=FAD_ONTO)\
-                .add_system_fields(SF_CLIENT_MAPS['Account'] + SF_RES_MAP)
+            sf_data = Record(system=SDI_SF, direction=FAD_ONTO)
+            sf_data.add_system_fields(SF_CLIENT_MAPS['Account'] + SF_RES_MAP)
             send_err = asd.sf_ass_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
             print('sf_data:', sf_data)
             if send_err:

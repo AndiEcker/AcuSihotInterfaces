@@ -179,10 +179,11 @@ class TestResSender:
                     ResFlightArrComment='Flight1234',
                     ResAllotmentNo=123456,
                     ResAdults=2, ResChildren=2,
-                    ResPersons0Surname='Tester', ResPersons0Forename='TestX', ResPersons0DOB=today - 1000 * wk1,
-                    ResPersons1Surname='Tester', ResPersons1Forename='TestY',
-                    ResPersons2Surname='Tester', ResPersons2Forename='Chilly', ResPersons2PersonType='2B',
-                    ResPersons3Surname='', ResPersons3Forename='', ResPersons3DOB=today - 100 * wk1,
+                    ResPersons0PersSurname='Tester', ResPersons0PersForename='TestX',
+                    ResPersons0PersDOB=today - 1000 * wk1,
+                    ResPersons1PersSurname='Tester', ResPersons1PersForename='TestY',
+                    ResPersons2PersSurname='Tester', ResPersons2PersForename='Chilly', ResPersons2TypeOfPerson='2B',
+                    ResPersons3PersSurname='', ResPersons3PersForename='', ResPersons3PersDOB=today - 100 * wk1,
                     )
         rec = Record(fields=crow)
         err, msg = rs.send_rec(rec)
@@ -477,7 +478,7 @@ class TestResFromSihot:
         xml_parser.parse_xml(self.XML_MATCHCODE_EXAMPLE)
         assert xml_parser.res_list[0].val('AcuId') == 'test2'
         assert xml_parser.res_list[0].val('RESERVATION.MATCHCODE') == 'test2'
-        assert xml_parser.res_list[0].val('ResPersons', 0, 'AcuId') == 'PersonAcuId'
+        assert xml_parser.res_list[0].val('ResPersons', 0, 'PersAcuId') == 'PersonAcuId'
         assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcuId'
 
     def test_fld_map_big(self, console_app_env):
@@ -487,8 +488,8 @@ class TestResFromSihot:
         assert xml_parser.res_list[0].val('AcuId') == 'test2'
         assert xml_parser.res_list.val(0, 'RESERVATION.MATCHCODE') == 'test2'
         assert xml_parser.res_list[0].val('RESERVATION.MATCHCODE') == 'test2'
-        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'AcuId') == 'PersonAcuId'
-        assert xml_parser.res_list[0].val('ResPersons0AcuId') == 'PersonAcuId'
+        assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PersAcuId') == 'PersonAcuId'
+        assert xml_parser.res_list[0].val('ResPersons0PersAcuId') == 'PersonAcuId'
         assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcuId'
         assert xml_parser.res_list.value(0, 'ResPersons', 0).val('PERSON.MATCHCODE') == 'PersonAcuId'
         assert xml_parser.res_list.val(0, 'ResGdsNo') == '1234567890ABC'

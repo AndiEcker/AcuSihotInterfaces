@@ -594,8 +594,8 @@ class TestRecord:
         r[('fnB', 1, 'sfnB')] = 11
         assert r.val('fnB', 1, 'sfnB') == 11
         r.field_items = True
-        r[('fnB', 1, 'sfnB')].set_val(33, system='Xx', direction='From', flex_sys_dir=False)\
-            .set_name('sfnB_From_Xx', system='Xx', direction='From')
+        r[('fnB', 1, 'sfnB')].set_val(33, system='Xx', direction='From', flex_sys_dir=False)
+        r[('fnB', 1, 'sfnB')].set_name('sfnB_From_Xx', system='Xx', direction='From')
         assert r[('fnB', 1, 'sfnB')].val() == 11
         assert r[('fnB', 1, 'sfnB')].val(system='Xx') == 33
         assert r[('fnB', 1, 'sfnB')].val(system='Xx', direction='From') == 33
@@ -688,10 +688,10 @@ class TestRecord:
         d = (
             ('F_CNT', 'Cnt'),
             ('F/', ),
-            ('F' + SEP + 'NAME', ('fn', 0, 'Surname'), lambda f: "Adult " + str(f.crx())
+            ('F' + SEP + 'NAME', ('fn', 0, 'PersSurname'), lambda f: "Adult " + str(f.crx())
                 if f.crx() is None or f.crx() < f.rfv('Cnt') else "Child " + str(f.crx() - f.rfv('Cnt') + 1),
              lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('F', 0, 'Id')),
-            ('F' + SEP + 'NAME2', ('fn', 0, 'Forename')),
+            ('F' + SEP + 'NAME2', ('fn', 0, 'PersForename')),
             ('AUTO-GENERATED', None, '1',
              lambda f: f.ina(ACTION_DELETE) or (f.rfv('ResAdults') <= 2 and f.rfv('fn', f.crx(), 'Id'))),
             ('F' + SEP + 'MATCHCODE', ('fn', 0, 'Id')),
@@ -700,7 +700,7 @@ class TestRecord:
             ('PERS-SEQ', None, None,
              lambda f: f.ina(ACTION_DELETE),
              lambda f: (str(f.crx()))),
-            ('F' + SEP + 'DOB', ('fn', 0, 'DOB'), None,
+            ('F' + SEP + 'DOB', ('fn', 0, 'PersDOB'), None,
              lambda f: f.ina(ACTION_DELETE) or not f.val()),
             ('/F', None, None,
              lambda f: f.ina(ACTION_DELETE) or f.rfv('Cnt') <= 0),
@@ -709,31 +709,31 @@ class TestRecord:
         sys_r.add_system_fields(d)
         assert sys_r.val('Cnt') == ''
 
-        data_r = Record(fields=dict(Cnt=2, fn0Forename='John'))
+        data_r = Record(fields=dict(Cnt=2, fn0PersForename='John'))
         sys_r.clear_leafs()
         for k in data_r.leaf_indexes():
             if k[0] in sys_r:
                 sys_r.set_val(data_r.val(k), *k, root_rec=data_r)
         sys_r.push(SDI_SH)
         assert sys_r.val('Cnt') == 2
-        assert data_r.val('fn', 0, 'Surname') is None
-        assert sys_r.val('fn', 0, 'Surname') == 'Adult 0'
-        assert sys_r.val('fn', 0, 'Surname', system=SDI_SH, direction=FAD_ONTO) == 'Adult 0'
+        assert data_r.val('fn', 0, 'PersSurname') is None
+        assert sys_r.val('fn', 0, 'PersSurname') == 'Adult 0'
+        assert sys_r.val('fn', 0, 'PersSurname', system=SDI_SH, direction=FAD_ONTO) == 'Adult 0'
 
-        assert data_r.val('fn', 0, 'Forename') == 'John'
-        assert sys_r.val('fn', 0, 'Forename') == 'John'
-        assert sys_r.val('fn', 0, 'Forename', system=SDI_SH, direction=FAD_ONTO) == 'John'
+        assert data_r.val('fn', 0, 'PersForename') == 'John'
+        assert sys_r.val('fn', 0, 'PersForename') == 'John'
+        assert sys_r.val('fn', 0, 'PersForename', system=SDI_SH, direction=FAD_ONTO) == 'John'
 
         sys_r.set_val(0, 'Cnt')
-        assert sys_r.val('fn', 0, 'Surname', system=SDI_SH, direction=FAD_ONTO) == 'Child 1'
+        assert sys_r.val('fn', 0, 'PersSurname', system=SDI_SH, direction=FAD_ONTO) == 'Child 1'
 
-        sys_r.set_val('Johnson', 'fn', 0, 'Surname')
-        assert sys_r.val('fn', 0, 'Surname') == 'Child 1'   # != changed sys val because of flex_sys_dir=True
-        sys_r.set_val('Johnson', 'fn', 0, 'Surname', flex_sys_dir=False)
-        assert sys_r.val('fn', 0, 'Surname') == 'Johnson'   # .. now we are having a separate sys val
+        sys_r.set_val('Johnson', 'fn', 0, 'PersSurname')
+        assert sys_r.val('fn', 0, 'PersSurname') == 'Child 1'   # != changed sys val because of flex_sys_dir=True
+        sys_r.set_val('Johnson', 'fn', 0, 'PersSurname', flex_sys_dir=False)
+        assert sys_r.val('fn', 0, 'PersSurname') == 'Johnson'   # .. now we are having a separate sys val
         sys_r.field_items = True
-        sys_r['fn0Surname'].del_aspect(FAT_VAL, system=SDI_SH, direction=FAD_ONTO)
-        assert sys_r.val('fn', 0, 'Surname') == 'Child 1'   # .. after delete of sys val: getting main val/calculator
+        sys_r['fn0PersSurname'].del_aspect(FAT_VAL, system=SDI_SH, direction=FAD_ONTO)
+        assert sys_r.val('fn', 0, 'PersSurname') == 'Child 1'   # .. after delete of sys val: get main val/calculator
 
         sys_r.set_val(123456, 'fn0Id')
         sys_r.push(SDI_SH)
@@ -900,10 +900,88 @@ class TestStructures:
         assert rec_2f_2s_incomplete['fnB1sfnB'].val() == 'sfB2v'
 
     def test_leafs(self, rec_2f_2s_incomplete, rec_2f_2s_complete):
-        leafs = list(rec_2f_2s_incomplete.leafs())
+        r = rec_2f_2s_incomplete
+        leafs = list(r.leafs())
         assert len(leafs) == 3
+        leafs = list(r.leafs(flex_sys_dir=False))
+        assert len(leafs) == 3
+        leafs = list(r.leafs(system='', direction=''))
+        assert len(leafs) == 3
+        leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
+        assert len(leafs) == 3
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        assert len(leafs) == 3
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        assert len(leafs) == 0
 
-        leafs = list(rec_2f_2s_complete.leafs())
+        r.set_env(system='Xx', direction=FAD_ONTO)
+        leafs = list(r.leafs())
+        assert len(leafs) == 3
+        leafs = list(r.leafs(flex_sys_dir=False))
+        assert len(leafs) == 0
+        leafs = list(r.leafs(system='', direction=''))
+        assert len(leafs) == 3
+        leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
+        assert len(leafs) == 3
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        assert len(leafs) == 3
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        assert len(leafs) == 0
+
+        r.add_system_fields((('fnAXx', 'fnA'), ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB')))
+        leafs = list(r.leafs())
+        assert len(leafs) == 5
+        leafs = list(r.leafs(flex_sys_dir=False))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='', direction=''))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        assert len(leafs) == 5
+
+        r = rec_2f_2s_complete
+        leafs = list(r.leafs())
+        assert len(leafs) == 5
+        leafs = list(r.leafs(flex_sys_dir=False))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='', direction=''))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        assert len(leafs) == 0
+
+        r.set_env(system='Xx', direction=FAD_ONTO)
+        leafs = list(r.leafs())
+        assert len(leafs) == 5
+        leafs = list(r.leafs(flex_sys_dir=False))
+        assert len(leafs) == 0
+        leafs = list(r.leafs(system='', direction=''))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        assert len(leafs) == 0
+
+        r.add_system_fields((('fnAXx', 'fnA'), ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB')))
+        leafs = list(r.leafs())
+        assert len(leafs) == 5
+        leafs = list(r.leafs(flex_sys_dir=False))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='', direction=''))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        assert len(leafs) == 5
+        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
         assert len(leafs) == 5
 
     def test_leaf_indexes(self, rec_2f_2s_incomplete, rec_2f_2s_complete):
@@ -1131,7 +1209,7 @@ class TestContactValidation:
         assert correct_email('', removed=r) == ('', False)
         assert r == []
         r = list()
-        assert correct_email(None, removed=r) == (None, False)
+        assert correct_email(None, removed=r) == ('', False)
         assert r == []
         # special characters !#$%&'*+-/=?^_`{|}~; are allowed in local part
         r = list()

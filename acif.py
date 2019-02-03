@@ -53,7 +53,7 @@ CLI_FIELD_MAP = [       # client data
     ('Language', 'SIHOT_LANG'),
     ('Comment', 'SH_COMMENT',
      "SIHOT_GUEST_TYPE || ' ExtRefs=' || EXT_REFS"),
-    ('HomePhone', 'CD_HTEL1'),
+    ('Phone', 'CD_HTEL1'),
     ('WorkPhone', 'CD_WTEL1',
      "CD_WTEL1 || CD_WEXT1"),
     ('MobilePhone', 'CD_MOBILE1'),
@@ -132,13 +132,13 @@ for idx in range(1, EXT_REF_COUNT + 1):
     FIELD_MAP.append(('ExtRefs' + str(idx) + 'Id', 'EXT_REF_ID' + str(idx),
                       "regexp_substr(regexp_substr(EXT_REFS, '[^,]+', 1, " + str(idx) + "), '[^=]+', 1, 2)"))
 for idx in range(1, RES_MAX_ADULTS + 1):
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'Surname', 'SH_ADULT' + str(idx) + '_NAME'))     # ResPersons1Surname
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'Forename', 'SH_ADULT' + str(idx) + '_NAME2'))   # ResPersons1Forename
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'DOB', 'SH_ADULT' + str(idx) + '_DOB'))          # ResPersons1DOB
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'PersSurname', 'SH_ADULT' + str(idx) + '_NAME'))    # ResPersons0Surname
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'PersForename', 'SH_ADULT' + str(idx) + '_NAME2'))  # ResPersons0Forename
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'PersDOB', 'SH_ADULT' + str(idx) + '_DOB'))         # ResPersons0DOB
 for idx in range(1, RES_MAX_CHILDREN + 1):
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'Surname', 'SH_CHILD' + str(idx) + '_NAME'))     # ResPersons1Surname
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'Forename', 'SH_CHILD' + str(idx) + '_NAME2'))   # ResPersons1Forename
-    FIELD_MAP.append(('ResPerson' + str(idx) + 'DOB', 'SH_CHILD' + str(idx) + '_DOB'))          # ResPersons1DOB
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'PersSurname', 'SH_CHILD' + str(idx) + '_NAME'))    # ResPersons0Surname
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'PersForename', 'SH_CHILD' + str(idx) + '_NAME2'))  # ResPersons0Forename
+    FIELD_MAP.append(('ResPerson' + str(idx) + 'PersDOB', 'SH_CHILD' + str(idx) + '_DOB'))         # ResPersons0DOB
 '''
 
 
@@ -249,10 +249,10 @@ class AcuClientToSihot(ClientToSihot):
     def __init__(self, cae):
         super(AcuClientToSihot, self).__init__(cae)
 
-        self.fld_col_rec = self.elem_fld_rec\
-            .copy()\
-            .set_env(system=SDI_ACU, direction=FAD_FROM)\
-            .add_system_fields(CLI_FIELD_MAP, sys_fld_indexes=field_indexes)
+        self.fld_col_rec = self.elem_fld_rec.copy()
+        self.fld_col_rec.set_env(system=SDI_ACU, direction=FAD_FROM)
+        self.fld_col_rec.add_system_fields(CLI_FIELD_MAP, sys_fld_indexes=field_indexes)
+
         self.recs = Records()
 
         self.acu_db = AcuDbRows(cae)
@@ -343,10 +343,9 @@ class AcuResToSihot(ResToSihot):
     def __init__(self, cae):
         super(AcuResToSihot, self).__init__(cae)
 
-        self.fld_col_rec = self.elem_fld_rec\
-            .copy()\
-            .set_env(system=SDI_ACU, direction=FAD_FROM)\
-            .add_system_fields(RES_FIELD_MAP, sys_fld_indexes=field_indexes)
+        self.fld_col_rec = self.elem_fld_rec.copy()
+        self.fld_col_rec.set_env(system=SDI_ACU, direction=FAD_FROM)
+        self.fld_col_rec.add_system_fields(RES_FIELD_MAP, sys_fld_indexes=field_indexes)
 
         self.recs = Records()
 

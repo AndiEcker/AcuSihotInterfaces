@@ -26,6 +26,7 @@ ACTION_COMPARE = 'COMPARE'
 # field aspect types/prefixes
 FAT_IDX = 'idx'                 # main/system field name within parent Record or list index within Records/Values
 FAT_VAL = 'vle'                 # main/system field value - storing one of the VALUE_TYPES instance
+FAT_CLEAR_VAL = 'vwc'           # field default/clear value (init by _Field.set_clear_val(), used by clear_leafs())
 FAT_REC = 'rrd'                 # root Record instance
 FAT_RCX = 'rrx'                 # field index path (idx_path) from the root Record instance
 FAT_CAL = 'clc'                 # calculator callable
@@ -34,7 +35,7 @@ FAT_CNV = 'cnv'                 # system value converter callable
 FAT_FLT = 'flt'                 # field filter callable
 FAT_SQE = 'sqc'                 # SQL expression for to fetch field value from db
 
-ALL_FATS = (FAT_IDX, FAT_VAL, FAT_REC, FAT_RCX, FAT_CAL, FAT_CHK, FAT_CNV, FAT_FLT, FAT_SQE)
+ALL_FATS = (FAT_IDX, FAT_VAL, FAT_CLEAR_VAL, FAT_REC, FAT_RCX, FAT_CAL, FAT_CHK, FAT_CNV, FAT_FLT, FAT_SQE)
 
 # field aspect directions
 FAD_FROM = 'From'
@@ -43,6 +44,12 @@ FAD_ONTO = 'Onto'
 # separator character used for idx_path values (especially if field has a Record value)
 # don't use dot char because this is used e.g. for to separate system field names in xml element name paths.
 IDX_PATH_SEP = '/'
+
+# special key of fields_patches argument of Record.copy() for to allow aspect value patching for all fields
+ALL_FIELDS = '**'
+
+# suffix for aspect keys - used by _Field.set_aspects()
+CALLABLE_SUFFIX = '()'
 
 # aspect key string lengths/structure
 _ASP_TYPE_LEN = 3
@@ -638,7 +645,7 @@ class Record(OrderedDict):
 
     def __repr__(self):
         # return "Record([" + ", ".join("(" + repr(k) + "," + repr(v) + ")" for k, v in self.items()) + "])"
-        return "Record(" + ", ".join(repr(self._fields[k]) for k in self.leaf_indexes()) + ")"
+        return "Record(" + ", ".join(repr(self._fields.val(*k)) for k in self.leaf_indexes()) + ")"
 
     def __contains__(self, idx_path):
         item = self.node_child(idx_path)
@@ -826,12 +833,14 @@ class Record(OrderedDict):
                       root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
         return self
 
-    def leafs(self, system='', direction='', flex_sys_dir=True):
+    def leafs(self, system=None, direction=None, flex_sys_dir=True):
+        system, direction = use_rec_default_sys_dir(self, system, direction)
         for idx in self._fields.keys():
             field = self._fields.get(idx)
             yield from field.leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def leaf_indexes(self, *idx_path, system='', direction='', flex_sys_dir=True):
+    def leaf_indexes(self, *idx_path, system=None, direction=None, flex_sys_dir=True):
+        system, direction = use_rec_default_sys_dir(self, system, direction)
         for idx in self._fields.keys():
             field = self._fields.get(idx)
             fld_idx = idx_path + (idx, )
@@ -895,7 +904,8 @@ class Record(OrderedDict):
         :param sys_fld_indexes: mapping/map-item-indexes of the inner tuples of system_fields. Keys are field aspect
                                 types (FAT_* constants), optionally extended with a direction (FAD_* constant) and a
                                 system (SDI_* constant). If the value aspect key (FAT_VAL) contains a callable then
-                                it will be set as the calculator (FAT_CAL) aspect.
+                                it will be set as the calculator (FAT_CAL) aspect; if contains a field value then also
+                                the clear_val of this field will be set to the specified value.
         :param extend:          True=add field if not exists, False=set system aspects only on existing fields.
         :return:                self
         """
@@ -934,6 +944,7 @@ class Record(OrderedDict):
                 field_name = field_name[-1]
             else:
                 idx_path = field_name_idx_path(field_name, return_root_fields=True)
+                field_name = idx_path[-1]
 
             sys_name = fas[sfi.pop(sys_nam_key)].strip('/')     # strip needed for Sihot elem names only
 
@@ -969,16 +980,20 @@ class Record(OrderedDict):
                 # now add all other field aspects (allowing calculator function specified in FAT_VAL aspect)
                 for fa, fi in sfi.items():
                     if fa.startswith(FAT_CNV):
-                        continue        # skip converter for other direction
+                        continue                    # skip converter for other direction
                     if map_len > fi and fas[fi] is not None \
                             and fa[_ASP_TYPE_LEN:] in ('', self.direction, self.system, self.direction + self.system):
                         if not fa.startswith(FAT_VAL):
                             field.set_aspect(fas[fi], fa, system=self.system, direction=self.direction, protect=True)
                         elif callable(fas[fi]):     # is a calculator specified in value/FAT_VAL item
                             field.set_calculator(fas[fi], system=self.system, direction=self.direction, protect=True)
-                        elif path_idx == 0:
-                            field.set_val(fas[fi], system=self.system, direction=self.direction, protect=True,
-                                          root_rec=self, root_idx=idx_path)
+                        else:                       # init field and clear val
+                            val = fas[fi]
+                            if path_idx == 0:
+                                field.set_val(val, system=self.system, direction=self.direction, protect=True,
+                                              root_rec=self, root_idx=idx_path)
+                            field.set_clear_val(val, system=self.system, direction=self.direction)
+
                 self.set_node_child(field, *idx_path, protect=field_created, root_rec=self, root_idx=())
 
                 if sys_name not in self.sys_name_field_map:
@@ -1058,8 +1073,12 @@ class Record(OrderedDict):
         :param root_idx:        destination root index (tuple/list with index path items: field names, list indexes).
         :param onto_rec:        destination record; pass None to create new Record instance.
         :param filter_fields:   method called for each copied field (return True to filter/hide/not-include into copy).
-        :param fields_patches:  dict with keys as idx_paths and values as dict of aspect keys and values (for to
-                                overwrite aspects in each copied _Field instance).
+        :param fields_patches:  dict[field_name_or_ALL_FIELDS:dict[aspect_key:val_or_callable]] for to overwrite
+                                aspect values in each copied _Field instance). The keys of the outer dict are either
+                                field names or the ALL_FIELDS value; aspect keys ending with the CALLABLE_SUFFIX
+                                have a callable in the dict item that will be called for each field with the field
+                                instance as argument; the return value of the callable will then be used as the (new)
+                                aspect value.
         :return:                new/extended record instance.
         """
         new_rec = onto_rec is None
@@ -1083,8 +1102,12 @@ class Record(OrderedDict):
             elif idx in onto_rec:
                 field = onto_rec.node_child(idx)
 
-            if fields_patches and idx in fields_patches:
-                field.set_aspects(**fields_patches[idx], allow_values=True)
+            if fields_patches:
+                if ALL_FIELDS in fields_patches:
+                    field.set_aspects(allow_values=True, **fields_patches[ALL_FIELDS])
+                if idx in fields_patches:
+                    field.set_aspects(allow_values=True, **fields_patches[idx])
+                idx = field.name()      # update field name if changed by field_patches
 
             if new_rec:
                 onto_rec._add_field(field, idx)
@@ -1473,22 +1496,21 @@ class _Field:
         names = self.name()
         vals = repr(self.val())
         sys_dir_names = list()
-        for key, name in self._aspects.items():
-            if key.startswith(FAT_IDX) and len(key) > _ASP_TYPE_LEN:
-                sys_dir_names.append((key, name))
-        ret = ""
+        for idx_key, name in self._aspects.items():
+            if idx_key.startswith(FAT_IDX) and len(idx_key) > _ASP_TYPE_LEN:
+                sys_dir_names.append((idx_key, name))
         for idx_key, name in sys_dir_names:
             val_key = self.aspect_exists(FAT_VAL, aspect_key_system(idx_key), aspect_key_direction(idx_key))
             if val_key and len(val_key) > _ASP_TYPE_LEN:
-                ret += "{0}={1}".format(name, self._aspects.get(val_key))
+                vals += "|" + "{0}={1}".format(name, self._aspects.get(val_key))
             else:
                 names += "|" + name
 
-        return "{0}={1}{2}".format(names, vals, ("|" + ret if ret else ""))
+        return "{0}=={1}".format(names, vals)
 
     def __str__(self):
         # return "_Field(" + repr(self._aspects) + ")"
-        return "_Field(" + ", ".join([repr(k) + ": " + repr(v)
+        return "_Field(" + ", ".join([str(k) + ": " + str(v)
                                       for k, v in self._aspects.items() if not k.startswith(FAT_REC)]) + ")"
 
     def __getitem__(self, key):
@@ -1501,10 +1523,10 @@ class _Field:
         msg = "_Field.node_child() expects "
         if isinstance(idx_path, (tuple, list)):
             if len(idx_path) and not isinstance(idx_path[0], IDX_TYPES):
-                assert not moan, msg + "str or int type in idx_path[0], got {} in {}".format(type(idx_path), idx_path)
+                assert not moan, msg + "str or int in idx_path[0], got {} ({})".format(type(idx_path[0]), idx_path[0])
                 return None
         elif not isinstance(idx_path, IDX_TYPES):
-            assert not moan, msg + "str or int type in idx_path, got {} in {}".format(type(idx_path), idx_path)
+            assert not moan, msg + "str or int type in idx_path, but got {} (idx={})".format(type(idx_path), idx_path)
             return None
         else:
             idx_path = field_name_idx_path(idx_path, return_root_fields=True)
@@ -1601,19 +1623,27 @@ class _Field:
                       use_curr_idx=use_curr_idx)
         return self
 
+    def leaf_value(self, system='', direction='', flex_sys_dir=False):
+        # return field node value for to allow the caller to check if possibly exists a deeper located sys field
+        value = self.value(system=system, direction=direction, flex_sys_dir=True)
+        if not flex_sys_dir and not isinstance(value, NODE_TYPES) \
+                and not self.aspect_value(FAT_IDX, system=system, direction=direction, flex_sys_dir=flex_sys_dir):
+            value = None
+        return value
+
     def leafs(self, system='', direction='', flex_sys_dir=True):
-        value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
-        if not isinstance(value, NODE_TYPES):
-            yield self
-        else:
+        value = self.leaf_value(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
+        if isinstance(value, NODE_TYPES):
             yield from value.leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
+        elif value is not None:
+            yield self
 
     def leaf_indexes(self, *idx_path, system='', direction='', flex_sys_dir=True):
-        value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
-        if not isinstance(value, NODE_TYPES):
-            yield idx_path
-        else:
+        value = self.leaf_value(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
+        if isinstance(value, NODE_TYPES):
             yield from value.leaf_indexes(*idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
+        elif value is not None:
+            yield idx_path
 
     def find_aspect_key(self, *aspect_types, system='', direction=''):
         keys = list()
@@ -1711,6 +1741,11 @@ class _Field:
 
     def set_aspects(self, allow_values=False, **aspects):
         for key, data in aspects.items():
+            if key.endswith(CALLABLE_SUFFIX):
+                assert callable(data), "_Field.set_aspects() expects callable for aspect {} with the {}-suffix"\
+                    .format(key, CALLABLE_SUFFIX)
+                key = key[:-len(CALLABLE_SUFFIX)]
+                data = data(self)
             self.set_aspect(data, key, allow_values=allow_values)
         return self
 
@@ -1760,17 +1795,15 @@ class _Field:
     def set_calculator(self, calculator, system='', direction='', protect=False):
         return self.set_aspect(calculator, FAT_CAL, system=system, direction=direction, protect=protect)
 
+    def clear_val(self, system='', direction=''):
+        return self.aspect_value(FAT_CLEAR_VAL, system=system, direction=direction)
+
+    def set_clear_val(self, val, system='', direction=''):
+        return self.set_aspect(val, FAT_CLEAR_VAL, system=system, direction=direction)
+
     def _ensure_system_value(self, system, direction='', root_rec=None, root_idx=()):
         if not self.aspect_exists(FAT_VAL, system=system, direction=direction):
             self.set_value(Value(), system=system, direction=direction, root_rec=root_rec, root_idx=root_idx)
-
-    def validator(self, system='', direction=''):
-        return self.aspect_value(FAT_CHK, system=system, direction=direction)
-
-    def set_validator(self, validator, system='', direction='', protect=False, root_rec=None, root_idx=()):
-        assert system != '', "_Field validator can only be set for a given/non-empty system"
-        self._ensure_system_value(system, direction=direction, root_rec=root_rec, root_idx=root_idx)
-        return self.set_aspect(validator, FAT_CHK, system=system, direction=direction, protect=protect)
 
     def converter(self, system='', direction=''):
         return self.aspect_value(FAT_CNV, system=system, direction=direction)
@@ -1792,6 +1825,14 @@ class _Field:
     def set_sql_expression(self, sql_expression, system='', direction='', protect=False):
         return self.set_aspect(sql_expression, FAT_SQE, system=system, direction=direction, protect=protect)
 
+    def validator(self, system='', direction=''):
+        return self.aspect_value(FAT_CHK, system=system, direction=direction)
+
+    def set_validator(self, validator, system='', direction='', protect=False, root_rec=None, root_idx=()):
+        assert system != '', "_Field validator can only be set for a given/non-empty system"
+        self._ensure_system_value(system, direction=direction, root_rec=root_rec, root_idx=root_idx)
+        return self.set_aspect(validator, FAT_CHK, system=system, direction=direction, protect=protect)
+
     def append_record(self, system='', direction='', flex_sys_dir=True, root_rec=None, root_idx=()):
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         assert isinstance(value, Records), "append_record() expects Records type but got {}".format(type(value))
@@ -1810,16 +1851,31 @@ class _Field:
         :param reset_lists:     if True/def then also clear Records/lists to one item.
         :return:                self (this _Field instance).
         """
-        if system is None:
-            for asp_key, asp_val in self._aspects:
+        def _clr_val(_sys, _dir, _fsd):
+            asp_val.clear_leafs(system=_sys, direction=_dir, flex_sys_dir=_fsd, reset_lists=reset_lists)
+            clr_val = self.clear_val(system=_sys, direction=_dir)
+            if clr_val is not None:
+                self.set_val(clr_val, system=_sys, direction=_dir, flex_sys_dir=False)
+                init_sys_dir.append((_sys, _dir))
+
+        init_sys_dir = list()
+        if system is None and direction is None:
+            for asp_key, asp_val in self._aspects.items():
                 if asp_key.startswith(FAT_VAL):
-                    asp_val.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir,
-                                        reset_lists=reset_lists)
+                    _clr_val(aspect_key_system(asp_key), aspect_key_direction(asp_key), False)
         else:
             asp_val = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
             if asp_val is not None:
-                asp_val.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir,
-                                    reset_lists=reset_lists)
+                _clr_val(system, direction, flex_sys_dir)
+
+        # finally set clear val for field value if field has no explicit value for the system of the clear val
+        for asp_key, asp_val in self._aspects.items():
+            if asp_key.startswith(FAT_CLEAR_VAL):
+                system = aspect_key_system(asp_key)
+                direction = aspect_key_direction(asp_key)
+                if (system, direction) not in init_sys_dir:
+                    self.set_val(asp_val)
+
         return self
 
     def convert_and_validate(self, val, system='', direction=''):

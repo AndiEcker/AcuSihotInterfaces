@@ -225,9 +225,9 @@ class ResChange(SihotXmlParser):
 
         # rgc/reservation clients elements
         elif self._curr_tag == 'GID':                       # Sihot Guest object ID
-            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'ShId'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'PersShId'
         elif self._curr_tag == 'MATCHCODE':
-            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'AcuId'
+            di, ik = self.rgr_list[-1]['ResPersons'][-1], 'PersAcuId'
         elif self._curr_tag == 'SN':
             di, ik = self.rgr_list[-1]['ResPersons'][-1], 'rgc_surname'
         elif self._curr_tag == 'CN':

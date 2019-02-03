@@ -129,23 +129,23 @@ try:
     last_checkout = date_till - datetime.timedelta(days=1)
     # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
     # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
-    all_rows = res_search.search_res(from_date=first_checkin, to_date=last_checkout, flags=search_flags, scope=search_scope)
-    if all_rows and isinstance(all_rows, str):
-        uprint(" ***  Sihot.PMS reservation search error:", all_rows)
+    recs = res_search.search_res(from_date=first_checkin, to_date=last_checkout, flags=search_flags, scope=search_scope)
+    if recs and isinstance(recs, str):
+        uprint(" ***  Sihot.PMS reservation search error:", recs)
         cae.shutdown(21)
-    elif all_rows and isinstance(all_rows, list):
+    elif recs and isinstance(recs, list):
         exp_file_exists = os.path.exists(export_fnam)
         with open(export_fnam, 'a' if exp_file_exists else 'w') as f:
             if not exp_file_exists:
                 f.write(file_caption)
             unique_ids = list()
-            for row_dict in all_rows:
-                hotel_id, res_id = get_hotel_and_res_id(row_dict)
+            for rec in recs:
+                hotel_id, res_id = get_hotel_and_res_id(rec)
                 if not hotel_id or not res_id:
                     # skip error already logged within hotel_and_res_id()
                     continue
-                check_in = row_dict['ResArrival'].val()
-                check_out = row_dict['ResDeparture'].val()
+                check_in = rec['ResArrival'].val()
+                check_out = rec['ResDeparture'].val()
                 if not check_in or not check_out:
                     cae.dprint(" ###  Skipping incomplete check-in/-out/res-id=", check_in, check_out, res_id)
                     continue
@@ -154,12 +154,12 @@ try:
                                "not in date range from ", date_from, 'till', date_till, 'res-id=', res_id,
                                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     continue
-                res_type = row_dict['ResStatus']
+                res_type = rec['ResStatus']
                 if res_type in ('S', 'N'):
                     cae.dprint("  ##  Skipping because of reservation type", res_type, 'res-id=', res_id,
                                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     continue
-                for arr_index in range(len(row_dict['ResPersons'].val())):
+                for arr_index in range(len(rec['ResPersons'])):
                     unique_id = res_id + ('#' + str(arr_index) if arr_index >= 0 else '')
                     if unique_id in unique_ids:
                         uprint("  **  Detected duplicate guest/client with unique-id=", unique_id)
@@ -175,7 +175,7 @@ try:
                                 c_val = ex
                                 cae.dprint(" ###  Invalid column expression", c_nam, "; exception:", str(ex))
                         else:
-                            c_val = row_dict.val('ResPersons', arr_index, c_nam)
+                            c_val = rec.val('ResPersons', arr_index, c_nam)
                         if first_col:
                             first_col = False
                         else:

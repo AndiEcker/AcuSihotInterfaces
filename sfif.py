@@ -94,12 +94,12 @@ SF_RES_MAP = (
     ('Children__c', 'ResChildren', None, None,
      lambda f, v: int(v)),
     ('Note__c', 'ResNote'),
-    # ('', ('ResPersons', 0, 'AcuId')),
-    # ('', ('ResPersons', 0, 'DOB')),
-    # ('', ('ResPersons', 0, 'Forename')),
-    # ('', ('ResPersons', 0, 'PersonType')),
-    # ('', ('ResPersons', 0, 'ShId')),
-    # ('', ('ResPersons', 0, 'Surname')),
+    # ('', ('ResPersons', 0, 'PersAcuId')),
+    # ('', ('ResPersons', 0, 'PersDOB')),
+    # ('', ('ResPersons', 0, 'PersForename')),
+    # ('', ('ResPersons', 0, 'TypeOfPerson')),
+    # ('', ('ResPersons', 0, 'PersShId')),
+    # ('', ('ResPersons', 0, 'PersSurname')),
 )  # type: Tuple[Tuple[Any]]
 
 # Allocation Object fields
@@ -121,7 +121,7 @@ MAP_RES_FROM_SF = (
     ('ResRoomNo', 'ResRoomNo'),
     ('ResRoomCat', 'ResRoomCat'),
     ('ResPriceCat', 'ResPriceCat'),
-    ('ResPersons0SurName', ('ResPersons', 0, 'SurName')),
+    ('ResPersons0Surname', ('ResPersons', 0, 'PersSurname')),
 )
 '''
 
@@ -336,8 +336,8 @@ class SfInterface:
         self._debug_level = debug_level
 
         self.error_msg = ""
-        self.cl_res_rec_onto = Record(system=SDI_SF, direction=FAD_ONTO)\
-            .add_system_fields(SF_CLIENT_MAPS['Account'] + SF_RES_MAP)
+        self.cl_res_rec_onto = Record(system=SDI_SF, direction=FAD_ONTO)
+        self.cl_res_rec_onto.add_system_fields(SF_CLIENT_MAPS['Account'] + SF_RES_MAP)
 
     @property
     def is_sandbox(self):

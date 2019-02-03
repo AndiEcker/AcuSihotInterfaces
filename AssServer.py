@@ -15,6 +15,8 @@
     1.0     Q&D fix for to not send any rental reservations.
     1.1     Fixed bug to not store rgr_sf_id into ass_cache.
     1.2     Changed DB-Locks to RLocks and added outer locking on transaction commit level.
+    1.3     Fixed bug to not overwrite rgr_sf_id.
+    2.0     First version after merge of sys_data_generic branch.
 """
 import datetime
 import threading
@@ -23,7 +25,7 @@ from functools import partial
 from traceback import format_exc
 import pprint
 
-from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_CLIENT_PORT, SDI_ASS
+from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING
 from ae_sys_data import Record, FAD_ONTO
 from ae_console_app import ConsoleApp, uprint, missing_requirements
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
@@ -31,7 +33,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
 from shif import client_data, ResFetch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '1.2'
+__version__ = '2.0'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -168,7 +170,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
                 .format(ppf(ass_changed_res), sh_id, ppf(sh_cl)), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sh_cl = dict()
 
-    rgr_sf_id = ass_changed_res['rgr_sf_id']
+    rgr_sf_id = ass_res_sf_id = ass_changed_res['rgr_sf_id']
     if not rgr_sf_id:
         # try to determine SF Reservation Opportunity ID from Acumen
         obj_id = ass_changed_res['rgr_obj_id']
@@ -183,7 +185,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     ass_res = Record(system=SDI_ASS, direction=FAD_ONTO)
-    if asd.res_save(sh_res, ass_res_rec=ass_res):
+    if not asd.res_save(sh_res, ass_res_rec=ass_res):
         return asd.error_message
 
     # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call
@@ -193,12 +195,15 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     # err_msg = asd.sf_ass_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
     err_msg = asd.sf_ass_res_upsert(rgr_sf_id, sh_cl, ass_res)
     if err_msg:
+        roll_back_msg = asd.connection(SDI_ASS).rollback() if asd.connection(SDI_ASS) else "Ass Db connection broken"
         return "res_from_sh_to_sf({}): SF reservation push/update err='{}', rollback='{}'"\
-            .format(ppf(ass_changed_res), err_msg, asd.ass_db.rollback())
+            .format(ppf(ass_changed_res), err_msg, roll_back_msg)
 
     # no errors on sync to SF, then set last sync timestamp
     chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
-    upd_values = dict(rgr_sf_id=rgr_sf_id, rgr_last_sync=ass_changed_res['rgr_last_sync'])
+    upd_values = dict(rgr_last_sync=ass_changed_res['rgr_last_sync'])
+    if not ass_res_sf_id and rgr_sf_id:
+        upd_values['rgr_sf_id'] = rgr_sf_id
     if not asd.rgr_upsert(upd_values, chk_values, commit=True):
         err_msg = "res_from_sh_to_sf({}): last reservation sync timestamp ass_cache update failed"\
                       .format(ppf(ass_changed_res)) + asd.error_message
@@ -558,7 +563,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             sys_connections = None
             try:
                 sys_connections = AssSysData(cae, err_logger=partial(log_msg, is_error=True), warn_logger=log_msg)
-                if sys_connections.error_message or not sys_connections.ass_db:
+                if sys_connections.error_message or not sys_connections.connection(SDI_ASS):
                     err_messages.append((95, "AssSysData instantiation fail: {}".format(sys_connections.error_message)))
                 else:
                     rec_ctx = dict(procedure='sys_conn')

@@ -143,7 +143,7 @@ def sih_reservation_discrepancies(data_dict):
         for crow in req.recs:
             if crow['SIHOT_GDSNO']:
                 rs = ResSearch(cae)
-                rd = rs.search_res(gdsno=crow['SIHOT_GDSNO'])
+                rd = rs.search_res(gds_no=crow['SIHOT_GDSNO'])
                 row_err = ''
                 if rd and isinstance(rd, list):
                     # compare reservation for errors/discrepancies
@@ -223,7 +223,7 @@ def sih_reservation_search(data_dict):
                       list_marker_prefix + 'MATCHCODE__15', list_marker_prefix + 'NAME__21',
                       'ARR__09', 'DEP__09', 'RN__06', 'OBJID__06']
     rs = ResSearch(cae)
-    # available filters: hotel_id, from_date, to_date, matchcode, name, gdsno, flags, scope
+    # available filters: hotel_id, from_date, to_date, matchcode, name, gds_no, flags, scope
     filters = {k[:-len(FILTER_CRITERIA_SUFFIX)]: v for k, v in data_dict.items() if k.endswith(FILTER_CRITERIA_SUFFIX)}
     rd = rs.search_res(**filters)
     results = list()

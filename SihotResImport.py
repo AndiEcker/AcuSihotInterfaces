@@ -25,12 +25,12 @@ from traceback import format_exc
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
     SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, FORE_SURNAME_SEP
+from ae_sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from sxmlif import ClientToSihot, ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
 from acif import add_ac_options
 from sfif import add_sf_options
-from shif import add_sh_options, ResSender
+from shif import add_sh_options, ClientToSihot, ResSender
 from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
 __version__ = '1.0'
@@ -131,7 +131,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
     # logon to and prepare Acumen, Salesforce, Sihot and config data env
     asd = AssSysData(cae, err_logger=log_error, warn_logger=log_import, ctx_no_file=NO_FILE_PREFIX_CHAR,
-                           acu_user=acu_user, acu_password=acu_password)
+                     acu_user=acu_user, acu_password=acu_password)
     if asd.error_message:
         log_error(asd.error_message, NO_FILE_PREFIX_CHAR + 'UserLogOn', importance=4)
         return
@@ -203,8 +203,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             ap_feats.append(748)
 
         room_cat = asd.cat_by_size('1' if curr_cols[TCI_RESORT] == 'BEVE' else '4',  # BEVE=BHC, PABE=PBC
-                                         'STUDIO' if room_size[1] == '1' else str(chr(ord(room_size[1]) - 1)) + ' BED',
-                                         ap_feats)
+                                   'STUDIO' if room_size[1] == '1' else str(chr(ord(room_size[1]) - 1)) + ' BED',
+                                   ap_feats)
 
         return room_cat, half_board, comments
 
@@ -289,7 +289,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 row['ResBoard'] = 'RO'
 
             row['ResMktSegment'] = asd.ro_sihot_mkt_seg('TK')
-            row['ResMktGroup'] = asd.ResMktGroup('TK')  # =='Rental SP'
+            row['ResMktGroup'] = asd.ro_res_group('TK')  # =='Rental SP'
             row['ResSource'] = 'T'
             row['ResArrival'] = datetime.datetime.strptime(curr_cols[TCI_ResArrival], '%Y-%m-%d')
             row['ResDeparture'] = row['ResArrival'] + datetime.timedelta(int(curr_cols[TCI_STAY_DAYS]))
@@ -301,11 +301,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 else (ACTION_UPDATE if curr_cols[TCI_BOOK_TYPE] == 'RBO' else ACTION_INSERT)
 
         # add pax name, person sequence number and room sequence number (sub_res_id)
-        name_col = 'Res' + ('Adult' if is_adult else 'Child') \
-                   + str(row['ResAdults' if is_adult else 'ResChildren']) + 'Surname'
-        row[name_col] = curr_cols[TCI_SURNAME]
-        row[name_col + '2'] = curr_cols[TCI_FORENAME]
-        pers_seq = row['ResAdults'] if is_adult else 10 + row['ResChildren']
+        row['ResPersons0PersSurname'] = curr_cols[TCI_SURNAME]
+        row['ResPersons0PersForename'] = curr_cols[TCI_FORENAME]
+        # pers_seq = row['ResAdults'] if is_adult else 10 + row['ResChildren']
         # row['SH_ROOMS'] = sub_res_id + 1
 
         row['RUL_CHANGES'] = curr_line  # needed for error notification
@@ -479,7 +477,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResBoard'] = board
 
             row['ResMktSegment'] = asd.ro_sihot_mkt_seg('BK')
-            row['ResMktGroup'] = asd.ResMktGroup('BK')  # 'Rental SP'
+            row['ResMktGroup'] = asd.ro_res_group('BK')  # 'Rental SP'
             row['ResSource'] = 'T'
             row['ResArrival'] = curr_arr
             row['ResDeparture'] = curr_dep
@@ -491,12 +489,12 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
             # add pax name(s) and person sequence number
             for i, full_name in enumerate(curr_cols[BKC_GUEST_NAMES].split(',')):
-                name_col = 'ResPerson' + str(i + 1) + 'Surname'
+                name_col = 'ResPersons' + str(i)
                 fore_name, last_name = full_name.strip().split(FORE_SURNAME_SEP, maxsplit=1)
                 if last_name:
-                    row[name_col] = last_name
+                    row[name_col + 'PersSurname'] = last_name
                 if fore_name:
-                    row[name_col + '2'] = fore_name
+                    row[name_col + 'PersForename'] = fore_name
 
         row['RUL_CHANGES'] = ','.join(curr_cols)  # needed for error notification
         row['=FILE_NAME'] = file_name
@@ -651,7 +649,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['Postal'] = curr_cols[RCI_GUEST_ZIP]
         row['City'] = curr_cols[RCI_GUEST_CITY]
         row['Email'] = curr_cols[RCI_GUEST_EMAIL]
-        row['HomePhone'] = curr_cols[RCI_GUEST_PHONE]
+        row['Phone'] = curr_cols[RCI_GUEST_PHONE]
         ext_refs = asd.cl_ext_refs_by_idx([curr_cols[RC_OCC_CLIENTS_IDX]])
         if ext_refs:
             row['RciId'] = ext_refs[0]  # first ref coming from Acu and put into Sihot MATCH-ADM element
@@ -674,7 +672,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['Postal'] = curr_cols[RCI_GUEST_ZIP]
         row['City'] = curr_cols[RCI_GUEST_CITY]
         row['Email'] = curr_cols[RCI_GUEST_EMAIL]
-        row['HomePhone'] = curr_cols[RCI_GUEST_PHONE]
+        row['Phone'] = curr_cols[RCI_GUEST_PHONE]
         ext_refs = asd.cl_ext_refs_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
         if ext_refs:
             row['RciId'] = ext_refs[0]  # first ref coming from Acu and put into Sihot MATCH-ADM element
@@ -731,21 +729,20 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             comments.append('GuestOf=' + own_rci_ref + '=' + row['AcuId'] + ':' + own_name)
 
             comments.append('ExcMail=' + curr_cols[RCI_CLIENT_EMAIL])
-            row['ShId'] = None
-            row['AcuId'] = ''
-            row['ResPersons1Surname'] = curr_cols[RCI_GUEST_SURNAME]
-            row['ResPersons1Forename'] = curr_cols[RCI_GUEST_FORENAME]
+            row['PersShId'] = None
+            row['ResPersons0PersAcuId'] = ''
+            row['ResPersons0PersSurname'] = curr_cols[RCI_GUEST_SURNAME]
+            row['ResPersons0PersForename'] = curr_cols[RCI_GUEST_FORENAME]
         else:
-            row['ShId'] = asd.cl_sh_id_by_idx(cl_occ_idx)
-            row['AcuId'] = asd.cl_ac_id_by_idx(cl_occ_idx)
-            # has to be populated after send to Sihot: row['ShId'] = client_row['ShId']
-            row['ResPersons1Surname'] = curr_cols[RCI_CLIENT_SURNAME]
-            row['ResPersons1Forename'] = curr_cols[RCI_CLIENT_FORENAME]
+            row['PersShId'] = asd.cl_sh_id_by_idx(cl_occ_idx)
+            row['PersAcuId'] = asd.cl_ac_id_by_idx(cl_occ_idx)
+            row['ResPersons0PersSurname'] = curr_cols[RCI_CLIENT_SURNAME]
+            row['ResPersons0PersForename'] = curr_cols[RCI_CLIENT_FORENAME]
         row['ResAdults'] = 1
         row['ResChildren'] = 0
 
         mkt_seg, mkt_grp = asd.rci_ro_group(curr_cols[RC_OCC_CLIENTS_IDX], is_guest,
-                                                  curr_cols[RC_FILE_NAME], curr_cols[RC_LINE_NUM])
+                                            curr_cols[RC_FILE_NAME], curr_cols[RC_LINE_NUM])
         row['ResMktSegment'] = mkt_seg
         row['ResMktGroup'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
         row['ResSource'] = 'R'
@@ -848,7 +845,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['Postal'] = curr_cols[RCIP_GUEST_ZIP]
         row['City'] = curr_cols[RCIP_GUEST_CITY]
         row['Email'] = curr_cols[RCIP_GUEST_EMAIL]
-        row['HomePhone'] = curr_cols[RCIP_GUEST_PHONE]
+        row['Phone'] = curr_cols[RCIP_GUEST_PHONE]
         # constant values - needed for to be accepted by the Sihot Kernel interface
         row['ShId'] = None
         row['GuestType'] = '1'
@@ -898,16 +895,16 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             else:
                 own_name = '(unknown)'
             comments.append('GuestOf=' + own_name)
-            row['ResPersons1Surname'] = curr_cols[RCIP_GUEST_SURNAME]
-            row['ResPersons1Forename'] = curr_cols[RCIP_GUEST_FORENAME]
+            row['ResPersons0PersSurname'] = curr_cols[RCIP_GUEST_SURNAME]
+            row['ResPersons0PersForename'] = curr_cols[RCIP_GUEST_FORENAME]
         else:
-            row['ResPersons1Surname'] = curr_cols[RCIP_CLIENT_SURNAME]
-            row['ResPersons1Forename'] = curr_cols[RCIP_CLIENT_FORENAME]
+            row['ResPersons0PersSurname'] = curr_cols[RCIP_CLIENT_SURNAME]
+            row['ResPersons0PersForename'] = curr_cols[RCIP_CLIENT_FORENAME]
         row['ResAdults'] = 1
         row['ResChildren'] = 0
 
         mkt_seg, mkt_grp = asd.rci_ro_group(curr_cols[RC_OCC_CLIENTS_IDX], is_guest,
-                                                  curr_cols[RC_FILE_NAME], curr_cols[RC_LINE_NUM])
+                                            curr_cols[RC_FILE_NAME], curr_cols[RC_LINE_NUM])
         row['ResMktSegment'] = mkt_seg
         row['ResMktGroup'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
         row['ResSource'] = 'R'
@@ -962,7 +959,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("User cancelled processing of TCI import file", fn, importance=4)
                 break
             log_import("Processing import file " + fn, fn, importance=4)
-            with open(fn, 'r') as fp:
+            with open(fn) as fp:
                 lines = fp.readlines()
 
             last_ln = ''
@@ -1000,7 +997,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("Hotel ID prefix followed by underscore character is missing - skipping.", fn, importance=4)
                 continue
 
-            with open(fn, 'r', encoding='utf-8-sig') as fp:  # encoding is removing the utf8 BOM
+            with open(fn, encoding='utf-8-sig') as fp:  # encoding is removing the utf8 BOM
                 lines = fp.readlines()
             # check/remove header and parse all other lines normalized into column list
             header = ''
@@ -1089,7 +1086,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("User cancelled loading of import files", fn, importance=4)
                 break
             log_import("Loading import file " + fn, fn, importance=4)
-            with open(fn, 'r', encoding='utf-16') as fp:
+            with open(fn, encoding='utf-16') as fp:
                 lines = fp.readlines()
 
             progress = Progress(debug_level, start_counter=len(lines),
@@ -1237,7 +1234,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("User cancelled loading of JSON import files", fn, importance=4)
                 break
             log_import("Loading JSON import file " + fn, fn, importance=4)
-            with open(fn, 'r', encoding='utf-8') as fp:
+            with open(fn, encoding='utf-8') as fp:
                 json_data = json.load(fp)
 
             if debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -1282,7 +1279,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("User cancelled reservation send", fn, idx, importance=4)
                 break
             progress.next(processed_id=str(crow['ResVoucherNo']), error_msg=error_msg)
-            error_msg, warning_msg = res_sender.send_row(crow)
+            error_msg, warning_msg = res_sender.send_rec(crow)
             if warning_msg:
                 log_import(warning_msg, fn, idx)
             if error_msg:

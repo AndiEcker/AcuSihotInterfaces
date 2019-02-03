@@ -153,15 +153,15 @@ def name_is_valid(name):
 
 def valid_name_indexes(shd):
     indexes = list()
-    for idx, occ_rec in enumerate(shd.val('ResPersons')):
-        if occ_rec.val('Surname') and occ_rec.val('Firstname'):
+    for idx, occ_rec in enumerate(shd.value('ResPersons', flex_sys_dir=True)):
+        if occ_rec.val('PersSurname') and occ_rec.val('PersFirstname'):
             indexes.append(idx)
     return indexes
 
 
 def valid_email_indexes(shd):
     indexes = list()
-    for idx, occ_rec in enumerate(shd.val('ResPersons')):
+    for idx, occ_rec in enumerate(shd.value('ResPersons', flex_sys_dir=True)):
         if occ_rec.val('Email'):
             indexes.append(idx)
     return indexes
@@ -279,9 +279,10 @@ try:
             mail_changes = list()
             email, mail_changed = correct_email(row_dict.val(arr_index, 'Email'), removed=mail_changes)
             phone_changes = list()
-            phone, phone_changed = correct_phone(row_dict.val(arr_index, 'HomePhone'), removed=phone_changes)
+            phone, phone_changed = correct_phone(row_dict.val(arr_index, 'Phone'), removed=phone_changes)
             surname = row_dict.val(arr_index, 'Surname')
             forename = row_dict.val(arr_index, 'Forename')
+
             mkt_src = row_dict.val('ResMktSegment')
             sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email, phone, surname, forename, mkt_src, hotel_id)
 
