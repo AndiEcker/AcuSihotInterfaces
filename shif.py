@@ -5,15 +5,15 @@ from traceback import format_exc, print_exc
 from copy import deepcopy
 from textwrap import wrap
 import pprint
-from typing import Union
+from typing import Union, Any, Tuple
 
 from sys_data_ids import (SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, FORE_SURNAME_SEP,
                           SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
 from ae_sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
-                         FAD_FROM, FAD_ONTO, LIST_TYPES,
-                         Record, Records, Value, current_index, set_current_index, field_name_idx_path, FAT_IDX,
-                         ALL_FIELDS, CALLABLE_SUFFIX)
+                         FAT_IDX, FAD_FROM, FAD_ONTO, LIST_TYPES, ALL_FIELDS, CALLABLE_SUFFIX,
+                         Record, Records, Value, current_index, compose_current_index, set_current_index,
+                         field_name_idx_path)
 from ae_console_app import uprint, full_stack_trace
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
@@ -245,9 +245,13 @@ SH_RES_MAP = \
         ('NOROOMS', None, 1),     # mandatory field, also needed for DELETE action
         # ('NOPAX', None, None,   # needed for DELETE action
         #  lambda f: f.rfv('ResAdults') + f.rfv('ResChildren'), lambda f, v: int(v), lambda f, v: str(v)),
-        ('NOPAX', 'ResAdults', None,          # actually NOPAX is number of adults (adults + children)
+        ('NOPAX', 'ResAdults', None,          # NOPAX is sum of adults + children
          None,
-         lambda f, v: int(v) if v else 2, lambda f, v: str(v)),
+         # converters: FROM-converter has to use system value because field value could still be unset by field.pull()
+         # .. additional: NOCHILDS can be omitted in Sihot xml response - therefore use '0' as default
+         lambda f, v: int(v) - int(f.srv('ResChildren', system=SDI_SH, direction=FAD_FROM) or '0') if v else 2,
+         # lambda f, v: str(v + f.rfv('ResChildren'))),
+         lambda f, v: str(v)),
         ('NOCHILDS', 'ResChildren', None,
          lambda f: f.ina(ACTION_DELETE),
          lambda f, v: int(v) if v else 0, lambda f, v: str(v)),
@@ -274,17 +278,18 @@ SH_RES_MAP = \
         ('PICKUP-TYPE-ARRIVAL', None, 1,                 # 1=car, 2=van
          lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResFlightETA')),
         # ### PERSON/occupant details
-        ('PERS-TYPE-LIST/', ),
-        ('PERS-TYPE/', ),
-        ('TYPE', None, '1A'),
-        ('NO', 'ResAdults'),
-        ('/PERS-TYPE', ),
-        ('PERS-TYPE/', ),
-        ('TYPE', None, '2B'),
-        ('NO', 'ResChildren'),
-        ('/PERS-TYPE', ),
-        ('/PERS-TYPE-LIST', ),
-        # Person Records
+        # ('PERS-TYPE-LIST/', ),
+        # ('PERS-TYPE/', ),
+        # ('TYPE', None, '1A'),
+        # ('NO', 'ResAdults'),
+        # ('/PERS-TYPE', ),
+        # ('PERS-TYPE/', ),
+        # ('TYPE', None, '2B'),
+        # ('NO', 'ResChildren'),
+        # ('/PERS-TYPE', ),
+        # ('/PERS-TYPE-LIST', ),
+        # Person Records - each rec also used as root rec for to upsert occupants as client (so FAT_CAL lambda has to
+        # .. check also if the reservation data is available in PersSurname and TypeOfPerson!!!)
         ('PERSON/', None, None,
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'GUEST-ID', ('ResPersons', 0, 'PersShId'), None,
@@ -292,8 +297,7 @@ SH_RES_MAP = \
         ('PERSON' + ELEM_PATH_SEP + 'MATCHCODE', ('ResPersons', 0, 'PersAcuId'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()
             or f.rfv('ResPersons', f.crx(), 'PersShId')),
-        ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'PersSurname'), lambda f: "Adult " + str(f.crx() + 1)
-            if f.crx() < f.rfv('ResAdults') else "Child " + str(f.crx() - f.rfv('ResAdults') + 1),
+        ('PERSON' + ELEM_PATH_SEP + 'NAME', ('ResPersons', 0, 'PersSurname'), None,
          lambda f: f.ina(ACTION_DELETE)
             or f.rfv('ResPersons', f.crx(), 'PersAcuId')
             or f.rfv('ResPersons', f.crx(), 'PersShId')),
@@ -306,15 +310,14 @@ SH_RES_MAP = \
             or f.rfv('ResPersons', f.crx(), 'PersShId')
             or f.rfv('ResPersons', f.crx(), 'PersSurname')
             or f.rfv('ResPersons', f.crx(), 'PersForename')),
-        ('PERSON' + ELEM_PATH_SEP + 'ROOM-SEQ', ('ResPersons', 0, 'RoomSeq'), '0',
+        ('PERSON' + ELEM_PATH_SEP + 'ROOM-SEQ', ('ResPersons', 0, 'RoomSeq'), None,
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'ROOM-PERS-SEQ', ('ResPersons', 0, 'RoomPersSeq'), None,
          lambda f: f.ina(ACTION_DELETE)),
-        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'TypeOfPerson'), lambda f: '1A'
-            if f.crx() < f.rfv('ResAdults') else '2B',
+        ('PERSON' + ELEM_PATH_SEP + 'PERS-TYPE', ('ResPersons', 0, 'TypeOfPerson'), None,
          lambda f: f.ina(ACTION_DELETE)),
         ('PERSON' + ELEM_PATH_SEP + 'RN', ('ResPersons', 0, 'RoomNo'), None,
-         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResDeparture') < datetime.datetime.now()),
+         lambda f: f.ina(ACTION_DELETE) or not f.val() or f.rfv('ResDeparture') < datetime.date.today()),
         ('PERSON' + ELEM_PATH_SEP + 'DOB', ('ResPersons', 0, 'PersDOB'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val(),
          lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
@@ -337,7 +340,7 @@ SH_RES_MAP = \
         ('PERSON' + ELEM_PATH_SEP + 'PICKUP-TIME-DEPARTURE', ('ResPersons', 0, 'FlightETD'), None,
          lambda f: f.ina(ACTION_DELETE) or not f.val()),
         ('/PERSON', None, None,
-         lambda f: f.ina(ACTION_DELETE) or f.rfv('ResAdults') <= 0),
+         lambda f: f.ina(ACTION_DELETE)),
         ('/RESERVATION',),
         ('/ARESLIST',),
     )
@@ -732,8 +735,10 @@ class FldMapXmlParser(SihotXmlParser):
         for cf in self._collected_fields:
             idx_path = cf.root_idx(system=SDI_SH, direction=FAD_FROM)
             if idx_path:
-                self._rec.set_val(self._current_data, *idx_path, system=SDI_SH, direction=FAD_FROM,
-                                  use_curr_idx=Value((1, )))
+                curr_idx = compose_current_index(self._rec, idx_path, Value((1, )))
+                self.cae.dprint("FldMapXmlParser.end() setting field {} to {!r}".format(curr_idx, self._current_data),
+                                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                self._rec.set_val(self._current_data, *curr_idx, system=SDI_SH, direction=FAD_FROM)
         self._collected_fields = list()
 
         for elem_name, *_ in self._elem_map:
@@ -1039,20 +1044,21 @@ class FldMapXmlBuilder(SihotXmlBuilder):
 
         self.action = ''
         self.elem_map = deepcopy(elem_map or cae.get_option(SDF_SH_RES_MAP))
-        self.elem_fld_rec = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(self.elem_map)
 
     # --- rec helpers
 
-    def fill_elem_fld_rec(self, rec):
-        self.elem_fld_rec.clear_leafs()     # and reestablish default values
-        self.elem_fld_rec.merge_leafs(rec, extend=False)
+    def prepare_rec(self, rec):
+        ori_rec = rec.copy(deepness=-1)
+        if rec.system != SDI_SH or rec.direction != FAD_ONTO:
+            rec.set_env(system=SDI_SH, direction=FAD_ONTO)
+            rec.add_system_fields(self.elem_map)
+        rec.clear_leafs()     # reestablish default values
+        rec.merge_leafs(ori_rec)    # , extend=False)
 
     def prepare_map_xml(self, rec, include_empty_values=True):
-        self.fill_elem_fld_rec(rec)
-        self.elem_fld_rec.push(SDI_SH)
-
-        old_act = self.elem_fld_rec.action
-        self.elem_fld_rec.action = self.action or ACTION_BUILD
+        self.prepare_rec(rec)
+        rec.push(SDI_SH)        # TODO: maybe REMOVE the other/1st one if 2nd push (preventing multiple ResAdults incr)
+        rec.action = self.action or ACTION_BUILD
 
         recs = None
         inner_xml = ''
@@ -1068,21 +1074,19 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 tag = tag[tag.rfind(ELEM_PATH_SEP) + 1:]
             idx = elem_map_item[MTI_FLD_NAME] if len(elem_map_item) > MTI_FLD_NAME else None
             if idx:
-                fld = self.elem_fld_rec.node_child(idx, use_curr_idx=Value((1, )))
+                fld = rec.node_child(idx, use_curr_idx=Value((1, )))
                 if fld is None:
-                    fld = self.elem_fld_rec.node_child(idx)  # use template field
+                    fld = rec.node_child(idx)  # use template field
                     if fld is None:
                         continue        # skip xml creation for missing field (in current and template rec)
                 field = fld
                 idx_path = idx if isinstance(idx, (tuple, list)) else (field_name_idx_path(idx) or (idx, ))
-                val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
-                # if val is None:     # if field from empty rec (added for to fulfill pax count)
-                #     val = self.elem_fld_rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO)   # use template val/cal
+                val = rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
                 filter_fields = field.filter(system=SDI_SH, direction=FAD_ONTO)
             else:
                 # field recycling has buggy side effects because last map item can refer to different/changed record:
                 # if field is None:   # try to use field of last map item (especially for to get crx())
-                field = next(iter(self.elem_fld_rec.values()))
+                field = next(iter(rec.values()))
                 val = elem_map_item[MTI_FLD_VAL] if len(elem_map_item) > MTI_FLD_VAL else ''
                 if callable(val):
                     val = val(field)
@@ -1098,7 +1102,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 if recs is None and map_i + 1 < len(self.elem_map):
                     nel = self.elem_map[map_i + 1]
                     if len(nel) > MTI_FLD_NAME and isinstance(nel[MTI_FLD_NAME], (tuple, list)):
-                        root_field = self.elem_fld_rec.node_child(nel[MTI_FLD_NAME][0])
+                        root_field = rec.node_child((nel[MTI_FLD_NAME][0], ))
                         if root_field:
                             recs = root_field.value()
                             if isinstance(recs, LIST_TYPES):
@@ -1120,7 +1124,6 @@ class FldMapXmlBuilder(SihotXmlBuilder):
             elif include_empty_values or val not in ('', None):
                 inner_xml += self.new_tag(tag, self.convert_value_to_xml_string(val))
 
-        self.elem_fld_rec.action = old_act
         return inner_xml
 
 
@@ -1130,13 +1133,22 @@ class ClientToSihot(FldMapXmlBuilder):
                          use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT),
                          elem_map=cae.get_option(SDF_SH_CLIENT_MAP) or SH_CLIENT_MAP)
 
+    @staticmethod
+    def _complete_client_data(rec):
+        if not rec.val('GuestType', system='', direction=''):
+            rec.set_val('1', 'GuestType', system='', direction='')
+
+    def prepare_rec(self, rec):
+        super().prepare_rec(rec)
+        self._complete_client_data(rec)
+
     def _prepare_guest_xml(self, rec, fld_name_suffix=''):
         if not self.action:
             self.action = ACTION_UPDATE if rec.val('ShId' + fld_name_suffix) else ACTION_INSERT
         self.beg_xml(operation_code='GUEST-CHANGE' if self.action == ACTION_UPDATE else 'GUEST-CREATE')
         self.add_tag('GUEST-PROFILE', self.prepare_map_xml(rec))
         self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_xml() act={} xml='{}' rec={}".format(self.action, self.xml, rec),
+        self.cae.dprint("ClientToSihot._prepare_guest_xml() action={} rec={}".format(self.action, rec),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _prepare_guest_link_xml(self, mc1, mc2):
@@ -1147,7 +1159,7 @@ class ClientToSihot(FldMapXmlBuilder):
         self.beg_xml(operation_code='GUEST-CONTACT')
         self.add_tag('CONTACTLIST', mct1 + mct2)
         self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_link_xml(): mc1={} mc2={} xml='{}'".format(mc1, mc2, self.xml),
+        self.cae.dprint("ClientToSihot._prepare_guest_link_xml(): mc1={} mc2={}".format(mc1, mc2),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _send_link_to_sihot(self, pk1, pk2):
@@ -1188,8 +1200,8 @@ class ResToSihot(FldMapXmlBuilder):
         self._gds_errors = dict()
 
     def _add_sihot_configs(self, rec):
-        mkt_seg = rec.val('ResMktSegment')
-        hotel_id = rec.val('ResHotelId')
+        mkt_seg = rec.val('ResMktSegment', system='', direction='')
+        hotel_id = rec.val('ResHotelId', system='', direction='')
         arr_date = rec.val('ResArrival', system='', direction='')   # system/direction needed for to get date type
         today = datetime.datetime.today()
         cf = self.cae.get_config
@@ -1199,22 +1211,23 @@ class ResToSihot(FldMapXmlBuilder):
             val = cf(mkt_seg + '_' + hotel_id, section='SihotAllotments',
                      default_value=cf(mkt_seg, section='SihotAllotments'))
             if val:
-                rec.set_val(val, 'ResAllotmentNo')
+                rec.set_val(val, 'ResAllotmentNo', system='', direction='')
 
-        if not rec.val('ResRateSegment'):  # not specified? FYI: this field is not included in V_ACU_RES_DATA
+        if not rec.val('ResRateSegment', system='', direction=''):
+            # not specified? FYI: this field is not included in V_ACU_RES_DATA
             val = cf(mkt_seg, section='SihotRateSegments', default_value=mkt_seg)
             if val:
-                rec.set_val(val, 'ResRateSegment')
+                rec.set_val(val, 'ResRateSegment', system='', direction='')
 
         val = cf(mkt_seg, section='SihotPaymentInstructions')
         if val:
-            rec.set_val(val, 'ResAccount')
+            rec.set_val(val, 'ResAccount', system='', direction='')
 
-        if self.action != ACTION_DELETE and rec.val('ResStatus') != 'S' \
+        if self.action != ACTION_DELETE and rec.val('ResStatus', system='', direction='') != 'S' \
                 and arr_date and arr_date.toordinal() > today.toordinal():
             val = cf(mkt_seg, section='SihotResTypes')
             if val:
-                rec.set_val(val, 'ResStatus')
+                rec.set_val(val, 'ResStatus', system='', direction='')
 
     @staticmethod
     def _complete_res_data(rec):
@@ -1238,38 +1251,63 @@ class ResToSihot(FldMapXmlBuilder):
         default_values = dict(ResStatus='1',
                               ResAction=ACTION_INSERT,
                               ResBooked=datetime.datetime.today(),
-                              ResPriceCat=rec.val('ResRoomCat'),
+                              ResPriceCat=rec.val('ResRoomCat', system='', direction=''),
                               ResBoard='RO',  # room only (no board/meal-plan)
                               ResAccount='1',
                               ResSource='A',
-                              ResRateSegment=rec.val('ResMktSegment'),
+                              ResRateSegment=rec.val('ResMktSegment', system='', direction=''),
                               ResMktGroup='RS',
                               ResAdults=2,
                               ResChildren=0,
                               )
         for field_name, field_value in default_values.items():
-            if not rec.val(field_name) and field_value not in ('', None):
-                rec.set_val(field_value, field_name)
+            if not rec.val(field_name, system='', direction='') and field_value not in ('', None):
+                rec.set_val(field_value, field_name, system='', direction='')
+
+        if rec.val('ResPersons', system='', direction=''):
+            adults = rec.val('ResAdults', system='', direction='')
+            pax = adults + rec.val('ResChildren', system='', direction='')
+            root_idx = ('ResPersons',)                                              # type: Tuple[Any]
+            recs = rec.value('ResPersons', flex_sys_dir=True)
+            recs_len = len(recs)
+            if recs_len > pax:
+                for _ in range(recs_len - pax):  # remove invalid/surplus occupant recs
+                    recs.pop()
+            elif recs_len < pax:
+                for _ in range(pax - recs_len):  # add rec, copied from recs[0] and establish init/default field values
+                    recs.append_record(root_rec=rec, root_idx=root_idx)
+
+            for pers_seq, occ_rec in enumerate(recs):
+                rix = root_idx + (pers_seq, )
+                if not occ_rec.val('RoomSeq', system='', direction=''):
+                    occ_rec.set_val('0', 'RoomSeq', system='', direction='', root_rec=rec, root_idx=rix)
+                if not occ_rec.val('RoomPersSeq', system='', direction=''):
+                    occ_rec.set_val(str(pers_seq), 'RoomPersSeq', system='', direction='', root_rec=rec, root_idx=rix)
+                if not occ_rec.val('TypeOfPerson', system='', direction=''):
+                    occ_rec.set_val('1A' if pers_seq < adults else '2B', 'TypeOfPerson', system='', direction='',
+                                    root_rec=rec, root_idx=rix)
+                if not occ_rec.val('PersAcuId', system='', direction='') \
+                        and not occ_rec.val('PersShId', system='', direction='') \
+                        and not occ_rec.val('PersSurname', system='', direction='') \
+                        and not occ_rec.val('PersForename', system='', direction=''):
+                    if pers_seq < adults:
+                        val = "Adult " + str(pers_seq + 1)
+                    else:
+                        val = "Child " + str(pers_seq - adults + 1)
+                    occ_rec.set_val(val, 'PersSurname', system='', direction='', root_rec=rec, root_idx=rix)
+                    occ_rec.set_val('1', 'AutoGen', system='', direction='', root_rec=rec, root_idx=rix)
+                if not occ_rec.val('RoomNo', system='', direction=''):
+                    room_no = rec.val('ResRoomNo', system='', direction='')
+                    if room_no:
+                        occ_rec.set_val(room_no, 'RoomNo', system='', direction='', root_rec=rec, root_idx=rix)
+
         return rec
 
-    def fill_elem_fld_rec(self, rec):
-        super().fill_elem_fld_rec(rec)
+    def prepare_rec(self, rec):
+        super().prepare_rec(rec)
 
         self._add_sihot_configs(rec)
         self._complete_res_data(rec)
-
-        adults = self.elem_fld_rec.val('ResAdults', system='', direction='')
-        pax = adults + self.elem_fld_rec.val('ResChildren', system='', direction='')
-        recs = self.elem_fld_rec.value('ResPersons', flex_sys_dir=True)
-        while True:
-            recs_len = len(recs)
-            if recs_len >= pax:
-                for _ in range(pax, recs_len):  # remove recs (from last send)
-                    recs.pop()
-                break
-            # add rec, copied from recs[0]
-            rec = recs.append_record(root_rec=self.elem_fld_rec, root_idx=('ResPersons', ))
-            rec.clear_leafs()
 
     def _prepare_res_xml(self, rec):
         self.action = rec.val('ResAction') or ACTION_INSERT
@@ -1283,7 +1321,7 @@ class ResToSihot(FldMapXmlBuilder):
         else:
             self.beg_xml(operation_code='RES', add_inner_xml=inner_xml)
         self.end_xml()
-        self.cae.dprint("ResToSihot._prepare_res_xml() result: ", self.xml,
+        self.cae.dprint("ResToSihot._prepare_res_xml(): action={}; rec={}".format(self.action, rec),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _sending_res_to_sihot(self, rec):
@@ -1324,20 +1362,23 @@ class ResToSihot(FldMapXmlBuilder):
         err_msg = ""
 
         # check occupants that are already registered (having a client reference)
+        sent_clients = list()
         if rec.val('ResPersons'):
             for occ_rec in rec.value('ResPersons', flex_sys_dir=True):
                 if occ_rec.val('PersAcuId'):
                     client = ClientToSihot(self.cae)
                     crc = occ_rec.copy(filter_fields=lambda f: not f.name().startswith('Pers'),
                                        fields_patches={ALL_FIELDS: {FAT_IDX + CALLABLE_SUFFIX: lambda f: f.name()[4:]}})
+                    crc.set_env(system=SDI_SH, direction=FAD_ONTO)
                     err_msg = client.send_client_to_sihot(crc)
                     if err_msg:
                         break
+                    sent_clients.append(crc.val('AcuId'))
                     if crc.val('ShId') and not rec.val('ShId') and crc.val('AcuId') == rec.val('AcuId'):
                         rec.set_val(crc.val('ShId'), 'ShId')     # pass new Guest Object Id to orderer
 
         # check also Orderer but exclude OTAs like TCAG/TCRENT with a MATCHCODE that is no normal Acumen-CDREF
-        if not err_msg and rec.val('AcuId') and len(rec.val('AcuId')) == 7:
+        if not err_msg and rec.val('AcuId') and len(rec.val('AcuId')) == 7 and rec.val('AcuId') not in sent_clients:
             client = ClientToSihot(self.cae)
             err_msg = client.send_client_to_sihot(rec)
 
@@ -1529,12 +1570,13 @@ class ResSender(ResToSihot):
             err = "ResSender.send_rec() exception: {}".format(full_stack_trace(ex))
         if err:
             if err.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
-                msg = "Ignoring error sending res: " + str(rec)
+                msg = "Ignoring error '{}' in sending res-rec {}; WARNINGS={}".format(err, rec, self.get_warnings())
                 err = ""
             elif 'setDataRoom not available!' in err:  # was: 'A_Persons::setDataRoom not available!'
                 err = "Apartment {} occupied between {} and {} - created GDS-No {} for manual allocation." \
                     .format(rec.val('ResRoomNo'), rec.val('ResArrival'), rec.val('ResDeparture'), rec.val('ResGdsNo')) \
-                      + (" Original error: " + err if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
+                      + (" Original error: {}; WARNINGS={}".format(err, self.get_warnings())
+                         if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
         elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
             msg = "Sent res: " + str(rec)
         return err, msg

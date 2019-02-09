@@ -292,6 +292,11 @@ class TestRecord:
         r.add_system_fields((('tsf', 'test'), ))
         print(r)
 
+        field = r.node_child(('test', ))
+        assert field
+        assert field.root_idx() == ('test', )
+        assert field.root_idx(system='Xx', direction=FAD_ONTO) == ('tsf', )
+
         assert r['tsf'] == 'xxx'
         assert r.val('tsf') == 'xxx'
         assert r.get('tsf') is None             # get() doesn't find sys names
@@ -829,20 +834,52 @@ class TestRecords:
 
     def test_append_sub_record(self):
         r1 = Record(fields=dict(fnA=1, fnB0sfnA=2, fnB0sfnB=3))
+        assert len(r1.value('fnB')) == 1
+        assert r1.val('fnB', 0, 'sfnA') == 2
+        assert r1.val('fnB', 0, 'sfnB') == 3
+        assert r1.val('fnB', 1, 'sfnA') is None
+        assert r1.val('fnB', 1, 'sfnB') is None
+        assert r1.val('fnB', 2, 'sfnA') is None
+        assert r1.val('fnB', 2, 'sfnB') is None
 
         r1.value('fnB').append_record(root_rec=r1, root_idx=('fnB', ))
-        assert r1.val('fnB', 1, 'sfnA') == 2
-        assert r1.val('fnB', 1, 'sfnB') == 3
+        assert len(r1.value('fnB')) == 2
+        assert r1.val('fnB', 0, 'sfnA') == 2
+        assert r1.val('fnB', 0, 'sfnB') == 3
+        assert r1.val('fnB', 1, 'sfnA') == ''
+        assert r1.val('fnB', 1, 'sfnB') == ''
 
         r1.node_child('fnB').append_record(root_rec=r1, root_idx=('fnB', ))
-        assert r1.val('fnB', 2, 'sfnA') == 2
-        assert r1.val('fnB', 2, 'sfnB') == 3
+        assert len(r1.value('fnB')) == 3
+        assert r1.val('fnB', 0, 'sfnA') == 2
+        assert r1.val('fnB', 0, 'sfnB') == 3
+        assert r1.val('fnB', 1, 'sfnA') == ''
+        assert r1.val('fnB', 1, 'sfnB') == ''
+        assert r1.val('fnB', 2, 'sfnA') == ''
+        assert r1.val('fnB', 2, 'sfnB') == ''
 
     def test_append_sub_record_to_foreign_records(self):
-        r1 = Record(fields=dict(fnA=1, fnB0sfnA=2, fnB0sfnB=3), field_items=True)
-        r2 = Record(fields=dict(fnA=7, fnB1sfnA=8, fnB1sfnB=9), field_items=True)
+        r1 = Record(fields=dict(fnA=1, fnB0sfnA=2, fnB0sfnB=3),
+                    field_items=True)
+        assert len(r1.value('fnB')) == 1
+        assert r1.val('fnB', 0, 'sfnA') == 2
+        assert r1.val('fnB', 0, 'sfnB') == 3
+        assert r1.val('fnB', 1, 'sfnA') is None
+        assert r1.val('fnB', 1, 'sfnB') is None
+        assert r1.val('fnB', 2, 'sfnA') is None
+        assert r1.val('fnB', 2, 'sfnB') is None
 
-        r2.value('fnB').append_record(from_rec=r1.value('fnB', 0), root_rec=r2, root_idx=('fnB', ))
+        r2 = Record(fields=dict(fnA=7, fnB1sfnA=8, fnB1sfnB=9),
+                    field_items=True)
+        assert len(r2.value('fnB')) == 2
+        assert r2.val('fnB', 0, 'sfnA') is None
+        assert r2.val('fnB', 0, 'sfnB') is None
+        assert r2.val('fnB', 1, 'sfnA') == 8
+        assert r2.val('fnB', 1, 'sfnB') == 9
+        assert r2.val('fnB', 2, 'sfnA') is None
+        assert r2.val('fnB', 2, 'sfnB') is None
+
+        r2.value('fnB').append_record(from_rec=r1.value('fnB', 0), clear_leafs=False, root_rec=r2, root_idx=('fnB', ))
         assert r2.val('fnB', 2, 'sfnA') == 2
         assert r2.val('fnB', 2, 'sfnB') == 3
         assert r2['fnB'].root_rec() is r2
@@ -850,7 +887,7 @@ class TestRecords:
         assert r2['fnB'].root_idx() == ('fnB', )
         assert r2[('fnB', 2, 'sfnB')].root_idx() == ('fnB', 2, 'sfnB')
 
-        r1.value('fnB').append_record(from_rec=r2.value('fnB', 1), root_rec=r1, root_idx=('fnB', ))
+        r1.value('fnB').append_record(from_rec=r2.value('fnB', 1), clear_leafs=False, root_rec=r1, root_idx=('fnB', ))
         assert r1.val('fnB', 1, 'sfnA') == 8
         assert r1.val('fnB', 1, 'sfnB') == 9
         assert r1['fnB'].root_rec() is r1
@@ -1022,7 +1059,7 @@ class TestCopy:
         assert rec_2f_2s_incomplete.value('fnA') is not r1c.value('fnA')
 
         # STRANGE failing until implementation of _Field.__eq__: assert rec_2f_2s_incomplete['fnB'] == r1c['fnB']
-        assert id(rec_2f_2s_incomplete['fnB']) != id(r1c.node_child(('fnB', )))
+        assert id(rec_2f_2s_incomplete['fnB']) != id(r1c.node_child('fnB'))
         assert rec_2f_2s_incomplete['fnB'] is not r1c.node_child(('fnB', ))
 
         # STRANGE crashing in: assert rec_2f_2s_incomplete['fnB'][1] == r1c['fnB'][1]

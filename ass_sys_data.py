@@ -650,10 +650,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         dup_ids = list()
         for ref, recs in found_ids.items():
             if len(recs) > 1:
-                dup_ids.append("Duplicate external {} ref {} found in clients: {}"
+                dup_ids.append("Duplicate external {} ref {!r} found in clients: {}"
                                .format(ref.split(EXT_REF_TYPE_ID_SEP)[0] if EXT_REF_TYPE_ID_SEP in ref
                                        else EXT_REF_TYPE_RCI,
-                                       repr(ref), ';'.join([_.val('AcuId') for _ in recs])))
+                                       ref, 
+                                       ';'.join([_.val('AcuId') for _ in recs])))
         for dup in sorted(dup_ids):
             self._warn(dup, self._ctx_no_file + 'CheckClientsDataExtRefDuplicates')
     '''
@@ -1154,7 +1155,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                 self.error_message = ""
             else:
-                occ_rec.set_val(occ_cl_pk, 'PersAssId')
+                occ_rec.set_val(occ_cl_pk, 'PersAssId', root_rec=sh_ass_rec, root_idx=('ResPersons', pers_idx))
+            if not sh_ass_rec.val('ResRoomNo') and occ_rec.val('RoomNo'):
+                sh_ass_rec.set_val(occ_rec.val('RoomNo'), 'ResRoomNo')
+
         sh_ass_rec.push(SDI_ASS)
 
         with ass_db.thread_lock_init('res_groups', chk_values):
@@ -1723,7 +1727,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             dif = ["ass_clients_compare() error {}".format(self.error_message)]
         else:
             dif = self.clients.compare_records(pulled, match_fields=match_fields,
-                                               field_names=field_names, exclude_fields=exclude_fields,
+                                               field_names=field_names, exclude_fields=exclude_fields + ('ExtRefs', ),
                                                record_comparator=self.cl_compare_ext_refs)
             for msg in dif:
                 self._warn(msg)
@@ -2250,7 +2254,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self._warn("Pushing reservation data onto Sihot", 'pushShResData', importance=4)
 
-        ignored_errors = 0
+        err, ignored_errors = "", list()
         recs = self.reservations
         recs.set_env(system=SDI_SH, direction=FAD_ONTO)
         for rec in recs:
@@ -2260,16 +2264,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 if field_names or exclude_fields:
                     rec = rec.copy(filter_fields=lambda f: field_names and f.name() not in field_names
                                    or f.name() in exclude_fields)
-                err = ResToSihot(self.cae).send_res_to_sihot(rec)
+                rts = ResToSihot(self.cae)
+                err = rts.send_res_to_sihot(rec)
                 if err:
-                    err = "sh_reservations_push() error: '{}'".format(err)
+                    err = "sh_reservations_push() error: '{}'; WARNINGS='{}'".format(err, rts.get_warnings())
                     if self.cae.get_option('breakOnError'):
-                        self.error_message = err
-                        self._err(err)
                         break
-                    ignored_errors += 1
+                    ignored_errors.append(err)
                     self._warn("Ignoring/Skipping " + err, importance=3)
                 elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
                     self._warn("sh_reservations_push(): reservation upserted; rec={}".format(rec))
+
         if ignored_errors:
-            self._err("Finished Sihot reservation push with {} skipped/ignored errors".format(ignored_errors))
+            err = "Sihot reservation push had {} ignored errors:\n{}".format(len(ignored_errors), ppf(ignored_errors))
+        if err:
+            self.error_message = err
+            self._err(err)

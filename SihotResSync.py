@@ -13,7 +13,7 @@
 """
 import datetime
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING, \
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
     SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, full_stack_trace
 from ae_notification import add_notification_options, init_notification
@@ -21,7 +21,7 @@ from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
 
 from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
 from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
-from shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
+from shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
 from ass_sys_data import AssSysData
 
 __version__ = '1.0'
@@ -100,7 +100,7 @@ if cae.get_option('clientsFirst'):
 
         acumen_cd = AcuClientToSihot(cae)
         error_msg = acumen_cd.fetch_from_acu_by_acu()
-        progress = Progress(debug_level, start_counter=acumen_cd.row_count,
+        progress = Progress(debug_level, start_counter=len(acumen_cd.recs),
                             start_msg='Prepare sending of {run_counter} client detail changes to Sihot',
                             nothing_to_do_msg='SihotResSync: acumen client fetch returning no recs')
         if not error_msg:
@@ -110,7 +110,7 @@ if cae.get_option('clientsFirst'):
                 progress.next(processed_id=cid, error_msg=error_msg)
                 if error_msg:
                     send_notification('Acumen Client', cid, error_msg, crow)
-                error_msg += acumen_cd.ora_db.commit()
+                error_msg += acumen_cd.acu_db.ora_db.commit()
                 if error_msg:
                     if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                         continue            # currently not used/returned-by-send_client_to_sihot()
@@ -156,7 +156,7 @@ if not error_msg:
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
                         notification.send_notification(error_msg, subject='SihotResSync admin room-swap notification',
                                                        mail_to=ADMIN_MAIL_TO_LIST)
-                    acumen_req.ora_db.rollback()  # send but directly roll back changes in RU_SIHOT_OBJID and T_SRSL
+                    acumen_req.acu_db.ora_db.rollback()  # send but roll back changes in RU_SIHOT_OBJID and T_SRSL
                 progress.finished(error_msg=error_msg)
 
             # 2nd pre-run for hotel movements (HOTMOVE) - for to delete/cancel booking in last/old hotel
@@ -183,9 +183,9 @@ if not error_msg:
                         notification.send_notification(error_msg, subject='SihotResSync admin HOTMOVE notification',
                                                        mail_to=ADMIN_MAIL_TO_LIST)
                     if new_hotel not in hotel_ids:
-                        acumen_req.ora_db.commit()    # because this res get skipped in the full run loop underneath
+                        acumen_req.acu_db.ora_db.commit()    # because this res get skipped in the run loop underneath
                     else:
-                        acumen_req.ora_db.rollback()  # send but directly roll back changes in RU_SIHOT_OBJID and T_SRSL
+                        acumen_req.acu_db.ora_db.rollback()  # send but roll back changes in RU_SIHOT_OBJID and T_SRSL
                 progress.finished(error_msg=error_msg)
 
             if not migration_mode:
@@ -194,7 +194,7 @@ if not error_msg:
 
             # now do the full run with room allocations (only skipping/excluding HOTMOVE to non-Sihot-hotel)
             synced_ids = list()
-            progress = Progress(debug_level, start_counter=acumen_req.row_count,
+            progress = Progress(debug_level, start_counter=len(acumen_req.recs),
                                 start_msg=" ###  Prepare sending of {total_count} reservations to Sihot",
                                 nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no recs")
             if acumen_req.recs:
@@ -208,11 +208,11 @@ if not error_msg:
                         continue        # skip HOTMOVE if new hotel is a non-Sihot-hotel
                     elif str(crow['RUL_SIHOT_LAST_HOTEL']) not in hotel_ids:
                         crow['RUL_ACTION'] = ACTION_INSERT
-                    error_msg = acumen_req.send_res_to_sihot(crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS)
+                    error_msg = acumen_req.send_res_to_sihot(crow)
                     progress.next(processed_id=rid, error_msg=error_msg)
                     if error_msg:
                         send_notification("Acumen Reservation", rid, acumen_req.res_id_desc(crow, error_msg), crow)
-                    error_msg += acumen_req.ora_db.commit()
+                    error_msg += acumen_req.acu_db.ora_db.commit()
                     if error_msg:
                         if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                             synced_ids.append(rid + "(C)")

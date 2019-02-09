@@ -6,7 +6,7 @@ import datetime
 from sys_data_ids import DEBUG_LEVEL_VERBOSE
 from ae_console_app import uprint
 from ae_db import OraDB
-from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM
+from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record
 from shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
 from sxmlif import SihotXmlBuilder
 from sys_data_ids import SDI_ACU
@@ -249,10 +249,8 @@ class AcuClientToSihot(ClientToSihot):
     def __init__(self, cae):
         super(AcuClientToSihot, self).__init__(cae)
 
-        self.fld_col_rec = self.elem_fld_rec.copy()
-        self.fld_col_rec.set_env(system=SDI_ACU, direction=FAD_FROM)
-        self.fld_col_rec.add_system_fields(CLI_FIELD_MAP, sys_fld_indexes=field_indexes)
-
+        self.fld_col_rec = Record(system=SDI_ACU, direction=FAD_FROM).add_system_fields(CLI_FIELD_MAP,
+                                                                                        sys_fld_indexes=field_indexes)
         self.recs = Records()
 
         self.acu_db = AcuDbRows(cae)
@@ -343,10 +341,8 @@ class AcuResToSihot(ResToSihot):
     def __init__(self, cae):
         super(AcuResToSihot, self).__init__(cae)
 
-        self.fld_col_rec = self.elem_fld_rec.copy()
-        self.fld_col_rec.set_env(system=SDI_ACU, direction=FAD_FROM)
-        self.fld_col_rec.add_system_fields(RES_FIELD_MAP, sys_fld_indexes=field_indexes)
-
+        self.fld_col_rec = Record(system=SDI_ACU, direction=FAD_FROM).add_system_fields(RES_FIELD_MAP,
+                                                                                        sys_fld_indexes=field_indexes)
         self.recs = Records()
 
         self.acu_db = AcuDbRows(cae)
@@ -406,7 +402,7 @@ class AcuResToSihot(ResToSihot):
                                                       if err_msg else "SYNCED",
                                                       err_msg + ("W" + warn_msg if warn_msg else ""),
                                                       rec['RUL_CODE'])
-        return err_msg
+        return err_msg, warn_msg
 
     def _ensure_clients_exist_and_updated(self, fld_vals, ensure_client_mode):
         if ensure_client_mode == ECM_DO_NOT_SEND_CLIENT:
@@ -451,8 +447,8 @@ class AcuResToSihot(ResToSihot):
                 if not err_msg:
                     err_msg = acu_client.fetch_from_acu_by_cd(fld_vals['OC_CODE'])
                 if not err_msg and not acu_client.recs:
-                    err_msg = "AcuResToSihot._ensure_clients_exist_and_updated() error: orderer={} cols={} sync={}"\
-                        .format(fld_vals['OC_CODE'], repr(getattr(acu_client, 'cols', "unDef")), client_synced)
+                    err_msg = "AcuResToSihot._ensure_clients_exist_and_updated() error: orderer={} cols={!r} sync={}"\
+                        .format(fld_vals['OC_CODE'], getattr(acu_client, 'cols', "unDef"), client_synced)
                 if not err_msg:
                     # transfer just created guest OBJIDs from guest to reservation record
                     fld_vals['OC_SIHOT_OBJID'] = acu_client.recs.val(0, 'CD_SIHOT_OBJID')
@@ -461,19 +457,19 @@ class AcuResToSihot(ResToSihot):
 
     def send_res_to_sihot(self, rec, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
         err_msg = super().send_res_to_sihot(rec=rec, ensure_client_mode=ensure_client_mode)
-
+        warn_msg = ""
         if "Could not find a key identifier" in err_msg and (rec['CD_SIHOT_OBJID'] or rec['CD_SIHOT_OBJID2']):
             self.cae.dprint("AcuResToSihot.send_res_to_sihot() ignoring CD_SIHOT_OBJID({}) error: {}"
                             .format(str(rec['CD_SIHOT_OBJID']) + "/" + str(rec['CD_SIHOT_OBJID2']), err_msg))
             rec['CD_SIHOT_OBJID'] = None  # use MATCHCODE instead
             rec['CD_SIHOT_OBJID2'] = None
-            err_msg = self._sending_res_to_sihot(rec)
+            err_msg, warn_msg = self._sending_res_to_sihot(rec)
 
         if err_msg:
-            self.cae.dprint("AcuResToSihot.send_res_to_sihot() error: {}".format(err_msg))
+            self.cae.dprint("AcuResToSihot.send_res_to_sihot() error: {}; warning={}".format(err_msg, warn_msg))
         else:
-            self.cae.dprint("AcuResToSihot.send_res_to_sihot() RESPONDED OBJID={} MATCHCODE={}, rec={}"
-                            .format(self.response.objid, self.response.matchcode, rec),
+            self.cae.dprint("AcuResToSihot.send_res_to_sihot() RESPONDED OBJID={} MATCHCODE={}, warning={}, rec={}"
+                            .format(self.response.objid, self.response.matchcode, warn_msg, rec),
                             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return err_msg
@@ -485,7 +481,7 @@ class AcuResToSihot(ResToSihot):
             if err_msg:
                 if break_on_error:
                     return err_msg  # BREAK/RETURN first error message
-                ret_msg += "\n" + err_msg
+                ret_msg += "\n" + err_msg + "; WARNINGS=" + self.get_warnings()
 
         if commit_last_rec:
             if ret_msg:

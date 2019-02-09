@@ -104,7 +104,7 @@ def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='
 
 
 def full_stack_trace(ex):
-    ret = "Exception {}. Traceback:\n".format(repr(ex))
+    ret = "Exception {!r}. Traceback:\n".format(ex)
 
     tb = sys.exc_info()[2]
     for item in reversed(inspect.getouterframes(tb.tb_frame)[1:]):

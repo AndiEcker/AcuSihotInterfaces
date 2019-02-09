@@ -343,14 +343,14 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResPersons<n>PersPhone | - | - | PERSON.PHONE | rgc_phone |
 | ResPersons<n>PersShId | CD_SIHOT_OBJID | - | PERSON.GUEST-ID | rgc_occup_cl_fk->cl_sh_id |
 | ResPersons<n>PersSurname | CD_SNAM1, CD_SNAM2 | - | PERSON.NAME | rgc_surname |
-| ResPersons<n>RoomNo | - | - | PERSON.RN | rgc_room_id |
+| ResPersons<n>RoomNo | RUL_SIHOT_CAT | RoomCat__c | PERSON.RN | rgc_room_id |
 | ResPersons<n>RoomPersSeq | - | - | PERSON.ROOM-PERS-SEQ | rgc_pers_seq |
 | ResPersons<n>RoomSeq | - | - | PERSON.ROOM-SEQ | rgc_room_seq |
 | ResPersons<n>TypeOfPerson | - | - | PERSON.PERS-TYPE | rgc_pers_type |
 | ResPriceCat | SH_PRICE_CAT | - | PCAT | - |
 | ResRateSegment | RUL_SIHOT_RATE | - | RESERVATION.RATE-SEGMENT | rgr_room_rate |
 | ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
-| ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgr_room_id, rgc_room_id |
+| ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgc_room_id+rgr_room_id |
 | ResSfId | - | ReservationOpportunityId, Opportunity.Id | NN2(?) | rgr_sf_id |
 | ResSource | RU_SOURCE | - | SOURCE | rgr_source |
 | ResStatus | SH_RES_TYPE | Status__c | RESERVATION.RT | rgr_status |

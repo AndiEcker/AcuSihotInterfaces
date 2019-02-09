@@ -44,7 +44,7 @@ sys.path.append(os.path.dirname(__file__))
 from bottle import default_app, request, response, static_file, template, run
 
 from sys_data_ids import SDI_SF, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
-from ae_sys_data import FAD_FROM
+from ae_sys_data import FAD_FROM, Record
 from ae_console_app import ConsoleApp, uprint
 from sfif import field_from_converters
 from shif import ResSender
@@ -146,7 +146,7 @@ def sh_res_upsert():
     res_json = request.json     # web service arguments as dict
 
     res_send = ResSender(cae)
-    rec = res_send.elem_fld_rec
+    rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
     for name, value in res_json.items():
         rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
     rec.pull(SDI_SF)

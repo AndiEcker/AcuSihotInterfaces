@@ -5,7 +5,7 @@ import pytest
 
 from configparser import ConfigParser
 
-from ae_sys_data import Record
+from ae_sys_data import Record, FAD_ONTO
 from ae_console_app import Setting
 from ae_db import OraDB
 from ass_sys_data import AssSysData
@@ -13,7 +13,7 @@ from sxmlif import PostMessage, ConfigDict, CatRooms, AvailCatInfo
 from sfif import SfInterface
 from shif import ClientSearch, ClientToSihot, \
     USE_KERNEL_FOR_CLIENTS_DEF, SH_CLIENT_MAP, USE_KERNEL_FOR_RES_DEF, SH_RES_MAP
-from sys_data_ids import SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SF_SANDBOX, SDF_SH_CLIENT_PORT
+from sys_data_ids import SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SF_SANDBOX, SDF_SH_CLIENT_PORT, SDI_SH
 
 
 @pytest.fixture(scope="module")
@@ -81,18 +81,12 @@ def create_test_client(console_app_env):
         client = cs
     else:
         client = ClientToSihot(console_app_env)
-        col_values = Record()
-        for col in client.elem_fld_rec.keys():
-            if col == 'AcuId':
-                col_values[col] = mc
-            elif col == 'Surname':
-                col_values[col] = sn
-            elif col == 'Forename':
-                col_values[col] = fn
-            elif col == 'GuestType':
-                col_values[col] = gt
-            else:
-                col_values[col] = None
+        col_values = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(client.elem_map)
+        col_values.clear_leafs()
+        col_values['AcuId'] = mc
+        col_values['Surname'] = sn
+        col_values['Forename'] = fn
+        col_values['GuestType'] = gt
         client.send_client_to_sihot(col_values)
     client.matchcode = mc     # added client attributes for easier testing
     client.objid = client.response.objid
@@ -195,7 +189,8 @@ class ConsoleApp:
 
     def get_option(self, name, default_value=None):
         ret = self._options[name] if name in self._options else default_value
-        uprint('ConsoleAppMock.get_option', name, '=', ret)
+        if name not in ('debugLevel', ):
+            uprint('ConsoleAppMock.get_option', name, '=', ret)
         return ret
 
     def set_option(self, name, val, cfg_fnam=None, save_to_config=True):

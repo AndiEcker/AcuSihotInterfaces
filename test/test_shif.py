@@ -14,14 +14,15 @@ class TestResToSihot:
                         )
         err_msg = res_to.send_res_to_sihot(rec=Record(fields=fld_vals), ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
         assert not err_msg
+        assert not res_to.get_warnings()
 
 
 class TestFldMapXmlParser:
     ELEM_MAP = (
         ('SYS_FNA', 'fnA'),
         ('SYS_FNB/', ),
-        ('SYS_FNB.SF-A', ('fnB', 0, 'sfnA')),
-        ('SYS_FNB.SF-B', ('fnB', 0, 'sfnB')),
+        ('SYS_FNB' + ELEM_PATH_SEP + 'SF-A', ('fnB', 0, 'sfnA')),
+        ('SYS_FNB' + ELEM_PATH_SEP + 'SF-B', ('fnB', 0, 'sfnB')),
         ('/SYS_FNB', ),
     )
 
@@ -39,9 +40,15 @@ class TestFldMapXmlParser:
         assert mp.elem_fld_map['SYS_FNA'].val() == ''
 
         mp.rec.field_items = True
-        assert mp.rec['fnA'].root_idx(system=SDI_SH) == ('fnA', )
-        assert mp.rec['fnB0sfnA'].root_idx(system=SDI_SH) == ('fnB', 0, 'sfnA')
-        assert mp.rec[('fnB', 0, 'sfnB')].root_idx(system=SDI_SH) == ('fnB', 0, 'sfnB')
+        assert mp.rec['fnA'].root_idx() == ('fnA', )
+        assert mp.rec['fnA'].root_idx(system=SDI_SH) == ('SYS_FNA', )
+        assert mp.rec['fnA'].root_idx(system=SDI_SH, direction=FAD_FROM) == ('SYS_FNA', )
+        assert mp.rec['fnB0sfnA'].root_idx() == ('fnB', 0, 'sfnA')
+        assert mp.rec['fnB0sfnA'].root_idx(system=SDI_SH) == ('fnB', 0, 'SYS_FNB.SF-A')
+        assert mp.rec['fnB0sfnA'].root_idx(system=SDI_SH, direction=FAD_FROM) == ('fnB', 0, 'SYS_FNB.SF-A')
+        assert mp.rec[('fnB', 0, 'sfnB')].root_idx() == ('fnB', 0, 'sfnB')
+        assert mp.rec[('fnB', 0, 'sfnB')].root_idx(system=SDI_SH) == ('fnB', 0, 'SYS_FNB.SF-B')
+        assert mp.rec[('fnB', 0, 'sfnB')].root_idx(system=SDI_SH, direction=FAD_FROM) == ('fnB', 0, 'SYS_FNB.SF-B')
         mp.rec.field_items = False
 
         mp.parse_xml(self.XML)
@@ -214,7 +221,8 @@ class TestResSender:
         rs = ResSender(console_app_env)
         crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
                     AcuId='TCRENT', ResGdsNo=gdsno)
-        err, msg = rs.send_rec(Record(fields=crow))
+        rec = Record(fields=crow, system=SDI_SH, direction=FAD_ONTO).add_system_fields(rs.elem_map)
+        err, msg = rs.send_rec(rec)
 
         assert not err
         assert ho_id == rs.response.id

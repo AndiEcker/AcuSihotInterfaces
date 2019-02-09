@@ -116,7 +116,7 @@ class SihotXmlParser:  # XMLParser interface
         return data
 
     def end(self, tag):  # called for each closing tag
-        self.cae.dprint("SihotXmlParser.end():", self._elem_path, tag, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("SihotXmlParser.end():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         self._curr_tag = ''
         self._curr_attr = ''
         if self._elem_path:     # Q&D Fix for TestGuestSearch for to prevent pop() on empty _elem_path list

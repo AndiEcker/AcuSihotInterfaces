@@ -97,9 +97,10 @@ SF_RES_MAP = (
     # ('', ('ResPersons', 0, 'PersAcuId')),
     # ('', ('ResPersons', 0, 'PersDOB')),
     # ('', ('ResPersons', 0, 'PersForename')),
-    # ('', ('ResPersons', 0, 'TypeOfPerson')),
     # ('', ('ResPersons', 0, 'PersShId')),
     # ('', ('ResPersons', 0, 'PersSurname')),
+    # ('', ('ResPersons', 0, 'RoomNo')),
+    # ('', ('ResPersons', 0, 'TypeOfPerson')),
 )  # type: Tuple[Tuple[Any]]
 
 # Allocation Object fields
