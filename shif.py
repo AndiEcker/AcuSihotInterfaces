@@ -249,6 +249,7 @@ SH_RES_MAP = \
          None,
          # converters: FROM-converter has to use system value because field value could still be unset by field.pull()
          # .. additional: NOCHILDS can be omitted in Sihot xml response - therefore use '0' as default
+         # lambda f, v: int(v) if v else 2,
          lambda f, v: int(v) - int(f.srv('ResChildren', system=SDI_SH, direction=FAD_FROM) or '0') if v else 2,
          # lambda f, v: str(v + f.rfv('ResChildren'))),
          lambda f, v: str(v)),
@@ -700,13 +701,16 @@ class FldMapXmlParser(SihotXmlParser):
         self._elem_map = elem_map
         self._collected_fields = list()
         self._current_data = ''
-
-        # create field data parsing record and mapping dict for all elements having a field value
-        self._rec = Record(system=SDI_SH, direction=FAD_FROM).add_system_fields(elem_map)
-        self.elem_fld_map = self._rec.sys_name_field_map
+        self.elem_fld_map = None
+        self.clear_rec()
 
     def clear_rec(self):
-        self._rec.clear_leafs(system=self._rec.system, direction=self._rec.direction)
+        # clear_leafs does clear also the copied rec from the last reservation, therefore simply recreate new template
+        # self._rec.clear_leafs(system=self._rec.system, direction=self._rec.direction)
+        # create field data parsing record and mapping dict for all elements having a field value
+        self._rec = Record(system=SDI_SH, direction=FAD_FROM).add_system_fields(self._elem_map)
+        self.elem_fld_map = self._rec.sys_name_field_map
+
         return self
 
     @property
@@ -1367,7 +1371,8 @@ class ResToSihot(FldMapXmlBuilder):
             for occ_rec in rec.value('ResPersons', flex_sys_dir=True):
                 if occ_rec.val('PersAcuId'):
                     client = ClientToSihot(self.cae)
-                    crc = occ_rec.copy(filter_fields=lambda f: not f.name().startswith('Pers'),
+                    crc = occ_rec.copy(deepness=-1,
+                                       filter_fields=lambda f: not f.name().startswith('Pers'),
                                        fields_patches={ALL_FIELDS: {FAT_IDX + CALLABLE_SUFFIX: lambda f: f.name()[4:]}})
                     crc.set_env(system=SDI_SH, direction=FAD_ONTO)
                     err_msg = client.send_client_to_sihot(crc)

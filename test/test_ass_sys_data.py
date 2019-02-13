@@ -88,7 +88,7 @@ def test_tmp(console_app_env, ass_sys_data):
     assert rec.val('ResGdsNo')
     assert rec.val('ResGdsNo') == asd.reservations[0].val('ResGdsNo')
 
-    orderer_fields = [fn for sn, fn, *_ in SH_CLIENT_MAP]
+    orderer_fields = [fn for sn, fn, *_ in SH_CLIENT_MAP if fn]
     recs, dif = asd.sh_reservations_compare(chk_values=dict(hotel_id=rec.val('ResHotelId'), gds_no=rec.val('ResGdsNo')),
                                             exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
                                                             'ResAccount',
@@ -100,6 +100,8 @@ def test_tmp(console_app_env, ass_sys_data):
                                                             'AutoGen',
                                                             # PersLanguage can be 'EN' in response if sent as None
                                                             'PersLanguage',
+                                                            # RoomSeq is coming back sometimes with 1 although sent as 0
+                                                            'RoomSeq',
                                                             ] + orderer_fields
                                             )
     assert not asd.error_message
@@ -113,109 +115,6 @@ def test_tmp(console_app_env, ass_sys_data):
     print(repr(asd.reservations))
 
     print()
-
-
-class TestSysDataResActions:
-    def test_ass_res_compare(self, ass_sys_data):
-        asd = ass_sys_data
-
-        # first need to be pushed/created within Sihot, because AssCache.res_groups needs non-empty ResObjId/rgr_obj_id
-        r = res_test_rec.copy(deepness=-1)
-        asd.reservations.append(r)
-        asd.sh_reservation_push()
-        assert not asd.error_message
-        print(r.val('ResObjId'))
-        assert r.val('ResObjId')
-        assert r.val('ResObjId') == asd.reservations[0].val('ResObjId')
-        print(r.val('ResId'))
-        assert r.val('ResId')
-        assert r.val('ResId') == asd.reservations[0].val('ResId')
-        print(r.val('ResSubId'))
-        assert r.val('ResSubId')
-        assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
-
-        # .. so now we can reset everything and put the Sihot res Ids for to test the push to AssCache
-        asd.reservations = Records()
-        rec = res_test_rec.copy(deepness=-1)
-        rec['ResId'] = r['ResId']
-        rec['ResSubId'] = r['ResSubId']
-        rec['ResObjId'] = r['ResObjId']
-        rec['ResRateSegment'] = r['ResRateSegment']
-        asd.reservations.append(rec)
-
-        asd.ass_reservations_push()
-        assert not asd.error_message
-        print(rec.val('ResAssId'))
-        assert rec.val('ResAssId')
-        assert rec.val('ResAssId') == asd.reservations[0].val('ResAssId')
-
-        orderer_fields = [fn for sn, fn, *_ in ASS_CLIENT_MAP]
-        recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')),
-                                                 exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
-                                                                 'ResAccount',
-                                                                 'PersAcuId',   # 'PersShId',
-                                                                 # not returned by Sihot RES-SEARCH
-                                                                 ] + orderer_fields
-                                                 )
-        assert not asd.error_message
-        print(recs)
-        assert len(recs) == 1 == len(asd.reservations)
-        print(dif)
-        assert not dif
-
-    def test_sf_res_compare(self, ass_sys_data):
-        asd = ass_sys_data
-
-        # first need to be pushed/created within Sihot, because SF needs non-empty ResId/ResSubId
-        r = res_test_rec.copy(deepness=-1)
-        asd.reservations.append(r)
-        asd.sh_reservation_push()
-        assert not asd.error_message
-        print(r.val('ResObjId'))
-        assert r.val('ResObjId')
-        assert r.val('ResObjId') == asd.reservations[0].val('ResObjId')
-        print(r.val('ResId'))
-        assert r.val('ResId')
-        assert r.val('ResId') == asd.reservations[0].val('ResId')
-        print(r.val('ResSubId'))
-        assert r.val('ResSubId')
-        assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
-
-        # .. so now we can reset everything and put the Sihot res Ids for to test the push to SF
-        asd.reservations = Records()
-        rec = res_test_rec.copy(deepness=-1)
-        rec['ResId'] = r['ResId']
-        rec['ResSubId'] = r['ResSubId']
-        # rec['ResObjId'] = r['ResObjId']
-        # rec['ResRateSegment'] = r['ResRateSegment']
-        asd.reservations.append(rec)
-
-        asd.sf_reservations_push()
-        assert not asd.error_message
-        print(rec.val('ResSfId'))
-        assert rec.val('ResSfId')
-        assert rec.val('ResSfId') == asd.reservations[0].val('ResSfId')
-
-        orderer_fields = [fn for sn, fn, *_ in SF_CLIENT_MAPS['Account']]
-        recs, dif = asd.sf_reservations_compare(chk_values=dict(ReservationOpportunityId=rec.val('ResSfId')),
-                                                exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
-                                                                'ResAccount',
-                                                                # not returned by Sihot RES-SEARCH
-                                                                'PersAcuId',    # 'PersShId',
-                                                                # special SF fields not included in field map
-                                                                'ReservationId',
-                                                                # fields currently not supported by the interface
-                                                                'ResBoard',
-                                                                'ResLongNote',
-                                                                'PersForename', 'PersDOB',
-                                                                'Board', 'RoomNo', 'TypeOfPerson',
-                                                                ] + orderer_fields
-                                                )
-        assert not asd.error_message
-        print(recs)
-        assert len(recs) == 1 == len(asd.reservations)
-        print(dif)
-        assert not dif
 
 
 class TestSysDataClientActions:
@@ -443,6 +342,155 @@ class TestSysDataClientActions:
         # assert repr(recs) == repr(asd.clients)
         print(repr(recs))
         print(repr(asd.clients))
+
+
+class TestSysDataResActions:
+    def test_ass_res_compare(self, ass_sys_data):
+        asd = ass_sys_data
+
+        # first need to be pushed/created within Sihot, because AssCache.res_groups needs non-empty ResObjId/rgr_obj_id
+        r = res_test_rec.copy(deepness=-1)
+        asd.reservations.append(r)
+        asd.sh_reservation_push()
+        assert not asd.error_message
+        print(r.val('ResObjId'))
+        assert r.val('ResObjId')
+        assert r.val('ResObjId') == asd.reservations[0].val('ResObjId')
+        print(r.val('ResId'))
+        assert r.val('ResId')
+        assert r.val('ResId') == asd.reservations[0].val('ResId')
+        print(r.val('ResSubId'))
+        assert r.val('ResSubId')
+        assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
+
+        # .. so now we can reset everything and put the Sihot res Ids for to test the push to AssCache
+        asd.reservations = Records()
+        rec = res_test_rec.copy(deepness=-1)
+        rec['ResId'] = r['ResId']
+        rec['ResSubId'] = r['ResSubId']
+        rec['ResObjId'] = r['ResObjId']
+        rec['ResRateSegment'] = r['ResRateSegment']
+        asd.reservations.append(rec)
+
+        asd.ass_reservations_push()
+        assert not asd.error_message
+        print(rec.val('ResAssId'))
+        assert rec.val('ResAssId')
+        assert rec.val('ResAssId') == asd.reservations[0].val('ResAssId')
+
+        orderer_fields = [fn for sn, fn, *_ in ASS_CLIENT_MAP if fn]
+        recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')),
+                                                 exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
+                                                                 'ResAccount',
+                                                                 'PersAcuId',   # 'PersShId',
+                                                                 # not returned by Sihot RES-SEARCH
+                                                                 ] + orderer_fields
+                                                 )
+        assert not asd.error_message
+        print(recs)
+        assert len(recs) == 1 == len(asd.reservations)
+        print(dif)
+        assert not dif
+
+    def test_sf_res_compare(self, ass_sys_data):
+        asd = ass_sys_data
+
+        # first need to be pushed/created within Sihot, because SF needs non-empty ResId/ResSubId
+        r = res_test_rec.copy(deepness=-1)
+        asd.reservations.append(r)
+        asd.sh_reservation_push()
+        assert not asd.error_message
+        print(r.val('ResObjId'))
+        assert r.val('ResObjId')
+        assert r.val('ResObjId') == asd.reservations[0].val('ResObjId')
+        print(r.val('ResId'))
+        assert r.val('ResId')
+        assert r.val('ResId') == asd.reservations[0].val('ResId')
+        print(r.val('ResSubId'))
+        assert r.val('ResSubId')
+        assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
+
+        # .. so now we can reset everything and put the Sihot res Ids for to test the push to SF
+        asd.reservations = Records()
+        rec = res_test_rec.copy(deepness=-1)
+        rec['ResId'] = r['ResId']
+        rec['ResSubId'] = r['ResSubId']
+        # rec['ResObjId'] = r['ResObjId']
+        # rec['ResRateSegment'] = r['ResRateSegment']
+        asd.reservations.append(rec)
+
+        asd.sf_reservations_push()
+        assert not asd.error_message
+        print(rec.val('ResSfId'))
+        assert rec.val('ResSfId')
+        assert rec.val('ResSfId') == asd.reservations[0].val('ResSfId')
+
+        orderer_fields = [fn for sn, fn, *_ in SF_CLIENT_MAPS['Account'] if fn]
+        recs, dif = asd.sf_reservations_compare(chk_values=dict(ReservationOpportunityId=rec.val('ResSfId')),
+                                                exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
+                                                                'ResAccount',
+                                                                # not returned by Sihot RES-SEARCH
+                                                                'PersAcuId',    # 'PersShId',
+                                                                # special SF fields not included in field map
+                                                                'ReservationId',
+                                                                # fields currently not supported by the interface
+                                                                'ResBoard',
+                                                                'ResLongNote',
+                                                                'PersForename', 'PersDOB',
+                                                                'Board', 'RoomNo', 'TypeOfPerson',
+                                                                ] + orderer_fields
+                                                )
+        assert not asd.error_message
+        print(recs)
+        assert len(recs) == 1 == len(asd.reservations)
+        print(dif)
+        assert not dif
+
+    def test_sh_res_compare(self, ass_sys_data):
+        asd = ass_sys_data
+
+        rec = res_test_rec.copy(deepness=-1)
+        asd.reservations.append(rec)
+        asd.sh_reservation_push()
+        assert not asd.error_message
+        print(rec.val('ResObjId'))
+        assert rec.val('ResObjId')
+        assert rec.val('ResObjId') == asd.reservations[0].val('ResObjId')
+        print(rec.val('ResHotelId'))
+        assert rec.val('ResHotelId')
+        assert rec.val('ResHotelId') == asd.reservations[0].val('ResHotelId')
+        print(rec.val('ResId'))
+        assert rec.val('ResId')
+        assert rec.val('ResId') == asd.reservations[0].val('ResId')
+        print(rec.val('ResSubId'))
+        assert rec.val('ResSubId')
+        assert rec.val('ResSubId') == asd.reservations[0].val('ResSubId')
+        print(rec.val('ResGdsNo'))
+        assert rec.val('ResGdsNo')
+        assert rec.val('ResGdsNo') == asd.reservations[0].val('ResGdsNo')
+
+        orderer_fields = [fn for sn, fn, *_ in SH_CLIENT_MAP if fn]
+        recs, dif = asd.sh_reservations_compare(
+            chk_values=dict(hotel_id=rec.val('ResHotelId'), gds_no=rec.val('ResGdsNo')),
+            exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
+                            'ResAccount',
+                            # not returned by Sihot RES-SEARCH
+                            'PersAcuId', 'PersShId',
+                            # SALES-DATE cannot be overwritten - first set value keeps
+                            'ResBooked',
+                            # AutoGen can be '1' in response if not send in request
+                            'AutoGen',
+                            # PersLanguage can be 'EN' in response if sent as None
+                            'PersLanguage',
+                            # RoomSeq is coming back sometimes with 1 although sent as 0
+                            'RoomSeq',
+                            ] + orderer_fields
+            )
+        assert not asd.error_message
+        print(recs)
+        assert len(recs) == 1 == len(asd.reservations)
+        print(dif)
+        assert not dif
 
 
 class TestAssSysDataSh:

@@ -1260,8 +1260,10 @@ class Record(OrderedDict):
         # for idx in self._fields.keys():
         #    field = self._fields.get(idx)
         #    field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (idx,))
-        for field in self.leafs():
-            field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + (field.name(), ))
+        for idx_path in self.leaf_indexes(system=system, direction=direction):
+            field = self.node_child(idx_path)
+            field.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx + idx_path)
+
         return self
 
     def sql_columns(self, from_system):
@@ -1710,12 +1712,12 @@ class _Field:
         system, direction = use_rec_default_sys_dir(root_rec, system, direction)
 
         self.set_root_rec(root_rec, system=system, direction=direction)
-        if FAT_REC not in self._aspects:
+        if FAT_REC not in self._aspects or system or direction:
             self.set_root_rec(root_rec)     # ensure also root_rec for main/non-sys field value
 
         if root_idx:
             self.set_root_idx(root_idx, system=system, direction=direction)
-            if FAT_RCX not in self._aspects:
+            if FAT_RCX not in self._aspects or system or direction:
                 self.set_root_idx(root_idx)
 
         return self

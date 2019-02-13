@@ -189,10 +189,6 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         return asd.error_message
 
     # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call
-    # TODO: MERGE WITH NEXT VERSION sys_data_generic BRANCH
-    # res_fields = asd.fields_from_sh(sh_cl)
-    # res_fields.update(asd.fields_from_ass(ass_res))
-    # err_msg = asd.sf_ass_res_upsert(res_fields, dict(rgr_sf_id=rgr_sf_id))  # (col_values, chk_values)
     err_msg = asd.sf_ass_res_upsert(rgr_sf_id, sh_cl, ass_res)
     if err_msg:
         roll_back_msg = asd.connection(SDI_ASS).rollback() if asd.connection(SDI_ASS) else "Ass Db connection broken"
@@ -359,12 +355,13 @@ def oc_res_change(asd, req, rec_ctx):
     rec_ctx['oc'] = req.oc     # == 'CR'
     rgr_list = req.rgr_list
     for idx, req_rgr in enumerate(rgr_list):
+        rooming_list_room_no = req_rgr.get('ResPersons', [{}, ])[0].get('rgc_room_id', '')
         rec_ctx.update(req_res_data=req_rgr,
                        ResObjId=req_rgr.get('rgr_obj_id', ''),
                        ResHotelId=getattr(req, 'hn', None),
                        ResId=req_rgr.get('rgr_res_id', ''),
                        ResSubId=req_rgr.get('rgr_sub_id', ''),
-                       ResRoomNo=req_rgr.get('rgr_room_id', req_rgr.get('ResPersons', [{}, ])[0].get('rgc_room_id', '')),
+                       ResRoomNo=req_rgr.get('rgr_room_id', rooming_list_room_no),
                        )
         log_msg(proc_context(rec_ctx) + "res change data={}".format(ppf(req_rgr)),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)

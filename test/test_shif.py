@@ -168,7 +168,7 @@ class TestResSender:
     def test_create_all_fields(self, console_app_env):
         ho_id = '3'
         gdsno = 'TEST-1234567890'
-        today = datetime.datetime.today()
+        today = datetime.date.today()
         wk1 = datetime.timedelta(days=7)
         cat = 'STDS'
 
