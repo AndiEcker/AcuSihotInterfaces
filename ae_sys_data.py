@@ -2095,18 +2095,24 @@ class UsedSystems(OrderedDict):
         self._systems = self
         self._available_systems = available_systems
         for sys_id in available_systems:
+            dbg_msg = list()
             credentials = dict()
             for cred_item in SYS_CRED_ITEMS:
                 sys_cred_item = sys_id.lower() + '_' + cred_item.lower()
                 cae_cred_item = sys_id.lower() + cred_item
+                found_cred = None
                 if sys_cred_item in sys_credentials:
-                    credentials[cred_item] = sys_credentials[sys_cred_item]
+                    found_cred = sys_credentials[sys_cred_item]
                 elif cae.get_option(cae_cred_item):
-                    credentials[cred_item] = cae.get_option(cae_cred_item)
+                    found_cred = cae.get_option(cae_cred_item)
                 elif cae.get_config(cae_cred_item):
-                    credentials[cred_item] = cae.get_config(cae_cred_item)
+                    found_cred = cae.get_config(cae_cred_item)
+                if found_cred is not None:
+                    dbg_msg.append("found credential {}={}".format(cred_item, found_cred))
+                    credentials[cred_item] = found_cred
             for cred_item in SYS_CRED_NEEDED.get(sys_id):
                 if cred_item not in credentials:
+                    dbg_msg.append("requested credential {} undefined/incomplete; error ignored".format(cred_item))
                     break    # ignore/skip not fully specified system - continue with next available system
             else:
                 # now collect features for this system with complete credentials
@@ -2120,6 +2126,8 @@ class UsedSystems(OrderedDict):
                         features.append(feat_item)
                 # finally add system to this used systems instance
                 self._add_system(sys_id, credentials, features=features)
+                dbg_msg.append("added system features={}".format(features))
+            cae.dprint("Initialized system {}: {}".format(sys_id, dbg_msg), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _add_system(self, sys_id, credentials, features=None):
         assert sys_id in self._available_systems, "UsedSystems._add_system(): unsupported system id {}".format(sys_id)

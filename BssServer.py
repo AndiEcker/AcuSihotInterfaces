@@ -1,5 +1,5 @@
 """
-    AssServer is listening on the SIHOT SXML interface for to propagate room check-ins/check-outs/move
+    BssServer is listening on the SIHOT SXML interface for to propagate room check-ins/check-outs/move
     and reservation changes onto the AssCache/Postgres database.
 
     0.1     first beta.
@@ -25,9 +25,10 @@ from functools import partial
 from traceback import format_exc
 import pprint
 
-from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING
+from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
+    SDI_ACU
 from ae_sys_data import Record, FAD_ONTO
-from ae_console_app import ConsoleApp, uprint, missing_requirements
+from ae_console_app import ConsoleApp, uprint
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
 from shif import client_data, ResFetch
@@ -48,13 +49,8 @@ uprint("Sync to SF interval: {} seconds".format(interval))
 
 sys_conns = ass_data['assSysData']
 if sys_conns.error_message:
-    uprint("AssServer startup error initializing AssSysData: ", sys_conns.error_message)
+    uprint("BssServer startup error initializing AssSysData: ", sys_conns.error_message)
     cae.shutdown(exit_code=9)
-
-mr = missing_requirements(sys_conns, [['ass_db'], ['acu_db'], ['sf_conn'], ['sh_conn']], bool_check=True)
-if mr:
-    uprint("Invalid connection-credentials/-configuration of the external systems:", mr)
-    cae.shutdown(exit_code=12)
 
 notification = ass_data['notification']
 
@@ -69,19 +65,18 @@ log_lock = threading.Lock()
 
 
 def log_msg(msg, *args, **kwargs):
-    log_lock.acquire()
-    is_error = kwargs.get('is_error', False)
-    notify = kwargs.get('notify', False)
-    if debug_level >= kwargs.get('minimum_debug_level', DEBUG_LEVEL_ENABLED) or is_error or notify:
-        importance = kwargs.get('importance', 2)
-        seps = '\n' * (importance - 2)
-        msg = seps + ' ' * (4 - importance) + ('*' if is_error else '#') * importance + '  ' + msg
-        if args:
-            msg += " (args={})".format(ppf(args))
-        uprint(msg)
-        if notification and (is_error or notify):
-            notification.send_notification(msg_body=msg, subject='AssServer notification')
-    log_lock.release()
+    with log_lock:
+        is_error = kwargs.get('is_error', False)
+        notify = kwargs.get('notify', False)
+        if is_error or notify or debug_level >= kwargs.get('minimum_debug_level', DEBUG_LEVEL_ENABLED):
+            importance = kwargs.get('importance', 2)
+            seps = '\n' * (importance - 2)
+            msg = seps + ' ' * (4 - importance) + ('*' if is_error else '#') * importance + '  ' + msg
+            if args:
+                msg += " (args={})".format(ppf(args))
+            uprint(msg)
+            if notification and (is_error or notify):
+                notification.send_notification(msg_body=msg, subject='BssServer notification')
 
 
 def proc_context(rec_ctx):
@@ -153,8 +148,9 @@ def check_res_change_data(rec_ctx):
 
 def res_from_sh_to_sf(asd, ass_changed_res):
     ho_id, res_id, sub_id = ass_changed_res['rgr_ho_fk'], ass_changed_res['rgr_res_id'], ass_changed_res['rgr_sub_id']
-    log_msg("res_from_sh_to_sf({}/{}@{}): sync reservation from SH Object Id={} to SF Opp Id={}"
-            .format(res_id, sub_id, ho_id, ass_changed_res['rgr_obj_id'], ass_changed_res['rgr_sf_id']),
+    msg_pre = "res_from_sh_to_sf({}/{}@{}): ".format(res_id, sub_id, ho_id)
+    log_msg(msg_pre + "sync reservation from SH Object Id={} to SF Opp Id={}"
+            .format(ass_changed_res['rgr_obj_id'], ass_changed_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     sh_res = ResFetch(cae).fetch_by_res_id(ho_id, res_id, sub_id)
@@ -166,8 +162,8 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     if sh_id:
         sh_cl = client_data(cae, sh_id)
     if not isinstance(sh_cl, dict):
-        log_msg("res_from_sh_to_sf({}): guest not found; objId={}; err='{}'"
-                .format(ppf(ass_changed_res), sh_id, ppf(sh_cl)), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+        log_msg(msg_pre + "guest not found; objId={}; ass=\n{};\n sh=\n{}"
+                .format(sh_id, ppf(ass_changed_res), ppf(sh_cl)), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sh_cl = dict()
 
     rgr_sf_id = ass_res_sf_id = ass_changed_res['rgr_sf_id']
@@ -175,13 +171,13 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         # try to determine SF Reservation Opportunity ID from Acumen
         obj_id = ass_changed_res['rgr_obj_id']
         if obj_id:
-            res = asd.load_view(asd.acu_db, 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
+            res = asd.load_view(asd.connection(SDI_ACU), 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
                                 "RU_SIHOT_OBJID = :obj_id", dict(obj_id=obj_id))
             if res and res[0] and res[0][0]:
                 rgr_sf_id = res[0][0]
         if not rgr_sf_id:
-            log_msg("res_from_sh_to_sf({}): Opportunity ID not found for Sihot Res Obj ID {}; err='{}'"
-                    .format(ppf(ass_changed_res), obj_id, asd.error_message),
+            log_msg(msg_pre + "Reservation Opportunity ID not found; ShResObjID={}; ass=\n{}; sh=\n{}; err?='{}'"
+                    .format(obj_id, ppf(ass_changed_res), ppf(sh_res), asd.error_message),
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     ass_res = Record(system=SDI_ASS, direction=FAD_ONTO)
@@ -192,8 +188,8 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     err_msg = asd.sf_ass_res_upsert(rgr_sf_id, sh_cl, ass_res)
     if err_msg:
         roll_back_msg = asd.connection(SDI_ASS).rollback() if asd.connection(SDI_ASS) else "Ass Db connection broken"
-        return "res_from_sh_to_sf({}): SF reservation push/update err='{}', rollback='{}'"\
-            .format(ppf(ass_changed_res), err_msg, roll_back_msg)
+        return msg_pre + "SF reservation push/update err='{}'; ass=\n{}; rollback='{}'" \
+            .format(err_msg, ppf(ass_changed_res), roll_back_msg)
 
     # no errors on sync to SF, then set last sync timestamp
     chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
@@ -201,28 +197,29 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     if not ass_res_sf_id and rgr_sf_id:
         upd_values['rgr_sf_id'] = rgr_sf_id
     if not asd.rgr_upsert(upd_values, chk_values, commit=True):
-        err_msg = "res_from_sh_to_sf({}): last reservation sync timestamp ass_cache update failed"\
-                      .format(ppf(ass_changed_res)) + asd.error_message
+        err_msg = msg_pre + "last reservation sync timestamp ass_cache update failed with err='{}'; ass={}" \
+                      .format(asd.error_message, ppf(ass_changed_res))
 
     return err_msg
 
 
 def room_change_to_sf(asd, ass_res):
     ho_id, res_id, sub_id = ass_res['rgr_ho_fk'], ass_res['rgr_res_id'], ass_res['rgr_sub_id']
-    log_msg("room_change_to_sf({}/{}@{}): sync room change from SH Object Id={} to SF Opp Id={}"
-            .format(res_id, sub_id, ho_id, ass_res['rgr_obj_id'], ass_res['rgr_sf_id']),
+    msg_pre = "room_change_to_sf({}/{}@{}): ".format(res_id, sub_id, ho_id)
+    log_msg(msg_pre + "sync room change from SH Object Id={} to SF Opp Id={}"
+            .format(ass_res['rgr_obj_id'], ass_res['rgr_sf_id']),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     err_msg = asd.sf_ass_room_change(ass_res['rgr_sf_id'],
                                      ass_res['rgr_time_in'], ass_res['rgr_time_out'], ass_res['rgr_room_id'])
     if err_msg:
-        return "room_change_to_sf({}): SF room push/update err='{}'".format(ppf(ass_res), err_msg)
+        return msg_pre + "SF room push/update err='{}'; ass={}".format(err_msg, ppf(ass_res))
 
     # no errors on sync to SF, then set last sync timestamp
     chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
     if not asd.rgr_upsert(dict(rgr_room_last_sync=ass_res['rgr_room_last_sync']), chk_values, commit=True):
-        err_msg = "room_change_to_sf({}): last room sync timestamp ass_cache update err='{}'"\
-                      .format(ppf(ass_res), asd.error_message)
+        err_msg = msg_pre + "last room sync timestamp ass_cache update err='{}'; ass={}" \
+                      .format(asd.error_message, ppf(ass_res))
 
     return err_msg
 
@@ -305,13 +302,13 @@ def run_sync_to_sf():
                 ass_res = dict(zip(ass_id_cols, res_list[0][1:]))
                 ass_res['rgr_last_sync'] = action_time
                 log_msg("run_sync_to_sf() fetch from Sihot and send to SF the changed res={}".format(ppf(ass_res)),
-                        notify=debug_level > DEBUG_LEVEL_VERBOSE)
+                        notify=debug_level >= DEBUG_LEVEL_VERBOSE)
                 err_msg = res_from_sh_to_sf(asd, ass_res)
             elif room_changed and (not res_changed or room_changed < res_changed):
                 ass_res = dict(zip(room_cols, room_list[0]))
                 ass_res['rgr_room_last_sync'] = action_time
                 log_msg("run_sync_to_sf() send to SF the room change {}".format(ppf(ass_res)),
-                        notify=debug_level > DEBUG_LEVEL_VERBOSE)
+                        notify=debug_level >= DEBUG_LEVEL_VERBOSE)
                 err_msg = room_change_to_sf(asd, ass_res)
             else:
                 break
@@ -327,7 +324,7 @@ def run_sync_to_sf():
 
     log_msg("run_sync_to_sf() requested at {}; processed {} syncs; finished at {}; err?='{}'"
             .format(sync_run_requested, sync_count, datetime.datetime.now(), err_msg),
-            importance=3, is_error=err_msg, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            importance=3, is_error=bool(err_msg), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     sync_timer = None
     sync_run_requested = None
@@ -363,7 +360,7 @@ def oc_res_change(asd, req, rec_ctx):
                        ResSubId=req_rgr.get('rgr_sub_id', ''),
                        ResRoomNo=req_rgr.get('rgr_room_id', rooming_list_room_no),
                        )
-        log_msg(proc_context(rec_ctx) + "res change data={}".format(ppf(req_rgr)),
+        log_msg(proc_context(rec_ctx) + "res change data=\n{}".format(ppf(req_rgr)),
                 importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
         # QUICK&DIRTY FIX: prevent the send of rental client reservations using roAgencies ini variable (rgr_mkt_group
@@ -437,7 +434,7 @@ def oc_room_change(asd, req, rec_ctx):
     return err_msg
 
 
-# supported operation codes (stored in AssServer.ini) with related request class and operation code handler/processor
+# supported operation codes (stored in BssServer.ini) with related request class and operation code handler/processor
 SUPPORTED_OCS = dict()
 # operation codes that will not be processed (no notification will be sent to user, only ACK will be send back to Sihot)
 IGNORED_OCS = []
@@ -538,7 +535,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         """ types of parameter xml_from_client and return value are bytes """
         xml_enc = cae.get_option(SDF_SH_XML_ENCODING)
         xml_request = str(xml_from_client, encoding=xml_enc)
-        log_msg("AssServer.handle_xml(): req='{}'".format(xml_request), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        log_msg("BssServer.handle_xml(): req='{}'".format(xml_request), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # classify request for to also respond on error (e.g. if config_reload/xml_parsing failed)
         oc = operation_code(xml_request)
@@ -602,7 +599,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             else:
                 log_msg(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED)
 
-        msg = "AssServer.handle_xml(): " + ("\n    ** ".join([_[1] for _ in err_messages if _[0]]) or "OK")
+        msg = "BssServer.handle_xml(): " + ("\n    ** ".join([_[1] for _ in err_messages if _[0]]) or "OK")
         xml_response = ack_response(tn, last_err, org=org, msg=msg, status='1' if oc == 'LA' else '')
         log_msg("OC {} processed; xml response: {}".format(oc, xml_response), importance=4)
 

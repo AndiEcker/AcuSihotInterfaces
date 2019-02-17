@@ -871,18 +871,18 @@ class SfInterface:
         result = self.apex_call('reservation_upsert', function_args=sf_args)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("... sfif.res_upsert({}) result={} err='{}'".format(ppf(cl_res_rec), ppf(result), self.error_msg))
+            uprint("... sfif.res_upsert() err?='{}'; sent=\n{}, result={}"
+                   .format(self.error_msg, ppf(cl_res_rec), ppf(result)))
 
         if result.get('ErrorMessage'):
             msg = ppf(result) if self._debug_level >= DEBUG_LEVEL_ENABLED else result['ErrorMessage']
-            self.error_msg += "sfif.res_upsert({}) received error '{}' from SF".format(ppf(cl_res_rec), msg)
+            self.error_msg += "sfif.res_upsert() received error '{}' from SF; rec=\n{}".format(msg, ppf(cl_res_rec))
         if not self.error_msg:
             if not cl_res_rec.val('ResSfId') and result.get('ReservationOpportunityId'):
                 cl_res_rec.set_val(result['ReservationOpportunityId'], 'ResSfId')
             elif cl_res_rec.val('ResSfId') != result.get('ReservationOpportunityId'):
-                msg = "sfif.res_upsert({}) ResSfId discrepancy; sent={} received={}"\
-                       .format(ppf(cl_res_rec),
-                               cl_res_rec.val('ResSfId'), result.get('ReservationOpportunityId'))
+                msg = "sfif.res_upsert() ResSfId discrepancy; sent={} received={}; cl_res_rec=\n{}"\
+                       .format(cl_res_rec.val('ResSfId'), result.get('ReservationOpportunityId'), ppf(cl_res_rec))
                 uprint(msg)
                 if msg and self._debug_level >= DEBUG_LEVEL_ENABLED:
                     self.error_msg += "\n      " + msg

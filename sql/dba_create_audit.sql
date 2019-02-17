@@ -1,12 +1,10 @@
--- COPIED FROM https://github.com/2ndQuadrant/audit-trigger/blob/master/audit.sql
---
---  An audit history is important on most tables. Provide an audit trigger that logs to
+-- An audit history is important on most tables. Provide an audit trigger that logs to
 -- a dedicated audit table for the major relations.
 --
 -- This file should be generic and not depend on application roles or structures,
 -- as it's being listed here:
 --
---    https://wiki.postgresql.org/wiki/Audit_trigger_91plus
+--    https://wiki.postgresql.org/wiki/Audit_trigger_91plus    
 --
 -- This trigger was originally based on
 --   http://wiki.postgresql.org/wiki/Audit_trigger
@@ -63,7 +61,7 @@ REVOKE ALL ON audit.logged_actions FROM public;
 COMMENT ON TABLE audit.logged_actions IS 'History of auditable actions on audited tables, from audit.if_modified_func()';
 COMMENT ON COLUMN audit.logged_actions.event_id IS 'Unique identifier for each auditable event';
 COMMENT ON COLUMN audit.logged_actions.schema_name IS 'Database schema audited table for this event is in';
-COMMENT ON COLUMN audit.logged_actions.table_name IS 'Non-schema-qualified table name of table event occurred in';
+COMMENT ON COLUMN audit.logged_actions.table_name IS 'Non-schema-qualified table name of table event occured in';
 COMMENT ON COLUMN audit.logged_actions.relid IS 'Table OID. Changes with drop/create. Get with ''tablename''::regclass';
 COMMENT ON COLUMN audit.logged_actions.session_user_name IS 'Login / session user whose statement caused the audited event';
 COMMENT ON COLUMN audit.logged_actions.action_tstamp_tx IS 'Transaction start timestamp for tx in which audited event occurred';
@@ -109,7 +107,7 @@ BEGIN
         current_setting('application_name'),          -- client application
         inet_client_addr(),                           -- client_addr
         inet_client_port(),                           -- client_port
-        current_query(),                              -- top-level query or queries (if multi statement) from client
+        current_query(),                              -- top-level query or queries (if multistatement) from client
         substring(TG_OP,1,1),                         -- action
         NULL, NULL,                                   -- row_data, changed_fields
         'f'                                           -- statement_only
@@ -122,7 +120,7 @@ BEGIN
     IF TG_ARGV[1] IS NOT NULL THEN
         excluded_cols = TG_ARGV[1]::text[];
     END IF;
-
+    
     IF (TG_OP = 'UPDATE' AND TG_LEVEL = 'ROW') THEN
         audit_row.row_data = hstore(OLD.*) - excluded_cols;
         audit_row.changed_fields =  (hstore(NEW.*) - audit_row.row_data) - excluded_cols;
@@ -188,15 +186,15 @@ DECLARE
   _q_txt text;
   _ignored_cols_snip text = '';
 BEGIN
-    EXECUTE 'DROP TRIGGER IF EXISTS audit_trigger_row ON ' || quote_ident(target_table::TEXT);
-    EXECUTE 'DROP TRIGGER IF EXISTS audit_trigger_stm ON ' || quote_ident(target_table::TEXT);
+    EXECUTE 'DROP TRIGGER IF EXISTS audit_trigger_row ON ' || target_table;
+    EXECUTE 'DROP TRIGGER IF EXISTS audit_trigger_stm ON ' || target_table;
 
     IF audit_rows THEN
         IF array_length(ignored_cols,1) > 0 THEN
             _ignored_cols_snip = ', ' || quote_literal(ignored_cols);
         END IF;
-        _q_txt = 'CREATE TRIGGER audit_trigger_row AFTER INSERT OR UPDATE OR DELETE ON ' ||
-                 quote_ident(target_table::TEXT) ||
+        _q_txt = 'CREATE TRIGGER audit_trigger_row AFTER INSERT OR UPDATE OR DELETE ON ' || 
+                 target_table || 
                  ' FOR EACH ROW EXECUTE PROCEDURE audit.if_modified_func(' ||
                  quote_literal(audit_query_text) || _ignored_cols_snip || ');';
         RAISE NOTICE '%',_q_txt;
@@ -242,13 +240,12 @@ COMMENT ON FUNCTION audit.audit_table(regclass) IS $body$
 Add auditing support to the given table. Row-level changes will be logged with full client query text. No cols are ignored.
 $body$;
 
--- ae:15-06-18: manually copied from github PR
-CREATE OR REPLACE VIEW audit.tableslist AS
+CREATE OR REPLACE VIEW audit.tableslist AS 
  SELECT DISTINCT triggers.trigger_schema AS schema,
     triggers.event_object_table AS auditedtable
    FROM information_schema.triggers
-  WHERE triggers.trigger_name::text = 'audit_trigger_row'::text
-  ORDER BY schema, auditedtable;
+    WHERE triggers.trigger_name::text IN ('audit_trigger_row'::text, 'audit_trigger_stm'::text)  
+ORDER BY schema, auditedtable;
 
 COMMENT ON VIEW audit.tableslist IS $body$
 View showing all tables with auditing set up. Ordered by schema, then table.

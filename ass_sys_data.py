@@ -163,7 +163,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
         uprint('Acumen database TNS and user:', cae.get_option('acuDSN'), cae.get_option('acuUser'))
         sys_ids.append(cae.get_option('acuDSN'))
     if asd.connection(SDI_SF):
-        sf_sandbox = SDF_SF_SANDBOX in asd.used_systems[SDI_SF].features
+        sf_sandbox = SDF_SF_SANDBOX + '=True' in asd.used_systems[SDI_SF].features
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:",
                cae.get_option('sfUser'))
         sys_ids.append("SBox" if sf_sandbox else "Prod")
@@ -600,8 +600,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         for idx in self.clients_changed:
             rec = self.clients[idx]
             cl_pk = self.cl_save(rec, ass_idx=idx, commit=True)
-            if cl_pk is None:
-                return "cl_flush(): " + self.error_message + " -> roll_back" + ass_db.rollback()
+            if cl_pk is None or self.error_message:
+                return "cl_flush(): err?='{}' -> roll_back-err?='{}'".format(self.error_message, ass_db.rollback())
 
         return ass_db.commit()
 
@@ -732,7 +732,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :return:            primary key (ass_id/cl_pk) of this client (if exists) or None if error.
         """
         if self.debug_level >= DEBUG_LEVEL_VERBOSE and not sh_id and not ac_id:
-            self._err("cl_ensure_id(... {}, {}, {}) Missing client references".format(surname, email, phone))
+            self._warn("cl_ensure_id() missing client references; name={} {}; email={}, phone={}"
+                       .format(surname, forename, email, phone))
         cl_pk = None
         if sh_id and ac_id:
             for rec in self.clients:
@@ -769,6 +770,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if phone:
                 cl_data['Phone'] = phone
             cl_pk = self.cl_save(cl_data, locked_cols=['AcuId', 'ShId', 'Surname', 'Forename', 'Email', 'Phone'])
+            if self.error_message:
+                self._err("cl_ensure_id(): error '{}' after cl_save({})".format(self.error_message, cl_data))
 
         return cl_pk
 
@@ -1300,8 +1303,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if sf_cl_id:
                 sf_rec['SfId'] = sf_cl_id
 
-        sf_rec.merge_leafs(sh_cl_data)
         sf_rec.merge_leafs(ass_res_data)
+        sf_rec.merge_leafs(sh_cl_data)
 
         if not sf_rec.val('ResRoomNo') and ass_res_data.val('ResPersons', 0, 'RoomNo'):
             sf_rec['ResRoomNo'] = ass_res_data.val('ResPersons', 0, 'RoomNo')
@@ -1704,7 +1707,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 field_names = rec.leaf_names(system=SDI_ASS, direction=FAD_ONTO,
                                              field_names=field_names, exclude_fields=exclude_fields,
                                              col_names=rec.sys_name_field_map.keys(), name_type='f')
-                if not self.cl_save(rec, field_names=field_names, match_fields=match_fields, commit=True):
+                if not self.cl_save(rec, field_names=field_names, match_fields=match_fields, commit=True) \
+                        or self.error_message:
                     msg = "ass_clients_push() error: '{}'".format(self.error_message)
                     if self.cae.get_option('breakOnError'):
                         self._err(msg)

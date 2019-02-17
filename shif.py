@@ -702,6 +702,8 @@ class FldMapXmlParser(SihotXmlParser):
         self._collected_fields = list()
         self._current_data = ''
         self.elem_fld_map = None
+
+        self._rec = None
         self.clear_rec()
 
     def clear_rec(self):

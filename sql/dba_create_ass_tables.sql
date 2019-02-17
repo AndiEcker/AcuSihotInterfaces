@@ -225,8 +225,8 @@ SELECT audit.audit_table('res_group_clients');
 ---- CLIENT VIEWS
 -- view for AssSysDate.ass_clients_pull()/cl_fetch_list() extending clients with external refs and pt_group aggregates
 -- EXT_REF_TYPE_ID_SEP cannot be imported here from ass_sys_data.py, therefore using hard-coded literal '='
--- Added DROP statement because postgres view cannot be recreated after column name change (cl_name -> cl_surname/...)
-DROP VIEW v_clients_refs_owns;
+-- Comment out DROP statement on column name changes because postgres view can then not be recreated (cl_name -> cl_surname/...)
+--DROP VIEW v_clients_refs_owns;
 CREATE OR REPLACE VIEW v_clients_refs_owns AS
   SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id
        -- , cl_name
@@ -242,7 +242,7 @@ COMMENT ON VIEW v_clients_refs_owns IS 'clients extended by external_refs and ow
 
 -- the query for a view for to show clients with all duplicate external references is too slow (needs more than 24h)
 -- .. therefore providing a separate view for each type of external reference: Acumen, Sf, Sihot, Email, Phone
-DROP VIEW v_client_duplicates_ac;
+--DROP VIEW v_client_duplicates_ac;
 CREATE OR REPLACE VIEW v_client_duplicates_ac AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
@@ -256,7 +256,7 @@ CREATE OR REPLACE VIEW v_client_duplicates_ac AS
 
 COMMENT ON VIEW v_client_duplicates_ac IS 'clients with duplicate Acumen client reference';
 
-DROP VIEW v_client_duplicates_sf;
+--DROP VIEW v_client_duplicates_sf;
 CREATE OR REPLACE VIEW v_client_duplicates_sf AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
@@ -270,7 +270,7 @@ CREATE OR REPLACE VIEW v_client_duplicates_sf AS
 
 COMMENT ON VIEW v_client_duplicates_sf IS 'clients with duplicate Salesforce ID';
 
-DROP VIEW v_client_duplicates_sh;
+--DROP VIEW v_client_duplicates_sh;
 CREATE OR REPLACE VIEW v_client_duplicates_sh AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
@@ -284,7 +284,7 @@ CREATE OR REPLACE VIEW v_client_duplicates_sh AS
 
 COMMENT ON VIEW v_client_duplicates_sh IS 'clients with duplicate Sihot guest object ID';
 
-DROP VIEW v_client_duplicates_email;
+--DROP VIEW v_client_duplicates_email;
 CREATE OR REPLACE VIEW v_client_duplicates_email AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
@@ -298,7 +298,7 @@ CREATE OR REPLACE VIEW v_client_duplicates_email AS
 
 COMMENT ON VIEW v_client_duplicates_email IS 'clients with duplicate email address';
 
-DROP VIEW v_client_duplicates_phone;
+--DROP VIEW v_client_duplicates_phone;
 CREATE OR REPLACE VIEW v_client_duplicates_phone AS
   SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
        , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END

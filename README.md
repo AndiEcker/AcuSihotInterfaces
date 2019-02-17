@@ -12,7 +12,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | :--- | :--- | :---: |
 | AcuServer | Synchronize room status changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| [AssServer](#assserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
+| [BssServer](#bssserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
@@ -60,23 +60,23 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfClientValidator |
-| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | SysDataMan, AssServer |
-| assPassword | User account password for the AssCache/Postgres database | - | P | SysDataMan, AssServer |
-| assDSN | Database name of the AssCache/Postgres database | ass_cache | N | SysDataMan, AssServer |
-| breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | SysDataMan, BssServer |
+| assPassword | User account password for the AssCache/Postgres database | - | P | SysDataMan, BssServer |
+| assDSN | Database name of the AssCache/Postgres database | ass_cache | N | SysDataMan, BssServer |
+| breakOnError | Abort processing if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
 | compare | Compare/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | SysDataMan |
 | correctSystem | Correct/Fix data for system (Acu=Acumen, Ass=AssCache) | - | A | SihotOccLogChecker |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
-| cmdInterval | synchronization interval in seconds | 3600 | l | AssServer, WatchPupPy |
+| cmdInterval | synchronization interval in seconds | 3600 | l | BssServer, WatchPupPy |
 | dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | dateTill | End date/time of date range | (depends on command) | T | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
 | emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfClientValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
-| filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | W | SfClientValidator |
+| filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | - | W | SfClientValidator |
 | filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfClientValidator |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
@@ -86,29 +86,29 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfClientValidator |
-| pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | SysDataMan |
+| pull | Pull (C=Clients, P=Products, R=Reservations) data from Acumen/Sihot/Salesforce into AssCache | - | S | SysDataMan |
 | push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | SysDataMan |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
 | sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfPassword | Salesforce user account password | - | a | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfToken | Salesforce user account token | - | o | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
 | sfUser | Salesforce account user name | - | y | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
-| shClientPort | IP port of the Sxml interface of this server | 11000 (AcuServer) or 12000 (AssServer) | m | AcuServer, AssServer |
+| shClientPort | IP port of the Sxml interface of this server | 11000 (AcuServer) or 12000 (BssServer) | m | AcuServer, BssServer |
 | shMapClient | Guest/Client mapping of xml to db items | SH_CLIENT_MAP | m | SihotResImport, SihotResSync |
 | shMapRes | Reservation mapping of xml to db items | SH_RES_MAP | n | SihotResImport, SihotResSync |
-| shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, SysDataMan, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, SysDataMan, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shTimeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, SysDataMan, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shTimeout | Timeout in seconds for TCP/IP connections | 1869.3 | t | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shUseKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | shUseKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, SysDataMan, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SysDataMan, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SysDataMan, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SysDataMan, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
-| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SysDataMan, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
+| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are
 hard-coded by python (like e.g. the -h switch for to show the help screen). The upper case character options -D and -L
@@ -144,7 +144,7 @@ each of our clients/guests:
 | Forename | String | Firstname of Client/Guest | John, Walter |
 | GuestType | String | Sihot Type of Client/Guest | 1=Individual, 6=Company |
 | Language | String | ISO2 Language code of Client/Guest | ES, EN, DE |
-| MarketSource | String | Marketing Source | ? |
+| MarketSource | String | Marketing Source | TO, BK |
 | MobilePhone | String | Main mobile phone number of Client/Guest | 0034678901234 |
 | MobilePhoneB | String | Second mobile phone number of Client/Guest | 0046789012345 |
 | Name | String | Full name of Client/Guest | John Smith |
@@ -531,9 +531,9 @@ empty:
     `--pull=ShC --compare="AcuC{'filter_records':lambda r: not r.val('Email') or not r.val('Phone')"`
 
 
-### AssServer Application
+### BssServer Application
 
-The AssServer is a server application that is providing a web-service that is listening/waiting for our Sihot system
+The BssServer is a server application that is providing a web-service that is listening/waiting for our Sihot system
 to connect (as a client) for to propagate/push the following live actions done within Sihot:
 
 * Change of Reservation Data
@@ -544,7 +544,7 @@ to connect (as a client) for to propagate/push the following live actions done w
 Any of these Sihot actions will be cashed within the AssCache/Postgres database and later (after the reservations got
 fully implemented within Salesforce) also be propagated onto our Salesforce system. We could pass these
 notifications directly into the SF system (by-passing AssCache) if SF would be able to act as a server for
-web services, but most likely we need to implement a bridge like AssServer here because the Sihot live/push interfaces 
+web services, but most likely we need to implement a bridge like BssServer here because the Sihot live/push interfaces 
 are not compatible to any web-service standards (SOAP/WSDL/REST/XML/…).
 
 
@@ -1079,7 +1079,7 @@ configuration file):
 | Settings | resortCats | Room category defaults and apartment feature overloads for all hotels/resorts |
 | Settings | roAgencies | Agency Sihot/Acumen object Ids and market segment groupings |
 | Settings | roomChangeMaxDaysDiff | Number of days a check-in/-out/room-move can differ from the expected arrival/departure date |
-| Settings | SfIdResetResendFragments | Text fragments of ignorable errors where AssServer will try to resend the reservation data without the currently cached Salesforce Reservation Opportunity Id |
+| Settings | SfIdResetResendFragments | Text fragments of ignorable errors where BssServer will try to resend the reservation data without the currently cached Salesforce Reservation Opportunity Id |
 | Settings | shAdultPersTypes | List of Sihot adult person type categories, e.g. ['1A', '5A'] |
 | Settings | shChildPersTypes | List of Sihot children person type categories, e.g. ['2A', '2B', '2C', '6A', '6B', '6C'] |
 | Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr` or `smtpTo`).
@@ -1185,7 +1185,7 @@ The synchronization process is fully logged within the new `T_SRSL` table provid
 
 ### Synchronization between Salesforce and Sihot
 
-Recently we also started to implement the [AssServer application](#assserver-application) that will pass any changes of
+Recently we also started to implement the [BssServer application](#bssserver-application) that will pass any changes of
 reservation data and of room occupations (check-ins, check-outs and room-moves) done within Sihot to Salesforce (and
 optionally also to the AssCache database).
 

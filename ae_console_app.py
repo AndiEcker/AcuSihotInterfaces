@@ -144,32 +144,6 @@ def substitute_placeholders(expr, key_values, value_prefix=""):
     return expr
 
 
-def missing_requirements(obj, requirements, bool_check=False):
-    """
-    test if obj has the required attribute-/item-hierarchies
-    :param obj:             object to inspect/test
-    :param requirements:    list of requirement items, each item is a list specifying the path to retrieve the
-                            required value. The items of the path list can be a of mix of attribute names and item keys.
-    :param bool_check:      (opt, def=False) additionally check if an existing requirement has non-empty/True value.
-    :return:                list of missing requirements.
-    """
-    missing = list()
-    for req in requirements:
-        val = obj
-        for name_or_key in req:
-            try:
-                val = getattr(val, name_or_key)
-            except (AttributeError, TypeError, IndexError, Exception):  # TypeError if name is not str
-                try:
-                    val = val[name_or_key]
-                except (AttributeError, TypeError, IndexError, Exception):
-                    missing.append(req)
-                    break
-        if bool_check and not val:
-            missing.append(req)
-    return missing
-
-
 class Setting:
     def __init__(self, name='Unnamed', value=None, value_type=None):
         """ create new Setting instance
