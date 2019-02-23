@@ -258,7 +258,7 @@ def check_and_init_sync_to_sf(wait=0.0):
         sync_timer = threading.Timer(wait, run_sync_to_sf)
         log_msg("check_and_init_sync_to_sf({}): new sync to SF; requested at {}; will run at {}; timer-obj={}"
                 .format(wait, sync_run_requested, sync_run_requested + datetime.timedelta(seconds=wait), sync_timer),
-                importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+                importance=4, notify=debug_level > DEBUG_LEVEL_VERBOSE)
         sync_timer.start()
 
     return not locked
@@ -272,6 +272,7 @@ def run_sync_to_sf():
     try:
         asd = AssSysData(cae, err_logger=partial(log_msg, is_error=True), warn_logger=log_msg)
         ass_id_cols = ['rgr_sf_id', 'rgr_obj_id', 'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id']
+        room_cols = ['rgr_room_last_change', 'rgr_time_in', 'rgr_time_out', 'rgr_room_id'] + ass_id_cols
         while True:
             res_changed = room_changed = None
             action_time = datetime.datetime.now()
@@ -286,7 +287,6 @@ def run_sync_to_sf():
                 err_msg = asd.error_message
                 break
 
-            room_cols = ['rgr_room_last_change', 'rgr_time_in', 'rgr_time_out', 'rgr_room_id'] + ass_id_cols
             room_list = asd.rgr_fetch_list(room_cols, where_group_order="rgr_sf_id != '' "
                                                                         "AND rgr_room_last_change IS NOT null "
                                                                         "AND (rgr_room_last_sync IS null"
@@ -324,7 +324,7 @@ def run_sync_to_sf():
 
     log_msg("run_sync_to_sf() requested at {}; processed {} syncs; finished at {}; err?='{}'"
             .format(sync_run_requested, sync_count, datetime.datetime.now(), err_msg),
-            importance=3, is_error=bool(err_msg), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+            importance=3, is_error=bool(err_msg), notify=debug_level > DEBUG_LEVEL_VERBOSE or sync_count)
 
     sync_timer = None
     sync_run_requested = None

@@ -286,6 +286,11 @@ class TestConnection:
 
             @staticmethod
             def app_name(): return "app_name"
+
+            @staticmethod
+            def dprint(*args, **kwargs):
+                print("mock-dprint() with args={}, kwargs={}".format(args, kwargs))
+
         us = UsedSystems(Cae(), SDI_SF)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection

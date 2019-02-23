@@ -1,7 +1,7 @@
 class TestTourOps:
     def test_missing_agencies_in_sihot(self, db_connected, client_search):
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
-                            "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
+                            where_group_order="RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
         ags = client_search.search_clients(guest_type='7', field_names=('AcuId', 'ShId'))
@@ -26,7 +26,7 @@ class TestTourOps:
     def test_missing_agencies_in_acumen(self, client_search, db_connected):
         ags = client_search.search_clients(guest_type='7', field_names=('AcuId', 'ShId'))
         db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
-                            "RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
+                            where_group_order="RO_SIHOT_AGENCY_OBJID is not NULL or RO_SIHOT_AGENCY_MC is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
 
@@ -49,7 +49,7 @@ class TestTourOps:
         assert not failures
 
     def test_get_thomas_cook_ag_objid_by_matchcode(self, client_search, db_connected):
-        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
+        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], where_group_order="RO_CODE = 'tk'")
         rows = db_connected.fetch_all()
         db_connected.close()
         obj_id = str(rows[0][0])
@@ -59,7 +59,7 @@ class TestTourOps:
         assert ret == obj_id                                # == '20'
 
     def test_get_thomas_cook_rental_objid_by_matchcode(self, client_search, db_connected):
-        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
+        db_connected.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], where_group_order="RO_CODE = 'TK'")
         rows = db_connected.fetch_all()
         db_connected.close()
         obj_id = str(rows[0][0])
@@ -93,7 +93,7 @@ class TestSystem:
         assert ret == ''
 
     def test_config_dict_german_language(self, config_dict, db_connected):
-        db_connected.select('T_LG', ['LG_SIHOT_LANG'], "LG_CODE = 'GER'")
+        db_connected.select('T_LG', ['LG_SIHOT_LANG'], where_group_order="LG_CODE = 'GER'")
         rows = db_connected.fetch_all()
         db_connected.close()
         lang_id = str(rows[0][0])   # == 'DE'
@@ -135,7 +135,7 @@ class TestSystem:
 
     def test_cat_rooms_bhc(self, cat_rooms, db_connected):      # see also TestRoomCat class further down
         db_connected.select('T_AP', ['AP_CODE', 'AP_SIHOT_CAT'],
-                            "F_RESORT(AP_CODE) = 'BHC' and AP_SIHOT_CAT is not NULL")
+                            where_group_order="F_RESORT(AP_CODE) = 'BHC' and AP_SIHOT_CAT is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
         cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='1')
@@ -162,7 +162,7 @@ class TestSystem:
 
     def test_cat_rooms_pbc(self, cat_rooms, db_connected):
         db_connected.select('T_AP', ['AP_CODE', 'AP_SIHOT_CAT'],
-                            "F_RESORT(AP_CODE) = 'PBC' and AP_SIHOT_CAT is not NULL")
+                            where_group_order="F_RESORT(AP_CODE) = 'PBC' and AP_SIHOT_CAT is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
         cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='4')
@@ -195,7 +195,7 @@ class TestSystem:
 
     def test_cat_rooms_bhh(self, cat_rooms, db_connected):
         db_connected.select('T_AP', ['AP_CODE', 'AP_SIHOT_CAT'],
-                            "F_RESORT(AP_CODE) = 'BHH' and AP_SIHOT_CAT is not NULL")
+                            where_group_order="F_RESORT(AP_CODE) = 'BHH' and AP_SIHOT_CAT is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
         cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='2')
@@ -222,7 +222,7 @@ class TestSystem:
 
     def test_cat_rooms_hmc(self, cat_rooms, db_connected):
         db_connected.select('T_AP', ['AP_CODE', 'AP_SIHOT_CAT'],
-                            "F_RESORT(AP_CODE) = 'HMC' and AP_SIHOT_CAT is not NULL")
+                            where_group_order="F_RESORT(AP_CODE) = 'HMC' and AP_SIHOT_CAT is not NULL")
         rows = db_connected.fetch_all()
         db_connected.close()
         cat_room_dict = cat_rooms.get_cat_rooms(hotel_id='3')

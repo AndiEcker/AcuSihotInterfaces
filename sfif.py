@@ -111,7 +111,7 @@ SF_ROOM_MAP = (
 )  # type: Tuple[Tuple[Any]]
 
 # from Sf rec map (used e.g. by SihotServer)
-''' - NOT NEEDED BECAUSE SAME FIELD NAMES (see SihotServer.py/sh_res_upsert())
+''' - NOT NEEDED BECAUSE SAME FIELD NAMES (see SihotServer.py/sh_res_action())
 MAP_RES_FROM_SF = (
     ('ResHotelId', 'ResHotelId'),
     ('ResId', 'ResId'),

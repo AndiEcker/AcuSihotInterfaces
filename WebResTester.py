@@ -50,19 +50,19 @@ if client_code or gds_no:
 
     acumen_req = AcuResToSihot(cae)
     err_msg = acumen_req.fetch_from_acu_by_aru("RU_CODE = " + gds_no if gds_no else "CD_CODE = '" + client_code + "'")
-    if not err_msg and not acumen_req.row_count:
+    if not err_msg and not len(acumen_req.recs):
         if gds_no:
             err_msg = acumen_req.fetch_all_valid_from_acu(where_group_order="RU_CODE = " + gds_no)
         else:
             err_msg = acumen_req.fetch_from_acu_by_cd(client_code)      # UNFILTERED !!! (possibly inactive hotel)
-    progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.rec_count,
+    progress = Progress(cae.get_option('debugLevel'), start_counter=len(acumen_req.recs),
                         start_msg='####  Prepare sending of {total_count} reservation requests' + client_msg,
                         nothing_to_do_msg='****  SihotMigration: acumen_req fetch returning no recs')
 
     for crow in acumen_req.recs:
         err_msg = acumen_req.send_res_to_sihot(crow)
-        acumen_req.ora_db.commit()
-        progress.next(processed_id=str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']), error_msg=err_msg)
+        acumen_req.acu_db.ora_db.commit()
+        progress.next(processed_id=str(crow['ResGdsNo']), error_msg=err_msg)
         ho_id = crow['RUL_SIHOT_HOTEL']
         xml = acumen_req.xml
 

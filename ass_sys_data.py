@@ -12,7 +12,7 @@ from ae_sys_data import correct_email, correct_phone, Records, Record, FAD_FROM,
 from ae_db import OraDB, PostgresDB
 from ae_console_app import uprint, DATE_ISO
 from ae_notification import add_notification_options, init_notification
-from acif import add_ac_options
+from acif import add_ac_options, ACU_CLIENT_MAP, AcuDbRows
 from sfif import add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS, \
     sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal
 from sxmlif import AvailCatInfo
@@ -279,8 +279,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.debug_level = cae.get_option('debugLevel')
 
         self.used_systems = UsedSystems(cae, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, **sys_credentials)
-        crs = {SDI_ASS: PostgresDB, SDI_ACU: OraDB, SDI_SF: SfInterface, SDI_SH: ShInterface}
-        self.error_message = self.used_systems.connect(crs, app_name=cae.app_name(), debug_level=self.debug_level)
+        self._crs = {SDI_ASS: PostgresDB, SDI_ACU: OraDB, SDI_SF: SfInterface, SDI_SH: ShInterface}
+        self.error_message = self.used_systems.connect(self._crs, app_name=cae.app_name(), debug_level=self.debug_level)
         if self.error_message:
             self._err(self.error_message, self._ctx_no_file + 'ConnFailed')
 
@@ -396,18 +396,25 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # ensure to close of DB connections (execution of auto-commits)
         return self.used_systems.disconnect()
 
-    def connection(self, system):
-        msg = "AssSysData.connection({}): ".format(system)
-        if not system:
+    def connection(self, sys_id):
+        msg = "AssSysData.connection({}): ".format(sys_id)
+        if not sys_id:
             uprint(msg + "empty system id")
-        elif system not in ALL_AVAILABLE_SYSTEMS:
+        elif sys_id not in ALL_AVAILABLE_SYSTEMS:
             uprint(msg + "invalid system id")
-        elif system not in self.used_systems:
+        elif sys_id not in self.used_systems:
             uprint(msg + "unknown/unused system id")
-        elif not self.used_systems[system].connection:
+        elif not self.used_systems[sys_id].connection:
             uprint(msg + "system is not connected/initialized")
         else:
-            return self.used_systems[system].connection
+            return self.used_systems[sys_id].connection
+
+    def reconnect(self, sys_id):
+        if sys_id in self.used_systems:
+            self.used_systems[sys_id].connect(self._crs[sys_id],
+                                              app_name=self.cae.app_name(),
+                                              debug_level=self.debug_level,
+                                              force_reconnect=True)
 
     def load_view(self, db_opt, view, cols=None, where="", bind_vars=None):
         if db_opt:      # use existing db connection if passed by caller
@@ -1292,7 +1299,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                 fields; e.g. the Reservation Opportunity Id gets returned as sf_data['ResSfId'].
         :return:                error message if error occurred, else empty string.
         """
-        ori_res_id = sf_res_id
+        msg_sfx = " in asd.sf_ass_res_upsert({}, {}, {})".format(sf_res_id, ppf(sh_cl_data), ppf(ass_res_data))
+
         sf_rec = Record(system=SDI_SF, direction=FAD_ONTO).add_system_fields(SF_CLIENT_MAPS['Account']
                                                                              + SF_RES_MAP) \
             if sf_sent is None else sf_sent
@@ -1316,22 +1324,19 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             # retry without sf_res_id if ResOpp got deleted within SF
             sf_rec['ResSfId'] = ''
             sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
-            self._warn("asd.sf_ass_res_upsert({}, {}, {}) cached ResSfId reset to {}; SF client={}; ori-/err='{}'/'{}'"
-                       .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_cl_id, ori_err, err_msg),
+            self._warn("Cached ResSfId reset to {}; SF client={}; ori-/err='{}'/'{}'" + msg_sfx
+                       .format(sf_opp_id, sf_cl_id, ori_err, err_msg),
                        notify=True)
             sf_res_id = ''
 
         if not err_msg and (not sf_cl_id or not sf_opp_id):
-            self._err("sf_ass_res_upsert({}, {}, {}) got empty Id from SF: PersonAccount.Id={}; ResSfId={}"
-                      .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_cl_id, sf_opp_id))
+            self._err("Empty Id from SF: PersonAccount.Id={}; ResSfId={}".format(sf_cl_id, sf_opp_id) + msg_sfx)
         if not err_msg and sf_rec.val('SfId') and sf_rec.val('SfId') != sf_cl_id \
                 and self.debug_level >= DEBUG_LEVEL_ENABLED:
-            self._err("sf_ass_res_upsert({}, {}, {}) PersonAccountId/id/SfId discrepancy {} != {}"
-                      .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_rec.val('SfId'), sf_cl_id))
+            self._err("PersonAccountId/id/SfId discrepancy {} != {}".format(sf_rec.val('SfId'), sf_cl_id) + msg_sfx)
         if not err_msg and sf_rec.val('ResSfId') and sf_rec.val('ResSfId') != sf_opp_id \
                 and self.debug_level >= DEBUG_LEVEL_ENABLED:
-            self._err("sf_ass_res_upsert({}, {}, {}) Reservation Opportunity Id discrepancy {} != {}"
-                      .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_rec.val('ResSfId'), sf_opp_id))
+            self._err("Res. Opportunity Id discrepancy {} != {}".format(sf_rec.val('ResSfId'), sf_opp_id) + msg_sfx)
 
         if sync_cache:
             if sf_cl_id and ass_id:
@@ -1345,8 +1350,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             if not sf_res_id and sf_opp_id:     # save just (re-)created ID of Reservation Opportunity in AssCache
                 col_values['rgr_sf_id'] = sf_opp_id
             elif self.debug_level >= DEBUG_LEVEL_VERBOSE and sf_opp_id and sf_res_id and sf_opp_id != sf_res_id:
-                self._err("sf_ass_res_upsert({}, {}, {}) Reservation Opportunity ID discrepancy {} != {}"
-                          .format(ori_res_id, ppf(sh_cl_data), ppf(ass_res_data), sf_opp_id, sf_res_id))
+                self._err("Reservation Opportunity ID discrepancy {} != {}".format(sf_opp_id, sf_res_id) + msg_sfx)
 
             if col_values:
                 self.rgr_upsert(col_values,
@@ -1657,6 +1661,33 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 self._warn(msg)
 
         return pulled, dif
+
+    def acu_clients_push(self, field_names=(), exclude_fields=(), filter_records=None, match_fields=()):
+        self._warn("Pushing client data onto Acumen", 'pushAcuClientData', importance=4)
+
+        ignored_errors = 0
+        recs = self.clients
+        recs.set_env(system=SDI_ACU, direction=FAD_ONTO)
+        acu_db = AcuDbRows(self.cae)
+        for rec in recs:
+            rec.add_system_fields(ACU_CLIENT_MAP)
+            rec.push(SDI_ACU)
+            if not callable(filter_records) or not filter_records(rec):
+                # leaf_names() has to be called after add_system_fields()
+                field_names = rec.leaf_names(system=SDI_ACU, direction=FAD_ONTO,
+                                             field_names=field_names, exclude_fields=exclude_fields,
+                                             col_names=rec.sys_name_field_map.keys(), name_type='f')
+                err_msg, pkey = acu_db.send_client(rec, field_names=field_names, match_fields=match_fields, commit=True)
+                if err_msg or self.error_message:
+                    self.error_message += err_msg
+                    msg = "acu_clients_push() error: '{}'".format(self.error_message)
+                    if self.cae.get_option('breakOnError'):
+                        self._err(msg)
+                        break
+                    ignored_errors += 1
+                    self._warn("Ignoring/Skipping " + msg)
+        if ignored_errors:
+            self._err("Finished Acumen client push with {} skipped/ignored errors".format(ignored_errors))
 
     def _ass_clients_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
                           field_names=(), exclude_fields=(), filter_records=None):

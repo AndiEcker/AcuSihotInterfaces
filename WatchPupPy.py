@@ -203,7 +203,7 @@ while True:
         # check environment and connections: AssCache, Acu/Oracle, Salesforce, Sihot servers and interfaces
         if SDI_ASS in asd.used_systems:
             if not asd.connection(SDI_ASS) or asd.connection(SDI_ASS).select('pg_tables'):
-                asd.connect_ass_db(force_reconnect=True)
+                asd.reconnect(SDI_ASS)
             if not asd.connection(SDI_ASS):
                 errors.append("AssCache environment check connection error: " + asd.error_message)
             else:
@@ -214,7 +214,7 @@ while True:
 
         if SDI_ACU in asd.used_systems:
             if not asd.connection(SDI_ACU) or asd.connection(SDI_ACU).select('dual', ['sysdate']):
-                asd.connect_acu_db(force_reconnect=True)
+                asd.reconnect(SDI_ACU)
             if not asd.connection(SDI_ACU):
                 errors.append("Acumen environment check connection error: " + asd.error_message)
             else:
@@ -254,7 +254,8 @@ while True:
                 if max_sync_outage_delta:
                     tbl = 'ARO' if exe_name.startswith('AcuServer') else 'RU'
                     err_msg = ora_db.select('T_SRSL', ['MAX(SRSL_DATE)'],
-                                            "SRSL_TABLE = '{}' and substr(SRSL_STATUS, 1, 6) = 'SYNCED'".format(tbl))
+                                            where_group_order="SRSL_TABLE = '{}' "
+                                                              "and substr(SRSL_STATUS, 1, 6) = 'SYNCED'".format(tbl))
                     if err_msg:
                         errors.append("Acumen environment T_SRSL/{} selection error: {}".format(tbl, err_msg))
                     else:

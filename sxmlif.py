@@ -403,7 +403,7 @@ class SihotXmlBuilder:
                 err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:
-            uprint("****  SihotXmlBuilder.send_to_server() error: ", err_msg)
+            uprint("****  SihotXmlBuilder.send_to_server() error: {}".format(err_msg))
         return err_msg
 
     @staticmethod

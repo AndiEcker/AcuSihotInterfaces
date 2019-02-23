@@ -1047,11 +1047,17 @@ class ResSearch(SihotXmlBuilder):
 class FldMapXmlBuilder(SihotXmlBuilder):
     def __init__(self, cae, use_kernel=None, elem_map=None):
         super().__init__(cae, use_kernel=use_kernel)
-
-        self.action = ''
         self.elem_map = deepcopy(elem_map or cae.get_option(SDF_SH_RES_MAP))
 
-    # --- rec helpers
+        self.action = ''
+        self._warning_frags = self.cae.get_config('warningFragments') or list()  # list of warning text fragments
+        self._warning_msgs = list()
+
+    def get_warnings(self):
+        return "\n\n".join(self._warning_msgs) + "\n\nEnd_Of_Message\n" if self._warning_msgs else ""
+
+    def wipe_warnings(self):
+        self._warning_msgs = list()
 
     def prepare_rec(self, rec):
         ori_rec = rec.copy(deepness=-1)
@@ -1063,7 +1069,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
 
     def prepare_map_xml(self, rec, include_empty_values=True):
         self.prepare_rec(rec)
-        rec.push(SDI_SH)        # TODO: maybe REMOVE the other/1st one if 2nd push (preventing multiple ResAdults incr)
+        rec.push(SDI_SH)        # TODO: maybe REMOVE the other/1st push (2nd push could increment ResAdults value)
         rec.action = self.action or ACTION_BUILD
 
         recs = None
@@ -1149,8 +1155,8 @@ class ClientToSihot(FldMapXmlBuilder):
         self._complete_client_data(rec)
 
     def _prepare_guest_xml(self, rec, fld_name_suffix=''):
-        if not self.action:
-            self.action = ACTION_UPDATE if rec.val('ShId' + fld_name_suffix) else ACTION_INSERT
+        # if not self.action:
+        self.action = ACTION_UPDATE if rec.val('ShId' + fld_name_suffix) else ACTION_INSERT
         self.beg_xml(operation_code='GUEST-CHANGE' if self.action == ACTION_UPDATE else 'GUEST-CREATE')
         self.add_tag('GUEST-PROFILE', self.prepare_map_xml(rec))
         self.end_xml()
@@ -1201,8 +1207,6 @@ class ResToSihot(FldMapXmlBuilder):
         super().__init__(cae,
                          use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_RES),
                          elem_map=cae.get_config(SDF_SH_RES_MAP) or SH_RES_MAP)
-        self._warning_frags = self.cae.get_config('warningFragments') or list()  # list of warning text fragments
-        self._warning_msgs = ""
         self._gds_errors = dict()
 
     def _add_sihot_configs(self, rec):
@@ -1219,11 +1223,11 @@ class ResToSihot(FldMapXmlBuilder):
             if val:
                 rec.set_val(val, 'ResAllotmentNo', system='', direction='')
 
-        if not rec.val('ResRateSegment', system='', direction=''):
-            # not specified? FYI: this field is not included in V_ACU_RES_DATA
-            val = cf(mkt_seg, section='SihotRateSegments', default_value=mkt_seg)
-            if val:
-                rec.set_val(val, 'ResRateSegment', system='', direction='')
+        # not specified? FYI: this field is not included in V_ACU_RES_DATA, default==RUL_SIHOT_RATE/SIHOT_MKT_SEG
+        rate_seg = rec.val('ResRateSegment', system='', direction='') or mkt_seg
+        val = cf(rate_seg, section='SihotRateSegments', default_value=rate_seg)
+        if val != rate_seg or not rate_seg:
+            rec.set_val(val, 'ResRateSegment', system='', direction='')
 
         val = cf(mkt_seg, section='SihotPaymentInstructions')
         if val:
@@ -1333,34 +1337,55 @@ class ResToSihot(FldMapXmlBuilder):
     def _sending_res_to_sihot(self, rec):
         self._prepare_res_xml(rec)
 
-        err_msg, warn_msg = self._handle_error(rec, self.send_to_server(response_parser=ResResponse(self.cae)))
+        err_msg = self._handle_error(rec, self.send_to_server(response_parser=ResResponse(self.cae)))
         if not err_msg:
-            if not rec.val('ResObjId'):
+            obj_id = rec.val('ResObjId')
+            if not obj_id:
                 rec.set_val(self.response.objid, 'ResObjId')
-            elif rec.val('ResObjId') != self.response.objid:
-                warn_msg += "\n      Sihot ResObjId mismatch: {} != {}".format(rec.val('ResObjId'), self.response.objid)
-            if not rec.val('ResId'):
+            elif obj_id != self.response.objid:
+                self._warning_msgs.append("ResObjId mismatch: {} != {}".format(obj_id, self.response.objid))
+            res_id = rec.val('ResId')
+            if not res_id:
                 rec.set_val(self.response.res_nr, 'ResId')
-            elif rec.val('ResId') != self.response.res_nr:
-                warn_msg += "\n      Sihot ResId mismatch: {} != {}".format(rec.val('ResId'), self.response.res_nr)
-            if not rec.val('ResSubId'):
+            elif res_id != self.response.res_nr:
+                self._warning_msgs.append("ResId mismatch: {} != {}".format(res_id, self.response.res_nr))
+            sub_id = rec.val('ResSubId')
+            if not sub_id:
                 rec.set_val(self.response.sub_nr, 'ResSubId')
-            elif rec.val('ResSubId') != self.response.sub_nr:
-                warn_msg += "\n     Sihot ResSubId mismatch: {} != {}".format(rec.val('ResSubId'), self.response.sub_nr)
+            elif sub_id != self.response.sub_nr:
+                self._warning_msgs.append("ResSubId mismatch: {} != {}".format(sub_id, self.response.sub_nr))
 
-        return err_msg, warn_msg
+        return err_msg
 
     def _handle_error(self, rec, err_msg):
-        warn_msg = ""
+        if not err_msg:
+            return ""
+
         if [frag for frag in self._warning_frags if frag in err_msg]:
-            warn_msg = self.res_id_desc(rec, err_msg, separator="\n")
-            self._warning_msgs += "\n\n" + warn_msg
+            self._warning_msgs.append(self.res_id_desc(rec, err_msg, separator="\n"))
             err_msg = ""
-        elif err_msg:
-            assert rec.val('ResGdsNo')
-            assert rec.val('ResGdsNo') not in self._gds_errors
-            self._gds_errors[rec.val('ResGdsNo')] = (rec, err_msg)
-        return err_msg, warn_msg
+
+        elif "Could not find a key identifier" in err_msg and (rec['ShId'] or rec['ShId_P']):
+            self.cae.dprint("ResToSihot._handle_error() ignoring client obj id {}/{} error: {}"
+                            .format(rec['ShId'], rec['ShId_P'], err_msg))
+            rec['ShId'] = None          # use AcId/MATCHCODE instead
+            rec['ShId_P'] = None
+            err_msg = self._sending_res_to_sihot(rec)
+
+        elif "A database error has occurred." in err_msg and rec['ResObjId']:
+            self.cae.dprint("ResToSihot._handle_error() ignoring reservation obj id {} error: {}"
+                            .format(rec['ResObjId'], err_msg))
+            rec['ResObjId'] = None      # use ResHotelId+ResGdsNo instead
+            err_msg = self._sending_res_to_sihot(rec)
+
+        if err_msg:
+            gds_no = rec.val('ResGdsNo')
+            if gds_no in self._gds_errors:
+                rec, last_msg = self._gds_errors[gds_no]
+                err_msg = last_msg + "\n" + err_msg
+            self._gds_errors[gds_no] = (rec, err_msg)
+
+        return err_msg
 
     def _ensure_clients_exist_and_updated(self, rec, ensure_client_mode):
         if ensure_client_mode == ECM_DO_NOT_SEND_CLIENT:
@@ -1400,16 +1425,13 @@ class ResToSihot(FldMapXmlBuilder):
         if gds_no:
             if gds_no in self._gds_errors:    # prevent send of follow-up changes on erroneous bookings (w/ same GDS)
                 old_id = self.res_id_desc(*self._gds_errors[gds_no], separator="\n")
-                warn_msg = "\n\n" + "Synchronization skipped because GDS number {} had errors in previous send: {}" \
-                           + "\nSkipped reservation: {}"
-                self._warning_msgs += warn_msg.format(gds_no, old_id, self.res_id_desc(rec, "", separator="\n"))
+                self._warning_msgs.append("Sync skipped because GDS number {} had errors in previous send: {}"
+                                          "\nres: {}".format(gds_no, old_id, self.res_id_desc(rec, "", separator="\n")))
                 return self._gds_errors[gds_no][1]    # return same error message
 
             err_msg = self._ensure_clients_exist_and_updated(rec, ensure_client_mode)
             if not err_msg:
-                err_msg, warn_msg = self._sending_res_to_sihot(rec)
-                if warn_msg:
-                    self._warning_msgs += warn_msg
+                err_msg = self._sending_res_to_sihot(rec)
         else:
             err_msg = self.res_id_desc(rec, "ResToSihot.send_res_to_sihot(): sync with empty GDS number skipped")
 
@@ -1428,28 +1450,26 @@ class ResToSihot(FldMapXmlBuilder):
 
     @staticmethod
     def res_id_values(rec):
-        return str(rec.val('ResGdsNo')) + \
+        ret = str(rec.val('ResGdsNo')) + \
                "/" + str(rec.val('ResVoucherNo')) + \
                "/" + str(rec.val('AcuId')) + "/" + str(rec.val('ResMktSegment'))
+        return ret
 
-    def res_id_desc(self, rec, error_msg, separator="\n\n"):
+    def res_id_desc(self, rec, err_msg, separator="\n\n"):
         indent = 8
-        return self.action + " RESERVATION: " \
-            + (rec.val('ResArrival').strftime('%d-%m') if rec.val('ResArrival') else "unknown") + ".." \
-            + (rec.val('ResDeparture').strftime('%d-%m-%y') if rec.val('ResDeparture') else "unknown") \
+        arr = rec.val('ResArrival', system='', direction='')
+        dep = rec.val('ResDeparture', system='', direction='')
+        ret = self.action + " RESERVATION: " \
+            + (arr.strftime('%d-%m') if arr else "unknown") + ".." \
+            + (dep.strftime('%d-%m-%y') if dep else "unknown") \
             + " in " + (rec.val('ResRoomNo') + "=" if rec.val('ResRoomNo') else "") + rec.val('ResRoomCat') \
             + ("!" + rec.val('ResPriceCat')
                if rec.val('ResPriceCat') and rec.val('ResPriceCat') != rec.val('ResRoomCat') else "") \
             + " at hotel " + rec.val('ResHotelId') \
             + separator + " " * indent + self.res_id_label() + "==" + self.res_id_values(rec) \
-            + (separator + "\n".join(wrap("ERROR: " + _strip_err_msg(error_msg), subsequent_indent=" " * indent))
-               if error_msg else "")
-
-    def get_warnings(self):
-        return self._warning_msgs + "\n\nEnd_Of_Message\n" if self._warning_msgs else ""
-
-    def wipe_warnings(self):
-        self._warning_msgs = ""
+            + (separator + "\n".join(wrap("ERROR: " + _strip_err_msg(err_msg), subsequent_indent=" " * indent))
+               if err_msg else "")
+        return ret
 
     def wipe_gds_errors(self):
         self._gds_errors = dict()

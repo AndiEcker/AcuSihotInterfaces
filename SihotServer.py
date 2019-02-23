@@ -44,7 +44,7 @@ sys.path.append(os.path.dirname(__file__))
 from bottle import default_app, request, response, static_file, template, run
 
 from sys_data_ids import SDI_SF, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
-from ae_sys_data import FAD_FROM, Record
+from ae_sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE
 from ae_console_app import ConsoleApp, uprint
 from sfif import field_from_converters
 from shif import ResSender
@@ -63,7 +63,7 @@ notification = ass_data['notification']
 app = application = default_app()
 
 
-# ------  BOTTLE ROUTES  -------------------------------------------
+# ------  BOTTLE WEB SERVICE ROUTES  -------------------------------------------
 
 @app.route('/hello/<name>')
 def get_hello(name='world'):
@@ -101,22 +101,14 @@ def get_res_data():
 
 @app.route('/res/<action>', method='PUSH')
 def push_res(action):
-    if action == 'upsert':
-        body = sh_res_upsert()
-    else:
-        body = "Reservation PUSH with action {} not implemented - use action upsert".format(action)
-        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+    body = sh_res_action(action)
     return body
 
 
 '''
 '@app.route('/res/<action>/<res_id>', method='PUT')
 def put_res(action, res_id):
-    if action == 'upsert':
-        body = sh_res_upsert(res_id)
-    else:
-        body = "Reservation PUT for ID {} with action {} not implemented".format(res_id, action)
-        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+    body = sh_res_action(action, res_id=res_id, method='PUT')
     return body
 '''
 
@@ -142,11 +134,19 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 # ------  ROUTE/SERVICE HANDLERS  ----------------------------------
 
 
-def sh_res_upsert():
+def sh_res_action(action, res_id=None, method='PUSH'):
+    supported_actions = (ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE)
+    if action.upper() not in supported_actions:
+        body = "Reservation {} for ID {} with action {} not implemented; use one of supported actions ({})" \
+            .format(method, res_id, action, supported_actions)
+        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+        return body
+
     res_json = request.json     # web service arguments as dict
 
     res_send = ResSender(cae)
     rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
+    rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)     # allow overwrite from json fields
     for name, value in res_json.items():
         rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
     rec.pull(SDI_SF)
@@ -162,7 +162,7 @@ def sh_res_upsert():
         # res_dict = dict(Sihot_Hotel_Id=ho_id, Sihot_Res_Id=res_id, Sihot_Sub_Id=sub_id)
         res_dict = dict(HotelIdc=ho_id, Numberc=res_id, SubNumberc=sub_id)
 
-    add_log_entry("sh_res_upsert() call with json arguments: {}, return from SF: {}".format(res_json, res_dict))
+    add_log_entry("sh_res_action() call with json arguments: {}, return from SF: {}".format(res_json, res_dict))
 
     return res_dict
 

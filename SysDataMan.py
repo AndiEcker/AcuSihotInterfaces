@@ -361,28 +361,28 @@ def ac_pull_res_data():
     error_msg = acumen_req.fetch_all_valid_from_acu(date_range='P', where_group_order=where)
     if error_msg:
         return error_msg
-    for crow in acumen_req.recs:
+    for rec in acumen_req.recs:
         # TODO: refactor to use AssSysData.res_save()
         # determine orderer
-        ord_cl_pk = asd.cl_ass_id_by_ac_id(crow['OC_CODE'])
+        ord_cl_pk = asd.cl_ass_id_by_ac_id(rec['OC_CODE'])
         if ord_cl_pk is None:
             error_msg = asd.error_message
-            ord_cl_pk = asd.cl_ass_id_by_sh_id(crow['OC_SIHOT_OBJID'])
+            ord_cl_pk = asd.cl_ass_id_by_sh_id(rec['OC_SIHOT_OBJID'])
             if ord_cl_pk is None:
                 error_msg += asd.error_message
                 break
             error_msg = ""
 
         # determine used reservation inventory
-        year, week = asd.rci_arr_to_year_week(crow['ARR_DATE'])
-        apt_wk = "{}-{:0>2}".format(crow['RUL_SIHOT_ROOM'], week)
+        year, week = asd.rci_arr_to_year_week(rec['ARR_DATE'])
+        apt_wk = "{}-{:0>2}".format(rec['RUL_SIHOT_ROOM'], week)
         if ass_db.select('res_inventories', ['ri_pk'], where_group_order="ri_pr_fk = :aw AND ri_usage_year = :y",
                          bind_vars=dict(aw=apt_wk, y=year)):
             error_msg = ass_db.last_err_msg
             break
         ri_pk = ass_db.fetch_value()
 
-        gds = crow['SIHOT_GDSNO']
+        gds = rec['SIHOT_GDSNO']
 
         # complete res data with check-in/-out time...
         ac_res = asd.load_view(acu_db,
@@ -395,29 +395,29 @@ def ac_pull_res_data():
             break
         elif not ac_res:
             ac_res = (None, None)
-        crow['TIMEIN'], crow['TIMEOUT'] = ac_res
+        rec['TIMEIN'], rec['TIMEOUT'] = ac_res
 
-        chk_values = dict(rgr_ho_fk=crow['RUL_SIHOT_HOTEL'], rgr_gds_no=gds)
+        chk_values = dict(rgr_ho_fk=rec['RUL_SIHOT_HOTEL'], rgr_gds_no=gds)
         upd_values = chk_values.copy()
         upd_values.update(rgr_order_cl_fk=ord_cl_pk,
                           rgr_used_ri_fk=ri_pk,
                           # never added next two commented lines because ID-updates should only come from ID-system
-                          # rgr_obj_id=crow['RU_SIHOT_OBJID'],
-                          # rgr_sf_id=crow['ResSfId'],
-                          rgr_status=crow['SIHOT_RES_TYPE'],
-                          rgr_adults=crow['RU_ADULTS'],
-                          rgr_children=crow['RU_CHILDREN'],
-                          rgr_arrival=crow['ARR_DATE'],
-                          rgr_departure=crow['DEP_DATE'],
-                          rgr_mkt_segment=crow['SIHOT_MKT_SEG'],
-                          rgr_mkt_group=crow['RO_SIHOT_RES_GROUP'],
-                          rgr_room_id=crow['RUL_SIHOT_ROOM'],
-                          rgr_room_cat_id=crow['RUL_SIHOT_CAT'],
-                          rgr_room_rate=crow['RUL_SIHOT_RATE'],
-                          rgr_ext_book_id=crow['RH_EXT_BOOK_REF'],
-                          rgr_ext_book_day=crow['RH_EXT_BOOK_DATE'],
-                          rgr_comment=crow['SIHOT_NOTE'],
-                          rgr_long_comment=crow['SIHOT_TEC_NOTE'],
+                          # rgr_obj_id=rec['RU_SIHOT_OBJID'],
+                          # rgr_sf_id=rec['ResSfId'],
+                          rgr_status=rec['SIHOT_RES_TYPE'],
+                          rgr_adults=rec['RU_ADULTS'],
+                          rgr_children=rec['RU_CHILDREN'],
+                          rgr_arrival=rec['ARR_DATE'],
+                          rgr_departure=rec['DEP_DATE'],
+                          rgr_mkt_segment=rec['SIHOT_MKT_SEG'],
+                          rgr_mkt_group=rec['RO_SIHOT_RES_GROUP'],
+                          rgr_room_id=rec['RUL_SIHOT_ROOM'],
+                          rgr_room_cat_id=rec['RUL_SIHOT_CAT'],
+                          rgr_room_rate=rec['RUL_SIHOT_RATE'],
+                          rgr_ext_book_id=rec['RH_EXT_BOOK_REF'],
+                          rgr_ext_book_day=rec['RH_EXT_BOOK_DATE'],
+                          rgr_comment=rec['SIHOT_NOTE'],
+                          rgr_long_comment=rec['SIHOT_TEC_NOTE'],
                           rgr_time_in=ac_res[0],
                           rgr_time_out=ac_res[1],
                           rgr_last_change=cae.startup_beg,
@@ -428,7 +428,7 @@ def ac_pull_res_data():
         rgr_pk = ass_db.fetch_value()
 
         # determine occupant(s)
-        mc = crow['CD_CODE']
+        mc = rec['CD_CODE']
         ac_cos = asd.load_view(acu_db, "T_CD",
                                ['CD_SNAM1', 'CD_FNAM1', 'CD_DOB1', 'CD_SNAM2', 'CD_FNAM2', 'CD_DOB2'],
                                "CD_CODE = :ac_id", dict(ac_id=mc))
@@ -446,12 +446,12 @@ def ac_pull_res_data():
                           rgc_firstname=ac_cos['CD_FNAM1'],
                           rgc_auto_generated='0',
                           rgc_occup_cl_fk=occ_cl_pk,
-                          rgc_flight_arr_comment=crow['RU_FLIGHT_AIRPORT'] + " No=" + crow['RU_FLIGHT_NO'],
-                          rgc_flight_arr_time=crow['RU_FLIGHT_LANDS'],
+                          rgc_flight_arr_comment=rec['RU_FLIGHT_AIRPORT'] + " No=" + rec['RU_FLIGHT_NO'],
+                          rgc_flight_arr_time=rec['RU_FLIGHT_LANDS'],
                           # occupation data
                           rgc_pers_type='1A',
-                          rgc_sh_pack=crow['RUL_SIHOT_PACK'],
-                          rgc_room_id=crow['RUL_SIHOT_ROOM'],
+                          rgc_sh_pack=rec['RUL_SIHOT_PACK'],
+                          rgc_room_id=rec['RUL_SIHOT_ROOM'],
                           rgc_dob=ac_cos['CD_DOB1']
                           )
         if ass_db.upsert('res_group_clients', upd_values, chk_values=chk_values):

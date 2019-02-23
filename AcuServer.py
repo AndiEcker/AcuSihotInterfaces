@@ -5,37 +5,32 @@
             passing/increment - is always duplicated '2' instead the one sent by Sihot (see Track-It closed WO #43242).
     0.4     added GDS number to alloc_trigger() - available since Sihot build/version 9.0.0.0787.CO.
     0.5     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
-
-    TODO:
-    - implement reservation fetch via Sihot WEB interface for better problem/discrepancy checks.
+    0.6     refactored to use system field records and migrated client_to_acu() to acif.py/AcuDbRows.send_client().
 """
 from traceback import format_exc
 
-from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_TIMEOUT, \
-    SDF_SH_XML_ENCODING, SDF_SH_CLIENT_PORT
+from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_TIMEOUT,
+                          SDF_SH_XML_ENCODING, SDF_SH_CLIENT_PORT)
 from ae_console_app import ConsoleApp, uprint
 from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
-from acif import add_ac_options
+from acif import add_ac_options, AcuDbRows
 from sxmlif import Request, RoomChange, SihotXmlBuilder
 from shif import add_sh_options, ClientFromSihot
 
-__version__ = '0.5'
+__version__ = '0.6'
 
 
-cae = debug_level = None  # added for to remove Pycharm warning
+cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle", multi_threading=True)
+add_ac_options(cae)
+add_sh_options(cae, client_port=11000)
+add_notification_options(cae)
 
-if __name__ == "__main__":      # for to allow import of client_to_acu() for testing suite
-    cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle", multi_threading=True)
-    add_ac_options(cae)
-    add_sh_options(cae, client_port=11000)
-    add_notification_options(cae)
-
-    debug_level = cae.get_option('debugLevel')
-    uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
-    uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
-    notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
+debug_level = cae.get_option('debugLevel')
+uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
+uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
 
 
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
@@ -46,50 +41,12 @@ def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
             uprint(msg)
 
 
-def client_to_acu(col_values, ca=None):
-    if ca:              # only needed for sxmlif testing section
-        dl = ca.get_option('debugLevel')
-    else:
-        dl = debug_level
-        ca = cae
-    ora_db = OraDB(dict(User=ca.get_option('acuUser'), Password=ca.get_option('acuPassword'),
-                        DSN=ca.get_option('acuDSN')),
-                   app_name=ca.app_name(), debug_level=dl)
-    err_msg = ora_db.connect()
-    pkey = None
-    if not err_msg:
-        if col_values.get('CD_CODE'):
-            pkey = col_values['CD_CODE']
-        else:
-            err_msg = ora_db.select('dual', ['S_OWNER_SEQ.nextval'])
-            if not err_msg:
-                seq = str(ora_db.fetch_value()).rjust(6, '0')
-                err_msg = ora_db.select('T_LG', ['LG_OWPRE'],
-                                        "LG_COUNTRY in (select CO_CODE from T_CO where CO_ISO2 = :CD_COREF)",
-                                        bind_vars=col_values)
-                if not err_msg:
-                    prefix = ora_db.fetch_value()
-                    if not prefix:
-                        prefix = 'E'
-                    pkey = col_values['CD_CODE'] = prefix + seq
-
-    if not err_msg:
-        err_msg = ora_db.select('T_CD', ['count(*)'], where_group_order="CD_CODE = '" + pkey + "'")
-        if not err_msg:
-            acu_col_values = {k: col_values[k] for k in col_values.keys() if k.startswith('CD_')}
-            if ora_db.fetch_value() > 0:
-                err_msg = ora_db.update('T_CD', acu_col_values, "CD_CODE = :CD_CODE", bind_vars=dict(CD_CODE=pkey))
-            else:
-                err_msg = ora_db.insert('T_CD', acu_col_values)
-    ora_db.close()
-    return err_msg, pkey
-
-
 def oc_client_to_acu(req):
-    error_msg, pk = client_to_acu(req.acu_col_values)
+    acu_db = AcuDbRows(cae)
+    error_msg, pk = acu_db.send_client(req.client_list[0])
     notify("####  Guest inserted or updated within Acumen with pk=" + pk if not error_msg
            else "****  Acumen guest data insert/update error: " + error_msg)
-    resp = SihotXmlBuilder(cae, use_kernel=False)
+    resp = SihotXmlBuilder(cae)
     resp.beg_xml(operation_code=req.oc)
     resp.add_tag('RC', '1' if error_msg else '0')
     resp.add_tag('MATCHCODE', pk)
@@ -145,7 +102,7 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
 
 
 def create_ack_response(req, ret_code, msg='', status=''):
-    resp = SihotXmlBuilder(cae, use_kernel=False)
+    resp = SihotXmlBuilder(cae)
     resp.beg_xml(operation_code='ACK', transaction_number=getattr(req, 'tn', '69'))
     resp.add_tag('RC', ret_code)
     if msg:
@@ -229,7 +186,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                 msg = "(ignored)"
             else:
                 msg = "****  SihotRequestXmlHandler.handle_xml(): empty or unsupported operation code '" + oc + "'!"
-                notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                notify(msg)
             xml_response = create_ack_response(req, '99', msg)
         else:
             try:

@@ -325,7 +325,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResMktGroupNN | RO_SIHOT_SP_GROUP | - | NN | - |
 | ResMktSegment | SIHOT_MKT_SEG | MktSegment__c (Marketing_Source__pc) | RESERVATION.MARKETCODE(oc=SS/RES-SEARCH)+MARKETCODE-NO(oc=RES) | rgr_mkt_segment |
 | ResNote | SIHOT_NOTE | Note__c | RESERVATION.COMMENT | rgr_comment |
-| ResObjId | RU_CODE, RUL_PRIMARY | SihotResvObjectId__c | RESERVATION.OBJID | rgr_obj_id |
+| ResObjId | RU_SIHOT_OBJID+RU_CODE+RUL_PRIMARY | SihotResvObjectId__c | RESERVATION.OBJID | rgr_obj_id |
 | ResPersons | - | - | PERSON | res_group_clients.* |
 | ResPersons\<n\>AutoGen | - | - | PERSON.AUTO-GENERATED | rgc_auto_generated |
 | ResPersons\<n\>Board | - | - | PERSON.PERS-RATE.R | rgc_sh_pack |
@@ -717,6 +717,99 @@ can be imported from a json file (the tool to convert each email into the json f
 The available json field names are documented in the 
 section [Available Reservation Fields](#available-reservation-fields) above. 
 
+
+### SihotServer Web Services
+
+SihotServer is providing serveral https web services, which are implemented and distributed as pure python package
+scripts. These python scripts are prepared to by used on top of a Apache Linux web server as a WSGI web service
+extension. For to access one of these services you first have to enter the correct user name and password
+(see .console_app_env.cfg).
+
+The first web-services for to create/upsert (PUSH) or for to update (PUT) reservations onto our Sihot system
+are available under the URL:
+
+https://services.signallia.com/res/upsert.
+
+Another GET web service provides the retrieval of the full data structure of a Sihot reservation:
+
+https://services.signallia.com/res/get?hotel_id=2&gds_no=1098576
+
+The `hotel_id` and `gds_no` query parameters of this web service are mandatory. Instead of passing the GDS number
+within `gds_no` you could alternatively also use the reservation number by passing the query parameters `res_id`
+and `sub_id` instead of the `gds_no` query parameter.
+ 
+Another GET web-service allows you to get the number of confirmed Sihot reservations:
+
+https://services.signallia.com/res/count?hotel_ids=2&day=2019-10-10&room_cat_prefix=1&res_max_days=21
+
+All query parameters are optional for this web service. If the `hotel_ids` query parameter get not passed then
+the service will count the reservations in all our Sihot hotels; The `hotel_ids` parameter does also support
+a list of Sihot hotel ids separated by a comma character. The `room_cat_prefix` query parameter does also allow
+to specify the full name of a Sihot room category, like e.g. `1JNR`. Please note that the `res_max_days`
+query parameter should be greater or equal to the number of days of the counted reservations – the default
+value is 27 days).
+
+Another web service allows to fetch the currently available units/rooms/apartments of the Sihot system, providing
+the query parameters `hotel_ids`, `room_cat_prefix` and `day`. For example the following URL is retrieving from
+Sihot all the available 1-Bedroom units within the hotel 2 (BHH) for the 10th of October 2019:
+
+https://services.signallia.com/avail_rooms?hotel_ids=2&room_cat_prefix=1&day=2019-10-10
+
+Additionally web services that are useful for debugging purposes are described in the section [Debugging](#debugging)
+underneath.
+ 
+#### Setup Web Server
+
+After setting up mod_wsgi using embedded mode (instead of daemon mode) the apache/linux server settings are used.
+
+For to change the encoding charsets in embedded mode you could change the environment variables
+LANG and LC_ALL of apache in /etc/apache2/envvars. Following the recommendations of the main developer of mod_wsgi
+(see http://blog.dscpl.com.au/2014/09/setting-lang-and-lcall-when-using.html) it would be better and saver
+to run mod_wsgi in daemon mode and specify there the language and locale settings by adding to the apache .conf file:
+
+    WSGIDaemonProcess my-site lang='en_US.UTF-8' locale='en_US.UTF-8'
+
+More useful hints and workarounds for common mod_wsgi issues and configuration problems you find here:
+    https://code.google.com/archive/p/modwsgi/wikis/ApplicationIssues.wiki
+Newer version:
+    https://modwsgi.readthedocs.io/en/develop/user-guides/application-issues.html
+
+#### Deployment 
+
+The deployment shell scripts `build_ws_res.cmd` and `build_ws_test.cmd` are used to prepare the roll-out of the
+web services. The first one available at https://services.signallia.com are the web services for to access our
+production servers and the second one is for to check the web services environment (available at 
+https://lint.signallia.com).
+
+For to run one of the deployment shell scripts, you first have to change the current working directory to the
+source folder. The shell script is copying all the needed python code from the actual source folder and the
+python path to the distribution folder on the same machine.
+
+After that you need to use a SFTP tool - like WinSCP.exe for to pass/synchronize the files in the distribution
+folder to the web server directories (lint and services underneath /var/www).
+
+#### Debugging
+
+For debugging you can check the log files in the log folder of the service folder (e.g. for the `services`
+web service within `/var/www/services/log`).
+
+Service specific log files created by the Apache server you find on the web server folder `/var/log/apache2`. The log
+file names are starting with the name of the service (`lint` or `services`), followed by an underscore character and
+the suffixes `error` and `access`. The file extension of these log files is `.log`.
+
+Additional log files you find in the web server folder `/var/log`, e.g. the Apache log files `syslog` and `auth.log`.
+
+There are also some extra web services available for debugging. A simple hello echo service can be reached by the
+URL - it will return the string you provided after the hello path ('debug_text' in the following example):
+
+https://services.signallia.com/hello/debug_text
+
+Another debug web service allows you to fetch any file from the web server that is placed in the `static` sub-folder
+of the services folder (for example from /var/www/services/static).
+
+Finally under the URL https://lint.signallia.com there is also a small web service available for debugging
+purposes that is displaying all the system environment variable of the web server (used by all our python
+web services).
 
 
 ### WatchPupPy Application
@@ -1170,7 +1263,8 @@ changes within the latest not synchronized requested unit log entry/record and a
 
 #### Synchronization Log
 
-The synchronization process is fully logged within the new `T_SRSL` table providing the following columns:
+Any synchronizations are fully logged within the `T_SRSL` table of the Acumen system, providing the
+following columns:
 
 | Column Name | Column Content |
 | --- | --- |
@@ -1185,7 +1279,9 @@ The synchronization process is fully logged within the new `T_SRSL` table provid
 
 ### Synchronization between Salesforce and Sihot
 
-Recently we also started to implement the [BssServer application](#bssserver-application) that will pass any changes of
+The [BssServer application](#bssserver-application) will pass any changes of
 reservation data and of room occupations (check-ins, check-outs and room-moves) done within Sihot to Salesforce (and
 optionally also to the AssCache database).
 
+Client and reservation data can be passed from Salesforce to Sihot by using the 
+[SihotServer Web Services](#sihotserver-web-services).

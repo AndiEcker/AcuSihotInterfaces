@@ -3,6 +3,7 @@ import datetime
 # import pytest
 
 # from sys_data_ids import CLIENT_REC_TYPE_ID_OWNERS
+from acif import ACU_CLIENT_MAP
 from ae_sys_data import Record, FAD_ONTO, Records
 
 from sfif import SF_RES_MAP, SF_CLIENT_MAPS
@@ -137,6 +138,31 @@ class TestSysDataClientActions:
         assert not dif
         assert repr(acc) == repr(asd.clients)
         assert repr(acc) == repr(recs)
+
+    def test_acu_clients_push_with_ext_refs(self, ass_sys_data):
+        asd = ass_sys_data
+        rec = cl_test_rec.copy(deepness=-1)
+
+        asd.clients.append(rec)
+        asd.acu_clients_push()  # no explicit match field available; Assertion error if passing match_fields=['AcuId'])
+        assert not asd.error_message
+        print(rec.val('AcuId'))
+        assert rec.val('AcuId')
+        assert rec.val('AcuId') == asd.clients[0].val('AcuId')
+
+        # added field_names arg for to only compare AssCache.clients fields
+        recs, dif = asd.acu_clients_compare(chk_values=dict(CD_CODE='T000369'),
+                                            match_fields=('AcuId',),
+                                            field_names=[fn for sn, fn, *_ in ACU_CLIENT_MAP])  # + ['ExtRefs'])
+        assert not asd.error_message
+        print(recs)
+        assert len(recs) == 1 == len(asd.clients)
+        print(dif)
+        assert not dif
+        # will always be False because asd.clients has more fields than in Sihot:
+        # assert repr(recs) == repr(asd.clients)
+        print(repr(recs))
+        print(repr(asd.clients))
 
     def test_ass_clients_pull_count(self, ass_sys_data):
         asd = ass_sys_data
@@ -345,6 +371,40 @@ class TestSysDataClientActions:
 
 
 class TestSysDataResActions:
+    def test_acu_res_compare(self, ass_sys_data):
+        asd = ass_sys_data
+
+        rec = res_test_rec.copy(deepness=-1)
+        asd.reservations.append(rec)
+        asd.acu_reservation_push()
+        assert not asd.error_message
+        print(rec.val('ResGdsNo'))
+        assert rec.val('ResGdsNo')
+        assert rec.val('ResGdsNo') == asd.reservations[0].val('ResGdsNo')
+
+        orderer_fields = [fn for sn, fn, *_ in ACU_CLIENT_MAP if fn]
+        recs, dif = asd.acu_reservations_compare(
+            chk_values=dict(hotel_id=rec.val('ResHotelId'), gds_no=rec.val('ResGdsNo')),
+            exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
+                            # 'ResAccount',
+                            # not returned by Sihot RES-SEARCH
+                            # 'PersAcuId', 'PersShId',
+                            # SALES-DATE cannot be overwritten - first set value keeps
+                            # 'ResBooked',
+                            # AutoGen can be '1' in response if not send in request
+                            # 'AutoGen',
+                            # PersLanguage can be 'EN' in response if sent as None
+                            # 'PersLanguage',
+                            # RoomSeq is coming back sometimes with 1 although sent as 0
+                            # 'RoomSeq',
+                            ] + orderer_fields
+            )
+        assert not asd.error_message
+        print(recs)
+        assert len(recs) == 1 == len(asd.reservations)
+        print(dif)
+        assert not dif
+
     def test_ass_res_compare(self, ass_sys_data):
         asd = ass_sys_data
 
@@ -415,7 +475,7 @@ class TestSysDataResActions:
         rec = res_test_rec.copy(deepness=-1)
         rec['ResId'] = r['ResId']
         rec['ResSubId'] = r['ResSubId']
-        # rec['ResObjId'] = r['ResObjId']
+        rec['ResObjId'] = r['ResObjId']
         # rec['ResRateSegment'] = r['ResRateSegment']
         asd.reservations.append(rec)
 
@@ -741,7 +801,10 @@ class TestSlowAssSysDataShIntegration:
     @staticmethod
     def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
         def _normalize_val(key, val):
-            val = val.capitalize() if 'name' in key else val.lower() if 'Email' in key else None if val == '' else val
+            val = None if val in ('', None) \
+                else val.capitalize() if 'name' in key.lower() \
+                else val.lower() if 'Email' in key \
+                else val
             if isinstance(val, str):
                 if len(val) > 40:
                     val = val[:40]
@@ -774,13 +837,13 @@ class TestSlowAssSysDataShIntegration:
             rgr_pk = asd.res_save(res, ass_res_rec=res_fields)
             print('got rgr_pk {} after sending res_fields {}'.format(rgr_pk, res_fields))
             if asd.error_message:
-                errors.append((idx, "res_save() error {}".format(asd.error_message), res))
+                errors.append((idx, "res_save() error={}".format(asd.error_message), res))
                 continue
 
             cl_fields = client_data(console_app_env, res.val('ShId'))
             print('cl_fields', cl_fields)
             if not isinstance(cl_fields, dict):
-                errors.append((idx, "client_data error - no dict=" + str(cl_fields), res))
+                errors.append((idx, "client_data error - no dict={}".format(cl_fields), res))
                 continue
 
             sf_data = Record(system=SDI_SF, direction=FAD_ONTO)
@@ -788,17 +851,17 @@ class TestSlowAssSysDataShIntegration:
             send_err = asd.sf_ass_res_upsert(None, cl_fields, res_fields, sf_sent=sf_data)
             print('sf_data:', sf_data)
             if send_err:
-                errors.append((idx, "sf_ass_res_upsert error " + send_err, res))
+                errors.append((idx, "sf_ass_res_upsert error={}".format(send_err), res))
                 continue
 
             sf_sent = sf_data.to_dict()
             sf_recd = sfc.res_dict(sf_sent['ReservationOpportunityId'])
             if sfc.error_msg:
-                errors.append((idx, "sfc.res_dict() error " + sfc.error_msg, res))
+                errors.append((idx, "sfc.res_dict() error={}".format(sfc.error_msg), res))
                 continue
             diff = self._compare_converted_field_dicts(sf_sent, sf_recd)
             if diff:
-                errors.append((idx, "compare found differences: " + str(diff), res))
+                errors.append((idx, "comparision found {} differences={}".format(len(diff), diff), res))
                 continue
         assert not errors, "{} tests had {} fails; collected errors".format(len(ret), len(errors)) \
                            + str(["\n" + str(e) for e in errors])
