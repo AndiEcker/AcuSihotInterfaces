@@ -1368,14 +1368,14 @@ class ResToSihot(FldMapXmlBuilder):
         elif "Could not find a key identifier" in err_msg and (rec['ShId'] or rec['ShId_P']):
             self.cae.dprint("ResToSihot._handle_error() ignoring client obj id {}/{} error: {}"
                             .format(rec['ShId'], rec['ShId_P'], err_msg))
-            rec['ShId'] = None          # use AcId/MATCHCODE instead
-            rec['ShId_P'] = None
+            rec['ShId'] = ''            # use AcId/MATCHCODE instead
+            rec['ShId_P'] = ''
             err_msg = self._sending_res_to_sihot(rec)
 
         elif "A database error has occurred." in err_msg and rec['ResObjId']:
             self.cae.dprint("ResToSihot._handle_error() ignoring reservation obj id {} error: {}"
                             .format(rec['ResObjId'], err_msg))
-            rec['ResObjId'] = None      # use ResHotelId+ResGdsNo instead
+            rec['ResObjId'] = ''        # use ResHotelId+ResGdsNo instead
             err_msg = self._sending_res_to_sihot(rec)
 
         if err_msg:

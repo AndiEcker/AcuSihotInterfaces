@@ -38,8 +38,8 @@ ACU_CLIENT_MAP = [       # client data
     ('AcuId', 'CD_CODE'),
     ('AcuId_P', 'CD_CODE2'),
     ('SfId', 'SIHOT_SF_ID'),
-    ('ShId', 'CD_SIHOT_OBJID', None, lambda f, v: '' if v is None else str(v)),
-    ('ShId_P', 'CD_SIHOT_OBJID2', None, lambda f, v: '' if v is None else str(v)),
+    ('ShId', 'CD_SIHOT_OBJID', None, lambda f, v: str(v)),
+    ('ShId_P', 'CD_SIHOT_OBJID2', None, lambda f, v: str(v)),
     ('Salutation', 'SIHOT_SALUTATION1'),
     ('Salutation_P', 'SIHOT_SALUTATION2'),
     ('Title', 'SIHOT_TITLE1'),
@@ -80,8 +80,8 @@ ACU_CLIENT_MAP = [       # client data
     ]
 
 ACU_RES_MAP = [       # reservation data
-    ('ResHotelId', 'RUL_SIHOT_HOTEL', None, lambda f, v: '' if v is None else str(v)),
-    ('ResLastHotelId', 'RUL_SIHOT_LAST_HOTEL', None, lambda f, v: '' if v is None else str(v)),
+    ('ResHotelId', 'RUL_SIHOT_HOTEL', None, lambda f, v: str(v)),
+    ('ResLastHotelId', 'RUL_SIHOT_LAST_HOTEL', None, lambda f, v: str(v)),
     # ('ResId', ),
     # ('ResSubId', ),
     ('ResGdsNo', 'SIHOT_GDSNO',
@@ -89,7 +89,7 @@ ACU_RES_MAP = [       # reservation data
      " then (select 'TC' || RH_EXT_BOOK_REF from T_RH"
      " where RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
      " else '(lost)' end else to_char(RUL_PRIMARY) end)"),  # RUL_PRIMARY needed for to delete/cancel res
-    ('ResObjId', 'RU_SIHOT_OBJID', None, lambda f, v: '' if v is None else str(v)),
+    ('ResObjId', 'RU_SIHOT_OBJID', None, lambda f, v: str(v)),
     ('ResArrival', 'ARR_DATE',
      "case when ARR_DATE is not NULL then ARR_DATE when RUL_ACTION <> '" + ACTION_UPDATE + "'"
      " then to_date(F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_FROM_DATE'), 'DD-MM-YY')"
