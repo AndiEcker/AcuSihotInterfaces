@@ -122,6 +122,7 @@ SH_CLIENT_MAP = \
         #  lambda f: f.ina(ACTION_SEARCH)),
     )
 
+'''
 SH_CLIENT_PARSE_MAP = \
     (
         ('EXT_REFS', 'ExtRefs'),  # only for elemHideIf expressions
@@ -129,6 +130,7 @@ SH_CLIENT_PARSE_MAP = \
         # ('STATUS', 'CD_STATUS', 500),
         # ('PAF_STAT', 'CD_PAF_STATUS', 0),
     )
+'''
 
 # Reservation interface mappings
 # .. first the mapping for the WEB interface
@@ -346,6 +348,7 @@ SH_RES_MAP = \
         ('/ARESLIST',),
     )
 
+'''
 MAP_PARSE_WEB_RES = \
     (   # ### EXTRA PARSING FIELDS (for to interpret reservation coming from the WEB interface)
         ('ACTION', 'ResAction'),
@@ -379,6 +382,7 @@ MAP_PARSE_WEB_RES = \
         ('LANG', ),
         ('MARKETCODE', ),     # RES-SEARCH has no MARKETCODE-NO element/tag
     )
+'''
 
 # default values for used interfaces (see email from Sascha Scheer from 28 Jul 2016 13:48 with answers from JBerger):
 # .. use kernel for clients and web for reservations
@@ -494,10 +498,10 @@ def gds_no_to_ids(cae, hotel_id, gds_no):
     ids = dict(ResHotelId=hotel_id, ResGdsNo=gds_no)
     rfr = ResFetch(cae).fetch_by_gds_no(hotel_id, gds_no)
     if isinstance(rfr, Record):
-        ids['ResObjId'] = rfr.val('ResObjId')
-        ids['ResId'] = rfr.val('ResId')
-        ids['ResSubId'] = rfr.val('ResSubId')
-        ids['ResSfId'] = rfr.val('ResSfId')
+        ids['ResObjId'] = rfr.val('ResObjId') or ''
+        ids['ResId'] = rfr.val('ResId') or ''
+        ids['ResSubId'] = rfr.val('ResSubId') or ''
+        ids['ResSfId'] = rfr.val('ResSfId') or ''
     return ids
 
 
@@ -509,9 +513,9 @@ def res_no_to_ids(cae, hotel_id, res_id, sub_id):
     ret = dict(ResHotelId=hotel_id, ResId=res_id, ResSubId=sub_id)
     rfr = ResFetch(cae).fetch_by_res_id(hotel_id, res_id, sub_id)
     if isinstance(rfr, Record):
-        ret['ResObjId'] = rfr.val('ResObjId')
-        ret['ResGdsNo'] = rfr.val('ResGdsNo')
-        ret['ResSfId'] = rfr.val('ResSfId')
+        ret['ResObjId'] = rfr.val('ResObjId') or ''
+        ret['ResGdsNo'] = rfr.val('ResGdsNo') or ''
+        ret['ResSfId'] = rfr.val('ResSfId') or ''
     else:
         ret = rfr
     return ret
@@ -541,25 +545,25 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
         date_till = date_from
 
     err_msg = ""
-    all_rows = Records()
+    all_recs = Records()
     try:
         rs = ResSearch(cae)
         # the from/to date range filter of WEB ResSearch filters the arrival date only (not date range/departure)
         # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
         # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
         for chunk_beg, chunk_end in date_range_chunks(date_from, date_till, max_los):
-            chunk_rows = rs.search_res(from_date=chunk_beg, to_date=chunk_end, flags=search_flags,
+            chunk_recs = rs.search_res(from_date=chunk_beg, to_date=chunk_end, flags=search_flags,
                                        scope=search_scope)
-            if chunk_rows and isinstance(chunk_rows, str):
-                err_msg = "Sihot.PMS reservation search error: {}".format(chunk_rows)
+            if chunk_recs and isinstance(chunk_recs, str):
+                err_msg = "Sihot.PMS reservation search error: {}".format(chunk_recs)
                 break
-            elif not chunk_rows or not isinstance(chunk_rows, list):
+            elif not chunk_recs or not isinstance(chunk_recs, list):
                 err_msg = "Unspecified Sihot.PMS reservation search error"
                 break
             cae.dprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
-                       .format(len(chunk_rows), chunk_beg, chunk_end, search_flags, search_scope))
-            valid_rows = Records()
-            for res_rec in chunk_rows:
+                       .format(len(chunk_recs), chunk_beg, chunk_end, search_flags, search_scope))
+            valid_recs = Records()
+            for res_rec in chunk_recs:
                 reasons = list()
                 check_in = res_rec.val('ResArrival')
                 check_out = res_rec.val('ResDeparture')
@@ -577,14 +581,14 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
                     cae.dprint("  ##  Skipped Sihot reservation:", res_rec, " reason(s):", reasons,
                                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     continue
-                valid_rows.append(res_rec)
+                valid_recs.append(res_rec)
 
-            all_rows.extend(valid_rows)
+            all_recs.extend(valid_recs)
             time.sleep(chunk_pause)
     except Exception as ex:
         err_msg = "Sihot interface reservation fetch exception: {}\n{}".format(ex, format_exc())
 
-    return err_msg or all_rows
+    return err_msg or all_recs
 
 
 def obj_id_to_res_no(cae, obj_id):
@@ -1343,17 +1347,17 @@ class ResToSihot(FldMapXmlBuilder):
             if not obj_id:
                 rec.set_val(self.response.objid, 'ResObjId')
             elif obj_id != self.response.objid:
-                self._warning_msgs.append("ResObjId mismatch: {} != {}".format(obj_id, self.response.objid))
+                self._warning_msgs.append("ResObjId mismatch: {!r} != {!r}".format(obj_id, self.response.objid))
             res_id = rec.val('ResId')
             if not res_id:
                 rec.set_val(self.response.res_nr, 'ResId')
             elif res_id != self.response.res_nr:
-                self._warning_msgs.append("ResId mismatch: {} != {}".format(res_id, self.response.res_nr))
+                self._warning_msgs.append("ResId mismatch: {!r} != {!r}".format(res_id, self.response.res_nr))
             sub_id = rec.val('ResSubId')
             if not sub_id:
                 rec.set_val(self.response.sub_nr, 'ResSubId')
             elif sub_id != self.response.sub_nr:
-                self._warning_msgs.append("ResSubId mismatch: {} != {}".format(sub_id, self.response.sub_nr))
+                self._warning_msgs.append("ResSubId mismatch: {!r} != {!r}".format(sub_id, self.response.sub_nr))
 
         return err_msg
 
@@ -1481,7 +1485,7 @@ class BulkFetcherBase:
         self.add_kernel_port = add_kernel_port
         self.debug_level = None
         self.startup_date = cae.startup_beg.date()
-        self.all_rows = None
+        self.all_recs = None
 
     def add_options(self):
         add_sh_options(self.cae, add_kernel_port=self.add_kernel_port)
@@ -1501,16 +1505,16 @@ class GuestBulkFetcher(BulkFetcherBase):
     """
     def fetch_all(self):
         cae = self.cae
-        self.all_rows = list()
+        self.all_recs = Records()
         try:
             # MATCH-SM (holding the Salesforce/SF client ID) is not available in Kernel GUEST-SEARCH (only GUEST-GET)
-            self.all_rows = ClientSearch(cae).search_clients(order_by='GUEST-NR', limit=600000)
+            self.all_recs = ClientSearch(cae).search_clients(order_by='GUEST-NR', limit=600000)
         except Exception as ex:
             uprint(" ***  Sihot interface guest bulk fetch exception:", str(ex))
             print_exc()
             cae.shutdown(2130)
 
-        return self.all_rows
+        return self.all_recs
 
 
 class ResBulkFetcher(BulkFetcherBase):
@@ -1580,12 +1584,12 @@ class ResBulkFetcher(BulkFetcherBase):
             ("BETWEEN" + from_date + " AND " + self.date_till.strftime(SH_DATE_FORMAT))
 
     def fetch_all(self):
-        self.all_rows = res_search(self.cae, self.date_from, self.date_till,
+        self.all_recs = res_search(self.cae, self.date_from, self.date_till,
                                    mkt_sources=self.allowed_mkt_src, mkt_groups=self.allowed_mkt_grp,
                                    max_los=self.max_length_of_stay,
                                    search_flags=self.search_flags, search_scope=self.search_scope,
                                    chunk_pause=self.fetch_chunk_pause_seconds)
-        return self.all_rows
+        return self.all_recs
 
 
 class ResSender(ResToSihot):

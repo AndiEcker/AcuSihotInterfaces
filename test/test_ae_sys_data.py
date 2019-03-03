@@ -210,9 +210,13 @@ class TestValue:
     def test_val_get(self):
         v = Value()
         assert v.val() == ''
-        assert v.val('test') is None
-        assert v.val(12, 'sub_field') is None
-        assert v.val('field', 12, 'sub_field') is None
+        # ae: 26-Feb-19 changed Value.val() to return empty string instead of None
+        # assert v.val('test') is None
+        # assert v.val(12, 'sub_field') is None
+        # assert v.val('field', 12, 'sub_field') is None
+        assert v.val('test') == ''
+        assert v.val(12, 'sub_field') == ''
+        assert v.val('field', 12, 'sub_field') == ''
 
         assert v.val(0) == ''
         assert v.val(-1) == ''
@@ -253,9 +257,13 @@ class TestField:
     def test_val_get(self):
         f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
         assert f.val() == ''
-        assert f.val('test') is None
-        assert f.val(12, 'sub_field') is None
-        assert f.val('sub_field', 12, '2nd_sub_field') is None
+        # ae: 26-Feb-19 changed Value.val() to return empty string instead of None
+        # assert f.val('test') is None
+        # assert f.val(12, 'sub_field') is None
+        # assert f.val('sub_field', 12, '2nd_sub_field') is None
+        assert f.val('test') == ''
+        assert f.val(12, 'sub_field') == ''
+        assert f.val('sub_field', 12, '2nd_sub_field') == ''
 
     def test_field_name_init(self):
         f = _Field(**{FAT_REC: Record(), FAT_RCX: ('init',)})

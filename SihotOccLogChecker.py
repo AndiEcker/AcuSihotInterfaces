@@ -373,7 +373,8 @@ try:
     # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
     # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
     for chunk_beg, chunk_end in date_range_chunks():
-        chunk_rows = res_search.search_res(from_date=chunk_beg, to_date=chunk_end, flags=search_flags, scope=search_scope)
+        chunk_rows = res_search.search_res(from_date=chunk_beg, to_date=chunk_end, flags=search_flags, 
+                                           scope=search_scope)
         if chunk_rows and isinstance(chunk_rows, str):
             add_log_msg("Sihot.PMS reservation search error: {}".format(chunk_rows), is_error=True, importance=3)
         elif not chunk_rows or not isinstance(chunk_rows, list):

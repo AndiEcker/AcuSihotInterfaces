@@ -399,7 +399,7 @@ class TestResResponse:
 
 class TestSihotXmlBuilder:
     def test_create_xml(self, console_app_env):
-        xml_builder = SihotXmlBuilder(console_app_env, use_kernel=False)
+        xml_builder = SihotXmlBuilder(console_app_env)
         xml_builder.beg_xml('TEST_OC')
         xml_builder.add_tag('EMPTY')
         xml_builder.add_tag('DEEP', xml_builder.new_tag('DEEPER', 'value'))

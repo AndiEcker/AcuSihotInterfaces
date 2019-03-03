@@ -90,42 +90,8 @@ class GenericDB:
                 new_sql = new_sql.replace(NAMED_BIND_VAR_PREFIX + key, '%(' + key + ')s')
         return new_sql
 
-    def execute_sql(self, sql, commit=False, auto_commit=False, bind_vars=None):
-        if self.conn or not self.connect():     # lazy connection
-            if auto_commit:
-                self.conn.autocommit = True     # or use: self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-
-            action = sql.split()[0]
-            if action == '--' or action == '/*':
-                action = 'SCRIPT'
-            elif action.upper() == 'CREATE':
-                action += ' ' + sql.split()[1]
-
-            self.last_err_msg = ""
-            sql, bind_vars = self._prepare_in_clause(sql, bind_vars)
-            sql = self._adapt_sql(sql, bind_vars)
-            try:
-                if bind_vars:
-                    self.curs.execute(sql, bind_vars)
-                else:
-                    # if no bind vars then call without for to prevent error "'dict' object does not support indexing"
-                    # .. in scripts with the % char (like e.g. dba_create_audit.sql)
-                    self.curs.execute(sql)
-                if commit:
-                    self.conn.commit()
-                if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint(self.dsn + ".execute_sql({}, {}) {}".format(sql, bind_vars, action))
-                    uprint(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
-
-            except Exception as ex:
-                self.last_err_msg = self.dsn + ".execute_sql({}, {}) {} error: {}".format(sql, bind_vars, action, ex)
-
-        return self.last_err_msg
-
-    def select(self, from_join, cols=None, chk_values=None, where_group_order='', bind_vars=None, hints=''):
-        if not cols:
-            cols = list('*')
-
+    @staticmethod
+    def _compile_filter_bind(chk_values, where_group_order, bind_vars):
         if chk_values:
             extra_where = " AND ".join([k + " = :" + k for k in chk_values.keys()])
             if not where_group_order:
@@ -142,9 +108,7 @@ class GenericDB:
         if not where_group_order:
             where_group_order = '1=1'
 
-        sql = "SELECT {} {} FROM {} WHERE {}".format(hints, ','.join(cols), from_join, where_group_order)
-
-        return self.execute_sql(sql, bind_vars=bind_vars)
+        return where_group_order, bind_vars
 
     def cursor_description(self):
         return self.curs.description if self.curs else None
@@ -184,6 +148,45 @@ class GenericDB:
             uprint(self.last_err_msg)
         return val
 
+    def execute_sql(self, sql, commit=False, auto_commit=False, bind_vars=None):
+        if self.conn or not self.connect():     # lazy connection
+            if auto_commit:
+                self.conn.autocommit = True     # or use: self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+
+            action = sql.split()[0]
+            if action == '--' or action == '/*':
+                action = 'SCRIPT'
+            elif action.upper() == 'CREATE':
+                action += ' ' + sql.split()[1]
+
+            self.last_err_msg = ""
+            sql, bind_vars = self._prepare_in_clause(sql, bind_vars)
+            sql = self._adapt_sql(sql, bind_vars)
+            try:
+                if bind_vars:
+                    self.curs.execute(sql, bind_vars)
+                else:
+                    # if no bind vars then call without for to prevent error "'dict' object does not support indexing"
+                    # .. in scripts with the % char (like e.g. dba_create_audit.sql)
+                    self.curs.execute(sql)
+                if commit:
+                    self.conn.commit()
+                if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                    uprint(self.dsn + ".execute_sql({}, {}) {}".format(sql, bind_vars, action))
+                    uprint(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
+
+            except Exception as ex:
+                self.last_err_msg = self.dsn + ".execute_sql({}, {}) {} error: {}".format(sql, bind_vars, action, ex)
+
+        return self.last_err_msg
+
+    def delete(self, table_name, chk_values=None, where_group_order='', commit=False, bind_vars=None):
+        where_group_order, bind_vars = self._compile_filter_bind(chk_values, where_group_order, bind_vars)
+        sql = "DELETE FROM {} WHERE {}".format(table_name, where_group_order)
+        with self.thread_lock_init(table_name, chk_values):
+            err_msg = self.execute_sql(sql, commit=commit, bind_vars=bind_vars)
+        return err_msg
+
     def insert(self, table_name, col_values, commit=False, returning_column=''):
         _normalize_col_values(col_values)
         sql = "INSERT INTO " + table_name + " (" + ", ".join(col_values.keys()) \
@@ -191,6 +194,13 @@ class GenericDB:
         if returning_column:
             sql += " RETURNING " + returning_column
         return self.execute_sql(sql, commit=commit, bind_vars=col_values)
+
+    def select(self, from_join, cols=None, chk_values=None, where_group_order='', bind_vars=None, hints=''):
+        if not cols:
+            cols = list('*')
+        where_group_order, bind_vars = self._compile_filter_bind(chk_values, where_group_order, bind_vars)
+        sql = "SELECT {} {} FROM {} WHERE {}".format(hints, ','.join(cols), from_join, where_group_order)
+        return self.execute_sql(sql, bind_vars=bind_vars)
 
     def update(self, table_name, col_values, where='', commit=False, bind_vars=None, locked_cols=None):
         _normalize_col_values(col_values)
@@ -269,12 +279,14 @@ class GenericDB:
     def rollback(self, reset_last_err_msg=False):
         if reset_last_err_msg:
             self.last_err_msg = ""
+
         try:
-            self.conn.rollback()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 uprint(self.dsn + ".rollback()")
+            self.conn.rollback()
         except Exception as ex:
             self.last_err_msg = self.dsn + " rollback error: " + str(ex)
+
         return self.last_err_msg
 
     def get_row_count(self):
@@ -432,4 +444,30 @@ class PostgresDB(GenericDB):
             self.last_err_msg = "PostgresDB-connect " + self.usr + " on " + self.dsn + " error: " + str(ex)
         else:
             self._create_cursor()
+        return self.last_err_msg
+
+    def execute_sql(self, sql, commit=False, auto_commit=False, bind_vars=None):
+        if self.conn or not self.connect():
+            ''' Overwriting generic execute_sql for Postgres because if auto_commit is False then a db error
+                is invalidating the connection until it gets rolled back (optionally to a save-point).
+                Unfortunately psycopg2 does not provide/implement save-points. Could be done alternatively with
+                execute("SAVEPOINT NonAutoCommErrRollback") but RELEASE/ROLLBACK makes it complicated (see also
+                https://stackoverflow.com/questions/2370328/continuing-a-transaction-after-primary-key-violation-error):
+                
+                    save_point = None if auto_commit else self.conn.setSavepoint('NonAutoCommErrRollback')
+                    super().execute_sql(sql, commit=commit, auto_commit=auto_commit, bind_vars=bind_vars)
+                    if save_point:
+                        if self.last_err_msg:
+                            self.conn.rollback(save_point)
+                        else:
+                            self.conn.releaseSavepoint(save_point)
+                    return self.last_err_msg
+                
+                Therefore KISS - a simple rollback will do it also.
+            '''
+            super().execute_sql(sql, commit=commit, auto_commit=auto_commit, bind_vars=bind_vars)
+            if self.last_err_msg and not auto_commit:
+                if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                    uprint("PostgresDB.execute_sql(): automatic rollback after error; for connection recycling")
+                self.conn.rollback()
         return self.last_err_msg

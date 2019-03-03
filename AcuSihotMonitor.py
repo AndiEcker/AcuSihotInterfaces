@@ -19,10 +19,10 @@ import datetime
 from functools import partial
 from traceback import print_exc
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_CLIENT_PORT
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_CLIENT_PORT, SDI_ACU
 from ae_console_app import ConsoleApp, uprint
 from sxmlif import PostMessage, ConfigDict, CatRooms
-from acif import AcuResToSihot, AcuServer
+from acif import AcumenRes, AcuServer
 from shif import ResSearch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
@@ -130,7 +130,7 @@ def ass_test_link_alive():
 def sih_reservation_discrepancies(data_dict):
     beg_day = data_dict['first_occupancy_criteria']  # datetime.datetime.today()
     end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))
-    req = AcuResToSihot(cae)
+    req = AcumenRes(cae)
     results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
                                            " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'"
                                            " order by ARR_DATE, CD_CODE")
@@ -140,10 +140,10 @@ def sih_reservation_discrepancies(data_dict):
     else:   # no error message then process fetched recs
         err_sep = '//'
         results = list()
-        for crow in req.recs:
-            if crow['SIHOT_GDSNO']:
+        for rec in req.recs:
+            if rec['ResGdsNo']:
                 rs = ResSearch(cae)
-                rd = rs.search_res(gds_no=crow['SIHOT_GDSNO'])
+                rd = rs.search_res(gds_no=rec['ResGdsNo'])
                 row_err = ''
                 if rd and isinstance(rd, list):
                     # compare reservation for errors/discrepancies
@@ -153,63 +153,63 @@ def sih_reservation_discrepancies(data_dict):
                                                    + str(rd[n]['ARR'].val()) + '...'
                                                    + str(rd[n]['DEP'].val()) for n in range(len(rd))]) + ')'
                                     if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE else '')
-                    row_err = _sih_check_all_res(crow, rd, row_err, err_sep)
+                    row_err = _sih_check_all_res(rec, rd, row_err, err_sep)
                 elif rd:
                     row_err += err_sep + 'Unexpected search result=' + str(rd)
                 else:
                     row_err += err_sep + 'Sihot interface search error text=' + rs.response.error_text + \
                                ' msg=' + str(rs.response.msg)
                 if row_err:
-                    results.append((crow['ARR_DATE'].strftime('%d-%m-%Y'), crow['CD_CODE'], crow['RUL_SIHOT_RATE'],
-                                    crow['SIHOT_GDSNO'], row_err[len(err_sep):]))
+                    results.append((rec['ResArrival'].strftime('%d-%m-%Y'), rec['AcuId'], rec['ResRateSegment'],
+                                    rec['ResGdsNo'], row_err[len(err_sep):]))
             else:
-                results.append(('RU' + str(crow['RUL_PRIMARY']), '(not check-able because RU deleted)'))
+                results.append(('RU' + str(rec['RUL_PRIMARY']), '(not check-able because RU deleted)'))
         results = (results, ('Arrival__18', 'Guest Ref__18', 'RO__06', 'GDS_NO__18', 'Discrepancy__72L'))
 
     return results or ('No discrepancies found for date range {}..{}.'.format(beg_day, end_day),)
 
 
-def _sih_check_all_res(crow, rd, row_err, err_sep):
+def _sih_check_all_res(rec, rd, row_err, err_sep):
     max_offset = datetime.timedelta(days=asd.room_change_max_days_diff)
     acu_sep = ' AC='
     sih_sep = ' SH='
     for n in range(len(rd)):
         if len(rd) > 1:
             sih_sep = ' SH' + str(n + 1) + '='
-        if rd[n]['GDSNO'].val() != crow['SIHOT_GDSNO']:
+        if rd[n]['GDSNO'].val() != rec['ResGdsNo']:
             row_err += err_sep + 'GDS no mismatch' + \
-                       acu_sep + str(crow['SIHOT_GDSNO']) + \
+                       acu_sep + str(rec['ResGdsNo']) + \
                        sih_sep + str(rd[n]['GDSNO'].val())
-        if abs(datetime.datetime.strptime(rd[n]['ARR'].val(), '%Y-%m-%d') - crow['ARR_DATE']) > max_offset:
+        if abs(datetime.datetime.strptime(rd[n]['ARR'].val(), '%Y-%m-%d') - rec['ResArrival']) > max_offset:
             row_err += err_sep + 'Arrival date offset more than ' + str(max_offset.days) + ' days' + \
-                       acu_sep + crow['ARR_DATE'].strftime('%Y-%m-%d') + \
+                       acu_sep + rec['ResArrival'].strftime('%Y-%m-%d') + \
                        sih_sep + str(rd[n]['ARR'].val())
-        if abs(datetime.datetime.strptime(rd[n]['DEP'].val(), '%Y-%m-%d') - crow['DEP_DATE']) > max_offset:
+        if abs(datetime.datetime.strptime(rd[n]['DEP'].val(), '%Y-%m-%d') - rec['ResDeparture']) > max_offset:
             row_err += err_sep + 'Departure date offset more than ' + str(max_offset.days) + ' days' + \
-                       acu_sep + crow['DEP_DATE'].strftime('%Y-%m-%d') + \
+                       acu_sep + rec['ResDeparture'].strftime('%Y-%m-%d') + \
                        sih_sep + str(rd[n]['DEP'].val())
-        if rd[n]['RT'].val() != crow['SH_RES_TYPE']:
+        if rd[n]['RT'].val() != rec['ResStatus']:
             row_err += err_sep + 'Res. status mismatch' + \
-                       acu_sep + str(crow['SH_RES_TYPE']) + \
+                       acu_sep + str(rec['ResStatus']) + \
                        sih_sep + str(rd[n]['RT'].val())
         # MARKETCODE-NO is mostly empty in Sihot RES-SEARCH response!!!
-        if rd[n]['MARKETCODE'].val() and rd[n]['MARKETCODE'].val() != crow['RUL_SIHOT_RATE']:
+        if rd[n]['MARKETCODE'].val() and rd[n]['MARKETCODE'].val() != rec['ResRateSegment']:
             row_err += err_sep + 'Market segment mismatch' + \
-                       acu_sep + str(crow['RUL_SIHOT_RATE']) + \
+                       acu_sep + str(rec['ResRateSegment']) + \
                        sih_sep + str(rd[n]['MARKETCODE'].val())
         # RN can be empty/None - prevent None != '' false posit.
-        if (rd[n]['RN'].val() or '') != crow['RUL_SIHOT_ROOM']:
+        if (rd[n]['RN'].val() or '') != rec['ResRoomNo']:
             row_err += err_sep + 'Room no mismatch' + \
-                       acu_sep + str(crow['RUL_SIHOT_ROOM']) + \
+                       acu_sep + str(rec['ResRoomNo']) + \
                        sih_sep + str(rd[n]['RN'].val())
-        elif rd[n]['_RES-HOTEL'].val() and rd[n]['_RES-HOTEL'].val() != str(crow['RUL_SIHOT_HOTEL']):
+        elif rd[n]['_RES-HOTEL'].val() and rd[n]['_RES-HOTEL'].val() != rec['ResHotelId']:
             row_err += err_sep + 'Hotel-ID mismatch' + \
-                       acu_sep + str(crow['RUL_SIHOT_HOTEL']) + \
+                       acu_sep + rec['ResHotelId'] + \
                        sih_sep + str(rd[n]['_RES-HOTEL'].val())
-        elif rd[n]['ID'].val() and str(rd[n]['ID'].val()) != str(crow['RUL_SIHOT_HOTEL']):
+        elif rd[n]['ID'].val() and str(rd[n]['ID'].val()) != rec['ResHotelId']:
             # actually the hotel ID is not provided within the Sihot interface response xml?!?!?
             row_err += err_sep + 'Hotel ID mismatch' + \
-                       acu_sep + str(crow['RUL_SIHOT_HOTEL']) + \
+                       acu_sep + rec['ResHotelId'] + \
                        sih_sep + str(rd[n]['ID'].val())
 
     return row_err
@@ -316,7 +316,7 @@ def cfg_room_cat_discrepancies(data_dict, app_inst):
 def db_fetch(data_dict, from_join_name='from_join'):
     bind_vars = {_[:-len(FILTER_CRITERIA_SUFFIX)]: data_dict[_] for _ in data_dict
                  if _.endswith(FILTER_CRITERIA_SUFFIX)}
-    acu_db = asd.acu_db
+    acu_db = asd.connection(SDI_ACU)
     err_msg = acu_db.select(from_join=data_dict[from_join_name], cols=data_dict['cols'],
                             where_group_order=data_dict.get('where_group_order'), bind_vars=bind_vars)
     if err_msg:
@@ -652,7 +652,7 @@ class AcuSihotMonitorApp(App):
                 if filter_name + FILTER_SELECTION_SUFFIX in board_dict:
                     filter_selection = board_dict[filter_name + FILTER_SELECTION_SUFFIX]
                     if isinstance(filter_selection, dict) and 'from_join' in filter_selection:
-                        acu_db = asd.acu_db
+                        acu_db = asd.connection(SDI_ACU)
                         err_msg = acu_db.select(from_join=filter_selection['from_join'],
                                                 cols=filter_selection['fields'],
                                                 where_group_order=filter_selection.get('where_group_order'),

@@ -13,7 +13,7 @@ import pprint
 
 from copy import deepcopy
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDI_SF
 from ae_sys_data import correct_email, correct_phone
 from ae_console_app import ConsoleApp, uprint
 from ae_client_validation import add_validation_options, init_validation
@@ -54,9 +54,10 @@ asd = AssSysData(cae)
 if asd.error_message:
     uprint("AssSysData initialization error: " + asd.error_message)
     cae.shutdown(20)
+sf_conn = asd.connection(SDI_SF)
 
 notification, warning_notification_emails = init_notification(cae, cae.get_option('shServerIP') + '/Salesforce '
-                                                              + ("sandbox" if asd.sf_sandbox else "production"))
+                                                              + ("sandbox" if sf_conn.is_sandbox() else "production"))
 
 # html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>
 msf_beg = cae.get_config('monoSpacedFontBegin', default_value='<pre>')
@@ -257,7 +258,7 @@ def layout_message(sfd, cols):
 
 
 uprint("####  Fetching from Sihot")
-all_rows = rbf.fetch_all()
+all_recs = rbf.fetch_all()
 
 # collect all the emails found in this export run (for to skip duplicates)
 uprint("####  Evaluate reservations fetched from Sihot")
@@ -265,28 +266,28 @@ found_emails = list()
 found_phones = list()
 valid_clients = list()
 try:
-    for row_dict in all_rows:
-        hotel_id, res_id = hotel_and_res_id(row_dict)
+    for rec in all_recs:
+        hotel_id, res_id = hotel_and_res_id(rec)
 
-        arr_indexes = valid_email_indexes(row_dict) if filter_email[:5] == 'valid' else valid_name_indexes(row_dict)
+        arr_indexes = valid_email_indexes(rec) if filter_email[:5] == 'valid' else valid_name_indexes(rec)
         if not arr_indexes:
             add_log_msg("Skipping res-id {} with invalid/empty {}: {}"
                         .format(res_id, "email address" if filter_email[:5] == 'valid' else "surname",
-                                row_dict.val('Email' if filter_email[:5] == 'valid' else 'Surname')))
+                                rec.val('Email' if filter_email[:5] == 'valid' else 'Surname')))
             continue
-        mkt_group = row_dict.val('ResMktGroup')
+        mkt_group = rec.val('ResMktGroup')
         for arr_index in arr_indexes:
             mail_changes = list()
-            email, mail_changed = correct_email(row_dict.val(arr_index, 'Email'), removed=mail_changes)
+            email, mail_changed = correct_email(rec.val(arr_index, 'Email'), removed=mail_changes)
             phone_changes = list()
-            phone, phone_changed = correct_phone(row_dict.val(arr_index, 'Phone'), removed=phone_changes)
-            surname = row_dict.val(arr_index, 'Surname')
-            forename = row_dict.val(arr_index, 'Forename')
+            phone, phone_changed = correct_phone(rec.val(arr_index, 'Phone'), removed=phone_changes)
+            surname = rec.val(arr_index, 'Surname')
+            forename = rec.val(arr_index, 'Forename')
 
-            mkt_src = row_dict.val('ResMktSegment')
-            sf_dict = prepare_mig_data(row_dict, arr_index, res_id, email, phone, surname, forename, mkt_src, hotel_id)
+            mkt_src = rec.val('ResMktSegment')
+            sf_dict = prepare_mig_data(rec, arr_index, res_id, email, phone, surname, forename, mkt_src, hotel_id)
 
-            res_type = row_dict.val('ResStatus')
+            res_type = rec.val('ResStatus')
 
             if mail_changed:
                 ext_sf_dict(sf_dict, "email corrected, removed 'index:char'=" + str(mail_changes), skip_it=False)
@@ -297,15 +298,15 @@ try:
             if phone_changed:
                 ext_sf_dict(sf_dict, "phone corrected, removed 'index:char'=" + str(phone_changes), skip_it=False)
             if phone_validator and phone:
-                err_msg = phone_validator.validate(phone, country_code=row_dict.val(arr_index, 'Country'))
+                err_msg = phone_validator.validate(phone, country_code=rec.val(arr_index, 'Country'))
                 if err_msg:
                     ext_sf_dict(sf_dict, "phone {} invalid, err={}".format(phone, err_msg), skip_it=False)
             if not hotel_id or hotel_id == '999':
                 ext_sf_dict(sf_dict, "invalid hotel-id {}".format(hotel_id))
             if not res_id:
                 ext_sf_dict(sf_dict, "missing res-id")
-            check_in = row_dict['ResArrival'].val()
-            check_out = row_dict['ResDeparture'].val()
+            check_in = rec['ResArrival'].val()
+            check_out = rec['ResDeparture'].val()
             if not check_in or not check_out:
                 ext_sf_dict(sf_dict, "incomplete arrival/check-in={} departure/checkout={}".format(check_in, check_out))
             if not (rbf.date_from <= check_in <= rbf.date_till):
@@ -324,7 +325,7 @@ try:
                 ext_sf_dict(sf_dict, "disallowed market source {}".format(mkt_src))
             if rbf.allowed_mkt_grp and mkt_group not in rbf.allowed_mkt_grp:
                 ext_sf_dict(sf_dict, "empty/invalid res. group/channel {} (market-source={})"
-                            .format(mkt_group, row_dict.val('ResMktSegment')),
+                            .format(mkt_group, rec.val('ResMktSegment')),
                             skip_it=False)  # only warn on missing channel, so no: skip_it = True
 
             if sf_dict[AI_SCORE] >= 0.0:
@@ -394,26 +395,25 @@ try:
             uprint("SfInterface.find_client(): phone number corrected to {}. Removed chars: {}".format(phone, removed))
         sf_dict['Phone'] = phone
 
-        sf_id, sf_obj = asd.connection(SDI_SF).find_client(email, phone, sf_dict['FirstName'], sf_dict['LastName'])
+        sf_id, sf_obj = sf_conn.find_client(email, phone, sf_dict['FirstName'], sf_dict['LastName'])
         if not sf_id and sf_obj and sf_dict['Email']:
-            sf_id = asd.connection(SDI_SF).cl_id_by_email(sf_dict['Email'], sf_obj=sf_obj)
+            sf_id = sf_conn.cl_id_by_email(sf_dict['Email'], sf_obj=sf_obj)
         if sf_id:
             sf_dict[AI_SF_ID] = sf_id
             existing_client_ids.append(sf_dict)
-            sf_dict[AI_SF_CURR_DATA] = asd.connection(SDI_SF).cl_field_data(strip_add_info_keys(sf_dict), sf_id,
-                                                                       sf_obj=sf_obj)
-            if asd.connection(SDI_SF).error_msg:
+            sf_dict[AI_SF_CURR_DATA] = sf_conn.cl_field_data(strip_add_info_keys(sf_dict), sf_id, sf_obj=sf_obj)
+            if sf_conn.error_msg:
                 notification_add_line("SF-FETCH-DATA-ERROR: '{}' of {} ID {}"
-                                      .format(asd.connection(SDI_SF).error_msg, sf_obj, sf_id), is_error=True)
+                                      .format(sf_conn.error_msg, sf_obj, sf_id), is_error=True)
 
-        rec_type_id = asd.connection(SDI_SF).record_type_id(sf_obj=sf_obj)
+        rec_type_id = sf_conn.record_type_id(sf_obj=sf_obj)
         sf_send = strip_add_info_from_sf_data(sf_dict, check_data=True, record_type_id=rec_type_id, obj_type=sf_obj)
         if not sf_send:
             notification_add_line("Skipped Sihot Res-Id {:12} to be sent because of empty/unchanged Sihot guest data={}"
                                   .format(res_id, sh_pp_data))
             continue
 
-        new_sf_id, err_msg, log_msg = asd.connection(SDI_SF).client_upsert(sf_send, sf_obj)
+        new_sf_id, err_msg, log_msg = sf_conn.client_upsert(sf_send, sf_obj)
         if err_msg:
             send_errors += 1
             notification_add_line(("Error {} in {} {} of Sihot Res-Id {:12} with match score {:6.3}"
@@ -474,7 +474,7 @@ except Exception as ex:
     print_exc()
 
 if notification:
-    subject = "Sihot Salesforce Client Migration protocol" + (" (sandbox/test system)" if asd.sf_sandbox else "")
+    subject = "Sihot Salesforce Client Migration protocol" + (" (sandbox/test system)" if sf_conn.is_sandbox() else "")
     mail_body = "\n\n".join(notification_lines)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
@@ -483,7 +483,7 @@ if notification:
     if warning_notification_emails and (ups_warnings or log_errors):
         mail_body = "MIGRATION WARNINGS:\n\n" + ("\n\n".join(ups_warnings) if ups_warnings else "NONE") \
                     + "\n\nERRORS:\n\n" + ("\n\n".join(log_errors) if log_errors else "NONE")
-        subject = "Sihot-SF Client Migration errors/discrepancies" + (" (sandbox)" if asd.sf_sandbox else "")
+        subject = "Sihot-SF Client Migration errors/discrepancies" + (" (sandbox)" if sf_conn.is_sandbox() else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
             uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))

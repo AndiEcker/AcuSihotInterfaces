@@ -10,10 +10,15 @@ IS
   lcSihotCat    T_RUL.RUL_SIHOT_CAT%type := NULL;
 
   cursor cRU is
-    select RU_RESORT, RU_ATGENERIC, 
+    select nvl(AT_RSREF, RU_RESORT) as RESORT, 
+           nvl(AT_GENERIC, RU_ATGENERIC) as GEN, 
            F_SIHOT_PAID_RAF(RU_CODE, RU_RESORT, RU_ATGENERIC)
-      from T_RU
-     where RU_CODE = lnRUCode;
+      from T_RU, T_AP, T_AT
+     -- instead of outer join to ARO use the same logic as in P_RUL_INSERT
+     where --RU_RHREF = ARO_RHREF(+) and RU_FROM_DATE between ARO_EXP_ARRIVE(+) and ARO_EXP_DEPART(+) and ARO_STATUS(+) <> 120
+           F_RH_ARO_APT(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) = AP_CODE(+)  
+       and AP_ATREF = AT_CODE(+)
+       and RU_CODE = lnRUCode;
 
   cursor cRL is
     select case when RU_RESORT = 'ANY' and RUL_SIHOT_ROOM is not NULL then F_RESORT(ltrim(RUL_SIHOT_ROOM, '0')) else RU_RESORT end, RU_ATGENERIC, 
@@ -94,7 +99,7 @@ BEGIN
       close cAP;
     end if;
   end if;
-  return nvl(lcSihotCat, '_C_');
+  return nvl(lcSihotCat, '_S_C');
 END
 /*
   ae:10-09-16 V00: first beta - added for SIHOT sync/migration project.
@@ -102,6 +107,7 @@ END
   ae:16-12-16 V02: removed T_RUL overload check from RU<RU_CODE> call (but kept as alternative R_<RU_CODE> call - currently unused).
   ae:11-03-17 V03: added ltrim(,'0') around RUL_SIHOT_ROOM after refactoring (now RUL_SIHOT_ROOM holding the Sihot room number - with leading zero for 3-digit PBC rooms).
   ae:30-05-18 V04: added fallback if RU record got deleted (mostly FBs in ANY resort) by checking V_ACU_RES_LOG.
+  ae:28-02-19 V05: ARO that is covering the expected arrival (RU_FROM_DATE) is now overwriting resort/room-category; also changed cat-id default from '_C_' to '_S_C'.
 */;
 /
 

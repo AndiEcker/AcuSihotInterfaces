@@ -88,10 +88,10 @@ elif date_from >= date_till:
     cae.shutdown(18)
 
 
-def get_hotel_and_res_id(row):  # see also shif.py/hotel_and_res_id()
-    h_id = row['RES-HOTEL'].val()
-    r_num = row['RES-NR'].val()
-    s_num = row['SUB-NR'].val()
+def get_hotel_and_res_id(res_rec):  # see also shif.py/hotel_and_res_id()
+    h_id = res_rec['RES-HOTEL'].val()
+    r_num = res_rec['RES-NR'].val()
+    s_num = res_rec['SUB-NR'].val()
     if not h_id or not hotel_id_to_name(h_id) or not hotel_id_to_location_id(h_id) or not r_num:
         cae.dprint("  ##  Skipping reservation with invalid hotel-id/RES-NR/SUB-NR", h_id, r_num, s_num,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)

@@ -154,14 +154,14 @@ class TestIdConverters:
         assert '33220' == ids['ResId']
         assert '1' == ids['ResSubId']
         assert 'ResSfId' in ids
-        assert ids['ResSfId'] is None
+        assert ids['ResSfId'] == ''
 
     def test_res_no_to_obj_ids(self, console_app_env):
         ids = res_no_to_ids(console_app_env, '4', '33220', '1')
         assert '60544' == ids['ResObjId']
         assert '899993' == ids['ResGdsNo']
         assert 'ResSfId' in ids
-        assert ids['ResSfId'] is None
+        assert ids['ResSfId'] == ''
 
 
 class TestResSender:
@@ -173,31 +173,31 @@ class TestResSender:
         cat = 'STDS'
 
         rs = ResSender(console_app_env)
-        crow = dict(ResHotelId=ho_id, ResStatus='1', ResAction=ACTION_INSERT,
-                    ResGdsNo=gdsno, ResVoucherNo='Voucher1234567890',
-                    ResBooked=today, ResArrival=today + wk1, ResDeparture=today + wk1 + wk1,
-                    ResRoomCat=cat, ResPriceCat=cat, ResRoomNo='3220',
-                    ShId='27', AcuId='TCRENT',
-                    ResNote='test short note', ResLongNote='test large TEC note',
-                    ResBoard='RO',    # room only (no board/meal-plan)
-                    ResMktSegment='TC', SIHOT_MKT_SEG='TC', ResRateSegment='TC',
-                    ResAccount='1',
-                    ResSource='A', ResMktGroup='RS',
-                    ResFlightArrComment='Flight1234',
-                    ResAllotmentNo=123456,
-                    ResAdults=2, ResChildren=2,
-                    ResPersons0PersSurname='Tester', ResPersons0PersForename='TestX',
-                    ResPersons0PersDOB=today - 1000 * wk1,
-                    ResPersons1PersSurname='Tester', ResPersons1PersForename='TestY',
-                    ResPersons2PersSurname='Tester', ResPersons2PersForename='Chilly', ResPersons2TypeOfPerson='2B',
-                    ResPersons3PersSurname='', ResPersons3PersForename='', ResPersons3PersDOB=today - 100 * wk1,
-                    )
-        rec = Record(fields=crow)
+        row = dict(ResHotelId=ho_id, ResStatus='1', ResAction=ACTION_INSERT,
+                   ResGdsNo=gdsno, ResVoucherNo='Voucher1234567890',
+                   ResBooked=today, ResArrival=today + wk1, ResDeparture=today + wk1 + wk1,
+                   ResRoomCat=cat, ResPriceCat=cat, ResRoomNo='3220',
+                   ShId='27', AcuId='TCRENT',
+                   ResNote='test short note', ResLongNote='test large TEC note',
+                   ResBoard='RO',    # room only (no board/meal-plan)
+                   ResMktSegment='TC', ResRateSegment='TC',
+                   ResAccount='1',
+                   ResSource='A', ResMktGroup='RS',
+                   ResFlightArrComment='Flight1234',
+                   ResAllotmentNo=123456,
+                   ResAdults=2, ResChildren=2,
+                   ResPersons0PersSurname='Tester', ResPersons0PersForename='TestX',
+                   ResPersons0PersDOB=today - 1000 * wk1,
+                   ResPersons1PersSurname='Tester', ResPersons1PersForename='TestY',
+                   ResPersons2PersSurname='Tester', ResPersons2PersForename='Chilly', ResPersons2TypeOfPerson='2B',
+                   ResPersons3PersSurname='', ResPersons3PersForename='', ResPersons3PersDOB=today - 100 * wk1,
+                   )
+        rec = Record(fields=row)
         err, msg = rs.send_rec(rec)
         if "setDataRoom not available!" in err:     # no error only on first run after TEST replication
-            crow.pop('ResRoomNo')           # .. so on n. run simply remove room number and then retry
+            row.pop('ResRoomNo')           # .. so on n. run simply remove room number and then retry
             rs.wipe_gds_errors()            # .. and also remove send locking by wiping GDS errors for this GDS
-            err, msg = rs.send_rec(Record(fields=crow))
+            err, msg = rs.send_rec(Record(fields=row))
 
         assert not err
         assert ho_id == rs.response.id
@@ -219,9 +219,9 @@ class TestResSender:
         mkt_seg = 'TC'
 
         rs = ResSender(console_app_env)
-        crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
-                    AcuId='TCRENT', ResGdsNo=gdsno)
-        rec = Record(fields=crow, system=SDI_SH, direction=FAD_ONTO).add_system_fields(rs.elem_map)
+        row = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
+                   AcuId='TCRENT', ResGdsNo=gdsno)
+        rec = Record(fields=row, system=SDI_SH, direction=FAD_ONTO).add_system_fields(rs.elem_map)
         err, msg = rs.send_rec(rec)
 
         assert not err
@@ -244,9 +244,9 @@ class TestResSender:
         mkt_seg = 'TC'
 
         rs = ResSender(console_app_env)
-        crow = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
-                    ShId='27', ResGdsNo=gdsno)
-        err, msg = rs.send_rec(Record(fields=crow))
+        row = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
+                   ShId='27', ResGdsNo=gdsno)
+        err, msg = rs.send_rec(Record(fields=row))
 
         assert not err
         assert ho_id == rs.response.id

@@ -304,9 +304,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['ResPersons0PersSurname'] = curr_cols[TCI_SURNAME]
         row['ResPersons0PersForename'] = curr_cols[TCI_FORENAME]
         # pers_seq = row['ResAdults'] if is_adult else 10 + row['ResChildren']
-        # row['SH_ROOMS'] = sub_res_id + 1
+        # row['ResRooms'] = sub_res_id + 1
 
-        row['RUL_CHANGES'] = curr_line  # needed for error notification
+        row['ResAcuLogChanges'] = curr_line  # needed for error notification
         row['=FILE_NAME'] = file_name
         row['=LINE_NUM'] = line_num
 
@@ -496,7 +496,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 if fore_name:
                     row[name_col + 'PersForename'] = fore_name
 
-        row['RUL_CHANGES'] = ','.join(curr_cols)  # needed for error notification
+        row['ResAcuLogChanges'] = ','.join(curr_cols)  # needed for error notification
         row['=FILE_NAME'] = file_name
         row['=LINE_NUM'] = line_num
 
@@ -1273,13 +1273,13 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                             nothing_to_do_msg="No reservations found for to be sent")
         res_sender = ResSender(cae)
 
-        for res_row_idx, crow in enumerate(res_rows):
-            fn, idx = crow['=FILE_NAME'], crow['=LINE_NUM']
+        for res_rec_idx, rec in enumerate(res_rows):
+            fn, idx = rec['=FILE_NAME'], rec['=LINE_NUM']
             if got_cancelled():
                 log_error("User cancelled reservation send", fn, idx, importance=4)
                 break
-            progress.next(processed_id=str(crow['ResVoucherNo']), error_msg=error_msg)
-            error_msg, warning_msg = res_sender.send_rec(crow)
+            progress.next(processed_id=str(rec['ResVoucherNo']), error_msg=error_msg)
+            error_msg, warning_msg = res_sender.send_rec(rec)
             if warning_msg:
                 log_import(warning_msg, fn, idx)
             if error_msg:
@@ -1305,7 +1305,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             log_import("Sending warnings: " + warnings, NO_FILE_PREFIX_CHAR + 'SendResWarnings')
         if notification:
             notification.send_notification(warnings, subject="SihotResImport warnings notification",
-                                           mail_to=warning_notification_emails)
+                                           mail_to=warning_notification_emails, body_style='plain')
 
     log_import("Pass Import Files to user/server logs", NO_FILE_PREFIX_CHAR + 'MoveImportFiles', importance=4)
     for sfn in tci_files + bkc_files + rci_files + jso_files:
@@ -1338,7 +1338,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     if error_log:
         error_text = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in error_log)
         if notification:
-            notification_err = notification.send_notification(error_text, subject="SihotResImport error notification")
+            notification_err = notification.send_notification(error_text, subject="SihotResImport error notification",
+                                                              body_style='plain')
             if notification_err:
                 error_text += "Notification send error: " + notification_err
                 log_import("Notification send error: " + notification_err, NO_FILE_PREFIX_CHAR + 'SendNotification')

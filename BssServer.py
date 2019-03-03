@@ -76,7 +76,7 @@ def log_msg(msg, *args, **kwargs):
                 msg += " (args={})".format(ppf(args))
             uprint(msg)
             if notification and (is_error or notify):
-                notification.send_notification(msg_body=msg, subject='BssServer notification')
+                notification.send_notification(msg_body=msg, subject='BssServer notification', body_style='plain')
 
 
 def proc_context(rec_ctx):

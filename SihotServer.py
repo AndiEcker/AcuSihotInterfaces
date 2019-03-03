@@ -126,7 +126,8 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
         msg += warning_msg
     uprint(msg)
     if error_msg and notification:
-        notification_err = notification.send_notification(msg, subject="SihotServer error notification")
+        notification_err = notification.send_notification(msg, subject="SihotServer error notification",
+                                                          body_style='plain')
         if notification_err:
             uprint(error_msg + "\n      Notification send error: " + notification_err)
 

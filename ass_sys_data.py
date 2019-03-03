@@ -12,9 +12,9 @@ from ae_sys_data import correct_email, correct_phone, Records, Record, FAD_FROM,
 from ae_db import OraDB, PostgresDB
 from ae_console_app import uprint, DATE_ISO
 from ae_notification import add_notification_options, init_notification
-from acif import add_ac_options, ACU_CLIENT_MAP, AcuDbRows
-from sfif import add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS, \
-    sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal
+from acif import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient
+from sfif import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
+                  sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal)
 from sxmlif import AvailCatInfo
 from shif import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
                   ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ShInterface, SH_CLIENT_MAP, ClientToSihot,
@@ -572,17 +572,21 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         cl_pk = ass_db.fetch_value()
 
-        ext_refs = client_data.val('ExtRefs') or list()
-        if ext_refs and isinstance(ext_refs, str):
-            ext_refs = [dict(Type=_.split(EXT_REF_TYPE_ID_SEP)[0], Id=_.split(EXT_REF_TYPE_ID_SEP)[1])
-                        for _ in ext_refs.split(EXT_REFS_SEP)]
-        for erd in ext_refs:
-            if erd.get('Type') and erd.get('Id'):   # ignore/skip empty template record
-                col_values = dict(er_cl_fk=cl_pk, er_type=erd['Type'], er_id=erd['Id'])
-                if ass_db.upsert('external_refs', col_values, chk_values=col_values, commit=commit):
-                    break
+        ers_table = 'external_refs'
+        ers_key = dict(er_cl_fk=cl_pk)
+        with ass_db.thread_lock_init(ers_table, ers_key):
+            if not ass_db.delete(ers_table, chk_values=ers_key, commit=commit):
+                ext_refs = client_data.val('ExtRefs') or list()
+                if ext_refs and isinstance(ext_refs, str):
+                    ext_refs = [dict(Type=_.split(EXT_REF_TYPE_ID_SEP)[0], Id=_.split(EXT_REF_TYPE_ID_SEP)[1])
+                                for _ in ext_refs.split(EXT_REFS_SEP)]
+                for erd in ext_refs:
+                    if erd.get('Type') and erd.get('Id'):   # ignore/skip empty template record
+                        col_values = dict(er_cl_fk=cl_pk, er_type=erd['Type'], er_id=erd['Id'])
+                        if ass_db.insert(ers_table, col_values, commit=commit):
+                            break
         if ass_db.last_err_msg:
-            self.error_message = "cl_save({}, {}, {}) external_refs upsert error: "\
+            self.error_message = "cl_save({}, {}, {}) external_refs delete/upsert error: "\
                                      .format(ppf(client_data), field_names, match_fields) + ass_db.last_err_msg
             return None
 
@@ -753,6 +757,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                  bind_vars=dict(sh_id=sh_id, ac_id=ac_id)):
                     self.error_message = "cl_ensure_id(): Sihot client {}/{} not found in AssCache (err={})" \
                         .format(sh_id, ac_id, ass_db.last_err_msg)
+                    return None
                 else:
                     cl_pk = ass_db.fetch_value()
 
@@ -1572,6 +1577,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     def _acu_clients_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
                           field_names=(), exclude_fields=(), filter_records=None):
+        """ pulls clients data from the Acumen system """
+        '''
         AC_CLIENT_MAP1 = (
             # ('', 'AssId'),
             ('CODE', 'AcuId'),
@@ -1586,7 +1593,6 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         )
 
         # column expression SQL for to fetch client data from Acumen - now migrated into V_CLIENTS_REFS_OWNS
-        '''
         AC_SQL_AC_ID1 = "CD_CODE"
         AC_SQL_AC_ID2 = "CD_CODE || '" + AC_ID_2ND_COUPLE_SUFFIX + "'"
         AC_SQL_SF_ID1 = "nvl(CD_SF_ID1, (select max(MS_SF_ID) from T_ML, T_MS" \
@@ -1604,13 +1610,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self._warn("Fetching client data from Acumen", 'pullAcuClientData', importance=4)
 
-        rec_tpl = Record(system=SDI_ACU, direction=FAD_FROM).add_system_fields(AC_CLIENT_MAP1)
+        rec_tpl = Record(system=SDI_ACU, direction=FAD_FROM)
+        rec_tpl.add_system_fields(ACU_CLIENT_MAP, sys_fld_indexes=from_field_indexes)
         if field_names or exclude_fields:
             col_names += rec_tpl.leaf_names(system=SDI_ACU, direction=FAD_FROM,
                                             field_names=field_names, exclude_fields=exclude_fields)
         if not col_names:
             col_names = rec_tpl.leaf_names(system=SDI_ACU, direction=FAD_FROM)
 
+        '''
         acu_db = self.connection(SDI_ACU)
         recs = Records()
         if acu_db.select('V_CLIENTS_REFS_OWNS', cols=col_names, chk_values=chk_values,
@@ -1628,9 +1636,17 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     rec.pull(from_system=SDI_ASS)
                     if not callable(filter_records) or not filter_records(rec):
                         recs.append(rec)
-
+        '''
+        acu_cl = AcumenClient(self.cae, ora_db=self.connection(SDI_ACU))
+        self.error_message = acu_cl.fetch_all_valid_from_acu(col_names=col_names, chk_values=chk_values,
+                                                             where_group_order=where_group_order,
+                                                             bind_values=bind_values, filter_records=filter_records)
         if self.error_message:
             self._err("_acu_clients_pull() error {}".format(self.error_message))
+            recs = Records()
+        else:
+            recs = acu_cl.recs
+
         return recs
 
     def acu_clients_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
@@ -1642,7 +1658,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.clients.merge_records(recs, match_fields=match_fields)
 
     def acu_clients_compare(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
-                            field_names=(), exclude_fields=('ExtRefs', 'ProductTypes', ), filter_records=None,
+                            field_names=(), exclude_fields=(), filter_records=None,
                             match_fields=()):
         self._warn("Comparing pulled client data against Acumen", 'compareAcuClientData', importance=4)
 
@@ -1650,7 +1666,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             match_fields = ['AcuId']
 
         pulled = self._acu_clients_pull(col_names=col_names, chk_values=chk_values, where_group_order=where_group_order,
-                                        bind_values=bind_values, field_names=field_names, filter_records=filter_records)
+                                        bind_values=bind_values, field_names=field_names, exclude_fields=exclude_fields,
+                                        filter_records=filter_records)
         if self.error_message:
             dif = ["acu_clients_compare() error {}".format(self.error_message)]
         else:
@@ -1662,22 +1679,22 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         return pulled, dif
 
-    def acu_clients_push(self, field_names=(), exclude_fields=(), filter_records=None, match_fields=()):
+    def acu_clients_push(self, field_names=(), exclude_fields=('ProductTypes', ), filter_records=None, match_fields=()):
         self._warn("Pushing client data onto Acumen", 'pushAcuClientData', importance=4)
 
         ignored_errors = 0
         recs = self.clients
         recs.set_env(system=SDI_ACU, direction=FAD_ONTO)
-        acu_db = AcuDbRows(self.cae)
+        acu_cl = AcumenClient(self.cae, ora_db=self.connection(SDI_ACU))
         for rec in recs:
-            rec.add_system_fields(ACU_CLIENT_MAP)
+            rec.add_system_fields(ACU_CLIENT_MAP, sys_fld_indexes=onto_field_indexes)
             rec.push(SDI_ACU)
             if not callable(filter_records) or not filter_records(rec):
                 # leaf_names() has to be called after add_system_fields()
                 field_names = rec.leaf_names(system=SDI_ACU, direction=FAD_ONTO,
                                              field_names=field_names, exclude_fields=exclude_fields,
                                              col_names=rec.sys_name_field_map.keys(), name_type='f')
-                err_msg, pkey = acu_db.send_client(rec, field_names=field_names, match_fields=match_fields, commit=True)
+                err_msg, pkey = acu_cl.save_client(rec, field_names=field_names, match_fields=match_fields, commit=True)
                 if err_msg or self.error_message:
                     self.error_message += err_msg
                     msg = "acu_clients_push() error: '{}'".format(self.error_message)
@@ -1762,7 +1779,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             dif = ["ass_clients_compare() error {}".format(self.error_message)]
         else:
             dif = self.clients.compare_records(pulled, match_fields=match_fields,
-                                               field_names=field_names, exclude_fields=exclude_fields + ('ExtRefs', ),
+                                               field_names=field_names, exclude_fields=exclude_fields,  # +('ExtRefs',),
                                                record_comparator=self.cl_compare_ext_refs)
             for msg in dif:
                 self._warn(msg)

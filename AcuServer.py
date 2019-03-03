@@ -5,7 +5,7 @@
             passing/increment - is always duplicated '2' instead the one sent by Sihot (see Track-It closed WO #43242).
     0.4     added GDS number to alloc_trigger() - available since Sihot build/version 9.0.0.0787.CO.
     0.5     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
-    0.6     refactored to use system field records and migrated client_to_acu() to acif.py/AcuDbRows.send_client().
+    0.6     refactored to use system field records and migrated client_to_acu() to acif.py/AcumenClient.save_client().
 """
 from traceback import format_exc
 
@@ -15,7 +15,7 @@ from ae_console_app import ConsoleApp, uprint
 from ae_notification import add_notification_options, init_notification
 from ae_db import OraDB
 from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
-from acif import add_ac_options, AcuDbRows
+from acif import add_ac_options, AcumenClient
 from sxmlif import Request, RoomChange, SihotXmlBuilder
 from shif import add_sh_options, ClientFromSihot
 
@@ -36,14 +36,14 @@ notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.ge
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
     if debug_level >= minimum_debug_level:
         if notification:
-            notification.send_notification(msg_body=msg, subject='AcuServer notification')
+            notification.send_notification(msg_body=msg, subject='AcuServer notification', body_style='plain')
         else:
             uprint(msg)
 
 
 def oc_client_to_acu(req):
-    acu_db = AcuDbRows(cae)
-    error_msg, pk = acu_db.send_client(req.client_list[0])
+    acu_cl = AcumenClient(cae)
+    error_msg, pk = acu_cl.save_client(req.client_list[0])
     notify("####  Guest inserted or updated within Acumen with pk=" + pk if not error_msg
            else "****  Acumen guest data insert/update error: " + error_msg)
     resp = SihotXmlBuilder(cae)

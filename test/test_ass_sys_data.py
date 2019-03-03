@@ -12,41 +12,41 @@ from ass_sys_data import AssSysData, ASS_CLIENT_MAP
 from sys_data_ids import SDI_ASS, SDI_SF
 
 
-cl_test_rec = Record(fields=dict(AssId=None, AcuId='T000369', SfId=None, ShId=None, RciId="1234-6789012",
+cl_test_rec = Record(fields=dict(AssId=None, AcuId='T000369', SfId='', ShId='', RciId="1234-67890",
                                  Surname="Tester-Surname", Forename="Tester-Forename",
-                                 Salutation=None, Title=None,
+                                 Salutation='', Title='',
                                  Email="tester-surname@tester-host.com", Phone="001234567890123",
                                  DOB=datetime.date(year=1962, month=6, day=15),
-                                 Street="Tester-street 36", City="Tester City", Postal="123456", POBox=None, State=None,
+                                 Street="Tester-street 36", City="Tester City", Postal="123456", POBox='', State='',
                                  Country="GB", Language="EN", Nationality="DE", Currency="EUR",
-                                 ExtRefs=Records((Record(fields=dict(Type="RCI", Id="1234-6789012")),
-                                                  Record(fields=dict(Type="ABC", Id="abc-def/ghi")),
-                                                  Record(fields=dict(Type="RCI", Id="1234-6789345")),
+                                 ExtRefs=Records((Record(fields=dict(Type="RCI", Id="1234-67890")),
+                                                  Record(fields=dict(Type="ABC", Id="abc-def/gh")),
+                                                  Record(fields=dict(Type="RCI", Id="1234-67893")),
                                                   Record(fields=dict(Type="xyz", Id="1a 234-xzy")),
                                                   )),
                                  ProductTypes=None))
 res_arr = datetime.date(year=datetime.date.today().year + 1, month=12, day=9)
 res_board = 'BB'
-res_test_rec = Record(fields=dict(AssId=None, AcuId='T963369', SfId=None, ShId=None,
+res_test_rec = Record(fields=dict(AssId='', AcuId='T963369', SfId='', ShId='',
                                   Surname="Tester-Res-Surname", Forename="Tester-Res-Forename",
                                   Email="tester-res-surname@tester-res-host.com", Phone="00321098765432",
-                                  RinId=None,
-                                  ResAssId=None,
-                                  ResHotelId='3', ResId=None, ResSubId=None, ResObjId=None, ResGdsNo='TEST-98765433339',
+                                  RinId='',
+                                  ResAssId='',
+                                  ResHotelId='3', ResId='', ResSubId='', ResObjId='', ResGdsNo='TEST-98765433339',
                                   ResArrival=res_arr, ResDeparture=res_arr + datetime.timedelta(days=9),
-                                  ResRoomCat='STDS', ResPriceCat=None,
+                                  ResRoomCat='STDS', ResPriceCat='',
                                   ResStatus='1',
                                   ResMktGroup='OW', ResMktSegment='TO',
-                                  ResSource=None, ResGroupNo=None, ResMktGroupNN=None,
+                                  ResSource='', ResGroupNo='', ResMktGroupNN='',
                                   ResAdults=1, ResChildren=1,
                                   ResBoard=res_board,
                                   ResNote="test_ass_sys_data res_test_rec ResNote",
                                   ResLongNote="test_ass_sys_data res_test_rec ResLongNote",
                                   ResCheckIn=None, ResCheckOut=None,
-                                  ResVoucherNo=None,
+                                  ResVoucherNo='',
                                   ResBooked=None,
-                                  ResRateSegment=None, ResAccount=None,
-                                  ResPersons=Records((Record(fields=dict(PersAssId=None, RoomSeq=None, RoomPersSeq=None,
+                                  ResRateSegment='', ResAccount='',
+                                  ResPersons=Records((Record(fields=dict(PersAssId='', RoomSeq='', RoomPersSeq='',
                                                                          PersAcuId='T963369',
                                                                          # PersSurname="Tester-Res-Surname",
                                                                          # PersForename="Tester-Res-Forename",
@@ -62,60 +62,14 @@ res_test_rec = Record(fields=dict(AssId=None, AcuId='T963369', SfId=None, ShId=N
                                                                          RoomNo='5201',
                                                                          Board=res_board)),
                                                       )),
-                                  ResAction=None,
+                                  ResAction='',
                                   ))
 
 
 def test_tmp(console_app_env, ass_sys_data):
     asd = ass_sys_data
 
-    rec = res_test_rec.copy(deepness=-1)
-    asd.reservations.append(rec)
-    asd.sh_reservation_push()
-    assert not asd.error_message
-    print(rec.val('ResObjId'))
-    assert rec.val('ResObjId')
-    assert rec.val('ResObjId') == asd.reservations[0].val('ResObjId')
-    print(rec.val('ResHotelId'))
-    assert rec.val('ResHotelId')
-    assert rec.val('ResHotelId') == asd.reservations[0].val('ResHotelId')
-    print(rec.val('ResId'))
-    assert rec.val('ResId')
-    assert rec.val('ResId') == asd.reservations[0].val('ResId')
-    print(rec.val('ResSubId'))
-    assert rec.val('ResSubId')
-    assert rec.val('ResSubId') == asd.reservations[0].val('ResSubId')
-    print(rec.val('ResGdsNo'))
-    assert rec.val('ResGdsNo')
-    assert rec.val('ResGdsNo') == asd.reservations[0].val('ResGdsNo')
-
-    orderer_fields = [fn for sn, fn, *_ in SH_CLIENT_MAP if fn]
-    recs, dif = asd.sh_reservations_compare(chk_values=dict(hotel_id=rec.val('ResHotelId'), gds_no=rec.val('ResGdsNo')),
-                                            exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
-                                                            'ResAccount',
-                                                            # not returned by Sihot RES-SEARCH
-                                                            'PersAcuId', 'PersShId',
-                                                            # SALES-DATE cannot be overwritten - first set value keeps
-                                                            'ResBooked',
-                                                            # AutoGen can be '1' in response if not send in request
-                                                            'AutoGen',
-                                                            # PersLanguage can be 'EN' in response if sent as None
-                                                            'PersLanguage',
-                                                            # RoomSeq is coming back sometimes with 1 although sent as 0
-                                                            'RoomSeq',
-                                                            ] + orderer_fields
-                                            )
-    assert not asd.error_message
-    print(recs)
-    assert len(recs) == 1 == len(asd.reservations)
-    print(dif)
-    assert not dif
-    # will always be False because asd.reservations has more fields than in AssCache:
-    # assert repr(recs) == repr(asd.reservations)
-    print(repr(recs))
-    print(repr(asd.reservations))
-
-    print()
+    print(asd)
 
 
 class TestSysDataClientActions:
@@ -125,14 +79,14 @@ class TestSysDataClientActions:
         # needs 3 minutes because full T_CD fetch:
         # .. asd.acu_clients_pull(filter_records=lambda r: len(r.val('ExtRefs')) < 69)
         # Using WHERE filter needs 2 minutes, and with additional CD_CODE filter finally needs only 8 seconds
-        asd.acu_clients_pull(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
+        asd.acu_clients_pull(where_group_order="substr(CD_CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
         assert not asd.error_message
         assert asd.clients
         cnt = len(asd.clients)
         acc = asd.clients.copy(deepness=-1)
         assert repr(acc) == repr(asd.clients)
 
-        recs, dif = asd.acu_clients_compare(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
+        recs, dif = asd.acu_clients_compare(where_group_order="substr(CD_CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
         assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
         assert not dif
@@ -150,19 +104,18 @@ class TestSysDataClientActions:
         assert rec.val('AcuId')
         assert rec.val('AcuId') == asd.clients[0].val('AcuId')
 
-        # added field_names arg for to only compare AssCache.clients fields
-        recs, dif = asd.acu_clients_compare(chk_values=dict(CD_CODE='T000369'),
-                                            match_fields=('AcuId',),
-                                            field_names=[fn for sn, fn, *_ in ACU_CLIENT_MAP])  # + ['ExtRefs'])
+        # added field_names arg for to only compare AssCache.clients fields that can be pushed (CD_* + ExtRefs)
+        field_names = [fn for fn, sn, *_ in ACU_CLIENT_MAP if sn.startswith('CD_')] + ['ExtRefs', ]
+        recs, dif = asd.acu_clients_compare(chk_values=dict(CD_CODE='T000369'), match_fields=('AcuId',),
+                                            field_names=field_names)
         assert not asd.error_message
-        print(recs)
+        print(recs[0])
+        print(asd.clients[0])
         assert len(recs) == 1 == len(asd.clients)
         print(dif)
         assert not dif
         # will always be False because asd.clients has more fields than in Sihot:
         # assert repr(recs) == repr(asd.clients)
-        print(repr(recs))
-        print(repr(asd.clients))
 
     def test_ass_clients_pull_count(self, ass_sys_data):
         asd = ass_sys_data
@@ -240,14 +193,14 @@ class TestSysDataClientActions:
         # needs 3 minutes because full T_CD fetch:
         # .. asd.acu_clients_pull(filter_records=lambda r: len(r.val('ExtRefs')) < 69)
         # Using WHERE filter needs 2 minutes, and with additional CD_CODE filter finally needs only 8 seconds
-        asd.acu_clients_pull(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
+        asd.acu_clients_pull(where_group_order="substr(CD_CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
         assert not asd.error_message
         assert asd.clients
         cnt = len(asd.clients)
         acc = asd.clients.copy(deepness=-1)
         assert repr(acc) == repr(asd.clients)
 
-        recs, dif = asd.acu_clients_compare(where_group_order="substr(CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
+        recs, dif = asd.acu_clients_compare(where_group_order="substr(CD_CODE, 1, 1) = 'F' and length(EXT_REFS) > 69")
         assert not asd.error_message
         assert len(recs) == cnt == len(asd.clients)
         assert not dif
@@ -371,6 +324,8 @@ class TestSysDataClientActions:
 
 
 class TestSysDataResActions:
+    """ implementation of acu_reservation_push is missing
+
     def test_acu_res_compare(self, ass_sys_data):
         asd = ass_sys_data
 
@@ -404,6 +359,7 @@ class TestSysDataResActions:
         assert len(recs) == 1 == len(asd.reservations)
         print(dif)
         assert not dif
+    """
 
     def test_ass_res_compare(self, ass_sys_data):
         asd = ass_sys_data
@@ -863,5 +819,6 @@ class TestSlowAssSysDataShIntegration:
             if diff:
                 errors.append((idx, "comparision found {} differences={}".format(len(diff), diff), res))
                 continue
-        assert not errors, "{} tests had {} fails; collected errors".format(len(ret), len(errors)) \
-                           + str(["\n" + str(e) for e in errors])
+        for err in errors:
+            print("****  {}".format(err))
+        assert not errors, "{} tests had {} fails; collected errors".format(len(ret), len(errors))

@@ -284,7 +284,7 @@ def field_name_idx_path(field_name, return_root_fields=False):
 
     idx_path = list()
     nam_i = num_i = None
-    last_i = len(field_name) - 1    # for to prevent splitting of indexed sys names, like e.g. NAME-1
+    last_i = len(field_name) - 2    # prevent splitting of 1- or 2-digit-indexed sys names, like e.g. NAME-1 or CD_ADD11
     for ch_i, ch_v in enumerate(field_name):
         if ch_v == IDX_PATH_SEP:
             if nam_i is not None:
@@ -489,7 +489,7 @@ class Value(list):
         idx_len = len(idx_path)
         if idx_len == 0 or (idx_len == 1 and isinstance(idx_path[0], int)):
             return self[idx_path[0] if idx_len else -1]
-        return None
+        return ''
 
     def set_val(self, val, *idx_path, **__):
         assert isinstance(idx_path, (tuple, list)) and len(idx_path) <= 1, \
@@ -663,8 +663,7 @@ class Record(OrderedDict):
         self.collected_system_fields = list()   # system fields found by collect_system_fields()
 
     def __repr__(self):
-        # return "Record([" + ", ".join("(" + repr(k) + "," + repr(v) + ")" for k, v in self.items()) + "])"
-        return "Record(" + ", ".join(repr(self._fields.val(*k)) for k in self.leaf_indexes()) + ")"
+        return "Record({})".format(", ".join(repr(self._fields.val(*k)) for k in self.leaf_indexes()))
 
     def __contains__(self, idx_path):
         item = self.node_child(idx_path)
@@ -1033,11 +1032,13 @@ class Record(OrderedDict):
         return self.collected_system_fields
 
     def compare_leafs(self, rec, field_names=(), exclude_fields=()):
+        def _excluded():
+            return (field_names and idx_path[0] not in field_names and idx_path[-1] not in field_names) \
+                                or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields)
         dif = list()
         found_idx = list()
         for idx_path in self.leaf_indexes():
-            if (field_names and idx_path[0] not in field_names and idx_path[-1] not in field_names) \
-                    or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields):
+            if _excluded():
                 continue
             found_idx.append(idx_path)
             this_val = self.compare_val(*idx_path)
@@ -1051,8 +1052,7 @@ class Record(OrderedDict):
                            .format(self.system, idx_path, self.val(*idx_path)))
 
         for idx_path in rec.leaf_indexes():
-            if (field_names and idx_path[0] not in field_names and idx_path[-1] not in field_names) \
-                    or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields):
+            if _excluded():
                 continue
             if idx_path not in found_idx:
                 dif.append("Field {}:{}={} does not exist in this Record"
@@ -1266,10 +1266,11 @@ class Record(OrderedDict):
 
         return self
 
-    def sql_columns(self, from_system):
+    def sql_columns(self, from_system, col_names=()):
         """
         return list of sql column names for given system.
         :param from_system: system from which the data will be selected/fetched.
+        :param col_names:   optionally restrict to select columns to names given in this list.
         :return:            list of sql column names.
         """
         column_names = list()
@@ -1277,14 +1278,15 @@ class Record(OrderedDict):
             field = self._fields.get(idx)
             if len(field.root_idx(system=from_system, direction=FAD_FROM)) == 1:
                 name = field.aspect_value(FAT_IDX, system=from_system, direction=FAD_FROM)
-                if name:
+                if name and (not col_names or name in col_names):
                     column_names.append(name)
         return column_names
 
-    def sql_select(self, from_system):
+    def sql_select(self, from_system, col_names=()):
         """
         return list of sql column names/expressions for given system.
         :param from_system: system from which the data will be selected/fetched.
+        :param col_names:   optionally restrict to select columns to names given in this list.
         :return:            list of sql column names/expressions.
         """
         column_expressions = list()
@@ -1292,7 +1294,7 @@ class Record(OrderedDict):
             field = self._fields.get(idx)
             if len(field.root_idx(system=from_system, direction=FAD_FROM)) == 1:
                 name = field.aspect_value(FAT_IDX, system=from_system, direction=FAD_FROM)
-                if name:
+                if name and (not col_names or name in col_names):
                     expr = field.aspect_value(FAT_SQE, system=from_system, direction=FAD_FROM) or ""
                     if expr:
                         expr += " AS "
@@ -1528,11 +1530,11 @@ class _Field:
         for idx_key, name in sys_dir_names:
             val_key = self.aspect_exists(FAT_VAL, aspect_key_system(idx_key), aspect_key_direction(idx_key))
             if val_key and len(val_key) > _ASP_TYPE_LEN:
-                vals += "|" + "{0}={1}".format(name, self._aspects.get(val_key))
+                vals += "|" + "{}={}".format(name, self._aspects.get(val_key))
             else:
                 names += "|" + name
 
-        return "{0}=={1}".format(names, vals)
+        return "{}=={}".format(names, vals)
 
     def __str__(self):
         # return "_Field(" + repr(self._aspects) + ")"
@@ -1951,6 +1953,8 @@ class _Field:
         direction = FAD_FROM
 
         val = self.val(system=from_system, direction=direction)
+        if val is None:
+            val = ''
         if self.validate(val, from_system, direction):
             val = self.convert(val, from_system, direction)
             if val is not None:
@@ -1962,7 +1966,10 @@ class _Field:
         assert onto_system, "_Field.push() with empty value in onto_system is not allowed"
         direction = FAD_ONTO
 
-        val = self.convert(self.val(), onto_system, direction)
+        val = self.val()
+        if val is None:
+            val = ''
+        val = self.convert(val, onto_system, direction)
         if val is not None and self.validate(val, onto_system, direction):
             self.set_val(val, system=onto_system, direction=direction, root_rec=root_rec, root_idx=root_idx)
 
@@ -2059,9 +2066,9 @@ class System:
             ret += "!" + self.conn_error
         if self.debug_level != DEBUG_LEVEL_DISABLED:
             cre = self.credentials
-            ret += "&" + (repr(cre) if self.debug_level == DEBUG_LEVEL_VERBOSE else cre.get('User'))
+            ret += "&" + (repr(cre) if self.debug_level >= DEBUG_LEVEL_VERBOSE else repr(cre.get('User')))
             ret += "_" + repr(self.features)
-            ret += "@" + self.app_name
+            ret += "@" + repr(self.app_name)
         return ret
 
     def connect(self, connector, app_name='', debug_level=DEBUG_LEVEL_DISABLED, force_reconnect=False):

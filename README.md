@@ -278,8 +278,8 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | AssId | - | AssCache_Id__pc | - | cl_pk |
 | City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
 | Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |
-| Country | CD_COREF | PersonMailingCountry, Country__pc | T-COUNTRY-CODE+COUNTRY+PERSON.COUNTRY-CODE | rgc_country |
-| Currency | CD_CUREF | CurrencyIsoCode | T-STANDARD-CURRENCY | - |
+| Country | SIHOT_COUNTRY | PersonMailingCountry, Country__pc | T-COUNTRY-CODE+COUNTRY+PERSON.COUNTRY-CODE | rgc_country |
+| Currency | - | CurrencyIsoCode | T-STANDARD-CURRENCY | - |
 | DOB | CD_DOB1 | DOB1__pc, KM_DOB__pc | D-BIRTHDAY, DOB | rgc_dob |
 | Email | CD_EMAIL | PersonEmail | EMAIL-1+EMAIL+PERSON.EMAIL | cl_email+rgc_email |
 | EmailB | - | - | EMAIL-2 | - |
@@ -289,10 +289,10 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | Fax | CD_FAX | Fax | FAX-1 | - |
 | Forename | CD_FNAM1 | FirstName | NAME-2 | cl_firstname+rgc_firstname |
 | GuestType | SIHOT_GUESTTYPE1+SIHOT_GUESTTYPE2 | - | T-GUEST | - |
-| Language | CD_LGREF | Language__pc | T-LANGUAGE+LANG+PERSON.LANG | rgc_language |
+| Language | SIHOT_LANG | Language__pc | T-LANGUAGE+LANG+PERSON.LANG | rgc_language |
 | MobilePhone | CD_MOBILE1 | PersonMobilePhone | MOBIL-1, MOBIL | - |
 | MobilePhoneB | - | - | MOBIL-2 | - |
-| Nationality | CD_LGREF | Nationality__pc | T-NATION | - |
+| Nationality | SIHOT_LANG | Nationality__pc | T-NATION | - |
 | Password | CD_PASSWORD | - | INTERNET-PASSWORD | - |
 | Phone | CD_HTEL1 | PersonHomePhone | PHONE-1+PHONE+PERSON.PHONE | cl_phone+rgc_phone |
 | POBox | CD_ADD12 | - | PO-BOX | - |
@@ -855,7 +855,7 @@ active hotels in the Sihot system (initially only ANY/999, BHC/1 and PBC/4):
 | LVI | Luna Villas | n | 105 |
 | PBC | Palm Beach Club | Y | 4 |
 | PLA | Platinum Sports Cruisers | n | 106 |
-| PMA | Paramount | n | 107 |
+| PMA | Paramount | Y | 107 |
 | PMY | The Palmyra | n | 108 |
 | PSF | Podere San Filippo | n | 109 |
 | RHF | Rhinefield Apartments | n | 110 |

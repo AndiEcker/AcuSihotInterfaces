@@ -204,38 +204,38 @@ if act_init:
     ass_user = cae.get_option('assUser')
     ass_pw = cae.get_option('assPassword')
     ass_dsn = cae.get_option('assDSN')
+    ass_ssl = cae.get_config('assSslArgs')
     pg_dbname, pg_host = ass_dsn.split('@') if '@' in ass_dsn else (ass_dsn, '')
     pg_root_usr = cae.get_config('assRootUsr', default_value='postgres')
+    pg_root_pw = cae.get_config('assRootPwd')
     pg_root_dsn = pg_root_usr + ('@' + pg_host if '@' in ass_dsn else '')
     log_warning("creating database {} and user {}".format(ass_dsn, ass_user), 'initCreateDBandUser')
-    pg_db = PostgresDB(dict(User=pg_root_usr, Password=cae.get_config('assRootPwd'), DSN=pg_root_dsn,
-                            SslArgs=cae.get_config('assSslArgs')),
-                       app_name=cae.app_name() + "-CreateDb",
-                       debug_level=_debug_level)
-    if pg_db.execute_sql("CREATE DATABASE " + pg_dbname + ";", auto_commit=True):  # " LC_COLLATE 'C'"):
+    pg_db = PostgresDB(dict(User=pg_root_usr, Password=pg_root_pw, DSN=pg_root_dsn, SslArgs=ass_ssl),
+                       app_name=cae.app_name() + "-CreateDb", debug_level=_debug_level)
+    if pg_db.execute_sql("CREATE DATABASE {};".format(pg_dbname), auto_commit=True):  # " LC_COLLATE 'C'"):
         log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72)
 
     if pg_db.select('pg_user', ['count(*)'], where_group_order="usename = :ass_user",
                     bind_vars=dict(ass_user=ass_user)):
         log_error(pg_db.last_err_msg, 'initCheckUser', exit_code=81)
     if not pg_db.fetch_value():
-        if pg_db.execute_sql("CREATE USER " + ass_user + " WITH PASSWORD '" + ass_pw + "';", commit=True):
+        if pg_db.execute_sql("CREATE USER {} WITH PASSWORD '{}';".format(ass_user, ass_pw), commit=True):
             log_error(pg_db.last_err_msg, 'initCreateUser', exit_code=84)
-        if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE " + pg_dbname + " to " + ass_user + ";", commit=True):
+        if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE {} TO {};".format(pg_dbname, ass_user), commit=True):
             log_error(pg_db.last_err_msg, 'initGrantUserConnect', exit_code=87)
     pg_db.close()
 
     log_warning("creating tables and audit trigger schema/extension", 'initCreateTableAndAudit')
-    pg_db = PostgresDB(dict(User=cae.get_config('assRootUsr'), Password=cae.get_config('assRootPwd'), DSN=ass_dsn,
-                            SslArgs=cae.get_config('assSslArgs')),
-                       app_name=cae.app_name() + "-InitTables",
-                       debug_level=_debug_level)
-    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO "
-                         + ass_user + ";"):
+    pg_db = PostgresDB(dict(User=pg_root_usr, Password=pg_root_pw, DSN=ass_dsn, SslArgs=ass_ssl),
+                       app_name=cae.app_name() + "-InitTables", debug_level=_debug_level)
+    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO {};"
+                         .format(ass_user)):
         log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=90)
-    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO " + ass_user + ";"):
-        log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=93)
-    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO " + ass_user + ";"):
+    if pg_db.execute_sql("GRANT DELETE ON TABLE {} TO {};".format('external_refs', ass_user)):
+        log_error(pg_db.last_err_msg, 'initGrantExtRefsTable', exit_code=91)
+    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO {};".format(ass_user)):
+        log_error(pg_db.last_err_msg, 'initGrantUserSchemas', exit_code=93)
+    if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO {};".format(ass_user)):
         log_error(pg_db.last_err_msg, 'initGrantUserFunctions', exit_code=96)
     if pg_db.execute_sql(open("sql/dba_create_audit.sql").read(), commit=True):
         log_error(pg_db.last_err_msg, 'initCreateAudit', exit_code=99)
@@ -357,11 +357,11 @@ def ac_pull_res_data():
     where = act_record_filters.get('R')
     if where:
         where = "(" + where + ")"
-    acumen_req = AcuResToSihot(cae)
-    error_msg = acumen_req.fetch_all_valid_from_acu(date_range='P', where_group_order=where)
+    acumen_res = AcuResToSihot(cae)
+    error_msg = acumen_res.fetch_all_valid_from_acu(date_range='P', where_group_order=where)
     if error_msg:
         return error_msg
-    for rec in acumen_req.recs:
+    for rec in acumen_res.recs:
         # TODO: refactor to use AssSysData.res_save()
         # determine orderer
         ord_cl_pk = asd.cl_ass_id_by_ac_id(rec['OC_CODE'])

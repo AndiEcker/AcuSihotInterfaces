@@ -36,8 +36,9 @@ asd = AssSysData(cae)
 if asd.error_message:
     uprint("AssSysData initialization error: " + asd.error_message)
     cae.shutdown(20)
+sf_conn = asd.connection(SDI_SF)
 
-notification, warning_notification_emails = init_notification(cae, "SF " + ("sdbx" if asd.sf_sandbox else "prod"))
+notification, warning_notification_emails = init_notification(cae, "SF " + ("sdbx" if sf_conn.is_sandbox() else "prod"))
 
 
 log_items = list()              # log entries with warnings and errors
@@ -99,7 +100,7 @@ for rec in clients:
     if phone_validator and 'Phone' in rec and rec['Phone'] \
             and eval("rec['CD_Htel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
         phone_changes = list()
-        rec['Phone'], phone_changed = correct_phone(rec['Phone'], changed=False, removed=phone_changes)
+        rec['Phone'], phone_changed = correct_phone(rec['Phone'], removed=phone_changes)
         if phone_changed:
             add_log_msg("{Id} phone {Phone} corrected; removed 'index:char'={chg}"
                         .format(chg=phone_changes, **rec))
@@ -135,7 +136,7 @@ for rec in clients:
     if phone_validator and 'MobilePhone' in rec and rec['MobilePhone'] \
             and eval("rec['CD_mtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
         phone_changes = list()
-        rec['MobilePhone'], phone_changed = correct_phone(rec['MobilePhone'], changed=False, removed=phone_changes)
+        rec['MobilePhone'], phone_changed = correct_phone(rec['MobilePhone'], removed=phone_changes)
         if phone_changed:
             add_log_msg("{Id} mobile phone {MobilePhone} corrected; removed 'index:char'={chg}"
                         .format(chg=phone_changes, **rec))
@@ -172,7 +173,7 @@ for rec in clients:
     if phone_validator and 'Work_Phone__c' in rec and rec['Work_Phone__c'] \
             and eval("rec['CD_wtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
         phone_changes = list()
-        rec['Work_Phone__c'], phone_changed = correct_phone(rec['Work_Phone__c'], changed=False, removed=phone_changes)
+        rec['Work_Phone__c'], phone_changed = correct_phone(rec['Work_Phone__c'], removed=phone_changes)
         if phone_changed:
             add_log_msg("{Id} work phone {Work_Phone__c} corrected; removed 'index:char'={chg}"
                         .format(chg=phone_changes, **rec))
@@ -229,7 +230,7 @@ if skipped_email_ids:
                     .format(len(id_list), frag, pprint.pformat(id_list, indent=9, compact=True)))
 
 if notification:
-    subject = "Salesforce Client Validation protocol" + (" (sandbox/test system)" if asd.sf_sandbox else "")
+    subject = "Salesforce Client Validation protocol" + (" (sandbox/test system)" if sf_conn.is_sandbox() else "")
     mail_body = "\n\n".join(log_items)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
@@ -237,7 +238,7 @@ if notification:
         cae.shutdown(36)
     if warning_notification_emails and log_errors:
         mail_body = "\n\n".join(log_errors)
-        subject = "Salesforce Client Validation errors/discrepancies" + (" (sandbox)" if asd.sf_sandbox else "")
+        subject = "Salesforce Client Validation errors/discrepancies" + (" (sandbox)" if sf_conn.is_sandbox() else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
             uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))

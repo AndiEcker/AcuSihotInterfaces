@@ -105,7 +105,7 @@ def user_notification(subject, body):
     body = pprint.pformat(body, indent=3, width=120)
 
     if notification:
-        err_message = notification.send_notification(body, subject=subject)
+        err_message = notification.send_notification(body, subject=subject, body_style='plain')
         if err_message:
             uprint("****  WatchPupPy notification error: {}. Unsent notification body:\n{}.".format(err_message, body))
     else:
