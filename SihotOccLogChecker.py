@@ -265,7 +265,7 @@ def fix_acu_discrepancies(od):
             msg += " (" + ", ".join(wrn) + ")"
         notification_add_line("Missing {}: {}".format(msg, od))
     if cols and correct_system:
-        err = sys_db.update('T_ARO', cols, "ARO_CODE = :res_id", bind_vars=dict(res_id=od.res_id))
+        err = sys_db.update('T_ARO', cols, {"ARO_CODE": od.res_id})
         if err:
             notification_add_line("Error {} in correcting missing {}: {}".format(err, msg, od), is_error=True)
             sys_db.rollback()
@@ -305,7 +305,7 @@ def fix_ass_discrepancies(od):
     if cols and correct_system:
         cols['rgr_room_last_change'] = od.time_stamp
         cols['rgr_room_id'] = od.room_no
-        err = sys_db.update('res_groups', cols, "rgr_pk = :res_id", bind_vars=dict(res_id=od.res_id))
+        err = sys_db.update('res_groups', cols, {"rgr_pk": od.res_id})
         if err:
             notification_add_line("Error {} in correcting missing {}: {}".format(err, msg, od), is_error=True)
             sys_db.rollback()

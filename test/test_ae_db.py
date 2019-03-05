@@ -31,12 +31,11 @@ class TestOraDB:
                                   commit=True)
 
     def test_update(self):
-        assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), "col_int = :yx", commit=True,
-                                  bind_vars=dict(yx=1))
+        assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), dict(col_int=1), commit=True)
 
     def test_upd_if_empty(self):
-        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), "col_int = :yx", commit=True,
-                                  bind_vars=dict(yx=1), locked_cols=['col_vc'])
+        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), dict(col_int=1), commit=True,
+                                  locked_cols=['col_vc'])
 
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'],
@@ -81,22 +80,19 @@ class TestPostgresDB:
                                   commit=True)
 
     def test_update_char(self):
-        assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), "col_int = :x", commit=True,
-                                  bind_vars=dict(x=1))
+        assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), dict(col_int=1), commit=True)
 
     def test_update_time_as_char(self):
-        assert not test_db.update(test_table, dict(col_ti='15:19'), "col_int = :x", commit=True,
-                                  bind_vars=dict(x=1))
+        assert not test_db.update(test_table, dict(col_ti='15:19'), dict(col_int=1), commit=True)
         assert not test_db.select(test_table, cols=['col_ti'], where_group_order='col_int = :x', bind_vars=dict(x=1))
         assert test_db.fetch_value() == datetime.time(hour=15, minute=19)
 
     def test_update_time(self):
-        assert not test_db.update(test_table, dict(col_ti=UPDATED_TIME), "col_int = :x", commit=True,
-                                  bind_vars=dict(x=1))
+        assert not test_db.update(test_table, dict(col_ti=UPDATED_TIME), dict(col_int=1), commit=True)
 
     def test_upd_if_empty(self):
-        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), "col_int = :yx", commit=True,
-                                  bind_vars=dict(yx=1), locked_cols=['col_vc'])
+        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), dict(col_int=1), commit=True,
+                                  locked_cols=['col_vc'])
 
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt', 'col_ti'],

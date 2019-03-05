@@ -262,6 +262,11 @@ class TestConnection:
 
             @staticmethod
             def get_config(*_, **__): return None
+
+            @staticmethod
+            def dprint(*args, **kwargs):
+                print("mock-dprint() with args={}, kwargs={}".format(args, kwargs))
+
         cae = Cae()
         us = UsedSystems(cae, SDI_SF)
         assert not us.connect({SDI_SF: SfInterface})

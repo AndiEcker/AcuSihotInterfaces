@@ -10,7 +10,7 @@ import cx_Oracle
 import psycopg2
 # from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae_console_app import NamedLocks, uprint
 
 
@@ -57,8 +57,12 @@ class GenericDB:
 
         self._param_style = 'named'
 
-    def connect(self):
-        raise NotImplementedError
+    def _adapt_sql(self, sql, bind_vars):
+        new_sql = sql
+        if self._param_style == 'pyformat':
+            for key in bind_vars.keys():
+                new_sql = new_sql.replace(NAMED_BIND_VAR_PREFIX + key, '%(' + key + ')s')
+        return new_sql
 
     def _create_cursor(self):
         try:
@@ -83,214 +87,32 @@ class GenericDB:
                     new_bind_vars[key] = val
         return sql, new_bind_vars
 
-    def _adapt_sql(self, sql, bind_vars):
-        new_sql = sql
-        if self._param_style == 'pyformat':
-            for key in bind_vars.keys():
-                new_sql = new_sql.replace(NAMED_BIND_VAR_PREFIX + key, '%(' + key + ')s')
-        return new_sql
-
     @staticmethod
-    def _compile_filter_bind(chk_values, where_group_order, bind_vars):
+    def _rebind(chk_values, where_group_order, bind_vars, extra_bind=None):
+        rebound_vars = dict()   # use new instance to not change callers bind_vars dict
+        if extra_bind:
+            rebound_vars.update(extra_bind)
+            if not chk_values:
+                chk_values = dict([next(iter(extra_bind.items()))])  # use first dict item as pkey check value
+
         if chk_values:
-            extra_where = " AND ".join([k + " = :" + k for k in chk_values.keys()])
+            var_prefix = "CV_"      # for to allow new value in SET clause and old value in WHERE clause for same column
+            rebound_vars.update({var_prefix + k: v for k, v in chk_values.items()})
+            extra_where = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + var_prefix + k for k in chk_values.keys()])
             if not where_group_order:
                 where_group_order = extra_where
             elif where_group_order.upper().startswith(('GROUP BY', 'ORDER BY')):
                 where_group_order = extra_where + " " + where_group_order
             else:
                 where_group_order = "(" + extra_where + ") AND " + where_group_order
-            if bind_vars:
-                bind_vars.update(chk_values)
-            else:
-                bind_vars = chk_values
 
         if not where_group_order:
             where_group_order = '1=1'
 
-        return where_group_order, bind_vars
-
-    def cursor_description(self):
-        return self.curs.description if self.curs else None
-
-    def selected_column_names(self):
-        curs_desc = self.cursor_description()
-        col_names = list()
-        if curs_desc:
-            for col_desc in curs_desc:
-                col_names.append(col_desc[0])
-        return col_names
-
-    def fetch_all(self):
-        self.last_err_msg = ""
-        try:
-            rows = self.curs.fetchall()
-            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".fetch_all(), 1st of", len(rows), "recs:", rows[:1])
-        except Exception as ex:
-            self.last_err_msg = self.dsn + ".fetch_all() exception: " + str(ex)
-            uprint(self.last_err_msg)
-            rows = None
-        return rows or list()
-
-    def fetch_value(self, col_idx=0):
-        self.last_err_msg = ""
-        val = None
-        try:
-            values = self.curs.fetchone()
-            if values:
-                val = values[col_idx]
-            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".fetch_value() retrieved values: {}[{}]".format(values, col_idx))
-        except Exception as ex:
-            self.last_err_msg = self.dsn + ".fetch_value()[{}] exception: {}; status message={}"\
-                .format(col_idx, ex, self.curs.statusmessage)
-            uprint(self.last_err_msg)
-        return val
-
-    def execute_sql(self, sql, commit=False, auto_commit=False, bind_vars=None):
-        if self.conn or not self.connect():     # lazy connection
-            if auto_commit:
-                self.conn.autocommit = True     # or use: self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-
-            action = sql.split()[0]
-            if action == '--' or action == '/*':
-                action = 'SCRIPT'
-            elif action.upper() == 'CREATE':
-                action += ' ' + sql.split()[1]
-
-            self.last_err_msg = ""
-            sql, bind_vars = self._prepare_in_clause(sql, bind_vars)
-            sql = self._adapt_sql(sql, bind_vars)
-            try:
-                if bind_vars:
-                    self.curs.execute(sql, bind_vars)
-                else:
-                    # if no bind vars then call without for to prevent error "'dict' object does not support indexing"
-                    # .. in scripts with the % char (like e.g. dba_create_audit.sql)
-                    self.curs.execute(sql)
-                if commit:
-                    self.conn.commit()
-                if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint(self.dsn + ".execute_sql({}, {}) {}".format(sql, bind_vars, action))
-                    uprint(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
-
-            except Exception as ex:
-                self.last_err_msg = self.dsn + ".execute_sql({}, {}) {} error: {}".format(sql, bind_vars, action, ex)
-
-        return self.last_err_msg
-
-    def delete(self, table_name, chk_values=None, where_group_order='', commit=False, bind_vars=None):
-        where_group_order, bind_vars = self._compile_filter_bind(chk_values, where_group_order, bind_vars)
-        sql = "DELETE FROM {} WHERE {}".format(table_name, where_group_order)
-        with self.thread_lock_init(table_name, chk_values):
-            err_msg = self.execute_sql(sql, commit=commit, bind_vars=bind_vars)
-        return err_msg
-
-    def insert(self, table_name, col_values, commit=False, returning_column=''):
-        _normalize_col_values(col_values)
-        sql = "INSERT INTO " + table_name + " (" + ", ".join(col_values.keys()) \
-              + ") VALUES (" + ", ".join([NAMED_BIND_VAR_PREFIX + c for c in col_values.keys()]) + ")"
-        if returning_column:
-            sql += " RETURNING " + returning_column
-        return self.execute_sql(sql, commit=commit, bind_vars=col_values)
-
-    def select(self, from_join, cols=None, chk_values=None, where_group_order='', bind_vars=None, hints=''):
-        if not cols:
-            cols = list('*')
-        where_group_order, bind_vars = self._compile_filter_bind(chk_values, where_group_order, bind_vars)
-        sql = "SELECT {} {} FROM {} WHERE {}".format(hints, ','.join(cols), from_join, where_group_order)
-        return self.execute_sql(sql, bind_vars=bind_vars)
-
-    def update(self, table_name, col_values, where='', commit=False, bind_vars=None, locked_cols=None):
-        _normalize_col_values(col_values)
-        new_bind_vars = deepcopy(col_values)
         if bind_vars:
-            new_bind_vars.update(bind_vars)
-        if locked_cols is None:
-            locked_cols = list()
-        sql = "UPDATE " + table_name \
-              + " SET " + ", ".join([c + " = " + _locked_col_expr(c, locked_cols) for c in col_values.keys()])
-        if where:
-            sql += " WHERE " + where
-        return self.execute_sql(sql, commit=commit, bind_vars=new_bind_vars)
+            rebound_vars.update(bind_vars)
 
-    def upsert(self, table_name, col_values, chk_values=None, returning_column='', commit=False, locked_cols=None,
-               multiple_row_update=True):
-        """
-        INSERT or UPDATE in table_name the col_values, depending on if record already exists.
-        :param table_name:          name of the database table.
-        :param col_values:          dict of inserted/updated column values with the column name as key.
-        :param chk_values:          dict of column names/values for to check if record already exists.
-                                    If not passed then use first name/value of col_values (has then to be OrderedDict).
-        :param returning_column:    name of column which value will be returned by next fetch_all/fetch_value() call.
-        :param commit:              bool value to specify if commit should be done.
-        :param locked_cols:         list of column names not be overwritten on update of column value is not empty
-        :param multiple_row_update  allow update of multiple records with the same chk_values.
-        :return:                    last error message or "" if no errors occurred.
-        """
-        _normalize_col_values(col_values)
-        if not chk_values:
-            chk_values = dict([next(iter(col_values.items()))])     # use first dict item as pkey check value
-        chk_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in chk_values.keys()])
-
-        with self.thread_lock_init(table_name, chk_values):
-            self.select(table_name, ["count(*)"], where_group_order=chk_expr, bind_vars=chk_values)
-            if self.last_err_msg:
-                self.last_err_msg += "; chk_expr={}; chk_values=".format(chk_expr, chk_values)
-            else:
-                count = self.fetch_value()
-                if self.last_err_msg:
-                    self.last_err_msg += "; chk_expr={}, chk_values=".format(chk_expr, chk_values)
-                else:
-                    if count == 1 or (multiple_row_update and count > 1):
-                        bind_vars = deepcopy(chk_values)
-                        bind_vars.update(col_values)
-                        self.update(table_name, col_values, chk_expr, commit=commit, bind_vars=bind_vars,
-                                    locked_cols=locked_cols)
-                        if self.last_err_msg:
-                            self.last_err_msg += "; chk_expr={}, bind_vars={}".format(chk_expr, bind_vars)
-                        elif returning_column:
-                            self.select(table_name, [returning_column], where_group_order=chk_expr,
-                                        bind_vars=chk_values)
-                    elif count == 0:
-                        col_values.update(chk_values)
-                        self.insert(table_name, col_values, commit=commit, returning_column=returning_column)
-                        if self.last_err_msg:
-                            self.last_err_msg += "; col_values={}".format(col_values)
-                    else:               # count not in (0, 1) or count is None:
-                        msg = "SELECT COUNT(*) returned None" if count is None \
-                            else "skipping update because found {} duplicate check/search values".format(count)
-                        self.last_err_msg = self.dsn + ".upsert({}, {}, {}, {}) error: {}"\
-                            .format(table_name, col_values, chk_values, returning_column, msg)
-        return self.last_err_msg
-
-    def commit(self, reset_last_err_msg=False):
-        if reset_last_err_msg:
-            self.last_err_msg = ""
-        try:
-            self.conn.commit()
-            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".commit()")
-        except Exception as ex:
-            self.last_err_msg = self.dsn + " commit error: " + str(ex)
-        return self.last_err_msg
-
-    def rollback(self, reset_last_err_msg=False):
-        if reset_last_err_msg:
-            self.last_err_msg = ""
-
-        try:
-            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".rollback()")
-            self.conn.rollback()
-        except Exception as ex:
-            self.last_err_msg = self.dsn + " rollback error: " + str(ex)
-
-        return self.last_err_msg
-
-    def get_row_count(self):
-        return self.curs.rowcount
+        return chk_values, where_group_order, rebound_vars
 
     def call_proc(self, proc_name, proc_args, ret_dict=None):
         self.last_err_msg = ""
@@ -322,6 +144,192 @@ class GenericDB:
             except Exception as ex:
                 self.last_err_msg += self.dsn + " close error: " + str(ex)
         return self.last_err_msg
+
+    def connect(self):
+        raise NotImplementedError
+
+    def cursor_description(self):
+        return self.curs.description if self.curs else None
+
+    def fetch_all(self):
+        self.last_err_msg = ""
+        try:
+            rows = self.curs.fetchall()
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint(self.dsn + ".fetch_all(), 1st of", len(rows), "recs:", rows[:1])
+        except Exception as ex:
+            self.last_err_msg = self.dsn + ".fetch_all() exception: " + str(ex)
+            uprint(self.last_err_msg)
+            rows = None
+        return rows or list()
+
+    def fetch_value(self, col_idx=0):
+        self.last_err_msg = ""
+        val = None
+        try:
+            values = self.curs.fetchone()
+            if values:
+                val = values[col_idx]
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint(self.dsn + ".fetch_value() retrieved values: {}[{}]".format(values, col_idx))
+        except Exception as ex:
+            self.last_err_msg = self.dsn + ".fetch_value()[{}] exception: {}; status message={}"\
+                .format(col_idx, ex, self.curs.statusmessage)
+            uprint(self.last_err_msg)
+        return val
+
+    def execute_sql(self, sql, commit=False, auto_commit=False, bind_vars=None):
+        action = sql.split()[0]
+        if action == '--' or action == '/*':
+            action = 'SCRIPT'
+        elif action.upper() == 'CREATE':
+            action += ' ' + sql.split()[1]
+
+        if self.conn or not self.connect():     # lazy connection
+            if auto_commit:
+                self.conn.autocommit = True     # or use: self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+
+            self.last_err_msg = ""
+            sql, bind_vars = self._prepare_in_clause(sql, bind_vars)
+            sql = self._adapt_sql(sql, bind_vars)
+            try:
+                if bind_vars:
+                    self.curs.execute(sql, bind_vars)
+                else:
+                    # if no bind vars then call without for to prevent error "'dict' object does not support indexing"
+                    # .. in scripts with the % char (like e.g. dba_create_audit.sql)
+                    self.curs.execute(sql)
+                if commit:
+                    self.conn.commit()
+                if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                    uprint(self.dsn + ".execute_sql({}, {}) {}".format(sql, bind_vars, action))
+                    uprint(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
+
+            except Exception as ex:
+                self.last_err_msg += self.dsn + ".execute_sql() {} error={}; {}, {}".format(action, ex, sql, bind_vars)
+
+        if self.debug_level >= DEBUG_LEVEL_ENABLED and self.last_err_msg:
+            uprint(self.last_err_msg)
+
+        return self.last_err_msg
+
+    def delete(self, table_name, chk_values=None, where_group_order='', bind_vars=None, commit=False):
+        chk_values, where_group_order, bind_vars = self._rebind(chk_values, where_group_order, bind_vars)
+        sql = "DELETE FROM {} WHERE {}".format(table_name, where_group_order)
+
+        with self.thread_lock_init(table_name, chk_values):
+            self.execute_sql(sql, commit=commit, bind_vars=bind_vars)
+
+        return self.last_err_msg
+
+    def insert(self, table_name, col_values, returning_column='', commit=False):
+        _normalize_col_values(col_values)
+        sql = "INSERT INTO " + table_name + " (" + ", ".join(col_values.keys()) \
+              + ") VALUES (" + ", ".join([NAMED_BIND_VAR_PREFIX + c for c in col_values.keys()]) + ")"
+        if returning_column:
+            sql += " RETURNING " + returning_column
+        return self.execute_sql(sql, commit=commit, bind_vars=col_values)
+
+    def select(self, from_join, cols=None, chk_values=None, where_group_order='', bind_vars=None, hints=''):
+        if not cols:
+            cols = list('*')
+        chk_values, where_group_order, bind_vars = self._rebind(chk_values, where_group_order, bind_vars)
+        sql = "SELECT {} {} FROM {} WHERE {}".format(hints, ','.join(cols), from_join, where_group_order)
+        return self.execute_sql(sql, bind_vars=bind_vars)
+
+    def update(self, table_name, col_values, chk_values=None, where_group_order='', bind_vars=None,
+               commit=False, locked_cols=None):
+        _normalize_col_values(col_values)
+        chk_values, where_group_order, bind_vars = self._rebind(chk_values, where_group_order, bind_vars,
+                                                                extra_bind=col_values)
+        if locked_cols is None:
+            locked_cols = list()
+        sql = "UPDATE " + table_name \
+              + " SET " + ", ".join([c + " = " + _locked_col_expr(c, locked_cols) for c in col_values.keys()])
+        if where_group_order:
+            sql += " WHERE " + where_group_order
+
+        with self.thread_lock_init(table_name, chk_values):
+            self.execute_sql(sql, commit=commit, bind_vars=bind_vars)
+
+        return self.last_err_msg
+
+    def upsert(self, table_name, col_values, chk_values=None, where_group_order='', bind_vars=None,
+               returning_column='', commit=False, locked_cols=None, multiple_row_update=True):
+        """
+        INSERT or UPDATE in table_name the col_values, depending on if record already exists.
+        :param table_name:          name of the database table.
+        :param col_values:          dict of inserted/updated column values with the column name as key.
+        :param chk_values:          dict of column names/values for to identify affected record(s), also used for to
+                                    check if record already exists.
+                                    If not passed then use first name/value of col_values (has then to be OrderedDict).
+        :param where_group_order:   string added after the SQL WHERE clause (including WHERE, ORDER BY
+                                    and GROUP BY expressions, can contain bind variables - specified in bind_vars arg).
+        :param bind_vars:           dict of extra bind variables (key=name, value=value), e.g..
+        :param returning_column:    name of column which value will be returned by next fetch_all/fetch_value() call.
+        :param commit:              bool value to specify if commit should be done.
+        :param locked_cols:         list of column names not be overwritten on update of column value is not empty
+        :param multiple_row_update  allow update of multiple records with the same chk_values.
+        :return:                    last error message or "" if no errors occurred.
+        """
+        _normalize_col_values(col_values)
+
+        with self.thread_lock_init(table_name, chk_values):
+            if not self.select(table_name, ["count(*)"],
+                               chk_values=chk_values, where_group_order=where_group_order, bind_vars=bind_vars):
+                count = self.fetch_value()
+                if not self.last_err_msg:
+                    if count == 1 or (multiple_row_update and count > 1):
+                        if not self.update(table_name, col_values, chk_values=chk_values,
+                                           where_group_order=where_group_order, bind_vars=bind_vars,
+                                           commit=commit, locked_cols=locked_cols) \
+                                and returning_column:
+                            self.select(table_name, [returning_column],
+                                        chk_values=chk_values, where_group_order=where_group_order, bind_vars=bind_vars)
+                    elif count == 0:
+                        col_values.update(chk_values)
+                        self.insert(table_name, col_values, returning_column=returning_column, commit=commit)
+                    else:               # count not in (0, 1) or count is None:
+                        msg = "SELECT COUNT(*) returned None" if count is None \
+                            else "skipping update because found {} duplicate check/search values".format(count)
+                        self.last_err_msg = self.dsn + ".upsert() error={}; args={}, {}, {}, {}, {}"\
+                            .format(msg, table_name, col_values, chk_values, where_group_order, bind_vars)
+        return self.last_err_msg
+
+    def commit(self, reset_last_err_msg=False):
+        if reset_last_err_msg:
+            self.last_err_msg = ""
+        try:
+            self.conn.commit()
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint(self.dsn + ".commit()")
+        except Exception as ex:
+            self.last_err_msg = self.dsn + " commit error: " + str(ex)
+        return self.last_err_msg
+
+    def rollback(self, reset_last_err_msg=False):
+        if reset_last_err_msg:
+            self.last_err_msg = ""
+
+        try:
+            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                uprint(self.dsn + ".rollback()")
+            self.conn.rollback()
+        except Exception as ex:
+            self.last_err_msg = self.dsn + " rollback error: " + str(ex)
+
+        return self.last_err_msg
+
+    def get_row_count(self):
+        return self.curs.rowcount
+
+    def selected_column_names(self):
+        curs_desc = self.cursor_description()
+        col_names = list()
+        if curs_desc:
+            for col_desc in curs_desc:
+                col_names.append(col_desc[0])
+        return col_names
 
     @staticmethod
     def thread_lock_init(table_name, chk_values):

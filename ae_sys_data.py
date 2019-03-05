@@ -376,6 +376,18 @@ def init_current_index(value, idx_path, use_curr_idx) -> tuple:
     return (idx, ) + tuple(idx2)
 
 
+def string_to_records(str_val, field_names, rec_sep=',', fld_sep='=', root_rec=None, root_idx=()):
+    recs = Records()
+    if str_val:
+        for rec_idx, rec_str in enumerate(str_val.split(rec_sep)):  # type: (int, str)
+            fields = dict()
+            for fld_idx, fld_val in enumerate(rec_str.split(fld_sep)):
+                fields[field_names[fld_idx]] = fld_val
+            recs.append(Record(fields=fields, root_rec=root_rec, root_idx=root_idx + (rec_idx,)))
+            set_current_index(recs, idx=rec_idx)
+    return recs
+
+
 def template_idx_path(idx_path, is_sub_rec=False):
     if len(idx_path) < 2:
         return not is_sub_rec
@@ -1037,7 +1049,7 @@ class Record(OrderedDict):
                                 or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields)
         dif = list()
         found_idx = list()
-        for idx_path in self.leaf_indexes():
+        for idx_path in self.leaf_indexes(system='', direction=''):
             if _excluded():
                 continue
             found_idx.append(idx_path)
@@ -1051,7 +1063,7 @@ class Record(OrderedDict):
                 dif.append("Field {}:{}={} does not exist in the other Record"
                            .format(self.system, idx_path, self.val(*idx_path)))
 
-        for idx_path in rec.leaf_indexes():
+        for idx_path in rec.leaf_indexes(system='', direction=''):
             if _excluded():
                 continue
             if idx_path not in found_idx:
@@ -1979,15 +1991,8 @@ class _Field:
         fld_root_rec = self.root_rec(system=system, direction=direction)
         fld_root_idx = self.root_idx(system=system, direction=direction)
 
-        recs = Records()
-        if str_val:
-            for rec_idx, rec_str in enumerate(str_val.split(rec_sep)):  # type: (int, str)
-                fields = dict()
-                for fld_idx, fld_val in enumerate(rec_str.split(fld_sep)):
-                    fields[field_names[fld_idx]] = fld_val
-                recs.append(Record(fields=fields, root_rec=fld_root_rec, root_idx=fld_root_idx + (rec_idx, )))
-                set_current_index(recs, idx=rec_idx)
-        return recs
+        return string_to_records(str_val, field_names, rec_sep=rec_sep, fld_sep=fld_sep,
+                                 root_rec=fld_root_rec, root_idx=fld_root_idx)
 
     def record_field_val(self, *idx_path, system='', direction=''):
         root_rec = self.root_rec(system=system, direction=direction)

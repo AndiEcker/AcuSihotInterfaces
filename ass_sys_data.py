@@ -8,7 +8,8 @@ from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
                           DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SF_SANDBOX,
                           ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS)
-from ae_sys_data import correct_email, correct_phone, Records, Record, FAD_FROM, FAD_ONTO, UsedSystems
+from ae_sys_data import correct_email, correct_phone, Records, Record, FAD_FROM, FAD_ONTO, UsedSystems, \
+    string_to_records
 from ae_db import OraDB, PostgresDB
 from ae_console_app import uprint, DATE_ISO
 from ae_notification import add_notification_options, init_notification
@@ -530,6 +531,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param locked_cols:     list of generic field names where the cl_ column value will be preserved if not empty.
         :return:                PKey/cl_pk of upserted AssCache client record or None on error (see self.error_message).
         """
+
         # normalize field values
         if not isinstance(client_data, Record):
             client_data = Record(fields=client_data, system=SDI_ASS, direction=FAD_ONTO)
@@ -544,6 +546,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     client_data[k] = ""
             elif 'Phone' in k and f.val():
                 client_data[k], _ = correct_phone(f.val())
+
         # process and check parameters
         if not field_names:
             field_names = [k for k in client_data.keys() if k not in ('AssId', 'ExtRefs', 'ProductTypes')]
@@ -556,9 +559,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             # default to non-empty, external system references (k.endswith('Id') and len(k) <= 5 and k != 'RciId')
             match_fields = [k for k, f in client_data.items() if k in ('AssId', 'AcuId', 'SfId', 'ShId') and f.val()]
         chk_values = {f.name(system=SDI_ASS): f.val() for k, f in client_data.items() if k in match_fields}
+
+        msg_tpl = "AssSysData.cl_save() error={}; {}, {}, {}".format("{}", ppf(client_data), field_names, match_fields)
         if not col_values or not chk_values or not match_fields:
-            self.error_message = "AssSysData.cl_save({}, {}, {}) called without data or with a non-empty system id"\
-                .format(ppf(client_data), field_names, match_fields)
+            self.error_message = msg_tpl.format("called without data or with a non-empty system id")
             return None
         # if locked_cols is None:
         #    locked_cols = field_names.copy()        # uncomment for all fields being locked by default
@@ -566,8 +570,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         ass_db = self.connection(SDI_ASS)
         if ass_db.upsert('clients', col_values, chk_values=chk_values, returning_column='cl_pk', commit=commit,
                          locked_cols=locked_cols):
-            self.error_message = "cl_save({}, {}, {}) clients upsert error: "\
-                                     .format(ppf(client_data), field_names, match_fields) + ass_db.last_err_msg
+            self.error_message = msg_tpl.format(ass_db.last_err_msg)
             return None
 
         cl_pk = ass_db.fetch_value()
@@ -575,19 +578,18 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         ers_table = 'external_refs'
         ers_key = dict(er_cl_fk=cl_pk)
         with ass_db.thread_lock_init(ers_table, ers_key):
-            if not ass_db.delete(ers_table, chk_values=ers_key, commit=commit):
-                ext_refs = client_data.val('ExtRefs') or list()
-                if ext_refs and isinstance(ext_refs, str):
-                    ext_refs = [dict(Type=_.split(EXT_REF_TYPE_ID_SEP)[0], Id=_.split(EXT_REF_TYPE_ID_SEP)[1])
-                                for _ in ext_refs.split(EXT_REFS_SEP)]
+            ext_refs = client_data.val('ExtRefs', system='', direction='')
+            if isinstance(ext_refs, str):
+                ext_refs = string_to_records(ext_refs, ('Type', 'Id'), rec_sep=EXT_REFS_SEP,
+                                             fld_sep=EXT_REF_TYPE_ID_SEP)
+            if ext_refs and not ass_db.delete(ers_table, chk_values=ers_key, commit=commit):
                 for erd in ext_refs:
-                    if erd.get('Type') and erd.get('Id'):   # ignore/skip empty template record
+                    if erd['Type'] and erd['Id']:   # ignore/skip empty template record
                         col_values = dict(er_cl_fk=cl_pk, er_type=erd['Type'], er_id=erd['Id'])
                         if ass_db.insert(ers_table, col_values, commit=commit):
                             break
         if ass_db.last_err_msg:
-            self.error_message = "cl_save({}, {}, {}) external_refs delete/upsert error: "\
-                                     .format(ppf(client_data), field_names, match_fields) + ass_db.last_err_msg
+            self.error_message = msg_tpl.format(ass_db.last_err_msg)
             return None
 
         if 'AssId' in client_data and not client_data.val('AssId'):
@@ -1671,8 +1673,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if self.error_message:
             dif = ["acu_clients_compare() error {}".format(self.error_message)]
         else:
+            # adding 'ExtRefs' to excluded_fields because Oracle's f_stragg() does not have fixed ordering
             dif = self.clients.compare_records(pulled, match_fields=match_fields,
-                                               field_names=field_names, exclude_fields=exclude_fields,
+                                               field_names=field_names, exclude_fields=exclude_fields + ('ExtRefs', ),
                                                record_comparator=self.cl_compare_ext_refs)
             for msg in dif:
                 self._warn(msg)

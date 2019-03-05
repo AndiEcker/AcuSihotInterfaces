@@ -6,7 +6,8 @@ import datetime
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
 from ae_console_app import uprint
 from ae_db import OraDB
-from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO
+from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
+    string_to_records
 from shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
 from sxmlif import SihotXmlBuilder
 from sys_data_ids import SDI_ACU
@@ -76,7 +77,7 @@ ACU_CLIENT_MAP = [       # client data
     ('RciId', 'CD_RCI_REF'),
     ('ExtRefs', 'EXT_REFS',
      None,
-     lambda f, v: f.string_to_records(v, ('Type', 'Id')),
+     lambda f, v: f.string_to_records(v, ('Type', 'Id'), rec_sep=EXT_REFS_SEP, fld_sep=EXT_REF_TYPE_ID_SEP),
      lambda f, v: EXT_REFS_SEP.join([r['Type'] + EXT_REF_TYPE_ID_SEP + r['Id'] for r in f.val()])),
     # ('Profession', 'CD_INDUSTRY1'),
     # ('Profession_P', 'CD_INDUSTRY2'),
@@ -253,7 +254,7 @@ class AcuDbRows:
         obj_id = objid if str(objid) else '-' + (pkey[2:] if table == 'CD' else str(pkey))
         id_col = table + "_SIHOT_OBJID" + col_name_suffix
         pk_col = table + "_CODE"
-        return self.ora_db.update('T_' + table, {id_col: obj_id}, pk_col + " = :pk", bind_vars=dict(pk=str(pkey)))
+        return self.ora_db.update('T_' + table, {id_col: obj_id}, {pk_col: str(pkey)})
 
     def fetch_all_from_acu(self, col_names):
         self._last_fetch = datetime.datetime.now()
@@ -363,33 +364,39 @@ class AcumenClient(AcuDbRows):
         if len(match_fields) > 1 or len(match_fields) == 1 and match_fields[0] != 'AcuId':
             return "AcumenClient.save_client() expects match_fields empty or with 'AcuId' as the only field name", None
 
-        rc2 = rec.copy()
-        rc2.set_env(system=SDI_ACU, direction=FAD_ONTO)
-        rc2.add_system_fields(ACU_CLIENT_MAP, sys_fld_indexes=onto_field_indexes)
+        if rec.system != SDI_ACU or rec.direction != FAD_ONTO:
+            rec = rec.copy()
+            rec.set_env(system=SDI_ACU, direction=FAD_ONTO)
+            rec.add_system_fields(ACU_CLIENT_MAP, sys_fld_indexes=onto_field_indexes)
 
-        acu_col_values = rc2.to_dict(filter_fields=lambda f: (field_names and f.name() not in field_names)
+        acu_col_values = rec.to_dict(filter_fields=lambda f: (field_names and f.name() not in field_names)
                                      or not f.name(system=SDI_ACU).startswith('CD_'))
-        err_msg, pkey = self.client_row_save(acu_col_values, commit=commit)
+        err_msg, acu_id = self.client_row_save(acu_col_values, commit=commit)
         if not err_msg:
-            rec['AcuId'] = pkey
+            rec['AcuId'] = acu_id
 
-            ers_table = 'T_CR'
-            ers_key = dict(CR_CDREF=pkey)
-            with self.ora_db.thread_lock_init(ers_table, ers_key):
-                if not self.ora_db.delete(ers_table, chk_values=ers_key, commit=commit):
-                    ext_refs = rec.val('ExtRefs') or list()
-                    if ext_refs and isinstance(ext_refs, str):
-                        ext_refs = [dict(Type=_.split(EXT_REF_TYPE_ID_SEP)[0], Id=_.split(EXT_REF_TYPE_ID_SEP)[1])
-                                    for _ in ext_refs.split(EXT_REFS_SEP)]
-                    for erd in ext_refs:
-                        if erd.get('Type') and erd.get('Id'):   # ignore/skip empty template record
-                            col_values = dict(CR_CDREF=pkey, CR_TYPE=erd['Type'], CR_REF=erd['Id'])
-                            if self.ora_db.insert(ers_table, col_values, commit=commit):
-                                break
-            if self.ora_db.last_err_msg:
-                err_msg = self.ora_db.last_err_msg
+            ext_refs = rec.val('ExtRefs', system='', direction='')      # check for optional ExtRefs
+            if ext_refs:
+                err_msg = self.upsert_ext_refs(ext_refs, acu_id, commit=commit)
 
-        return err_msg, pkey
+        return err_msg, acu_id
+
+    def upsert_ext_refs(self, ext_refs, acu_id, commit=False):
+        if isinstance(ext_refs, str):
+            # ext_refs = [dict(Type=_.split(EXT_REF_TYPE_ID_SEP)[0], Id=_.split(EXT_REF_TYPE_ID_SEP)[1])
+            #             for _ in ext_refs.split(EXT_REFS_SEP)]
+            ext_refs = string_to_records(ext_refs, ('Type', 'Id'), rec_sep=EXT_REFS_SEP, fld_sep=EXT_REF_TYPE_ID_SEP)
+        ers_table = 'T_CR'
+        ers_key = dict(CR_CDREF=acu_id)
+
+        with self.ora_db.thread_lock_init(ers_table, ers_key):
+            if not self.ora_db.delete(ers_table, chk_values=ers_key, commit=commit):
+                for erd in ext_refs:
+                    if erd['Type'] and erd['Id']:  # ignore/skip empty template record
+                        col_values = dict(CR_CDREF=acu_id, CR_TYPE=erd['Type'], CR_REF=erd['Id'])
+                        if self.ora_db.insert(ers_table, col_values, commit=commit):
+                            break
+        return self.ora_db.last_err_msg
 
 
 class AcuClientToSihot(AcumenClient, ClientToSihot):

@@ -1219,13 +1219,24 @@ class ResToSihot(FldMapXmlBuilder):
         arr_date = rec.val('ResArrival', system='', direction='')   # system/direction needed for to get date type
         today = datetime.datetime.today()
         cf = self.cae.get_config
+        extra_comments = list()
 
-        if arr_date and arr_date.toordinal() > today.toordinal():
-            # Sihot doesn't accept allotment for reservations in the past
-            val = cf(mkt_seg + '_' + hotel_id, section='SihotAllotments',
-                     default_value=cf(mkt_seg, section='SihotAllotments'))
+        if self.action != ACTION_DELETE and rec.val('ResStatus', system='', direction='') != 'S':
+            val = cf(mkt_seg + '_' + hotel_id, section='SihotResTypes',
+                     default_value=cf(mkt_seg, section='SihotResTypes'))
             if val:
+                if arr_date and arr_date.toordinal() > today.toordinal():
+                    rec.set_val(val, 'ResStatus', system='', direction='')
+                else:
+                    extra_comments.append("RT={}".format(val))
+
+        val = cf(mkt_seg + '_' + hotel_id, section='SihotAllotments',
+                 default_value=cf(mkt_seg, section='SihotAllotments'))
+        if val:
+            if arr_date and arr_date.toordinal() > today.toordinal():
                 rec.set_val(val, 'ResAllotmentNo', system='', direction='')
+            else:   # Sihot doesn't accept allotment for reservations in the past
+                extra_comments.append("AllotNo={}".format(val))
 
         # not specified? FYI: this field is not included in V_ACU_RES_DATA, default==RUL_SIHOT_RATE/SIHOT_MKT_SEG
         rate_seg = rec.val('ResRateSegment', system='', direction='') or mkt_seg
@@ -1237,11 +1248,10 @@ class ResToSihot(FldMapXmlBuilder):
         if val:
             rec.set_val(val, 'ResAccount', system='', direction='')
 
-        if self.action != ACTION_DELETE and rec.val('ResStatus', system='', direction='') != 'S' \
-                and arr_date and arr_date.toordinal() > today.toordinal():
-            val = cf(mkt_seg, section='SihotResTypes')
-            if val:
-                rec.set_val(val, 'ResStatus', system='', direction='')
+        for comment in extra_comments:
+            res_cmt = rec.val('ResComment', system='', direction='')
+            if comment not in res_cmt:
+                rec.set_val(comment + "; " + res_cmt, 'ResComment', system='', direction='')
 
     @staticmethod
     def _complete_res_data(rec):

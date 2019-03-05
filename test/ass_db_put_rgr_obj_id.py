@@ -75,11 +75,10 @@ updated = 0
 for rgr_rec in rgr_records:
     obj_id = res_no_to_obj_id(cae, rgr_rec[0], rgr_rec[1], rgr_rec[2])
     rgr_dict = dict(rgr_ho_fk=rgr_rec[0], rgr_res_id=rgr_rec[1], rgr_sub_id=rgr_rec[2])
-    where_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in rgr_dict.keys()])
     if not obj_id:
         log_warning("No reservation object id found for res_no {}".format(rgr_dict), 'FetchObjId', importance=3)
         continue
-    elif ass_db.update('res_groups', dict(rgr_obj_id=obj_id), where_expr, bind_vars=rgr_dict):
+    elif ass_db.update('res_groups', dict(rgr_obj_id=obj_id), rgr_dict):
         break
     updated += 1
 
