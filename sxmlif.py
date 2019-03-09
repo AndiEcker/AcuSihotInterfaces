@@ -350,7 +350,6 @@ class SihotXmlBuilder:
         self.response = None
 
         self._xml = ''
-        self._indent = 0
 
     def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
         self._xml = '<?xml version="1.0" encoding="' + self.cae.get_option(SDF_SH_XML_ENCODING).lower() + \
@@ -384,7 +383,7 @@ class SihotXmlBuilder:
                        timeout=self.cae.get_option(SDF_SH_TIMEOUT),
                        encoding=self.cae.get_option(SDF_SH_XML_ENCODING),
                        debug_level=self.debug_level)
-        self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}, xml={}"
+        self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}\nxml=\n{}"
                         .format(response_parser, self.xml), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
@@ -398,8 +397,7 @@ class SihotXmlBuilder:
                 elif err_num == '29':
                     err_msg = "No Reservations Found"
                 if err_num != '1' or self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    err_msg += "; sent xml='{}'; got xml='{}'"\
-                        .format(self.xml, sc.received_xml)[0 if err_msg else 2:]
+                    err_msg += "; sent xml='{}'; got xml='{}'".format(self.xml, sc.received_xml)[0 if err_msg else 2:]
                 err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:
@@ -517,7 +515,7 @@ class ResKernelGet(SihotXmlBuilder):
         err_msg = self.send_to_server(response_parser=ResKernelResponse(self.cae))
         if not err_msg and self.response:
             res_no = (self.response.hn, self.response.res_nr, self.response.sub_nr)
-            self.cae.dprint(msg + "res_no={}; xml='{}'".format(res_no, self.xml),
+            self.cae.dprint(msg + "res_no={};\nxml=\n{}".format(res_no, self.xml),
                             minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         else:
             res_no = None

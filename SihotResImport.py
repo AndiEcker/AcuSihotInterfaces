@@ -10,6 +10,7 @@
     0.8     15-07-17: refactoring moving clients and reservation_inventories to ass_sys_data.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
     1.0     June-18: refactoring and clean-up
+    1.1     08-03-19: migrated to use ae_sys_data (extended logging and notification messages).
 
     TODO:
     - use new config sections (for each hotel and ANY) or AssCache instead of Acumen asd.
@@ -26,6 +27,7 @@ from traceback import format_exc
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
     SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, FORE_SURNAME_SEP
 from ae_sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
+from ae_db import bind_var_prefix
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
 from ae_notification import add_notification_options, init_notification
 from acif import add_ac_options
@@ -33,7 +35,7 @@ from sfif import add_sf_options
 from shif import add_sh_options, ClientToSihot, ResSender
 from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
@@ -1059,9 +1061,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         # re-create resort match codes config value from Acumen data if empty
         if not cae.get_config('ClientRefsResortCodes'):
             m1 = asd.load_view(None, 'T_CD', ["AcuId"], "RciId in (:rci_refs)",
-                                     {'rci_refs': asd.client_refs_add_exclude})
+                                     {bind_var_prefix + 'rci_refs': asd.client_refs_add_exclude})
             m2 = asd.load_view(None, 'T_CR', ["CR_CDREF"], "CR_TYPE like 'RCI%' and CR_REF in (:rci_refs)",
-                                     {'rci_refs': asd.client_refs_add_exclude})
+                                     {bind_var_prefix + 'rci_refs': asd.client_refs_add_exclude})
             if m1 is None or m2 is None:
                 error_msg = "Resort match code fetch error"
                 log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciResortCodesDataFetch', importance=3)

@@ -11,11 +11,12 @@
     1.0     30-05-18 bug fix in sxmlif.py: now use RUL_PRIMARY instead of RU_CODE in F_SIHOT_CAT/CAT element for
             to allow sync of deleted RU records.
     1.1     28-02-19 migrated to use system data fields.
+    1.2     08-03-19 extended logging and notification messages.
 """
 import datetime
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
-    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
+    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDI_ACU
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, full_stack_trace
 from ae_notification import add_notification_options, init_notification
 from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
@@ -25,7 +26,7 @@ from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
 from shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
 from ass_sys_data import AssSysData
 
-__version__ = '1.1'
+__version__ = '1.2'
 
 ADMIN_MAIL_TO_LIST = ['ITDevmen@signallia.com']
 
@@ -130,16 +131,15 @@ if not error_msg:
 
         asd = AssSysData(cae)
         hotel_ids = asd.ho_id_list()     # determine active/valid Sihot-hotels
-        asd.close_dbs()
 
-        acumen_req = AcuResToSihot(cae)
+        acumen_req = AcuResToSihot(cae, ora_db=asd.connection(SDI_ACU))
         error_msg = acumen_req.fetch_from_acu_by_aru(date_range=sync_date_range)
         if error_msg:
             notification.send_notification(error_msg, subject='SihotResSync fetch error notification',
-                                           mail_to=ADMIN_MAIL_TO_LIST)
+                                           mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')
         else:
             # 1st pre-run without room allocation - for to allow room swaps in the same batch
-            room_recs = [r for r in acumen_req.recs if r['ResHotelId']
+            room_recs = [r.copy(deepness=-1) for r in acumen_req.recs if r['ResHotelId']
                          and r['ResHotelId'] == r['ResLastHotelId']
                          and r['ResAction'] != ACTION_DELETE]
             if not migration_mode and room_recs:
@@ -156,12 +156,12 @@ if not error_msg:
                         error_msg = acumen_req.res_id_values(rec) + '\n\nERRORS=' + error_msg \
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
                         notification.send_notification(error_msg, subject='SihotResSync admin room-swap notification',
-                                                       mail_to=ADMIN_MAIL_TO_LIST)
+                                                       mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')
                     acumen_req.ora_db.rollback()  # send but roll back changes in ResObjId and T_SRSL
                 progress.finished(error_msg=error_msg)
 
             # 2nd pre-run for hotel movements (HOTMOVE) - for to delete/cancel booking in last/old hotel
-            room_recs = [r for r in acumen_req.recs if r['ResHotelId'] != r['ResLastHotelId']
+            room_recs = [r.copy(deepness=-1) for r in acumen_req.recs if r['ResHotelId'] != r['ResLastHotelId']
                          and r['ResLastHotelId'] in hotel_ids
                          and r['ResAction'] == ACTION_UPDATE]
             if not migration_mode and room_recs:
@@ -182,7 +182,7 @@ if not error_msg:
                         error_msg = acumen_req.res_id_values(rec) + '\n\nERRORS=' + error_msg \
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
                         notification.send_notification(error_msg, subject='SihotResSync admin HOTMOVE notification',
-                                                       mail_to=ADMIN_MAIL_TO_LIST)
+                                                       mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')
                     if new_hotel not in hotel_ids:
                         acumen_req.ora_db.commit()    # because this res get skipped in the run loop underneath
                     else:
@@ -232,7 +232,7 @@ if not error_msg:
             warnings = acumen_req.get_warnings()
             if notification and warnings:
                 notification.send_notification(warnings, subject="SihotResSync warnings notification",
-                                               mail_to=cae.get_option('warningsMailToAddr'))
+                                               mail_to=cae.get_option('warningsMailToAddr'), body_style='plain')
 
     except Exception as ex:
         app_env_err += "\n\nSync Req/ARU Changes exception: " + full_stack_trace(ex)

@@ -25,6 +25,7 @@ from functools import partial
 from traceback import format_exc
 import pprint
 
+from ae_db import NAMED_BIND_VAR_PREFIX, bind_var_prefix
 from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
     SDI_ACU
 from ae_sys_data import Record, FAD_ONTO
@@ -172,11 +173,12 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         obj_id = ass_changed_res['rgr_obj_id']
         if obj_id:
             res = asd.load_view(asd.connection(SDI_ACU), 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
-                                "RU_SIHOT_OBJID = :obj_id", dict(obj_id=obj_id))
+                                "RU_SIHOT_OBJID = " + NAMED_BIND_VAR_PREFIX + bind_var_prefix + "obj_id",
+                                dict(obj_id=obj_id))
             if res and res[0] and res[0][0]:
                 rgr_sf_id = res[0][0]
         if not rgr_sf_id:
-            log_msg(msg_pre + "Reservation Opportunity ID not found; ShResObjID={}; ass=\n{}; sh=\n{}; err?='{}'"
+            log_msg(msg_pre + "Reservation Opportunity ID not found; ShResObjID={}; ass=\n{}; sh=\n{}; err?={}"
                     .format(obj_id, ppf(ass_changed_res), ppf(sh_res), asd.error_message),
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
@@ -322,7 +324,7 @@ def run_sync_to_sf():
         if asd:
             asd.close_dbs()
 
-    log_msg("run_sync_to_sf() requested at {}; processed {} syncs; finished at {}; err?='{}'"
+    log_msg("run_sync_to_sf() requested at {}; processed {} syncs; finished at {}; err?={}"
             .format(sync_run_requested, sync_count, datetime.datetime.now(), err_msg),
             importance=3, is_error=bool(err_msg), notify=debug_level > DEBUG_LEVEL_VERBOSE or sync_count)
 
@@ -391,7 +393,7 @@ def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
     res_no = req.res_nr
     rec_ctx.update(ResHotelId=ho_id, ResId=res_no, ResSubId=sub_no, ResRoomNo=room_id,
                    extended_oc=oc, action_time=action_time)
-    log_msg(proc_context(rec_ctx) + "{} room change; ctx={} xml='{}'".format(oc, ppf(rec_ctx), req.get_xml()),
+    log_msg(proc_context(rec_ctx) + "{} room change; ctx=\n{}\nxml=\n{}".format(oc, ppf(rec_ctx), req.get_xml()),
             importance=3, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     # QUICK&DIRTY FIX: prevent the send of rental client allocations using roAgencies ini variable
@@ -567,7 +569,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
                         req = req_class(cae)
                         req.parse_xml(xml_request)
                         if debug_level >= DEBUG_LEVEL_VERBOSE:
-                            err_messages.append((0, "Slot {}:{} parsed xml={}".format(slot, ppf(req), req.get_xml())))
+                            err_messages.append((0, "Slot {}:\n{}\ngot xml=\n{}".format(slot, ppf(req), req.get_xml())))
                         for proc in slot['ocProcessors']:
                             rec_ctx['procedure'] = proc.__name__
                             try:

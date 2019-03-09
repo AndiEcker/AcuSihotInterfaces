@@ -65,16 +65,13 @@ def aspect_key(type_or_key, system='', direction=''):
     :param direction:       direction string FAD_* constant (if type_or_key is a pure FAT_* constant).
     :return:                compiled aspect key as string.
     """
-    assert len(type_or_key) >= _ASP_TYPE_LEN, \
-        "aspect_key({}, {}, {}): aspect type is too short".format(type_or_key, system, direction)
-    assert system == '' or len(system) >= _ASP_SYS_MIN_LEN, \
-        "aspect_key({}, {}, {}): aspect system id is too short".format(type_or_key, system, direction)
-    assert direction == '' or len(direction) == _ASP_DIR_LEN, \
-        "aspect_key({}, {}, {}): invalid aspect direction length".format(type_or_key, system, direction)
-    assert not type_or_key[0].islower() or type_or_key[:_ASP_TYPE_LEN] in ALL_FATS, \
-        "aspect_key({}, {}, {}): invalid aspect type format".format(type_or_key, system, direction)
-    assert (system == '' or system[0].isupper()) and (direction == '' or direction[0].isupper()), \
-        "aspect_key({}, {}, {}): invalid system or direction format".format(type_or_key, system, direction)
+    msg = "aspect_key({}, {}, {}) error: ".format(type_or_key, system, direction)
+    assert len(type_or_key) >= _ASP_TYPE_LEN, msg + "aspect type is too short"
+    assert system == '' or len(system) >= _ASP_SYS_MIN_LEN, msg + "aspect system id is too short"
+    assert direction == '' or len(direction) == _ASP_DIR_LEN, msg + "invalid aspect direction length"
+    assert not type_or_key[0].islower() or type_or_key[:_ASP_TYPE_LEN] in ALL_FATS, msg + "invalid aspect type format"
+    assert (system == '' or system[0].isupper()) and \
+           (direction == '' or direction[0].isupper()), msg + "invalid system or direction format"
 
     key = type_or_key
     if len(key) == _ASP_TYPE_LEN:
@@ -82,11 +79,9 @@ def aspect_key(type_or_key, system='', direction=''):
     if len(key) <= _ASP_TYPE_LEN + _ASP_DIR_LEN:
         key += system
 
-    assert key.isidentifier() and not keyword.iskeyword(key), \
-        "aspect_key({}, {}, {}): key '{}' contains invalid characters".format(type_or_key, system, direction, key)
+    assert key.isidentifier() and not keyword.iskeyword(key), msg + "key '{}' contains invalid characters".format(key)
     if type_or_key[:_ASP_TYPE_LEN] in ALL_FATS:
-        assert key.count(FAD_FROM) <= 1 and key.count(FAD_ONTO) <= 1, \
-            "aspect_key({}, {}, {}): direction duplicates".format(type_or_key, system, direction)
+        assert key.count(FAD_FROM) <= 1 and key.count(FAD_ONTO) <= 1, msg + "direction duplicates"
 
     return key
 
@@ -980,7 +975,7 @@ class Record(OrderedDict):
 
             records = self.value(idx_path[0], system='', direction='')
             if template_idx_path(idx_path, is_sub_rec=True) and records:
-                # if template sub-record then also add sys name/converter/calculator/... to each sub Record
+                # if template sub-record then also add sys name/converter/calculator/filter/... to each sub Record
                 idx_paths = [(idx_path[0], idx, ) + idx_path[2:] for idx in range(len(records))]
             else:
                 idx_paths = (idx_path, )

@@ -753,7 +753,7 @@ class TestRciHelpers:
         assert ass_sys_data.rci_arr_to_year_week(d1) == (2018, 22)
 
 
-class TestSlowAssSysDataShIntegration:
+class RemoveThisPrefixForToTestSlowAssSysDataShIntegration:
     @staticmethod
     def _compare_converted_field_dicts(dict_with_compare_keys, dict_with_compare_values):
         def _normalize_val(key, val):

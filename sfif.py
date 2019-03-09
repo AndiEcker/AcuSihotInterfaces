@@ -8,7 +8,7 @@ from typing import Tuple, Dict, Any
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
 from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, SDF_SF_SANDBOX
-from ae_sys_data import Record, FAD_ONTO
+from ae_sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
 from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
 from ae_console_app import uprint
 
@@ -603,16 +603,15 @@ class SfInterface:
         :param log_warnings:    pass list for to append warning log entries on re-search on old/redirected SF IDs.
         :return:                either single field value (if fetch_fields is str) or dict(fld=val) of field values.
         """
+        msg = " in cl_field_data(); {}, {}, {}".format(fetch_fields, search_value, search_field)
         if sf_obj is None:
             if search_field not in (SF_DEF_SEARCH_FIELD, 'External_Id__c', 'Contact_Ref__c', 'Id_before_convert__c',
                                     'CSID__c'):
-                self.error_msg = "cl_field_data({}, {}, {}, {}): client object cannot be determined without Id" \
-                    .format(fetch_fields, search_value, search_field, sf_obj)
+                self.error_msg = "client object cannot be determined without Id" + msg
                 return None
             sf_obj = obj_from_id(search_value)
             if not sf_obj:
-                self.error_msg = "cl_field_data(): {} field value {} is not a valid Lead/Contact/Account SF ID" \
-                    .format(search_field, search_value)
+                self.error_msg = "search_value is not a valid Lead/Contact/Account SF ID" + msg
                 return None
 
         ret_dict = isinstance(fetch_fields, list)
@@ -628,8 +627,7 @@ class SfInterface:
                     sf_fld_sys_name(search_field, sf_obj), search_op, search_val_deli, search_value, search_val_deli)
         res = self.soql_query_all(soql_query)
         if self.error_msg:
-            self.error_msg = "cl_field_data({}, {}, {}): ".format(fetch_fields, search_value, search_field) \
-                             + self.error_msg
+            self.error_msg += msg
         elif res['totalSize'] > 0:
             ret_val = res['records'][0]
             if ret_dict:
@@ -641,23 +639,23 @@ class SfInterface:
         if not ret_val and search_field == SF_DEF_SEARCH_FIELD:
             if log_warnings is None:
                 log_warnings = list()
-            log_warnings.append("{} ID {} not found as direct/main ID in {}s".format(sf_obj, search_value, sf_obj))
+            log_warnings.append("{} ID {} not found in SF{}".format(sf_obj, search_value, msg))
             if sf_obj == 'Lead':
                 # try to find this Lead Id in the Lead field External_Id__c
                 ret_val = self.cl_field_data(fetch_fields, search_value, search_field='External_Id__c')
                 if not ret_val:
                     ret_val = self.cl_field_data(fetch_fields, search_value, search_field='CSID__c')
                     if not ret_val:
-                        log_warnings.append("{} ID {} not found in Lead fields External_Id__c/CSID__c"
-                                            .format(sf_obj, search_value))
+                        log_warnings.append("{} ID {} not found in Lead fields External_Id__c/CSID__c{}"
+                                            .format(sf_obj, search_value, msg))
             elif sf_obj == 'Contact':
                 # try to find this Contact Id in the Contact fields Contact_Ref__c, Id_before_convert__c
                 ret_val = self.cl_field_data(fetch_fields, search_value, search_field='Contact_Ref__c')
                 if not ret_val:
                     ret_val = self.cl_field_data(fetch_fields, search_value, search_field='Id_before_convert__c')
                     if not ret_val:
-                        log_warnings.append("{} ID {} not found in Contact fields Contact_Ref__c/Id_before_convert__c"
-                                            .format(sf_obj, search_value))
+                        log_warnings.append("{} ID {} not found in Contact fields Contact_Ref__c/Id_before_convert__c{}"
+                                            .format(sf_obj, search_value, msg))
 
         """ FUTURE ENHANCEMENT 
             in case a Lead IsConverted to Contact/Account we need to get more up-to-date Contact/Account data.
@@ -694,20 +692,19 @@ class SfInterface:
         # check if Id passed in (then this method can determine the sf_obj and will do an update not an insert)
         sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD).val(), True) if rec.val(SF_DEF_SEARCH_FIELD) else \
             ('', False)
+        msg = " in SFIF.cl_upsert() {} rec=\n{}".format(ACTION_UPDATE if update_client else ACTION_INSERT, ppf(rec))
 
         if sf_obj is None:
             if not sf_id:
-                self.error_msg = "cl_upsert({}, {}): client object cannot be upserted without Id"\
-                    .format(ppf(rec), sf_obj)
+                self.error_msg = "missing client object or Id{}".format(msg)
                 return None, self.error_msg, ""
             sf_obj = obj_from_id(sf_id)
 
         client_obj = self.ssf_object(sf_obj)
         if not client_obj:
-            self.error_msg += "\n      +cl_upsert({}, {}): no client object".format(ppf(rec), sf_obj)
+            self.error_msg += "\n      +empty {} client object{}".format(sf_obj, msg)
             return None, self.error_msg, ""
 
-        ''' sf_dict = rec_to_sf_obj_fld_dict(rec, sf_obj) '''
         sf_dict = rec.to_dict(system=SDI_SF, direction=FAD_ONTO, filter_fields=filter_fields)
         err = msg = ""
         if update_client:
@@ -871,7 +868,7 @@ class SfInterface:
         result = self.apex_call('reservation_upsert', function_args=sf_args)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("... sfif.res_upsert() err?='{}'; sent=\n{}, result={}"
+            uprint("... sfif.res_upsert() err?={}; sent=\n{}, result={}"
                    .format(self.error_msg, ppf(cl_res_rec), ppf(result)))
 
         if result.get('ErrorMessage'):
@@ -892,16 +889,15 @@ class SfInterface:
     def room_change(self, res_sf_id, check_in, check_out, next_room_id):
         room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out,
                              RoomNo__c=next_room_id)
+        msg = "SFIF.room_change({}, {}, {}, {})".format(res_sf_id, check_in, check_out, next_room_id)
+        dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
+
         result = self.apex_call('reservation_room_move', function_args=room_chg_data)
 
-        if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("... room_change({}, {}, {}, {}) args={} result={} err='{}'"
-                   .format(res_sf_id, check_in, check_out, next_room_id, room_chg_data, ppf(result), self.error_msg))
-
-        if result.get('ErrorMessage'):
-            self.error_msg += "sfif.room_change({}, {}, {}, {}) received error '{}' from SF"\
-                .format(res_sf_id, check_in, check_out, next_room_id,
-                        ppf(result) if self._debug_level >= DEBUG_LEVEL_VERBOSE else result['ErrorMessage'])
+        if self.error_msg or result.get('ErrorMessage'):
+            self.error_msg += "error '{}' from SF in {}".format(ppf(result) if dbg else result['ErrorMessage'], msg)
+        elif dbg:
+            uprint(msg + " result=\n{}'".format(ppf(result)))
 
         return self.error_msg
 

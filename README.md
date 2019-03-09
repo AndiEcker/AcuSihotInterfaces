@@ -321,7 +321,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResHotelId | RUL_SIHOT_HOTEL | HotelId__c | ID, HN, RES-HOTEL | rgr_ho_fk |
 | ResId | - | Number__c | RES-NR | rgr_res_id |
 | ResLongNote | SIHOT_TEC_NOTE | - | RESERVATION.TEC-COMMENT | rgr_long_comment |
-| ResMktGroup | RO_RES_GROUP | MktGroup__c | RESERVATION.CHANNEL | rgr_mkt_group |
+| ResMktGroup | RO_SIHOT_RES_GROUP | MktGroup__c | RESERVATION.CHANNEL | rgr_mkt_group |
 | ResMktGroupNN | RO_SIHOT_SP_GROUP | - | NN | - |
 | ResMktSegment | SIHOT_MKT_SEG | MktSegment__c (Marketing_Source__pc) | RESERVATION.MARKETCODE(oc=SS/RES-SEARCH)+MARKETCODE-NO(oc=RES) | rgr_mkt_segment |
 | ResNote | SIHOT_NOTE | Note__c | RESERVATION.COMMENT | rgr_comment |

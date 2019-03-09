@@ -123,7 +123,7 @@ ACU_RES_MAP = [       # reservation data
     ('ResBooked', 'RH_EXT_BOOK_DATE'),
     ('ResBoard', 'RUL_SIHOT_PACK'),
     ('ResSource', 'RU_SOURCE'),
-    ('ResMktGroup', 'RO_SIHOT_RES_GROUP'),      # Acumen value in RO_RES_GROUP
+    ('ResMktGroup', 'RO_SIHOT_RES_GROUP'),
     ('ResMktGroupNN', 'RO_SIHOT_SP_GROUP'),
     ('ResMktSegment', 'SIHOT_MKT_SEG',
      "nvl(SIHOT_MKT_SEG, RUL_SIHOT_RATE)"),     # SIHOT_MKT_SEG is NULL if RU is deleted
@@ -224,7 +224,6 @@ class AcuDbRows:
         self._current_rec_i = 0
 
         self._xml = ''
-        self._indent = 0
     '''
 
     def __del__(self):
@@ -254,7 +253,7 @@ class AcuDbRows:
         obj_id = objid if str(objid) else '-' + (pkey[2:] if table == 'CD' else str(pkey))
         id_col = table + "_SIHOT_OBJID" + col_name_suffix
         pk_col = table + "_CODE"
-        return self.ora_db.update('T_' + table, {id_col: obj_id}, {pk_col: str(pkey)})
+        return self.ora_db.update('T_' + table, {id_col: obj_id}, {pk_col: str(pkey)})  # T_CD or T_RU
 
     def fetch_all_from_acu(self, col_names):
         self._last_fetch = datetime.datetime.now()
@@ -431,6 +430,8 @@ class AcuClientToSihot(AcumenClient, ClientToSihot):
             rc2['DOB'] = rec['DOB_P']
             # rc2['Profession'] = rec['Profession_P']
             err_msg = self._send_person_to_sihot(rc2, rec['AcuId'])
+            if not err_msg:
+                rec.set_val(rc2['ShId'], 'ShId_P')
             action += '/' + self.action
             couple_linkage = '+P2'
 
@@ -510,24 +511,23 @@ class AcumenRes(AcuDbRows):
 class AcuResToSihot(AcumenRes, ResToSihot):
     def __init__(self, cae, ora_db=None):
         super().__init__(cae, ora_db=ora_db)
-        ResToSihot.__init__(self, cae)
+        ResToSihot.__init__(self, cae)          # call directly because AcuDbRows interrupts MRO calling chain
 
-    def _sending_res_to_sihot(self, rec):
-        err_msg = super()._sending_res_to_sihot(rec)
-
-        if not err_msg and self.response:
-            err_msg = self.store_sihot_objid('RU', rec['ResGdsNo'], self.response.objid)
-
-        warn_msg = self.get_warnings()
-        err_msg += self.add_to_acumen_sync_log('RU', rec['ResGdsNo'],
-                                               rec.action,
-                                               "ERR" + (self.response.server_error() if self.response else "")
-                                               if err_msg else "SYNCED",
-                                               err_msg + ("W" + warn_msg if warn_msg else ""),
-                                               rec.val('ResAcuLogId') or -336699)  # ==RUL_CODE
-        return err_msg
+    @staticmethod
+    def _add_occupants(rec):
+        mkt_grp = rec['ResMktGroup']
+        if mkt_grp not in ('GU', 'RE'):     # exclude guest mkt groups
+            rec.set_val(rec['AcuId'], 'ResPersons', 0, 'PersAcuId')
+            if rec.val('ShId'):
+                rec.set_val(rec['ShId'], 'ResPersons', 0, 'PersShId')
+            if rec['ResAdults'] > 1:
+                if rec.val('AcuId_P'):
+                    rec.set_val(rec['AcuId_P'], 'ResPersons', 1, 'PersAcuId')
+                if rec.val('ShId_P'):
+                    rec.set_val(rec['ShId_P'], 'ResPersons', 1, 'PersShId')
 
     def _ensure_clients_exist_and_updated(self, rec, ensure_client_mode):
+        msg = type(self).__name__ + "._ensure_clients_exist_and_updated(): "
         if ensure_client_mode == ECM_DO_NOT_SEND_CLIENT:
             return ""
         err_msg = ""
@@ -542,16 +542,16 @@ class AcuResToSihot(AcumenRes, ResToSihot):
                 if acu_client.recs:
                     err_msg = acu_client.send_client_to_sihot(acu_client.recs[0])
                 elif not client_synced:
-                    err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): client {} not found"\
-                        .format(rec['AcuId'])
+                    err_msg = msg + "client {} not found".format(rec['AcuId'])
                 if not err_msg:
                     err_msg = acu_client.fetch_from_acu_by_cd(rec['AcuId'])  # re-fetch OBJIDs
                 if not err_msg and not acu_client.recs:
-                    err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): IntErr/client: " + rec['AcuId']
+                    err_msg = msg + "re-fetched client {} is missing; recs={}".format(rec['AcuId'], acu_client.recs)
                 if not err_msg:
-                    # transfer just created guest OBJIDs from 1st occupant/guest to reservation record
+                    # transfer just created guest IDs from client to reservation record
                     rec['ShId'] = acu_client.recs.val(0, 'ShId')
                     rec['ShId_P'] = acu_client.recs.val(0, 'ShId_P')
+                    rec['AcuId_P'] = acu_client.recs.val(0, 'AcuId_P')
 
         '''
         if not err_msg and rec.val('OC_CODE') and len(rec['OC_CODE']) == 7:  # exclude pseudo client like TCAG/TCRENT
@@ -565,18 +565,33 @@ class AcuResToSihot(AcumenRes, ResToSihot):
                 if acu_client.recs:
                     err_msg = acu_client.send_client_to_sihot(acu_client.recs[0])
                 elif not client_synced:
-                    err_msg = "AcuResToSihot._ensure_clients_exist_and_updated(): invalid orderer {}"\
-                        .format(rec['OC_CODE'])
+                    err_msg = msg + "invalid orderer {}".format(rec['OC_CODE'])
                 if not err_msg:
                     err_msg = acu_client.fetch_from_acu_by_cd(rec['OC_CODE'])
                 if not err_msg and not acu_client.recs:
-                    err_msg = "AcuResToSihot._ensure_clients_exist_and_updated() error: orderer={} cols={!r} sync={}"\
-                        .format(rec['OC_CODE'], getattr(acu_client, 'cols', "unDef"), client_synced)
+                    err_msg = msg + "orderer={} cols={!r} sync={}".format(rec['OC_CODE'], 
+                                                                    getattr(acu_client, 'cols', "unDef"), client_synced)
                 if not err_msg:
                     # transfer just created guest OBJIDs from guest to reservation record
                     rec['OC_SIHOT_OBJID'] = acu_client.recs.val(0, 'CD_SIHOT_OBJID')
         '''
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
+
+    def _sending_res_to_sihot(self, rec):
+        self._add_occupants(rec)
+        err_msg = super()._sending_res_to_sihot(rec)
+
+        if not err_msg and self.response:
+            err_msg = self.store_sihot_objid('RU', rec['ResGdsNo'], self.response.objid)
+
+        warn_msg = self.get_warnings()
+        err_msg += self.add_to_acumen_sync_log('RU', rec['ResGdsNo'],
+                                               rec.action,
+                                               "ERR" + (self.response.server_error() if self.response else "")
+                                               if err_msg else "SYNCED",
+                                               err_msg + ("W" + warn_msg if warn_msg else ""),
+                                               rec.val('ResAcuLogId') or -336699)  # ==RUL_CODE
+        return err_msg
 
     def send_res_to_sihot(self, rec, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
         err_msg = super().send_res_to_sihot(rec, ensure_client_mode=ensure_client_mode)

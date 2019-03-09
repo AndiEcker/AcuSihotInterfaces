@@ -15,6 +15,8 @@ from ae_console_app import NamedLocks, uprint
 
 
 NAMED_BIND_VAR_PREFIX = ':'
+bind_var_prefix = "CV_"   # for to allow new value in SET clause and old value in WHERE clause for same column/-name
+# .. we add this prefix to all bind_vars and chk_values (self._adapt_sql() would not work with suffix)
 
 
 def _locked_col_expr(col, locked_cols):
@@ -90,15 +92,16 @@ class GenericDB:
     @staticmethod
     def _rebind(chk_values, where_group_order, bind_vars, extra_bind=None):
         rebound_vars = dict()   # use new instance to not change callers bind_vars dict
+
         if extra_bind:
             rebound_vars.update(extra_bind)
             if not chk_values:
                 chk_values = dict([next(iter(extra_bind.items()))])  # use first dict item as pkey check value
 
         if chk_values:
-            var_prefix = "CV_"      # for to allow new value in SET clause and old value in WHERE clause for same column
-            rebound_vars.update({var_prefix + k: v for k, v in chk_values.items()})
-            extra_where = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + var_prefix + k for k in chk_values.keys()])
+            rebound_vars.update({bind_var_prefix + k: v for k, v in chk_values.items()})
+            extra_where = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + bind_var_prefix + k
+                                        for k in chk_values.keys()])
             if not where_group_order:
                 where_group_order = extra_where
             elif where_group_order.upper().startswith(('GROUP BY', 'ORDER BY')):
@@ -110,7 +113,7 @@ class GenericDB:
             where_group_order = '1=1'
 
         if bind_vars:
-            rebound_vars.update(bind_vars)
+            rebound_vars.update({bind_var_prefix + k: v for k, v in bind_vars.items()})
 
         return chk_values, where_group_order, rebound_vars
 
@@ -264,7 +267,8 @@ class GenericDB:
                                     check if record already exists.
                                     If not passed then use first name/value of col_values (has then to be OrderedDict).
         :param where_group_order:   string added after the SQL WHERE clause (including WHERE, ORDER BY
-                                    and GROUP BY expressions, can contain bind variables - specified in bind_vars arg).
+                                    and GROUP BY expressions. bind variables - specified in the bind_vars arg - have to
+                                    be prefixed with the 'CV_' var_prefix in this string - s.a. _rebind()).
         :param bind_vars:           dict of extra bind variables (key=name, value=value), e.g..
         :param returning_column:    name of column which value will be returned by next fetch_all/fetch_value() call.
         :param commit:              bool value to specify if commit should be done.

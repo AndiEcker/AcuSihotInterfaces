@@ -5,7 +5,7 @@ from traceback import format_exc, print_exc
 from copy import deepcopy
 from textwrap import wrap
 import pprint
-from typing import Union, Any, Tuple
+from typing import Union, Tuple
 
 from sys_data_ids import (SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, FORE_SURNAME_SEP,
                           SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
@@ -209,34 +209,34 @@ SH_RES_MAP = \
         # ('/RATE', ),
         # ### Reservation Channels - used for assignment of reservation to a allotment or to board payment
         ('RESCHANNELLIST/', None, None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('OW', 'FB', 'RE', 'RI')),
         ('RESCHANNEL/', None, None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('OW', 'FB', 'RE', 'RI')),
         # needed for to add RCI booking to RCI allotment
         ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None, 1,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('RE', 'RI')),
         ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None, 'RCI',
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('RE', 'RI')),
         ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None, 1,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('RCI ', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('RE', 'RI')),
         # needed for marketing fly buys for board payment bookings
         ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None, 1,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') != 'FB'),
         ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None, 'MAR01',
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') != 'FB'),
         ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None, 1,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Promo', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') != 'FB'),
         # needed for owner bookings for to select/use owner allotment
         ('RESCHANNEL' + ELEM_PATH_SEP + 'IDX', None, 2,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') != 'OW'),
         ('RESCHANNEL' + ELEM_PATH_SEP + 'MATCHCODE', None, 'TSP',
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') != 'OW'),
         ('RESCHANNEL' + ELEM_PATH_SEP + 'ISPRICEOWNER', None, 1,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('Owner', )),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') != 'OW'),
         ('/RESCHANNEL', None, None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('OW', 'FB', 'RE', 'RI')),
         ('/RESCHANNELLIST', None, None,
-         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup')[:4] not in ('Owne', 'Prom', 'RCI ')),
+         lambda f: not f.rfv('ResAllotmentNo') or f.rfv('ResMktGroup') not in ('OW', 'FB', 'RE', 'RI')),
         # ### GENERAL RESERVATION DATA: arrival/departure, pax, market sources, comments
         ('ARR', 'ResArrival', None,
          None,
@@ -355,8 +355,8 @@ MAP_PARSE_WEB_RES = \
         ('STATUS', 'RU_STATUS'),
         ('RULREF', 'RUL_CODE'),
         ('RUL_PRIMARY', 'RUL_PRIMARY'),
-        # ('RU_OBJID', 'RU_SIHOT_OBJID'),
-        ('RU_OBJID', 'RUL_SIHOT_OBJID'),
+        # ('RU_SIHOT_OBJID', 'RU_SIHOT_OBJID'),
+        ('RU_SIHOT_OBJID', 'RUL_SIHOT_OBJID'),
         # ('RO_AGENCY_OBJID', 'RO_SIHOT_AGENCY_OBJID'),
         ('OC_CODE', 'AcuId'),
         ('OC_OBJID', 'ShId'),
@@ -927,7 +927,7 @@ class ClientSearch(SihotXmlBuilder):
 
         err_msg = self.send_to_server(response_parser=ClientFromSihot(self.cae))
         if err_msg or not self.response:
-            return "search_clients() error='{}'; xml='{}'".format(err_msg or "response not instantiated", self._xml)
+            return "search_clients() error='{}';\nxml=\n{}\n".format(err_msg or "response not instantiated", self._xml)
 
         records = self.response.client_list
         if field_names:
@@ -1044,7 +1044,7 @@ class ResSearch(SihotXmlBuilder):
         """
         err_msg = self.send_to_server(response_parser=ResFromSihot(self.cae))
         if err_msg or not self.response:
-            err_msg = "search_res() error='{}'; xml='{}'".format(err_msg or "response is empty", self._xml)
+            err_msg = "search_res() error='{}';\nxml=\n{}".format(err_msg or "response is empty", self._xml)
         return err_msg or self.response.res_list
 
 
@@ -1068,7 +1068,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         if rec.system != SDI_SH or rec.direction != FAD_ONTO:
             rec.set_env(system=SDI_SH, direction=FAD_ONTO)
             rec.add_system_fields(self.elem_map)
-        rec.clear_leafs()     # reestablish default values
+        rec.clear_leafs(reset_lists=False)     # reestablish default values - leave ResPersons occupants list untouched
         rec.merge_leafs(ori_rec)    # , extend=False)
 
     def prepare_map_xml(self, rec, include_empty_values=True):
@@ -1079,6 +1079,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
         recs = None
         inner_xml = ''
         map_i = group_i = -1
+        indent = 0
         while True:
             map_i += 1
             if map_i >= len(self.elem_map):
@@ -1099,6 +1100,11 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 idx_path = idx if isinstance(idx, (tuple, list)) else (field_name_idx_path(idx) or (idx, ))
                 val = rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
                 filter_fields = field.filter(system=SDI_SH, direction=FAD_ONTO)
+                ''' finally not needed if clear_leafs() are called with reset_lists=False
+                if not filter_fields and len(idx_path) > 1 and idx_path[1] > 0:
+                    fld = rec.node_child(idx)  # use template field's filter if not in sub-records 2..n
+                    filter_fields = fld.filter(system=SDI_SH, direction=FAD_ONTO)
+                '''
             else:
                 # field recycling has buggy side effects because last map item can refer to different/changed record:
                 # if field is None:   # try to use field of last map item (especially for to get crx())
@@ -1112,9 +1118,11 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 if filter_fields(field):
                     continue
 
-            if tag.endswith('/'):
-                self._indent += 1
-                inner_xml += '\n' + ' ' * self._indent + self.new_tag(tag[:-1], closing=False)
+            if tag.endswith('/'):   # opening tag
+                if not inner_xml.endswith("\n"):
+                    inner_xml += "\n"
+                inner_xml += " " * indent + self.new_tag(tag[:-1], closing=False)
+                indent += 1
                 if recs is None and map_i + 1 < len(self.elem_map):
                     nel = self.elem_map[map_i + 1]
                     if len(nel) > MTI_FLD_NAME and isinstance(nel[MTI_FLD_NAME], (tuple, list)):
@@ -1127,9 +1135,9 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                             else:
                                 recs = None     # set to None also if recs is empty/False
 
-            elif tag.startswith('/'):
-                self._indent -= 1
-                inner_xml += self.new_tag(tag[1:], opening=False)
+            elif tag.startswith('/'):   # closing tag
+                inner_xml += self.new_tag(tag[1:], opening=False) + "\n"
+                indent -= 1
                 if recs:
                     if current_index(recs) >= len(recs) - 1:
                         recs = None
@@ -1291,7 +1299,7 @@ class ResToSihot(FldMapXmlBuilder):
         if rec.val('ResPersons', system='', direction=''):
             adults = rec.val('ResAdults', system='', direction='')
             pax = adults + rec.val('ResChildren', system='', direction='')
-            root_idx = ('ResPersons',)                                              # type: Tuple[Any]
+            root_idx = ('ResPersons',)                                              # type: Tuple[Union[str, int]]
             recs = rec.value('ResPersons', flex_sys_dir=True)
             recs_len = len(recs)
             if recs_len > pax:
@@ -1303,23 +1311,31 @@ class ResToSihot(FldMapXmlBuilder):
 
             for pers_seq, occ_rec in enumerate(recs):
                 rix = root_idx + (pers_seq, )
+
                 if not occ_rec.val('RoomSeq', system='', direction=''):
                     occ_rec.set_val('0', 'RoomSeq', system='', direction='', root_rec=rec, root_idx=rix)
+
                 if not occ_rec.val('RoomPersSeq', system='', direction=''):
                     occ_rec.set_val(str(pers_seq), 'RoomPersSeq', system='', direction='', root_rec=rec, root_idx=rix)
+
                 if not occ_rec.val('TypeOfPerson', system='', direction=''):
-                    occ_rec.set_val('1A' if pers_seq < adults else '2B', 'TypeOfPerson', system='', direction='',
-                                    root_rec=rec, root_idx=rix)
+                    guest_type = '1A' if pers_seq < adults else '2B'
+                    occ_rec.set_val(guest_type, 'TypeOfPerson', system='', direction='', root_rec=rec, root_idx=rix)
+
                 if not occ_rec.val('PersAcuId', system='', direction='') \
                         and not occ_rec.val('PersShId', system='', direction='') \
                         and not occ_rec.val('PersSurname', system='', direction='') \
                         and not occ_rec.val('PersForename', system='', direction=''):
                     if pers_seq < adults:
-                        val = "Adult " + str(pers_seq + 1)
+                        name = "Adult " + str(pers_seq + 1)
                     else:
-                        val = "Child " + str(pers_seq - adults + 1)
-                    occ_rec.set_val(val, 'PersSurname', system='', direction='', root_rec=rec, root_idx=rix)
-                    occ_rec.set_val('1', 'AutoGen', system='', direction='', root_rec=rec, root_idx=rix)
+                        name = "Child " + str(pers_seq - adults + 1)
+                    occ_rec.set_val(name, 'PersSurname', system='', direction='', root_rec=rec, root_idx=rix)
+                    auto_gen = '1'
+                else:
+                    auto_gen = '0'
+                occ_rec.set_val(auto_gen, 'AutoGen', system='', direction='', root_rec=rec, root_idx=rix)
+
                 if not occ_rec.val('RoomNo', system='', direction=''):
                     room_no = rec.val('ResRoomNo', system='', direction='')
                     if room_no:
@@ -1460,13 +1476,16 @@ class ResToSihot(FldMapXmlBuilder):
 
     @staticmethod
     def res_id_label():
-        return "GDS/VOUCHER/CD/RO"
+        return "ResID+GDS+VOUCHER+CD+RO+Room"
 
     @staticmethod
     def res_id_values(rec):
-        ret = str(rec.val('ResGdsNo')) + \
-               "/" + str(rec.val('ResVoucherNo')) + \
-               "/" + str(rec.val('AcuId')) + "/" + str(rec.val('ResMktSegment'))
+        ret = str(rec.val('ResId')) + "/" + str(rec.val('ResSubId')) + "@" + str(rec.val('ResHotelId')) + \
+               "+" + str(rec.val('ResGdsNo')) + \
+               "+" + str(rec.val('ResVoucherNo')) + \
+               "+" + str(rec.val('AcuId')) + \
+               "+" + str(rec.val('ResMktSegment')) + \
+               "+" + str(rec.val('ResRoomNo'))
         return ret
 
     def res_id_desc(self, rec, err_msg, separator="\n\n"):
