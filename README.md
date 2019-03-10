@@ -1,11 +1,18 @@
-# Interfaces between Acumen, Salesforce and Sihot
+# Interface Suite
 
->Tools and processes for to migrate and synchronize system configuration, room status, clients and reservations 
-between Sihot.PMS, Acumen and Salesforce.
+>This repository is providing tools and processes for to migrate and synchronize system configuration, room status, 
+clients, ownerships and reservations between Sihot.PMS, Acumen and Salesforce.
 
-[![Code Size](https://img.shields.io/github/languages/code-size/AndiEcker/AcuSihotInterfaces.svg)](#repository)
-[!Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)
-[!Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)
+[![Code Size](https://img.shields.io/github/languages/code-size/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
+[![Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
+[![Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
+
+The code-base gets stripped before any push to this repository for to not publish any internals like the names of our
+servers, users and the passwords. Therefore this suite cannot be directly used in other environments without additional
+configuration steps, but at least we hope that you can still use parts of it for your applications.
+
+Big thanks to our IT managers (Gary and Søren) for to let us developers publish parts of our in-house applications to
+the community.
 
 
 ## Available Applications
