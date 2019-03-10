@@ -4,8 +4,8 @@
 between Sihot.PMS, Acumen and Salesforce.
 
 [![Code Size](https://img.shields.io/github/languages/code-size/AndiEcker/AcuSihotInterfaces.svg)](#repository)
-[![Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)]
-[![Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)]
+[Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)
+[Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)
 
 
 ## Available Applications
@@ -16,8 +16,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
 | AcuServer | Synchronize room status changes from Sihot.PMS onto Acumen | Sxml, Web |
-| [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web,
-  Sxml |
+| [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
 | [BssServer](#bssserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
