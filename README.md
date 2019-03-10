@@ -4,8 +4,8 @@
 between Sihot.PMS, Acumen and Salesforce.
 
 [![Code Size](https://img.shields.io/github/languages/code-size/AndiEcker/AcuSihotInterfaces.svg)](#repository)
-[Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)
-[Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)
+[!Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)
+[!Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)
 
 
 ## Available Applications
