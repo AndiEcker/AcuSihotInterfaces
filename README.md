@@ -3,6 +3,11 @@
 >Tools and processes for to migrate and synchronize system configuration, room status, clients and reservations 
 between Sihot.PMS, Acumen and Salesforce.
 
+[![Code Size](https://img.shields.io/github/languages/code-size/AndiEcker/AcuSihotInterfaces.svg)](#repository)
+[![Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)]
+[![Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)]
+
+
 ## Available Applications
 
 This interface suite project is including the following commands/tools - most of them are command line applications,
@@ -11,7 +16,8 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | Command | Description | Used Sihot.PMS Interfaces |
 | :--- | :--- | :---: |
 | AcuServer | Synchronize room status changes from Sihot.PMS onto Acumen | Sxml, Web |
-| [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
+| [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web,
+  Sxml |
 | [BssServer](#bssserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
@@ -28,14 +34,14 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | WebRestTester | Reservation interface testing tool | Web |
 
 
-### General installation instructions
+### Installation instructions
 
 Most of the command line tools don't have a GUI (graphical user interface) - these need only to be distributed/provided
 into any folder where the user has execution permissions (e.g. in Windows in C:\Program Files or on any network drive).
 
 For applications of this project with an GUI (like e.g. SihotResImport or AcuSihotMonitor) please first copy the EXE
-file and KV file of the application to any folder where the user has execution privileges. Then the following steps need 
-to be done to install it for each single user on the users machine:
+file and KV file of the application to any folder where the user has execution privileges. Then the following steps 
+have to be done to install it for each single user on the users machine:
 
 * Create a new folder with the name if the application (e.g. SihotResImport) under %LOCALAPPDATA% (in Windows situated
  normally under C:\users\<user name>\AppData\Local\ if the user has the profile on the local C: drive, else within the
@@ -44,12 +50,12 @@ to be done to install it for each single user on the users machine:
 * Copy the INI file of the application (e.g. SihotResImport.ini) into this folder (created in the last step).
 
 * Create a new shortcut on the user’s desktop with the application name (e.g. “Sihot Reservation Import”). Then within
- the target field put the full absolute path to application EXE file (e.g. “U:\tools\SihotResImport\SihotResImport.exe”).
- And finally put the path of the new folder created in the first step (e.g. “C:\Users\<user name>\AppData\Local\SihotResImport”) 
- into the Start In field of the shortcut. 
+ the target field put the full absolute path to application EXE file (e.g. “U:\SihotResImport\SihotResImport.exe”).
+ And finally put the path of the new folder created in the first step (e.g. 
+ “C:\Users\<user name>\AppData\Local\SihotResImport”) into the Start In field of the shortcut. 
 
  
-### General command line arguments
+### Command line arguments
 
 Most of the available commands are using the same command line options. All names of the following command line options
 are case-sensitive. The following table is listing them sorted by the option name (see the first column named Option):
@@ -647,7 +653,7 @@ line arguments:
 `-F="2017-10-21 17:54:38.0" -T="2017-10-23 10:20:50.0" -A=Acu -u=AECKER -p=password -d=SP.WORLD`
 
 In the last example the short options got used (see the Short Option column in the section
-[General command line arguments](#general-command-line-arguments) above). For a more verbose output you can also
+[Command line arguments](#command-line-arguments) above). For a more verbose output you can also
 pass the `debugLevel` command line option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
 with timestamp).
 
@@ -677,14 +683,14 @@ Please note that the value of this setting is restricted by the value of the max
 Combined Console/Kivy Application for to import reservation bookings, changes and cancellations from CSV or JSON files
 into the Sihot system.
 
-Apart from the instruction in the [General Installation Instructions](#general-installation-instructions)_ section (see
+Apart from the instruction in the [Installation Instructions](#installation-instructions) section (see
 above) you also have to create an import path folder for each supported import channel (e.g. C:\JSON_Import). The same
 path name has to be specified as command line argument when you start the SihotResImport application (see next 
 paragraph). Please note that the user need to have full access (read, write and create folder privileges) within each 
 of these import channel folders. 
 
 The provided command line options are documented above in the section
-[General command line arguments](#general-command-line-arguments). The most important one is the `jsonPath` option, 
+[Command line arguments](#command-line-arguments). The most important one is the `jsonPath` option, 
 for to specify the import path and file mask for OTA JSON files - this value defaults to `C:/JSON_Import/*.json`.
 
 For to run this application in console mode (headless without any user interface), simply specify a valid 
@@ -1125,7 +1131,9 @@ Sihot.PMS.
 For to minimize the amount of client data to migrate to Sihot.PMS we had to classify the Acumen clients by their type of
 ownership(s). For each product a owner type can be specified/configured within the new column `RS_SIHOT_GUEST_TYPE`.
 
-The current mapping is setting a general owner flag for to group all timeshare/resort owners together with less important owner types like e.g. tablet, lifestyle, experience or explorer. For special treatment we only need to specify distinguishable client types for Investors (new fractionals/share holders) and Keys Members.
+The current mapping is setting a owner flag string for to group all timeshare/resort owners together with less
+important owner types like e.g. tablet, lifestyle, experience or explorer. For special treatment we only need to specify
+distinguishable client types for Investors (new fractionals/share holders) and Keys Members.
 
 
 ### SIHOT package mappings
@@ -1285,3 +1293,6 @@ optionally also to the AssCache database).
 
 Client and reservation data can be passed from Salesforce to Sihot by using the 
 [SihotServer Web Services](#sihotserver-web-services).
+
+
+# Repository

@@ -1062,10 +1062,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message = ass_db.upsert('res_group_clients', col_values, chk_values, commit=commit,
                                                multiple_row_update=multiple_row_update)
             if not self.error_message and not multiple_row_update and ass_db.curs.rowcount != 1:
-                self.error_message = "rgc_upsert({}, {}): Invalid affected row count; expected 1 but got {}"\
-                    .format(ppf(col_values), ppf(chk_values), ass_db.curs.rowcount)
+                self.error_message = "rgc_upsert(): expected 1 but got {} affected row count; col=\n{}; chk=\n{}" \
+                    .format(ass_db.curs.rowcount, ppf(col_values), ppf(chk_values))
         else:
-            self.error_message = "ASD.rgc_upsert(): missing occupant id\ncol_values:\n{}\n".format(ppf(col_values))
+            self.error_message = "ASD.rgc_upsert(): missing occupant id\ncol_values=\n{}".format(ppf(col_values))
 
         return self.error_message
 
@@ -1303,7 +1303,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                 fields; e.g. the Reservation Opportunity Id gets returned as sf_data['ResSfId'].
         :return:                error message if error occurred, else empty string.
         """
-        msg_sfx = " in ASD.sf_ass_res_upsert({}, {}, {})".format(sf_res_id, ppf(sh_cl_data), ppf(ass_res_data))
+        msg_sfx = " in ASD.sf_ass_res_upsert({}) sh=\n{} ass=\n{}".format(sf_res_id, ppf(sh_cl_data), ppf(ass_res_data))
 
         sf_rec = Record(system=SDI_SF, direction=FAD_ONTO).add_system_fields(SF_CLIENT_MAPS['Account']
                                                                              + SF_RES_MAP) \

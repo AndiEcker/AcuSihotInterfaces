@@ -893,7 +893,7 @@ class ClientSearch(SihotXmlBuilder):
                        guest_no='', email='', guest_type='', flags='FIND-ALSO-DELETED-GUESTS', order_by='', limit=0,
                        field_names=('ShId', ), **kwargs) -> Union[str, list, Records]:
         if kwargs:
-            return "ClientSearch.search_clients() does not support the argument(s) {}".format(kwargs)
+            return "ClientSearch.search_clients() does not support the argument(s)=\n{}".format(ppf(kwargs))
 
         self.beg_xml(operation_code='GUEST-SEARCH')
         search_for = ""
@@ -1101,7 +1101,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 val = rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
                 filter_fields = field.filter(system=SDI_SH, direction=FAD_ONTO)
                 ''' finally not needed if clear_leafs() are called with reset_lists=False
-                if not filter_fields and len(idx_path) > 1 and idx_path[1] > 0:
+                if not filter_fields and len(idx_path) >= 3 and isinstance(idx_path[1], int) and idx_path[1] > 0:
                     fld = rec.node_child(idx)  # use template field's filter if not in sub-records 2..n
                     filter_fields = fld.filter(system=SDI_SH, direction=FAD_ONTO)
                 '''
@@ -1136,6 +1136,8 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                                 recs = None     # set to None also if recs is empty/False
 
             elif tag.startswith('/'):   # closing tag
+                if inner_xml.endswith("\n"):
+                    inner_xml += " " * indent
                 inner_xml += self.new_tag(tag[1:], opening=False) + "\n"
                 indent -= 1
                 if recs:
@@ -1361,7 +1363,7 @@ class ResToSihot(FldMapXmlBuilder):
         else:
             self.beg_xml(operation_code='RES', add_inner_xml=inner_xml)
         self.end_xml()
-        self.cae.dprint("ResToSihot._prepare_res_xml(): action={}; rec={}".format(self.action, rec),
+        self.cae.dprint("ResToSihot._prepare_res_xml(): action={}; rec=\n{}".format(self.action, ppf(rec)),
                         minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
     def _sending_res_to_sihot(self, rec):
@@ -1539,7 +1541,7 @@ class GuestBulkFetcher(BulkFetcherBase):
             # MATCH-SM (holding the Salesforce/SF client ID) is not available in Kernel GUEST-SEARCH (only GUEST-GET)
             self.all_recs = ClientSearch(cae).search_clients(order_by='GUEST-NR', limit=600000)
         except Exception as ex:
-            uprint(" ***  Sihot interface guest bulk fetch exception:", str(ex))
+            uprint(" ***  Sihot interface guest bulk fetch exception: {}".format(ex))
             print_exc()
             cae.shutdown(2130)
 

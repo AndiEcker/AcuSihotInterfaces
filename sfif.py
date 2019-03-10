@@ -490,7 +490,7 @@ class SfInterface:
         msg = ""
         try:
             sf_ret = client_obj.delete(sf_id)
-            msg = "{} {} deleted, status={}".format(sf_obj, sf_id, ppf(sf_ret))
+            msg = "{} {} deleted, status=\n{}".format(sf_obj, sf_id, ppf(sf_ret))
         except Exception as ex:
             self.error_msg = "{} {} deletion raised exception {}".format(sf_obj, sf_id, ex)
 
@@ -561,7 +561,7 @@ class SfInterface:
         er_list = self.cl_ext_refs(sf_client_id, er_type, er_id, return_obj_id=True, sf_obj=sf_obj)
         if er_list:     # update?
             if self._debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
-                uprint("cl_ext_ref_upsert({}): duplicate external refs found: {}".format(sf_client_id, ppf(er_list)))
+                uprint("cl_ext_ref_upsert({}): duplicate external refs found:\n{}".format(sf_client_id, ppf(er_list)))
             sf_er_id = er_list[0]
             if upd_rec:
                 new_id = upd_rec.val('Id') or sf_dict['Name'].split(EXT_REF_TYPE_ID_SEP)[1]
@@ -570,13 +570,13 @@ class SfInterface:
                 sf_dict['Reference_No_or_ID__c'] = new_id
             try:
                 sf_ret = ext_ref_obj.update(sf_er_id, sf_dict)
-                msg = "{} {} updated with {} ret={}".format(er_obj, sf_er_id, ppf(sf_dict), sf_ret)
+                msg = "{} {} updated with {} ret=\n{}".format(er_obj, sf_er_id, ppf(sf_dict), ppf(sf_ret))
             except Exception as ex:
                 err = "{} update() raised exception {}. msg={}; sent={}".format(er_obj, ex, msg, ppf(sf_dict))
         else:
             try:
                 sf_ret = ext_ref_obj.create(sf_dict)
-                msg = "{} created with {}, ret={}".format(er_obj, ppf(sf_dict), sf_ret)
+                msg = "{} created with {}, ret=\n{}".format(er_obj, ppf(sf_dict), ppf(sf_ret))
                 if sf_ret['success']:
                     sf_er_id = sf_ret.get('Id') or sf_ret.get('id')     # TODO: fix UGLY lowercase API field name
             except Exception as ex:
@@ -710,14 +710,14 @@ class SfInterface:
         if update_client:
             try:
                 sf_ret = client_obj.update(sf_id, sf_dict)
-                msg = "{} {} updated with {}, ret={}".format(sf_obj, sf_id, ppf(sf_dict), sf_ret)
+                msg = "{} {} updated with {}, ret=\n{}".format(sf_obj, sf_id, ppf(sf_dict), ppf(sf_ret))
             except Exception as ex:
-                err = "{} update() raised exception {}. sent={}".format(sf_obj, _format_exc(ex), ppf(sf_dict))
+                err = "{} update() raised exception {}. sent=\n{}".format(sf_obj, _format_exc(ex), ppf(sf_dict))
                 sf_id = None
         else:
             try:
                 sf_ret = client_obj.create(sf_dict)
-                msg = "{} created with {}, ret={}".format(sf_obj, ppf(sf_dict), sf_ret)
+                msg = "{} created with {}, ret=\n{}".format(sf_obj, ppf(sf_dict), ppf(sf_ret))
                 if sf_ret['success']:
                     fld_name = sf_fld_sys_name(SF_DEF_SEARCH_FIELD, sf_obj)
                     sf_id = sf_ret.get(fld_name) or sf_ret.get(fld_name.lower())    # TODO: fix UGLY lowercase API name
@@ -868,12 +868,12 @@ class SfInterface:
         result = self.apex_call('reservation_upsert', function_args=sf_args)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("... sfif.res_upsert() err?={}; sent=\n{}, result={}"
+            uprint("... sfif.res_upsert() err?={}; sent=\n{}, result=\n{}"
                    .format(self.error_msg, ppf(cl_res_rec), ppf(result)))
 
         if result.get('ErrorMessage'):
             msg = ppf(result) if self._debug_level >= DEBUG_LEVEL_ENABLED else result['ErrorMessage']
-            self.error_msg += "sfif.res_upsert() received error '{}' from SF; rec=\n{}".format(msg, ppf(cl_res_rec))
+            self.error_msg += "sfif.res_upsert() received err=\n{} from SF; rec=\n{}".format(msg, ppf(cl_res_rec))
         if not self.error_msg:
             if not cl_res_rec.val('ResSfId') and result.get('ReservationOpportunityId'):
                 cl_res_rec.set_val(result['ReservationOpportunityId'], 'ResSfId')
@@ -895,7 +895,7 @@ class SfInterface:
         result = self.apex_call('reservation_room_move', function_args=room_chg_data)
 
         if self.error_msg or result.get('ErrorMessage'):
-            self.error_msg += "error '{}' from SF in {}".format(ppf(result) if dbg else result['ErrorMessage'], msg)
+            self.error_msg += "err=\n{} from SF in {}".format(ppf(result) if dbg else result['ErrorMessage'], msg)
         elif dbg:
             uprint(msg + " result=\n{}'".format(ppf(result)))
 

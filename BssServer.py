@@ -163,7 +163,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     if sh_id:
         sh_cl = client_data(cae, sh_id)
     if not isinstance(sh_cl, dict):
-        log_msg(msg_pre + "guest not found; objId={}; ass=\n{};\n sh=\n{}"
+        log_msg(msg_pre + "guest not found; objId={}; ass=\n{};\n sh_cl=\n{}"
                 .format(sh_id, ppf(ass_changed_res), ppf(sh_cl)), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         sh_cl = dict()
 
@@ -178,7 +178,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
             if res and res[0] and res[0][0]:
                 rgr_sf_id = res[0][0]
         if not rgr_sf_id:
-            log_msg(msg_pre + "Reservation Opportunity ID not found; ShResObjID={}; ass=\n{}; sh=\n{}; err?={}"
+            log_msg(msg_pre + "Reservation Opportunity ID not found; ShResObjID={}; ass=\n{}; sh_res=\n{}; err?={}"
                     .format(obj_id, ppf(ass_changed_res), ppf(sh_res), asd.error_message),
                     notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
@@ -199,7 +199,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     if not ass_res_sf_id and rgr_sf_id:
         upd_values['rgr_sf_id'] = rgr_sf_id
     if not asd.rgr_upsert(upd_values, chk_values, commit=True):
-        err_msg = msg_pre + "last reservation sync timestamp ass_cache update failed with err='{}'; ass={}" \
+        err_msg = msg_pre + "last reservation sync timestamp ass_cache update failed with err='{}'; ass=\n{}" \
                       .format(asd.error_message, ppf(ass_changed_res))
 
     return err_msg
@@ -215,12 +215,12 @@ def room_change_to_sf(asd, ass_res):
     err_msg = asd.sf_ass_room_change(ass_res['rgr_sf_id'],
                                      ass_res['rgr_time_in'], ass_res['rgr_time_out'], ass_res['rgr_room_id'])
     if err_msg:
-        return msg_pre + "SF room push/update err='{}'; ass={}".format(err_msg, ppf(ass_res))
+        return msg_pre + "SF room push/update err='{}'; ass=\n{}".format(err_msg, ppf(ass_res))
 
     # no errors on sync to SF, then set last sync timestamp
     chk_values = dict(rgr_ho_fk=ho_id, rgr_res_id=res_id, rgr_sub_id=sub_id)
     if not asd.rgr_upsert(dict(rgr_room_last_sync=ass_res['rgr_room_last_sync']), chk_values, commit=True):
-        err_msg = msg_pre + "last room sync timestamp ass_cache update err='{}'; ass={}" \
+        err_msg = msg_pre + "last room sync timestamp ass_cache update err='{}'; ass=\n{}" \
                       .format(asd.error_message, ppf(ass_res))
 
     return err_msg
@@ -303,13 +303,13 @@ def run_sync_to_sf():
             if res_changed and (not room_changed or res_changed <= room_changed):
                 ass_res = dict(zip(ass_id_cols, res_list[0][1:]))
                 ass_res['rgr_last_sync'] = action_time
-                log_msg("run_sync_to_sf() fetch from Sihot and send to SF the changed res={}".format(ppf(ass_res)),
+                log_msg("run_sync_to_sf() fetch from Sihot and send to SF the changed res=\n{}".format(ppf(ass_res)),
                         notify=debug_level >= DEBUG_LEVEL_VERBOSE)
                 err_msg = res_from_sh_to_sf(asd, ass_res)
             elif room_changed and (not res_changed or room_changed < res_changed):
                 ass_res = dict(zip(room_cols, room_list[0]))
                 ass_res['rgr_room_last_sync'] = action_time
-                log_msg("run_sync_to_sf() send to SF the room change {}".format(ppf(ass_res)),
+                log_msg("run_sync_to_sf() send to SF the room change ass=\n{}".format(ppf(ass_res)),
                         notify=debug_level >= DEBUG_LEVEL_VERBOSE)
                 err_msg = room_change_to_sf(asd, ass_res)
             else:

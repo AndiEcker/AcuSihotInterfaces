@@ -26,7 +26,7 @@ from traceback import format_exc
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
     SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, FORE_SURNAME_SEP
-from ae_sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
+from ae_sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record
 from ae_db import bind_var_prefix
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
 from ae_notification import add_notification_options, init_notification
@@ -1275,11 +1275,12 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                             nothing_to_do_msg="No reservations found for to be sent")
         res_sender = ResSender(cae)
 
-        for res_rec_idx, rec in enumerate(res_rows):
-            fn, idx = rec['=FILE_NAME'], rec['=LINE_NUM']
+        for res_rec_idx, res_row in enumerate(res_rows):
+            fn, idx = res_row.pop('=FILE_NAME'), res_row.pop('=LINE_NUM')
             if got_cancelled():
                 log_error("User cancelled reservation send", fn, idx, importance=4)
                 break
+            rec = Record(fields=res_row)
             progress.next(processed_id=str(rec['ResVoucherNo']), error_msg=error_msg)
             error_msg, warning_msg = res_sender.send_rec(rec)
             if warning_msg:

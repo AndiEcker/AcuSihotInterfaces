@@ -1229,7 +1229,7 @@ class Record(OrderedDict):
     def pull(self, from_system):
         assert from_system, "Record.pull() with empty value in from_system is not allowed"
         for idx_path in self.leaf_indexes(system=from_system, direction=FAD_FROM):    # _fields.values():
-            if len(idx_path) > 1:
+            if len(idx_path) >= 3 and isinstance(idx_path[1], int):
                 set_current_index(self.value(idx_path[0], system=from_system, direction=FAD_FROM, flex_sys_dir=True),
                                   idx=idx_path[1])
             field = self.node_child(idx_path)
