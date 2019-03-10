@@ -50,10 +50,10 @@ class TestClientFromAcuToSihot:
             assert not error_msg
 
     def test_female_client(self, acu_client):
-        error_msg = acu_client.fetch_from_acu_by_acu('E119378')       # Marlene Guy - has no T_LOG entries
+        error_msg = acu_client.fetch_from_acu_by_acu('E119378')       # Marlene Guy
         assert not error_msg
         if not error_msg:
-            assert len(acu_client.recs) == 0
+            assert len(acu_client.recs) == 0    # 0/no T_LOG entries before Mar-2019
 
         error_msg = acu_client.fetch_from_acu_by_cd('E119378')
         assert not error_msg

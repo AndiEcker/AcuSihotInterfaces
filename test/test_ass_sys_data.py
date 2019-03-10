@@ -613,7 +613,7 @@ class TestAssSysDataSh:
 
 class TestAssSysDataAvailRoomsSep14:
     def test_avail_rooms_for_all_hotels_and_cats(self, ass_sys_data):    # SLOW (22 s)
-        assert ass_sys_data.sh_avail_rooms(day=datetime.date(2017, 9, 14)) == 164  # 165 before Feb2018
+        assert ass_sys_data.sh_avail_rooms(day=datetime.date(2017, 9, 14)) == 165  # 165 before Feb2018, 165 after PMA
 
     def test_avail_rooms_for_bhc_and_all_cats(self, ass_sys_data):
         assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], day=datetime.date(2017, 9, 14)) == 21
@@ -646,7 +646,7 @@ class TestAssSysDataAvailRoomsSep14:
 
 class TestAssSysDataAvailRoomsSep15:
     def test_avail_rooms_for_all_hotels_and_cats(self, ass_sys_data):    # SLOW (22 s)
-        assert ass_sys_data.sh_avail_rooms(day=datetime.date(2017, 9, 15)) == 98  # 99 before Feb2018
+        assert ass_sys_data.sh_avail_rooms(day=datetime.date(2017, 9, 15)) == 100  # 99 before Feb2018, 100 after PMA
 
     def test_avail_rooms_for_bhc_and_all_cats(self, ass_sys_data):
         assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], day=datetime.date(2017, 9, 15)) == 21

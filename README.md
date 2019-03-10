@@ -1299,6 +1299,3 @@ optionally also to the AssCache database).
 
 Client and reservation data can be passed from Salesforce to Sihot by using the 
 [SihotServer Web Services](#sihotserver-web-services).
-
-
-# Repository

@@ -1,5 +1,5 @@
 import datetime
-from ae_db import OraDB, PostgresDB
+from ae_db import OraDB, PostgresDB, bind_var_prefix
 
 UPDATED_TEST_STRING = 'Updated Test String'
 TEST_DATE = datetime.datetime(2018, 1, 21, 22, 33, 44)
@@ -39,7 +39,14 @@ class TestOraDB:
 
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'],
-                                  where_group_order='col_int >= :xy', bind_vars=dict(xy=0))
+                                  where_group_order="col_int >= :" + bind_var_prefix + "xy", bind_vars=dict(xy=0))
+        rows = test_db.fetch_all()
+        assert rows
+        assert rows[0][0] == 1
+        assert rows[0][1] == UPDATED_TEST_STRING
+        assert rows[0][2] == TEST_DATE
+
+        assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'], chk_values=dict(col_int=1))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1
@@ -48,7 +55,8 @@ class TestOraDB:
 
     def test_in_clause(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'],
-                                  where_group_order='col_int IN (:yz)', bind_vars=dict(yz=[0, 1, 2, 3, 4]))
+                                  where_group_order="col_int IN (:" + bind_var_prefix + "yz)",
+                                  bind_vars=dict(yz=[0, 1, 2, 3, 4]))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1
@@ -84,7 +92,7 @@ class TestPostgresDB:
 
     def test_update_time_as_char(self):
         assert not test_db.update(test_table, dict(col_ti='15:19'), dict(col_int=1), commit=True)
-        assert not test_db.select(test_table, cols=['col_ti'], where_group_order='col_int = :x', bind_vars=dict(x=1))
+        assert not test_db.select(test_table, cols=['col_ti'], chk_values=dict(col_int=1))
         assert test_db.fetch_value() == datetime.time(hour=15, minute=19)
 
     def test_update_time(self):
@@ -96,7 +104,7 @@ class TestPostgresDB:
 
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt', 'col_ti'],
-                                  where_group_order='col_int >= :xy', bind_vars=dict(xy=0))
+                                  chk_values=dict(col_int=1))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1
@@ -106,7 +114,8 @@ class TestPostgresDB:
 
     def test_in_clause(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt', 'col_ti'],
-                                  where_group_order='col_int IN (:yz)', bind_vars=dict(yz=[0, 1, 2, 3, 4]))
+                                  where_group_order="col_int IN (:" + bind_var_prefix + "yz)",
+                                  bind_vars=dict(yz=[0, 1, 2, 3, 4]))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1
