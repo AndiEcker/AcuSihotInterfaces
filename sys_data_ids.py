@@ -66,3 +66,23 @@ AC_SQL_EXT_REF_TYPE = "CASE WHEN CR_TYPE in ('" + _EXT_REF_TYPE_RCIP + "', 'SPX'
     " then '" + EXT_REF_TYPE_RCI + "' else CR_TYPE end"
 
 FORE_SURNAME_SEP = ' '
+
+
+def parse_system_option_args(args_str):
+    """
+    parse command line option string
+    :param args_str:    command line option string to be parsed.
+    :return:            system id, record type id and option arguments dict string
+    """
+    str_i = args_str.find('{')
+    if str_i >= 0:
+        arg_dict_str = args_str[str_i:]
+    else:
+        str_i = len(args_str)
+        arg_dict_str = ""
+    str_i -= SRT_ID_LEN
+    rec_type = args_str[str_i:str_i + SRT_ID_LEN]
+    system = args_str[:str_i]
+    if rec_type in ALL_AVAILABLE_RECORD_TYPES and system in ALL_AVAILABLE_SYSTEMS:
+        return system, rec_type, arg_dict_str
+    return (None, None, None)

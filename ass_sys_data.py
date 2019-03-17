@@ -672,6 +672,25 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self._warn(dup, self._ctx_no_file + 'CheckClientsDataExtRefDuplicates')
     '''
 
+    def cl_ac_id_by_ass_id(self, ass_id):
+        """
+        :param ass_id:  AssCache client pkey/ID.
+        :return:        Acumen client reference.
+        """
+        acu_id = None
+        for rec in self.clients:
+            if rec.val('AssId') == ass_id:
+                acu_id = rec.val('AcuId')
+                break
+        if not acu_id:
+            ass_db = self.connection(SDI_ASS)
+            if ass_db.select('clients', ['cl_ac_id'], chk_values=dict(cl_pk=ass_id)):
+                self.error_message = "cl_ac_id_by_ass_id(): AssCache client PKey {} not found (err={})" \
+                    .format(ass_id, ass_db.last_err_msg)
+            else:
+                acu_id = ass_db.fetch_value()
+        return acu_id
+
     def cl_ass_id_by_idx(self, index):
         return self.clients[index].val('AssId')
 
@@ -731,6 +750,25 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             else:
                 sf_id = ass_db.fetch_value()
         return sf_id
+
+    def cl_sh_id_by_ass_id(self, ass_id):
+        """
+        :param ass_id:  AssCache client pkey/ID.
+        :return:        Sihot client/guest object id.
+        """
+        sh_id = None
+        for rec in self.clients:
+            if rec.val('AssId') == ass_id:
+                sh_id = rec.val('ShId')
+                break
+        if not sh_id:
+            ass_db = self.connection(SDI_ASS)
+            if ass_db.select('clients', ['cl_sh_id'], chk_values=dict(cl_pk=ass_id)):
+                self.error_message = "cl_sh_id_by_ass_id(): AssCache client PKey {} not found (err={})" \
+                    .format(ass_id, ass_db.last_err_msg)
+            else:
+                sh_id = ass_db.fetch_value()
+        return sh_id
 
     def cl_ensure_id(self, sh_id=None, ac_id=None, surname=None, forename=None, email=None, phone=None):
         """
@@ -1152,26 +1190,24 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         sh_ass_rec.set_val(ord_cl_pk, 'AssId')
         sh_ass_rec.set_val(ri_pk, 'RinId')
         for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons', flex_sys_dir=True)):
-            sh_id = occ_rec.val('PersShId')
-            ac_id = occ_rec.val('PersAcuId')
-            sn = occ_rec.val('PersSurname')
-            fn = occ_rec.val('PersForename')
-            if not sh_id and not ac_id:
-                self._warn(err_pre + "ignoring unspecified {}. person: {} {}".format(pers_idx + 1, sn, fn),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                continue
-            self._warn(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id),
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-            occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id, surname=sn, forename=fn)
-            if occ_cl_pk is None:
-                self._warn(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
-                           .format(fn, sn, sh_id, ac_id, self.error_message),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                self.error_message = ""
-            else:
-                occ_rec.set_val(occ_cl_pk, 'PersAssId', root_rec=sh_ass_rec, root_idx=('ResPersons', pers_idx))
             if not sh_ass_rec.val('ResRoomNo') and occ_rec.val('RoomNo'):
                 sh_ass_rec.set_val(occ_rec.val('RoomNo'), 'ResRoomNo')
+
+            sh_id = occ_rec.val('PersShId')
+            ac_id = occ_rec.val('PersAcuId')
+            if sh_id or ac_id:
+                sn = occ_rec.val('PersSurname')
+                fn = occ_rec.val('PersForename')
+                self._warn(err_pre + "ensure client {} {} for occupant {}/{}".format(fn, sn, sh_id, ac_id),
+                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                occ_cl_pk = self.cl_ensure_id(sh_id=sh_id, ac_id=ac_id, surname=sn, forename=fn)
+                if occ_cl_pk is None:
+                    self._warn(err_pre + "create client record for occupant {} {} {}/{} failed; ignored err={}"
+                               .format(fn, sn, sh_id, ac_id, self.error_message),
+                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                    self.error_message = ""
+                else:
+                    occ_rec.set_val(occ_cl_pk, 'PersAssId', root_rec=sh_ass_rec, root_idx=('ResPersons', pers_idx))
 
         sh_ass_rec.push(SDI_ASS)
 
@@ -1823,8 +1859,21 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                                where_group_order="ORDER BY rgc_room_seq, rgc_pers_seq")
                 for row_idx, rgc_values in enumerate(rgc_rows):
                     for col_idx, val in enumerate(rgc_values):
-                        idx_path = ('ResPersons', row_idx, rgc_cols[col_idx])
-                        rec.set_val(val, *idx_path, system=SDI_ASS, direction=FAD_FROM)
+                        col_name = rgc_cols[col_idx]
+                        idx_pre = ('ResPersons', row_idx, )
+                        rec.set_val(val, *idx_pre, col_name, system=SDI_ASS, direction=FAD_FROM)
+                        if val and col_name == 'rgc_occup_cl_fk':
+                            if 'PersAcuId' in rec.value(*idx_pre):
+                                acu_id = self.cl_ac_id_by_ass_id(val)
+                                if acu_id:
+                                    rec.set_val(acu_id, *idx_pre, 'PersAcuId', system=SDI_ASS, direction=FAD_FROM)
+                            sf_id = self.cl_sf_id_by_ass_id(val)
+                            if sf_id:
+                                rec.set_val(sf_id, *idx_pre, 'PersSfId', system=SDI_ASS, direction=FAD_FROM)
+                            sh_id = self.cl_sh_id_by_ass_id(val)
+                            if sh_id:
+                                rec.set_val(sh_id, *idx_pre, 'PersShId', system=SDI_ASS, direction=FAD_FROM)
+
             rec.pull(from_system=SDI_ASS)
             if not callable(filter_records) or not filter_records(rec):
                 recs.append(rec)

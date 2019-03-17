@@ -13,7 +13,8 @@ import argparse
 import pprint
 from traceback import format_exc
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES, SRT_ID_LEN
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES, SRT_ID_LEN, \
+    parse_system_option_args
 from ae_sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae_console_app import ConsoleApp, uprint
 from ae_db import PostgresDB
@@ -140,16 +141,7 @@ def log_warning(msg, *args, importance=2, **kwargs):
 
 
 def parse_action_args(args_str, eval_kwargs=False):
-    str_i = args_str.find('{')
-    if str_i >= 0:
-        arg_dict_str = args_str[str_i:]
-    else:
-        str_i = len(args_str)
-        arg_dict_str = ""
-    str_i -= SRT_ID_LEN
-    rec_type = args_str[str_i:str_i + SRT_ID_LEN]
-    system = args_str[:str_i - 1]
-
+    system, rec_type, arg_dict_str = parse_system_option_args(args_str)
     if eval_kwargs:
         # eval args after system and rec_type variables are set, also available are: ass_data, asd, action, ...
         kwargs = eval(arg_dict_str) if arg_dict_str else dict()

@@ -29,12 +29,12 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
 | SfClientValidator | Salesforce Client Data Validator | - |
-| ShSfClientMigration | Migrate guests from Sihot to Salesforce | Web |
+| ShSfClientMigration | Migrate guests from Sihot to Salesforce | Kernel, Web |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
 | [SihotOccLogChecker](#sihotocclogchecker-application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
 | [SihotResImport](#sihotresimport-application) | Create/Update/Cancel reservations from CSV/TXT/JSON files within Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
-| [SysDataMan](#sysdataman-application) | Initialize, pull, compare or push data against Acumen, AssCache, Salesforce and/or Sihot | Web |
+| [SysDataMan](#sysdataman-application) | Initialize, pull, compare or push data against Acumen, AssCache, Salesforce and/or Sihot | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
 | [WatchPupPy](#watchpuppy-application) | Supervise always running servers or periodically execute command | Kernel, Web |
 | WebRestTester | Reservation interface testing tool | Web |
@@ -64,24 +64,24 @@ have to be done to install it for each single user on the users machine:
 ### Command line arguments
 
 Most of the available commands are using the same command line options. All names of the following command line options
-are case-sensitive. The following table is listing them sorted by the option name (see the first column named Option):
+are case-sensitive. The following table is listing them ordered by the option name (see the first column named Option):
 
 | Option | Description | Default | Short option | Commands |
 | --- | --- | --- | --- | --- |
-| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfClientValidator |
-| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | SysDataMan, BssServer |
-| assPassword | User account password for the AssCache/Postgres database | - | P | SysDataMan, BssServer |
 | assDSN | Database name of the AssCache/Postgres database | ass_cache | N | SysDataMan, BssServer |
+| assPassword | User account password for the AssCache/Postgres database | - | P | SysDataMan, BssServer |
+| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | SysDataMan, BssServer |
 | breakOnError | Abort processing if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
-| compare | Compare/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | SysDataMan |
-| correctSystem | Correct/Fix data for system (Acu=Acumen, Ass=AssCache) | - | A | SihotOccLogChecker |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
 | cmdInterval | synchronization interval in seconds | 3600 | l | BssServer, WatchPupPy |
+| compare | Compare/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | SysDataMan |
+| correctSystem | Correct/Fix data for system (Acu=Acumen, Ass=AssCache) | - | A | SihotOccLogChecker |
 | dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | dateTill | End date/time of date range | (depends on command) | T | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
@@ -109,16 +109,16 @@ are case-sensitive. The following table is listing them sorted by the option nam
 | shMapClient | Guest/Client mapping of xml to db items | SH_CLIENT_MAP | m | SihotResImport, SihotResSync |
 | shMapRes | Reservation mapping of xml to db items | SH_RES_MAP | n | SihotResImport, SihotResSync |
 | shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, SysDataMan, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, SysDataMan, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shTimeout | Timeout in seconds for TCP/IP connections | 1869.3 | t | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | shUseKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
 | shUseKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
 | shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
 | smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpFrom | SMTP Sender/From address | - | f | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
@@ -179,9 +179,14 @@ each of our clients/guests:
 
 #### Available Reservation Fields
 
-The table underneath is showing all the fields that can be used to specify a reservation created within Sihot. Only the
-fields marked with an asterisk (*) are mandatory, with the extension that the reservation orderer has to be specified
-by at least one of the client fields `ShId`, `AcuId` or `Surname`. The fields names marked with an plus character (+) 
+The table underneath is showing most of the fields that can be used to specify a reservation created within Sihot.
+Additionally most of the [client fields](#available-client-fields) can be added for to specify the orderer of a
+reservation.
+
+The fields marked with an asterisk (*) after their field name in the table underneath are mandatory. Additionally
+the reservation orderer has to be specified by at least one of the client fields `ShId`, `AcuId` or `Surname`.
+
+The fields names marked with an plus character (+)
 are optional only if the reservation gets sent the first time to Sihot, so for every change/update of an already 
 existing reservation these fields need to be included in the send to Sihot:
 
@@ -244,12 +249,16 @@ Field Name | Field Type | Description | Example Values |
 | ResStatus | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
 | ResVoucherNo | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
 
+Please note that the first value of the ResPersons index value (represented by \<n\> in the above table) is 0 (zero) and
+not 1.
+
 All the field specifying the orderer of a reservation as well as the `ResPersons` fields are identical to the 
 [client fields](#available-client-fields), the only difference is that the field names within `ResPersons` are
 having the prefix `Pers`.
 
-Please note that the first value of the ResPersons index value (represented by \<n\> in the above table) is 0 (zero) and
-not 1.
+The soon deprecated Acumen system is additionally using extra reservation fields for to specify the occupants of a
+guest reservation. `OccuAcuId` and `OccuShId` are specifying the first occupant and `OccuAcuId_P` and `OccuShId_P` the
+second occupant (respectively the partner of the couple).
 
 
 #### Available Reservation Inventory Fields
@@ -286,7 +295,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 
 | Field Name | Acumen Column | Salesforce Field | Sihot Element | AssCache Column |
 | --- | --- | --- | --- | --- |
-| AcuId | CD_CODE+OC_CODE | AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | cl_ac_id+rgr_order_cl_fk->cl_ac_id | 
+| AcuId | OC_CODE+CD_CODE | AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | rgr_order_cl_fk->cl_ac_id | 
 | AssId | - | AssCache_Id__pc | - | cl_pk |
 | City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
 | Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |
@@ -305,6 +314,8 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | MobilePhone | CD_MOBILE1 | PersonMobilePhone | MOBIL-1, MOBIL | - |
 | MobilePhoneB | - | - | MOBIL-2 | - |
 | Nationality | SIHOT_LANG | Nationality__pc | T-NATION | - |
+| OccuAcuId | CD_CODE | - | MATCHCODE | cl_ac_id | 
+| OccuShId | CD_SIHOT_OBJID | - | OBJID+GUEST-ID | cl_sh_id |
 | Password | CD_PASSWORD | - | INTERNET-PASSWORD | - |
 | Phone | CD_HTEL1 | PersonHomePhone | PHONE-1+PHONE+PERSON.PHONE | cl_phone+rgc_phone |
 | POBox | CD_ADD12 | - | PO-BOX | - |
@@ -376,7 +387,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | RinUsageComment | - | - | -  | ri_usage_comment |   
 | Salutation | F_SIHOT_SALUTATION() | Salutation | T-SALUTATION | - |
 | SfId | CD_SF_ID1/2, MS_SF_ID | id+PersonAccountId | MATCH-SM | cl_sf_id |
-| ShId | CD_SIHOT_OBJID+OC_SIHOT_OBJID | SihotGuestObjId__pc | OBJID+GUEST-ID | cl_sh_id+rgr_order_cl_fk->cl_sh_id |
+| ShId | OC_SIHOT_OBJID+CD_SIHOT_OBJID | SihotGuestObjId__pc | OBJID+GUEST-ID | rgr_order_cl_fk->cl_sh_id |
 | State | (CD_ADD13) | PersonMailingState | T-STATE | - |
 | Street | CD_ADD11 | PersonMailingStreet | STREET | - |
 | Surname | CD_SNAM1 | LastName | NAME-1 | cl_surname+rgc_surname |
@@ -986,7 +997,6 @@ hotel 4:
 | :---: | --- | :---: |
 | 1 BED | - | 1JNR |
 | 2 BED | - | 2BSU |
-| 2 BED | Duplex/752 | 2DDO |
 | 3 BED | - | 3BPS |
 | 4 BED | - | 4BPS |
 
@@ -1068,20 +1078,20 @@ lower-case booking types:
 The following table shows the mapping between the Sihot CHANNEL field IDs (stored in the `RO_SIHOT_RES_GROUP` column)
 and the Acumen reservation groups (with the `RO_RES_GROUP` column):
 
-| Acumen Reservation Group | Sihot Channel Id |
+| Sihot Channel Id | Acumen Reservation Group |
 | --- | --- |
-| Club Paradiso Guest | CG |
-| Club Paradiso Owner | CO |
-| Other | OT |
-| Owner | OW |
-| Owner Guest | OG |
-| Promo | FB |
-| RCI External | RE |
-| RCI External Guest | RG |
-| RCI Internal | RI |
-| RCI Owner Guest | RO |
-| Rental External | RR |
-| Rental SP | RS |
+| FB | Promo + Marketing Rental |
+| GU | Guest |
+| OT | Others |
+| OW | Keys Member + Owner |
+| RE | RCI External |
+| RI | RCI Internal |
+| RR | Rental External |
+| RS | Rental SG |
+
+This mapping got restructured on 9-Aug-2018 - the changes are logged in the Acumen/Oracle table T_LOG (double check
+with query: `select * from t_log where log_table = 'RESOCC_TYPES' and log_column = 'RO_SIHOT_RES_GROUP'
+order by log_code desc`).
 
 
 #### Mapping of Acumen SP Group to Sihot NN

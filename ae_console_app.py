@@ -12,7 +12,7 @@ from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter
 
 from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
-                          debug_levels)
+                          debug_levels, parse_system_option_args)
 
 # default name of main config section
 MAIN_SECTION_DEF = 'Settings'
@@ -155,7 +155,7 @@ class Setting:
         super(Setting, self).__init__()
         self._name = name
         self._value = None
-        self._type = value_type
+        self._type = None if value_type is type(None) else value_type
         if value is not None:
             self.value = value
 
@@ -177,10 +177,11 @@ class Setting:
                            (self._type(value) if self._type else value))))
                 elif self._type:
                     self._value = self._type(value)
-            if not self._type and self._value is not None:      # the value type gets only once initialized
+            # the value type gets only once initialized, but after _eval_str() for to auto-detect complex types
+            if not self._type and self._value is not None:
                 self._type = type(self._value)
         except Exception as ex:
-            uprint("Setting.value exception '{}' on evaluating the setting {} with value: '{}'"
+            uprint("Setting.value exception '{}' on evaluating the setting {} with value: {!r}"
                    .format(ex, self._name, value))
         return self._value
 
@@ -460,6 +461,9 @@ class ConsoleApp:
             self.config_options[name].value = getattr(self._parsed_args, name)
             if name in self.config_choices:
                 for given_value in self.config_options[name].value:
+                    system, rec_type, opt_args = parse_system_option_args(given_value)
+                    if system and rec_type:
+                        given_value = system + rec_type     # split off option args before checking allowed choices
                     allowed_values = self.config_choices[name]
                     if given_value not in allowed_values:
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"

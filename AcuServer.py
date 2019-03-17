@@ -84,7 +84,7 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
                                       'SRSL_PRIMARY': (old_room_no + '-' if old_room_no else '') + room_no,
                                       'SRSL_ACTION': oc,
                                       'SRSL_STATUS': 'ERR' if err_msg else 'SYNCED',
-                                      'SRSL_MESSAGE': (gds_no + '='
+                                      'SRSL_MESSAGE': (str(gds_no) + '='        # gds_no could be None/NoneType
                                                        + (err_msg + extra_info if err_msg else extra_info[1:]))[:1998],
                                       'SRSL_LOGREF': guest_id or -1,
                                       },

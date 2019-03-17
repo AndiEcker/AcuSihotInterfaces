@@ -195,7 +195,7 @@ CREATE TABLE res_group_clients
   rgc_rgr_fk              INTEGER NOT NULL REFERENCES res_groups(rgr_pk),
   rgc_room_seq            INTEGER NOT NULL DEFAULT 0,
   rgc_pers_seq            INTEGER NOT NULL DEFAULT 0,
-  rgc_surname             VARCHAR(42),
+  rgc_surname             VARCHAR(69),
   rgc_firstname           VARCHAR(42),
   rgc_email               VARCHAR(69),            -- Sihot values (cashed but not corrected, s.a. cl_email
   rgc_phone               VARCHAR(42),            -- .. and cl_phone)

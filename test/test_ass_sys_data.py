@@ -379,13 +379,17 @@ class TestSysDataResActions:
         assert r.val('ResSubId')
         assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
 
-        # .. so now we can reset everything and put the Sihot res Ids for to test the push to AssCache
+        # .. so now we can reset everything and put the Sihot res Ids and default values for to push to AssCache
         asd.reservations = Records()
         rec = res_test_rec.copy(deepness=-1)
+        rec['ShId'] = r['ShId']
         rec['ResId'] = r['ResId']
         rec['ResSubId'] = r['ResSubId']
         rec['ResObjId'] = r['ResObjId']
+        rec['ResBooked'] = r['ResBooked']
         rec['ResRateSegment'] = r['ResRateSegment']
+        rec['ResSource'] = r['ResSource']
+
         asd.reservations.append(rec)
 
         asd.ass_reservations_push()
@@ -396,9 +400,9 @@ class TestSysDataResActions:
 
         orderer_fields = [fn for sn, fn, *_ in ASS_CLIENT_MAP if fn]
         recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')),
-                                                 exclude_fields=['ResAssId', 'ResAction',  # 'ResSource', 'ResPriceCat',
+                                                 exclude_fields=['ResAction',  # 'ResAssId', 'ResSource', 'ResPriceCat',
                                                                  'ResAccount',
-                                                                 'PersAcuId',   # 'PersShId',
+                                                                 # 'PersAcuId',   # 'PersShId',
                                                                  # not returned by Sihot RES-SEARCH
                                                                  ] + orderer_fields
                                                  )

@@ -114,8 +114,10 @@ ACU_RES_MAP = [       # reservation data
     ('ResRoomNo', 'RUL_SIHOT_ROOM'),
     ('AcuId', 'OC_CODE',
      "nvl(OC_CODE, CD_CODE)"),
+    ('OccuAcuId', 'CD_CODE'),
     ('ShId', 'OC_SIHOT_OBJID',
      "to_char(nvl(OC_SIHOT_OBJID, CD_SIHOT_OBJID))"),
+    ('OccuShId', 'CD_SIHOT_OBJID'),
     ('ResStatus', 'SH_RES_TYPE',
      "case when RUL_ACTION = '" + ACTION_DELETE + "' then 'S' else nvl(SIHOT_RES_TYPE, 'S') end"),
     ('ResAction', 'RUL_ACTION'),
@@ -515,43 +517,68 @@ class AcuResToSihot(AcumenRes, ResToSihot):
 
     @staticmethod
     def _add_occupants(rec):
+        """
+        add Acumen occupants to Sihot Rooming List
+        :param rec:     reservation record (amended with occupant Ids of the client/couple: Occu*Id)
+        """
+        '''
         mkt_grp = rec['ResMktGroup']
         if mkt_grp not in ('GU', 'RE'):     # exclude guest mkt groups
-            rec.set_val(rec['AcuId'], 'ResPersons', 0, 'PersAcuId')
-            if rec.val('ShId'):
-                rec.set_val(rec['ShId'], 'ResPersons', 0, 'PersShId')
-            if rec['ResAdults'] > 1:
-                if rec.val('AcuId_P'):
-                    rec.set_val(rec['AcuId_P'], 'ResPersons', 1, 'PersAcuId')
-                if rec.val('ShId_P'):
-                    rec.set_val(rec['ShId_P'], 'ResPersons', 1, 'PersShId')
+        '''
+        rec.set_val(rec['OccuAcuId'], 'ResPersons', 0, 'PersAcuId')
+        if rec.val('OccuShId'):
+            rec.set_val(rec['OccuShId'], 'ResPersons', 0, 'PersShId')
+        '''
+        if int(rec.val('ResAdults', system='', direction='')) or 0 > 1:   # rec['ResAdults'] is of type str
+        '''
+        if rec.val('OccuAcuId_P'):
+            rec.set_val(rec['OccuAcuId_P'], 'ResPersons', 1, 'PersAcuId')
+        if rec.val('OccuShId_P'):
+            rec.set_val(rec['OccuShId_P'], 'ResPersons', 1, 'PersShId')
 
     def _ensure_clients_exist_and_updated(self, rec, ensure_client_mode):
         msg = type(self).__name__ + "._ensure_clients_exist_and_updated(): "
         if ensure_client_mode == ECM_DO_NOT_SEND_CLIENT:
             return ""
         err_msg = ""
-        if rec.val('AcuId'):
+
+        # if orderer != occupant (-> guest booking), then sent orderer if not is a pseudo client like TCAG/TCRENT
+        if rec.val('AcuId') != rec.val('OccuAcuId') and len(rec['AcuId']) >= 7:
             acu_client = AcuClientToSihot(self.cae)
-            client_synced = bool(rec['ShId'])
-            if client_synced:
-                err_msg = acu_client.fetch_from_acu_by_acu(rec['AcuId'])
-            else:
-                err_msg = acu_client.fetch_from_acu_by_cd(rec['AcuId'])
+            err_msg = acu_client.fetch_from_acu_by_cd(rec['AcuId'])
             if not err_msg:
-                if acu_client.recs:
+                if not acu_client.recs:
+                    err_msg = msg + "orderer {} not found".format(rec['AcuId'])
+                if not err_msg:
                     err_msg = acu_client.send_client_to_sihot(acu_client.recs[0])
-                elif not client_synced:
-                    err_msg = msg + "client {} not found".format(rec['AcuId'])
                 if not err_msg:
                     err_msg = acu_client.fetch_from_acu_by_cd(rec['AcuId'])  # re-fetch OBJIDs
                 if not err_msg and not acu_client.recs:
-                    err_msg = msg + "re-fetched client {} is missing; recs={}".format(rec['AcuId'], acu_client.recs)
+                    err_msg = msg + "re-fetched orderer {} is missing; recs={}".format(rec['AcuId'], acu_client.recs)
+                if not err_msg:
+                    # transfer just created guest IDs from orderer/client to reservation record
+                    rec.set_val(acu_client.recs.val(0, 'ShId'), 'ShId')
+                    rec.set_val(acu_client.recs.val(0, 'ShId_P'), 'ShId_P')
+                    rec.set_val(acu_client.recs.val(0, 'AcuId_P'), 'AcuId_P')
+
+        if not err_msg:
+            # send occupant(s)
+            acu_client = AcuClientToSihot(self.cae)
+            err_msg = acu_client.fetch_from_acu_by_cd(rec['OccuAcuId'])
+            if not err_msg:
+                if not acu_client.recs:
+                    err_msg = msg + "client/occupant {} not found".format(rec['OccuAcuId'])
+                if not err_msg:
+                    err_msg = acu_client.send_client_to_sihot(acu_client.recs[0])
+                if not err_msg:
+                    err_msg = acu_client.fetch_from_acu_by_cd(rec['OccuAcuId'])  # re-fetch OBJIDs
+                if not err_msg and not acu_client.recs:
+                    err_msg = msg + "missing re-fetched occupant {}; recs={}".format(rec['OccuAcuId'], acu_client.recs)
                 if not err_msg:
                     # transfer just created guest IDs from client to reservation record
-                    rec['ShId'] = acu_client.recs.val(0, 'ShId')
-                    rec['ShId_P'] = acu_client.recs.val(0, 'ShId_P')
-                    rec['AcuId_P'] = acu_client.recs.val(0, 'AcuId_P')
+                    rec.set_val(acu_client.recs.val(0, 'ShId'), 'OccuShId')
+                    rec.set_val(acu_client.recs.val(0, 'ShId_P'), 'OccuShId_P')
+                    rec.set_val(acu_client.recs.val(0, 'AcuId_P'), 'OccuAcuId_P')
 
         '''
         if not err_msg and rec.val('OC_CODE') and len(rec['OC_CODE']) == 7:  # exclude pseudo client like TCAG/TCRENT

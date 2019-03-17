@@ -1260,7 +1260,7 @@ class ResToSihot(FldMapXmlBuilder):
 
         for comment in extra_comments:
             res_cmt = rec.val('ResComment', system='', direction='')
-            if comment not in res_cmt:
+            if res_cmt and comment not in res_cmt:
                 rec.set_val(comment + "; " + res_cmt, 'ResComment', system='', direction='')
 
     @staticmethod
@@ -1369,45 +1369,50 @@ class ResToSihot(FldMapXmlBuilder):
     def _sending_res_to_sihot(self, rec):
         self._prepare_res_xml(rec)
 
-        err_msg = self._handle_error(rec, self.send_to_server(response_parser=ResResponse(self.cae)))
+        err_msg = self.send_to_server(response_parser=ResResponse(self.cae))
+        if err_msg:
+            err_msg = self._handle_error(rec, err_msg)
         if not err_msg:
             obj_id = rec.val('ResObjId')
             if not obj_id:
                 rec.set_val(self.response.objid, 'ResObjId')
-            elif obj_id != self.response.objid:
+            elif obj_id != self.response.objid and self.response.objid:
                 self._warning_msgs.append("ResObjId mismatch: {!r} != {!r}".format(obj_id, self.response.objid))
             res_id = rec.val('ResId')
             if not res_id:
                 rec.set_val(self.response.res_nr, 'ResId')
-            elif res_id != self.response.res_nr:
+            elif res_id != self.response.res_nr and self.response.res_nr:
                 self._warning_msgs.append("ResId mismatch: {!r} != {!r}".format(res_id, self.response.res_nr))
             sub_id = rec.val('ResSubId')
             if not sub_id:
                 rec.set_val(self.response.sub_nr, 'ResSubId')
-            elif sub_id != self.response.sub_nr:
+            elif sub_id != self.response.sub_nr and self.response.sub_nr:
                 self._warning_msgs.append("ResSubId mismatch: {!r} != {!r}".format(sub_id, self.response.sub_nr))
 
         return err_msg
 
     def _handle_error(self, rec, err_msg):
-        if not err_msg:
-            return ""
+        msg = "ResToSihot._handle_error(): {}; data=\n{}".format("{}", self.res_id_desc(rec, err_msg, separator="\n"))
 
+        obj_id = rec.val('ResObjId')
         if [frag for frag in self._warning_frags if frag in err_msg]:
-            self._warning_msgs.append(self.res_id_desc(rec, err_msg, separator="\n"))
+            self._warning_msgs.append(msg.format("reinterpreting this error as warning"))
             err_msg = ""
 
         elif "Could not find a key identifier" in err_msg and (rec['ShId'] or rec['ShId_P']):
-            self.cae.dprint("ResToSihot._handle_error() ignoring client obj id {}/{} error: {}"
-                            .format(rec['ShId'], rec['ShId_P'], err_msg))
+            self.cae.dprint(msg.format("ignoring client obj-id {}/{}".format(rec['ShId'], rec['ShId_P'])))
             rec['ShId'] = ''            # use AcId/MATCHCODE instead
             rec['ShId_P'] = ''
             err_msg = self._sending_res_to_sihot(rec)
 
-        elif "A database error has occurred." in err_msg and rec['ResObjId']:
-            self.cae.dprint("ResToSihot._handle_error() ignoring reservation obj id {} error: {}"
-                            .format(rec['ResObjId'], err_msg))
-            rec['ResObjId'] = ''        # use ResHotelId+ResGdsNo instead
+        elif ("A database error has occurred." in err_msg or 'Room not available!' in err_msg) and obj_id:
+            self.cae.dprint(msg.format("resetting reservation obj-id {}".format(obj_id)))
+            del_rec = rec.copy(deepness=-1)
+            del_rec.set_env(system=SDI_SH, direction=FAD_ONTO)
+            del_rec.set_val(ACTION_DELETE, 'ResAction')
+            err_msg = self._sending_res_to_sihot(del_rec)
+            self.cae.dprint(msg.format("orphan res deletion; res obj-id={}; ignorable err?={}".format(obj_id, err_msg)))
+            rec['ResObjId'] = ''        # resend with wiped orphan/invalid obj_id, using ResHotelId+ResGdsNo instead
             err_msg = self._sending_res_to_sihot(rec)
 
         if err_msg:
@@ -1449,10 +1454,17 @@ class ResToSihot(FldMapXmlBuilder):
         return "" if ensure_client_mode == ECM_TRY_AND_IGNORE_ERRORS else err_msg
 
     def send_res_to_sihot(self, rec, ensure_client_mode=ECM_ENSURE_WITH_ERRORS):
-        missing = rec.missing_fields((('ShId', 'AcuId', 'Surname'), 'ResHotelId', ('ResGdsNo', 'ResId', 'ResObjId'),
-                                      'ResMktSegment', 'ResRoomCat', 'ResArrival', 'ResDeparture'))
-        assert not missing, "ResToSihot expects non-empty value in fields {}".format(missing)
+        req_fields = ('ResHotelId', ('ResGdsNo', 'ResId', 'ResObjId'), 'ResMktSegment', 'ResRoomCat', 'ResArrival',
+                      'ResDeparture')
+        action = rec.val('ResAction')
+        if action != ACTION_DELETE:
+            # for reservations deleted within Acumen there will be no ShId/AcuId/Surname
+            req_fields += (('ShId', 'AcuId', 'Surname'), )
+        missing = rec.missing_fields(req_fields)
+        if missing:
+            return "ResToSihot.send_res_to_sihot() expects non-empty value in fields {}; rec=\n{}".format(missing, rec)
 
+        err_msg = ""
         gds_no = rec.val('ResGdsNo')
         if gds_no:
             if gds_no in self._gds_errors:    # prevent send of follow-up changes on erroneous bookings (w/ same GDS)
@@ -1461,7 +1473,8 @@ class ResToSihot(FldMapXmlBuilder):
                                           "\nres: {}".format(gds_no, old_id, self.res_id_desc(rec, "", separator="\n")))
                 return self._gds_errors[gds_no][1]    # return same error message
 
-            err_msg = self._ensure_clients_exist_and_updated(rec, ensure_client_mode)
+            if action != ACTION_DELETE:
+                err_msg = self._ensure_clients_exist_and_updated(rec, ensure_client_mode)
             if not err_msg:
                 err_msg = self._sending_res_to_sihot(rec)
         else:
@@ -1478,16 +1491,19 @@ class ResToSihot(FldMapXmlBuilder):
 
     @staticmethod
     def res_id_label():
-        return "ResID+GDS+VOUCHER+CD+RO+Room"
+        return "ResId+GDS+VOUCHER+CD+RO+Room"
 
     @staticmethod
     def res_id_values(rec):
-        ret = str(rec.val('ResId')) + "/" + str(rec.val('ResSubId')) + "@" + str(rec.val('ResHotelId')) + \
-               "+" + str(rec.val('ResGdsNo')) + \
-               "+" + str(rec.val('ResVoucherNo')) + \
-               "+" + str(rec.val('AcuId')) + \
-               "+" + str(rec.val('ResMktSegment')) + \
-               "+" + str(rec.val('ResRoomNo'))
+        sh_res_id = rec.val('ResId') or ''
+        if sh_res_id:
+            sh_res_id += "/" + str(rec.val('ResSubId')) + "@"
+        ret = str(sh_res_id) + str(rec.val('ResHotelId')) + \
+            "+" + str(rec.val('ResGdsNo')) + \
+            "+" + str(rec.val('ResVoucherNo')) + \
+            "+" + str(rec.val('AcuId')) + \
+            "+" + str(rec.val('ResMktSegment')) + \
+            "+" + str(rec.val('ResRoomNo'))
         return ret
 
     def res_id_desc(self, rec, err_msg, separator="\n\n"):

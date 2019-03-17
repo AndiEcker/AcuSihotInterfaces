@@ -872,7 +872,7 @@ class SfInterface:
                    .format(self.error_msg, ppf(cl_res_rec), ppf(result)))
 
         if result.get('ErrorMessage'):
-            msg = ppf(result) if self._debug_level >= DEBUG_LEVEL_ENABLED else result['ErrorMessage']
+            msg = ppf(result) if self._debug_level >= DEBUG_LEVEL_ENABLED else result.get('ErrorMessage')
             self.error_msg += "sfif.res_upsert() received err=\n{} from SF; rec=\n{}".format(msg, ppf(cl_res_rec))
         if not self.error_msg:
             if not cl_res_rec.val('ResSfId') and result.get('ReservationOpportunityId'):
@@ -895,7 +895,7 @@ class SfInterface:
         result = self.apex_call('reservation_room_move', function_args=room_chg_data)
 
         if self.error_msg or result.get('ErrorMessage'):
-            self.error_msg += "err=\n{} from SF in {}".format(ppf(result) if dbg else result['ErrorMessage'], msg)
+            self.error_msg += "err=\n{} from SF in {}".format(ppf(result) if dbg else result.get('ErrorMessage'), msg)
         elif dbg:
             uprint(msg + " result=\n{}'".format(ppf(result)))
 

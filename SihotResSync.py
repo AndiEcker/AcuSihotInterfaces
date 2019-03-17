@@ -210,6 +210,7 @@ if not error_msg:
                     elif rec['ResLastHotelId'] not in hotel_ids:
                         rec['ResAction'] = ACTION_INSERT
                     error_msg = acumen_req.send_res_to_sihot(rec)
+                    rid = acumen_req.res_id_values(rec)     # refresh rid with new ResId/ResSubId from Sihot
                     progress.next(processed_id=rid, error_msg=error_msg)
                     if error_msg:
                         send_notification("Acumen Reservation", rid, acumen_req.res_id_desc(rec, error_msg), rec)

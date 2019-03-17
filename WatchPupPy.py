@@ -305,29 +305,34 @@ while True:
 
         # check interval / next execution
         last_check = get_timer_corrected()
+        next_check = last_check + check_interval
+        next_run = last_run + command_interval
+        curr_time = datetime.datetime.now()
 
-        if last_check + check_interval < last_run + command_interval:
-            cae.dprint(" ###  Timer={}, next check in {}s (last={} interval={}), next run in {}s (last={} interval={})"
-                       .format(get_timer_corrected(),
-                               last_check + check_interval - get_timer_corrected(), last_check, check_interval,
-                               last_run + command_interval - get_timer_corrected(), last_run, command_interval),
+        if next_check < next_run:
+            cae.dprint(" ###  Timer={}, next chk {}s (last={} interval={}), next run {}s (last={} interval={}) (at {})"
+                       .format(last_check, next_check - last_check, last_check, check_interval,
+                               next_run - last_check, last_run, command_interval, curr_time),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             continue  # wait for next check
 
         # wait for next command_interval, only directly after startup checks on first run
-        if get_timer_corrected() < last_run + command_interval:
-            cae.dprint(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={})".format(
-                last_run + command_interval - get_timer_corrected(), get_timer_corrected(), last_run, command_interval),
-                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        if get_timer_corrected() < next_run:
+            cae.dprint(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={}) (at {})"
+                       .format(next_run - last_check, last_check, last_run, command_interval, curr_time),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         try:
-            while get_timer_corrected() < last_run + command_interval:
+            while get_timer_corrected() < next_run:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
         except KeyboardInterrupt:
-            errors.append(BREAK_PREFIX + " while waiting for next command schedule in {} seconds"
-                          .format(last_run + command_interval - get_timer_corrected()))
+            curr_time = datetime.datetime.now()
+            errors.append(BREAK_PREFIX + " while waiting for next command schedule in {} seconds (at {})"
+                          .format(next_run - get_timer_corrected(), curr_time))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
-        cae.dprint(" ###  Run command (timer={}, last={}, interval={})"
-                   .format(get_timer_corrected(), last_run, command_interval), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        curr_time = datetime.datetime.now()
+        cae.dprint(" ###  Run command (timer={}, last={}, interval={}) (at {})"
+                   .format(get_timer_corrected(), last_run, command_interval, curr_time),
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # then run the command
         run_starts += 1
@@ -338,7 +343,7 @@ while True:
             else:
                 subprocess.check_call(command_line_args, timeout=timeout)
         except subprocess.CalledProcessError as cpe:
-            err_msg = "{}. run returned non-zero exit code {}".format(run_starts, cpe.returncode)
+            err_msg = "{}. run returned non-zero exit code {} (at {})".format(run_starts, cpe.returncode, curr_time)
             if cpe.returncode == 4:
                 reset_last_run_time()
             if getattr(cpe, 'output'):      # only available when running command with check_output()/send_output
@@ -346,7 +351,7 @@ while True:
             errors.append(err_msg)
             continue        # command not really started, so try directly again - don't reset last_run variable
         except subprocess.TimeoutExpired as toe:    # sub process killed
-            err_msg = "{}. run timed out at {} last sync={}; interval={}, current timer({})-last_run({})={}"\
+            err_msg = "{}. run timed out at {}; last sync={}; timeout={}, current timer({})-last_run({})={}"\
                 .format(run_starts, datetime.datetime.now(), last_sync,
                         timeout, get_timer_corrected(), last_run, get_timer_corrected() - last_run)
             if getattr(toe, 'output'):      # only available when running command with check_output()/send_output
@@ -355,24 +360,28 @@ while True:
             reset_last_run_time(force=True)   # force reset of lock in INI file because subproc killed
             continue        # try directly again - don't reset last_run variable
         except KeyboardInterrupt:
-            errors.append(BREAK_PREFIX + " while running {}. command {}".format(run_starts, exe_name))
+            curr_time = datetime.datetime.now()
+            errors.append(BREAK_PREFIX + " while running {}. command {} at {}".format(run_starts, exe_name, curr_time))
             continue        # jump to begin of loop for to notify user, BREAK this loop and quit this app
         except Exception as ex:
-            errors.append("{}. run raised unspecified exception: {}\n      {}"
-                          .format(run_starts, ex, full_stack_trace(ex)))
+            curr_time = datetime.datetime.now()
+            errors.append("{}. run raised unspecified exception: {} at {}\n      {}"
+                          .format(run_starts, ex, curr_time, full_stack_trace(ex)))
             continue        # try directly again - don't reset last_run variable
 
         last_run = last_check
         last_sync = datetime.datetime.now()
         run_ends += 1
     except KeyboardInterrupt:
-        errors.append(BREAK_PREFIX + " before/after running {}. command {}".format(run_starts, exe_name))
+        curr_time = datetime.datetime.now()
+        errors.append(BREAK_PREFIX + " while running {} at {}. command {}".format(run_starts, curr_time, exe_name))
     except Exception as ex:
-        errors.append("WatchPupPy loop exception: " + full_stack_trace(ex))
+        errors.append("WatchPupPy loop exception at {}:\n     {}".format(datetime.datetime.now(), full_stack_trace(ex)))
 
 progress.finished(error_msg=err_msg)
 if asd:
     asd.close_dbs()
-uprint("####  WatchPupPy exit - successfully run {} of {} times the command {}".format(run_ends, run_starts, exe_name))
+curr_time = datetime.datetime.now()
+uprint("####  WatchPupPy did run {} of {} times at {}; command={}".format(run_ends, run_starts, curr_time, exe_name))
 if err_count:
-    uprint("****  {} runs failed".format(err_count))
+    uprint("****  {} runs failed at {}".format(err_count, curr_time))

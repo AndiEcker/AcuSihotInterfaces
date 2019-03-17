@@ -167,6 +167,7 @@
       <w>obji</w>
       <w>objid</w>
       <w>objids</w>
+      <w>occu</w>
       <w>occup</w>
       <w>oferta</w>
       <w>ogdsno</w>
@@ -209,6 +210,7 @@
       <w>requnit</w>
       <w>reschannel</w>
       <w>reschannellist</w>
+      <w>resocc</w>
       <w>returncode</w>
       <w>rhinefield</w>
       <w>rhref</w>

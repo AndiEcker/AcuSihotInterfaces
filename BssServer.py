@@ -165,7 +165,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     if not isinstance(sh_cl, dict):
         log_msg(msg_pre + "guest not found; objId={}; ass=\n{};\n sh_cl=\n{}"
                 .format(sh_id, ppf(ass_changed_res), ppf(sh_cl)), notify=debug_level >= DEBUG_LEVEL_VERBOSE)
-        sh_cl = dict()
+        sh_cl = Record()
 
     rgr_sf_id = ass_res_sf_id = ass_changed_res['rgr_sf_id']
     if not rgr_sf_id:
@@ -354,7 +354,7 @@ def oc_res_change(asd, req, rec_ctx):
     rec_ctx['oc'] = req.oc     # == 'CR'
     rgr_list = req.rgr_list
     for idx, req_rgr in enumerate(rgr_list):
-        rooming_list_room_no = req_rgr.get('ResPersons', [{}, ])[0].get('rgc_room_id', '')
+        rooming_list_room_no = (req_rgr.get('ResPersons') or [dict(), ])[0].get('rgc_room_id', '')
         rec_ctx.update(req_res_data=req_rgr,
                        ResObjId=req_rgr.get('rgr_obj_id', ''),
                        ResHotelId=getattr(req, 'hn', None),
