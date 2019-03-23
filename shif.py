@@ -742,13 +742,19 @@ class FldMapXmlParser(SihotXmlParser):
         return data
 
     def end(self, tag):
+        msg = "FldMapXmlParser.end({}) ".format(tag)
         for cf in self._collected_fields:
             idx_path = cf.root_idx(system=SDI_SH, direction=FAD_FROM)
             if idx_path:
                 curr_idx = compose_current_index(self._rec, idx_path, Value((1, )))
-                self.cae.dprint("FldMapXmlParser.end() setting field {} to {!r}".format(curr_idx, self._current_data),
+                val = self._current_data
+                # fix Sihot bug sending sometimes a value of 1 (greater 0) within ROOM-SEQ|ResPersons.<N>.RoomSeq
+                if len(curr_idx) == 3 and curr_idx[2] == 'PERSON.ROOM-SEQ' and val != '0':
+                    self.cae.dprint(msg + "auto-correction of {} RoomSeq value {!r} to '0'".format(curr_idx, val))
+                    val = '0'
+                self.cae.dprint(msg + "setting field {} to {!r}".format(curr_idx, val),
                                 minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                self._rec.set_val(self._current_data, *curr_idx, system=SDI_SH, direction=FAD_FROM)
+                self._rec.set_val(val, *curr_idx, system=SDI_SH, direction=FAD_FROM)
         self._collected_fields = list()
 
         for elem_name, *_ in self._elem_map:
@@ -1222,6 +1228,7 @@ class ResToSihot(FldMapXmlBuilder):
                          use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_RES),
                          elem_map=cae.get_config(SDF_SH_RES_MAP) or SH_RES_MAP)
         self._gds_errors = dict()
+        self._in_error_handling = False
 
     def _add_sihot_configs(self, rec):
         mkt_seg = rec.val('ResMktSegment', system='', direction='')
@@ -1392,11 +1399,16 @@ class ResToSihot(FldMapXmlBuilder):
         return err_msg
 
     def _handle_error(self, rec, err_msg):
-        msg = "ResToSihot._handle_error(): {}; data=\n{}".format("{}", self.res_id_desc(rec, err_msg, separator="\n"))
+        msg = "##    ResToSihot._handle_error(): {}; data=" if self.debug_level >= DEBUG_LEVEL_VERBOSE else "{}"
+        msg += "\n{}".format(self.res_id_desc(rec, err_msg, separator="\n"))
 
         obj_id = rec.val('ResObjId')
         if [frag for frag in self._warning_frags if frag in err_msg]:
-            self._warning_msgs.append(msg.format("reinterpreting this error as warning"))
+            self._warning_msgs.append(msg.format("reinterpreting Sihot interface error as warning"))
+            err_msg = ""
+
+        elif self._in_error_handling:
+            self._warning_msgs.append(msg.format("skipping and ignoring this follow-up error"))
             err_msg = ""
 
         elif "Could not find a key identifier" in err_msg and (rec['ShId'] or rec['ShId_P']):
@@ -1407,10 +1419,16 @@ class ResToSihot(FldMapXmlBuilder):
 
         elif ("A database error has occurred." in err_msg or 'Room not available!' in err_msg) and obj_id:
             self.cae.dprint(msg.format("resetting reservation obj-id {}".format(obj_id)))
-            del_rec = rec.copy(deepness=-1)
-            del_rec.set_env(system=SDI_SH, direction=FAD_ONTO)
-            del_rec.set_val(ACTION_DELETE, 'ResAction')
-            err_msg = self._sending_res_to_sihot(del_rec)
+            try:
+                self._in_error_handling = True      # prevent recursion in handling follow-up errors
+                del_rec = rec.copy(deepness=-1)
+                del_rec.set_env(system=SDI_SH, direction=FAD_ONTO)
+                del_rec.set_val(ACTION_DELETE, 'ResAction')
+                err_msg = self._sending_res_to_sihot(del_rec)
+            except Exception as ex:
+                err_msg = msg.format("Exception {} occurred in orphan reservation deletion".format(ex))
+            finally:
+                self._in_error_handling = False
             self.cae.dprint(msg.format("orphan res deletion; res obj-id={}; ignorable err?={}".format(obj_id, err_msg)))
             rec['ResObjId'] = ''        # resend with wiped orphan/invalid obj_id, using ResHotelId+ResGdsNo instead
             err_msg = self._sending_res_to_sihot(rec)
@@ -1495,10 +1513,13 @@ class ResToSihot(FldMapXmlBuilder):
 
     @staticmethod
     def res_id_values(rec):
-        sh_res_id = rec.val('ResId') or ''
+        sh_res_id = str(rec.val('ResId')) or ''
         if sh_res_id:
-            sh_res_id += "/" + str(rec.val('ResSubId')) + "@"
-        ret = str(sh_res_id) + str(rec.val('ResHotelId')) + \
+            sh_sub_id = str(rec.val('ResSubId'))
+            if sh_sub_id != '1':
+                sh_res_id += "/" + sh_sub_id
+        sh_res_id += "@"
+        ret = sh_res_id + str(rec.val('ResHotelId')) + \
             "+" + str(rec.val('ResGdsNo')) + \
             "+" + str(rec.val('ResVoucherNo')) + \
             "+" + str(rec.val('AcuId')) + \

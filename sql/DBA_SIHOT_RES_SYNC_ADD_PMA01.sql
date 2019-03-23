@@ -1,4 +1,6 @@
 --- VERSION 00: first beta
+--- VERSION 01: post-roll-out fixes (never used, only for to prepare roll-out of other CPA resorts)
+
 -- Other system configuration changes for to add a new resort:
 -- * .console_app_env.cfg: configure new resort in INI vars hotelIds, resortCats
 --  and in section RcResortIds.
@@ -29,13 +31,55 @@ select 'V_ACU_RES_FILTERED count=' || to_char(count(*))
  where exists (select NULL from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = RUL_SIHOT_ROOM and AT_RSREF = 'PMA')
        or RUL_SIHOT_HOTEL = '107';
 
-select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF
+select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF, RU_ROREF, CD_CODE, OC_CODE
      , (select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as ROOM_HOTEL
   from V_ACU_RES_FILTERED
  where instr(RUL_SIHOT_PACK || RUL_SIHOT_ROOM || RUL_SIHOT_RATE || RUL_SIHOT_CAT || RUL_SIHOT_LAST_CAT || SIHOT_MKT_SEG, '_') > 0
     or RUL_SIHOT_HOTEL <= 0 or RUL_SIHOT_LAST_HOTEL <= 0
     or RUL_SIHOT_RATE is NULL
     or RUL_SIHOT_ROOM is not NULL and RUL_SIHOT_HOTEL <> nvl((select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')), -96);
+
+
+prompt V_ACU_RES_UNFILTERED check query
+
+select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF, RU_ROREF, CD_CODE, OC_CODE
+     , (select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as ROOM_HOTEL
+  from V_ACU_RES_UNFILTERED
+ where instr(RUL_SIHOT_PACK || RUL_SIHOT_ROOM || RUL_SIHOT_RATE || RUL_SIHOT_CAT || RUL_SIHOT_LAST_CAT || SIHOT_MKT_SEG, '_') > 0
+    or RUL_SIHOT_HOTEL <= 0 or RUL_SIHOT_LAST_HOTEL <= 0
+    or RUL_SIHOT_RATE is NULL
+    or RUL_SIHOT_ROOM is not NULL and RUL_SIHOT_HOTEL <> nvl((select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')), -96);
+
+prompt double directly check against T_RU if missing all|2019+|future reservations
+
+select 'T_RU count=' || to_char(count(*))
+     , 'Future Only=' || sum(case when RU_FROM_DATE >= trunc(sysdate) then 1 end) as Future_Only
+     , 'Present And Future=' || sum(case when RU_FROM_DATE + RU_DAYS >= trunc(sysdate) then 1 end) as Present_And_Future
+     , 'Present And Next Month=' || sum(case when RU_FROM_DATE + RU_DAYS >= trunc(sysdate) and RU_FROM_DATE <= trunc(sysdate) + 31 then 1 end) as Present_Plus_31Days
+  from T_RU
+ where ru_status <> 120
+   and (ru_resort = 'PMA'
+        or exists (select NULL from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = F_RH_ARO_APT(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) and AT_RSREF = 'PMA')
+        );
+ 
+select ru_code, ru_boardref, F_RH_ARO_APT(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) as room, ru_roref, ru_atgeneric, ru_resort, ru_rhref, ru_cdref
+     --, (select f_stragg(RUL_CODE) from T_RUL where RUL_PRIMARY = ru_code) as RUL_CODES
+     --, (select f_stragg(srsl_status || '@' || srsl_date) from t_srsl where srsl_primary = to_char(ru_code)) as SRSL_ENTRIES
+  from t_ru
+ where ru_status <> 120
+   and (ru_resort = 'PMA'
+        or exists (select NULL from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = F_RH_ARO_APT(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) and AT_RSREF = 'PMA')
+        -- uncomment to triple-check (VERY VERY SLOW): or exists (select NULL from V_ACU_RES_LOG where RUL_PRIMARY = RU_CODE and RUL_SIHOT_HOTEL = 107)
+       )
+   -- additional filters for discrep checks
+--   and ( not exists (select NULL from t_srsl where srsl_primary = to_char(ru_code) and srsl_date > DATE'2019-03-13' and substr(srsl_status, 1, 6) = 'SYNCED')
+--        or ru_sihot_objid is NULL )
+--   and ru_from_date + ru_days > DATE'2019-01-01' --2016-01-01'
+--   and exists (select NULL from t_ro where ro_code = ru_roref and ro_sihot_rate is not NULL)
+ order by ru_from_date desc;
+
+
+prompt UNSYNCED check
 
 select 'V_ACU_RES_UNSYNCED count=' || to_char(count(*))
      , 'Future Only=' || sum(case when ARR_DATE >= trunc(sysdate) then 1 end) as Future_Only
@@ -50,7 +94,7 @@ select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RU
 
 prompt DATA CHANGES
 
-prompt ... PMA overloads
+prompt ... insert resort configuration overloads
 
 delete from T_LU where LU_CLASS = 'SIHOT_CATS_PMA';
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
@@ -176,7 +220,7 @@ update T_RUL l
 
 commit;
 
-prompt .. then set HOTEL = 23 rows only (2:30 min on SP.DEV)
+prompt .. then set HOTEL ... 23 rows only (2:30 min on SP.DEV)
  
 update T_RUL l
    set RUL_SIHOT_HOTEL = F_SIHOT_HOTEL(nvl(ltrim(RUL_SIHOT_ROOM, '0'), nvl(F_RH_ARO_APT((select RU_RHREF from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE + RU_DAYS from T_RU where RU_CODE = RUL_PRIMARY), pnSihotFormat => 1), (select RU_ATGENERIC || '@' || RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY))))
@@ -204,7 +248,8 @@ prompt .. then set CAT
 --   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
 --   and 1=1;
 
--- first all the ones with ARO/room associated and set to room's category = 250k rows in 32 sec on SP.TEST
+prompt ... first all the ones with ARO/room associated and set to room category = 250k rows in 32 sec on SP.TEST
+
 update T_RUL l
    set RUL_SIHOT_CAT = (select AP_SIHOT_CAT from T_AP where AP_CODE = ltrim(RUL_SIHOT_ROOM, '0'))
 --select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_ROOM, F_RH_ARO_APT((select RU_RHREF from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE + RU_DAYS from T_RU where RU_CODE = RUL_PRIMARY), pnSihotFormat => 1) as RH_ARO_APT, (select RU_ATGENERIC || '@' || RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY) as RU_GEN, (select AT_GENERIC || '@' || AT_RSREF from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as AT_GEN, (select RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY) as RU_RESORT, RUL_SIHOT_CAT, (select AP_SIHOT_CAT from T_AP where AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as AP_SIHOT_CAT from T_RUL l
@@ -221,7 +266,8 @@ update T_RUL l
 
 commit;
 
--- then the ones without requested apt features = 14,5k rows
+prompt ... then the ones without requested apt features = 14,5k rows
+
 update T_RUL l
              set RUL_SIHOT_CAT = (select LU_CHAR from T_LU, T_RU
                                    where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
@@ -245,7 +291,8 @@ update T_RUL l
 
 commit;
 
--- then finally the ones with requested apt features and category overload == 3 rows in 2 sec
+prompt ... then the ones with requested apt features and category overload == 3 rows in 2 sec
+
 update T_RUL l
              set RUL_SIHOT_CAT = (select max(LU_CHAR) from T_LU, T_RU, T_RAF
                                    where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
@@ -268,6 +315,29 @@ update T_RUL l
                                      and RU_CODE = RUL_PRIMARY)
    and RUL_SIHOT_CAT <> (select max(LU_CHAR) from T_LU, T_RU, T_RAF where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end and LU_ID = RU_ATGENERIC || '_' || RAF_AFTREF and RU_CODE = RAF_RUREF and RU_CODE = RUL_PRIMARY)
    and exists (select NULL from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = RUL_SIHOT_ROOM and AT_RSREF = 'PMA');
+
+commit;
+
+
+prompt ... finally set all other invalid CATS (containing _) to the default room size cat
+
+update T_RUL l
+             set RUL_SIHOT_CAT = (select max(LU_CHAR) from T_LU, T_RU
+                                   where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
+                                     and LU_ID = RU_ATGENERIC
+                                     and RU_CODE = RUL_PRIMARY)
+--select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_ROOM, F_RH_ARO_APT((select RU_RHREF from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE + RU_DAYS from T_RU where RU_CODE = RUL_PRIMARY), pnSihotFormat => 1) as RH_ARO_APT, (select RU_ATGENERIC || '@' || RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY) as RU_GEN, (select AT_GENERIC || '@' || AT_RSREF from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as AT_GEN, (select RU_RESORT from T_RU where RU_CODE = RUL_PRIMARY) as RU_RESORT, (select AP_SIHOT_CAT from T_AP where AP_CODE = F_RH_ARO_APT((select RU_RHREF from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE + RU_DAYS from T_RU where RU_CODE = RUL_PRIMARY), pnSihotFormat => 1)) as AP_SIHOT_CAT, RUL_SIHOT_CAT, (select max(LU_CHAR) from T_LU, T_RU where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end and LU_ID = RU_ATGENERIC and RU_CODE = RUL_PRIMARY) as LU_SIHOT_CAT, (select RU_ATGENERIC || '@' || RU_RESORT || '/' || RU_CDREF from T_RU where RU_CODE = RUL_PRIMARY) as REQ_DATA from T_RUL l
+ where RUL_DATE >= DATE'2012-01-01'
+   and not exists (select NULL from T_RUL c where c.RUL_PRIMARY = l.RUL_PRIMARY and (c.RUL_ACTION = l.RUL_ACTION or c.RUL_ACTION <> 'DELETE' and l.RUL_ACTION <> 'DELETE') and c.RUL_CODE > l.RUL_CODE)
+   and nvl(RUL_MAINPROC, '_') not in ('wCheckIn', 'wCheckin')
+   and exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_STATUS <> 120) 
+   and ( exists (select NULL from T_RU where RU_CODE = RUL_PRIMARY and RU_STATUS <> 120 and RU_RESORT in ('PMA')) or RUL_SIHOT_HOTEL = 107 ) 
+   and RUL_SIHOT_RATE is not NULL 
+   and instr(RUL_SIHOT_CAT, '_') > 0
+   and exists (select NULL from T_LU, T_RU
+                where LU_CLASS = case when exists (select NULL from T_LU where LU_CLASS = 'SIHOT_CATS_' || RU_RESORT and LU_ID = RU_ATGENERIC and LU_ACTIVE = 1) then 'SIHOT_CATS_' || RU_RESORT else 'SIHOT_CATS_ANY' end
+                  and LU_ID = RU_ATGENERIC
+                  and RU_CODE = RUL_PRIMARY);
 
 commit;
 
@@ -314,13 +384,24 @@ select 'V_ACU_RES_FILTERED count=' || to_char(count(*))
      , 'Present And Next Month=' || sum(case when DEP_DATE >= trunc(sysdate) and ARR_DATE <= trunc(sysdate) + 31 then 1 end) as Present_Plus_31Days
   from V_ACU_RES_FILTERED;
 
-select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF
+select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF, RU_ROREF, CD_CODE, OC_CODE
      , (select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as ROOM_HOTEL
   from V_ACU_RES_FILTERED
  where ( instr(RUL_SIHOT_PACK || RUL_SIHOT_ROOM || RUL_SIHOT_RATE || RUL_SIHOT_CAT || RUL_SIHOT_LAST_CAT || SIHOT_MKT_SEG, '_') > 0
     or RUL_SIHOT_HOTEL <= 0 or RUL_SIHOT_LAST_HOTEL <= 0
     or RUL_SIHOT_RATE is NULL
     or RUL_SIHOT_ROOM is not NULL and RUL_SIHOT_HOTEL <> nvl((select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and 			AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')), -96) )
+   and exists (select NULL from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = RUL_SIHOT_ROOM and AT_RSREF = 'PMA');
+
+prompt same check query but from V_ACU_RES_UNFILTERED
+
+select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF, RU_ROREF, CD_CODE, OC_CODE
+     , (select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')) as ROOM_HOTEL
+  from V_ACU_RES_UNFILTERED
+ where ( instr(RUL_SIHOT_PACK || RUL_SIHOT_ROOM || RUL_SIHOT_RATE || RUL_SIHOT_CAT || RUL_SIHOT_LAST_CAT || SIHOT_MKT_SEG, '_') > 0
+    or RUL_SIHOT_HOTEL <= 0 or RUL_SIHOT_LAST_HOTEL <= 0
+    or RUL_SIHOT_RATE is NULL
+    or RUL_SIHOT_ROOM is not NULL and RUL_SIHOT_HOTEL <> nvl((select LU_NUMBER from T_AP, T_AT, T_LU where AP_ATREF = AT_CODE and       AT_RSREF = LU_ID and LU_CLASS = 'SIHOT_HOTELS' and AP_CODE = ltrim(RUL_SIHOT_ROOM, '0')), -96) )
    and exists (select NULL from T_AP, T_AT where AP_ATREF = AT_CODE and AP_CODE = RUL_SIHOT_ROOM and AT_RSREF = 'PMA');
 
 select 'V_ACU_RES_UNSYNCED count=' || to_char(count(*))
@@ -331,6 +412,19 @@ select 'V_ACU_RES_UNSYNCED count=' || to_char(count(*))
 
 select RUL_CODE, RUL_PRIMARY, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_RATE, RUL_SIHOT_CAT, RUL_SIHOT_LAST_CAT, RU_RESORT, RUL_SIHOT_HOTEL, RUL_SIHOT_LAST_HOTEL, RU_RHREF
   from V_ACU_RES_UNSYNCED where RUL_SIHOT_HOTEL in (107);
+
+
+prompt EXTRA check for still missing PMA syncs of future reservations (for correct double-checking results please run again after first sync process has finished)
+
+select * from t_ru
+ where ru_from_date + ru_days > DATE'2019-01-01' --2016-01-01'
+   and ru_status <> 120
+   and (ru_resort = 'PMA' or f_resort(F_RH_ARO_APT(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS)) = 'PMA')
+   and ( not exists (select NULL from t_srsl where srsl_primary = to_char(ru_code) and srsl_date > DATE'2019-03-13' and substr(srsl_status, 1, 6) = 'SYNCED')
+        or ru_sihot_objid is NULL )
+   and exists (select NULL from t_ro where ro_code = ru_roref and ro_sihot_rate is not NULL)
+ order by ru_from_date desc;
+ 
 
 
 prompt 'Finished  -  End Of Script'

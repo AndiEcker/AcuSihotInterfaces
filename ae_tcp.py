@@ -130,7 +130,7 @@ class TcpClient:
                 self.received_xml = self._receive_response(sock)
         except Exception as ex:
             self.error_message = "TcpClient.send_to_server() exception: " + str(ex) \
-                                 + (" (sent XML=" + xml + ")" + "\n" + format_exc() if self.debug_level else "")
+                + (" (sent XML=" + xml + ")" + "\n" + format_exc() if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
 
         return self.error_message
 
@@ -158,6 +158,6 @@ class TcpClient:
             else:
                 self.error_message = "TcpClient._receive_response() err: " + str(ex) \
                                      + (" (received XML=" + str(xml_recv, self.encoding) + ")" + "\n" + format_exc()
-                                        if self.debug_level else "")
+                                        if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
 
         return str(xml_recv, self.encoding)

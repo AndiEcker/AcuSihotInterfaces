@@ -189,7 +189,8 @@ def res_from_sh_to_sf(asd, ass_changed_res):
     # convert sh xml and ass_cache db columns to fields, and then push to Salesforce server via APEX method call
     err_msg = asd.sf_ass_res_upsert(rgr_sf_id, sh_cl, ass_res)
     if err_msg:
-        roll_back_msg = asd.connection(SDI_ASS).rollback() if asd.connection(SDI_ASS) else "Ass Db connection broken"
+        ass_conn = asd.connection(SDI_ASS, raise_if_error=False)
+        roll_back_msg = ass_conn.rollback() if ass_conn else "Ass Db connection broken"
         return msg_pre + "SF reservation push/update err='{}'; ass=\n{}; rollback='{}'" \
             .format(err_msg, ppf(ass_changed_res), roll_back_msg)
 
@@ -400,6 +401,10 @@ def _room_change_ass(asd, req, rec_ctx, oc, sub_no, room_id, action_time):
     if req.mc in [a[0] for a in asd.ro_agencies]:           # rental mkt segment found in MC element of CI/CO/RM request
         log_msg(proc_context(rec_ctx) + "ROOM CHANGE SKIP", importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
         return ""
+    # RM oc gets normally changed into CI-RM/CO-RM/RC-RM, but in this case (SUB-NR > 1) we simply ignoring this RM
+    if oc == 'RM':
+        log_msg(proc_context(rec_ctx) + "IGNORING ROOM CHANGE", importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
+        return ""
 
     rgr_sf_id = asd.sh_room_change_to_ass(oc, ho_id, res_no, sub_no, room_id, action_time)
     if rgr_sf_id:
@@ -559,7 +564,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             sys_connections = None
             try:
                 sys_connections = AssSysData(cae, err_logger=partial(log_msg, is_error=True), warn_logger=log_msg)
-                if sys_connections.error_message or not sys_connections.connection(SDI_ASS):
+                if sys_connections.error_message or not sys_connections.connection(SDI_ASS, raise_if_error=False):
                     err_messages.append((95, "AssSysData instantiation fail: {}".format(sys_connections.error_message)))
                 else:
                     rec_ctx = dict(procedure='sys_conn')

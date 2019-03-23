@@ -9,6 +9,7 @@ IS
   lcAftSuffix   varchar2(12);
   lcSihotCat    T_RUL.RUL_SIHOT_CAT%type := NULL;
 
+  /*  REMOVED 4 WEEKS LATER - ROLLED BACK TO PREVIOUS VERSION 04: 
   cursor cRU is
     select nvl(AT_RSREF, RU_RESORT) as RESORT, 
            nvl(AT_GENERIC, RU_ATGENERIC) as GEN, 
@@ -19,7 +20,13 @@ IS
            F_RH_ARO_APT(RU_RHREF, RU_FROM_DATE, RU_FROM_DATE + RU_DAYS) = AP_CODE(+)  
        and AP_ATREF = AT_CODE(+)
        and RU_CODE = lnRUCode;
-
+   */
+  cursor cRU is
+    select RU_RESORT, RU_ATGENERIC, 
+           F_SIHOT_PAID_RAF(RU_CODE, RU_RESORT, RU_ATGENERIC)
+      from T_RU
+     where RU_CODE = lnRUCode;
+   
   cursor cRL is
     select case when RU_RESORT = 'ANY' and RUL_SIHOT_ROOM is not NULL then F_RESORT(ltrim(RUL_SIHOT_ROOM, '0')) else RU_RESORT end, RU_ATGENERIC, 
            F_SIHOT_PAID_RAF(RU_CODE, case when RU_RESORT = 'ANY' and RUL_SIHOT_ROOM is not NULL then F_RESORT(ltrim(RUL_SIHOT_ROOM, '0')) else RU_RESORT end, RU_ATGENERIC)
@@ -99,7 +106,7 @@ BEGIN
       close cAP;
     end if;
   end if;
-  return nvl(lcSihotCat, '_S_C');
+  return nvl(lcSihotCat, '_SC_');
 END
 /*
   ae:10-09-16 V00: first beta - added for SIHOT sync/migration project.
@@ -108,6 +115,7 @@ END
   ae:11-03-17 V03: added ltrim(,'0') around RUL_SIHOT_ROOM after refactoring (now RUL_SIHOT_ROOM holding the Sihot room number - with leading zero for 3-digit PBC rooms).
   ae:30-05-18 V04: added fallback if RU record got deleted (mostly FBs in ANY resort) by checking V_ACU_RES_LOG.
   ae:28-02-19 V05: ARO that is covering the expected arrival (RU_FROM_DATE) is now overwriting resort/room-category; also changed cat-id default from '_C_' to '_S_C'.
+  ae:21-03-19 V06: Rolled back extension of cursor cRU to previous version V04.
 */;
 /
 

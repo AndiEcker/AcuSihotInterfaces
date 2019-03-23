@@ -116,12 +116,12 @@ def get_timer_corrected():
     """ get timer ticker value (seconds) and reset all timer vars on overflow (which should actually never happen
         with monotonic, but some OS may only support 32 bits - rolling-over after 49.7 days) """
     global last_timer, last_run, last_check
-    curr_timer = time.monotonic()
-    if last_timer is None or curr_timer < last_timer:   # if app-startup or timer-roll-over
-        last_run = curr_timer - command_interval        # .. then reset to directly do next env-check and cmd-run
-        last_check = curr_timer - check_interval
-    last_timer = curr_timer
-    return curr_timer
+    timer = time.monotonic()
+    if last_timer is None or timer < last_timer:   # if app-startup or timer-roll-over
+        last_run = timer - command_interval        # .. then reset to directly do next env-check and cmd-run
+        last_check = timer - check_interval
+    last_timer = timer
+    return timer
 
         
 def reset_last_run_time(force=False):
@@ -182,29 +182,33 @@ while True:
             if break_on_error or BREAK_PREFIX in err_msg:
                 break
             errors = list()
-            time.sleep(command_interval / 30)  # wait 120 seconds after each error, for command_interval of 1 hour
+            # wait minimum 10 minutes after each error, wait longer if command_interval is greater than 1 hour
+            time.sleep(max(600, command_interval / 6))
 
         # wait for next check_interval, only directly after startup checks on first run
-        if get_timer_corrected() < last_check + check_interval:
-            cae.dprint(" ###  Waiting for next check in {} seconds (timer={}, last={}, interval={})".format(
-                last_check + check_interval - get_timer_corrected(), get_timer_corrected(), last_check, check_interval),
-                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        next_check = last_check + check_interval
+        curr_time = datetime.datetime.now()
+        curr_timer = get_timer_corrected()
+        if curr_timer < next_check:
+            cae.dprint(" ###  Waiting for next check in {} seconds (timer={}, last={}, interval={}, at {})"
+                       .format(next_check - curr_timer, curr_timer, last_check, check_interval, curr_time),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         try:
-            while get_timer_corrected() < last_check + check_interval:
+            while get_timer_corrected() < next_check:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
         except KeyboardInterrupt:
             errors.append(BREAK_PREFIX + " while waiting for next check in {} seconds"
-                          .format(last_check + check_interval - get_timer_corrected()))
+                          .format(next_check - get_timer_corrected()))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
-        cae.dprint(" ###  Running checks (timer={}, last={}, interval={})".format(
-            get_timer_corrected(), last_check, check_interval),
-            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        cae.dprint(" ###  Running checks (timer={}, last={}, interval={}) at={}"
+                   .format(get_timer_corrected(), last_check, check_interval, datetime.datetime.now()),
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # check environment and connections: AssCache, Acu/Oracle, Salesforce, Sihot servers and interfaces
         if SDI_ASS in asd.used_systems:
-            if not asd.connection(SDI_ASS) or asd.connection(SDI_ASS).select('pg_tables'):
+            if not asd.connection(SDI_ASS, raise_if_error=False) or asd.connection(SDI_ASS).select('pg_tables'):
                 asd.reconnect(SDI_ASS)
-            if not asd.connection(SDI_ASS):
+            if not asd.connection(SDI_ASS, raise_if_error=False):
                 errors.append("AssCache environment check connection error: " + asd.error_message)
             else:
                 ass_db = asd.connection(SDI_ASS)
@@ -213,9 +217,9 @@ while True:
                     errors.append("AssCache table hotels selection error: " + err_msg)
 
         if SDI_ACU in asd.used_systems:
-            if not asd.connection(SDI_ACU) or asd.connection(SDI_ACU).select('dual', ['sysdate']):
+            if not asd.connection(SDI_ACU, raise_if_error=False) or asd.connection(SDI_ACU).select('dual', ['sysdate']):
                 asd.reconnect(SDI_ACU)
-            if not asd.connection(SDI_ACU):
+            if not asd.connection(SDI_ACU, raise_if_error=False):
                 errors.append("Acumen environment check connection error: " + asd.error_message)
             else:
                 ora_db = asd.connection(SDI_ACU)
@@ -317,7 +321,7 @@ while True:
             continue  # wait for next check
 
         # wait for next command_interval, only directly after startup checks on first run
-        if get_timer_corrected() < next_run:
+        if last_check < next_run:
             cae.dprint(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={}) (at {})"
                        .format(next_run - last_check, last_check, last_run, command_interval, curr_time),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)

@@ -157,18 +157,18 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
     ret_dict['assSysData'] = asd = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger,
                                               sys_msg_prefix=used_systems_msg_prefix)
     sys_ids = list()
-    if asd.connection(SDI_ASS):
+    if asd.connection(SDI_ASS, raise_if_error=False):
         uprint('AssCache database name and user:', cae.get_option('assDSN'), cae.get_option('assUser'))
         sys_ids.append(cae.get_option('assDSN'))
-    if asd.connection(SDI_ACU):
+    if asd.connection(SDI_ACU, raise_if_error=False):
         uprint('Acumen database TNS and user:', cae.get_option('acuDSN'), cae.get_option('acuUser'))
         sys_ids.append(cae.get_option('acuDSN'))
-    if asd.connection(SDI_SF):
+    if asd.connection(SDI_SF, raise_if_error=False):
         sf_sandbox = SDF_SF_SANDBOX + '=True' in asd.used_systems[SDI_SF].features
         uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:",
                cae.get_option('sfUser'))
         sys_ids.append("SBox" if sf_sandbox else "Prod")
-    if asd.connection(SDI_SH):
+    if asd.connection(SDI_SH, raise_if_error=False):
         print_sh_options(cae)
         sys_ids.append(cae.get_option('shServerIP'))
     ret_dict['sysIds'] = sys_ids
@@ -321,7 +321,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.ro_agencies = cae.get_config('roAgencies')
             self.room_change_max_days_diff = cae.get_config('roomChangeMaxDaysDiff', default_value=3)
         else:                   # fetch config data from Acumen
-            db = self.connection(SDI_ACU)
+            db = self.connection(SDI_ACU, raise_if_error=False)
             if not db:      # logon/connect error
                 self.error_message = "AssSysData: Missing credentials for to open Acumen database"
                 self._err(self.error_message, self._ctx_no_file + 'InitAcuDb')
@@ -382,11 +382,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def __del__(self):
         self.close_dbs()
 
-    def is_test_system(self):
-        ass_db = self.connection(SDI_ASS)
-        acu_db = self.connection(SDI_ACU)
-        sf_conn = self.connection(SDI_SF)
-        sh_conn = self.connection(SDI_SH)
+    def is_test_system(self, raise_if_error=False):
+        err_msg = self.error_message
+        ass_db = self.connection(SDI_ASS, raise_if_error=raise_if_error)
+        acu_db = self.connection(SDI_ACU, raise_if_error=raise_if_error)
+        sf_conn = self.connection(SDI_SF, raise_if_error=raise_if_error)
+        sh_conn = self.connection(SDI_SH, raise_if_error=raise_if_error)
+        self.error_message = err_msg    # restore old error message (most likely empty string)
+
         return (ass_db and 'sihot3v' in self.cae.get_option('assDSN', default_value='')
                 or acu_db and '.TEST' in self.cae.get_option('acuDSN', default_value='')
                 or sf_conn and SDF_SF_SANDBOX + '=True' in self.used_systems[SDI_SF].features
@@ -397,18 +400,22 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # ensure to close of DB connections (execution of auto-commits)
         return self.used_systems.disconnect()
 
-    def connection(self, sys_id):
+    def connection(self, sys_id, raise_if_error=True):
         msg = "AssSysData.connection({}): ".format(sys_id)
         if not sys_id:
-            uprint(msg + "empty system id")
+            msg += "empty system id"
         elif sys_id not in ALL_AVAILABLE_SYSTEMS:
-            uprint(msg + "invalid system id")
+            msg += "invalid system id"
         elif sys_id not in self.used_systems:
-            uprint(msg + "unknown/unused system id")
+            msg += "unknown/unused system id"
         elif not self.used_systems[sys_id].connection:
-            uprint(msg + "system is not connected/initialized")
+            msg += "system is not connected/initialized"
         else:
             return self.used_systems[sys_id].connection
+
+        if raise_if_error:
+            self.error_message = msg
+            raise ConnectionError(msg)
 
     def reconnect(self, sys_id):
         if sys_id in self.used_systems:
@@ -422,7 +429,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             db = db_opt
             self.error_message = ""
         else:
-            db = self.connection(SDI_ACU)
+            db = self.connection(SDI_ACU, raise_if_error=False)
         if not self.error_message:
             self.error_message = db.select(view, cols, where_group_order=where, bind_vars=bind_vars)
         if self.error_message:
@@ -1232,6 +1239,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 ass_res_rec['ResAssId'] = rgr_pk
                 next_rs = next_ps = '0'
                 for pers_idx, occ_rec in enumerate(sh_ass_rec.value('ResPersons', flex_sys_dir=True)):
+                    '''
+                    # sometimes Sihot SS is sending back ROOM-SEQ value as "1" - therefore now hard-coded to "0"
+                    # .. room_seq, pers_seq = occ_rec.val('RoomSeq') or next_rs, occ_rec.val('RoomPersSeq') or next_ps
+                    # LATER in Mar-2019 migrated the bug fix underneath to FldMapXmlParser.end()
+                    # .. room_seq, pers_seq = "0", occ_rec.val('RoomPersSeq') or next_ps
+                    '''
                     room_seq, pers_seq = occ_rec.val('RoomSeq') or next_rs, occ_rec.val('RoomPersSeq') or next_ps
                     chk_values = dict(rgc_rgr_fk=rgr_pk, rgc_room_seq=int(room_seq), rgc_pers_seq=int(pers_seq))
                     occ_rec.update(chk_values)
@@ -1341,8 +1354,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         """
         msg_sfx = " in ASD.sf_ass_res_upsert({}) sh=\n{} ass=\n{}".format(sf_res_id, ppf(sh_cl_data), ppf(ass_res_data))
 
-        sf_rec = Record(system=SDI_SF, direction=FAD_ONTO).add_system_fields(SF_CLIENT_MAPS['Account']
-                                                                             + SF_RES_MAP) \
+        sf_rec = Record(system=SDI_SF, direction=FAD_ONTO).add_system_fields(SF_CLIENT_MAPS['Account'] + SF_RES_MAP) \
             if sf_sent is None else sf_sent
         sf_rec['ResSfId'] = sf_res_id
         ass_id = ass_res_data.val('AssId')
@@ -1372,10 +1384,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not err_msg and (not sf_cl_id or not sf_opp_id):
             self._err("Empty Id from SF: PersonAccount.Id={}; ResSfId={}".format(sf_cl_id, sf_opp_id) + msg_sfx)
         if not err_msg and sf_rec.val('SfId') and sf_rec.val('SfId') != sf_cl_id \
-                and self.debug_level >= DEBUG_LEVEL_ENABLED:
+                and self.debug_level >= DEBUG_LEVEL_VERBOSE:
             self._err("PersonAccountId/id/SfId discrepancy {} != {}".format(sf_rec.val('SfId'), sf_cl_id) + msg_sfx)
         if not err_msg and sf_rec.val('ResSfId') and sf_rec.val('ResSfId') != sf_opp_id \
-                and self.debug_level >= DEBUG_LEVEL_ENABLED:
+                and self.debug_level >= DEBUG_LEVEL_VERBOSE:
             self._err("Res. Opportunity Id discrepancy {} != {}".format(sf_rec.val('ResSfId'), sf_opp_id) + msg_sfx)
 
         if sync_cache:
@@ -1670,7 +1682,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     if not callable(filter_records) or not filter_records(rec):
                         recs.append(rec)
         '''
-        acu_cl = AcumenClient(self.cae, ora_db=self.connection(SDI_ACU))
+        acu_cl = AcumenClient(self.cae, ora_db=self.connection(SDI_ACU, raise_if_error=False))
         self.error_message = acu_cl.fetch_all_valid_from_acu(col_names=col_names, chk_values=chk_values,
                                                              where_group_order=where_group_order,
                                                              bind_values=bind_values, filter_records=filter_records)
@@ -1719,7 +1731,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         ignored_errors = 0
         recs = self.clients
         recs.set_env(system=SDI_ACU, direction=FAD_ONTO)
-        acu_cl = AcumenClient(self.cae, ora_db=self.connection(SDI_ACU))
+        acu_cl = AcumenClient(self.cae, ora_db=self.connection(SDI_ACU, raise_if_error=False))
         for rec in recs:
             rec.add_system_fields(ACU_CLIENT_MAP, sys_fld_indexes=onto_field_indexes)
             rec.push(SDI_ACU)

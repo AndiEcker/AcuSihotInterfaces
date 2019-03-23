@@ -273,7 +273,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResStatus'] = 'S' if curr_cols[TCI_BOOK_TYPE] == 'CNL' else '1'
             row['ResHotelId'] = '1' if curr_cols[TCI_RESORT] == 'BEVE' else '4'  # '1'=BHC, '4'=PBC
             row['ResVoucherNo'] = curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
-            row['ResBooked'] = curr_cols[TCI_BOOK_DATE]
+            row['ResBooked'] = datetime.datetime.strptime(curr_cols[TCI_BOOK_DATE], '%Y-%m-%d')
             row['ResAllotmentNo'] = 11 if curr_cols[TCI_RESORT] == 'BEVE' else 12
 
             row['ResRoomCat'] = row['ResPriceCat'] = room_cat
@@ -469,7 +469,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResStatus'] = 'S' if curr_cols[BKC_CANCEL_DATE] else '1'
             row['ResHotelId'] = resort  # 1=BHC, 4=PBC
             row['ResVoucherNo'] = curr_cols[BKC_BOOK_REF]
-            row['ResBooked'] = curr_cols[BKC_BOOK_DATE]
+            row['ResBooked'] = datetime.datetime.strptime(curr_cols[BKC_BOOK_DATE], '%Y-%m-%d')
             row['ResGroupNo'] = (ext_key + ' ' if sub_res_id else '') + acu_user[:2].lower()
             # no allotment for Booking.com: row['ResAllotmentNo'] = 11 if resort == 1 else 12
 

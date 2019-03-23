@@ -1052,7 +1052,7 @@ class Record(OrderedDict):
             if idx_path in rec:
                 that_val = rec.compare_val(*idx_path)
                 if this_val != that_val:
-                    dif.append("Different values in Field {}: {}:{} != {}:{}"
+                    dif.append("Different values in Field {}: {}:{!r} != {}:{!r}"
                                .format(idx_path, self.system, this_val, rec.system, that_val))
             elif this_val:  # silently skip/ignore fields with empty value in this record if field doesn't exist in rec
                 dif.append("Field {}:{}={} does not exist in the other Record"
@@ -2143,11 +2143,12 @@ class UsedSystems(OrderedDict):
         self._systems[sys_id] = system
 
     def connect(self, connectors, **connector_args):
+        errors = list()
         for sys_id, system in self._systems.items():
             assert sys_id in connectors, "UsedSystems.connect(): connector for system {} missing".format(sys_id)
             if system.connect(connectors[sys_id], **connector_args) or not system.connection:
-                return system.conn_error or "UsedSystems.connect(): system {} connection failed".format(sys_id)
-        return ""
+                errors.append(system.conn_error or "UsedSystems.connect(): system {} connection failed".format(sys_id))
+        return "\n      ".join(errors)
 
     def disconnect(self):
         err_msg = ""

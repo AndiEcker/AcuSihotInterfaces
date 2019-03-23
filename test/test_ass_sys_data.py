@@ -386,7 +386,7 @@ class TestSysDataResActions:
         rec['ResId'] = r['ResId']
         rec['ResSubId'] = r['ResSubId']
         rec['ResObjId'] = r['ResObjId']
-        rec['ResBooked'] = r['ResBooked']
+        rec['ResBooked'] = r.val('ResBooked', system='', direction='')
         rec['ResRateSegment'] = r['ResRateSegment']
         rec['ResSource'] = r['ResSource']
 
@@ -401,9 +401,12 @@ class TestSysDataResActions:
         orderer_fields = [fn for sn, fn, *_ in ASS_CLIENT_MAP if fn]
         recs, dif = asd.ass_reservations_compare(chk_values=dict(rgr_pk=rec.val('ResAssId')),
                                                  exclude_fields=['ResAction',  # 'ResAssId', 'ResSource', 'ResPriceCat',
-                                                                 'ResAccount',
-                                                                 # 'PersAcuId',   # 'PersShId',
                                                                  # not returned by Sihot RES-SEARCH
+                                                                 'PersAcuId', 'PersShId', 'ResSfId',
+                                                                 # AutoGen can be '1' in response if not send in request
+                                                                 'AutoGen',
+                                                                 # PersLanguage can be 'EN' in response if sent as None
+                                                                 'PersLanguage',
                                                                  ] + orderer_fields
                                                  )
         assert not asd.error_message
@@ -503,7 +506,7 @@ class TestSysDataResActions:
                             # PersLanguage can be 'EN' in response if sent as None
                             'PersLanguage',
                             # RoomSeq is coming back sometimes with 1 although sent as 0
-                            'RoomSeq',
+                            # 'RoomSeq',    # ..  meanwhile hard-coded to '0' in ASD.res_save()
                             ] + orderer_fields
             )
         assert not asd.error_message
