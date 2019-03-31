@@ -70,7 +70,7 @@ SF_CLIENT_MAPS = \
          # ('Market_Source__c', 'MarketSource'),
          # ('Previous_Arrivals__c', 'ArrivalInfo')
      )
-     }  # type: Dict[str, Tuple[Tuple[Any]]]
+     }  # type: Dict[str, Tuple[Tuple[Any, ...], ...]]
 
 # Reservation Object fields
 SF_RES_MAP = (
@@ -101,14 +101,14 @@ SF_RES_MAP = (
     # ('', ('ResPersons', 0, 'PersSurname')),
     # ('', ('ResPersons', 0, 'RoomNo')),
     # ('', ('ResPersons', 0, 'TypeOfPerson')),
-)  # type: Tuple[Tuple[Any]]
+)  # type: Tuple[Tuple[Any, ...], ...]
 
 # Allocation Object fields
 SF_ROOM_MAP = (
     ('CheckIn__c', 'ResCheckIn', None, None,
      lambda f, v: convert_date_time_from_sf(v), lambda f, v: convert_date_time_onto_sf(v)),
     ('CheckOut__c', 'ResCheckOut'),
-)  # type: Tuple[Tuple[Any]]
+)  # type: Tuple[Tuple[Any, ...], ...]
 
 # from Sf rec map (used e.g. by SihotServer)
 ''' - NOT NEEDED BECAUSE SAME FIELD NAMES (see SihotServer.py/sh_res_action())
@@ -135,7 +135,7 @@ MAP_RES_FROM_SF = (
     Address.Country     (String,    80)
 """
 
-# SF ID prefixes for to determine SF object
+# SF ID prefixes for to determine SF object (s.a. Sf object describe 'keyPrefix')
 ID_PREFIX_OBJECTS = {'001': 'Account', '003': 'Contact', '00Q': 'Lead', '006': 'Opportunity'}
 
 

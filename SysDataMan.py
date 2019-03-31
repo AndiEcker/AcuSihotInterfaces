@@ -13,8 +13,8 @@ import argparse
 import pprint
 from traceback import format_exc
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES, SRT_ID_LEN, \
-    parse_system_option_args
+from sys_data_ids import (DEBUG_LEVEL_VERBOSE, ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES,
+                          parse_system_option_args)
 from ae_sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae_console_app import ConsoleApp, uprint
 from ae_db import PostgresDB

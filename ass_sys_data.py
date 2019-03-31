@@ -2,7 +2,7 @@ import datetime
 import pprint
 import re
 from traceback import format_exc
-from typing import Dict, Any, Union, Tuple
+from typing import Dict, Any, Union, Tuple  # , Tuple
 
 from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
@@ -49,7 +49,7 @@ ASS_CLIENT_MAP = (
      None,
      lambda f, v: f.string_to_records(v, ('Type', 'Id'), rec_sep=EXT_REFS_SEP, fld_sep=EXT_REF_TYPE_ID_SEP)),
     ('owns', 'ProductTypes'),
-)  # type: Tuple[Tuple[Any]]
+)  # type: Tuple[Tuple[Any, ...], ...]
 
 
 # ass_cache res_groups/res_group_clients rec map
@@ -102,7 +102,7 @@ ASS_RES_MAP = (
     ('rgc_pers_type', ('ResPersons', 0, 'TypeOfPerson')),
     ('rgc_sh_pack', ('ResPersons', 0, 'Board')),
     ('rgc_room_id', ('ResPersons', 0, 'RoomNo')),
-)  # type: Tuple[Tuple[Any]]
+)  # type: Tuple[Tuple[Any, ...], ...]
 
 
 # Reservation Inventory data (ass_cache.res_inventories/AssSysData.reservation_inventories)
@@ -559,9 +559,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             field_names = [k for k in client_data.keys() if k not in ('AssId', 'ExtRefs', 'ProductTypes')]
         col_values = {f.name(system=SDI_ASS): f.val() for k, f in client_data.items()
                       if k in field_names and k not in ('AssId', 'ExtRefs', 'ProductTypes')}
+        '''
         # cl_name got DEPRECATED in sys_data_generic branch and replaced by cl_firstname, cl_surname
         # if 'Surname' in field_names or 'Forename' in field_names:
         #    col_values['cl_name'] = client_data.val('Forename') + FORE_SURNAME_SEP + client_data.val('Surname')
+        '''
         if not match_fields:
             # default to non-empty, external system references (k.endswith('Id') and len(k) <= 5 and k != 'RciId')
             match_fields = [k for k, f in client_data.items() if k in ('AssId', 'AcuId', 'SfId', 'ShId') and f.val()]
@@ -571,8 +573,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not col_values or not chk_values or not match_fields:
             self.error_message = msg_tpl.format("called without data or with a non-empty system id")
             return None
+        '''
         # if locked_cols is None:
         #    locked_cols = field_names.copy()        # uncomment for all fields being locked by default
+        '''
 
         ass_db = self.connection(SDI_ASS)
         if ass_db.upsert('clients', col_values, chk_values=chk_values, returning_column='cl_pk', commit=commit,
@@ -1011,7 +1015,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 and not (chk_values.get('rgr_ho_fk') and chk_values.get('rgr_res_id') and chk_values.get('rgr_sub_id')):
             if chk_values.get('rgr_obj_id') or col_values.get('rgr_obj_id'):
                 res_no_ids = obj_id_to_res_no(self.cae, chk_values.get('rgr_obj_id') or col_values['rgr_obj_id'])
-                if res_no_ids:
+                if res_no_ids[0] is not None:
                     if res_no_ids[:2] != (col_values.get('rgr_ho_fk'), col_values.get('rgr_res_id'), ):
                         self._warn("Automatic/hidden update of reservation number from {}/{}@{} to {}/{}@{}"
                                    .format(col_values.get('rgr_ho_fk'), col_values.get('rgr_res_id'),
@@ -1373,13 +1377,21 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
         if err_msg and sf_res_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
             ori_err = err_msg
-            # retry without sf_res_id if ResOpp got deleted within SF
-            sf_rec['ResSfId'] = ''
-            sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
-            self._warn("Cached ResSfId reset to {}; SF client={}; ori-/err='{}'/'{}'" + msg_sfx
-                       .format(sf_opp_id, sf_cl_id, ori_err, err_msg),
-                       notify=True)
-            sf_res_id = ''
+            if "Required fields are missing: [LastName]" in err_msg:
+                # retry with dummy Surname if Sihot client has no surname
+                sf_rec['Surname'] = "+++EmptySihotClientSurname+++"
+                sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
+                self._warn("Sent empty Sihot surname as {} to SF client={}; ori-/err='{}'/'{}'"
+                           .format(sf_rec['Surname'], sf_cl_id, ori_err, err_msg) + msg_sfx,
+                           notify=True)
+            else:
+                # retry without sf_res_id if ResOpp got deleted within SF
+                sf_rec['ResSfId'] = ''
+                sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
+                self._warn("Cached ResSfId {} reset to {}; SF client={}; ori-/err='{}'/'{}'"
+                           .format(sf_res_id, sf_opp_id, sf_cl_id, ori_err, err_msg) + msg_sfx,
+                           notify=True)
+                sf_res_id = ''
 
         if not err_msg and (not sf_cl_id or not sf_opp_id):
             self._err("Empty Id from SF: PersonAccount.Id={}; ResSfId={}".format(sf_cl_id, sf_opp_id) + msg_sfx)
@@ -1431,10 +1443,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         err_msg = self.connection(SDI_SF).room_change(rgr_sf_id, check_in, check_out, next_room_id)
         if err_msg and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
-            # reset (set last res change to midnight) to re-sync reservation (to get new ResSfId) and then try again
-            self.rgr_upsert(dict(rgr_last_change=datetime.date.today(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
+            # reset last-res-change-datetime to now for to re-sync reservation (to get new ResSfId) and then try again
+            self.rgr_upsert(dict(rgr_last_change=datetime.datetime.now(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
                             multiple_row_update=True, commit=True)
-            self._warn("ResSfId reset; ori-/err='{}'/'{}' in ".format(err_msg, self.error_message) + msg, notify=True)
+            self._warn("ResSfId {} reset; ori-/err='{}'/'{}' in "
+                       .format(rgr_sf_id, err_msg, self.error_message) + msg, notify=True)
             self.error_message = ""
             return ""
 

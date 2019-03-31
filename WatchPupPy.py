@@ -94,7 +94,8 @@ send_output = 1 if notification and cae.get_option('sendOutput') else 0
 uprint("Send Output (subprocess call method: 1=check_output, 0=check_call)", send_output)
 
 is_test = asd.is_test_system()
-max_sync_outage_delta = exe_name.startswith(('AcuServer', 'SihotResSync')) \
+debug_level = cae.get_option('debugLevel')
+max_sync_outage_delta = exe_name.startswith(('AcuServer', 'SihotResSync')) and debug_level > DEBUG_LEVEL_DISABLED \
                         and datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS * (9 if is_test else 1))
 
 

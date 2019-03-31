@@ -686,6 +686,8 @@ class Record(OrderedDict):
         return bool(item)
 
     def __getitem__(self, key):
+        if isinstance(key, slice):
+            return super().__getitem__(key)
         ssd = dict()
         child = self.node_child(key, moan=True, selected_sys_dir=ssd)
         if child is None:
@@ -720,7 +722,7 @@ class Record(OrderedDict):
         # defensive programming: using self._fields.keys() although self._fields.items() gets item via get() in 3.5, for
         # .. to ensure _Field instances independent from self.field_items value (having py-tests for get() not items())
         for fld_nam in self._fields.keys():
-            field = self._fields.get(fld_nam)   # type: _Field
+            field = self._fields.get(fld_nam)   # type: Union[_Field, None]
             if fld_nam == idx:
                 if not idx2:
                     break
@@ -1355,7 +1357,9 @@ class Records(Values):              # type: List[Record]
         super().__init__(seq)
         self.match_index = dict()   # type: Dict[Tuple, List[Record]]
 
-    def __getitem__(self, key: Union[int, str, tuple]) -> Record:
+    def __getitem__(self, key: Union[int, str, tuple]) -> Union[Record, list]:
+        if isinstance(key, slice):
+            return super().__getitem__(key)
         child = self.node_child(key, moan=True)
         if child is None:
             raise KeyError("There is no item with the idx_path '{}' in this Records instance ({})".format(key, self))

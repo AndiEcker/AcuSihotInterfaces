@@ -24,13 +24,15 @@ import json
 import csv
 from traceback import format_exc
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
-    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, FORE_SURNAME_SEP
-from ae_sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record
+from sys_data_ids import (DEBUG_LEVEL_VERBOSE, FORE_SURNAME_SEP,
+                          SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
+                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES,
+                          SDI_ACU)
+from ae_sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_ONTO
 from ae_db import bind_var_prefix
 from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from acif import add_ac_options
+from acif import add_ac_options, ACU_RES_MAP, onto_field_indexes
 from sfif import add_sf_options
 from shif import add_sh_options, ClientToSihot, ResSender
 from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
@@ -927,9 +929,35 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     '''
 
     def json_imp_to_res_row(row, file_name, res_index):
-        row['ResArrival'] = datetime.datetime.strptime(row['ResArrival'], '%Y-%m-%d')
-        row['ResDeparture'] = datetime.datetime.strptime(row['ResDeparture'], '%Y-%m-%d')
-        row['ResBooked'] = datetime.datetime.strptime(row['ResBooked'], '%Y-%m-%d')
+        """ convert date/int values, support old Acu-Sys-Field-Names and extend json dict with file/line context """
+        row['ResArrival'] = datetime.datetime.strptime(row.get('ResArrival', row.pop('ARR_DATE')), '%Y-%m-%d')
+        row['ResDeparture'] = datetime.datetime.strptime(row.get('ResDeparture', row.pop('DEP_DATE')), '%Y-%m-%d')
+        row['ResBooked'] = datetime.datetime.strptime(row.get('ResBooked', row.pop('RH_EXT_BOOK_DATE')), '%Y-%m-%d')
+
+        row['ResHotelId'] = str(row.get('ResHotelId', row.pop('RUL_SIHOT_HOTEL')))
+
+        if 'RUL_SIHOT_CAT' in row:
+            row['ResRoomCat'] = row.pop('RUL_SIHOT_CAT')    # SH_CAT
+        if 'RO_RES_GROUP' in row:
+            row['ResMktGroup'] = row.pop('RO_RES_GROUP')    # RO_SIHOT_RES_GROUP
+        if 'SH_OBJID' in row:
+            row['ShId'] = row.pop('SH_OBJID')               # orderer GUEST-ID
+        if 'SH_MC' in row:
+            row['AcuId'] = row.pop('SH_MC')                 # orderer MATCHCODE
+        if 'SIHOT_ALLOTMENT_NO' in row:
+            row['ResAllotmentNo'] = row.pop('SIHOT_ALLOTMENT_NO')
+        if 'SIHOT_RATE_SEGMENT' in row:
+            row['ResRateSegment'] = row.pop('SIHOT_RATE_SEGMENT')
+
+        fld_nam_map = dict(NAME='Surname', NAME2='Forename', DOB='DOB')
+        for key, val in [(k, v) for k, v in row.items() if k.startswith('SH_ADULT') or k.startswith('SH_CHILD')]:
+            nam = fld_nam_map.get(key[10:])
+            if nam:
+                pers_idx = str(int(key[8]) - 1)
+                row['ResPersons' + str(pers_idx) + nam] = row.pop(key)
+        for key in [k for k in row.keys()
+                    if k.startswith('SH_PERS_SEQ') or k.startswith('SH_ROOM_SEQ') or k == 'SH_ROOMS']:
+            row.pop(key)
 
         row['=FILE_NAME'] = file_name
         row['=LINE_NUM'] = res_index
@@ -1280,7 +1308,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             if got_cancelled():
                 log_error("User cancelled reservation send", fn, idx, importance=4)
                 break
-            rec = Record(fields=res_row)
+            rec = Record(system=SDI_ACU, direction=FAD_ONTO)
+            rec.add_system_fields(ACU_RES_MAP, sys_fld_indexes=onto_field_indexes)
+            rec.update(res_row)
             progress.next(processed_id=str(rec['ResVoucherNo']), error_msg=error_msg)
             error_msg, warning_msg = res_sender.send_rec(rec)
             if warning_msg:

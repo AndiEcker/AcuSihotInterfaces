@@ -452,6 +452,91 @@ def client_data(cae, obj_id):
     return ret
 
 
+def complete_res_data(rec):
+    """
+    complete reservation data row (rec) with default values.
+
+    :param rec:     reservation data Record instance.
+    :return:        completed reservation data Record instance.
+
+    un-changed fields:
+        ResRoomNo, ResNote, ResLongNote, ResFlightArrComment (flight no...), ResAllotmentNo, ResVoucherNo.
+    mandatory fields:
+        ShId or AcuId or Surname (to specify the orderer of the reservation), ResHotelId, ResArrival, ResDeparture,
+        ResRoomCat, ResMktSegment, ResGdsNo.
+    optional fields:
+        ResPersons0PersSurname and ResPersons0PersForename (surname and forename)
+        ResPersons1PersSurname and ResPersons1PersForename ( ... )
+    optional auto-populated fields:
+        see the default values - specified in default_values dict underneath.
+    """
+    default_values = dict(ResStatus='1',
+                          ResAction=ACTION_INSERT,
+                          ResBooked=datetime.datetime.today(),
+                          ResPriceCat=rec.val('ResRoomCat', system='', direction=''),
+                          ResBoard='RO',  # room only (no board/meal-plan)
+                          ResAccount='1',
+                          ResSource='A',
+                          ResRateSegment=rec.val('ResMktSegment', system='', direction=''),
+                          ResMktGroup='RS',
+                          ResAdults=2,
+                          ResChildren=0,
+                          )
+    for field_name, field_value in default_values.items():
+        if not rec.val(field_name, system='', direction='') and field_value not in ('', None):
+            rec.set_val(field_value, field_name, system='', direction='')
+
+    if 'ResSfId' in rec and not rec.val('ResSfId') and rec['ResGdsNo'].startswith('006'):
+        rec.set_val(rec['ResGdsNo'], 'ResSfId', system='', direction='')
+
+    if rec.val('ResPersons', system='', direction=''):
+        adults = rec.val('ResAdults', system='', direction='')
+        pax = adults + rec.val('ResChildren', system='', direction='')
+        root_idx = ('ResPersons',)  # type: Tuple[Union[str, int]]
+        recs = rec.value('ResPersons', flex_sys_dir=True)
+        recs_len = len(recs)
+        if recs_len > pax:
+            for _ in range(recs_len - pax):  # remove invalid/surplus occupant recs
+                recs.pop()
+        elif recs_len < pax:
+            for _ in range(pax - recs_len):  # add rec, copied from recs[0] and establish init/default field values
+                recs.append_record(root_rec=rec, root_idx=root_idx)
+
+        for pers_seq, occ_rec in enumerate(recs):
+            rix = root_idx + (pers_seq,)
+
+            if not occ_rec.val('RoomSeq', system='', direction=''):
+                occ_rec.set_val('0', 'RoomSeq', system='', direction='', root_rec=rec, root_idx=rix)
+
+            if not occ_rec.val('RoomPersSeq', system='', direction=''):
+                occ_rec.set_val(str(pers_seq), 'RoomPersSeq', system='', direction='', root_rec=rec, root_idx=rix)
+
+            if not occ_rec.val('TypeOfPerson', system='', direction=''):
+                guest_type = '1A' if pers_seq < adults else '2B'
+                occ_rec.set_val(guest_type, 'TypeOfPerson', system='', direction='', root_rec=rec, root_idx=rix)
+
+            if not occ_rec.val('PersAcuId', system='', direction='') \
+                    and not occ_rec.val('PersShId', system='', direction='') \
+                    and not occ_rec.val('PersSurname', system='', direction='') \
+                    and not occ_rec.val('PersForename', system='', direction=''):
+                if pers_seq < adults:
+                    name = "Adult " + str(pers_seq + 1)
+                else:
+                    name = "Child " + str(pers_seq - adults + 1)
+                occ_rec.set_val(name, 'PersSurname', system='', direction='', root_rec=rec, root_idx=rix)
+                auto_gen = '1'
+            else:
+                auto_gen = '0'
+            occ_rec.set_val(auto_gen, 'AutoGen', system='', direction='', root_rec=rec, root_idx=rix)
+
+            if not occ_rec.val('RoomNo', system='', direction=''):
+                room_no = rec.val('ResRoomNo', system='', direction='')
+                if room_no:
+                    occ_rec.set_val(room_no, 'RoomNo', system='', direction='', root_rec=rec, root_idx=rix)
+
+    return rec
+
+
 def elem_path_join(elem_names):
     """
     convert list of element names to element path.
@@ -502,6 +587,10 @@ def gds_no_to_ids(cae, hotel_id, gds_no):
         ids['ResId'] = rfr.val('ResId') or ''
         ids['ResSubId'] = rfr.val('ResSubId') or ''
         ids['ResSfId'] = rfr.val('ResSfId') or ''
+
+    if not ids['ResSfId'] and gds_no.startswith('006'):
+        ids['ResSfId'] = gds_no
+
     return ids
 
 
@@ -516,6 +605,8 @@ def res_no_to_ids(cae, hotel_id, res_id, sub_id):
         ret['ResObjId'] = rfr.val('ResObjId') or ''
         ret['ResGdsNo'] = rfr.val('ResGdsNo') or ''
         ret['ResSfId'] = rfr.val('ResSfId') or ''
+        if not ret['ResSfId'] and ret['ResGdsNo'].startswith('006'):
+            ret['ResSfId'] = ret['ResGdsNo']
     else:
         ret = rfr
     return ret
@@ -596,7 +687,7 @@ def obj_id_to_res_no(cae, obj_id):
     using RESERVATION-GET oc from KERNEL interface (see 7.3 in SIHOT KERNEL interface doc).
     :param cae:         Console App Environment instance.
     :param obj_id:      Sihot Reservation Object Id.
-    :return:            reservation number as tuple of (hotel_id, res_id, sub_id) or None if not found
+    :return:            reservation number as tuple of (hotel_id, res_id, sub_id) or (None, "error") if not found
     """
     return ResKernelGet(cae).fetch_res_no(obj_id)
 
@@ -789,7 +880,7 @@ class ResFromSihot(FldMapXmlParser):
 
     def end(self, tag):
         if tag == 'RESERVATION':
-            rec = self._rec.copy(deepness=-1)
+            rec = complete_res_data(self._rec.copy(deepness=-1))
             rec.pull(SDI_SH)
             self.res_list.append(rec)
             self.clear_rec()
@@ -1270,93 +1361,11 @@ class ResToSihot(FldMapXmlBuilder):
             if res_cmt and comment not in res_cmt:
                 rec.set_val(comment + "; " + res_cmt, 'ResComment', system='', direction='')
 
-    @staticmethod
-    def _complete_res_data(rec):
-        """
-        complete reservation data row (rec) with the default values (specified in default_values underneath), while
-        the following fields are mandatory:
-            ShId or AcuId or Surname (to specify the orderer of the reservation), ResHotelId, ResArrival, ResDeparture,
-            ResRoomCat, ResMktSegment, ResGdsNo.
-
-        :param rec:     reservation data Record instance.
-        :return:        completed reservation data Record instance.
-
-        These fields will not be completed/changed at all:
-            ResRoomNo, ResNote, ResLongNote, ResFlightArrComment (flight no...), ResAllotmentNo, ResVoucherNo.
-
-        optional fields:
-            ResPersons0PersSurname and ResPersons0PersForename (surname and forename)
-            ResPersons1PersSurname and ResPersons1PersForename ( ... )
-        optional auto-populated fields (see default_values dict underneath).
-        """
-        default_values = dict(ResStatus='1',
-                              ResAction=ACTION_INSERT,
-                              ResBooked=datetime.datetime.today(),
-                              ResPriceCat=rec.val('ResRoomCat', system='', direction=''),
-                              ResBoard='RO',  # room only (no board/meal-plan)
-                              ResAccount='1',
-                              ResSource='A',
-                              ResRateSegment=rec.val('ResMktSegment', system='', direction=''),
-                              ResMktGroup='RS',
-                              ResAdults=2,
-                              ResChildren=0,
-                              )
-        for field_name, field_value in default_values.items():
-            if not rec.val(field_name, system='', direction='') and field_value not in ('', None):
-                rec.set_val(field_value, field_name, system='', direction='')
-
-        if rec.val('ResPersons', system='', direction=''):
-            adults = rec.val('ResAdults', system='', direction='')
-            pax = adults + rec.val('ResChildren', system='', direction='')
-            root_idx = ('ResPersons',)                                              # type: Tuple[Union[str, int]]
-            recs = rec.value('ResPersons', flex_sys_dir=True)
-            recs_len = len(recs)
-            if recs_len > pax:
-                for _ in range(recs_len - pax):  # remove invalid/surplus occupant recs
-                    recs.pop()
-            elif recs_len < pax:
-                for _ in range(pax - recs_len):  # add rec, copied from recs[0] and establish init/default field values
-                    recs.append_record(root_rec=rec, root_idx=root_idx)
-
-            for pers_seq, occ_rec in enumerate(recs):
-                rix = root_idx + (pers_seq, )
-
-                if not occ_rec.val('RoomSeq', system='', direction=''):
-                    occ_rec.set_val('0', 'RoomSeq', system='', direction='', root_rec=rec, root_idx=rix)
-
-                if not occ_rec.val('RoomPersSeq', system='', direction=''):
-                    occ_rec.set_val(str(pers_seq), 'RoomPersSeq', system='', direction='', root_rec=rec, root_idx=rix)
-
-                if not occ_rec.val('TypeOfPerson', system='', direction=''):
-                    guest_type = '1A' if pers_seq < adults else '2B'
-                    occ_rec.set_val(guest_type, 'TypeOfPerson', system='', direction='', root_rec=rec, root_idx=rix)
-
-                if not occ_rec.val('PersAcuId', system='', direction='') \
-                        and not occ_rec.val('PersShId', system='', direction='') \
-                        and not occ_rec.val('PersSurname', system='', direction='') \
-                        and not occ_rec.val('PersForename', system='', direction=''):
-                    if pers_seq < adults:
-                        name = "Adult " + str(pers_seq + 1)
-                    else:
-                        name = "Child " + str(pers_seq - adults + 1)
-                    occ_rec.set_val(name, 'PersSurname', system='', direction='', root_rec=rec, root_idx=rix)
-                    auto_gen = '1'
-                else:
-                    auto_gen = '0'
-                occ_rec.set_val(auto_gen, 'AutoGen', system='', direction='', root_rec=rec, root_idx=rix)
-
-                if not occ_rec.val('RoomNo', system='', direction=''):
-                    room_no = rec.val('ResRoomNo', system='', direction='')
-                    if room_no:
-                        occ_rec.set_val(room_no, 'RoomNo', system='', direction='', root_rec=rec, root_idx=rix)
-
-        return rec
-
     def prepare_rec(self, rec):
         super().prepare_rec(rec)
 
         self._add_sihot_configs(rec)
-        self._complete_res_data(rec)
+        complete_res_data(rec)
 
     def _prepare_res_xml(self, rec):
         self.action = rec.val('ResAction') or ACTION_INSERT
@@ -1418,7 +1427,7 @@ class ResToSihot(FldMapXmlBuilder):
             err_msg = self._sending_res_to_sihot(rec)
 
         elif ("A database error has occurred." in err_msg or 'Room not available!' in err_msg) and obj_id:
-            self.cae.dprint(msg.format("resetting reservation obj-id {}".format(obj_id)))
+            self.cae.dprint(msg.format("resetting reservation with obj-id={}".format(obj_id)))
             try:
                 self._in_error_handling = True      # prevent recursion in handling follow-up errors
                 del_rec = rec.copy(deepness=-1)
@@ -1426,10 +1435,10 @@ class ResToSihot(FldMapXmlBuilder):
                 del_rec.set_val(ACTION_DELETE, 'ResAction')
                 err_msg = self._sending_res_to_sihot(del_rec)
             except Exception as ex:
-                err_msg = msg.format("Exception {} occurred in orphan reservation deletion".format(ex))
+                err_msg = msg.format("Exception {} occurred in deletion of orphan res".format(ex))
             finally:
                 self._in_error_handling = False
-            self.cae.dprint(msg.format("orphan res deletion; res obj-id={}; ignorable err?={}".format(obj_id, err_msg)))
+            self.cae.dprint("    .. orphan res deletion; obj-id={}; ignorable err?={}".format(obj_id, err_msg))
             rec['ResObjId'] = ''        # resend with wiped orphan/invalid obj_id, using ResHotelId+ResGdsNo instead
             err_msg = self._sending_res_to_sihot(rec)
 
@@ -1527,10 +1536,10 @@ class ResToSihot(FldMapXmlBuilder):
             "+" + str(rec.val('ResRoomNo'))
         return ret
 
-    def res_id_desc(self, rec, err_msg, separator="\n\n"):
-        indent = 8
+    def res_id_desc(self, rec, err_msg, separator="\n\n", indent=8):
         arr = rec.val('ResArrival', system='', direction='')
         dep = rec.val('ResDeparture', system='', direction='')
+
         ret = self.action + " RESERVATION: " \
             + (arr.strftime('%d-%m') if arr else "unknown") + ".." \
             + (dep.strftime('%d-%m-%y') if dep else "unknown") \
@@ -1538,9 +1547,11 @@ class ResToSihot(FldMapXmlBuilder):
             + ("!" + rec.val('ResPriceCat')
                if rec.val('ResPriceCat') and rec.val('ResPriceCat') != rec.val('ResRoomCat') else "") \
             + " at hotel " + rec.val('ResHotelId') \
-            + separator + " " * indent + self.res_id_label() + "==" + self.res_id_values(rec) \
-            + (separator + "\n".join(wrap("ERROR: " + _strip_err_msg(err_msg), subsequent_indent=" " * indent))
-               if err_msg else "")
+            + separator + " " * indent + self.res_id_label() + "==" + self.res_id_values(rec)
+
+        if err_msg:
+            ret += separator + "\n".join(wrap("ERROR: " + _strip_err_msg(err_msg), subsequent_indent=" " * indent))
+
         return ret
 
     def wipe_gds_errors(self):

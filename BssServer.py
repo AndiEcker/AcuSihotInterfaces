@@ -168,6 +168,9 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         sh_cl = Record()
 
     rgr_sf_id = ass_res_sf_id = ass_changed_res['rgr_sf_id']
+    ''' QUICK FIX: don't get rgr_sf_id from Acumen MS_SF_DL_ID because this is the deal opportunity (not ResOpp)
+        later added back because it looks like it is a ResOpp with record type Service Center Booking
+    '''
     if not rgr_sf_id:
         # try to determine SF Reservation Opportunity ID from Acumen
         obj_id = ass_changed_res['rgr_obj_id']

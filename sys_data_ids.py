@@ -85,4 +85,4 @@ def parse_system_option_args(args_str):
     system = args_str[:str_i]
     if rec_type in ALL_AVAILABLE_RECORD_TYPES and system in ALL_AVAILABLE_SYSTEMS:
         return system, rec_type, arg_dict_str
-    return (None, None, None)
+    return None, None, None

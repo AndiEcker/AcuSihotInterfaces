@@ -9,7 +9,7 @@ Version History:
 
 0.1     first beta
 0.2     refactored to use ae_sys_data.
-
+0.3     prepared first production version
 
 DISTRIBUTE:
 
@@ -33,7 +33,7 @@ Web-Service server check/prepare:
 
 """
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 # change working dir so bottle.py will be find by next import statement (also for relative paths and template lookup)
 import os
@@ -52,7 +52,7 @@ from ass_sys_data import add_ass_options, init_ass_data
 
 cae = ConsoleApp(__version__, "Web Service Server", additional_cfg_files=['SihotMktSegExceptions.cfg'],
                  multi_threading=True, suppress_stdout=True)
-ass_options = add_ass_options(cae)
+ass_options = add_ass_options(cae, add_kernel_port=True)
 
 debug_level = cae.get_option('debugLevel')
 ass_data = init_ass_data(cae, ass_options)
@@ -99,7 +99,7 @@ def get_res_data():
     return asd.sh_res_data(**request.query)
 
 
-@app.route('/res/<action>', method='PUSH')
+@app.route('/res/<action>', method='POST')
 def push_res(action):
     body = sh_res_action(action)
     return body
@@ -135,7 +135,7 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 # ------  ROUTE/SERVICE HANDLERS  ----------------------------------
 
 
-def sh_res_action(action, res_id=None, method='PUSH'):
+def sh_res_action(action, res_id=None, method='POST'):
     supported_actions = (ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE)
     if action.upper() not in supported_actions:
         body = "Reservation {} for ID {} with action {} not implemented; use one of supported actions ({})" \
@@ -143,29 +143,46 @@ def sh_res_action(action, res_id=None, method='PUSH'):
         add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
         return body
 
-    res_json = request.json     # web service arguments as dict
+    if debug_level >= DEBUG_LEVEL_VERBOSE:
+        headers_string = ['{}: {}'.format(h, request.headers.get(h)) for h in request.headers.keys()]
+        msg = "sh_res_action({}, {}, {}/{}) received request: URL={}; header={!r}; body={!r}; query={!r}" \
+            .format(action, res_id, method, request.method, request.url, headers_string,
+                    request.body.getvalue(), request.query_string)
+        uprint(msg)
+        uprint()
+        # return dict(Error="test", Message=msg)
 
     res_send = ResSender(cae)
-    rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
-    rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)     # allow overwrite from json fields
-    for name, value in res_json.items():
-        rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
-    rec.pull(SDI_SF)
 
-    err, msg = res_send.send_rec(rec)
+    res_json = request.json     # web service arguments as dict
+    if res_json is None:
+        err = "JSON arguments missing"
+        msg = "got request {!r} but body with JSON is empty".format(request)
+    else:
+        rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
+        rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # allow overwrite from json fields
+        for name, value in res_json.items():
+            rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
+        rec.pull(SDI_SF)
+
+        err, msg = res_send.send_rec(rec)
+
     if err or msg:
         add_log_entry(warning_msg=msg, error_msg=err, importance=3 if err else 2)
-    if err:
-        res_dict = dict(Error=err, Message=msg)
-    else:
-        response.status_code = 400
-        ho_id, res_id, sub_id = res_send.get_res_no()
-        # res_dict = dict(Sihot_Hotel_Id=ho_id, Sihot_Res_Id=res_id, Sihot_Sub_Id=sub_id)
-        res_dict = dict(HotelIdc=ho_id, Numberc=res_id, SubNumberc=sub_id)
 
-    add_log_entry("sh_res_action() call with json arguments: {}, return from SF: {}".format(res_json, res_dict))
+    ret = dict(ErrorMessage=err, WarningMessage=msg)
+    if not err:
+        res_no_tuple = res_send.get_res_no()
+        if res_no_tuple[0] is None:
+            ret.update(ErrorMessage=res_no_tuple[1])
+        else:
+            response.status = 400
+            ho_id, res_id, sub_id = res_no_tuple
+            ret.update(ResHotelId=ho_id, ResId=res_id, ResSubId=sub_id)
 
-    return res_dict
+    add_log_entry("sh_res_action() call with json arguments: {}, responding to SF: {}".format(res_json, ret))
+
+    return ret
 
 
 # ------  DEBUG HELPERS  -------------------------------------------

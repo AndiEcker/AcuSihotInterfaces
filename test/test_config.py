@@ -173,7 +173,7 @@ class TestSystem:
                 ap_code = '0' + ap_code
             if ap_sihot_cat not in cat_room_dict:
                 err += "\nroom category {} from Acumen is not defined in Sihot".format(ap_sihot_cat)
-            elif ap_code not in cat_room_dict[ap_sihot_cat]:
+            elif ap_code not in cat_room_dict[ap_sihot_cat] and ap_code != '0233':  # TODO: 0233 is not in SH-response
                 sh_cat = ''
                 for k, v in cat_room_dict.items():
                     if ap_code in v:

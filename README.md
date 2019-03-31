@@ -374,7 +374,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResRateSegment | RUL_SIHOT_RATE | - | RESERVATION.RATE-SEGMENT | rgr_room_rate |
 | ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
 | ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgc_room_id+rgr_room_id |
-| ResSfId | - | ReservationOpportunityId, Opportunity.Id | NN2(?) | rgr_sf_id |
+| ResSfId | - | ReservationOpportunityId+Opportunity.Id | NN2(?) | rgr_sf_id |
 | ResSource | RU_SOURCE | - | SOURCE | rgr_source |
 | ResStatus | SH_RES_TYPE | Status__c | RESERVATION.RT | rgr_status |
 | ResSubId | - | SubNumber__c | SUB-NR | rgr_sub_id |
@@ -743,7 +743,7 @@ section [Available Reservation Fields](#available-reservation-fields) above.
 
 ### SihotServer Web Services
 
-SihotServer is providing serveral https web services, which are implemented and distributed as pure python package
+SihotServer is providing several https web services, which are implemented and distributed as pure python package
 scripts. These python scripts are prepared to by used on top of a Apache Linux web server as a WSGI web service
 extension. For to access one of these services you first have to enter the correct user name and password
 (see .console_app_env.cfg).
