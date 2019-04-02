@@ -1373,6 +1373,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not sf_rec.val('ResRoomNo') and ass_res_data.val('ResPersons', 0, 'RoomNo'):
             sf_rec['ResRoomNo'] = ass_res_data.val('ResPersons', 0, 'RoomNo')
 
+        self._warn("Sending reservation to Salesforce; sf_rec=\n{}".format(ppf(sf_rec)),
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         sf_conn = self.connection(SDI_SF)
         sf_cl_id, sf_opp_id, err_msg = sf_conn.res_upsert(sf_rec)
         if err_msg and sf_res_id and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:

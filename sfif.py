@@ -865,11 +865,15 @@ class SfInterface:
         sf_id = sf_args.pop('Id', None)
         if sf_id:
             sf_args['PersonAccountId'] = sf_id
+        sf_res_id = sf_args.get('ReservationOpportunityId')
+        if not sf_res_id and sf_args.get('GdsNo__c', '').startswith('006'):
+            sf_args['ReservationOpportunityId'] = sf_args['GdsNo__c']
+
         result = self.apex_call('reservation_upsert', function_args=sf_args)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
             uprint("... sfif.res_upsert() err?={}; sent=\n{}, result=\n{}"
-                   .format(self.error_msg, ppf(cl_res_rec), ppf(result)))
+                   .format(self.error_msg, ppf(sf_args), ppf(result)))
 
         if result.get('ErrorMessage'):
             msg = ppf(result) if self._debug_level >= DEBUG_LEVEL_ENABLED else result.get('ErrorMessage')

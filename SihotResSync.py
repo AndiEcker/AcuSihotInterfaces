@@ -164,6 +164,7 @@ if not error_msg:
             room_recs = [r.copy(deepness=-1) for r in acumen_req.recs if r['ResHotelId'] != r['ResLastHotelId']
                          and r['ResLastHotelId'] in hotel_ids
                          and r['ResAction'] == ACTION_UPDATE]
+            hotel_move_gds_nos = list()
             if not migration_mode and room_recs:
                 cae.dprint(" ###  hotel movement pre-run has {} recs".format(len(room_recs)),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -176,7 +177,9 @@ if not error_msg:
                     rec['ResRoomCat'] = rec['ResLastRoomCat']
                     rec['ResAction'] = ACTION_DELETE
                     rec['ResStatus'] = 'S'
+
                     error_msg = acumen_req.send_res_to_sihot(rec, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
+
                     progress.next(processed_id='HotMove:' + acumen_req.res_id_values(rec), error_msg=error_msg)
                     if error_msg and notification:
                         error_msg = acumen_req.res_id_values(rec) + '\n\nERRORS=' + error_msg \
@@ -187,6 +190,8 @@ if not error_msg:
                         acumen_req.ora_db.commit()    # because this res get skipped in the run loop underneath
                     else:
                         acumen_req.ora_db.rollback()  # send but roll back changes in ResObjId and T_SRSL
+                    if rec.get('ResGdsNo'):
+                        hotel_move_gds_nos.append(rec['ResGdsNo'])
                 progress.finished(error_msg=error_msg)
 
             if not migration_mode:
@@ -209,7 +214,11 @@ if not error_msg:
                         continue        # skip HOTMOVE if new hotel is a non-Sihot-hotel
                     elif rec['ResLastHotelId'] not in hotel_ids:
                         rec['ResAction'] = ACTION_INSERT
+                    if rec.get('ResGdsNo') in hotel_move_gds_nos:
+                        rec['ResObjId'] = ''
+
                     error_msg = acumen_req.send_res_to_sihot(rec)
+
                     rid = acumen_req.res_id_values(rec)     # refresh rid with new ResId/ResSubId from Sihot
                     progress.next(processed_id=rid, error_msg=error_msg)
                     if error_msg:

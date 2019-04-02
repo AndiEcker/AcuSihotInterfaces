@@ -8,6 +8,7 @@
     0.9     enhanced system checking (merge errors and added checks for AssCache and Salesforce), fixed bug (missing
             config file write) in reset_last_run_time().
     1.0     add check of last T_SRSL for RU (SRSL_TABLE) and fix file path bug and on INI lock reset.
+    1.1     wait at least 6 minutes between error notifications.
 
 TODO:
     - investigate and fix bug with freeze if sendOutput option is specified with the value 1/enabled and unsuccessful
@@ -37,7 +38,7 @@ from shif import ClientSearch
 from ass_sys_data import add_ass_options, init_ass_data
 
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 MAX_SRSL_OUTAGE_HOURS = 18.0                # maximum time after last sync entry was logged (multiple on TEST system)

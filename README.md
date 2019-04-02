@@ -374,7 +374,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResRateSegment | RUL_SIHOT_RATE | - | RESERVATION.RATE-SEGMENT | rgr_room_rate |
 | ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
 | ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgc_room_id+rgr_room_id |
-| ResSfId | - | ReservationOpportunityId+Opportunity.Id | NN2(?) | rgr_sf_id |
+| ResSfId | MS_SF_DL_ID | ReservationOpportunityId+Opportunity.Id | NN2(?) | rgr_sf_id |
 | ResSource | RU_SOURCE | - | SOURCE | rgr_source |
 | ResStatus | SH_RES_TYPE | Status__c | RESERVATION.RT | rgr_status |
 | ResSubId | - | SubNumber__c | SUB-NR | rgr_sub_id |
