@@ -7,7 +7,7 @@ from textwrap import wrap
 import pprint
 from typing import Union, Tuple
 
-from sys_data_ids import (SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, FORE_SURNAME_SEP,
+from sys_data_ids import (SDI_SH, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_DISABLED, FORE_SURNAME_SEP,
                           SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
 from ae_sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
@@ -651,8 +651,9 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
             elif not chunk_recs or not isinstance(chunk_recs, list):
                 err_msg = "Unspecified Sihot.PMS reservation search error"
                 break
-            cae.dprint("  ##  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
-                       .format(len(chunk_recs), chunk_beg, chunk_end, search_flags, search_scope))
+            cae.dprint(" ###  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
+                       .format(len(chunk_recs), chunk_beg, chunk_end, search_flags, search_scope),
+                       minimum_debug_level=DEBUG_LEVEL_ENABLED)
             valid_recs = Records()
             for res_rec in chunk_recs:
                 reasons = list()
@@ -669,8 +670,7 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
                 if mkt_groups and mkt_group not in mkt_groups:
                     reasons.append("disallowed market group/channel {}".format(mkt_group))
                 if reasons:
-                    cae.dprint("  ##  Skipped Sihot reservation:", res_rec, " reason(s):", reasons,
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                    cae.dprint("  ##  Skipped Sihot reservation:", res_rec, " reason(s):", reasons)
                     continue
                 valid_recs.append(res_rec)
 
@@ -844,7 +844,7 @@ class FldMapXmlParser(SihotXmlParser):
                     self.cae.dprint(msg + "auto-correction of {} RoomSeq value {!r} to '0'".format(curr_idx, val))
                     val = '0'
                 self.cae.dprint(msg + "setting field {} to {!r}".format(curr_idx, val),
-                                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                                minimum_debug_level=DEBUG_LEVEL_ENABLED)
                 self._rec.set_val(val, *curr_idx, system=SDI_SH, direction=FAD_FROM)
         self._collected_fields = list()
 
@@ -976,7 +976,8 @@ class ClientFetch(SihotXmlBuilder):
         elif self.response.client_list:
             recs = self.response.client_list
             if len(recs) > 1:
-                self.cae.dprint("fetch_client({}): multiple clients found: {}".format(obj_id, recs))
+                self.cae.dprint("fetch_client({}): multiple clients found: {}".format(obj_id, recs),
+                                minimum_debug_level=DEBUG_LEVEL_ENABLED)
             rec = recs[0].copy(deepness=2, filter_fields=lambda f: f.name() not in field_names if field_names else None)
 
         return err_msg or rec
@@ -1053,7 +1054,7 @@ class ClientSearch(SihotXmlBuilder):
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
             ret = self.response.ret_elem_values
-            self.cae.dprint(msg + " xml='{}'; result={}".format(self.xml, ret), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint(msg + " xml='{}'; result={}".format(self.xml, ret))
         else:
             uprint(msg + " error: {}".format(err_msg))
             ret = None
@@ -1067,7 +1068,8 @@ class ClientSearch(SihotXmlBuilder):
 
         cnt = len(ids_or_err)
         if cnt > 1:
-            self.cae.dprint("client_id_by_matchcode({}): multiple clients found".format(matchcode))
+            self.cae.dprint("client_id_by_matchcode({}): multiple clients found".format(matchcode),
+                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
         if cnt:
             return ids_or_err[0]        # else RETURN None
 
@@ -1092,7 +1094,8 @@ class ResFetch(SihotXmlBuilder):
         if err_msg or not self.response:
             err_msg = "fetch_res({}) error='{}'".format(self._xml, err_msg or "response is empty")
         elif len(self.response.res_list) > 1:
-            self.cae.dprint("fetch_res({}): multiple reservations found".format(self._xml))
+            self.cae.dprint("fetch_res({}): multiple reservations found".format(self._xml),
+                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
 
         return err_msg or self.response.res_list[0]
 
@@ -1271,8 +1274,7 @@ class ClientToSihot(FldMapXmlBuilder):
         self.beg_xml(operation_code='GUEST-CHANGE' if self.action == ACTION_UPDATE else 'GUEST-CREATE')
         self.add_tag('GUEST-PROFILE', self.prepare_map_xml(rec))
         self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_xml() action={} rec={}".format(self.action, rec),
-                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ClientToSihot._prepare_guest_xml() action={} rec={}".format(self.action, rec))
 
     def _prepare_guest_link_xml(self, mc1, mc2):
         mct1 = self.new_tag('MATCHCODE-GUEST', self.convert_value_to_xml_string(mc1))
@@ -1282,8 +1284,7 @@ class ClientToSihot(FldMapXmlBuilder):
         self.beg_xml(operation_code='GUEST-CONTACT')
         self.add_tag('CONTACTLIST', mct1 + mct2)
         self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_link_xml(): mc1={} mc2={}".format(mc1, mc2),
-                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ClientToSihot._prepare_guest_link_xml(): mc1={} mc2={}".format(mc1, mc2))
 
     def _send_link_to_sihot(self, pk1, pk2):
         self._prepare_guest_link_xml(pk1, pk2)
@@ -1304,11 +1305,10 @@ class ClientToSihot(FldMapXmlBuilder):
         msg = "ClientToSihot.send_client_to_sihot({}): action={}".format(rec, self.action)
         err_msg = self._send_person_to_sihot(rec)
         if err_msg:
-            self.cae.dprint(msg + "; err='{}'".format(err_msg))
+            self.cae.dprint(msg + "; err='{}'".format(err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
             self.cae.dprint(msg + "; client={} RESPONDED OBJID={} MATCHCODE={}"
-                            .format(rec.val('AcuId'), self.response.objid, self.response.matchcode),
-                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                            .format(rec.val('AcuId'), self.response.objid, self.response.matchcode))
 
         return err_msg
 
@@ -1379,8 +1379,7 @@ class ResToSihot(FldMapXmlBuilder):
         else:
             self.beg_xml(operation_code='RES', add_inner_xml=inner_xml)
         self.end_xml()
-        self.cae.dprint("ResToSihot._prepare_res_xml(): action={}; rec=\n{}".format(self.action, ppf(rec)),
-                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ResToSihot._prepare_res_xml(): action={}; rec=\n{}".format(self.action, ppf(rec)))
 
     def _sending_res_to_sihot(self, rec):
         self._prepare_res_xml(rec)
@@ -1408,7 +1407,7 @@ class ResToSihot(FldMapXmlBuilder):
         return err_msg
 
     def _handle_error(self, rec, err_msg):
-        msg = "##    ResToSihot._handle_error(): {}; data=" if self.debug_level >= DEBUG_LEVEL_VERBOSE else "{}"
+        msg = "##    ResToSihot._handle_error(): {}; data=" if self.debug_level >= DEBUG_LEVEL_ENABLED else "{}"
         msg += "\n{}".format(self.res_id_desc(rec, err_msg, separator="\n"))
 
         obj_id = rec.val('ResObjId')
@@ -1421,13 +1420,15 @@ class ResToSihot(FldMapXmlBuilder):
             err_msg = ""
 
         elif "Could not find a key identifier" in err_msg and (rec['ShId'] or rec['ShId_P']):
-            self.cae.dprint(msg.format("ignoring client obj-id {}/{}".format(rec['ShId'], rec['ShId_P'])))
+            self.cae.dprint(msg.format("ignoring client obj-id {}/{}".format(rec['ShId'], rec['ShId_P'])),
+                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
             rec['ShId'] = ''            # use AcId/MATCHCODE instead
             rec['ShId_P'] = ''
             err_msg = self._sending_res_to_sihot(rec)
 
         elif ("A database error has occurred." in err_msg or 'Room not available!' in err_msg) and obj_id:
-            self.cae.dprint(msg.format("resetting reservation with obj-id={}".format(obj_id)))
+            self.cae.dprint(msg.format("resetting reservation with obj-id={}".format(obj_id)),
+                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
             try:
                 self._in_error_handling = True      # prevent recursion in handling follow-up errors
                 del_rec = rec.copy(deepness=-1)
@@ -1438,7 +1439,8 @@ class ResToSihot(FldMapXmlBuilder):
                 err_msg = msg.format("Exception {} occurred in deletion of orphan res".format(ex))
             finally:
                 self._in_error_handling = False
-            self.cae.dprint("    .. orphan res deletion; obj-id={}; ignorable err?={}".format(obj_id, err_msg))
+            self.cae.dprint("    .. orphan res deletion; obj-id={}; ignorable err?={}".format(obj_id, err_msg),
+                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
             rec['ResObjId'] = ''        # resend with wiped orphan/invalid obj_id, using ResHotelId+ResGdsNo instead
             err_msg = self._sending_res_to_sihot(rec)
 
@@ -1508,11 +1510,11 @@ class ResToSihot(FldMapXmlBuilder):
             err_msg = self.res_id_desc(rec, "ResToSihot.send_res_to_sihot(): sync with empty GDS number skipped")
 
         if err_msg:
-            self.cae.dprint("ResToSihot.send_res_to_sihot() error: {}".format(err_msg))
+            self.cae.dprint("ResToSihot.send_res_to_sihot() error: {}".format(err_msg),
+                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
             self.cae.dprint("ResToSihot.send_res_to_sihot() GDSNO={} RESPONDED OBJID={} MATCHCODE={}"
-                            .format(gds_no, self.response.objid, self.response.matchcode),
-                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                            .format(gds_no, self.response.objid, self.response.matchcode))
 
         return err_msg
 
@@ -1686,8 +1688,8 @@ class ResSender(ResToSihot):
                 err = "Apartment {} occupied between {} and {} - created GDS-No {} for manual allocation." \
                     .format(rec.val('ResRoomNo'), rec.val('ResArrival'), rec.val('ResDeparture'), rec.val('ResGdsNo')) \
                       + (" Original error: {}; WARNINGS={}".format(err, self.get_warnings())
-                         if self.debug_level >= DEBUG_LEVEL_VERBOSE else "")
-        elif self.debug_level >= DEBUG_LEVEL_VERBOSE:
+                         if self.debug_level >= DEBUG_LEVEL_ENABLED else "")
+        elif self.debug_level >= DEBUG_LEVEL_ENABLED:
             msg = "Sent res: " + str(rec)
         return err, msg
 

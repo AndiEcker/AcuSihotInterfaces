@@ -3,7 +3,7 @@ Acumen interface constants and helpers
 """
 import datetime
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
+from sys_data_ids import DEBUG_LEVEL_ENABLED, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
 from ae_console_app import uprint
 from ae_db import OraDB
 from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
@@ -235,8 +235,7 @@ class AcuDbRows:
             self.ora_db = None
 
     def add_to_acumen_sync_log(self, table, primary, action, status, message, logref):
-        self.cae.dprint('AcuDbRows.add_to_acumen_sync_log() fetched/now:', self._last_fetch, datetime.datetime.now(),
-                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint('AcuDbRows.add_to_acumen_sync_log() fetched/now:', self._last_fetch, datetime.datetime.now())
         return self.ora_db.insert('T_SRSL',
                                   {'SRSL_TABLE': table[:6],
                                    'SRSL_PRIMARY': str(primary)[:12],
@@ -261,14 +260,15 @@ class AcuDbRows:
         self._last_fetch = datetime.datetime.now()
         ret_rows = list()
         plain_rows = self.ora_db.fetch_all()
-        if self.ora_db.last_err_msg:
+        err_msg = self.ora_db.last_err_msg
+        if err_msg:
             self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} had error {}"
-                            .format(self._last_fetch, self.ora_db.last_err_msg))
+                            .format(self._last_fetch, err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
             for row in plain_rows:
                 ret_rows.append(dict(zip(col_names, row)))
             self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} got {}, 1st row: {}"
-                            .format(self._last_fetch, len(ret_rows), ret_rows), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                            .format(self._last_fetch, len(ret_rows), ret_rows))
         return ret_rows
 
     def client_row_save(self, col_values, commit=False):
@@ -448,11 +448,10 @@ class AcuClientToSihot(AcumenClient, ClientToSihot):
 
         if err_msg:
             self.cae.dprint("AcuClientToSihot.send_client_to_sihot() error: rec={} action-p1/2={} err={}"
-                            .format(rec, action, err_msg))
+                            .format(rec, action, err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
             self.cae.dprint("AcuClientToSihot.send_client_to_sihot() with client={} RESPONDED OBJID={}/MATCHCODE={}"
-                            .format(rec['AcuId'], self.response.objid, self.response.matchcode),
-                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                            .format(rec['AcuId'], self.response.objid, self.response.matchcode))
 
         return err_msg
 
@@ -624,11 +623,11 @@ class AcuResToSihot(AcumenRes, ResToSihot):
         err_msg = super().send_res_to_sihot(rec, ensure_client_mode=ensure_client_mode)
         warn_msg = self.get_warnings()
         if err_msg:
-            self.cae.dprint("AcuResToSihot.send_res_to_sihot() error: {}; warning={}".format(err_msg, warn_msg))
+            self.cae.dprint("AcuResToSihot.send_res_to_sihot() error: {}; warning={}".format(err_msg, warn_msg),
+                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
             self.cae.dprint("AcuResToSihot.send_res_to_sihot() RESPONDED OBJID={} MATCHCODE={}, warning={}, rec={}"
-                            .format(self.response.objid, self.response.matchcode, warn_msg, rec),
-                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                            .format(self.response.objid, self.response.matchcode, warn_msg, rec))
 
         return err_msg
 

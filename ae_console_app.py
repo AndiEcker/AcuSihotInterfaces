@@ -294,7 +294,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
         try_counter += 1
 
 
-def dprint(*objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_ENABLED):
+def dprint(*objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
     if _ca_instance is None or _get_debug_level() >= minimum_debug_level:
         uprint(*objects, sep=sep, end=end, file=file)
 
@@ -596,7 +596,7 @@ class ConsoleApp:
             self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
             self._cfg_parser.read(self._config_files, encoding='utf-8')
 
-    def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_ENABLED):
+    def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
         if self.get_option('debugLevel') >= minimum_debug_level:
             uprint(*objects, sep=sep, end=end, file=file)
 
@@ -763,22 +763,22 @@ class NamedLocks:
         # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
         self.dprint = _ca_instance.dprint if _ca_instance and getattr(_ca_instance, 'startup_end', False) else dprint
 
-        self.dprint("NamedLocks.__init__", lock_names, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.__init__", lock_names)
 
     def __enter__(self):
-        self.dprint("NamedLocks.__enter__", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.__enter__")
         for lock_name in self._lock_names:
-            self.dprint("NamedLocks.__enter__ b4 acquire ", lock_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.dprint("NamedLocks.__enter__ b4 acquire ", lock_name)
             self.acquire(lock_name)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb)
         for lock_name in self._lock_names:
-            self.dprint("NamedLocks.__exit__ b4 release ", lock_name, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.dprint("NamedLocks.__exit__ b4 release ", lock_name)
             self.release(lock_name)
 
     def acquire(self, lock_name, *args, **kwargs):
-        self.dprint("NamedLocks.acquire", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.acquire", lock_name, 'START')
 
         while True:     # break at the end - needed for to retry after conflicted add/del of same lock name in threads
             with self.locks_change_lock:
@@ -791,7 +791,7 @@ class NamedLocks:
             if lock_acquired:
                 with self.locks_change_lock:
                     if lock_exists != (lock_name in self.active_locks):  # if lock state has changed, then redo/retry
-                        self.dprint("NamedLocks.acquire", lock_name, 'RETRY', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                        self.dprint("NamedLocks.acquire", lock_name, 'RETRY')
                         lock_instance.release()
                         continue
                     if lock_exists:
@@ -801,16 +801,16 @@ class NamedLocks:
                         self.active_lock_counters[lock_name] = 1
             break
 
-        self.dprint("NamedLocks.acquire", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.acquire", lock_name, 'END')
 
         return lock_acquired
 
     def release(self, lock_name, *args, **kwargs):
-        self.dprint("NamedLocks.release", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.release", lock_name, 'START')
 
         with self.locks_change_lock:
             if lock_name not in self.active_lock_counters or lock_name not in self.active_locks:
-                self.dprint("NamedLocks.release", lock_name, 'IDX-ERR', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                self.dprint("NamedLocks.release", lock_name, 'IDX-ERR')
                 return
             elif self.active_lock_counters[lock_name] == 1:
                 self.active_lock_counters.pop(lock_name)
@@ -821,4 +821,4 @@ class NamedLocks:
 
         lock.release(*args, **kwargs)
 
-        self.dprint("NamedLocks.release", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.dprint("NamedLocks.release", lock_name, 'END')

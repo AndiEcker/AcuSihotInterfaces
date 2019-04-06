@@ -2138,7 +2138,7 @@ class UsedSystems(OrderedDict):
                 # finally add system to this used systems instance
                 self._add_system(sys_id, credentials, features=features)
                 dbg_msg.append("added system features={}".format(features))
-            cae.dprint("Initialized system {}: {}".format(sys_id, dbg_msg), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("Initialized system {}: {}".format(sys_id, dbg_msg))
 
     def _add_system(self, sys_id, credentials, features=None):
         assert sys_id in self._available_systems, "UsedSystems._add_system(): unsupported system id {}".format(sys_id)

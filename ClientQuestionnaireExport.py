@@ -16,7 +16,6 @@ import datetime
 import re
 from traceback import print_exc
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE
 from ae_console_app import ConsoleApp, uprint
 from shif import ResSearch, SH_DATE_FORMAT
 from shif import add_sh_options, print_sh_options
@@ -93,8 +92,7 @@ def get_hotel_and_res_id(res_rec):  # see also shif.py/hotel_and_res_id()
     r_num = res_rec['RES-NR'].val()
     s_num = res_rec['SUB-NR'].val()
     if not h_id or not hotel_id_to_name(h_id) or not hotel_id_to_location_id(h_id) or not r_num:
-        cae.dprint("  ##  Skipping reservation with invalid hotel-id/RES-NR/SUB-NR", h_id, r_num, s_num,
-                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        cae.dprint("  ##  Skipping reservation with invalid hotel-id/RES-NR/SUB-NR", h_id, r_num, s_num)
         return None, None
     return h_id, r_num + ('/' + s_num if s_num else '') + '@' + h_id
 
@@ -151,13 +149,11 @@ try:
                     continue
                 if not (date_from <= check_out < date_till):
                     cae.dprint("  ##  Skipping check-out", check_out,
-                               "not in date range from ", date_from, 'till', date_till, 'res-id=', res_id,
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                               "not in date range from ", date_from, 'till', date_till, 'res-id=', res_id)
                     continue
                 res_type = rec['ResStatus']
                 if res_type in ('S', 'N'):
-                    cae.dprint("  ##  Skipping because of reservation type", res_type, 'res-id=', res_id,
-                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                    cae.dprint("  ##  Skipping because of reservation type", res_type, 'res-id=', res_id)
                     continue
                 for arr_index in range(len(rec['ResPersons'])):
                     unique_id = res_id + ('#' + str(arr_index) if arr_index >= 0 else '')

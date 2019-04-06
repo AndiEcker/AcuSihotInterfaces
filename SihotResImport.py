@@ -1438,14 +1438,14 @@ else:
         _thread = None
 
         def build(self):
-            cae.dprint("App.build()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.build()")
             self.display_files()
             self.title = "Sihot Reservation Import  V " + __version__ + " [" + cae.get_option('acuDSN') + "]"
             self.root = Factory.MainWindow()
             return self.root
 
         def display_files(self):
-            cae.dprint("App.display_files()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.display_files()")
             collect_files()  # collect files for showing them in the user interface
             self.file_count = len(imp_files)
             self.file_names = ''
@@ -1456,8 +1456,7 @@ else:
         def key_down_callback(self, keyboard, key_code, scan_code, text, modifiers, *args, **kwargs):
             if True:   # change to True for debugging - leave dprint for hiding Pycharm inspection "Parameter not used"
                 cae.dprint("App.kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}"
-                           .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                           .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs))
             if self._thread and self._thread.is_alive():                        # block kbd while import is running
                 return True
             elif key_code == 27:                                                # escape key
@@ -1469,11 +1468,11 @@ else:
             return False
 
         def on_start(self):
-            cae.dprint("App.on_start()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.on_start()")
             Window.bind(on_key_down=self.key_down_callback)
 
         def on_stop(self):
-            cae.dprint("App.on_stop()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.on_stop()")
             self.cancel_import.set()
             self.exit_app()
 
@@ -1494,7 +1493,7 @@ else:
             self.root.ids.scroll_view.scroll_y = 0
 
         def start_import(self):
-            cae.dprint("App.start_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.start_import()")
             usr = self.root.ids.user_name.text
             cae.set_config('acuUser', usr.upper())
             self.prepare_ui_for_import()
@@ -1505,7 +1504,7 @@ else:
             self._thread.start()
 
         def prepare_ui_for_import(self):
-            cae.dprint("App.prepare_ui_for_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.prepare_ui_for_import()")
             ids = self.root.ids
             ids.user_name.disabled = True
             ids.user_password.disabled = True
@@ -1513,7 +1512,7 @@ else:
             ids.exit_or_cancel_button.text = "Cancel Import"
 
         def exec_import(self, usr, pw, event_is_set_func, amend_screen_log_func):
-            cae.dprint("App.exec_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.exec_import()")
             # (added next line for to remove inspection warning on "too broad exception clause")
             # noinspection PyBroadException
             try:
@@ -1525,7 +1524,7 @@ else:
             self.finalize_import()
 
         def finalize_import(self):
-            cae.dprint("App.finalize_import()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.finalize_import()")
             ids = self.root.ids
             self.user_password = ""         # reset pw - user need to enter again for new import run
             ids.user_password.text = ""     # .. should be set by app.user_password kv expression but isn't
@@ -1538,8 +1537,7 @@ else:
 
         def exit_app_or_cancel_import(self):
             cae.dprint("App.exit_app_or_cancel_import(), thread-alive={}, is_set={}"
-                       .format(self._thread.is_alive() if self._thread else 'finished', self.cancel_import.is_set()),
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                       .format(self._thread.is_alive() if self._thread else 'finished', self.cancel_import.is_set()))
             if self._thread and self._thread.is_alive():
                 self.cancel_import.set()
                 self._thread.join()
@@ -1550,7 +1548,7 @@ else:
                 self.exit_app()
 
         def exit_app(self):
-            cae.dprint("App.exit_app()", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            cae.dprint("App.exit_app()")
             if self._thread and self._thread.is_alive():
                 self.cancel_import.set()
                 cae.dprint("  ....  waiting for to join/finish worker thread")

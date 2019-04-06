@@ -15,8 +15,8 @@
 """
 import datetime
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
-    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDI_ACU
+from sys_data_ids import (SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
+                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDI_ACU)
 from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, full_stack_trace
 from ae_notification import add_notification_options, init_notification
 from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
@@ -143,8 +143,7 @@ if not error_msg:
                          and r['ResHotelId'] == r['ResLastHotelId']
                          and r['ResAction'] != ACTION_DELETE]
             if not migration_mode and room_recs:
-                cae.dprint(" ###  room swap pre-run has {} recs".format(len(room_recs)),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                cae.dprint("  ##  room swap pre-run has {} recs".format(len(room_recs)))
                 progress = Progress(debug_level, start_counter=len(room_recs),
                                     start_msg=" ###  Prepare sending of {total_count} room swaps to Sihot",
                                     nothing_to_do_msg=" ***  SihotResSync: room swap fetch returning no recs")
@@ -166,8 +165,7 @@ if not error_msg:
                          and r['ResAction'] == ACTION_UPDATE]
             hotel_move_gds_nos = list()
             if not migration_mode and room_recs:
-                cae.dprint(" ###  hotel movement pre-run has {} recs".format(len(room_recs)),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                cae.dprint("  ##  hotel movement pre-run has {} recs".format(len(room_recs)))
                 progress = Progress(debug_level, start_counter=len(room_recs),
                                     start_msg=" ###  Prepare sending of {total_count} hotel movements to Sihot",
                                     nothing_to_do_msg=" ***  SihotResSync: hotel movement fetch returning no recs")
@@ -204,9 +202,8 @@ if not error_msg:
                                 start_msg=" ###  Prepare sending of {total_count} reservations to Sihot",
                                 nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no recs")
             if acumen_req.recs:
-                cae.dprint(" ###  full/main run has {} recs"
-                           .format(len([_ for _ in acumen_req.recs if _['ResHotelId'] in hotel_ids])),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                cae.dprint("  ##  full/main run has {} recs"
+                           .format(len([_ for _ in acumen_req.recs if _['ResHotelId'] in hotel_ids])))
                 for rec in acumen_req.recs:
                     rid = acumen_req.res_id_values(rec)
                     if rec['ResHotelId'] not in hotel_ids:

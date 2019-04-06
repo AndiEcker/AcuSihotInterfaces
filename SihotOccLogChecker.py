@@ -412,7 +412,7 @@ try:
                 elif last_line:
                     line_str = last_line + line_str
                     line_no -= added_lines
-                cae.dprint("\nParse Log Entry:", ts, oc, line_str, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                cae.dprint("\nParse Log Entry:", ts, oc, line_str)
                 check_occ_change(ts, 'RI' if oc == 'RM' else oc, room, line_str[2:], line_no)
                 room = get_xml_element(line_str, 'ORN')
                 if room:
@@ -423,8 +423,7 @@ try:
 
             ts = get_log_time_stamp(line_str)
             if not ts:
-                cae.dprint("Empty timestamp in log line, OC={}, line={}".format(oc, line_str),
-                           minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                cae.dprint("Empty timestamp in log line, OC={}, line={}".format(oc, line_str))
                 continue
             if not first_log_date:
                 first_log_date = ts

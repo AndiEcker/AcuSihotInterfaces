@@ -193,8 +193,7 @@ while True:
         curr_timer = get_timer_corrected()
         if curr_timer < next_check:
             cae.dprint(" ###  Waiting for next check in {} seconds (timer={}, last={}, interval={}, at {})"
-                       .format(next_check - curr_timer, curr_timer, last_check, check_interval, curr_time),
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                       .format(next_check - curr_timer, curr_timer, last_check, check_interval, curr_time))
         try:
             while get_timer_corrected() < next_check:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
@@ -203,8 +202,7 @@ while True:
                           .format(next_check - get_timer_corrected()))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
         cae.dprint(" ###  Running checks (timer={}, last={}, interval={}) at={}"
-                   .format(get_timer_corrected(), last_check, check_interval, datetime.datetime.now()),
-                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                   .format(get_timer_corrected(), last_check, check_interval, datetime.datetime.now()))
 
         # check environment and connections: AssCache, Acu/Oracle, Salesforce, Sihot servers and interfaces
         if SDI_ASS in asd.used_systems:
@@ -318,15 +316,13 @@ while True:
         if next_check < next_run:
             cae.dprint(" ###  Timer={}, next chk {}s (last={} interval={}), next run {}s (last={} interval={}) (at {})"
                        .format(last_check, next_check - last_check, last_check, check_interval,
-                               next_run - last_check, last_run, command_interval, curr_time),
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                               next_run - last_check, last_run, command_interval, curr_time))
             continue  # wait for next check
 
         # wait for next command_interval, only directly after startup checks on first run
         if last_check < next_run:
             cae.dprint(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={}) (at {})"
-                       .format(next_run - last_check, last_check, last_run, command_interval, curr_time),
-                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                       .format(next_run - last_check, last_check, last_run, command_interval, curr_time))
         try:
             while get_timer_corrected() < next_run:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
@@ -337,8 +333,7 @@ while True:
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
         curr_time = datetime.datetime.now()
         cae.dprint(" ###  Run command (timer={}, last={}, interval={}) (at {})"
-                   .format(get_timer_corrected(), last_run, command_interval, curr_time),
-                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+                   .format(get_timer_corrected(), last_run, command_interval, curr_time))
 
         # then run the command
         run_starts += 1

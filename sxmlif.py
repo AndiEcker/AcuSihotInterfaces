@@ -70,7 +70,7 @@ class SihotXmlParser:  # XMLParser interface
         self._parser = None  # reset to XMLParser(target=self) in self.parse_xml() and close in self.close()
 
     def parse_xml(self, xml):
-        self.cae.dprint("SihotXmlParser.parse_xml():", xml, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("SihotXmlParser.parse_xml():", xml)
         try_counter = 0
         xml_cleaned = xml
         while True:
@@ -96,7 +96,7 @@ class SihotXmlParser:  # XMLParser interface
         self._curr_attr = None  # used as flag for a currently parsed base tag (for self.data())
         self._elem_path.append(tag)
         if tag in self._base_tags:
-            self.cae.dprint("SihotXmlParser.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("SihotXmlParser.start():", self._elem_path)
             self._curr_attr = elem_to_attr(tag)
             setattr(self, self._curr_attr, '')
             return None
@@ -110,13 +110,13 @@ class SihotXmlParser:  # XMLParser interface
 
     def data(self, data):  # called on each chunk (separated by XMLParser on spaces, special chars, ...)
         if self._curr_attr and data.strip():
-            self.cae.dprint("SihotXmlParser.data(): ", self._elem_path, data, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint("SihotXmlParser.data(): ", self._elem_path, data)
             setattr(self, self._curr_attr, getattr(self, self._curr_attr) + data)
             return None
         return data
 
     def end(self, tag):  # called for each closing tag
-        self.cae.dprint("SihotXmlParser.end():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("SihotXmlParser.end():", self._elem_path)
         self._curr_tag = ''
         self._curr_attr = ''
         if self._elem_path:     # Q&D Fix for TestGuestSearch for to prevent pop() on empty _elem_path list
@@ -181,7 +181,7 @@ class ResChange(SihotXmlParser):
     def start(self, tag, attrib):  # called for each opening tag
         if super(ResChange, self).start(tag, attrib) is None and tag not in ('MATCHCODE', 'OBJID'):
             return None  # processed by base class
-        self.cae.dprint("ResChange.start():", self._elem_path, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ResChange.start():", self._elem_path)
         if tag == 'SIHOT-Reservation':
             self.rgr_list.append(dict(rgr_ho_fk=self.hn, ResPersons=list()))
         elif tag in ('FIRST-Person', 'SIHOT-Person'):       # FIRST-Person only seen in room change (CI) on first occ
@@ -190,7 +190,7 @@ class ResChange(SihotXmlParser):
     def data(self, data):
         if super(ResChange, self).data(data) is None and self._curr_tag not in ('MATCHCODE', 'OBJID'):
             return None  # processed by base class
-        self.cae.dprint("ResChange.data():", self._elem_path, self.rgr_list, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("ResChange.data():", self._elem_path, self.rgr_list)
         # flag for to detect and prevent multiple values
         append = True
         # because data can be sent in chunks on parsing, we first determine the dictionary (di) and the item key (ik)
@@ -383,8 +383,7 @@ class SihotXmlBuilder:
                        timeout=self.cae.get_option(SDF_SH_TIMEOUT),
                        encoding=self.cae.get_option(SDF_SH_XML_ENCODING),
                        debug_level=self.debug_level)
-        self.cae.dprint("SihotXmlBuilder.send_to_server(): response_parser={}\nxml=\n{}"
-                        .format(response_parser, self.xml), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint("SihotXmlBuilder.send_to_server(): resp_parser={}\nxml=\n{}".format(response_parser, self.xml))
         err_msg = sc.send_to_server(self.xml)
         if not err_msg:
             self.response = response_parser or SihotXmlParser(self.cae)
@@ -427,7 +426,7 @@ class SihotXmlBuilder:
 
     @xml.setter
     def xml(self, value):
-        self.cae.dprint('SihotXmlBuilder.xml-set:', value, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        self.cae.dprint('SihotXmlBuilder.xml-set:', value)
         self._xml = value
 
 
@@ -515,8 +514,7 @@ class ResKernelGet(SihotXmlBuilder):
         err_msg = self.send_to_server(response_parser=ResKernelResponse(self.cae))
         if not err_msg and self.response:
             res_no = (self.response.hn, self.response.res_nr, self.response.sub_nr)
-            self.cae.dprint(msg + "res_no={};\nxml=\n{}".format(res_no, self.xml),
-                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+            self.cae.dprint(msg + "res_no={};\nxml=\n{}".format(res_no, self.xml))
         else:
             res_no = None
             uprint(msg + "error='{}'".format(err_msg))
