@@ -10,18 +10,23 @@
     0.9     08-03-18 bug fix in sxmlif.py: now set SRSL_DATE to start-of-sync-query-fetch instead of end-of-sync).
     1.0     30-05-18 bug fix in sxmlif.py: now use RUL_PRIMARY instead of RU_CODE in F_SIHOT_CAT/CAT element for
             to allow sync of deleted RU records.
+    1.1     28-02-19 migrated to use system data fields.
+    1.2     08-03-19 extended logging and notification messages.
 """
 import datetime
 
-from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, DEBUG_LEVEL_VERBOSE, full_stack_trace
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,\
+    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDI_ACU
+from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from sxmlif import ClientToSihot, ResToSihot, ACTION_UPDATE, ACTION_DELETE, \
-    ERR_MESSAGE_PREFIX_CONTINUE, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS
-from acif import add_ac_options
-from shif import add_sh_options
+from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
+
+from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
+from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
+from shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
 from ass_sys_data import AssSysData
 
-__version__ = '1.0'
+__version__ = '1.2'
 
 ADMIN_MAIL_TO_LIST = ['ITDevmen@signallia.com']
 
@@ -47,11 +52,11 @@ cae.add_option('syncDateRange', "Restrict sync. of res. to: "
 
 debug_level = cae.get_option('debugLevel')
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-       cae.get_option('shServerKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
-uprint('Use Kernel for clients:', 'Yes' if cae.get_option('useKernelForClient') else 'No (WEB)')
-uprint('Use Kernel for reservations:', 'Yes' if cae.get_option('useKernelForRes') else 'No (WEB)')
+uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+       cae.get_option(SDF_SH_KERNEL_PORT))
+uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+uprint('Use Kernel for clients:', 'Yes' if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else 'No (WEB)')
+uprint('Use Kernel for reservations:', 'Yes' if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else 'No (WEB)')
 last_rt_prefix = cae.get_option('acuDSN')[-4:]
 uprint('Last unfinished run (-1=all finished):  ', cae.get_config(last_rt_prefix + 'lastRt'))
 uprint('Migrate Clients First/Separate:',
@@ -84,7 +89,7 @@ def send_notification(what, sid, mail_body, data_dict=None):
         data_dict = dict()
 
     subject = 'SihotResSync notification ' + what + ' ' + sid
-    send_err = notification.send_notification(mail_body, subject=subject, data_dict=data_dict)
+    send_err = notification.send_notification(mail_body, subject=subject, data_dict=data_dict, body_style='plain')
     if send_err:
         uprint(" **** " + subject
                + " send error: {}. data='{}' mail-body='{}'.".format(send_err, data_dict, mail_body))
@@ -95,19 +100,18 @@ if cae.get_option('clientsFirst'):
     try:
         uprint("####  Sync CD Changes.....  ####")
 
-        acumen_cd = ClientToSihot(cae, use_kernel_interface=cae.get_option('useKernelForClient'),
-                                  map_client=cae.get_option('mapClient'))
+        acumen_cd = AcuClientToSihot(cae)
         error_msg = acumen_cd.fetch_from_acu_by_acu()
-        progress = Progress(debug_level, start_counter=acumen_cd.row_count,
+        progress = Progress(debug_level, start_counter=len(acumen_cd.recs),
                             start_msg='Prepare sending of {run_counter} client detail changes to Sihot',
-                            nothing_to_do_msg='SihotResSync: acumen client fetch returning no rows')
+                            nothing_to_do_msg='SihotResSync: acumen client fetch returning no recs')
         if not error_msg:
-            for crow in acumen_cd.rows:
-                error_msg = acumen_cd.send_client_to_sihot(crow)
-                cid = crow['CD_CODE'] + '/' + str(crow['CDL_CODE'])
+            for rec in acumen_cd.recs:
+                error_msg = acumen_cd.send_client_to_sihot(rec)
+                cid = rec['AcuId'] + '/' + str(rec['AcuLogId'])
                 progress.next(processed_id=cid, error_msg=error_msg)
                 if error_msg:
-                    send_notification('Acumen Client', cid, error_msg, crow)
+                    send_notification('Acumen Client', cid, error_msg, rec)
                 error_msg += acumen_cd.ora_db.commit()
                 if error_msg:
                     if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
@@ -125,68 +129,69 @@ if not error_msg:
     try:
         uprint("####  Sync Req/ARU Changes  ####")
 
-        config_data = AssSysData(cae)
-        hotel_ids = config_data.ho_id_list()     # determine active/valid Sihot-hotels
-        config_data.close_dbs()
+        asd = AssSysData(cae)
+        hotel_ids = asd.ho_id_list()     # determine active/valid Sihot-hotels
 
-        acumen_req = ResToSihot(cae, use_kernel_interface=cae.get_option('useKernelForRes'),
-                                map_res=cae.get_option('mapRes'),
-                                use_kernel_for_new_clients=cae.get_option('useKernelForClient'),
-                                map_client=cae.get_option('mapClient'))
+        acumen_req = AcuResToSihot(cae, ora_db=asd.connection(SDI_ACU))
         error_msg = acumen_req.fetch_from_acu_by_aru(date_range=sync_date_range)
         if error_msg:
             notification.send_notification(error_msg, subject='SihotResSync fetch error notification',
-                                           mail_to=ADMIN_MAIL_TO_LIST)
+                                           mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')
         else:
             # 1st pre-run without room allocation - for to allow room swaps in the same batch
-            room_rows = [dict(r) for r in acumen_req.rows if r['RUL_SIHOT_ROOM']
-                         and r['RUL_SIHOT_HOTEL'] == r['RUL_SIHOT_LAST_HOTEL']
-                         and r['RUL_ACTION'] != ACTION_DELETE]
-            if not migration_mode and room_rows:
-                cae.dprint(" ###  room swap pre-run has {} rows".format(len(room_rows)),
+            room_recs = [r.copy(deepness=-1) for r in acumen_req.recs if r['ResHotelId']
+                         and r['ResHotelId'] == r['ResLastHotelId']
+                         and r['ResAction'] != ACTION_DELETE]
+            if not migration_mode and room_recs:
+                cae.dprint(" ###  room swap pre-run has {} recs".format(len(room_recs)),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                progress = Progress(debug_level, start_counter=len(room_rows),
+                progress = Progress(debug_level, start_counter=len(room_recs),
                                     start_msg=" ###  Prepare sending of {total_count} room swaps to Sihot",
-                                    nothing_to_do_msg=" ***  SihotResSync: room swap fetch returning no rows")
-                for crow in room_rows:
-                    crow['RUL_SIHOT_ROOM'] = ''
-                    error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
-                    progress.next(processed_id='RoomSwap:' + acumen_req.res_id_values(crow), error_msg=error_msg)
+                                    nothing_to_do_msg=" ***  SihotResSync: room swap fetch returning no recs")
+                for rec in room_recs:
+                    rec['ResRoomNo'] = ''
+                    error_msg = acumen_req.send_res_to_sihot(rec, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
+                    progress.next(processed_id='RoomSwap:' + acumen_req.res_id_values(rec), error_msg=error_msg)
                     if error_msg and notification:
-                        error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
+                        error_msg = acumen_req.res_id_values(rec) + '\n\nERRORS=' + error_msg \
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
                         notification.send_notification(error_msg, subject='SihotResSync admin room-swap notification',
-                                                       mail_to=ADMIN_MAIL_TO_LIST)
-                    acumen_req.ora_db.rollback()  # send but directly roll back changes in RU_SIHOT_OBJID and T_SRSL
+                                                       mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')
+                    acumen_req.ora_db.rollback()  # send but roll back changes in ResObjId and T_SRSL
                 progress.finished(error_msg=error_msg)
 
             # 2nd pre-run for hotel movements (HOTMOVE) - for to delete/cancel booking in last/old hotel
-            room_rows = [dict(r) for r in acumen_req.rows if r['RUL_SIHOT_HOTEL'] != r['RUL_SIHOT_LAST_HOTEL']
-                         and str(r['RUL_SIHOT_LAST_HOTEL']) in hotel_ids
-                         and r['RUL_ACTION'] == ACTION_UPDATE]
-            if not migration_mode and room_rows:
-                cae.dprint(" ###  hotel movement pre-run has {} rows".format(len(room_rows)),
+            room_recs = [r.copy(deepness=-1) for r in acumen_req.recs if r['ResHotelId'] != r['ResLastHotelId']
+                         and r['ResLastHotelId'] in hotel_ids
+                         and r['ResAction'] == ACTION_UPDATE]
+            hotel_move_gds_nos = list()
+            if not migration_mode and room_recs:
+                cae.dprint(" ###  hotel movement pre-run has {} recs".format(len(room_recs)),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                progress = Progress(debug_level, start_counter=len(room_rows),
+                progress = Progress(debug_level, start_counter=len(room_recs),
                                     start_msg=" ###  Prepare sending of {total_count} hotel movements to Sihot",
-                                    nothing_to_do_msg=" ***  SihotResSync: hotel movement fetch returning no rows")
-                for crow in room_rows:
-                    new_hotel = str(crow['RUL_SIHOT_HOTEL'])
-                    crow['RUL_SIHOT_HOTEL'] = crow['RUL_SIHOT_LAST_HOTEL']
-                    crow['RUL_SIHOT_CAT'] = crow['RUL_SIHOT_LAST_CAT']
-                    crow['RUL_ACTION'] = 'DELETE'
-                    crow['SH_RES_TYPE'] = 'S'
-                    error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
-                    progress.next(processed_id='HotMove:' + acumen_req.res_id_values(crow), error_msg=error_msg)
+                                    nothing_to_do_msg=" ***  SihotResSync: hotel movement fetch returning no recs")
+                for rec in room_recs:
+                    new_hotel = str(rec['ResHotelId'])
+                    rec['ResHotelId'] = rec['ResLastHotelId']
+                    rec['ResRoomCat'] = rec['ResLastRoomCat']
+                    rec['ResAction'] = ACTION_DELETE
+                    rec['ResStatus'] = 'S'
+
+                    error_msg = acumen_req.send_res_to_sihot(rec, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
+
+                    progress.next(processed_id='HotMove:' + acumen_req.res_id_values(rec), error_msg=error_msg)
                     if error_msg and notification:
-                        error_msg = acumen_req.res_id_values(crow) + '\n\nERRORS=' + error_msg \
+                        error_msg = acumen_req.res_id_values(rec) + '\n\nERRORS=' + error_msg \
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
                         notification.send_notification(error_msg, subject='SihotResSync admin HOTMOVE notification',
-                                                       mail_to=ADMIN_MAIL_TO_LIST)
+                                                       mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')
                     if new_hotel not in hotel_ids:
-                        acumen_req.ora_db.commit()    # because this res get skipped in the full run loop underneath
+                        acumen_req.ora_db.commit()    # because this res get skipped in the run loop underneath
                     else:
-                        acumen_req.ora_db.rollback()  # send but directly roll back changes in RU_SIHOT_OBJID and T_SRSL
+                        acumen_req.ora_db.rollback()  # send but roll back changes in ResObjId and T_SRSL
+                    if rec.val('ResGdsNo'):
+                        hotel_move_gds_nos.append(rec['ResGdsNo'])
                 progress.finished(error_msg=error_msg)
 
             if not migration_mode:
@@ -195,24 +200,30 @@ if not error_msg:
 
             # now do the full run with room allocations (only skipping/excluding HOTMOVE to non-Sihot-hotel)
             synced_ids = list()
-            progress = Progress(debug_level, start_counter=acumen_req.row_count,
+            progress = Progress(debug_level, start_counter=len(acumen_req.recs),
                                 start_msg=" ###  Prepare sending of {total_count} reservations to Sihot",
-                                nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no rows")
-            if acumen_req.rows:
-                cae.dprint(" ###  full/main run has {} rows"
-                           .format(len([_ for _ in acumen_req.rows if str(_['RUL_SIHOT_HOTEL']) in hotel_ids])),
+                                nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no recs")
+            if acumen_req.recs:
+                cae.dprint(" ###  full/main run has {} recs"
+                           .format(len([_ for _ in acumen_req.recs if _['ResHotelId'] in hotel_ids])),
                            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                for crow in acumen_req.rows:
-                    rid = acumen_req.res_id_values(crow)
-                    if str(crow['RUL_SIHOT_HOTEL']) not in hotel_ids:
+                for rec in acumen_req.recs:
+                    rid = acumen_req.res_id_values(rec)
+                    if rec['ResHotelId'] not in hotel_ids:
                         synced_ids.append(rid + "(H)")
                         continue        # skip HOTMOVE if new hotel is a non-Sihot-hotel
-                    elif str(crow['RUL_SIHOT_LAST_HOTEL']) not in hotel_ids:
-                        crow['RUL_ACTION'] = 'INSERT'
-                    error_msg = acumen_req.send_row_to_sihot(crow, ensure_client_mode=ECM_ENSURE_WITH_ERRORS)
+                    elif rec['ResLastHotelId'] not in hotel_ids:
+                        rec['ResAction'] = ACTION_INSERT
+                    if rec.val('ResGdsNo') in hotel_move_gds_nos:
+                        cae.dprint("  ##  HotMove ResObjId {} reset; GdsNo={}".format(rec['ResObjId'], rec['ResGdsNo']))
+                        rec['ResObjId'] = ''
+
+                    error_msg = acumen_req.send_res_to_sihot(rec)
+
+                    rid = acumen_req.res_id_values(rec)     # refresh rid with new ResId/ResSubId from Sihot
                     progress.next(processed_id=rid, error_msg=error_msg)
                     if error_msg:
-                        send_notification("Acumen Reservation", rid, acumen_req.res_id_desc(crow, error_msg), crow)
+                        send_notification("Acumen Reservation", rid, acumen_req.res_id_desc(rec, error_msg), rec)
                     error_msg += acumen_req.ora_db.commit()
                     if error_msg:
                         if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
@@ -232,7 +243,7 @@ if not error_msg:
             warnings = acumen_req.get_warnings()
             if notification and warnings:
                 notification.send_notification(warnings, subject="SihotResSync warnings notification",
-                                               mail_to=cae.get_option('warningsMailToAddr'))
+                                               mail_to=cae.get_option('warningsMailToAddr'), body_style='plain')
 
     except Exception as ex:
         app_env_err += "\n\nSync Req/ARU Changes exception: " + full_stack_trace(ex)

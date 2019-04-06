@@ -4,8 +4,7 @@ cd ..\_build_dist\AcuSihotInterfaces
 c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\AcuServer.py
 rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource ..\..\AcuSihotInterfaces\AcuSihotMonitor.kv ..\..\AcuSihotInterfaces\AcuSihotMonitor.py
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\AcuSihotMonitor.spec
-c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\AssCacheSync.py
-c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\AssServer.py
+c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\BssServer.py
 c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\ClientQuestionnaireExport.py
 rem c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\KernelGuestTester.py
 rem c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\MatchcodeToObjId.py
@@ -19,6 +18,7 @@ rem NOT WORKING: c:\Python35\Scripts\pyinstaller --onefile --resource ..\..\AcuS
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SihotResImport.spec
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SihotResImport_console.spec
 c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SihotResSync.py
+c:\Python35\Scripts\pyinstaller --onefile --hiddenimport queue ..\..\AcuSihotInterfaces\SysDataMan.py
 c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\TestConnectivity.py
 c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\WatchPupPy.py
 rem c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\WebResTester.py

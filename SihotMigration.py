@@ -5,8 +5,8 @@
 """
 
 from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace
-from acif import add_ac_options
-from sxmlif import ClientToSihot, ResToSihot, SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE
+from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
+from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
 from shif import add_sh_options, print_sh_options
 
 
@@ -54,17 +54,17 @@ uprint("####  Migration of .......  ####")
 if cae.get_option('clientsFirst'):
     uprint('####  ... Clients' + ('+Res' if cae.get_option('clientsFirst') == 2 else '....')
            + ('.....' if future_only else 'Hist.') + '  ####')
-    acumen_cd = ClientToSihot(cae)
-    acu_res_hist = ResToSihot(cae)
+    acumen_cd = AcuClientToSihot(cae)
+    acu_res_hist = AcuResToSihot(cae)
 
     error_msg = acumen_cd.fetch_all_valid_from_acu()
-    progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_cd.row_count,
+    progress = Progress(cae.get_option('debugLevel'), start_counter=len(acumen_cd.recs),
                         start_msg='Prepare sending of {run_counter} client(s) to Sihot',
-                        nothing_to_do_msg='SihotMigration: acumen_cd fetch returning no rows')
+                        nothing_to_do_msg='SihotMigration: acumen_cd fetch returning no recs')
     if not error_msg:
-        for crow in acumen_cd.rows:
-            error_msg = acumen_cd.send_client_to_sihot(crow)
-            progress.next(processed_id=crow['CD_CODE'] + '/' + str(crow['CDL_CODE']), error_msg=error_msg)
+        for rec in acumen_cd.recs:
+            error_msg = acumen_cd.send_client_to_sihot(rec)
+            progress.next(processed_id=rec['AcuId'] + '/' + str(rec['AcuLogId']), error_msg=error_msg)
             if error_msg:
                 acumen_cd.ora_db.rollback()
             else:
@@ -76,18 +76,21 @@ if cae.get_option('clientsFirst'):
                 # using fetch_from_acu_by_cd() would also pass reservations for currently not existing hotels
                 #  error_msg = acu_res_hist.fetch_from_acu_by_cd(cols['CD_CODE'], future_only=future_only)
                 # .. on the other hand: with aru fetch we are only migrating the synchronized resOcc types
-                error_msg = acu_res_hist.fetch_from_acu_by_aru(where_group_order="CD_CODE = '" + crow['CD_CODE'] + "'",
+                error_msg = acu_res_hist.fetch_from_acu_by_aru(where_group_order="CD_CODE = '" + rec['AcuId'] + "'",
                                                                date_range=sync_date_range)
                 if error_msg:
-                    error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + ' reservation history fetch error: ' + \
-                                error_msg + '! Data=' + str(crow)
+                    error_msg = 'SihotMigration guest ' + rec['AcuId'] + ' reservation history fetch error: ' + \
+                                error_msg + '! Data=' + str(rec)
                 else:
-                    error_msg = acu_res_hist.send_rows_to_sihot(commit_per_row=True)
+                    error_msg = acu_res_hist.send_res_recs_to_sihot()
                     if error_msg:
-                        error_msg = 'SihotMigration guest ' + crow['CD_CODE'] + \
-                                    ' reservation history send error: ' + error_msg + '! Data=' + str(crow)
+                        error_msg = 'SihotMigration guest ' + rec['AcuId'] + \
+                                    ' reservation history send error: ' + error_msg + '! Data=' + str(rec)
+                        acu_res_hist.ora_db.rollback()
+                    else:
+                        acu_res_hist.ora_db.commit()
             if error_msg:
-                uprint('****  Error sending new guest ' + crow['CD_CODE'] + ' to Sihot: ' + error_msg)
+                uprint('****  Error sending new guest ' + rec['AcuId'] + ' to Sihot: ' + error_msg)
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     continue  # currently not used/returned-by-send_client_to_sihot()
                 elif break_on_error:
@@ -101,34 +104,34 @@ if cae.get_option('clientsFirst'):
 uprint("####  ... " + ("future Res......" if future_only else "Reservations....") + "  ####")
 
 try:
-    acumen_req = ResToSihot(cae)
-    error_msg = acumen_req.fetch_from_acu_by_aru(date_range=sync_date_range)
+    acumen_res = AcuResToSihot(cae)
+    error_msg = acumen_res.fetch_from_acu_by_aru(date_range=sync_date_range)
     if not error_msg:
-        progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.row_count,
+        progress = Progress(cae.get_option('debugLevel'), start_counter=len(acumen_res.recs),
                             start_msg='Prepare the migration of {total_count} reservations to Sihot',
-                            nothing_to_do_msg='SihotMigration: acumen_req.fetch_all_valid_from_acu() returning no rows')
+                            nothing_to_do_msg='SihotMigration: acumen_res.fetch_all_valid_from_acu() returning no recs')
         if include_cxl_res:
-            all_rows = acumen_req.rows
+            all_recs = acumen_res.recs
         else:
-            all_rows = list()
+            all_recs = list()
             del_gds_nos = list()
-            for crow in reversed(acumen_req.rows):
-                gds_no = crow['RUL_PRIMARY']
+            for rec in reversed(acumen_res.recs):
+                gds_no = rec['ResGdsNo']
                 if gds_no in del_gds_nos:
                     continue
-                elif crow['SH_RES_TYPE'] == 'S' and gds_no:
+                elif rec['ResStatus'] == 'S' and gds_no:
                     del_gds_nos.append(gds_no)
                 else:
-                    all_rows.append(crow)
-            all_rows = reversed(all_rows)
-        for crow in all_rows:
-            error_msg = acumen_req.send_row_to_sihot(crow)
-            res_id = acumen_req.res_id_values(crow)
+                    all_recs.append(rec)
+            all_recs = reversed(all_recs)
+        for rec in all_recs:
+            error_msg = acumen_res.send_res_to_sihot(rec)
+            res_id = acumen_res.res_id_values(rec)
             progress.next(processed_id=res_id, error_msg=error_msg)
             if error_msg:
-                acumen_req.ora_db.rollback()
+                acumen_res.ora_db.rollback()
             else:
-                error_msg = acumen_req.ora_db.commit()
+                error_msg = acumen_res.ora_db.commit()
             if error_msg:
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     continue

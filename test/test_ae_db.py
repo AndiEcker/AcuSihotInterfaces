@@ -1,5 +1,5 @@
 import datetime
-from ae_db import OraDB, PostgresDB
+from ae_db import OraDB, PostgresDB, bind_var_prefix
 
 UPDATED_TEST_STRING = 'Updated Test String'
 TEST_DATE = datetime.datetime(2018, 1, 21, 22, 33, 44)
@@ -13,7 +13,8 @@ class TestOraDB:
     def test_prepare_connect(self, console_app_env):
         global test_db
         cae = console_app_env
-        test_db = OraDB(usr=cae.get_option('acuUser'), pwd=cae.get_option('acuPassword'), dsn=cae.get_option('acuDSN'),
+        test_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
+                             DSN=cae.get_option('acuDSN')),
                         app_name='test_ae_db-ora', debug_level=cae.get_option('debugLevel'))
         assert not test_db.last_err_msg
 
@@ -30,16 +31,22 @@ class TestOraDB:
                                   commit=True)
 
     def test_update(self):
-        assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), "col_int = :yx", commit=True,
-                                  bind_vars=dict(yx=1))
+        assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), dict(col_int=1), commit=True)
 
     def test_upd_if_empty(self):
-        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), "col_int = :yx", commit=True,
-                                  bind_vars=dict(yx=1), locked_cols=['col_vc'])
+        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), dict(col_int=1), commit=True,
+                                  locked_cols=['col_vc'])
 
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'],
-                                  where_group_order='col_int >= :xy', bind_vars=dict(xy=0))
+                                  where_group_order="col_int >= :" + bind_var_prefix + "xy", bind_vars=dict(xy=0))
+        rows = test_db.fetch_all()
+        assert rows
+        assert rows[0][0] == 1
+        assert rows[0][1] == UPDATED_TEST_STRING
+        assert rows[0][2] == TEST_DATE
+
+        assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'], chk_values=dict(col_int=1))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1
@@ -48,7 +55,8 @@ class TestOraDB:
 
     def test_in_clause(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'],
-                                  where_group_order='col_int IN (:yz)', bind_vars=dict(yz=[0, 1, 2, 3, 4]))
+                                  where_group_order="col_int IN (:" + bind_var_prefix + "yz)",
+                                  bind_vars=dict(yz=[0, 1, 2, 3, 4]))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1
@@ -60,10 +68,10 @@ class TestPostgresDB:
     def test_connect(self, console_app_env):    # test_connect
         global test_db
         cae = console_app_env
-        test_db = PostgresDB(usr=cae.get_option('assRootUsr'), pwd=cae.get_option('assRootPwd'), dsn='test',
-                             app_name='test_ae_db-pg', ssl_args=cae.get_config('assSslArgs'),
-                             debug_level=cae.get_option('debugLevel'))
-        test_db.connect()
+        test_db = PostgresDB(dict(User=cae.get_option('assRootUsr'), Password=cae.get_option('assRootPwd'), DSN='test',
+                                  SslArgs=cae.get_config('assSslArgs')),
+                             app_name='test_ae_db-pg', debug_level=cae.get_option('debugLevel'))
+        assert not test_db.connect()
         assert not test_db.last_err_msg
 
     def test_create_table(self):
@@ -80,26 +88,23 @@ class TestPostgresDB:
                                   commit=True)
 
     def test_update_char(self):
-        assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), "col_int = :x", commit=True,
-                                  bind_vars=dict(x=1))
+        assert not test_db.update(test_table, dict(col_vc=UPDATED_TEST_STRING), dict(col_int=1), commit=True)
 
     def test_update_time_as_char(self):
-        assert not test_db.update(test_table, dict(col_ti='15:19'), "col_int = :x", commit=True,
-                                  bind_vars=dict(x=1))
-        assert not test_db.select(test_table, cols=['col_ti'], where_group_order='col_int = :x', bind_vars=dict(x=1))
+        assert not test_db.update(test_table, dict(col_ti='15:19'), dict(col_int=1), commit=True)
+        assert not test_db.select(test_table, cols=['col_ti'], chk_values=dict(col_int=1))
         assert test_db.fetch_value() == datetime.time(hour=15, minute=19)
 
     def test_update_time(self):
-        assert not test_db.update(test_table, dict(col_ti=UPDATED_TIME), "col_int = :x", commit=True,
-                                  bind_vars=dict(x=1))
+        assert not test_db.update(test_table, dict(col_ti=UPDATED_TIME), dict(col_int=1), commit=True)
 
     def test_upd_if_empty(self):
-        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), "col_int = :yx", commit=True,
-                                  bind_vars=dict(yx=1), locked_cols=['col_vc'])
+        assert not test_db.update(test_table, dict(col_vc='WillNotBeChanged'), dict(col_int=1), commit=True,
+                                  locked_cols=['col_vc'])
 
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt', 'col_ti'],
-                                  where_group_order='col_int >= :xy', bind_vars=dict(xy=0))
+                                  chk_values=dict(col_int=1))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1
@@ -109,7 +114,8 @@ class TestPostgresDB:
 
     def test_in_clause(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt', 'col_ti'],
-                                  where_group_order='col_int IN (:yz)', bind_vars=dict(yz=[0, 1, 2, 3, 4]))
+                                  where_group_order="col_int IN (:" + bind_var_prefix + "yz)",
+                                  bind_vars=dict(yz=[0, 1, 2, 3, 4]))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1

@@ -1,7 +1,8 @@
 from smtplib import SMTP, SMTP_SSL
 from email.mime.text import MIMEText
 
-from ae_console_app import uprint, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae_console_app import uprint
 
 
 DEF_ENC_PORT = 25
@@ -20,7 +21,7 @@ def add_notification_options(cae, add_warnings=False):
     cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
     if add_warnings:
         # separate warnings email is optional for some applications (e.g. AcuServer)
-        cae.add_option('warningsMailToAddr', "Warnings SMTP receiver/to addresses (if differs from smtpTo)", list(), 'v')
+        cae.add_option('warningsMailToAddr', "Warnings SMTP receiver addresses (if differs from smtpTo)", list(), 'v')
 
 
 def init_notification(cae, system_name=''):
@@ -43,8 +44,8 @@ class Notification:
     def __init__(self, smtp_server_uri, mail_from, mail_to, local_mail_host='', used_system='', mail_body_footer='',
                  debug_level=DEBUG_LEVEL_DISABLED):
         if debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint(' ###  New Notification({}, {}, {}, {}, {}).'
-                   .format(smtp_server_uri, mail_from, mail_to, local_mail_host, used_system))
+            uprint(' ###  New Notification({}, {}, {}, {}, {}, {}).'
+                   .format(smtp_server_uri, mail_from, mail_to, local_mail_host, used_system, mail_body_footer))
         # split smtp server URI into service, host, user, pw and port (all apart host are optional)
         if '://' in smtp_server_uri:
             self._mail_service, smtp_server_uri = smtp_server_uri.split('://')
@@ -123,7 +124,7 @@ class Notification:
 
         # log error message and try to send it per email
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint(" #### Notification.send_notification(): '" + msg_body[:MAX_LEN_BODY_IN_LOG] + "'" + title_ext)
+            uprint(" #### Notification.send_notification(): BODY{" + msg_body[:MAX_LEN_BODY_IN_LOG] + "..}" + title_ext)
         err_msg = ''
         try:
             message = MIMEText(msg_body, _subtype=body_style)

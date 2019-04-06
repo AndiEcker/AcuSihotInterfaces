@@ -3,10 +3,14 @@ create or replace view LOBBY.ACU_RES_UNSYNCED  -- filtered and unsynced reservat
 select *
   from V_ACU_RES_FILTERED
  where not exists (select NULL from T_SRSL where SRSL_TABLE = 'RU' and SRSL_PRIMARY = RUL_PRIMARY and substr(SRSL_STATUS, 1, 6) = 'SYNCED' and SRSL_DATE >= RUL_DATE)
+   and (RU_CODE is not NULL
+     or exists (select NULL from T_SRSL where SRSL_TABLE = 'RU' and SRSL_PRIMARY = RUL_PRIMARY)
+       )
    --- TEST
    --and RU_CODE >= 1018389 -- 180046 are less/equal and 2058 are greater/equal
    --and RU_CODE = 1025884 --1024776  --1027947/TK@BHC --1018389/FB@BHH
    --and RUL_CODE = 4552688 -- adding this fixes the strange wrong RUL_SIHOT_HOTEL value error: 4 or 0 instead of 1
+   --and (cd_code = 'B463787' or rul_sihot_room = '3503')
    order by RUL_DATE, RUL_CODE
 /*
   ae:12-07-16 first beta of unsynced reservation changes for to be synced to SiHOT.
@@ -16,6 +20,7 @@ select *
   ae:27-09-16 V04: added ROREF filter for deleted RUs and moved RO_SIHOT_RATE is not NULL filter to V_ACU_RES_CORE because else other resOcc types would also be migrated/synched.
   ae:30-09-16 V05: split into V_ACU_RES_FILTERED.
   ae:17-09-17 V06: added RUL_DATE in order by clause for to ensure correct order for receycled/reused T_RUL records (done by P_RUL_INSERT()).
+  ae:05-04-19 V07: exclude FB bookings that got deleted and old T_RUL entries are missing (from the DB clean-up?)
 */
 /
 

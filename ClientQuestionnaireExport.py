@@ -9,32 +9,30 @@
     CSV file into the folder U:/transfer/staysformarketing/.
     
     0.1     first beta.
+    0.2     roughly refactored to use ae_sys_data - NOT TESTED.
 """
 import os
 import datetime
 import re
 from traceback import print_exc
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import ResSearch, SXML_DEF_ENCODING
+from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint
+from shif import ResSearch, SH_DATE_FORMAT
 from shif import add_sh_options, print_sh_options
 
 
-__version__ = '0.1'
+__version__ = '0.2'
 
 LIST_MARKER_PREFIX = '*'
 LINE_SEPARATOR = '\n'
-SIHOT_PROVIDES_CHECKOUT_TIME = False    # currently there is no real checkout time available in Sihot
-SIHOT_DATE_FORMAT = '%Y-%m-%d %H:%M:%S' if SIHOT_PROVIDES_CHECKOUT_TIME else '%Y-%m-%d'
 
-startup_date = datetime.datetime.now() if SIHOT_PROVIDES_CHECKOUT_TIME else datetime.date.today()
+startup_date = datetime.date.today()
 mail_re = re.compile('[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+\.[a-zA-Z]{2,4}$')
 
 cae = ConsoleApp(__version__, "Export check-outs from Sihot to CSV file")
-cae.add_option('dateFrom', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
-               " of first check-out to be exported", startup_date - datetime.timedelta(days=7), 'F')
-cae.add_option('dateTill', "Date" + ("/time" if SIHOT_PROVIDES_CHECKOUT_TIME else "") +
-               " of last check-out to be exported", startup_date, 'T')
+cae.add_option('dateFrom', "Date of first check-out to be exported", startup_date - datetime.timedelta(days=7), 'F')
+cae.add_option('dateTill', "Date of last check-out to be exported", startup_date, 'T')
 
 # old Acumen script used the following file path: //<oracle-server>/home/oracle/ext_tables/INTUITION.csv
 cae.add_option('exportFile', "Full path and name of the CSV file (appending new checkouts if already exits)", '', 'x')
@@ -46,8 +44,8 @@ export_fnam = cae.get_option('exportFile')
 uprint("Export file:", export_fnam)
 date_from = cae.get_option('dateFrom')
 date_till = cae.get_option('dateTill')
-uprint("Date range including checkouts from", date_from.strftime(SIHOT_DATE_FORMAT),
-       'and till/before', date_till.strftime(SIHOT_DATE_FORMAT))
+uprint("Date range including checkouts from", date_from.strftime(SH_DATE_FORMAT),
+       'and till/before', date_till.strftime(SH_DATE_FORMAT))
 print_sh_options(cae)
 
 column_separator = cae.get_config('columnSeparator', default_value=',')
@@ -90,52 +88,15 @@ elif date_from >= date_till:
     cae.shutdown(18)
 
 
-def elem_value(row, col_nam, arri=-1):
-    """ get the column value from the row_dict variable, using arr_index in case of """
-    is_list = col_nam.startswith(LIST_MARKER_PREFIX)
-    if is_list:
-        col_nam = col_nam[len(LIST_MARKER_PREFIX):]
-
-    if col_nam not in row:
-        col_val = "(missing)"
-    elif is_list and 'elemListVal' in row[col_nam] and len(row[col_nam]['elemListVal']) > arri:
-        col_val = row[col_nam]['elemListVal'][arri]
-    elif 'elemVal' in row[col_nam]:
-        col_val = row[col_nam]['elemVal']
-    else:
-        col_val = "(incomplete)"
-
-    return col_val
-
-
-def get_hotel_and_res_id(row):  # see also shif.py/hotel_and_res_id()
-    h_id = elem_value(row, 'RES-HOTEL')
-    r_num = elem_value(row, 'RES-NR')
-    s_num = elem_value(row, 'SUB-NR')
+def get_hotel_and_res_id(res_rec):  # see also shif.py/hotel_and_res_id()
+    h_id = res_rec['RES-HOTEL'].val()
+    r_num = res_rec['RES-NR'].val()
+    s_num = res_rec['SUB-NR'].val()
     if not h_id or not hotel_id_to_name(h_id) or not hotel_id_to_location_id(h_id) or not r_num:
         cae.dprint("  ##  Skipping reservation with invalid hotel-id/RES-NR/SUB-NR", h_id, r_num, s_num,
                    minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         return None, None
     return h_id, r_num + ('/' + s_num if s_num else '') + '@' + h_id
-
-
-def get_date_range(row):
-    """ determines the check-in/-out values (of type: datetime if SH_PROVIDES_CHECKOUT_TIME else date) """
-    if SIHOT_PROVIDES_CHECKOUT_TIME:
-        d_str = row['ARR']['elemVal']
-        t_str = row['ARR-TIME']['elemVal']
-        checked_in = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
-        dt_key = 'DEP-TIME'
-        if dt_key in row and row[dt_key].get('elemVal'):
-            d_str = row['DEP']['elemVal']
-            t_str = row[dt_key]['elemVal']
-            checked_out = datetime.datetime.strptime(d_str + ' ' + t_str, SIHOT_DATE_FORMAT)
-        else:
-            checked_out = None
-    else:
-        checked_in = datetime.datetime.strptime(row['ARR']['elemVal'], SIHOT_DATE_FORMAT).date()
-        checked_out = datetime.datetime.strptime(row['DEP']['elemVal'], SIHOT_DATE_FORMAT).date()
-    return checked_in, checked_out
 
 
 def hotel_id_to_name(h_id):
@@ -161,42 +122,30 @@ def email_is_valid(email):
     return False
 
 
-def valid_email_indexes(row):
-    indexes = list()
-    if 'EMAIL' in row:
-        if 'elemListVal' in row['EMAIL']:
-            for idx, email in enumerate(row['EMAIL']['elemListVal']):
-                if email_is_valid(email):
-                    indexes.append(idx)
-        if not indexes and 'elemVal' in row['EMAIL'] and email_is_valid(row['EMAIL']['elemVal']):
-            row['EMAIL']['elemListVal'] = [row['EMAIL']['elemVal']]
-            indexes.append(0)
-    return indexes
-
-
 try:
     res_search = ResSearch(cae)
     # the from/to date range filter of WEB ResSearch is filtering the arrival date only (not date range/departure)
     first_checkin = date_from - datetime.timedelta(days=max_len_of_stay)
-    last_checkout = date_till - datetime.timedelta(days=0 if SIHOT_PROVIDES_CHECKOUT_TIME else 1)
+    last_checkout = date_till - datetime.timedelta(days=1)
     # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
     # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
-    all_rows = res_search.search(from_date=first_checkin, to_date=last_checkout, flags=search_flags, scope=search_scope)
-    if all_rows and isinstance(all_rows, str):
-        uprint(" ***  Sihot.PMS reservation search error:", all_rows)
+    recs = res_search.search_res(from_date=first_checkin, to_date=last_checkout, flags=search_flags, scope=search_scope)
+    if recs and isinstance(recs, str):
+        uprint(" ***  Sihot.PMS reservation search error:", recs)
         cae.shutdown(21)
-    elif all_rows and isinstance(all_rows, list):
+    elif recs and isinstance(recs, list):
         exp_file_exists = os.path.exists(export_fnam)
         with open(export_fnam, 'a' if exp_file_exists else 'w') as f:
             if not exp_file_exists:
                 f.write(file_caption)
             unique_ids = list()
-            for row_dict in all_rows:
-                hotel_id, res_id = get_hotel_and_res_id(row_dict)
+            for rec in recs:
+                hotel_id, res_id = get_hotel_and_res_id(rec)
                 if not hotel_id or not res_id:
                     # skip error already logged within hotel_and_res_id()
                     continue
-                check_in, check_out = get_date_range(row_dict)
+                check_in = rec['ResArrival'].val()
+                check_out = rec['ResDeparture'].val()
                 if not check_in or not check_out:
                     cae.dprint(" ###  Skipping incomplete check-in/-out/res-id=", check_in, check_out, res_id)
                     continue
@@ -205,20 +154,16 @@ try:
                                "not in date range from ", date_from, 'till', date_till, 'res-id=', res_id,
                                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     continue
-                arr_indexes = valid_email_indexes(row_dict)
-                if not arr_indexes:
-                    cae.dprint(" ###  Skipping checkout with invalid/empty email address; res-id=", res_id)
+                res_type = rec['ResStatus']
+                if res_type in ('S', 'N'):
+                    cae.dprint("  ##  Skipping because of reservation type", res_type, 'res-id=', res_id,
+                               minimum_debug_level=DEBUG_LEVEL_VERBOSE)
                     continue
-                for arr_index in arr_indexes:
+                for arr_index in range(len(rec['ResPersons'])):
                     unique_id = res_id + ('#' + str(arr_index) if arr_index >= 0 else '')
                     if unique_id in unique_ids:
                         uprint("  **  Detected duplicate guest/client with unique-id=", unique_id)
                     unique_ids.append(unique_id)
-                    res_type = elem_value(row_dict, 'RT', arr_index)
-                    if res_type in ('S', 'N'):
-                        cae.dprint("  ##  Skipping because of reservation type", res_type, 'unique-id=', unique_id,
-                                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-                        continue
                     f.write(LINE_SEPARATOR)
                     first_col = True
                     for c_nam in file_columns:
@@ -230,7 +175,7 @@ try:
                                 c_val = ex
                                 cae.dprint(" ###  Invalid column expression", c_nam, "; exception:", str(ex))
                         else:
-                            c_val = elem_value(row_dict, c_nam, arr_index)
+                            c_val = rec.val('ResPersons', arr_index, c_nam)
                         if first_col:
                             first_col = False
                         else:

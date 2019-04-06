@@ -22,6 +22,7 @@
       <w>arol</w>
       <w>arolref</w>
       <w>arraysize</w>
+      <w>asscache</w>
       <w>atgeneric</w>
       <w>atref</w>
       <w>auditable</w>
@@ -62,6 +63,7 @@
       <w>coref</w>
       <w>countrycode</w>
       <w>csid</w>
+      <w>curef</w>
       <w>dbname</w>
       <w>defaultpaymenttype</w>
       <w>devmen</w>
@@ -75,6 +77,7 @@
       <w>elems</w>
       <w>elif</w>
       <w>elpp</w>
+      <w>envvars</w>
       <w>exch</w>
       <w>exportextendedcomment</w>
       <w>expres</w>
@@ -97,6 +100,7 @@
       <w>gethostname</w>
       <w>giftvoucher</w>
       <w>gridlayout</w>
+      <w>groxx</w>
       <w>gubse</w>
       <w>guesttype</w>
       <w>halign</w>
@@ -163,6 +167,7 @@
       <w>obji</w>
       <w>objid</w>
       <w>objids</w>
+      <w>occu</w>
       <w>occup</w>
       <w>oferta</w>
       <w>ogdsno</w>
@@ -187,6 +192,7 @@
       <w>podere</w>
       <w>popen</w>
       <w>portalocker</w>
+      <w>postgresql</w>
       <w>precheckin</w>
       <w>proc</w>
       <w>promocode</w>
@@ -195,12 +201,16 @@
       <w>pyinstaller</w>
       <w>pytest</w>
       <w>rcip</w>
+      <w>recordtype</w>
       <w>recv</w>
+      <w>reentrant</w>
       <w>reforma</w>
+      <w>refpc</w>
       <w>regclass</w>
       <w>requnit</w>
       <w>reschannel</w>
       <w>reschannellist</w>
+      <w>resocc</w>
       <w>returncode</w>
       <w>rhinefield</w>
       <w>rhref</w>
@@ -237,6 +247,10 @@
       <w>sosl</w>
       <w>spdev</w>
       <w>srsl</w>
+      <w>sslcert</w>
+      <w>sslkey</w>
+      <w>sslmode</w>
+      <w>sslrootcert</w>
       <w>stackoverflow</w>
       <w>starttls</w>
       <w>staymonth</w>
@@ -256,6 +270,7 @@
       <w>sxml</w>
       <w>sxmlif</w>
       <w>sysmessage</w>
+      <w>søren</w>
       <w>tablename</w>
       <w>tbody</w>
       <w>tcag</w>
@@ -277,6 +292,7 @@
       <w>useisodate</w>
       <w>usename</w>
       <w>uwsgi</w>
+      <w>vals</w>
       <w>valu</w>
       <w>veri</w>
       <w>veris</w>

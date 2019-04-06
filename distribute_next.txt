@@ -1,5 +1,5 @@
-23-06-18: removing SIHOT_MKT_SEG column (provided as nvl(RO_SIHOT_MKT_SEG, RU_ROREF) by V_ACU_RES_DATA06 - replace with RO_SIHOT_MKT_SEG/RO_SIHOT_RATE or RUL_SIHOT_RATE)
+23-06-18: removing SIHOT_MKT_SEG column (provided as nvl(RO_SIHOT_MKT_SEG, RU_ROREF) by V_ACU_RES_DATA06 - replace with RO_SIHOT_MKT_SEG/RO_SIHOT_RATE or RUL_SIHOT_RATE if RU deleted)
 and fix bug with empty RUL_SIHOT_RATE and RU_ROREF == '??':
 - add NOT NULL constraint on RUL_SIHOT_RATE
 - remove SIHOT_MKT_SEG in V_ACU_RES_DATA07.sql
-- SihotResImport: Advice Nitesh to replace in JSON column SIHOT_MKT_SEG with RUL_SIHOT_RATE
+- SihotResImport: Advice Nitesh to replace in JSON column names with new field names, e.g. SIHOT_MKT_SEG/RUL_SIHOT_RATE with ResMktSegment

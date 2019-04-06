@@ -1,8 +1,10 @@
 import os
-from ae_console_app import ConsoleApp, Progress, uprint, DEBUG_LEVEL_VERBOSE
-from sxmlif import SihotXmlBuilder, ResToSihot, ResResponse, ResFetch, ResSearch
-from acif import add_ac_options
-from shif import add_sh_options
+
+from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
+from ae_console_app import ConsoleApp, Progress, uprint
+from sxmlif import SihotXmlBuilder, ResResponse
+from acif import add_ac_options, AcuResToSihot
+from shif import add_sh_options, ResFetch, ResSearch
 
 __version__ = '0.3'
 
@@ -22,9 +24,9 @@ cae.add_option('client', 'Test reservations of a client identified with matchcod
 
 
 uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-       cae.get_option('shServerKernelPort'))
-uprint('TCP Timeout/XML Encoding:', cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
+uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+       cae.get_option(SDF_SH_KERNEL_PORT))
+uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
 
 
 client_code = cae.get_option('client')
@@ -46,32 +48,33 @@ if client_code or gds_no:
 
     uprint('####  Fetching client res  ####')
 
-    acumen_req = ResToSihot(cae, use_kernel_interface=False)
-    err_msg = acumen_req.fetch_from_acu_by_aru("RU_CODE = " + gds_no if gds_no else "CD_CODE = '" + client_code + "'")
-    if not err_msg and not acumen_req.row_count:
+    acumen_res = AcuResToSihot(cae)
+    err_msg = acumen_res.fetch_from_acu_by_aru("RU_CODE = " + gds_no if gds_no else "CD_CODE = '" + client_code + "'")
+    if not err_msg and not len(acumen_res.recs):
         if gds_no:
-            err_msg = acumen_req.fetch_all_valid_from_acu(where_group_order="RU_CODE = " + gds_no)
+            err_msg = acumen_res.fetch_all_valid_from_acu(where_group_order="RU_CODE = " + gds_no)
         else:
-            err_msg = acumen_req.fetch_from_acu_by_cd(client_code)      # UNFILTERED !!! (possibly inactive hotel)
-    progress = Progress(cae.get_option('debugLevel'), start_counter=acumen_req.row_count,
+            err_msg = acumen_res.fetch_from_acu_by_cd(client_code)      # UNFILTERED !!! (possibly inactive hotel)
+    progress = Progress(cae.get_option('debugLevel'), start_counter=len(acumen_res.recs),
                         start_msg='####  Prepare sending of {total_count} reservation requests' + client_msg,
-                        nothing_to_do_msg='****  SihotMigration: acumen_req fetch returning no rows')
+                        nothing_to_do_msg='****  SihotMigration: acumen_res fetch returning no recs')
 
-    for crow in acumen_req.rows:
-        err_msg = acumen_req.send_row_to_sihot(crow, commit=True)
-        progress.next(processed_id=str(crow['RUL_PRIMARY']) + '/' + str(crow['RUL_CODE']), error_msg=err_msg)
-        ho_id = crow['RUL_SIHOT_HOTEL']
-        xml = acumen_req.xml
+    for rec in acumen_res.recs:
+        err_msg = acumen_res.send_res_to_sihot(rec)
+        acumen_res.ora_db.commit()
+        progress.next(processed_id=str(rec['ResGdsNo']), error_msg=err_msg)
+        ho_id = rec['ResHotelId']
+        xml = acumen_res.xml
 
     progress.finished(error_msg=err_msg)
 
 elif os.path.isfile(RES_REQ_FILE):
     uprint('####  Preparing XML .....  ####')
 
-    with open(RES_REQ_FILE, 'r') as f:
+    with open(RES_REQ_FILE) as f:
         xml = f.read()
 
-    sxb = SihotXmlBuilder(cae, use_kernel_interface=False, elem_col_map=(), connect_to_acu=False)
+    sxb = SihotXmlBuilder(cae)
     sxb.xml = xml
 
     uprint('####  Sending ...........  ####')
@@ -122,7 +125,7 @@ if ho_id and gds_no:
 
     uprint("####  ResSearch .............  ####")
     rfs = ResSearch(cae)
-    ret = rfs.search(hotel_id=ho_id, gdsno=gds_no)
+    ret = rfs.search_res(hotel_id=ho_id, gds_no=gds_no)
     if not isinstance(ret, list):
         uprint("***     ResSearch error", ret)
     else:

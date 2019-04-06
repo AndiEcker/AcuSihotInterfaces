@@ -1,5 +1,5 @@
 from ae_console_app import ConsoleApp, uprint
-from ae_db import PostgresDB, NAMED_BIND_VAR_PREFIX
+from ae_db import PostgresDB
 from shif import add_sh_options, print_sh_options, res_no_to_obj_id
 
 
@@ -50,19 +50,19 @@ def log_warning(msg, ctx, importance=2):
 
 # logon to and prepare AssCache db
 '''
-conf_data = AssSysData(cae, err_logger=log_error, warn_logger=log_warning)
-if conf_data.error_message:
-    log_error(conf_data.error_message, 'AssSysDataInit', importance=4, exit_code=9)
+asd = AssSysData(cae, err_logger=log_error, warn_logger=log_warning)
+if asd.error_message:
+    log_error(asd.error_message, 'AssSysDataInit', importance=4, exit_code=9)
 '''
 # prepare ass_cache database
-ass_db = PostgresDB(usr=ass_user, pwd=ass_pw, dsn=ass_dsn, app_name=cae.app_name(),
-                    ssl_args=cae.get_config('assSslArgs'), debug_level=debug_level)
+ass_db = PostgresDB(dict(User=ass_user, Password=ass_pw, DSN=ass_dsn, SslArgs=cae.get_config('assSslArgs')),
+                    app_name=cae.app_name(), debug_level=debug_level)
 if ass_db.connect():
     log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
 
 
 log_warning("Fetching records with empty object id", 'FetchAssInvalids', importance=3)
-if ass_db.select('res_groups', ["rgr_ho_fk", "rgr_res_id", "rgr_sub_id"], "rgr_obj_id is NULL"):
+if ass_db.select('res_groups', ["rgr_ho_fk", "rgr_res_id", "rgr_sub_id"], where_group_order="rgr_obj_id is NULL"):
     log_error("SELECT from res_groups failed with error " + ass_db.last_err_msg, 'FetchAssError', exit_code=15)
 
 rgr_records = ass_db.fetch_all()
@@ -75,11 +75,10 @@ updated = 0
 for rgr_rec in rgr_records:
     obj_id = res_no_to_obj_id(cae, rgr_rec[0], rgr_rec[1], rgr_rec[2])
     rgr_dict = dict(rgr_ho_fk=rgr_rec[0], rgr_res_id=rgr_rec[1], rgr_sub_id=rgr_rec[2])
-    where_expr = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + k for k in rgr_dict.keys()])
     if not obj_id:
         log_warning("No reservation object id found for res_no {}".format(rgr_dict), 'FetchObjId', importance=3)
         continue
-    elif ass_db.update('res_groups', dict(rgr_obj_id=obj_id), where_expr, bind_vars=rgr_dict):
+    elif ass_db.update('res_groups', dict(rgr_obj_id=obj_id), rgr_dict):
         break
     updated += 1
 

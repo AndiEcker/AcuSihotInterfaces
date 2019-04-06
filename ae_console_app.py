@@ -9,14 +9,10 @@ import unicodedata
 import threading
 
 from configparser import ConfigParser
-from argparse import ArgumentParser, ArgumentError
+from argparse import ArgumentParser, ArgumentError, HelpFormatter
 
-# supported debugging levels
-DEBUG_LEVEL_DISABLED = 0
-DEBUG_LEVEL_ENABLED = 1
-DEBUG_LEVEL_VERBOSE = 2
-DEBUG_LEVEL_TIMESTAMPED = 3
-debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
+from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
+                          debug_levels, parse_system_option_args)
 
 # default name of main config section
 MAIN_SECTION_DEF = 'Settings'
@@ -108,7 +104,7 @@ def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='
 
 
 def full_stack_trace(ex):
-    ret = "Exception {}. Traceback:\n".format(repr(ex))
+    ret = "Exception {!r}. Traceback:\n".format(ex)
 
     tb = sys.exc_info()[2]
     for item in reversed(inspect.getouterframes(tb.tb_frame)[1:]):
@@ -148,32 +144,6 @@ def substitute_placeholders(expr, key_values, value_prefix=""):
     return expr
 
 
-def missing_requirements(obj, requirements, bool_check=False):
-    """
-    test if obj has the required attribute-/item-hierarchies
-    :param obj:             object to inspect/test
-    :param requirements:    list of requirement items, each item is a list specifying the path to retrieve the
-                            required value. The items of the path list can be a of mix of attribute names and item keys.
-    :param bool_check:      (opt, def=False) additionally check if an existing requirement has non-empty/True value.
-    :return:                list of missing requirements.
-    """
-    missing = list()
-    for req in requirements:
-        val = obj
-        for name_or_key in req:
-            try:
-                val = getattr(val, name_or_key)
-            except (AttributeError, TypeError, IndexError, Exception):  # TypeError if name is not str
-                try:
-                    val = val[name_or_key]
-                except (AttributeError, TypeError, IndexError, Exception):
-                    missing.append(req)
-                    break
-        if bool_check and not val:
-            missing.append(req)
-    return missing
-
-
 class Setting:
     def __init__(self, name='Unnamed', value=None, value_type=None):
         """ create new Setting instance
@@ -185,7 +155,7 @@ class Setting:
         super(Setting, self).__init__()
         self._name = name
         self._value = None
-        self._type = value_type
+        self._type = None if value_type is type(None) else value_type
         if value is not None:
             self.value = value
 
@@ -207,10 +177,11 @@ class Setting:
                            (self._type(value) if self._type else value))))
                 elif self._type:
                     self._value = self._type(value)
-            if not self._type and self._value is not None:      # the value type gets only once initialized
+            # the value type gets only once initialized, but after _eval_str() for to auto-detect complex types
+            if not self._type and self._value is not None:
                 self._type = type(self._value)
         except Exception as ex:
-            uprint("Setting.value exception '{}' on evaluating the setting {} with value: '{}'"
+            uprint("Setting.value exception '{}' on evaluating the setting {} with value: {!r}"
                    .format(ex, self._name, value))
         return self._value
 
@@ -334,18 +305,22 @@ INI_EXT = '.ini'
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
                  log_file_def='', config_eval_vars=None, additional_cfg_files=None, log_max_size=20,
-                 multi_threading=False, suppress_stdout=False):
+                 multi_threading=False, suppress_stdout=False,
+                 formatter_class=HelpFormatter, epilog=""):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
-            :param app_version          application version.
-            :param app_desc             application description.
-            :param debug_level_def      default debug level (DEBUG_LEVEL_DISABLED).
-            :param log_file_def         default log file name.
-            :param config_eval_vars     dict of additional application specific data values that are used in eval
+            :param app_version:         application version.
+            :param app_desc:            application description.
+            :param debug_level_def:     default debug level (DEBUG_LEVEL_DISABLED).
+            :param log_file_def:        default log file name.
+            :param config_eval_vars:    dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
-            :param additional_cfg_files list of additional CFG/INI file names (opt. incl. abs/rel. path).
-            :param log_max_size         maximum size in MBytes of a log file.
-            :param multi_threading      pass True if instance is used in multi-threading app.
-            :param suppress_stdout      pass True (for wsgi apps) for to prevent any python print outputs to stdout.
+            :param additional_cfg_files: list of additional CFG/INI file names (opt. incl. abs/rel. path).
+            :param log_max_size:        maximum size in MBytes of a log file.
+            :param multi_threading:     pass True if instance is used in multi-threading app.
+            :param suppress_stdout:     pass True (for wsgi apps) for to prevent any python print outputs to stdout.
+            :param formatter_class:     alternative formatter class passed onto ArgumentParser instantiation.
+            :param epilog:              optional epilog text for command line arguments/options help text (passed onto
+                                        ArgumentParser instantiation).
         """
         """
             :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
@@ -421,7 +396,7 @@ class ConsoleApp:
         self.load_config()
 
         # prepare argument parser
-        self._arg_parser = ArgumentParser(description=app_desc)
+        self._arg_parser = ArgumentParser(description=app_desc, formatter_class=formatter_class, epilog=epilog)
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
                         choices=debug_levels.keys())
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
@@ -486,6 +461,9 @@ class ConsoleApp:
             self.config_options[name].value = getattr(self._parsed_args, name)
             if name in self.config_choices:
                 for given_value in self.config_options[name].value:
+                    system, rec_type, opt_args = parse_system_option_args(given_value)
+                    if system and rec_type:
+                        given_value = system + rec_type     # split off option args before checking allowed choices
                     allowed_values = self.config_choices[name]
                     if given_value not in allowed_values:
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
@@ -586,7 +564,7 @@ class ConsoleApp:
                 cfg_parser = ConfigParser()     # not using self._cfg_parser for to put INI vars from other files
                 cfg_parser.optionxform = str    # or use 'lambda option: option' to have case sensitive var names
                 cfg_parser.read(cfg_fnam)
-                if isinstance(val, dict) or isinstance(val, list) or isinstance(val, tuple):
+                if isinstance(val, (dict, list, tuple)):
                     str_val = "'''" + repr(val).replace('%', '%%') + "'''"
                 elif type(val) is datetime.datetime:
                     str_val = val.strftime(DATE_TIME_ISO)
@@ -777,14 +755,15 @@ class NamedLocks:
     active_locks = {}
     active_lock_counters = {}
 
-    def __init__(self, *lock_names, sys_lock=False):
+    def __init__(self, *lock_names, reentrant_locks=True, sys_lock=False):
         self._lock_names = lock_names
+        self._lock_class = threading.RLock if reentrant_locks else threading.Lock
+        assert not sys_lock, "sys_lock is currently not implemented"
         self._sys_lock = sys_lock
         # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
         self.dprint = _ca_instance.dprint if _ca_instance and getattr(_ca_instance, 'startup_end', False) else dprint
 
         self.dprint("NamedLocks.__init__", lock_names, minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        assert not sys_lock, "sys_lock is currently not implemented"
 
     def __enter__(self):
         self.dprint("NamedLocks.__enter__", minimum_debug_level=DEBUG_LEVEL_VERBOSE)
@@ -800,27 +779,46 @@ class NamedLocks:
 
     def acquire(self, lock_name, *args, **kwargs):
         self.dprint("NamedLocks.acquire", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
-        with self.locks_change_lock:
-            if lock_name in self.active_locks:
-                self.active_lock_counters[lock_name] += 1
-            else:
-                self.active_locks[lock_name] = threading.RLock()
-                self.active_lock_counters[lock_name] = 1
 
-        lock_acquired = self.active_locks[lock_name].acquire(*args, **kwargs)
+        while True:     # break at the end - needed for to retry after conflicted add/del of same lock name in threads
+            with self.locks_change_lock:
+                lock_exists = lock_name in self.active_locks
+                lock_instance = self.active_locks[lock_name] if lock_exists else self._lock_class()
+
+            # request the lock - out of locks_change_lock context, for to not block other instances of this class
+            lock_acquired = lock_instance.acquire(*args, **kwargs)
+
+            if lock_acquired:
+                with self.locks_change_lock:
+                    if lock_exists != (lock_name in self.active_locks):  # if lock state has changed, then redo/retry
+                        self.dprint("NamedLocks.acquire", lock_name, 'RETRY', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                        lock_instance.release()
+                        continue
+                    if lock_exists:
+                        self.active_lock_counters[lock_name] += 1
+                    else:
+                        self.active_locks[lock_name] = lock_instance
+                        self.active_lock_counters[lock_name] = 1
+            break
+
         self.dprint("NamedLocks.acquire", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         return lock_acquired
 
     def release(self, lock_name, *args, **kwargs):
         self.dprint("NamedLocks.release", lock_name, 'START', minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+
         with self.locks_change_lock:
-            if self.active_lock_counters[lock_name] == 1:
-                del self.active_lock_counters[lock_name]
+            if lock_name not in self.active_lock_counters or lock_name not in self.active_locks:
+                self.dprint("NamedLocks.release", lock_name, 'IDX-ERR', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                return
+            elif self.active_lock_counters[lock_name] == 1:
+                self.active_lock_counters.pop(lock_name)
                 lock = self.active_locks.pop(lock_name)
             else:
                 self.active_lock_counters[lock_name] -= 1
                 lock = self.active_locks[lock_name]
 
         lock.release(*args, **kwargs)
+
         self.dprint("NamedLocks.release", lock_name, 'END', minimum_debug_level=DEBUG_LEVEL_VERBOSE)

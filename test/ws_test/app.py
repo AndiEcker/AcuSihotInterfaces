@@ -123,7 +123,7 @@ def append_sys_environ():
 
     ps.append(("Postgres Database Environment", HDR))
     ps.append(("__version__", psycopg2.__version__))
-    ps.append(("__libpq_version__", getattr(psycopg2, "__libpq_version__", MISSING_ATTR)))
+    ps.append(("__libpq_version__", getattr(psycopg2, "__libpq_version__", MISSING_ATTR)))  # available in V 2.7+
     ps.append(("apilevel", psycopg2.apilevel))
 
     return ps

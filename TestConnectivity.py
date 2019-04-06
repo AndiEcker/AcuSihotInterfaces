@@ -19,7 +19,8 @@ notification, _ = init_notification(cae, 'TestConnectivity')
 notification.send_notification('test message from Sihot server')
 
 
-ora_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
+ora_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
+                    DSN=cae.get_option('acuDSN')),
                app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
 err_msg = ora_db.connect()
 if err_msg:

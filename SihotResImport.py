@@ -7,12 +7,13 @@
     0.5     removed Booking.com imports and added RCI booking imports (using Acumen reservation inventory data).
     0.6     31-03-17: removed hyphen and sub-booking-id from GDSNO and dup-exec/-startup lock (lastRt).
     0.7     30-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
-    0.8     15-07-17: refactoring moving clients and res_inv_data to ass_sys_data.py.
+    0.8     15-07-17: refactoring moving clients and reservation_inventories to ass_sys_data.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
     1.0     June-18: refactoring and clean-up
+    1.1     08-03-19: migrated to use ae_sys_data (extended logging and notification messages).
 
     TODO:
-    - use new config sections (for each hotel and ANY) or AssCache instead of Acumen conf_data.
+    - use new config sections (for each hotel and ANY) or AssCache instead of Acumen asd.
 """
 import sys
 import os
@@ -23,15 +24,20 @@ import json
 import csv
 from traceback import format_exc
 
-from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, DEBUG_LEVEL_VERBOSE, full_stack_trace
+from sys_data_ids import (DEBUG_LEVEL_VERBOSE, FORE_SURNAME_SEP,
+                          SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
+                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES,
+                          SDI_ACU)
+from ae_sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
+from ae_db import bind_var_prefix
+from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
 from ae_notification import add_notification_options, init_notification
-from sxmlif import ClientToSihot, ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE
-from acif import add_ac_options
+from acif import add_ac_options, ACU_RES_MAP, from_field_indexes
 from sfif import add_sf_options
-from shif import add_sh_options, ResSender
+from shif import add_sh_options, ClientToSihot, ResSender
 from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
@@ -52,11 +58,11 @@ notification, warning_notification_emails = init_notification(cae, cae.get_optio
                                                               + '/' + cae.get_option('shServerIP'))
 
 uprint("Acumen DSN:", cae.get_option('acuDSN'))
-uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('shServerIP'), cae.get_option('shServerPort'),
-       cae.get_option('shServerKernelPort'))
-uprint("TCP Timeout/XML Encoding:", cae.get_option('shTimeout'), cae.get_option('shXmlEncoding'))
-uprint("Use Kernel for clients:", "Yes" if cae.get_option('useKernelForClient') else "No (WEB)")
-uprint("Use Kernel for reservations:", "Yes" if cae.get_option('useKernelForRes') else "No (WEB)")
+uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+       cae.get_option(SDF_SH_KERNEL_PORT))
+uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+uprint("Use Kernel for clients:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else "No (WEB)")
+uprint("Use Kernel for reservations:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else "No (WEB)")
 uprint("Break on error:", "Yes" if cae.get_option('breakOnError') else "No")
 if cae.get_config('warningFragments'):
     uprint('Warning Fragments:', cae.get_config('warningFragments'))
@@ -128,10 +134,10 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     log_import("Acumen Usr: " + acu_user, NO_FILE_PREFIX_CHAR + 'RunImport', importance=4)
 
     # logon to and prepare Acumen, Salesforce, Sihot and config data env
-    conf_data = AssSysData(cae, acu_user=acu_user, acu_password=acu_password,
-                           err_logger=log_error, warn_logger=log_import, ctx_no_file=NO_FILE_PREFIX_CHAR)
-    if conf_data.error_message:
-        log_error(conf_data.error_message, NO_FILE_PREFIX_CHAR + 'UserLogOn', importance=4)
+    asd = AssSysData(cae, err_logger=log_error, warn_logger=log_import, ctx_no_file=NO_FILE_PREFIX_CHAR,
+                     acu_user=acu_user, acu_password=acu_password)
+    if asd.error_message:
+        log_error(asd.error_message, NO_FILE_PREFIX_CHAR + 'UserLogOn', importance=4)
         return
 
     log_import("successful user login", NO_FILE_PREFIX_CHAR + 'SuccessfulUserLogin')
@@ -147,7 +153,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     # Thomas Cook import file format column indexes
     TCI_BOOK_TYPE = 0
     TCI_RESORT = 1  # PABE=PBC, BEVE=BHC
-    TCI_ARR_DATE = 3
+    TCI_ResArrival = 3
     TCI_STAY_DAYS = 4
     TCI_ROOM_SIZE1 = 7
     TCI_BOOK_IDX = 10
@@ -200,9 +206,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             comments.append('#Sterling')  # 748 == AFT_CODE of "Refurbished" apt.feature - HARD - CODED?!?!?
             ap_feats.append(748)
 
-        room_cat = conf_data.cat_by_size('1' if curr_cols[TCI_RESORT] == 'BEVE' else '4',  # BEVE=BHC, PABE=PBC
-                                         'STUDIO' if room_size[1] == '1' else str(chr(ord(room_size[1]) - 1)) + ' BED',
-                                         ap_feats)
+        room_cat = asd.cat_by_size('1' if curr_cols[TCI_RESORT] == 'BEVE' else '4',  # BEVE=BHC, PABE=PBC
+                                   'STUDIO' if room_size[1] == '1' else str(chr(ord(room_size[1]) - 1)) + ' BED',
+                                   ap_feats)
 
         return room_cat, half_board, comments
 
@@ -241,15 +247,15 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 # additional pax (maybe with different LengthOfStay)
                 row = rows[-1]
                 comments.append(curr_cols[TCI_LINK_REF] + '-' + curr_cols[TCI_BOOK_EXT])
-                if datetime.timedelta(int(curr_cols[TCI_STAY_DAYS])) != row['DEP_DATE'] - row['ARR_DATE']:
+                if datetime.timedelta(int(curr_cols[TCI_STAY_DAYS])) != row['ResDeparture'] - row['ResArrival']:
                     comments.append('(LengthOfStay differs!)')
             elif last_cols[TCI_BOOK_REF] == curr_cols[TCI_BOOK_REF]:
                 # separate room - mostly with same TC booking reference - increment sub_res_id (0==1st room)
                 row = rows[-1]
                 txt = curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id)
-                if txt not in row['SIHOT_NOTE']:
-                    row['SIHOT_NOTE'] += '+' + txt
-                    row['SIHOT_TEC_NOTE'] += '|CR|+' + txt
+                if txt not in row['ResNote']:
+                    row['ResNote'] += '+' + txt
+                    row['ResLongNote'] += '|CR|+' + txt
                 sub_res_id += 1
                 comments.append(curr_cols[TCI_BOOK_REF] + '-' + str(sub_res_id))
             else:
@@ -257,58 +263,54 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         if row:  # add next pax - extending previous row
             for txt in comments:
-                if txt not in row['SIHOT_NOTE']:
-                    row['SIHOT_NOTE'] += ';' + txt
-                    row['SIHOT_TEC_NOTE'] += '|CR|' + txt
-            row['RU_ADULTS' if is_adult else 'RU_CHILDREN'] += 1
+                if txt not in row['ResNote']:
+                    row['ResNote'] += ';' + txt
+                    row['ResLongNote'] += '|CR|' + txt
+            row['ResAdults' if is_adult else 'ResChildren'] += 1
         else:
             rows.append(row)
-            row['SIHOT_GDSNO'] = TCI_GDSNO_PREFIX + curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
-            row['SH_RES_TYPE'] = 'S' if curr_cols[TCI_BOOK_TYPE] == 'CNL' else '1'
-            row['RUL_SIHOT_HOTEL'] = 1 if curr_cols[TCI_RESORT] == 'BEVE' else 4  # 1=BHC, 4=PBC
-            row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.ro_agency_objid('TK')
-            row['SH_MC'] = row['OC_CODE'] = conf_data.ro_agency_matchcode('TK')
-            row['RH_EXT_BOOK_REF'] = curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
-            row['RH_EXT_BOOK_DATE'] = curr_cols[TCI_BOOK_DATE]
-            row['SIHOT_ALLOTMENT_NO'] = 11 if curr_cols[TCI_RESORT] == 'BEVE' else 12
+            row['ShId'] = asd.ro_agency_objid('TK')
+            row['AcuId'] = asd.ro_agency_matchcode('TK')
+            row['ResGdsNo'] = TCI_GDSNO_PREFIX + curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
+            row['ResStatus'] = 'S' if curr_cols[TCI_BOOK_TYPE] == 'CNL' else '1'
+            row['ResHotelId'] = '1' if curr_cols[TCI_RESORT] == 'BEVE' else '4'  # '1'=BHC, '4'=PBC
+            row['ResVoucherNo'] = curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
+            row['ResBooked'] = datetime.datetime.strptime(curr_cols[TCI_BOOK_DATE], '%Y-%m-%d')
+            row['ResAllotmentNo'] = 11 if curr_cols[TCI_RESORT] == 'BEVE' else 12
 
-            row['RUL_SIHOT_CAT'] = row['SH_PRICE_CAT'] = room_cat
+            row['ResRoomCat'] = row['ResPriceCat'] = room_cat
             if curr_cols[TCI_CLIENT_CAT]:
                 comments.append('ClientCat=' + curr_cols[TCI_CLIENT_CAT])
             if meal_plan == 'SPECIAL OFERTA':
                 comments.append(meal_plan)
-            row['SIHOT_NOTE'] = ';'.join(comments)
-            row['SIHOT_TEC_NOTE'] = '|CR|'.join(comments)
+            row['ResNote'] = ';'.join(comments)
+            row['ResLongNote'] = '|CR|'.join(comments)
             if half_board or 'HALF' in meal_plan.upper():
-                row['RUL_SIHOT_PACK'] = 'HB'
+                row['ResBoard'] = 'HB'
             elif meal_plan and meal_plan != 'SPECIAL OFERTA':
-                row['RUL_SIHOT_PACK'] = 'BB'
+                row['ResBoard'] = 'BB'
             else:
-                row['RUL_SIHOT_PACK'] = 'RO'
+                row['ResBoard'] = 'RO'
 
-            row['SIHOT_MKT_SEG'] = row['RUL_SIHOT_RATE'] = conf_data.ro_sihot_mkt_seg('TK')
-            row['RO_RES_GROUP'] = conf_data.ro_res_group('TK')  # =='Rental SP'
-            row['RU_SOURCE'] = 'T'
-            row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[TCI_ARR_DATE], '%Y-%m-%d')
-            row['DEP_DATE'] = row['ARR_DATE'] + datetime.timedelta(int(curr_cols[TCI_STAY_DAYS]))
-            row['SH_EXT_REF'] = curr_cols[TCI_FLIGHT_NO]
-            row['RU_ADULTS' if is_adult else 'RU_CHILDREN'] = 1
-            row['RU_CHILDREN' if is_adult else 'RU_ADULTS'] = 0
+            row['ResMktSegment'] = asd.ro_sihot_mkt_seg('TK')
+            row['ResMktGroup'] = asd.ro_res_group('TK')  # =='Rental SP'
+            row['ResSource'] = 'T'
+            row['ResArrival'] = datetime.datetime.strptime(curr_cols[TCI_ResArrival], '%Y-%m-%d')
+            row['ResDeparture'] = row['ResArrival'] + datetime.timedelta(int(curr_cols[TCI_STAY_DAYS]))
+            row['ResFlightArrComment'] = curr_cols[TCI_FLIGHT_NO]
+            row['ResAdults' if is_adult else 'ResChildren'] = 1
+            row['ResChildren' if is_adult else 'ResAdults'] = 0
 
-            row['RUL_ACTION'] = ACTION_DELETE if curr_cols[TCI_BOOK_TYPE] == 'CNL' \
+            row['ResAction'] = ACTION_DELETE if curr_cols[TCI_BOOK_TYPE] == 'CNL' \
                 else (ACTION_UPDATE if curr_cols[TCI_BOOK_TYPE] == 'RBO' else ACTION_INSERT)
 
         # add pax name, person sequence number and room sequence number (sub_res_id)
-        name_col = 'SH_' + ('ADULT' if is_adult else 'CHILD') \
-                   + str(row['RU_ADULTS' if is_adult else 'RU_CHILDREN']) + '_NAME'
-        row[name_col] = curr_cols[TCI_SURNAME]
-        row[name_col + '2'] = curr_cols[TCI_FORENAME]
-        pers_seq = row['RU_ADULTS'] if is_adult else 10 + row['RU_CHILDREN']
-        row['SH_PERS_SEQ' + str(pers_seq)] = pers_seq - 1
-        row['SH_ROOM_SEQ' + str(pers_seq)] = sub_res_id
-        row['SH_ROOMS'] = sub_res_id + 1
+        row['ResPersons0PersSurname'] = curr_cols[TCI_SURNAME]
+        row['ResPersons0PersForename'] = curr_cols[TCI_FORENAME]
+        # pers_seq = row['ResAdults'] if is_adult else 10 + row['ResChildren']
+        # row['ResRooms'] = sub_res_id + 1
 
-        row['RUL_CHANGES'] = curr_line  # needed for error notification
+        row['ResAcuLogChanges'] = curr_line  # needed for error notification
         row['=FILE_NAME'] = file_name
         row['=LINE_NUM'] = line_num
 
@@ -328,8 +330,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     BKC_MODIFY_DATE = 3
     BKC_CANCEL_DATE = 4
     BKC_ROOM_INFO = 5
-    BKC_ARR_DATE = 6
-    BKC_DEP_DATE = 7
+    BKC_ResArrival = 6
+    BKC_ResDeparture = 7
     BKC_GUEST_NAMES = 8
     BKC_ADULTS = 9
     BKC_CHILDREN = 10
@@ -379,7 +381,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         if room_info.find('SUPERIOR') >= 0:  # 748==AFT_CODE of "Refurbished" apt. feature
             ap_feats.append(748)
             comments.insert(0, '#Sterling')
-        room_cat = conf_data.cat_by_size('1' if resort == 1 else '4', room_size, ap_feats)
+        room_cat = asd.cat_by_size('1' if resort == 1 else '4', room_size, ap_feats)
 
         children = ''
         pos = room_info.find('ADULTS')
@@ -420,20 +422,20 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             return "bkc_line_to_res_row(): invalid channel {} instead of Booking.com".format(curr_cols[BKC_CHANNEL])
 
         room_cat, adults, children, board, comments = bkc_cat_pax_board_comments(curr_cols, resort)
-        curr_arr = datetime.datetime.strptime(curr_cols[BKC_ARR_DATE], '%Y-%m-%d')
-        curr_dep = datetime.datetime.strptime(curr_cols[BKC_DEP_DATE], '%Y-%m-%d')
+        curr_arr = datetime.datetime.strptime(curr_cols[BKC_ResArrival], '%Y-%m-%d')
+        curr_dep = datetime.datetime.strptime(curr_cols[BKC_ResDeparture], '%Y-%m-%d')
 
         ext_key = curr_cols[BKC_BOOK_REF]
         row = dict()
         if rows:  # check if current line is an extension of the booking from last line (only not in first line)
-            if BKC_GDSNO_PREFIX + ext_key in rows[-1]['SIHOT_GDSNO']:  # 'in' instead of '==' for to detect group res
+            if BKC_GDSNO_PREFIX + ext_key in rows[-1]['ResGdsNo']:  # 'in' instead of '==' for to detect group res
                 # check if date range extension or additional room - assuming additional room
-                last_arr = rows[-1]['ARR_DATE']
-                last_dep = rows[-1]['DEP_DATE']
+                last_arr = rows[-1]['ResArrival']
+                last_dep = rows[-1]['ResDeparture']
                 if last_dep == curr_arr:
                     # merge two contiguous date ranges (by extending last row)
                     row = rows[-1]
-                    row['DEP_DATE'] = curr_dep
+                    row['ResDeparture'] = curr_dep
                     comments.append("date range extended")
                 elif last_arr == curr_arr and last_dep != curr_dep:
                     comments.append("GroupRes:length of stay differs")
@@ -445,11 +447,11 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                     # separate room - with same booking reference
                     sub_res_id += 1
                     txt = ext_key + '-' + str(sub_res_id)
-                    rows[-1]['SIHOT_GDSNO'] = BKC_GDSNO_PREFIX + txt
-                    if txt not in rows[-1]['SIHOT_NOTE']:
-                        rows[-1]['SIHOT_NOTE'] += txt
-                        rows[-1]['SIHOT_TEC_NOTE'] += '|CR|' + txt
-                        rows[-1]['SIHOT_LINK_GROUP'] = txt
+                    rows[-1]['ResGdsNo'] = BKC_GDSNO_PREFIX + txt
+                    if txt not in rows[-1]['ResNote']:
+                        rows[-1]['ResNote'] += txt
+                        rows[-1]['ResLongNote'] += '|CR|' + txt
+                        rows[-1]['ResGroupNo'] = txt
                     ext_key += '-' + str(sub_res_id + 1)
                     comments.append(ext_key)
 
@@ -458,48 +460,47 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         if row:  # add extra comments to extended previous row - removing duplicates
             for txt in comments:
-                if txt not in row['SIHOT_NOTE']:
-                    row['SIHOT_NOTE'] += ';' + txt
-                    row['SIHOT_TEC_NOTE'] += '|CR|' + txt
+                if txt not in row['ResNote']:
+                    row['ResNote'] += ';' + txt
+                    row['ResLongNote'] += '|CR|' + txt
         else:
             rows.append(row)
-            row['SIHOT_GDSNO'] = BKC_GDSNO_PREFIX + ext_key
-            row['SH_RES_TYPE'] = 'S' if curr_cols[BKC_CANCEL_DATE] else '1'
-            row['RUL_SIHOT_HOTEL'] = resort  # 1=BHC, 4=PBC
-            row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.ro_agency_objid('BK')
-            row['SH_MC'] = row['OC_CODE'] = conf_data.ro_agency_matchcode('BK')
-            row['RH_EXT_BOOK_REF'] = curr_cols[BKC_BOOK_REF]
-            row['RH_EXT_BOOK_DATE'] = curr_cols[BKC_BOOK_DATE]
-            row['SIHOT_LINK_GROUP'] = (ext_key + ' ' if sub_res_id else '') + acu_user[:2].lower()
-            # no allotment for Booking.com: row['SIHOT_ALLOTMENT_NO'] = 11 if resort == 1 else 12
+            row['ShId'] = asd.ro_agency_objid('BK')
+            row['AcuId'] = asd.ro_agency_matchcode('BK')
+            row['ResGdsNo'] = BKC_GDSNO_PREFIX + ext_key
+            row['ResStatus'] = 'S' if curr_cols[BKC_CANCEL_DATE] else '1'
+            row['ResHotelId'] = resort  # 1=BHC, 4=PBC
+            row['ResVoucherNo'] = curr_cols[BKC_BOOK_REF]
+            row['ResBooked'] = datetime.datetime.strptime(curr_cols[BKC_BOOK_DATE], '%Y-%m-%d')
+            row['ResGroupNo'] = (ext_key + ' ' if sub_res_id else '') + acu_user[:2].lower()
+            # no allotment for Booking.com: row['ResAllotmentNo'] = 11 if resort == 1 else 12
 
-            row['RUL_SIHOT_CAT'] = row['SH_PRICE_CAT'] = room_cat
-            row['SIHOT_NOTE'] = ';'.join(comments)
-            row['SIHOT_TEC_NOTE'] = '|CR|'.join(comments)
-            row['RUL_SIHOT_PACK'] = board
+            row['ResRoomCat'] = row['ResPriceCat'] = room_cat
+            row['ResNote'] = ';'.join(comments)
+            row['ResLongNote'] = '|CR|'.join(comments)
+            row['ResBoard'] = board
 
-            row['SIHOT_MKT_SEG'] = row['RUL_SIHOT_RATE'] = conf_data.ro_sihot_mkt_seg('BK')
-            row['RO_RES_GROUP'] = conf_data.ro_res_group('BK')  # 'Rental SP'
-            row['RU_SOURCE'] = 'T'
-            row['ARR_DATE'] = curr_arr
-            row['DEP_DATE'] = curr_dep
-            row['RU_ADULTS'] = adults
-            row['RU_CHILDREN'] = children
+            row['ResMktSegment'] = asd.ro_sihot_mkt_seg('BK')
+            row['ResMktGroup'] = asd.ro_res_group('BK')  # 'Rental SP'
+            row['ResSource'] = 'T'
+            row['ResArrival'] = curr_arr
+            row['ResDeparture'] = curr_dep
+            row['ResAdults'] = adults
+            row['ResChildren'] = children
 
-            row['RUL_ACTION'] = ACTION_DELETE if curr_cols[BKC_CANCEL_DATE] \
+            row['ResAction'] = ACTION_DELETE if curr_cols[BKC_CANCEL_DATE] \
                 else (ACTION_UPDATE if curr_cols[BKC_MODIFY_DATE] else ACTION_INSERT)
 
             # add pax name(s) and person sequence number
             for i, full_name in enumerate(curr_cols[BKC_GUEST_NAMES].split(',')):
-                name_col = 'SH_ADULT' + str(i + 1) + '_NAME'
-                fore_name, last_name = full_name.strip().split(' ', maxsplit=1)
+                name_col = 'ResPersons' + str(i)
+                fore_name, last_name = full_name.strip().split(FORE_SURNAME_SEP, maxsplit=1)
                 if last_name:
-                    row[name_col] = last_name
+                    row[name_col + 'PersSurname'] = last_name
                 if fore_name:
-                    row[name_col + '2'] = fore_name
-                row['SH_PERS_SEQ' + str(i + 1)] = i
+                    row[name_col + 'PersForename'] = fore_name
 
-        row['RUL_CHANGES'] = ','.join(curr_cols)  # needed for error notification
+        row['ResAcuLogChanges'] = ','.join(curr_cols)  # needed for error notification
         row['=FILE_NAME'] = file_name
         row['=LINE_NUM'] = line_num
 
@@ -510,12 +511,12 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         biggest differences to TCI and Booking.com import:
          o  client and matchcode explicitly created as guest record in Sihot
          o  room assigned to reservation (not for RL bookings)
-         o  update of clients data (Sihot objid in local db and EXT_REFS in Sihot db)
+         o  update of clients data (Sihot objid in local db and ExtRefs in Sihot db)
         **************************************************************************************
     '''
 
     def rc_complete_client_row_with_ext_refs(c_row, ext_refs):
-        """ complete client row for to send to Sihot as external references (EXT_REFS/EXT_REF_ID1/EXT_REF_TYPE1...) """
+        """ complete client row for to send to Sihot as external references (ExtRefs/ExtRefs0Id/ExtRefs0Type...) """
         s_ext_refs = list()
         for i, ext_ref in enumerate(ext_refs):
             if EXT_REF_TYPE_ID_SEP in ext_ref:
@@ -524,11 +525,11 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 er_type = EXT_REF_TYPE_RCI
                 er_ref = ext_ref
             er_type += str(i + 1)
-            c_row['EXT_REF_TYPE' + str(i + 1)] = er_type
-            c_row['EXT_REF_ID' + str(i + 1)] = er_ref
+            c_row['ExtRefs' + str(i) + 'Type'] = er_type
+            c_row['ExtRefs' + str(i) + 'Id'] = er_ref
             s_ext_refs.append(er_type + EXT_REF_TYPE_ID_SEP + er_ref)
-        # EXT_REFS xml element is only needed for elemHideIf, data is in EXT_REF_ID<n>/EXT_REF_TYPE<n>
-        c_row['EXT_REFS'] = EXT_REFS_SEP.join(s_ext_refs)
+        # EXT_REFS xml element is only needed for elemHideIf, data is in ExtRefs<n>Id/Type
+        c_row['ExtRefs'] = EXT_REFS_SEP.join(s_ext_refs)
 
     def rc_country_to_iso2(rci_country):
         """ convert RCI country names into Sihot ISO2 country codes """
@@ -575,7 +576,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     # RCI_LINE_OF_BUS_SUB_GRP_NM = 3    # e.g. 141 (newly added and not used)
     # RCI_LINE_OF_BUS_NM = 4            # e.g. Member (newly added and not used)
     # RCI_TIER = 5                      # e.g. STANDARD (newly added and not used)
-    RCI_ARR_DATE = 6
+    RCI_ResArrival = 6
     RCI_BOOK_STATUS = 7  # STATUS, e.g. Reserved/Cancelled
     RCI_IS_GUEST = 9  # GUEST CERT, e.g. Y/N
     RCI_CLIENT_ID = 10
@@ -626,62 +627,62 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = False
             cid = rc_ref_normalize(curr_cols[RCI_CLIENT_ID])
-            fields_dict = dict(name=curr_cols[RCI_GUEST_FORENAME] + ' ' + curr_cols[RCI_GUEST_SURNAME],
+            fields_dict = dict(name=curr_cols[RCI_GUEST_FORENAME] + FORE_SURNAME_SEP + curr_cols[RCI_GUEST_SURNAME],
                                email=curr_cols[RCI_GUEST_EMAIL], phone=curr_cols[RCI_GUEST_PHONE])
-            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
+            curr_cols[RC_OCC_CLIENTS_IDX] = asd.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
             cid = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
-            fields_dict = dict(name=curr_cols[RCI_CLIENT_FORENAME] + ' ' + curr_cols[RCI_CLIENT_SURNAME],
+            fields_dict = dict(name=curr_cols[RCI_CLIENT_FORENAME] + FORE_SURNAME_SEP + curr_cols[RCI_CLIENT_SURNAME],
                                email=curr_cols[RCI_CLIENT_EMAIL])
             # sometimes resort is the "owner", e.g. 2429-55555/2429-99928 for HMC - in Sihot we are not hiding resort
             # if cid in client_refs_add_exclude:
             #     curr_cols[RC_OWN_CLIENTS_IDX] = -1
             # else:
-            curr_cols[RC_OWN_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
+            curr_cols[RC_OWN_CLIENTS_IDX] = asd.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
 
         return curr_cols, err_msg
 
     def rci_line_to_occ_client_row(curr_cols):
         row = dict()
-        row['CD_CODE'] = conf_data.cl_ac_id_by_idx(curr_cols[RC_OCC_CLIENTS_IDX])
-        row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
-        row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
-        row['CD_ADD11'] = curr_cols[RCI_GUEST_ADDR1]
-        row['CD_ADD12'] = curr_cols[RCI_GUEST_ADDR2]
-        row['SIHOT_COUNTRY'] = rc_country_to_iso2(curr_cols[RCI_GUEST_COUNTRY])
-        row['SIHOT_STATE'] = curr_cols[RCI_GUEST_STATE]
-        row['CD_POSTAL'] = curr_cols[RCI_GUEST_ZIP]
-        row['CD_CITY'] = curr_cols[RCI_GUEST_CITY]
-        row['CD_EMAIL'] = curr_cols[RCI_GUEST_EMAIL]
-        row['CD_HTEL1'] = curr_cols[RCI_GUEST_PHONE]
-        ext_refs = conf_data.cl_ext_refs_by_idx([curr_cols[RC_OCC_CLIENTS_IDX]])
+        row['AcuId'] = asd.cl_ac_id_by_idx(curr_cols[RC_OCC_CLIENTS_IDX])
+        row['Surname'] = curr_cols[RCI_CLIENT_SURNAME]
+        row['Forename'] = curr_cols[RCI_CLIENT_FORENAME]
+        row['Street'] = curr_cols[RCI_GUEST_ADDR1]
+        row['POBox'] = curr_cols[RCI_GUEST_ADDR2]
+        row['Country'] = rc_country_to_iso2(curr_cols[RCI_GUEST_COUNTRY])
+        row['State'] = curr_cols[RCI_GUEST_STATE]
+        row['Postal'] = curr_cols[RCI_GUEST_ZIP]
+        row['City'] = curr_cols[RCI_GUEST_CITY]
+        row['Email'] = curr_cols[RCI_GUEST_EMAIL]
+        row['Phone'] = curr_cols[RCI_GUEST_PHONE]
+        ext_refs = asd.cl_ext_refs_by_idx([curr_cols[RC_OCC_CLIENTS_IDX]])
         if ext_refs:
-            row['CD_RCI_REF'] = ext_refs[0]  # first ref coming from Acu.CD_RCI_REF and put into Sihot MATCH-ADM element
+            row['RciId'] = ext_refs[0]  # first ref coming from Acu and put into Sihot MATCH-ADM element
 
         # constant values - needed for to be accepted by the Sihot Kernel interface
-        row['CD_SIHOT_OBJID'] = None
-        row['SIHOT_GUESTTYPE1'] = '1'
+        row['ShId'] = None
+        row['GuestType'] = '1'
 
         return row, ''
 
     def rci_line_to_own_client_row(curr_cols):
         row = dict()
-        row['CD_CODE'] = conf_data.cl_ac_id_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
-        row['CD_SNAM1'] = curr_cols[RCI_CLIENT_SURNAME]
-        row['CD_FNAM1'] = curr_cols[RCI_CLIENT_FORENAME]
-        row['CD_ADD11'] = curr_cols[RCI_GUEST_ADDR1]
-        row['CD_ADD12'] = curr_cols[RCI_GUEST_ADDR2]
-        row['SIHOT_COUNTRY'] = rc_country_to_iso2(curr_cols[RCI_GUEST_COUNTRY])
-        row['SIHOT_STATE'] = curr_cols[RCI_GUEST_STATE]
-        row['CD_POSTAL'] = curr_cols[RCI_GUEST_ZIP]
-        row['CD_CITY'] = curr_cols[RCI_GUEST_CITY]
-        row['CD_EMAIL'] = curr_cols[RCI_GUEST_EMAIL]
-        row['CD_HTEL1'] = curr_cols[RCI_GUEST_PHONE]
-        ext_refs = conf_data.cl_ext_refs_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
+        row['AcuId'] = asd.cl_ac_id_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
+        row['Surname'] = curr_cols[RCI_CLIENT_SURNAME]
+        row['Forename'] = curr_cols[RCI_CLIENT_FORENAME]
+        row['Street'] = curr_cols[RCI_GUEST_ADDR1]
+        row['POBox'] = curr_cols[RCI_GUEST_ADDR2]
+        row['Country'] = rc_country_to_iso2(curr_cols[RCI_GUEST_COUNTRY])
+        row['State'] = curr_cols[RCI_GUEST_STATE]
+        row['Postal'] = curr_cols[RCI_GUEST_ZIP]
+        row['City'] = curr_cols[RCI_GUEST_CITY]
+        row['Email'] = curr_cols[RCI_GUEST_EMAIL]
+        row['Phone'] = curr_cols[RCI_GUEST_PHONE]
+        ext_refs = asd.cl_ext_refs_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
         if ext_refs:
-            row['CD_RCI_REF'] = ext_refs[0]  # first ref coming from Acu.CD_RCI_REF and put into Sihot MATCH-ADM element
+            row['RciId'] = ext_refs[0]  # first ref coming from Acu and put into Sihot MATCH-ADM element
         # constant values - needed for to be accepted by the Sihot Kernel interface
-        row['CD_SIHOT_OBJID'] = None
-        row['SIHOT_GUESTTYPE1'] = '1'
+        row['ShId'] = None
+        row['GuestType'] = '1'
 
         return row, ''
 
@@ -690,38 +691,38 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row = dict()
         comments = list()
 
-        row['RUL_SIHOT_HOTEL'] = conf_data.rci_to_sihot_hotel_id(curr_cols[RCI_RESORT_ID])
-        if not row['RUL_SIHOT_HOTEL'] or row['RUL_SIHOT_HOTEL'] <= 0:
+        row['ResHotelId'] = asd.rci_to_sihot_hotel_id(curr_cols[RCI_RESORT_ID])
+        if not row['ResHotelId'] or row['ResHotelId'] <= 0:
             return None, "rci_line_to_res_row(): invalid resort id {}".format(curr_cols[RCI_RESORT_ID])
 
         if curr_cols[RCI_BOOK_STATUS] == 'Cancelled':
             comments.append('Cancelled=' + curr_cols[RCI_CANCEL_DATE])
-            row['SH_RES_TYPE'] = 'S'
-            row['RUL_ACTION'] = ACTION_DELETE
+            row['ResStatus'] = 'S'
+            row['ResAction'] = ACTION_DELETE
         else:
-            row['SH_RES_TYPE'] = '1'
-            row['RUL_ACTION'] = ACTION_INSERT
-        row['SIHOT_GDSNO'] = EXT_REF_TYPE_RCI + curr_cols[RCI_BOOK_REF]
-        row['RH_EXT_BOOK_REF'] = 'R' + curr_cols[RCI_BOOK_REF]
-        row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(curr_cols[RCI_BOOK_DATE][:10], '%Y-%m-%d')
+            row['ResStatus'] = '1'
+            row['ResAction'] = ACTION_INSERT
+        row['ResGdsNo'] = EXT_REF_TYPE_RCI + curr_cols[RCI_BOOK_REF]
+        row['ResVoucherNo'] = 'R' + curr_cols[RCI_BOOK_REF]
+        row['ResBooked'] = datetime.datetime.strptime(curr_cols[RCI_BOOK_DATE][:10], '%Y-%m-%d')
 
-        row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCI_ARR_DATE][:10], '%Y-%m-%d')
-        row['DEP_DATE'] = row['ARR_DATE'] + datetime.timedelta(7)
+        row['ResArrival'] = datetime.datetime.strptime(curr_cols[RCI_ResArrival][:10], '%Y-%m-%d')
+        row['ResDeparture'] = row['ResArrival'] + datetime.timedelta(7)
 
-        rno = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCI_APT_NO]) == 3
-               else ('J' if row['RUL_SIHOT_HOTEL'] == 2 and curr_cols[RCI_APT_NO][0] != 'J'
+        rno = ('0' if row['ResHotelId'] == 4 and len(curr_cols[RCI_APT_NO]) == 3
+               else ('J' if row['ResHotelId'] == 2 and curr_cols[RCI_APT_NO][0] != 'J'
                      else '')) + curr_cols[RCI_APT_NO]
         rsi = 'STUDIO' if curr_cols[RCI_ROOM_SIZE][0] == 'S' else curr_cols[RCI_ROOM_SIZE][0] + ' BED'
-        row['RUL_SIHOT_CAT'] = row['SH_PRICE_CAT'] = conf_data.cat_by_size(row['RUL_SIHOT_HOTEL'], rsi)
+        row['ResRoomCat'] = row['ResPriceCat'] = asd.cat_by_size(row['ResHotelId'], rsi)
         comments.append(rsi + ' (' + rno + ')')
         if curr_cols[RCI_RESORT_ID][0] not in ('a', 'c', 'd'):      # suppress room allocation for CPA reservations
-            row['RUL_SIHOT_ROOM'] = conf_data.ri_allocated_room(rno, row['ARR_DATE'])
+            row['ResRoomNo'] = asd.ri_allocated_room(rno, row['ResArrival'])
 
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
         cl_own_idx = curr_cols[RC_OWN_CLIENTS_IDX] if curr_cols[RC_OWN_CLIENTS_IDX] > -1 else cl_occ_idx
         own_rci_ref = rc_ref_normalize(curr_cols[RCI_OWNER_ID])
-        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = conf_data.cl_sh_id_by_idx(cl_own_idx)
-        row['SH_MC'] = row['OC_CODE'] = conf_data.cl_ac_id_by_idx(cl_own_idx)
+        row['ShId'] = asd.cl_sh_id_by_idx(cl_own_idx)
+        row['AcuId'] = asd.cl_ac_id_by_idx(cl_own_idx)
 
         is_guest = curr_cols[RCI_IS_GUEST] == 'Y'
         if is_guest:                                # guest bookings doesn't provide RCI client Id
@@ -729,37 +730,34 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 own_name = curr_cols[RCI_CLIENT_SURNAME] + ', ' + curr_cols[RCI_CLIENT_FORENAME]
             else:
                 own_name = '(unknown)'
-            comments.append('GuestOf=' + own_rci_ref + '=' + row['OC_CODE'] + ':' + own_name)
+            comments.append('GuestOf=' + own_rci_ref + '=' + row['AcuId'] + ':' + own_name)
 
             comments.append('ExcMail=' + curr_cols[RCI_CLIENT_EMAIL])
-            row['CD_SIHOT_OBJID'] = None
-            row['CD_CODE'] = ''
-            row['SH_ADULT1_NAME'] = curr_cols[RCI_GUEST_SURNAME]
-            row['SH_ADULT1_NAME2'] = curr_cols[RCI_GUEST_FORENAME]
+            row['PersShId'] = None
+            row['ResPersons0PersAcuId'] = ''
+            row['ResPersons0PersSurname'] = curr_cols[RCI_GUEST_SURNAME]
+            row['ResPersons0PersForename'] = curr_cols[RCI_GUEST_FORENAME]
         else:
-            row['CD_SIHOT_OBJID'] = conf_data.cl_sh_id_by_idx(cl_occ_idx)
-            row['CD_CODE'] = conf_data.cl_ac_id_by_idx(cl_occ_idx)
-            # has to be populated after send to Sihot: row['CD_SIHOT_OBJID'] = client_row['CD_SIHOT_OBJID']
-            row['SH_ADULT1_NAME'] = curr_cols[RCI_CLIENT_SURNAME]
-            row['SH_ADULT1_NAME2'] = curr_cols[RCI_CLIENT_FORENAME]
-        row['SH_PRES_SEQ1'] = 0
-        row['SH_ROOM_SEQ1'] = 0
-        row['RU_ADULTS'] = 1
-        row['RU_CHILDREN'] = 0
+            row['PersShId'] = asd.cl_sh_id_by_idx(cl_occ_idx)
+            row['PersAcuId'] = asd.cl_ac_id_by_idx(cl_occ_idx)
+            row['ResPersons0PersSurname'] = curr_cols[RCI_CLIENT_SURNAME]
+            row['ResPersons0PersForename'] = curr_cols[RCI_CLIENT_FORENAME]
+        row['ResAdults'] = 1
+        row['ResChildren'] = 0
 
-        mkt_seg, mkt_grp = conf_data.rci_ro_group(curr_cols[RC_OCC_CLIENTS_IDX], is_guest,
-                                                  curr_cols[RC_FILE_NAME], curr_cols[RC_LINE_NUM])
-        row['SIHOT_MKT_SEG'] = row['RUL_SIHOT_RATE'] = mkt_seg
-        row['RO_RES_GROUP'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
-        row['RU_SOURCE'] = 'R'
+        mkt_seg, mkt_grp = asd.rci_ro_group(curr_cols[RC_OCC_CLIENTS_IDX], is_guest,
+                                            curr_cols[RC_FILE_NAME], curr_cols[RC_LINE_NUM])
+        row['ResMktSegment'] = mkt_seg
+        row['ResMktGroup'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
+        row['ResSource'] = 'R'
 
-        row['RUL_SIHOT_PACK'] = 'RO'
+        row['ResBoard'] = 'RO'
 
-        comments.append("Owner/Club=" + own_rci_ref + ' '
-                        + curr_cols[RCI_OWNER_SURNAME] + ', ' + curr_cols[RCI_OWNER_FORENAME])
+        comments.append("Owner/Club=" + own_rci_ref + ', '
+                        + curr_cols[RCI_OWNER_SURNAME] + FORE_SURNAME_SEP + curr_cols[RCI_OWNER_FORENAME])
 
-        row['SIHOT_NOTE'] = ";".join(comments)
-        row['SIHOT_TEC_NOTE'] = "|CR|".join(comments)
+        row['ResNote'] = ";".join(comments)
+        row['ResLongNote'] = "|CR|".join(comments)
 
         row['=FILE_NAME'] = curr_cols[RC_FILE_NAME]
         row['=LINE_NUM'] = curr_cols[RC_LINE_NUM]
@@ -777,8 +775,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                        '\tGST PHONE\tGST EMAIL\tINT EXCH\tBOOK DT\tCXL DT\tMASTER ARRIVAL DATE\n'
     RCIP_RESORT_ID = 0  # BHC=1442, BHH=2398, HMC=2429, PBC=0803 (see also RS_RCI_CODE)
     RCIP_BOOK_REF = 3
-    RCIP_ARR_DATE = 6
-    RCIP_DEP_DATE = 7
+    RCIP_ResArrival = 6
+    RCIP_ResDeparture = 7
     RCIP_BOOK_STATUS = 9  # e.g. R=Reserved/C=Cancelled
     RCIP_IS_GUEST = 11
     RCIP_ROOM_SIZE = 12
@@ -826,35 +824,35 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             curr_cols[RC_LINE_NUM] = line_num
             curr_cols[RC_POINTS] = True
             cid = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
-            fields_dict = dict(name=curr_cols[RCIP_GUEST_FORENAME] + ' ' + curr_cols[RCIP_GUEST_SURNAME],
+            fields_dict = dict(name=curr_cols[RCIP_GUEST_FORENAME] + FORE_SURNAME_SEP + curr_cols[RCIP_GUEST_SURNAME],
                                email=curr_cols[RCIP_GUEST_EMAIL], phone=curr_cols[RCIP_GUEST_PHONE])
-            curr_cols[RC_OCC_CLIENTS_IDX] = conf_data.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
+            curr_cols[RC_OCC_CLIENTS_IDX] = asd.cl_idx_by_rci_id(cid, fields_dict, file_name, line_num)
             curr_cols[RC_OWN_CLIENTS_IDX] = -1  # does not exists for points but needed for generic client send check
         return curr_cols, err_msg
 
     def rcip_line_to_occ_client_row(curr_cols):
         row = dict()
         rci_ref = rc_ref_normalize(curr_cols[RCIP_CLIENT_ID])
-        row['CD_RCI_REF'] = rci_ref  # Sihot MATCH-ADM element
+        row['RciId'] = rci_ref  # Sihot MATCH-ADM element
         if curr_cols[RCIP_IS_GUEST] == 'Y':
-            row['CD_CODE'] = ''     # dict key needed/used in elemHideIf expressions
-            row['CD_SNAM1'] = curr_cols[RCIP_GUEST_SURNAME]
-            row['CD_FNAM1'] = curr_cols[RCIP_GUEST_FORENAME]
+            row['AcuId'] = ''     # dict key needed/used in elemHideIf expressions
+            row['Surname'] = curr_cols[RCIP_GUEST_SURNAME]
+            row['Forename'] = curr_cols[RCIP_GUEST_FORENAME]
         else:
-            row['CD_CODE'] = EXT_REF_TYPE_RCI + rci_ref
-            row['CD_SNAM1'] = curr_cols[RCIP_CLIENT_SURNAME]
-            row['CD_FNAM1'] = curr_cols[RCIP_CLIENT_FORENAME]
-        row['CD_ADD11'] = curr_cols[RCIP_GUEST_ADDR1]
-        row['CD_ADD12'] = curr_cols[RCIP_GUEST_ADDR2]
-        row['SIHOT_COUNTRY'] = rc_country_to_iso2(curr_cols[RCIP_GUEST_COUNTRY])
-        row['SIHOT_STATE'] = curr_cols[RCIP_GUEST_STATE]
-        row['CD_POSTAL'] = curr_cols[RCIP_GUEST_ZIP]
-        row['CD_CITY'] = curr_cols[RCIP_GUEST_CITY]
-        row['CD_EMAIL'] = curr_cols[RCIP_GUEST_EMAIL]
-        row['CD_HTEL1'] = curr_cols[RCIP_GUEST_PHONE]
+            row['AcuId'] = EXT_REF_TYPE_RCI + rci_ref
+            row['Surname'] = curr_cols[RCIP_CLIENT_SURNAME]
+            row['Forename'] = curr_cols[RCIP_CLIENT_FORENAME]
+        row['Street'] = curr_cols[RCIP_GUEST_ADDR1]
+        row['POBox'] = curr_cols[RCIP_GUEST_ADDR2]
+        row['Country'] = rc_country_to_iso2(curr_cols[RCIP_GUEST_COUNTRY])
+        row['State'] = curr_cols[RCIP_GUEST_STATE]
+        row['Postal'] = curr_cols[RCIP_GUEST_ZIP]
+        row['City'] = curr_cols[RCIP_GUEST_CITY]
+        row['Email'] = curr_cols[RCIP_GUEST_EMAIL]
+        row['Phone'] = curr_cols[RCIP_GUEST_PHONE]
         # constant values - needed for to be accepted by the Sihot Kernel interface
-        row['CD_SIHOT_OBJID'] = None
-        row['SIHOT_GUESTTYPE1'] = '1'
+        row['ShId'] = None
+        row['GuestType'] = '1'
 
         return row, ''
 
@@ -865,34 +863,34 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row = dict()
         comments = list()
 
-        row['RUL_SIHOT_HOTEL'] = conf_data.rci_to_sihot_hotel_id(curr_cols[RCIP_RESORT_ID])
-        if not row['RUL_SIHOT_HOTEL'] or row['RUL_SIHOT_HOTEL'] <= 0:
+        row['ResHotelId'] = asd.rci_to_sihot_hotel_id(curr_cols[RCIP_RESORT_ID])
+        if not row['ResHotelId'] or row['ResHotelId'] <= 0:
             return None, "rci_line_to_res_row(): invalid resort id {}".format(curr_cols[RCIP_RESORT_ID])
 
         if curr_cols[RCIP_BOOK_STATUS] == 'C':
             comments.append('Cancelled=' + curr_cols[RCIP_CANCEL_DATE])
-        row['SH_RES_TYPE'] = 'S' if curr_cols[RCIP_BOOK_STATUS] == 'C' else '1'
-        row['RUL_ACTION'] = ACTION_DELETE if curr_cols[RCIP_BOOK_STATUS] == 'C' else ACTION_INSERT
+        row['ResStatus'] = 'S' if curr_cols[RCIP_BOOK_STATUS] == 'C' else '1'
+        row['ResAction'] = ACTION_DELETE if curr_cols[RCIP_BOOK_STATUS] == 'C' else ACTION_INSERT
 
-        row['SIHOT_GDSNO'] = EXT_REF_TYPE_RCI + curr_cols[RCIP_BOOK_REF]
-        row['RH_EXT_BOOK_REF'] = 'RP' + curr_cols[RCIP_BOOK_REF]
-        row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_BOOK_DATE][:10], '%Y-%m-%d')
+        row['ResGdsNo'] = EXT_REF_TYPE_RCI + curr_cols[RCIP_BOOK_REF]
+        row['ResVoucherNo'] = 'RP' + curr_cols[RCIP_BOOK_REF]
+        row['ResBooked'] = datetime.datetime.strptime(curr_cols[RCIP_BOOK_DATE][:10], '%Y-%m-%d')
 
-        row['ARR_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_ARR_DATE][:10], '%Y-%m-%d')
-        row['DEP_DATE'] = datetime.datetime.strptime(curr_cols[RCIP_DEP_DATE][:10], '%Y-%m-%d')
+        row['ResArrival'] = datetime.datetime.strptime(curr_cols[RCIP_ResArrival][:10], '%Y-%m-%d')
+        row['ResDeparture'] = datetime.datetime.strptime(curr_cols[RCIP_ResDeparture][:10], '%Y-%m-%d')
 
-        rno = ('0' if row['RUL_SIHOT_HOTEL'] == 4 and len(curr_cols[RCIP_APT_NO]) == 3
-               else ('J' if row['RUL_SIHOT_HOTEL'] == 2 and curr_cols[RCIP_APT_NO][0] != 'J'
+        rno = ('0' if row['ResHotelId'] == 4 and len(curr_cols[RCIP_APT_NO]) == 3
+               else ('J' if row['ResHotelId'] == 2 and curr_cols[RCIP_APT_NO][0] != 'J'
                      else '')) + curr_cols[RCIP_APT_NO]
         rsi = 'STUDIO' if curr_cols[RCIP_ROOM_SIZE][0] == 'S' else curr_cols[RCIP_ROOM_SIZE][0] + ' BED'
-        row['RUL_SIHOT_CAT'] = row['SH_PRICE_CAT'] = conf_data.cat_by_size(row['RUL_SIHOT_HOTEL'], rsi)
+        row['ResRoomCat'] = row['ResPriceCat'] = asd.cat_by_size(row['ResHotelId'], rsi)
         comments.append(rsi + ' (' + rno + ')')
         if curr_cols[RCIP_RESORT_ID][0] not in ('a', 'c', 'd'):  # suppress room allocation for CPA reservations
-            row['RUL_SIHOT_ROOM'] = conf_data.ri_allocated_room(rno, row['ARR_DATE'])
+            row['ResRoomNo'] = asd.ri_allocated_room(rno, row['ResArrival'])
 
         cl_occ_idx = curr_cols[RC_OCC_CLIENTS_IDX]
-        row['SH_OBJID'] = row['OC_SIHOT_OBJID'] = row['CD_SIHOT_OBJID'] = conf_data.cl_sh_id_by_idx(cl_occ_idx)
-        row['SH_MC'] = row['OC_CODE'] = row['CD_CODE'] = conf_data.cl_ac_id_by_idx(cl_occ_idx)
+        row['ShId'] = asd.cl_sh_id_by_idx(cl_occ_idx)
+        row['AcuId'] = asd.cl_ac_id_by_idx(cl_occ_idx)
 
         is_guest = curr_cols[RCIP_IS_GUEST] == 'Y'
         if is_guest:
@@ -901,24 +899,24 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             else:
                 own_name = '(unknown)'
             comments.append('GuestOf=' + own_name)
-            row['SH_ADULT1_NAME'] = curr_cols[RCIP_GUEST_SURNAME]
-            row['SH_ADULT1_NAME2'] = curr_cols[RCIP_GUEST_FORENAME]
+            row['ResPersons0PersSurname'] = curr_cols[RCIP_GUEST_SURNAME]
+            row['ResPersons0PersForename'] = curr_cols[RCIP_GUEST_FORENAME]
         else:
-            row['SH_ADULT1_NAME'] = curr_cols[RCIP_CLIENT_SURNAME]
-            row['SH_ADULT1_NAME2'] = curr_cols[RCIP_CLIENT_FORENAME]
-        row['RU_ADULTS'] = 1
-        row['RU_CHILDREN'] = 0
+            row['ResPersons0PersSurname'] = curr_cols[RCIP_CLIENT_SURNAME]
+            row['ResPersons0PersForename'] = curr_cols[RCIP_CLIENT_FORENAME]
+        row['ResAdults'] = 1
+        row['ResChildren'] = 0
 
-        mkt_seg, mkt_grp = conf_data.rci_ro_group(curr_cols[RC_OCC_CLIENTS_IDX], is_guest,
-                                                  curr_cols[RC_FILE_NAME], curr_cols[RC_LINE_NUM])
-        row['SIHOT_MKT_SEG'] = row['RUL_SIHOT_RATE'] = mkt_seg
-        row['RO_RES_GROUP'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
-        row['RU_SOURCE'] = 'R'
+        mkt_seg, mkt_grp = asd.rci_ro_group(curr_cols[RC_OCC_CLIENTS_IDX], is_guest,
+                                            curr_cols[RC_FILE_NAME], curr_cols[RC_LINE_NUM])
+        row['ResMktSegment'] = mkt_seg
+        row['ResMktGroup'] = mkt_grp  # RCI External, RCI Internal, RCI External Guest, RCI Owner Guest
+        row['ResSource'] = 'R'
 
-        row['RUL_SIHOT_PACK'] = 'RO'
+        row['ResBoard'] = 'RO'
 
-        row['SIHOT_NOTE'] = ';'.join(comments)
-        row['SIHOT_TEC_NOTE'] = '|CR|'.join(comments)
+        row['ResNote'] = ';'.join(comments)
+        row['ResLongNote'] = '|CR|'.join(comments)
 
         row['=FILE_NAME'] = curr_cols[RC_FILE_NAME]
         row['=LINE_NUM'] = curr_cols[RC_LINE_NUM]
@@ -931,9 +929,35 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     '''
 
     def json_imp_to_res_row(row, file_name, res_index):
-        row['ARR_DATE'] = datetime.datetime.strptime(row['ARR_DATE'], '%Y-%m-%d')
-        row['DEP_DATE'] = datetime.datetime.strptime(row['DEP_DATE'], '%Y-%m-%d')
-        row['RH_EXT_BOOK_DATE'] = datetime.datetime.strptime(row['RH_EXT_BOOK_DATE'], '%Y-%m-%d')
+        """ convert date/int values, support old Acu-Sys-Field-Names and extend json dict with file/line context """
+        row['ResArrival'] = datetime.datetime.strptime(row.get('ResArrival', row.pop('ARR_DATE')), '%Y-%m-%d')
+        row['ResDeparture'] = datetime.datetime.strptime(row.get('ResDeparture', row.pop('DEP_DATE')), '%Y-%m-%d')
+        row['ResBooked'] = datetime.datetime.strptime(row.get('ResBooked', row.pop('RH_EXT_BOOK_DATE')), '%Y-%m-%d')
+
+        row['ResHotelId'] = str(row.get('ResHotelId', row.pop('RUL_SIHOT_HOTEL')))
+
+        if 'RUL_SIHOT_CAT' in row:
+            row['ResRoomCat'] = row.pop('RUL_SIHOT_CAT')    # SH_CAT
+        if 'RO_RES_GROUP' in row:
+            row['ResMktGroup'] = row.pop('RO_RES_GROUP')    # RO_SIHOT_RES_GROUP
+        if 'SH_OBJID' in row:
+            row['ShId'] = row.pop('SH_OBJID')               # orderer GUEST-ID
+        if 'SH_MC' in row:
+            row['AcuId'] = row.pop('SH_MC')                 # orderer MATCHCODE
+        if 'SIHOT_ALLOTMENT_NO' in row:
+            row['ResAllotmentNo'] = row.pop('SIHOT_ALLOTMENT_NO')
+        if 'SIHOT_RATE_SEGMENT' in row:
+            row['ResRateSegment'] = row.pop('SIHOT_RATE_SEGMENT')
+
+        fld_nam_map = dict(NAME='PersSurname', NAME2='PersForename', DOB='DOB')
+        for key, val in [(k, v) for k, v in row.items() if k.startswith('SH_ADULT') or k.startswith('SH_CHILD')]:
+            nam = fld_nam_map.get(key[10:])
+            if nam:
+                pers_idx = str(int(key[8]) - 1)
+                row['ResPersons' + str(pers_idx) + nam] = row.pop(key)
+        for key in [k for k in row.keys()
+                    if k.startswith('SH_PERS_SEQ') or k.startswith('SH_ROOM_SEQ') or k == 'SH_ROOMS']:
+            row.pop(key)
 
         row['=FILE_NAME'] = file_name
         row['=LINE_NUM'] = res_index
@@ -965,7 +989,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("User cancelled processing of TCI import file", fn, importance=4)
                 break
             log_import("Processing import file " + fn, fn, importance=4)
-            with open(fn, 'r') as fp:
+            with open(fn) as fp:
                 lines = fp.readlines()
 
             last_ln = ''
@@ -1003,7 +1027,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("Hotel ID prefix followed by underscore character is missing - skipping.", fn, importance=4)
                 continue
 
-            with open(fn, 'r', encoding='utf-8-sig') as fp:  # encoding is removing the utf8 BOM
+            with open(fn, encoding='utf-8-sig') as fp:  # encoding is removing the utf8 BOM
                 lines = fp.readlines()
             # check/remove header and parse all other lines normalized into column list
             header = ''
@@ -1035,7 +1059,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 break
 
             # sort by ext book ref, room info, adults and arrival date for to allow to join date ranges
-            imp_rows.sort(key=lambda f: f[BKC_BOOK_REF] + f[BKC_ROOM_INFO] + f[BKC_ADULTS] + f[BKC_ARR_DATE])
+            imp_rows.sort(key=lambda f: f[BKC_BOOK_REF] + f[BKC_ROOM_INFO] + f[BKC_ADULTS] + f[BKC_ResArrival])
 
             for idx, ln in enumerate(imp_rows):
                 if got_cancelled():
@@ -1064,10 +1088,10 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         # re-create resort match codes config value from Acumen data if empty
         if not cae.get_config('ClientRefsResortCodes'):
-            m1 = conf_data.load_view(None, 'T_CD', ["CD_CODE"], "CD_RCI_REF in (:rci_refs)",
-                                     {'rci_refs': conf_data.client_refs_add_exclude})
-            m2 = conf_data.load_view(None, 'T_CR', ["CR_CDREF"], "CR_TYPE like 'RCI%' and CR_REF in (:rci_refs)",
-                                     {'rci_refs': conf_data.client_refs_add_exclude})
+            m1 = asd.load_view(None, 'T_CD', ["AcuId"], "RciId in (:rci_refs)",
+                                     {bind_var_prefix + 'rci_refs': asd.client_refs_add_exclude})
+            m2 = asd.load_view(None, 'T_CR', ["CR_CDREF"], "CR_TYPE like 'RCI%' and CR_REF in (:rci_refs)",
+                                     {bind_var_prefix + 'rci_refs': asd.client_refs_add_exclude})
             if m1 is None or m2 is None:
                 error_msg = "Resort match code fetch error"
                 log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciResortCodesDataFetch', importance=3)
@@ -1075,12 +1099,12 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             match_codes = sorted(list(set([_[0] for _ in m1 + m2])))
             cae.set_config('ClientRefsResortCodes', EXT_REFS_SEP.join(match_codes))
 
-        error_msg = conf_data.cl_fetch_all()      # load clients data
+        error_msg = asd.ass_clients_pull()      # load clients data
         if error_msg:
             log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciClientDataFetch', importance=3)
             return
 
-        error_msg = conf_data.ri_fetch_all()  # load reservation inventory data
+        error_msg = asd.ri_fetch_all()  # load reservation inventory data
         if error_msg:
             log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciResInvDataFetch', importance=3)
             return
@@ -1092,7 +1116,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("User cancelled loading of import files", fn, importance=4)
                 break
             log_import("Loading import file " + fn, fn, importance=4)
-            with open(fn, 'r', encoding='utf-16') as fp:
+            with open(fn, encoding='utf-16') as fp:
                 lines = fp.readlines()
 
             progress = Progress(debug_level, start_counter=len(lines),
@@ -1138,11 +1162,10 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             progress = Progress(debug_level, start_counter=len(imp_rows),
                                 start_msg="Sending {run_counter} clients to Sihot",
                                 nothing_to_do_msg="No client records to be send to Sihot")
-            client_send = ClientToSihot(cae, use_kernel_interface=cae.get_option('useKernelForClient'),
-                                        map_client=cae.get_option('mapClient'), connect_to_acu=False)
+            client_send = ClientToSihot(cae)
 
             # cl_sent_to_sihot() detects clients sent already by SihotResSync and duplicate clients in import file
-            sent_clients = conf_data.cl_sent_to_sihot()
+            sent_clients = asd.cl_sent_to_sihot()
             for lni, imp_cols in enumerate(imp_rows):
                 fn, idx = imp_cols[RC_FILE_NAME], imp_cols[RC_LINE_NUM]
                 if got_cancelled():
@@ -1169,16 +1192,16 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                         if clients_idx in sent_clients:
                             if debug_level >= DEBUG_LEVEL_VERBOSE:
                                 log_import(which_client + "/client {} skip"
-                                           .format(conf_data.clients[clients_idx]), fn, idx)
+                                           .format(asd.clients[clients_idx]), fn, idx)
                             continue
-                        rc_complete_client_row_with_ext_refs(client_row, conf_data.cl_ext_refs_by_idx(clients_idx))
+                        rc_complete_client_row_with_ext_refs(client_row, asd.cl_ext_refs_by_idx(clients_idx))
                         try:
                             error_msg = client_send.send_client_to_sihot(client_row)
                             if not error_msg:
                                 if debug_level >= DEBUG_LEVEL_VERBOSE:
                                     log_import("Sent " + which_client + "/client: " + str(client_row), fn, idx)
-                                client_row['CD_SIHOT_OBJID'] = client_send.response.objid
-                                conf_data.cl_complete_with_sh_id(clients_idx, client_row['CD_SIHOT_OBJID'])
+                                # already done by ClientToSihot: client_row['ShId'] = client_send.response.objid
+                                asd.cl_complete_with_sh_id(clients_idx, client_row['ShId'])
                                 sent_clients.append(clients_idx)
                         except Exception as ex:
                             error_msg = which_client + "/client send exception: {}".format(full_stack_trace(ex))
@@ -1194,8 +1217,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             error_msg = ""
 
         # overwrite clients data if at least one client got changed/extended
-        if conf_data.clients_changed:
-            conf_data.cl_flush()
+        if asd.clients_changed:
+            asd.cl_flush()
 
         # now parse RCI reservations
         if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
@@ -1241,7 +1264,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error("User cancelled loading of JSON import files", fn, importance=4)
                 break
             log_import("Loading JSON import file " + fn, fn, importance=4)
-            with open(fn, 'r', encoding='utf-8') as fp:
+            with open(fn, encoding='utf-8') as fp:
                 json_data = json.load(fp)
 
             if debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -1280,13 +1303,17 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                             nothing_to_do_msg="No reservations found for to be sent")
         res_sender = ResSender(cae)
 
-        for res_row_idx, crow in enumerate(res_rows):
-            fn, idx = crow['=FILE_NAME'], crow['=LINE_NUM']
+        for res_rec_idx, res_row in enumerate(res_rows):
+            fn, idx = res_row.pop('=FILE_NAME'), res_row.pop('=LINE_NUM')
             if got_cancelled():
                 log_error("User cancelled reservation send", fn, idx, importance=4)
                 break
-            progress.next(processed_id=str(crow['RH_EXT_BOOK_REF']), error_msg=error_msg)
-            error_msg, warning_msg = res_sender.send_row(crow)
+            rec = Record(system=SDI_ACU, direction=FAD_FROM)
+            rec.add_system_fields(ACU_RES_MAP, sys_fld_indexes=from_field_indexes)
+            rec.update(res_row)
+            rec.pull(SDI_ACU)
+            progress.next(processed_id=str(rec['ResVoucherNo']), error_msg=error_msg)
+            error_msg, warning_msg = res_sender.send_rec(rec)
             if warning_msg:
                 log_import(warning_msg, fn, idx)
             if error_msg:
@@ -1312,7 +1339,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             log_import("Sending warnings: " + warnings, NO_FILE_PREFIX_CHAR + 'SendResWarnings')
         if notification:
             notification.send_notification(warnings, subject="SihotResImport warnings notification",
-                                           mail_to=warning_notification_emails)
+                                           mail_to=warning_notification_emails, body_style='plain')
 
     log_import("Pass Import Files to user/server logs", NO_FILE_PREFIX_CHAR + 'MoveImportFiles', importance=4)
     for sfn in tci_files + bkc_files + rci_files + jso_files:
@@ -1345,7 +1372,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     if error_log:
         error_text = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in error_log)
         if notification:
-            notification_err = notification.send_notification(error_text, subject="SihotResImport error notification")
+            notification_err = notification.send_notification(error_text, subject="SihotResImport error notification",
+                                                              body_style='plain')
             if notification_err:
                 error_text += "Notification send error: " + notification_err
                 log_import("Notification send error: " + notification_err, NO_FILE_PREFIX_CHAR + 'SendNotification')

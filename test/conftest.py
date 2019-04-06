@@ -4,28 +4,21 @@ import datetime
 import pytest
 
 from configparser import ConfigParser
+
+from ae_sys_data import Record, FAD_ONTO
+from ae_console_app import Setting
 from ae_db import OraDB
 from ass_sys_data import AssSysData
-from sxmlif import PostMessage, ConfigDict, CatRooms, GuestSearch, ClientToSihot, ResToSihot, AvailCatInfo, \
-    USE_KERNEL_FOR_CLIENTS_DEF, MAP_CLIENT_DEF, USE_KERNEL_FOR_RES_DEF, MAP_RES_DEF
-from sfif import prepare_connection
+from sxmlif import PostMessage, ConfigDict, CatRooms, AvailCatInfo
+from sfif import SfInterface
+from shif import ClientSearch, ClientToSihot, \
+    USE_KERNEL_FOR_CLIENTS_DEF, SH_CLIENT_MAP, USE_KERNEL_FOR_RES_DEF, SH_RES_MAP
+from sys_data_ids import SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SF_SANDBOX, SDF_SH_CLIENT_PORT, SDI_SH
 
 
 @pytest.fixture(scope="module")
 def console_app_env():
     return ConsoleApp()
-
-
-# noinspection PyShadowingNames
-@pytest.fixture()
-def acu_guest(console_app_env):
-    return ClientToSihot(console_app_env)
-
-
-# noinspection PyShadowingNames
-@pytest.fixture()
-def acu_res(console_app_env):
-    return ResToSihot(console_app_env)
 
 
 # noinspection PyShadowingNames
@@ -37,16 +30,16 @@ def avail_cats(console_app_env):
 # noinspection PyShadowingNames
 @pytest.fixture()
 def db_connected(console_app_env):
-    ora_db = OraDB(console_app_env.get_option('acuUser'), console_app_env.get_option('acuPassword'),
-                   console_app_env.get_option('acuDSN'), app_name='conftest',
-                   debug_level=console_app_env.get_option('debugLevel'))
+    ora_db = OraDB(dict(User=console_app_env.get_option('acuUser'), Password=console_app_env.get_option('acuPassword'),
+                        DSN=console_app_env.get_option('acuDSN')),
+                   app_name='conftest', debug_level=console_app_env.get_option('debugLevel'))
     ora_db.connect()
     return ora_db
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def config_data(console_app_env):
+def ass_sys_data(console_app_env):
     return AssSysData(console_app_env)
 
 
@@ -64,8 +57,8 @@ def cat_rooms(console_app_env):
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def guest_search(console_app_env):
-    return GuestSearch(console_app_env)
+def client_search(console_app_env):
+    return ClientSearch(console_app_env)
 
 
 # noinspection PyShadowingNames
@@ -76,44 +69,54 @@ def post_message(console_app_env):
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def create_test_guest(console_app_env):
+def create_test_client(console_app_env):
     # prevent duplicate creation of test client
     mc = 'T800001'
     sn = 'Tester800001'
     fn = 'Pepe'
     gt = '1'    # Guest (not Company)
-    gs = GuestSearch(console_app_env)
-    objid = gs.get_objid_by_matchcode(mc)
+    cs = ClientSearch(console_app_env)
+    objid = cs.client_id_by_matchcode(mc)
     if objid and '\n' not in objid:
-        guest = gs
+        client = cs
     else:
-        guest = ClientToSihot(console_app_env, connect_to_acu=False)
-        col_values = dict()
-        for col in guest.acu_col_names:
-            if col == 'CD_CODE':
-                col_values[col] = mc
-            elif col == 'CD_SNAM1':
-                col_values[col] = sn
-            elif col == 'CD_FNAM1':
-                col_values[col] = fn
-            elif col == 'SIHOT_GUESTTYPE1':
-                col_values[col] = gt
-            else:
-                col_values[col] = None
-        guest.send_client_to_sihot(col_values)
-    guest.matchcode = mc     # added guest attributes for easier testing
-    guest.objid = guest.response.objid
-    guest.surname = sn
-    guest.forename = fn
-    guest.guest_type = gt
+        client = ClientToSihot(console_app_env)
+        col_values = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(client.elem_map)
+        col_values.clear_leafs()
+        col_values['AcuId'] = mc
+        col_values['Surname'] = sn
+        col_values['Forename'] = fn
+        col_values['GuestType'] = gt
+        client.send_client_to_sihot(col_values)
+    client.matchcode = mc     # added client attributes for easier testing
+    client.objid = client.response.objid
+    client.surname = sn
+    client.forename = fn
+    client.client_type = gt
 
-    return guest
+    return client
 
 
 # noinspection PyShadowingNames
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
-    sf_conn, sf_sandbox = prepare_connection(console_app_env)
+    cae = console_app_env
+    debug_level = cae.get_option('debugLevel')
+    sf_user = cae.get_option('sfUser')
+    if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
+        uprint("conftest.salesforce_connection(): skipped because of unspecified credentials")
+        return None
+    sf_pw = cae.get_option('sfPassword')
+    sf_token = cae.get_option('sfToken')
+    sf_sandbox = cae.get_option(SDF_SF_SANDBOX, default_value='test' in sf_user.lower() or 'dbx' in sf_user.lower())
+    sf_client = cae.app_name()
+
+    uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
+
+    sf_conn = SfInterface(dict(User=sf_user, Password=sf_pw, Token=sf_token),
+                          features=[SDF_SF_SANDBOX + '=True'] if sf_sandbox else None,
+                          app_name=sf_client, debug_level=debug_level)
+
     return sf_conn
 
 
@@ -150,15 +153,14 @@ class ConsoleApp:
                              assDSN=cfg.get('Settings', 'assDSN', fallback='test'),
                              sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
                              sfToken=cfg.get('Settings', 'sfToken'),
-                             sfClientId=cfg.get('Settings', 'sfClientId', fallback='AcuSihotInterfaces_TEST'),
-                             sfIsSandbox=cfg.get('Settings', 'sfIsSandbox', fallback=True),
-                             shClientPort=cfg.get('Settings', 'shClientPort', fallback=12000),
+                             sfIsSandbox=cfg.get('Settings', SDF_SF_SANDBOX, fallback=True),
+                             shClientPort=cfg.get('Settings', SDF_SH_CLIENT_PORT, fallback=12000),
                              shServerIP=cfg.get('Settings', 'shServerIP', fallback='10.103.222.70'),
-                             shServerPort=cfg.get('Settings', 'shServerPort', fallback=14777),
-                             shServerKernelPort=cfg.get('Settings', 'shServerKernelPort', fallback=14772),
+                             shServerPort=cfg.get('Settings', SDF_SH_WEB_PORT, fallback=14777),
+                             shServerKernelPort=cfg.get('Settings', SDF_SH_KERNEL_PORT, fallback=14772),
                              shTimeout=369.0, shXmlEncoding='utf8',
-                             useKernelForClient=USE_KERNEL_FOR_CLIENTS_DEF, mapClient=MAP_CLIENT_DEF,
-                             useKernelForRes=USE_KERNEL_FOR_RES_DEF, mapRes=MAP_RES_DEF,
+                             shUseKernelForClient=USE_KERNEL_FOR_CLIENTS_DEF, shMapClient=SH_CLIENT_MAP,
+                             shUseKernelForRes=USE_KERNEL_FOR_RES_DEF, shMapRes=SH_RES_MAP,
                              warningFragments='',
                              )
         for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):
@@ -175,7 +177,11 @@ class ConsoleApp:
         elif name in self._options:
             ret = self._options[name]
         elif section is None or section != 'Settings':
-            ret = self._env_cfg.get(section or 'Settings', name, fallback=default_value)
+            # does not convert config value into list/dict:
+            # .. ret = self._env_cfg.get(section or 'Settings', name, fallback=default_value)
+            s = Setting(name=name, value=default_value, value_type=type(default_value))  # used only for conversion/eval
+            s.value = self._env_cfg.get(section or 'Settings', name, fallback=s.value)
+            ret = s.value
         else:
             ret = default_value
         uprint('ConsoleAppMock.get_config', name, '=', ret, 'section=' + str(section))
@@ -183,7 +189,8 @@ class ConsoleApp:
 
     def get_option(self, name, default_value=None):
         ret = self._options[name] if name in self._options else default_value
-        uprint('ConsoleAppMock.get_option', name, '=', ret)
+        if name not in ('debugLevel', ):
+            uprint('ConsoleAppMock.get_option', name, '=', ret)
         return ret
 
     def set_option(self, name, val, cfg_fnam=None, save_to_config=True):

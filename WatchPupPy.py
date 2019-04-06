@@ -8,6 +8,7 @@
     0.9     enhanced system checking (merge errors and added checks for AssCache and Salesforce), fixed bug (missing
             config file write) in reset_last_run_time().
     1.0     add check of last T_SRSL for RU (SRSL_TABLE) and fix file path bug and on INI lock reset.
+    1.1     wait at least 6 minutes between error notifications.
 
 TODO:
     - investigate and fix bug with freeze if sendOutput option is specified with the value 1/enabled and unsuccessful
@@ -29,14 +30,15 @@ import subprocess
 from configparser import ConfigParser
 import pprint
 
+from sys_data_ids import SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT
 from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace,\
     MAIN_SECTION_DEF, DATE_TIME_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
-from sxmlif import PostMessage, GuestSearch
-from ass_sys_data import (add_ass_options, init_ass_data,
-                          USED_SYS_ASS_ID, USED_SYS_ACU_ID, USED_SYS_SF_ID, USED_SYS_SHWEB_ID, USED_SYS_SHKERNEL_ID)
+from sxmlif import PostMessage
+from shif import ClientSearch
+from ass_sys_data import add_ass_options, init_ass_data
 
 
-__version__ = '1.0'
+__version__ = '1.1'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 MAX_SRSL_OUTAGE_HOURS = 18.0                # maximum time after last sync entry was logged (multiple on TEST system)
@@ -80,24 +82,21 @@ last_rt_prefix = cae.get_option('acuDSN')[-4:]
 
 
 ass_data = init_ass_data(cae, ass_options, used_systems_msg_prefix="Active Sys Env Checks")
-conf_data = ass_data['assSysData']
-if conf_data.error_message:
-    uprint("WatchPupPy startup error: ", conf_data.error_message)
-    conf_data.close_dbs()
+asd = ass_data['assSysData']
+if asd.error_message:
+    uprint("WatchPupPy startup error: ", asd.error_message)
+    asd.close_dbs()
     cae.shutdown(exit_code=9)
-check_ass = USED_SYS_ASS_ID in conf_data.used_systems
-check_acu = USED_SYS_ACU_ID in conf_data.used_systems
-check_sf = USED_SYS_SF_ID in conf_data.used_systems
-check_sh_web = USED_SYS_SHWEB_ID in conf_data.used_systems
-check_sh_kernel = USED_SYS_SHKERNEL_ID in conf_data.used_systems
+
 
 break_on_error = ass_data['breakOnError']
 notification = ass_data['notification']
 send_output = 1 if notification and cae.get_option('sendOutput') else 0
 uprint("Send Output (subprocess call method: 1=check_output, 0=check_call)", send_output)
 
-is_test = conf_data.is_test_system()
-max_sync_outage_delta = (exe_name.startswith('AcuServer') or exe_name.startswith('SihotResSync')) \
+is_test = asd.is_test_system()
+debug_level = cae.get_option('debugLevel')
+max_sync_outage_delta = exe_name.startswith(('AcuServer', 'SihotResSync')) and debug_level > DEBUG_LEVEL_DISABLED \
                         and datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS * (9 if is_test else 1))
 
 
@@ -108,7 +107,7 @@ def user_notification(subject, body):
     body = pprint.pformat(body, indent=3, width=120)
 
     if notification:
-        err_message = notification.send_notification(body, subject=subject)
+        err_message = notification.send_notification(body, subject=subject, body_style='plain')
         if err_message:
             uprint("****  WatchPupPy notification error: {}. Unsent notification body:\n{}.".format(err_message, body))
     else:
@@ -119,12 +118,12 @@ def get_timer_corrected():
     """ get timer ticker value (seconds) and reset all timer vars on overflow (which should actually never happen
         with monotonic, but some OS may only support 32 bits - rolling-over after 49.7 days) """
     global last_timer, last_run, last_check
-    curr_timer = time.monotonic()
-    if last_timer is None or curr_timer < last_timer:   # if app-startup or timer-roll-over
-        last_run = curr_timer - command_interval        # .. then reset to directly do next env-check and cmd-run
-        last_check = curr_timer - check_interval
-    last_timer = curr_timer
-    return curr_timer
+    timer = time.monotonic()
+    if last_timer is None or timer < last_timer:   # if app-startup or timer-roll-over
+        last_run = timer - command_interval        # .. then reset to directly do next env-check and cmd-run
+        last_check = timer - check_interval
+    last_timer = timer
+    return timer
 
         
 def reset_last_run_time(force=False):
@@ -185,44 +184,49 @@ while True:
             if break_on_error or BREAK_PREFIX in err_msg:
                 break
             errors = list()
-            time.sleep(command_interval / 30)  # wait 120 seconds after each error, for command_interval of 1 hour
+            # wait minimum 10 minutes after each error, wait longer if command_interval is greater than 1 hour
+            time.sleep(max(600, command_interval / 6))
 
         # wait for next check_interval, only directly after startup checks on first run
-        if get_timer_corrected() < last_check + check_interval:
-            cae.dprint(" ###  Waiting for next check in {} seconds (timer={}, last={}, interval={})".format(
-                last_check + check_interval - get_timer_corrected(), get_timer_corrected(), last_check, check_interval),
-                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        next_check = last_check + check_interval
+        curr_time = datetime.datetime.now()
+        curr_timer = get_timer_corrected()
+        if curr_timer < next_check:
+            cae.dprint(" ###  Waiting for next check in {} seconds (timer={}, last={}, interval={}, at {})"
+                       .format(next_check - curr_timer, curr_timer, last_check, check_interval, curr_time),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         try:
-            while get_timer_corrected() < last_check + check_interval:
+            while get_timer_corrected() < next_check:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
         except KeyboardInterrupt:
             errors.append(BREAK_PREFIX + " while waiting for next check in {} seconds"
-                          .format(last_check + check_interval - get_timer_corrected()))
+                          .format(next_check - get_timer_corrected()))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
-        cae.dprint(" ###  Running checks (timer={}, last={}, interval={})".format(
-            get_timer_corrected(), last_check, check_interval),
-            minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        cae.dprint(" ###  Running checks (timer={}, last={}, interval={}) at={}"
+                   .format(get_timer_corrected(), last_check, check_interval, datetime.datetime.now()),
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # check environment and connections: AssCache, Acu/Oracle, Salesforce, Sihot servers and interfaces
-        if check_ass:
-            if not conf_data.ass_db or conf_data.ass_db.select('pg_tables'):
-                conf_data.connect_ass_db(force_reconnect=True)
-            if not conf_data.ass_db:
-                errors.append("AssCache environment check connection error: " + conf_data.error_message)
+        if SDI_ASS in asd.used_systems:
+            if not asd.connection(SDI_ASS, raise_if_error=False) or asd.connection(SDI_ASS).select('pg_tables'):
+                asd.reconnect(SDI_ASS)
+            if not asd.connection(SDI_ASS, raise_if_error=False):
+                errors.append("AssCache environment check connection error: " + asd.error_message)
             else:
-                ass_db = conf_data.ass_db
+                ass_db = asd.connection(SDI_ASS)
                 err_msg = ass_db.select('hotels', ['ho_pk', 'ho_ac_id'])
                 if err_msg:
                     errors.append("AssCache table hotels selection error: " + err_msg)
 
-        if check_acu:
-            if not conf_data.acu_db or conf_data.acu_db.select('dual', ['sysdate']):
-                conf_data.connect_acu_db(force_reconnect=True)
-            if not conf_data.acu_db:
-                errors.append("Acumen environment check connection error: " + conf_data.error_message)
+        if SDI_ACU in asd.used_systems:
+            if not asd.connection(SDI_ACU, raise_if_error=False) or asd.connection(SDI_ACU).select('dual', ['sysdate']):
+                asd.reconnect(SDI_ACU)
+            if not asd.connection(SDI_ACU, raise_if_error=False):
+                errors.append("Acumen environment check connection error: " + asd.error_message)
             else:
-                ora_db = conf_data.acu_db
-                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'TK'")
+                ora_db = asd.connection(SDI_ACU)
+                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
+                                        where_group_order="RO_CODE = 'TK'")
                 if err_msg:
                     errors.append("Acumen environment T_RO/TK selection error: " + err_msg)
                 else:
@@ -233,7 +237,8 @@ while True:
                         tc_sc_id = str(rows[0][0])  # == DEF_TC_SC_ID
                         tc_sc_mc = rows[0][1]       # == DEF_TC_SC_MC
 
-                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'], "RO_CODE = 'tk'")
+                err_msg = ora_db.select('T_RO', ['RO_SIHOT_AGENCY_OBJID', 'RO_SIHOT_AGENCY_MC'],
+                                        where_group_order="RO_CODE = 'tk'")
                 if err_msg:
                     errors.append("Acumen environment T_RO/tk selection error: " + err_msg)
                 else:
@@ -255,7 +260,8 @@ while True:
                 if max_sync_outage_delta:
                     tbl = 'ARO' if exe_name.startswith('AcuServer') else 'RU'
                     err_msg = ora_db.select('T_SRSL', ['MAX(SRSL_DATE)'],
-                                            "SRSL_TABLE = '{}' and substr(SRSL_STATUS, 1, 6) = 'SYNCED'".format(tbl))
+                                            where_group_order="SRSL_TABLE = '{}' "
+                                                              "and substr(SRSL_STATUS, 1, 6) = 'SYNCED'".format(tbl))
                     if err_msg:
                         errors.append("Acumen environment T_SRSL/{} selection error: {}".format(tbl, err_msg))
                     else:
@@ -279,22 +285,22 @@ while True:
             tc_ag_id = DEF_TC_AG_ID
             tc_ag_mc = DEF_TC_AG_MC
 
-        if check_sf:
-            if not conf_data.sf_conn.record_type_id('Contact'):
-                errors.append("Salesforce environment record type fetch error: " + conf_data.sf_conn.error_msg)
+        if SDI_SF in asd.used_systems:
+            if not asd.connection(SDI_SF).record_type_id('Contact'):
+                errors.append("Salesforce environment record type fetch error: " + asd.connection(SDI_SF).error_msg)
 
-        if check_sh_kernel:
-            gi = GuestSearch(cae)
-            tc_sc_obj_id2 = gi.get_objid_by_matchcode(tc_sc_mc)
+        if SDI_SH in asd.used_systems and SDF_SH_KERNEL_PORT in asd.used_systems[SDI_SH].features:
+            gi = ClientSearch(cae)
+            tc_sc_obj_id2 = gi.client_id_by_matchcode(tc_sc_mc)
             if tc_sc_id != tc_sc_obj_id2:
                 errors.append("Sihot kernel check found Thomas Cook Northern matchcode discrepancy: expected={} got={}."
                               .format(tc_sc_id, tc_sc_obj_id2))
-            tc_ag_obj_id2 = gi.get_objid_by_matchcode(tc_ag_mc)
+            tc_ag_obj_id2 = gi.client_id_by_matchcode(tc_ag_mc)
             if tc_ag_id != tc_ag_obj_id2:
                 errors.append("Sihot kernel check found Thomas Cook AG/U.K. matchcode discrepancy: expected={} got={}."
                               .format(tc_ag_id, tc_ag_obj_id2))
 
-        if check_sh_web:
+        if SDI_SH in asd.used_systems and SDF_SH_WEB_PORT in asd.used_systems[SDI_SH].features:
             pm = PostMessage(cae)
             err_msg = pm.post_message("WatchPupPy Sihot WEB check for command {}".format(exe_name))
             if err_msg:
@@ -305,29 +311,34 @@ while True:
 
         # check interval / next execution
         last_check = get_timer_corrected()
+        next_check = last_check + check_interval
+        next_run = last_run + command_interval
+        curr_time = datetime.datetime.now()
 
-        if last_check + check_interval < last_run + command_interval:
-            cae.dprint(" ###  Timer={}, next check in {}s (last={} interval={}), next run in {}s (last={} interval={})"
-                       .format(get_timer_corrected(),
-                               last_check + check_interval - get_timer_corrected(), last_check, check_interval,
-                               last_run + command_interval - get_timer_corrected(), last_run, command_interval),
+        if next_check < next_run:
+            cae.dprint(" ###  Timer={}, next chk {}s (last={} interval={}), next run {}s (last={} interval={}) (at {})"
+                       .format(last_check, next_check - last_check, last_check, check_interval,
+                               next_run - last_check, last_run, command_interval, curr_time),
                        minimum_debug_level=DEBUG_LEVEL_VERBOSE)
             continue  # wait for next check
 
         # wait for next command_interval, only directly after startup checks on first run
-        if get_timer_corrected() < last_run + command_interval:
-            cae.dprint(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={})".format(
-                last_run + command_interval - get_timer_corrected(), get_timer_corrected(), last_run, command_interval),
-                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        if last_check < next_run:
+            cae.dprint(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={}) (at {})"
+                       .format(next_run - last_check, last_check, last_run, command_interval, curr_time),
+                       minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         try:
-            while get_timer_corrected() < last_run + command_interval:
+            while get_timer_corrected() < next_run:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
         except KeyboardInterrupt:
-            errors.append(BREAK_PREFIX + " while waiting for next command schedule in {} seconds"
-                          .format(last_run + command_interval - get_timer_corrected()))
+            curr_time = datetime.datetime.now()
+            errors.append(BREAK_PREFIX + " while waiting for next command schedule in {} seconds (at {})"
+                          .format(next_run - get_timer_corrected(), curr_time))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
-        cae.dprint(" ###  Run command (timer={}, last={}, interval={})"
-                   .format(get_timer_corrected(), last_run, command_interval), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
+        curr_time = datetime.datetime.now()
+        cae.dprint(" ###  Run command (timer={}, last={}, interval={}) (at {})"
+                   .format(get_timer_corrected(), last_run, command_interval, curr_time),
+                   minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
         # then run the command
         run_starts += 1
@@ -338,7 +349,7 @@ while True:
             else:
                 subprocess.check_call(command_line_args, timeout=timeout)
         except subprocess.CalledProcessError as cpe:
-            err_msg = "{}. run returned non-zero exit code {}".format(run_starts, cpe.returncode)
+            err_msg = "{}. run returned non-zero exit code {} (at {})".format(run_starts, cpe.returncode, curr_time)
             if cpe.returncode == 4:
                 reset_last_run_time()
             if getattr(cpe, 'output'):      # only available when running command with check_output()/send_output
@@ -346,33 +357,37 @@ while True:
             errors.append(err_msg)
             continue        # command not really started, so try directly again - don't reset last_run variable
         except subprocess.TimeoutExpired as toe:    # sub process killed
-            err_msg = "{}. run timed out at {} last sync={}; interval={}, current timer({})-last_run({})={}"\
+            err_msg = "{}. run timed out at {}; last sync={}; timeout={}, current timer({})-last_run({})={}"\
                 .format(run_starts, datetime.datetime.now(), last_sync,
-                        timeout, get_timer_corrected(), last_run, last_run - get_timer_corrected())
+                        timeout, get_timer_corrected(), last_run, get_timer_corrected() - last_run)
             if getattr(toe, 'output'):      # only available when running command with check_output()/send_output
                 err_msg += "\n         output=" + str(getattr(toe, 'output'))  # PyCharm says not defined: toe.output
             errors.append(err_msg)
             reset_last_run_time(force=True)   # force reset of lock in INI file because subproc killed
             continue        # try directly again - don't reset last_run variable
         except KeyboardInterrupt:
-            errors.append(BREAK_PREFIX + " while running {}. command {}".format(run_starts, exe_name))
+            curr_time = datetime.datetime.now()
+            errors.append(BREAK_PREFIX + " while running {}. command {} at {}".format(run_starts, exe_name, curr_time))
             continue        # jump to begin of loop for to notify user, BREAK this loop and quit this app
         except Exception as ex:
-            errors.append("{}. run raised unspecified exception: {}\n      {}"
-                          .format(run_starts, ex, full_stack_trace(ex)))
+            curr_time = datetime.datetime.now()
+            errors.append("{}. run raised unspecified exception: {} at {}\n      {}"
+                          .format(run_starts, ex, curr_time, full_stack_trace(ex)))
             continue        # try directly again - don't reset last_run variable
 
         last_run = last_check
         last_sync = datetime.datetime.now()
         run_ends += 1
     except KeyboardInterrupt:
-        errors.append(BREAK_PREFIX + " before/after running {}. command {}".format(run_starts, exe_name))
+        curr_time = datetime.datetime.now()
+        errors.append(BREAK_PREFIX + " while running {} at {}. command {}".format(run_starts, curr_time, exe_name))
     except Exception as ex:
-        errors.append("WatchPupPy loop exception: " + full_stack_trace(ex))
+        errors.append("WatchPupPy loop exception at {}:\n     {}".format(datetime.datetime.now(), full_stack_trace(ex)))
 
 progress.finished(error_msg=err_msg)
-if conf_data:
-    conf_data.close_dbs()
-uprint("####  WatchPupPy exit - successfully run {} of {} times the command {}".format(run_ends, run_starts, exe_name))
+if asd:
+    asd.close_dbs()
+curr_time = datetime.datetime.now()
+uprint("####  WatchPupPy did run {} of {} times at {}; command={}".format(run_ends, run_starts, curr_time, exe_name))
 if err_count:
-    uprint("****  {} runs failed".format(err_count))
+    uprint("****  {} runs failed at {}".format(err_count, curr_time))

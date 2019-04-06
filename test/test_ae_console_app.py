@@ -6,7 +6,7 @@ import time
 from argparse import ArgumentError
 import pytest
 
-from ae_console_app import ConsoleApp, NamedLocks, full_stack_trace, missing_requirements, uprint, \
+from ae_console_app import ConsoleApp, NamedLocks, full_stack_trace, uprint, \
     DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT
 
 
@@ -465,60 +465,135 @@ class TestFullStackTrace:
             assert full_stack_trace(ex)
 
 
-class TestMissingRequirements:
-    def test_none_obj_with__attributes(self):
-        assert [] == missing_requirements(None, [['__str__']])
-        assert [] == missing_requirements(None, [['__str__', '__name__']])
-        assert [] == missing_requirements(None, [['__str__', '__name__', '__str__']])
-        assert [['__name__']] == missing_requirements(None, [['__name__']])
-        assert [['__name__']] == missing_requirements(None, [['__name__'], ['__doc__'], ['__str__', '__name__']])
-
-    def test_dict_with_bool_check(self):
-        d = dict(i=1, s='test')
-        assert [] == missing_requirements(d, [['i'], ['s']])
-        assert [['x']] == missing_requirements(d, [['i'], ['s'], ['x']])
-        d = dict(i=0, s='')
-        assert [['x']] == missing_requirements(d, [['i'], ['s'], ['x']])
-        assert [['i'], ['s'], ['x']] == missing_requirements(d, [['i'], ['s'], ['x']], bool_check=True)
-        d = dict(d=dict(i=0, s=''))
-        assert [] == missing_requirements(d, [['d', 'i'], ['d', 's']])
-        assert [['d', 'i'], ['d', 's']] == missing_requirements(d, [['d', 'i'], ['d', 's']], bool_check=True)
-
-    def test_attr_dict_mixed(self):
-        d = dict(d=dict(i=0, s=''))
-        assert [] == missing_requirements(d, [['d', 's', '__doc__']])
-
-
 class TestNamedLocks:
     def test_sequential(self):
         nl = NamedLocks()
-        assert nl.acquire('test', timeout=0.01)
-        nl.release('test')
+        assert len(nl.active_lock_counters) == 0
         nl2 = NamedLocks()
+        assert len(nl2.active_lock_counters) == 0
+
+        assert nl.acquire('test', timeout=0.01)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+        assert len(nl2.active_lock_counters) == 1 and nl2.active_lock_counters['test'] == 1
+
+        nl.release('test')
+        assert len(nl.active_lock_counters) == 0
+        assert len(nl2.active_lock_counters) == 0
+
         assert nl2.acquire('test', timeout=.01)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+        assert len(nl2.active_lock_counters) == 1 and nl2.active_lock_counters['test'] == 1
+
         nl2.release('test')
+        assert len(nl.active_lock_counters) == 0
+        assert len(nl2.active_lock_counters) == 0
 
     def test_locking_with_timeout(self):
+        nl = NamedLocks(reentrant_locks=False)
+        assert nl.acquire('test', timeout=0.01)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        nl2 = NamedLocks(reentrant_locks=False)
+        assert not nl2.acquire('test', timeout=.01)
+        assert len(nl2.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        nl.release('test')
+        assert len(nl2.active_lock_counters) == 0
+        assert nl2.acquire('test', timeout=.01)
+        assert len(nl2.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        nl2.release('test')
+        assert len(nl2.active_lock_counters) == 0
+
+    def test_reentrant_locking_with_timeout(self):
         nl = NamedLocks()
         assert nl.acquire('test', timeout=0.01)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
         nl2 = NamedLocks()
-        assert not nl2.acquire('test', timeout=.01)
-        nl.release('test')
         assert nl2.acquire('test', timeout=.01)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 2
+
+        nl.release('test')
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
         nl2.release('test')
+        assert len(nl2.active_lock_counters) == 0
+
+        assert nl2.acquire('test', timeout=.01)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        nl2.release('test')
+        assert len(nl.active_lock_counters) == 0
 
     def test_non_blocking_args(self):
+        nl = NamedLocks(reentrant_locks=False)
+        assert nl.acquire('test')
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        nl2 = NamedLocks(reentrant_locks=False)
+        assert nl2.acquire('otherTest')
+        assert len(nl.active_lock_counters) == 2 and nl.active_lock_counters['test'] == 1 \
+            and nl.active_lock_counters['otherTest'] == 1
+
+        nl2.release('otherTest')
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        assert not nl2.acquire('test', blocking=False)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        assert not nl2.acquire('test', False)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        assert not nl2.acquire('test', timeout=.01)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        nl.release('test')
+        assert len(nl2.active_lock_counters) == 0
+
+        assert nl2.acquire('test', blocking=False)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        nl2.release('test')
+        assert len(nl2.active_lock_counters) == 0
+
+    def test_reentrant_non_blocking_args(self):
         nl = NamedLocks()
         assert nl.acquire('test')
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
         nl2 = NamedLocks()
         assert nl2.acquire('otherTest')
+        assert len(nl.active_lock_counters) == 2 and nl.active_lock_counters['test'] == 1 \
+            and nl.active_lock_counters['otherTest'] == 1
         nl2.release('otherTest')
-        assert not nl2.acquire('test', blocking=False)
-        assert not nl2.acquire('test', False)
-        assert not nl2.acquire('test', timeout=.01)
-        nl.release('test')
+
         assert nl2.acquire('test', blocking=False)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 2
+
+        assert nl2.acquire('test', False)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 3
+
+        assert nl2.acquire('test', timeout=.01)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 4
+
+        nl.release('test')
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 3
+
+        nl.release('test')
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 2
+
+        nl.release('test')
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
+        nl.release('test')
+        assert len(nl2.active_lock_counters) == 0
+
+        assert nl2.acquire('test', blocking=False)
+        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
+
         nl2.release('test')
+        assert len(nl2.active_lock_counters) == 0
 
 
 class TestConfigMainFileModified:

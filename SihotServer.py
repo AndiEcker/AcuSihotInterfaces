@@ -5,6 +5,11 @@ or we will use a Workflow, triggered by a record update to send an Outbound Mess
 Outbound Example with twisted: https://salesforce.stackexchange.com/questions/94279/parsing-outbound-message-in-python
 and https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_quickstart_intro.htm
 
+Version History:
+
+0.1     first beta
+0.2     refactored to use ae_sys_data.
+0.3     prepared first production version
 
 DISTRIBUTE:
 
@@ -28,7 +33,7 @@ Web-Service server check/prepare:
 
 """
 
-__version__ = '0.1'
+__version__ = '0.3'
 
 # change working dir so bottle.py will be find by next import statement (also for relative paths and template lookup)
 import os
@@ -38,24 +43,27 @@ sys.path.append(os.path.dirname(__file__))
 
 from bottle import default_app, request, response, static_file, template, run
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import SDI_SF, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae_sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE
+from ae_console_app import ConsoleApp, uprint
+from sfif import field_from_converters
 from shif import ResSender
 from ass_sys_data import add_ass_options, init_ass_data
 
 cae = ConsoleApp(__version__, "Web Service Server", additional_cfg_files=['SihotMktSegExceptions.cfg'],
                  multi_threading=True, suppress_stdout=True)
-ass_options = add_ass_options(cae)
+ass_options = add_ass_options(cae, add_kernel_port=True)
 
 debug_level = cae.get_option('debugLevel')
 ass_data = init_ass_data(cae, ass_options)
-conf_data = ass_data['assSysData']
+asd = ass_data['assSysData']
 notification = ass_data['notification']
 
 # app and application will be used when used as server plug-in in apache/nginx
 app = application = default_app()
 
 
-# ------  BOTTLE ROUTES  -------------------------------------------
+# ------  BOTTLE WEB SERVICE ROUTES  -------------------------------------------
 
 @app.route('/hello/<name>')
 def get_hello(name='world'):
@@ -75,7 +83,7 @@ def get_page(page_name):       # return a page that has been rendered using a te
 @app.route('/avail_rooms')
 def get_avail_rooms():
     rd = request.json
-    rooms = conf_data.sh_avail_rooms(hotel_ids=rd['hotel_ids'], room_cat_prefix=rd['room_cat_prefix'], day=rd['day'])
+    rooms = asd.sh_avail_rooms(hotel_ids=rd['hotel_ids'], room_cat_prefix=rd['room_cat_prefix'], day=rd['day'])
     return str(rooms)
 
 
@@ -83,32 +91,26 @@ def get_avail_rooms():
 def get_res_count():
     rqi = " ".join([k + "=" + str(v) for k, v in request.query.items()])
     return "Number of reservations" + (" with " + rqi if len(rqi) else "") \
-           + " is " + str(conf_data.sh_count_res(**request.query))
+           + " is " + str(asd.sh_count_res(**request.query))
 
 
 @app.route('/res/get')
 def get_res_data():
-    return conf_data.sh_res_data(**request.query)
+    return asd.sh_res_data(**request.query)
 
 
-@app.route('/res/<action>', method='PUSH')
+@app.route('/res/<action>', method='POST')
 def push_res(action):
-    if action == 'upsert':
-        body = res_upsert()
-    else:
-        body = "Reservation PUSH with action {} not implemented".format(action)
-        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+    body = sh_res_action(action)
     return body
 
 
-@app.route('/res/<action>/<res_id>', method='PUT')
+'''
+'@app.route('/res/<action>/<res_id>', method='PUT')
 def put_res(action, res_id):
-    if action == 'upsert':
-        body = res_upsert(res_id)
-    else:
-        body = "Reservation PUT for ID {} with action {} not implemented".format(res_id, action)
-        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+    body = sh_res_action(action, res_id=res_id, method='PUT')
     return body
+'''
 
 
 # -----  HELPER METHODS  -------------------------------------------
@@ -124,7 +126,8 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
         msg += warning_msg
     uprint(msg)
     if error_msg and notification:
-        notification_err = notification.send_notification(msg, subject="SihotServer error notification")
+        notification_err = notification.send_notification(msg, subject="SihotServer error notification",
+                                                          body_style='plain')
         if notification_err:
             uprint(error_msg + "\n      Notification send error: " + notification_err)
 
@@ -132,34 +135,54 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 # ------  ROUTE/SERVICE HANDLERS  ----------------------------------
 
 
-def res_upsert(res_id=''):
-    # web service parameters are available as dict in request.json
-    res_json = request.json
-    add_log_entry("res_upsert({}): {}".format(res_id, res_json))
+def sh_res_action(action, res_id=None, method='POST'):
+    supported_actions = (ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE)
+    if action.upper() not in supported_actions:
+        body = "Reservation {} for ID {} with action {} not implemented; use one of supported actions ({})" \
+            .format(method, res_id, action, supported_actions)
+        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+        return body
 
-    # added Q&D for to support new parameter/field names
-    tt = dict(HotelIdc='RUL_SIHOT_HOTEL', Numberc='', SubNumberc='', GdsNoc='SIHOT_GDSNO',
-              Arrivalc='ARR_DATE', Departurec='DEP_DATE',
-              RoomCatc='RUL_SIHOT_CAT', AcumenClientRefpc='OC_CODE', Statusc='SH_RES_TYPE', Actionc='RUL_ACTION',
-              BaordIdc='RUL_SIHOT_PACK', SourceIdc='RU_SOURCE', Notec='SIHOT_NOTE', Adultsc='RU_ADULTS',
-              Childrenc='RU_CHILDREN')
-    res_data = {tt[k]: v for k, v in res_json.items() if k in tt}
-
-    if res_id and not res_data.get('RUL_ACTION'):      # res_id is passed also within request
-        res_data['RUL_ACTION'] = 'UPDATE'
+    if debug_level >= DEBUG_LEVEL_VERBOSE:
+        headers_string = ['{}: {}'.format(h, request.headers.get(h)) for h in request.headers.keys()]
+        msg = "sh_res_action({}, {}, {}/{}) received request: URL={}; header={!r}; body={!r}; query={!r}" \
+            .format(action, res_id, method, request.method, request.url, headers_string,
+                    request.body.getvalue(), request.query_string)
+        uprint(msg)
+        uprint()
+        # return dict(Error="test", Message=msg)
 
     res_send = ResSender(cae)
-    err, msg = res_send.send_row(res_data)
+
+    res_json = request.json     # web service arguments as dict
+    if res_json is None:
+        err = "JSON arguments missing"
+        msg = "got request {!r} but body with JSON is empty".format(request)
+    else:
+        rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
+        rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # allow overwrite from json fields
+        for name, value in res_json.items():
+            rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
+        rec.pull(SDI_SF)
+
+        err, msg = res_send.send_rec(rec)
+
     if err or msg:
         add_log_entry(warning_msg=msg, error_msg=err, importance=3 if err else 2)
-    if err:
-        res_dict = dict(Error=err, Message=msg)
-    else:
-        response.status_code = 400
-        ho_id, res_id, sub_id = res_send.get_res_no()
-        # res_dict = dict(Sihot_Hotel_Id=ho_id, Sihot_Res_Id=res_id, Sihot_Sub_Id=sub_id)
-        res_dict = dict(HotelIdc=ho_id, Numberc=res_id, SubNumberc=sub_id)
-    return res_dict
+
+    ret = dict(ErrorMessage=err, WarningMessage=msg)
+    if not err:
+        res_no_tuple = res_send.get_res_no()
+        if res_no_tuple[0] is None:
+            ret.update(ErrorMessage=res_no_tuple[1])
+        else:
+            response.status = 400
+            ho_id, res_id, sub_id = res_no_tuple
+            ret.update(ResHotelId=ho_id, ResId=res_id, ResSubId=sub_id)
+
+    add_log_entry("sh_res_action() call with json arguments: {}, responding to SF: {}".format(res_json, ret))
+
+    return ret
 
 
 # ------  DEBUG HELPERS  -------------------------------------------

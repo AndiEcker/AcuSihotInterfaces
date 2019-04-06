@@ -7,7 +7,8 @@
 import datetime
 from traceback import format_exc
 
-from ae_console_app import ConsoleApp, uprint, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae_console_app import ConsoleApp, uprint
 from ae_db import OraDB, PostgresDB
 from ass_sys_data import add_ass_options, init_ass_data
 
@@ -264,7 +265,7 @@ def fix_acu_discrepancies(od):
             msg += " (" + ", ".join(wrn) + ")"
         notification_add_line("Missing {}: {}".format(msg, od))
     if cols and correct_system:
-        err = sys_db.update('T_ARO', cols, "ARO_CODE = :res_id", bind_vars=dict(res_id=od.res_id))
+        err = sys_db.update('T_ARO', cols, {"ARO_CODE": od.res_id})
         if err:
             notification_add_line("Error {} in correcting missing {}: {}".format(err, msg, od), is_error=True)
             sys_db.rollback()
@@ -304,7 +305,7 @@ def fix_ass_discrepancies(od):
     if cols and correct_system:
         cols['rgr_room_last_change'] = od.time_stamp
         cols['rgr_room_id'] = od.room_no
-        err = sys_db.update('res_groups', cols, "rgr_pk = :res_id", bind_vars=dict(res_id=od.res_id))
+        err = sys_db.update('res_groups', cols, {"rgr_pk": od.res_id})
         if err:
             notification_add_line("Error {} in correcting missing {}: {}".format(err, msg, od), is_error=True)
             sys_db.rollback()
@@ -317,7 +318,8 @@ def fix_ass_discrepancies(od):
 add_log_msg("Fetching reservation/occupation data from {} system".format(correct_system), importance=4)
 try:
     if correct_system == 'Acu':
-        sys_db = OraDB(cae.get_option('acuUser'), cae.get_option('acuPassword'), cae.get_option('acuDSN'),
+        sys_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
+                            DSN=cae.get_option('acuDSN')),
                        app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
         err_msg = sys_db.connect()
         if not err_msg:
@@ -332,23 +334,25 @@ try:
                                      " and RU_FROM_DATE < least(ARO_EXP_DEPART, trunc(:till) + :days)"
                                      " and RU_FROM_DATE + RU_DAYS > greatest(ARO_EXP_ARRIVE, trunc(:beg) - :days))"
                                      " as GDS_NOS"],
-                                    "ARO_EXP_ARRIVE < trunc(:till) + :days and ARO_EXP_DEPART > trunc(:beg) - :days"
+                                    where_group_order="ARO_EXP_ARRIVE < trunc(:till) + :days"
+                                    " and ARO_EXP_DEPART > trunc(:beg) - :days"
                                     " and ARO_STATUS <> 120 and F_RESORT(ARO_APREF)"
                                     " in (select LU_ID from T_LU where LU_CLASS = 'SIHOT_HOTELS' and LU_ACTIVE = 1)"
                                     " order by ARO_EXP_ARRIVE desc",  # order to have old room last for RM
                                     bind_vars=dict(beg=date_from, till=date_till, days=max_days_diff))
     else:
-        sys_db = PostgresDB(cae.get_option('assUser'), cae.get_option('assPassword'), cae.get_option('assDSN'),
-                            app_name=cae.app_name(), ssl_args=cae.get_config('assSslArgs'),
+        sys_db = PostgresDB(dict(User=cae.get_option('assUser'), Password=cae.get_option('assPassword'),
+                                 DSN=cae.get_option('assDSN'), SslArgs=cae.get_config('assSslArgs')),
+                            app_name=cae.app_name(),
                             debug_level=cae.get_option('debugLevel'))
         err_msg = sys_db.connect()
         if not err_msg:
             err_msg = sys_db.select('res_groups LEFT OUTER JOIN clients ON rgr_order_cl_fk = cl_pk',
-                                    ['rgr_pk', 'cl_ac_id', 'cl_name',
+                                    ['rgr_pk', 'cl_ac_id', 'cl_surname', 'cl_firstname',
                                      'rgr_arrival::timestamp', 'rgr_departure::timestamp', "rgr_room_id",
                                      'rgr_status', 'rgr_time_in', 'rgr_time_out', 'rgr_mkt_segment', "rgr_gds_no",
                                      'rgr_ho_fk', 'rgr_res_id', 'rgr_sub_id'],
-                                    "rgr_arrival < date(:till) + integer ':days'"
+                                    where_group_order="rgr_arrival < date(:till) + integer ':days'"
                                     " and rgr_departure > date(:beg) - integer ':days'"
                                     " and rgr_status <> 'S'"
                                     " order by rgr_arrival desc",  # order to have old room last for RM
@@ -369,7 +373,8 @@ try:
     # adding flag ;WITH-PERSONS results in getting the whole reservation duplicated for each PAX in rooming list
     # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
     for chunk_beg, chunk_end in date_range_chunks():
-        chunk_rows = res_search.search(from_date=chunk_beg, to_date=chunk_end, flags=search_flags, scope=search_scope)
+        chunk_rows = res_search.search_res(from_date=chunk_beg, to_date=chunk_end, flags=search_flags, 
+                                           scope=search_scope)
         if chunk_rows and isinstance(chunk_rows, str):
             add_log_msg("Sihot.PMS reservation search error: {}".format(chunk_rows), is_error=True, importance=3)
         elif not chunk_rows or not isinstance(chunk_rows, list):

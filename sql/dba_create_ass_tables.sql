@@ -8,9 +8,11 @@ CREATE TABLE clients
                                             -- .. E127673D1P2, Z000020D1P2, I127633D1P2, but also refs like MAINTENANC
   cl_sf_id                VARCHAR(18),
   cl_sh_id                VARCHAR(15),
-  cl_name                 VARCHAR(81),
-  cl_email                VARCHAR(69),
+  --cl_name                 VARCHAR(81),    -- deprecated - now using cl_surname/cl_firstname
+  cl_email                VARCHAR(96),      -- extended 18-03-2019 not rolled out, because views need to be recompiled
   cl_phone                VARCHAR(42),
+  cl_surname              VARCHAR(69),      -- extended 18-03-2019 not rolled out, because views need to be recompiled
+  cl_firstname            VARCHAR(42),
   UNIQUE (cl_ac_id, cl_sf_id, cl_sh_id),
   CHECK (cl_ac_id is not NULL or cl_sf_id is not NULL or cl_sh_id is not NULL)
 );
@@ -72,6 +74,7 @@ INSERT INTO hotels VALUES ('1', 'BHC');
 INSERT INTO hotels VALUES ('2', 'BHH');
 INSERT INTO hotels VALUES ('3', 'HMC');
 INSERT INTO hotels VALUES ('4', 'PBC');
+INSERT INTO hotels VALUES ('107', 'PMA');
 INSERT INTO hotels VALUES ('999', 'ANY');
 COMMIT;
 
@@ -89,7 +92,7 @@ CREATE TABLE res_inventories
   ri_ho_fk                VARCHAR(3) NOT NULL REFERENCES hotels(ho_pk),
   ri_usage_year           INTEGER NOT NULL,
   ri_inv_type             VARCHAR(3) NOT NULL,
-  ri_swapped_product_id   VARCHAR(12),
+  ri_swapped_product_id   VARCHAR(12) REFERENCES products(pr_pk),
   ri_granted_to           VARCHAR(3),
   ri_used_points          VARCHAR(9),           -- 'i' prefixed if individual owner points value
   ri_usage_comment        VARCHAR(33),          -- for Esther/Nancy Status Entitlement Usage spreadsheet column
@@ -100,7 +103,6 @@ SELECT audit.audit_table('res_inventories');
 
 -- reservations
 /* .. columns not included from V_ACU_RES_DATA/_UNSYNCED or indirectly included via clients table
-    RU_SOURCE	15	VARCHAR2 (1 Byte)	Y
     RO_RES_GROUP	17	VARCHAR2 (40 Byte)	Y
     RO_RES_CLASS	18	VARCHAR2 (12 Byte)	Y
     RO_SP_GROUP	19	VARCHAR2 (40 Byte)	Y
@@ -113,7 +115,6 @@ SELECT audit.audit_table('res_inventories');
     CD_RCI_REF	30	VARCHAR2 (10 Byte)	Y
     OC_SIHOT_OBJID	32	NUMBER	Y
     OC_CODE	33	VARCHAR2 (10 Byte)	Y
-    SIHOT_LINK_GROUP	35	VARCHAR2 (97 Byte)	Y
     SIHOT_RES_TYPE	38	CHAR (1 Byte)	Y
     RUL_*  (apart from RUL_SIHOT_PACK)
    .. columns not included from Esther's Reservation_Fields_Salesforce spreadsheet:
@@ -140,12 +141,15 @@ CREATE TABLE res_groups
   rgr_gds_no              VARCHAR(24),
   rgr_sf_id               VARCHAR(18),
   rgr_status              VARCHAR(3),
+  rgr_source              VARCHAR(3),   -- added later in branch sys_data_generic
   rgr_adults              INTEGER,
   rgr_children            INTEGER,
   rgr_arrival             DATE,
   rgr_departure           DATE,
   rgr_mkt_segment         VARCHAR(3),
   rgr_mkt_group           VARCHAR(3),
+  rgr_group_no            VARCHAR(96),  -- added later in branch sys_data_generic
+  rgr_sh_pack             VARCHAR(3),   -- added later in branch sys_data_generic
   rgr_room_id             VARCHAR(6),
   rgr_room_cat_id         VARCHAR(6),
   rgr_room_rate           VARCHAR(3),
@@ -191,9 +195,9 @@ CREATE TABLE res_group_clients
   rgc_rgr_fk              INTEGER NOT NULL REFERENCES res_groups(rgr_pk),
   rgc_room_seq            INTEGER NOT NULL DEFAULT 0,
   rgc_pers_seq            INTEGER NOT NULL DEFAULT 0,
-  rgc_surname             VARCHAR(42),
+  rgc_surname             VARCHAR(69),
   rgc_firstname           VARCHAR(42),
-  rgc_email               VARCHAR(69),            -- Sihot values (cashed but not corrected, s.a. cl_email
+  rgc_email               VARCHAR(96),            -- Sihot values (cashed but not corrected, s.a. cl_email
   rgc_phone               VARCHAR(42),            -- .. and cl_phone)
   rgc_language            VARCHAR(3),
   rgc_country             VARCHAR(3),
@@ -202,9 +206,9 @@ CREATE TABLE res_group_clients
   rgc_occup_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgc_flight_arr_comment  VARCHAR(42),
   rgc_flight_arr_time     TIME,
-  rgc_flight_dep_comment  VARCHAR(42),
-  rgc_flight_dep_time     TIME,
-  rgc_pers_type           VARCHAR(3),
+  rgc_flight_dep_comment  VARCHAR(42),            -- currently not used
+  rgc_flight_dep_time     TIME,                   -- currently not used
+  rgc_pers_type           VARCHAR(3),             -- 1A=adult, 2B=children
   rgc_sh_pack             VARCHAR(3),
   rgc_room_id             VARCHAR(6),
   UNIQUE (rgc_rgr_fk, rgc_room_seq, rgc_pers_seq)
@@ -219,10 +223,15 @@ SELECT audit.audit_table('res_group_clients');
 
 ------ VIEWS
 ---- CLIENT VIEWS
--- view for AssSysDate.cl_fetch_all() extending clients table with external refs and pt_group aggregates
+-- view for AssSysDate.ass_clients_pull()/cl_fetch_list() extending clients with external refs and pt_group aggregates
 -- EXT_REF_TYPE_ID_SEP cannot be imported here from ass_sys_data.py, therefore using hard-coded literal '='
+-- Comment out DROP statement on column name changes because postgres view can then not be recreated (cl_name -> cl_surname/...)
+--DROP VIEW v_clients_refs_owns;
 CREATE OR REPLACE VIEW v_clients_refs_owns AS
-  SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id, cl_name, cl_email, cl_phone
+  SELECT cl_pk, cl_ac_id, cl_sf_id, cl_sh_id
+       -- , cl_name
+       , cl_surname, cl_firstname
+       , cl_email, cl_phone
        , (select string_agg(er_type || '=' || er_id, ',') FROM external_refs WHERE er_cl_fk = cl_pk) as ext_refs
        , (select string_agg(pt_group, '') FROM client_products
           INNER JOIN products ON cp_pr_fk = pr_pk INNER JOIN product_types ON pr_pt_fk = pt_pk
@@ -233,9 +242,10 @@ COMMENT ON VIEW v_clients_refs_owns IS 'clients extended by external_refs and ow
 
 -- the query for a view for to show clients with all duplicate external references is too slow (needs more than 24h)
 -- .. therefore providing a separate view for each type of external reference: Acumen, Sf, Sihot, Email, Phone
+--DROP VIEW v_client_duplicates_ac;
 CREATE OR REPLACE VIEW v_client_duplicates_ac AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
@@ -246,9 +256,10 @@ CREATE OR REPLACE VIEW v_client_duplicates_ac AS
 
 COMMENT ON VIEW v_client_duplicates_ac IS 'clients with duplicate Acumen client reference';
 
+--DROP VIEW v_client_duplicates_sf;
 CREATE OR REPLACE VIEW v_client_duplicates_sf AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
@@ -259,9 +270,10 @@ CREATE OR REPLACE VIEW v_client_duplicates_sf AS
 
 COMMENT ON VIEW v_client_duplicates_sf IS 'clients with duplicate Salesforce ID';
 
+--DROP VIEW v_client_duplicates_sh;
 CREATE OR REPLACE VIEW v_client_duplicates_sh AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
@@ -272,9 +284,10 @@ CREATE OR REPLACE VIEW v_client_duplicates_sh AS
 
 COMMENT ON VIEW v_client_duplicates_sh IS 'clients with duplicate Sihot guest object ID';
 
+--DROP VIEW v_client_duplicates_email;
 CREATE OR REPLACE VIEW v_client_duplicates_email AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END
@@ -285,9 +298,10 @@ CREATE OR REPLACE VIEW v_client_duplicates_email AS
 
 COMMENT ON VIEW v_client_duplicates_email IS 'clients with duplicate email address';
 
+--DROP VIEW v_client_duplicates_phone;
 CREATE OR REPLACE VIEW v_client_duplicates_phone AS
-  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_name AS Name_A, b.cl_name AS Name_B
-       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcId=' || a.cl_ac_id ELSE '' END
+  SELECT a.cl_pk AS AssId_A, b.cl_pk AS AssId_B, a.cl_surname AS Name_A, b.cl_surname AS Name_B
+       , SUBSTR(CASE WHEN a.cl_ac_id = b.cl_ac_id THEN ', AcuId=' || a.cl_ac_id ELSE '' END
              || CASE WHEN a.cl_sf_id = b.cl_sf_id THEN ', SfId=' || a.cl_sf_id ELSE '' END
              || CASE WHEN a.cl_sh_id = b.cl_sh_id THEN ', ShId=' || a.cl_sh_id ELSE '' END
              || CASE WHEN a.cl_email = b.cl_email THEN ', Email=' || a.cl_email ELSE '' END

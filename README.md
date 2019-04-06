@@ -1,7 +1,19 @@
-# Interfaces between Acumen, Salesforce and Sihot
+# Interface Suite
 
->Tools and processes for to migrate and synchronize system configuration, room status, clients and reservations 
-between Sihot.PMS, Acumen and Salesforce.
+>This repository is providing tools and processes for to migrate and synchronize system configuration, room status, 
+clients, ownerships and reservations between Sihot.PMS, Acumen and Salesforce.
+
+[![Code Size](https://img.shields.io/github/languages/code-size/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
+[![Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
+[![Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
+
+The code-base gets stripped before any push to this repository for to not publish any internals like the names of our
+servers, users and the passwords. Therefore this suite cannot be directly used in other environments without additional
+configuration steps, but at least we hope that you can still use parts of it for your applications.
+
+Big thanks to our IT managers (Gary and Søren) for to let us developers publish parts of our in-house applications to
+the community.
+
 
 ## Available Applications
 
@@ -12,30 +24,30 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | :--- | :--- | :---: |
 | AcuServer | Synchronize room status changes from Sihot.PMS onto Acumen | Sxml, Web |
 | [AcuSihotMonitor](#acusihotmonitor-application) | Monitor the Acumen and Sihot interfaces and servers | Kernel, Web, Sxml |
-| [AssCacheSync](#asscachesync-application) | Initialize, pull, verify or push AssCache data against Acumen, Salesforce and/or Sihot | Web |
-| [AssServer](#assserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
+| [BssServer](#bssserver-application) | Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce | Sxml, Web |
 | [ClientQuestionnaireExport](#clientquestionnaireexport-application) | Export check-outs from Sihot to CSV file | Web |
 | KernelGuestTester | Client/Guest interface testing tool | Kernel |
 | MatchcodeToObjId | Get guest OBJID from passed matchcode | Kernel |
 | SfClientValidator | Salesforce Client Data Validator | - |
-| ShSfClientMigration | Migrate guests from Sihot to Salesforce | Web |
+| ShSfClientMigration | Migrate guests from Sihot to Salesforce | Kernel, Web |
 | SihotMigration | Migration of clients and reservations from Acumen to Sihot.PMS | Kernel, Web |
 | [SihotOccLogChecker](#sihotocclogchecker-application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
 | [SihotResImport](#sihotresimport-application) | Create/Update/Cancel reservations from CSV/TXT/JSON files within Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
+| [SysDataMan](#sysdataman-application) | Initialize, pull, compare or push data against Acumen, AssCache, Salesforce and/or Sihot | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
 | [WatchPupPy](#watchpuppy-application) | Supervise always running servers or periodically execute command | Kernel, Web |
 | WebRestTester | Reservation interface testing tool | Web |
 
 
-### General installation instructions
+### Installation instructions
 
 Most of the command line tools don't have a GUI (graphical user interface) - these need only to be distributed/provided
 into any folder where the user has execution permissions (e.g. in Windows in C:\Program Files or on any network drive).
 
 For applications of this project with an GUI (like e.g. SihotResImport or AcuSihotMonitor) please first copy the EXE
-file and KV file of the application to any folder where the user has execution privileges. Then the following steps need 
-to be done to install it for each single user on the users machine:
+file and KV file of the application to any folder where the user has execution privileges. Then the following steps 
+have to be done to install it for each single user on the users machine:
 
 * Create a new folder with the name if the application (e.g. SihotResImport) under %LOCALAPPDATA% (in Windows situated
  normally under C:\users\<user name>\AppData\Local\ if the user has the profile on the local C: drive, else within the
@@ -44,140 +56,343 @@ to be done to install it for each single user on the users machine:
 * Copy the INI file of the application (e.g. SihotResImport.ini) into this folder (created in the last step).
 
 * Create a new shortcut on the user’s desktop with the application name (e.g. “Sihot Reservation Import”). Then within
- the target field put the full absolute path to application EXE file (e.g. “U:\tools\SihotResImport\SihotResImport.exe”).
- And finally put the path of the new folder created in the first step (e.g. “C:\Users\<user name>\AppData\Local\SihotResImport”) 
- into the Start In field of the shortcut. 
+ the target field put the full absolute path to application EXE file (e.g. “U:\SihotResImport\SihotResImport.exe”).
+ And finally put the path of the new folder created in the first step (e.g. 
+ “C:\Users\<user name>\AppData\Local\SihotResImport”) into the Start In field of the shortcut. 
 
  
-### General command line arguments
+### Command line arguments
 
 Most of the available commands are using the same command line options. All names of the following command line options
-are case-sensitive. The following table is listing them sorted by the option name (see the first column named Option):
+are case-sensitive. The following table is listing them ordered by the option name (see the first column named Option):
 
 | Option | Description | Default | Short option | Commands |
 | --- | --- | --- | --- | --- |
-| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuDSN | Data source name of the Acumen/Oracle database system | SP.TEST | d | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuPassword | User account password on Acumen/Oracle system | - | p | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| acuUser | User name of Acumen/Oracle system | SIHOT_INTERFACE | u | AcuServer, AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | addressesToValidate | Post addresses to be validated (invalidated, not validated, ...) | - | A | SfClientValidator |
-| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | AssCacheSync, AssServer |
-| assPassword | User account password for the AssCache/Postgres database | - | P | AssCacheSync, AssServer |
-| assDSN | Database name of the AssCache/Postgres database | ass_cache | N | AssCacheSync, AssServer |
-| breakOnError | Abort importation if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| assDSN | Database name of the AssCache/Postgres database | ass_cache | N | SysDataMan, BssServer |
+| assPassword | User account password for the AssCache/Postgres database | - | P | SysDataMan, BssServer |
+| assUser | User account name for the AssCache/Postgres database | 'postgres' | U | SysDataMan, BssServer |
+| breakOnError | Abort processing if an error occurs (0=No, 1=Yes) | 0 | b | SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
 | client | Acumen client reference / Sihot matchcode to be sent | - | c | KernelGuestTester |
 | clientsFirst | Migrate first the clients then the reservations (0=No, 1=Yes) | 0 | q | SihotMigration, SihotResSync |
-| correctSystem | Correct/Fix data for system (Acu=Acumen, Ass=AssCache) | - | A | SihotOccLogChecker |
 | cmdLine | Command [line] to execute | - | x | WatchPupPy |
-| cmdInterval | synchronization interval in seconds | 3600 | l | AssServer, WatchPupPy |
+| cmdInterval | synchronization interval in seconds | 3600 | l | BssServer, WatchPupPy |
+| compare | Compare/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | SysDataMan |
+| correctSystem | Correct/Fix data for system (Acu=Acumen, Ass=AssCache) | - | A | SihotOccLogChecker |
 | dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | dateTill | End date/time of date range | (depends on command) | T | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
 | emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfClientValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
-| filterFields | Filter to restrict used fields of (C=clients, P=products, R=reservations) | - | Y | AssCacheSync |
-| filterRecords | Filter to restrict processed (C=client, P=product, R=reservation) records | - | X | AssCacheSync |
-| filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | W | SfClientValidator |
+| filterSfClients | Additional WHERE filter clause for Salesforce SOQL client fetch query | - | W | SfClientValidator |
 | filterSfRecTypes | List o fSalesforce client record type(s) to be processed | ['Rentals'] | R | SfClientValidator |
 | help | Show help on all the available command line argument options | - | h | (all) |
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
-| init | Initialize/Recreate AssCache/Postgres database (0=No, 1=Yes) | 0 | I | AssCacheSync |
+| init | Initialize/Recreate AssCache/Postgres database (0=No, 1=Yes) | 0 | I | SysDataMan |
 | jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
 | logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
-| mapClient | Guest/Client mapping of xml to db items | MAP_CLIENT_DEF | m | SihotResImport, SihotResSync |
-| mapRes | Reservation mapping of xml to db items | MAP_RES_DEF | n | SihotResImport, SihotResSync |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
-| matchFields | Specify field(s) used for to match/lookup the associated data record | - | Z | AssCacheSync |
-| matchRecords | Restrict processed (dict keys: C=client, P=product, R=reservation) destination records | - | M | AssCacheSync |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfClientValidator |
-| pull | Pull from (ac=Acumen, sh=Sihot, sf=Salesforce) the (C=Clients, P=Products, R=Reservations) into AssCache | - | S | AssCacheSync |
-| push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | AssCacheSync |
+| pull | Pull (C=Clients, P=Products, R=Reservations) data from Acumen/Sihot/Salesforce into AssCache | - | S | SysDataMan |
+| push | Push/Update (C=Clients, P=Products, R=Reservations) data from AssCache onto Acumen/Salesforce/Sihot | - | W | SysDataMan |
 | rciPath | Import path and file mask for RCI CSV-tci_files | C:/RCI_Import/*.csv | Y | SihotResImport |
-| sfClientId | Salesforce client/application name/id defaulting to cae.app_name() | SignalliaSfInterface/cae.app_name() | C | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
-| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
-| sfPassword | Salesforce user account password | - | a | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
-| sfToken | Salesforce user account token | - | o | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
-| sfUser | Salesforce account user name | - | y | AssCacheSync, SfClientValidator, ShSfClientMigration, SihotResImport |
-| shClientPort | IP port of the Sxml interface of this server | 11000 (AcuServer) or 12000 (AssServer) | m | AcuServer, AssServer |
-| shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, AssCacheSync, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, AssCacheSync, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shTimeout | Timeout in seconds for TCP/IP connections | 69.3 | t | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
-| shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, AssCacheSync, AssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| sfIsSandbox | Use Salesforce sandbox (instead of production) | True | s | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfPassword | Salesforce user account password | - | a | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfToken | Salesforce user account token | - | o | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
+| sfUser | Salesforce account user name | - | y | SysDataMan, SfClientValidator, ShSfClientMigration, SihotResImport |
+| shClientPort | IP port of the Sxml interface of this server | 11000 (AcuServer) or 12000 (BssServer) | m | AcuServer, BssServer |
+| shMapClient | Guest/Client mapping of xml to db items | SH_CLIENT_MAP | m | SihotResImport, SihotResSync |
+| shMapRes | Reservation mapping of xml to db items | SH_RES_MAP | n | SihotResImport, SihotResSync |
+| shServerIP | IP address of the Sihot interface server | localhost | i | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerKernelPort | IP port of the KERNEL interface of this server | 14772 | k | AcuSihotMonitor, SysDataMan, KernelGuestTester, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shServerPort | IP port of the WEB interface of the Sihot server | 14777 | w | AcuSihotMonitor, SysDataMan, ClientQuestionnaireExport, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shTimeout | Timeout in seconds for TCP/IP connections | 1869.3 | t | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| shUseKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
+| shUseKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
+| shXmlEncoding | Charset used for the xml data | cp1252 | e | AcuServer, AcuSihotMonitor, SysDataMan, BssServer, ClientQuestionnaireExport, KernelGuestTester, ShSfClientMigration, SihotMigration, SihotResImport, SihotResSync, WatchPupPy |
+| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpFrom | SMTP Sender/From address | - | f | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
+| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | syncDateRange | Restrict sync. of res. to: H=historical, M=present and 1 month in future, P=present and all future, F=future only, Y=present and 1 month in future and all for hotels 1 4 and 999, Y<nnn>=like Y plus the nnn oldest records in the sync queue | - | R | SihotMigration, SihotResSync |
-| smtpServerUri | SMTP error notification server URI [user[:pw]@]host[:port] | - | c | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpFrom | SMTP Sender/From address | - | f | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
-| smtpTo | List/Expression of SMTP Receiver/To addresses | - | r | AcuServer, AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync, TestConnectivity, WatchPupPy |
 | tciPath | Import path and file mask for Thomas Cook R*.TXT-tci_files | C:/TourOp_Import/R*.txt | j | SihotResImport |
-| useKernelForClient | Used interface for clients (0=web, 1=kernel) | 1 | g | SihotResImport, SihotResSync |
-| useKernelForRes | Used interface for reservations (0=web, 1=kernel) | 0 | z | SihotResImport, SihotResSync |
-| verify | Verify/Check ass_cache database against (ac=Acumen, sh=Sihot, sf=Salesforce) for (C=Clients, P=Products, R=Reservations) data | - | V | AssCacheSync |
-| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | AssCacheSync, AssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
+| warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are
 hard-coded by python (like e.g. the -h switch for to show the help screen). The upper case character options -D and -L
 are hard-coded by the ae_console_app module. Some options like -m are used and interpreted differently in several
 command line applications.
 
-The following lower case letters could be used more easily as short options than others (for to prevent duplicates/conflicts)
-for future/upcoming command line options with less conflicts: | l | m | n | q |.
+The following lower case letters could be used more easily as short options than others (for to prevent
+duplicates/conflicts) for future/upcoming command line options with less conflicts: | l | m | n | q | M | X | Y | Z |.
 
 
-### Available Reservation Fields
+### System Data Fields
 
-The table underneath is showing all the fields that can be used to specify a reservation created within Sihot. Only the
-fields marked with an asterisk (*) are mandatory, with the exception that if `OC_SIHOT_OBJID` is specified then `OC_CODE`
-can be omitted:
+#### Available Client Fields
 
-| Field Name | Field Type | Description | Example Values |
+The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+each of our clients/guests:
+
+ Field Name | Field Type | Description | Example Values |
 | --- | --- | --- | --- |
-| RUL_SIHOT_HOTEL * | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
-| SIHOT_GDSNO * | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
-| ARR_DATE * | Date | Arrival Date | 28-02-2017 |
-| DEP_DATE * | Date | Departure Date | 07-03-2017 |
-| RUL_SIHOT_CAT * | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
-| SH_PRICE_CAT | String | Paid Sihot Room Category (mostly same as RUL_SIHOT_CAT) | '1STS', '1JNP', '2BSS' |
-| RUL_SIHOT_ROOM | String | Sihot Room Number (optional) | '0426', 'A112' |
-| OC_CODE * | String | Sihot Orderer Matchcode of OTA channel (same as SH_MC) | 'TCRENT' |
-| SH_MC | String | Sihot Orderer Matchcode of OTA channel | 'TCRENT' |
-| OC_SIHOT_OBJID | String | Sihot Orderer Object Id of OTA channel (same as SH_OBJID) | '123456' |
-| SH_OBJID | String | Sihot Orderer Object Id of OTA channel | '123456' |
-| RUL_SIHOT_RATE * | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
-| SIHOT_MKT_SEG | String | Sihot Marketing Segment / OTA Channel | 'XY', 'TK', 'TC' |
-| SIHOT_RATE_SEGMENT | String | Sihot Price Rate/Segment (mostly same as SIHOT_MKT_SEG, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
-| SH_RES_TYPE | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
-| RUL_ACTION | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modified booking, 'CANCEL'=cancellation |
-| RH_EXT_BOOK_REF | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
-| RH_EXT_BOOK_DATE | Date | Sihot Reservation Booking Date | 24-12-2016 |
-| RUL_SIHOT_PACK | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
-| RU_SOURCE | Char | Sihot Reservation Source | 'A'=Admin, 'T'=Tour Operator |
-| RO_RES_GROUP | String | Sihot Reservation Channel | 'RS'=Rental SP |
-| SIHOT_NOTE | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
-| SIHOT_TEC_NOTE | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '|CR|' for to separate various comments) |
-| SIHOT_PAYMENT_INST | Numeric | Sihot Payment Instructions | 0=Guest Account, 1=Group Account, 3=Client Account |
-| SIHOT_ALLOTMENT_NO | Numeric | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
-| RU_ADULTS | Numeric | Number of Adults | 1, 2, 4 |
-| RU_CHILDREN | Numeric | Number of Children | 0, 1, 2 |
-| SH_ADULT1_NAME | String | Surname of first adult | 'Smith' | 
-| SH_ADULT1_NAME2 | String | Forename of first adult | 'John' | 
-| SH_PERS_SEQ1 | Numeric | Rooming List Person First Adults Sequence Number | 0 | 
-| SH_ROOM_SEQ1 | Numeric | Rooming List First Adults Room Sequence Number | 0 | 
-| SH_ADULT2_NAME | String | Surname of second adult | 'Miller' | 
-| SH_ADULT2_NAME2 | String | Forename of second adult | 'Joanna' |
-| SH_PERS_SEQ2 | Numeric | Rooming List Person Second Adults Sequence Number | 1 | 
-| SH_ROOM_SEQ2 | Numeric | Rooming List Second Adults Room Sequence Number | 0 | 
-| SH_CHILD1_NAME | String | Surname of first children | 'Smith' | 
-| SH_CHILD1_NAME2 | String | Forename of first children | 'Paul' | 
-| SH_PERS_SEQ11 | Numeric | Rooming List Person First Children Sequence Number | 10 | 
-| SH_ROOM_SEQ11 | Numeric | Rooming List First Children Room Sequence Number | 0 | 
-| SH_CHILD2_NAME | String | Surname of second children | 'Miller' | 
-| SH_CHILD2_NAME2 | String | Forename of second children | 'Debra' |
-| SH_PERS_SEQ12 | Numeric | Rooming List Person Second Children Sequence Number | 11 | 
-| SH_ROOM_SEQ12 | Numeric | Rooming List Second Children Room Sequence Number | 0 |
-| SH_ROOMS | Numeric | Number of Rooms in Rooming List (optional if 1) | 1 | 
-| SH_EXT_REF | String | Flight Number (optional) | 'ABC-2345' |
+| AcuId | String | Acumen Client Reference, Sihot Matchcode | X123456, E234567 |
+| AssId | Integer | Primary key value of ass_cache.clients table | 123456789 |
+| City | String | City name of Client/Guest | Madrid, London, Berlin |
+| Comment | String | Client/Guest Comment | Disabled, Wheel Chair, Has Kids, Has Pets |
+| Country | String | ISO2 Country code of Client/Guest | ES, DE, UK |
+| Currency | String | Currency code of Client/Guest | GBP, EUR, USD |
+| DOB | Date | Birthdate of Client/Guest | 15-12-1962 |
+| Email | String | First email address of Client/Guest | john.smith@provider.com |
+| EmailB | String | Second email address of Client/Guest | jim.knopf@company.com |
+| ExtRefs | String or List(Type, Id) | External Client/Guest Ids/Reference-numbers | ((RCI, 5-67890), (SF, 001234ABC67890QEI1)) |
+| ExtRefs\<n\>Type | String | Type of External Client/Guest Id | RCI, SF, KEYS |
+| ExtRefs\<n\>Id | String | Id/Reference-number of External Client/Guest Id | 5-67890, 001234ABC67890QEI1 |
+| Fax | String | Fax number of Client/Guest | 004898765432 |
+| Forename | String | Firstname of Client/Guest | John, Walter |
+| GuestType | String | Sihot Type of Client/Guest | 1=Individual, 6=Company |
+| Language | String | ISO2 Language code of Client/Guest | ES, EN, DE |
+| MarketSource | String | Marketing Source | TO, BK |
+| MobilePhone | String | Main mobile phone number of Client/Guest | 0034678901234 |
+| MobilePhoneB | String | Second mobile phone number of Client/Guest | 0046789012345 |
+| Name | String | Full name of Client/Guest | John Smith |
+| Nationality | String | Nationality of Client/Guest (ISO2 Country code) | ES, DE, UK |
+| Password | String | Password of Client/Guest | secRet12345, MyPassword |
+| Phone | String | Home phone number of Client/Guest | 0034678901234, 004987654321 |
+| POBox | String | Postbox of Client/Guest | 12345, ABC123 |
+| Postal | String | ZIP code of Client/Guest city | A1234, 234567 |
+| ProductTypes | String or List(Char) | Product types owned by this client (O=owner, I=investor, K=keys, E=ELPP) | OIK |
+| RciId | String | First/Main RCI reference of Client/Guest | 5-123456, 9876-54321 |
+| Salutation | String | Client/Guest Salutation | Mr., Mrs, Herr, Fru |
+| SfId | String | Salesforce Client Id | 001ABC234DEF567GHI |
+| ShId | String | Sihot Client/Guest Object Id | 123456789 |
+| State | String | Province of Client/Guest | Tenerife, California, Yorkshire |
+| Street | String | Street of Client/Guest | Main Street 45, Road 69, Hauptstrasse 12 |
+| Surname | String | Lastname of Client/Guest | Smith, Johnson |
+| Title | String | Client/Guest Title | Dr., Prof. |
+| WorkPhone | String | Working phone number of Client/Guest | 004567891234 |
 
+
+#### Available Reservation Fields
+
+The table underneath is showing most of the fields that can be used to specify a reservation created within Sihot.
+Additionally most of the [client fields](#available-client-fields) can be added for to specify the orderer of a
+reservation.
+
+The fields marked with an asterisk (*) after their field name in the table underneath are mandatory. Additionally
+the reservation orderer has to be specified by at least one of the client fields `ShId`, `AcuId` or `Surname`.
+
+The fields names marked with an plus character (+)
+are optional only if the reservation gets sent the first time to Sihot, so for every change/update of an already 
+existing reservation these fields need to be included in the send to Sihot:
+
+Field Name | Field Type | Description | Example Values |
+| --- | --- | --- | --- |
+| ResAccount | String | Sihot Payment Instructions | '0'=Guest Account, '1'=Group Account, '3'=Client Account |
+| ResAction | String | Reservation Booking Action | 'INSERT'=new booking, 'UPDATE'=modify booking, 'CANCEL'=cancel b. |
+| ResAdults | Integer | Number of Adults | 1, 2, 4 |
+| ResAllotmentNo | Integer | Sihot Allotment Number (optional) | e.g. 11 in BHC, 12 in PBC for Thomas Cook bookings | 
+| ResArrival * | Date | Arrival Date | 28-02-2017 |
+| ResAssId | Integer | Primary key of AssCache.res_groups table (auto-incrementing value) | 12345 |
+| ResBoard | String | Sihot Meal-Plan/Board | 'RO'=room only, 'BB'=Breakfast, 'HB'=Half Board |
+| ResBooked | Date | Sihot Reservation Booking Date | 24-12-2016 |
+| ResCheckIn | Datetime | Room Check-/Move-In date and time | 01-02-2018 10:11:12 |
+| ResCheckOut | Datetime | Room Check-/Move-Out date and time | 10-02-2018 09:10:11 |
+| ResChildren | Integer | Number of Children | 0, 1, 2 |
+| ResDeparture * | Date | Departure Date | 07-03-2017 |
+| ResFlightETA | Datetime | ETA of flight | 11-12-2019 16:17:18 |
+| ResFlightETD | Datetime | Departure of flight | 29-12-2019 14:45 |
+| ResFlightArrComment | String | Arrival Flight Comment (flight number, ...) | 'ABC-2345 to Tenerife' |
+| ResFlightDepComment | String | Departure Flight Comment (flight number, airport, ...) | 'TFS-1234 London' |
+| ResGdsNo * | String | Sihot GDS number | <OTA-channel-prefix><Voucher number>, e.g. 'OTS-abc123456789' |
+| ResGroupNo | String | Reservation Grouping Info | 345678, <123456> |
+| ResHotelId * | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
+| ResId + | String | Sihot Reservation Number | 123456789' |
+| ResLongNote | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '&#124;CR&#124;' for to separate various comments) |
+| ResMktGroup | String | Sihot Reservation Channel | 'OW'=Owner |
+| ResMktGroupNN | String | Reservation Marketing Group | 'RS'=Rental SP | 
+| ResMktSegment * | String | Sihot Marketing Segment / OTA Channel | 'TO', 'PA', 'TC' |
+| ResNote | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
+| ResObjId | String | Sihot Internal Reservation Object Id | '123456789' |
+| ResPersons | List | List of Occupants | ((Smith, John, 24-12-1962, ...), (Knopf, Jim, 27-01-1955, ...)) |
+| ResPersons\<n\>AutoGen | String | Autogenerated entry | '1' if auto-generated else '0' |
+| ResPersons\<n\>Board | String | Board-Rate | 'RO'=room only |
+| ResPersons\<n\>FlightArrComment | String | Flight Arrival Comment | 'Flight-No, Airport' |
+| ResPersons\<n\>FlightETA | Datetime | Flight estimated time of arrival | 11-12-2022 13:14 |
+| ResPersons\<n\>FlightDepComment | String | Flight Departure Comment | 'Flight-no, Airport' |
+| ResPersons\<n\>FlightETD | Datetime | Flight estimated time of departure | 18-12-2022 18:19 |
+| ResPersons\<n\>PersAcuId | String | Sihot Occupant Matchcode | E123456 |
+| ResPersons\<n\>PersAssId | Integer | Sihot Occupant AssCache clients primary key | 123456 |
+| ResPersons\<n\>PersCountry | String | Country code (ISO2/3) | 'DE', 'ES', 'GB' |
+| ResPersons\<n\>PersDOB | Date | Birthdate of n-th Occupant | 24-12-1962 |
+| ResPersons\<n\>PersEmail | String | Email address of Occupant | 'name@host.xxx' |
+| ResPersons\<n\>PersForename | String | Firstname of n-th occupant | John |
+| ResPersons\<n\>PersLanguage | String | Language/Nationality code (ISO2/3) | 'DE', 'EN' |
+| ResPersons\<n\>PersPhone | String | Phone number of occupant | '00234568899822' |
+| ResPersons\<n\>PersShId | String | Sihot occupant Object Id | 1234567 |
+| ResPersons\<n\>PersSurname | String | Lastname of n-th occupant | Smith |
+| ResPersons\<n\>RoomNo | String | Room number of occupant | 'A234' |
+| ResPersons\<n\>RoomPersSeq | String | Person sequence within room | '0' |
+| ResPersons\<n\>RoomSeq | String | Room sequence number of occupant | '0' |
+| ResPersons\<n\>TypeOfPerson | String | Age/Type of n-th occupant | '1A', '2B' |
+| ResPriceCat | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
+| ResSfId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
+| ResSubId + | String | Sihot Reservation Sub-number | '1' |
+| ResRateSegment | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
+| ResRoomCat * | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
+| ResRoomNo | String | Sihot Room Number (optional) | '0426', 'A112' |
+| ResSource | Char | Sihot Reservation Source | 'A'=Admin, 'S'=Sales, 'T'=Tour Operator |
+| ResStatus | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
+| ResVoucherNo | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
+
+Please note that the first value of the ResPersons index value (represented by \<n\> in the above table) is 0 (zero) and
+not 1.
+
+All the field specifying the orderer of a reservation as well as the `ResPersons` fields are identical to the 
+[client fields](#available-client-fields), the only difference is that the field names within `ResPersons` are
+having the prefix `Pers`.
+
+The soon deprecated Acumen system is additionally using extra reservation fields for to specify the occupants of a
+guest reservation. `OccuAcuId` and `OccuShId` are specifying the first occupant and `OccuAcuId_P` and `OccuShId_P` the
+second occupant (respectively the partner of the couple).
+
+
+#### Available Reservation Inventory Fields
+
+The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+each of each reservation inventory:
+
+ Field Name | Field Type | Description | Example Values |
+| --- | --- | --- | --- |
+| RinUsageYear | Integer | Usage year | 2019 |
+| RinType | String | Reservation Inventory Type | TO, RX |
+| RinSwappedWith | String | Product Id of swapped Reservation Inventory | B234-52, 1024-44 |
+| RinGrantedTo | String | Company to which Reservation Inventory got granted to | XL, SP |
+| RinUsedPoints | String | Used Points for this Reservation Inventory | 23456, i56789 |
+| RinUsageComment | String | User comment on the usage | Granted twice because last year her father passed away |   
+
+
+#### Available Product Fields
+
+The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+each of our products:
+
+ Field Name | Field Type | Description | Example Values |
+| --- | --- | --- | --- |
+| ProId | String | Id of a certain product article | A123-45, 0345-52, KEYS-1234, ELPP-5678 |
+| ProTypGroup | Char | Product type group code | O=owner, I=investor, K=keys |
+| ProTypName | String | Product type name | BHH, PBC, KEYS, ELPP |
+
+
+#### Field Mapping of our systems
+ 
+The table underneath is showing the association between the Record Fields and the fields/columns/element names used
+for them within our systems (Acumen, Salesforce, Sihot and AssCache):
+
+| Field Name | Acumen Column | Salesforce Field | Sihot Element | AssCache Column |
+| --- | --- | --- | --- | --- |
+| AcuId | OC_CODE+CD_CODE | AcumenClientRef__pc | MATCHCODE+RESERVATION.MATCHCODE | rgr_order_cl_fk->cl_ac_id | 
+| AssId | - | AssCache_Id__pc | - | cl_pk |
+| City | CD_CITY | PersonMailingCity, City__pc | CITY | - |
+| Comment | CD_NOTE | Client_Comments_pc | COMMENT | - |
+| Country | SIHOT_COUNTRY | PersonMailingCountry, Country__pc | T-COUNTRY-CODE+COUNTRY+PERSON.COUNTRY-CODE | rgc_country |
+| Currency | - | CurrencyIsoCode | T-STANDARD-CURRENCY | - |
+| DOB | CD_DOB1 | DOB1__pc, KM_DOB__pc | D-BIRTHDAY, DOB | rgc_dob |
+| Email | CD_EMAIL | PersonEmail | EMAIL-1+EMAIL+PERSON.EMAIL | cl_email+rgc_email |
+| EmailB | - | - | EMAIL-2 | - |
+| ExtRefs | T_CR | - | EXTID | external_refs |
+| ExtRefs\<n\>Type | CR_TYPE+CD_RCI_REF+CD_SF_ID1 | - | EXTID.TYPE | er_type | 
+| ExtRefs\<n\>Id | CR_REF | - | EXTID.ID | er_id |
+| Fax | CD_FAX | Fax | FAX-1 | - |
+| Forename | CD_FNAM1 | FirstName | NAME-2 | cl_firstname+rgc_firstname |
+| GuestType | SIHOT_GUESTTYPE1+SIHOT_GUESTTYPE2 | - | T-GUEST | - |
+| Language | SIHOT_LANG | Language__pc | T-LANGUAGE+LANG+PERSON.LANG | rgc_language |
+| MobilePhone | CD_MOBILE1 | PersonMobilePhone | MOBIL-1, MOBIL | - |
+| MobilePhoneB | - | - | MOBIL-2 | - |
+| Nationality | SIHOT_LANG | Nationality__pc | T-NATION | - |
+| OccuAcuId | CD_CODE | - | MATCHCODE | cl_ac_id | 
+| OccuShId | CD_SIHOT_OBJID | - | OBJID+GUEST-ID | cl_sh_id |
+| Password | CD_PASSWORD | - | INTERNET-PASSWORD | - |
+| Phone | CD_HTEL1 | PersonHomePhone | PHONE-1+PHONE+PERSON.PHONE | cl_phone+rgc_phone |
+| POBox | CD_ADD12 | - | PO-BOX | - |
+| Postal | CD_POSTAL | PersonMailingPostalCode | ZIP | - |
+| ProTypGroup | RS_SIHOT_GUEST_TYPE | - | - | pt_group |
+| ProTypName | RS_NAME | - | - | pt_name |
+| ProId | WK_CODE | - | - | pr_pk |
+| RciId | CD_RCI_REF, CR_REF | RCI_Reference__pc | MATCH-ADM | - |
+| ResAccount | SIHOT_PAYMENT_INST | - | RESERVATION.PAYMENT-INST | rgr_payment_inst |
+| ResAction | RUL_ACTION | - | - | - |
+| ResAdults | RU_ADULTS | Adults__c | RESERVATION.NOPAX+NO | rgr_adults |
+| ResAllotmentNo | - | - | ALLOTMENT-EXT-NO(oc=RES)+ALLOTMENT-NO(oc=RES-SEARCH) | - | 
+| ResArrival | ARR_DATE | Arrival__c | RESERVATION.ARR | rgr_arrival |
+| ResBoard | RUL_SIHOT_PACK | - | PERSON.R | rgr_sh_pack |
+| ResBooked | RH_EXT_BOOK_DATE | - | RESERVATION.SALES-DATE | rgr_ext_book_day |
+| ResCheckIn | ARO_TIMEIN | CheckIn__c | ARR-TIME | rgr_time_in |
+| ResCheckOut | ARO_TIMEOUT | CheckOut__c | DEP-TIME | rgr_time_out |
+| ResChildren | RU_CHILDREN | Children__c | RESERVATION.NOCHILDS+NO | rgr_children |
+| ResDeparture | DEP_DATE | Departure__c | RESERVATION.DEP | rgr_departure |
+| ResFlightETA | RU_FLIGHT_LANDS | - | PICKUP-TIME-ARRIVAL | rgc_flight_arr_time |
+| ResFlightETD | - | - | PICKUP-TIME-DEPARTURE | rgc_flight_dep_time |
+| ResFlightArrComment | SH_EXT_REF | - | EXT-REFERENCE+PICKUP-COMMENT-ARRIVAL | rgc_flight_arr_comment |
+| ResFlightDepComment | - | - | PICKUP-COMMENT-DEPARTURE | rgc_flight_dep_comment |
+| ResGdsNo | SIHOT_GDSNO | GdsNo__c | GDSNO | rgr_gds_no |
+| ResGroupNo | SIHOT_LINK_GROUP | - | EXT-KEY | rgr_group_no |
+| ResHotelId | RUL_SIHOT_HOTEL | HotelId__c | ID, HN, RES-HOTEL | rgr_ho_fk |
+| ResId | - | Number__c | RES-NR | rgr_res_id |
+| ResLongNote | SIHOT_TEC_NOTE | - | RESERVATION.TEC-COMMENT | rgr_long_comment |
+| ResMktGroup | RO_SIHOT_RES_GROUP | MktGroup__c | RESERVATION.CHANNEL | rgr_mkt_group |
+| ResMktGroupNN | RO_SIHOT_SP_GROUP | - | NN | - |
+| ResMktSegment | SIHOT_MKT_SEG | MktSegment__c (Marketing_Source__pc) | RESERVATION.MARKETCODE(oc=SS/RES-SEARCH)+MARKETCODE-NO(oc=RES) | rgr_mkt_segment |
+| ResNote | SIHOT_NOTE | Note__c | RESERVATION.COMMENT | rgr_comment |
+| ResObjId | RU_SIHOT_OBJID+RU_CODE+RUL_PRIMARY | SihotResvObjectId__c | RESERVATION.OBJID | rgr_obj_id |
+| ResPersons | - | - | PERSON | res_group_clients.* |
+| ResPersons\<n\>AutoGen | - | - | PERSON.AUTO-GENERATED | rgc_auto_generated |
+| ResPersons\<n\>Board | - | - | PERSON.PERS-RATE.R | rgc_sh_pack |
+| ResPersons\<n\>FlightArrComment | SH_EXT_REF | - | PERSON.PICKUP-COMMENT-ARRIVAL | rgc_flight_arr_comment |
+| ResPersons\<n\>FlightETA | RU_FLIGHT_LANDS | - | PERSON.PICKUP-TIME-ARRIVAL | rgc_flight_arr_time |
+| ResPersons\<n\>FlightDepComment | - | - | PERSON.PICKUP-COMMENT-DEPARTURE | rgc_flight_dep_comment |
+| ResPersons\<n\>FlightETD | - | - | PERSON.PICKUP-TIME-DEPARTURE | rgc_flight_dep_time |
+| ResPersons\<n\>PersAcuId | CD_CODE | - | PERSON.MATCHCODE | rgc_occup_cl_fk->cl_ac_id |
+| ResPersons\<n\>PersAssId | CD_CODE | - | PERSON.MATCHCODE | rgc_occup_cl_fk |
+| ResPersons\<n\>PersCountry | - | - | PERSON.COUNTRY-CODE | rgc_country |
+| ResPersons\<n\>PersDOB | CD_DOB1+CD_DOB2 | - | PERSON.DOB | rgc_dob |
+| ResPersons\<n\>PersEmail | - | - | PERSON.EMAIL | rgc_email |
+| ResPersons\<n\>PersForename | CD_FNAM1, CD_FNAM2 | - | PERSON.NAME2 | rgc_firstname |
+| ResPersons\<n\>PersLanguage | - | - | PERSON.LANG | rgc_language |
+| ResPersons\<n\>PersPhone | - | - | PERSON.PHONE | rgc_phone |
+| ResPersons\<n\>PersShId | CD_SIHOT_OBJID | - | PERSON.GUEST-ID | rgc_occup_cl_fk->cl_sh_id |
+| ResPersons\<n\>PersSurname | CD_SNAM1, CD_SNAM2 | - | PERSON.NAME | rgc_surname |
+| ResPersons\<n\>RoomNo | RUL_SIHOT_CAT | RoomCat__c | PERSON.RN | rgc_room_id |
+| ResPersons\<n\>RoomPersSeq | - | - | PERSON.ROOM-PERS-SEQ | rgc_pers_seq |
+| ResPersons\<n\>RoomSeq | - | - | PERSON.ROOM-SEQ | rgc_room_seq |
+| ResPersons\<n\>TypeOfPerson | - | - | PERSON.PERS-TYPE | rgc_pers_type |
+| ResPriceCat | SH_PRICE_CAT | - | PCAT | - |
+| ResRateSegment | RUL_SIHOT_RATE | - | RESERVATION.RATE-SEGMENT | rgr_room_rate |
+| ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
+| ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgc_room_id+rgr_room_id |
+| ResSfId | MS_SF_DL_ID | ReservationOpportunityId+Opportunity.Id | NN2(?) | rgr_sf_id |
+| ResSource | RU_SOURCE | - | SOURCE | rgr_source |
+| ResStatus | SH_RES_TYPE | Status__c | RESERVATION.RT | rgr_status |
+| ResSubId | - | SubNumber__c | SUB-NR | rgr_sub_id |
+| ResVoucherNo | RH_EXT_BOOK_REF | - | RESERVATION.VOUCHERNUMBER | rgr_ext_book_id |
+| RinUsageYear | AOWN_YEAR | - | - | ri_usage_year |
+| RinType | AOWN_ROREF | - | - | ri_inv_type |
+| RinSwappedWith | AOWN_SWAPPED_WITH | - | - | ri_swapped_product_id |
+| RinGrantedTo | AOWN_GRANTED_TO | - | - | ri_granted_to |
+| RinUsedPoints | - | - | - | ri_used_points |
+| RinUsageComment | - | - | -  | ri_usage_comment |   
+| Salutation | F_SIHOT_SALUTATION() | Salutation | T-SALUTATION | - |
+| SfId | CD_SF_ID1/2, MS_SF_ID | id+PersonAccountId | MATCH-SM | cl_sf_id |
+| ShId | OC_SIHOT_OBJID+CD_SIHOT_OBJID | SihotGuestObjId__pc | OBJID+GUEST-ID | rgr_order_cl_fk->cl_sh_id |
+| State | (CD_ADD13) | PersonMailingState | T-STATE | - |
+| Street | CD_ADD11 | PersonMailingStreet | STREET | - |
+| Surname | CD_SNAM1 | LastName | NAME-1 | cl_surname+rgc_surname |
+| Title | CD_TITL1 | PersonTitle | T-TITLE | - |
+| WorkPhone | CD_WTEL1+CD_WEXT1 | Work_Phone__pc | PHONE-2 | - |
 
 
 ### AcuSihotMonitor Application
@@ -186,32 +401,32 @@ AcuSihotMonitor is a kivy application for Windows, Linux, Mac OS X, Android and 
 the correct functionality of the Salesforce, Acumen and Sihot servers and interfaces.
 
 
-### AssCacheSync Application
+### SysDataMan Application
 
-AssCacheSync is a command line tool for to synchronize and verify data between our three main systems (Acumen, Salesforce
-and Sihot). The actions performed by this tool get specified by the [command line options --pull, --push and --verify](#action-command-line-options),
-which can be specify multiple times. The [command line options --filterRecords and --filterFields](#filter-command-line-options) allow to filter the
-processed data records and fields. The way how two data records will be associated for to be verified or synchronized
-can be specified with the [command line options --matchFields and --matchRecords](#match-command-line-options).
+SysDataMan is a command line tool for to synchronize and compare data between our four systems (Acu=Acumen Ass=AssCache
+Sf=Salesforce and Sh=Sihot). The actions performed by this tool get specified by the 
+[command line options --pull, --push and --compare](#action-command-line-options),
+which can be specify multiple times.
 
-All command line options can be specified in any order, because AssCacheSync is always first doing all the pull actions.
-After the pull any push actions are performed (if specified/given) and finally the verify actions are processed. So if
-you want to run a verification before any pull/push action then you have to execute AssCacheSync twice (the first run
-with the --verify option and the second run with the pull/push and optionally another verify action).
+All command line options can be specified in any order, because SysDataMan is always first doing all the pull actions.
+After the pull any push actions are performed (if specified/given) and finally the compare actions are processed.
+
+For to run a compare before any additional pull/push action simply execute SysDataMan twice (the first run
+with the --compare option and the second run with the pull/push and optionally another compare action).
  
-The postgres database AssCache is used for to temporarily store the data pulled from one of our three
-systems (the source system) for to be either verified against or pushed onto another system (the destination system).
+The postgres database AssCache (Ass) can be used for to temporarily store the data pulled from one of our three
+systems (the source system) for to speed up large data synchronization tasks.
 
 #### Supported Data Fields
 
 The following client data fields can be used for to optionally specify the fields that are used within the 
-command line options --filterFields and --matchFields, although not all of them are implemented for all our three systems
-(e.g. Sihot only supports the ShId field for filtering and matching):
+`field_names` key-word-arguments of the action command line options `pull`, `push` and `compare`, although not all of
+them are implemented for all our three systems (e.g. Sihot only supports the ShId field for filtering and matching):
 
 | Field Name | Description |
 | --- | --- |
 | AssId | AssCache client primary key |
-| AcId | Acumen client reference |
+| AcuId | Acumen client reference |
 | SfId | Salesforce client (lead/contact/account) id |  
 | ShId | Sihot guest object id |
 | Name | Client forename and surname (separated by one space character) |
@@ -220,89 +435,128 @@ command line options --filterFields and --matchFields, although not all of them 
 
 #### Action Command Line Options
 
-Each run of the AssCacheSync tool has to specify at least one (mostly more than one) valid action (which are given with
-the --pull, --push and/or the --verify command line option). Each action value consists of a two character system identifier
-followed by a one character data type identifier. The supported system identifiers are:
+Each run of the SysDataMan tool has to specify at least one (mostly more than one) valid action (which are given with
+the --pull, --push and/or the --compare command line option). The option value of these actions consists of a system
+identifier (two or three characters long) followed by a record/data type identifier (one character).
+
+The supported system identifiers are:
 
 | System Identifier | Description |
 | --- | --- |
-| ac | Acumen |
-| sh | Sihot |
-| sf | Salesforce |
+| Acu | Acumen |
+| Ass | AssCache |
+| Sh | Sihot |
+| Sf | Salesforce |
 
-The supported data identifiers are:
+The supported record/data type identifiers are:
 
-| Data Identifier | Description |
+| Record Type Identifier | Description |
 | --- | --- |
 | C | Clients |
 | P | Products |
 | R | Reservations |
 
-So for to verify/compare client data (C) between Acumen (ac) and Salesforce (sf) you could use the following
-action command line options:
+So for to compare/compare all client record data (C) from the Acumen (Acu) against Salesforce (Sf) system, use the
+following action command line options:
 
-    `--pull=acC --verify=shC`
+    `--pull=AcuC --compare=SfC`
 
-This will first pull client data from Acumen and then compare it to the same clients within Salesforce. A similar verify
-run could be done with:
+This will first pull client data from Acumen and then compare it to the same clients within Salesforce. A similar
+compare run could be done with:
 
-    `--pull=shC --verify=acC`
+    `--pull=SfC --compare=AcuC`
 
-The difference is that the first verify run will pull (and optionally filter) the clients from the (source) Acumen system and
-then compare the found clients against the (destination) Salesforce system. In contrary the second verify run will pull the clients from
-Salesforce (source) and then compare the found clients with associated clients on the Acumen (destination) system. 
+The difference is that the first compare run will pull (and optionally filter) the clients from the (source) system
+Acumen and then compare the found clients against the (destination) system Salesforce. In contrary the second example
+will first pull all the clients from Salesforce (source) and then compare the found clients with associated clients from
+the Acumen (destination) system. 
 
-A combination of the --pull and --push command line options allows to synchronize the data between two systems.
-For example for to synchronize client data from Acumen to Salesforce you have to specify the following two action
+A combination of the --pull and --push command line options allows to synchronize data between several systems.
+For example for to synchronize client data from Acumen to Sihot and Salesforce you have to specify the following action
 command line arguments:
 
-    `--pull=acC --push=sfC`
+    `--pull=AcuC --push=SfC --push=ShC`
 
-#### Filter Command Line Options
+Multiple options of the same action will be processed in the given order, but only within the same action type. So first
+all pull actions (in the given order), then all push actions and finally all compare actions. So on multiple push
+actions a field will have the value from the system which last pull action included this field.
 
-In most cases you want to restrict the synchronized/verified data from the source system to a small amount of 
-data-records and/or -fields. Not specifying any filters will result in a verification/synchronization run that
-needs more than 3 days only for to process all of our client data records.
+#### Additional Action Command Line Options
 
-The --filterRecords option allows you to specify a filter expression that will reduce the amount of (source) data from the
-system where the data get pulled from (specified by the --pull option). In case of pulling Acumen client data this filter
-expression will be used in the `WHERE` clause of the SQL that is used for to fetch this client data from the Acumen table
-`CLIENT_DETAILS` (T_CD). So the following command line option will pull only Acumen client data with a non-empty email
-address and verify them against Salesforce:
+In most cases you want to restrict the synchronized/compared data from the source system to a small amount of 
+data-records and/or -fields and for to prevent heavy data and system loads.
 
-    `--pull=acC --filterRecords="CD_EMAIL is not NULL" --verify=sfC`
+Filters and other input parameters can be specified as action arguments directly after the system and record type of
+each Action command line option as a python dictionary literal. The key is identifying the argument type, e.g. 
+sql clauses or a list of matching field names. The following action argument dictionary keys are available:
 
-Additionally you can restrict the synchronized/verified fields with the --filterFields option. If no --filterFields
-option is specified then AssCacheSync is processing all [data fields](#supported-data-fields) that are supported by
-the system you are pulling from. So for to restrict the last example to only verify the client's email address and
-phone number you have to specify the following command line options:
+* col_names
+* chk_values
+* where_group_order
+* bind_values
+* filter_records
+* field_names
+* exclude_fields
+* match_fields
 
-    `--pull=acC --filterFields=['Email','Phone'] --filterRecords="CD_EMAIL is not NULL" --verify=sfC`
+The `filter_records` key-word-argument specifies a callable that can filter/reduce the amount of data. E.g. in case of
+pulling client data (using the --pull option) this callable can be used instead of the `where_group_order` SQL for
+to filter/restrict data from a system.
 
-#### Match Command Line Options
+The following command line option - using `where_group_order` - will pull only
+Acumen client data with a non-empty email address and compare them against Salesforce:
 
-The --matchFields and --matchRecord options are used for to restrict the fields and records of the destination system
-(the system pushed-to or verified-against).
+    `--pull="AcuC{'where_group_order':\"CD_EMAIL is not NULL\"} --compare=SfC`
 
-Normally the primary key of each system is used for to lookup/associate the matching data record in the destination
-system. But in the case where you cannot rely on the primary key value you can a specify with the 
-command line option --matchFields a different field (or a list of fields) for this lookup/association.
+The same can be achieved by using `filter_records` with:
+
+    `--pull="AcuC{'filter_records': lambda r: not r.val('Email')}" --compare=SfC`
+
+Additionally you can restrict the processed (synchronized/compared) fields with the key-word-arguments `col_names`, 
+`field_names` and/or `exclude_fields`. If none of these are specified then SysDataMan is processing all 
+[data fields](#supported-data-fields) supported by the system you are working with. So for to restrict the last 
+example to only compare the client's email address and phone number you have to specify the following 
+command line options:
+
+    `--pull="AcuC{'field_names': ['Email','Phone']}" --compare=SfC`
+
+The same action is done by specifying the system column names of the email and phone fields with the `col_names`
+action argument:
+
+    `--pull="AcuC{'col_names': ['CD_EMAIL','CD_HTEL1']}" --compare=SfC`
+
+In contrary the `exclude_fields` action argument is excluding fields from the action, so all the field names
+in this list will not be used for this action. E.g. the following command is pulling all fields apart from the
+email address:
+
+    `--pull="AcuC{'exclude_fields': ['Email']}" --compare=SfC`
+
+Please note that there is currently no action argument available to exclude fields using the system field names.
+
+#### Additional Matching Action Command Line Options
+
+The `match_fields` and `filter_records` key-word-arguments are also restricting the fields and records of the
+destination system (the system pushed-to or compared-against).
+
+The primary key of each system is used by default for to lookup/associate the matching data record in the destination
+system. But in the case where you the primary key value is not available in both systems you can a specify with the 
+command line option `match_fields` a different field (or a list of fields) for this lookup/association.
 So e.g. for to compare the client data between Acumen and Salesforce by using the Email and Phone data for to match 
 the client record within Salesforce the following command line options have to be specified:
 
-    `--pull=acC --matchFields=['Email','Phone'] --verify=sfC`
+    `--pull=AcuC --compare=SfC{'match_fields':['Email','Phone']}`
 
-And with the --matchRecords option you can further restrict the processed/synchronized/verified data records on the
-destination system. The following example is verifying the source client data from Sihot against the (destination)
+The `filter_records` argument allows to restrict the processed/synchronized/compared data records on the
+destination system. The following example is comparing the source client data from Sihot against the (destination)
 client data within Acumen, restricted to Acumen client data where the email address and the phone number are not
 empty:  
 
-    `--pull=shC --matchRecords="CD_EMAIL is not NULL and CD_HTEL1 is not NULL" --verify=acC`
+    `--pull=ShC --compare="AcuC{'filter_records':lambda r: not r.val('Email') or not r.val('Phone')"`
 
 
-### AssServer Application
+### BssServer Application
 
-The AssServer is a server application that is providing a web-service that is listening/waiting for our Sihot system
+The BssServer is a server application that is providing a web-service that is listening/waiting for our Sihot system
 to connect (as a client) for to propagate/push the following live actions done within Sihot:
 
 * Change of Reservation Data
@@ -313,7 +567,7 @@ to connect (as a client) for to propagate/push the following live actions done w
 Any of these Sihot actions will be cashed within the AssCache/Postgres database and later (after the reservations got
 fully implemented within Salesforce) also be propagated onto our Salesforce system. We could pass these
 notifications directly into the SF system (by-passing AssCache) if SF would be able to act as a server for
-web services, but most likely we need to implement a bridge like AssServer here because the Sihot live/push interfaces 
+web services, but most likely we need to implement a bridge like BssServer here because the Sihot live/push interfaces 
 are not compatible to any web-service standards (SOAP/WSDL/REST/XML/…).
 
 
@@ -416,7 +670,7 @@ line arguments:
 `-F="2017-10-21 17:54:38.0" -T="2017-10-23 10:20:50.0" -A=Acu -u=AECKER -p=password -d=SP.WORLD`
 
 In the last example the short options got used (see the Short Option column in the section
-[General command line arguments](#general-command-line-arguments) above). For a more verbose output you can also
+[Command line arguments](#command-line-arguments) above). For a more verbose output you can also
 pass the `debugLevel` command line option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
 with timestamp).
 
@@ -446,23 +700,24 @@ Please note that the value of this setting is restricted by the value of the max
 Combined Console/Kivy Application for to import reservation bookings, changes and cancellations from CSV or JSON files
 into the Sihot system.
 
-Apart from the instruction in the [General Installation Instructions](#general-installation-instructions)_ section (see
+Apart from the instruction in the [Installation Instructions](#installation-instructions) section (see
 above) you also have to create an import path folder for each supported import channel (e.g. C:\JSON_Import). The same
 path name has to be specified as command line argument when you start the SihotResImport application (see next 
 paragraph). Please note that the user need to have full access (read, write and create folder privileges) within each 
 of these import channel folders. 
 
 The provided command line options are documented above in the section
-[General command line arguments](#general-command-line-arguments). The most important one is the `jsonPath` option, 
+[Command line arguments](#command-line-arguments). The most important one is the `jsonPath` option, 
 for to specify the import path and file mask for OTA JSON files - this value defaults to `C:/JSON_Import/*.json`.
 
 For to run this application in console mode (headless without any user interface), simply specify a valid 
-Acumen user name (acuUser) and password (acuPassword) as command line parameters (or via one of supported config/INI files).
+Acumen user name (acuUser) and password (acuPassword) as command line parameters (or via one of supported config/INI 
+files).
 
-There are four command line parameters specifying the used Sihot server (production or test): `shServerIP` is the DNS name
-or IP address of the SIHOT interface server, `shServerPort` is the IP port of the used WEB interface and optionally
-you can specify via `shTimeout` the timeout value in seconds for TCP/IP connections (default=69.3) and via `shXmlEncoding`
-the charset encoding used for the xml data (default='cp1252').
+There are four command line parameters specifying the used Sihot server (production or test): `shServerIP` is the DNS 
+name or IP address of the SIHOT interface server, `shServerPort` is the IP port of the used WEB interface and optionally
+you can specify via `shTimeout` the timeout value in seconds for TCP/IP connections (default=69.3) and 
+via `shXmlEncoding` the charset encoding used for the xml data (default='cp1252').
 
 Meanwhile and for to check the client data against our Salesforce system this application needs also a user account for
 the Salesforce system. If you start this application using E:\AcuServer\ of the Sihot production system as the current
@@ -482,9 +737,102 @@ if an error occurs in one of the JSON files.
 
 Reservation details of each booking coming via email from OTA channels and are not supported/included by Siteminder
 can be imported from a json file (the tool to convert each email into the json format is written in C#.NET by Nitesh).
-The available json field names are documented in the section [Available Reservation Fields](#available-reservation-fields)
-above. 
+The available json field names are documented in the 
+section [Available Reservation Fields](#available-reservation-fields) above. 
 
+
+### SihotServer Web Services
+
+SihotServer is providing several https web services, which are implemented and distributed as pure python package
+scripts. These python scripts are prepared to by used on top of a Apache Linux web server as a WSGI web service
+extension. For to access one of these services you first have to enter the correct user name and password
+(see .console_app_env.cfg).
+
+The first web-services for to create/upsert (PUSH) or for to update (PUT) reservations onto our Sihot system
+are available under the URL:
+
+https://services.signallia.com/res/upsert.
+
+Another GET web service provides the retrieval of the full data structure of a Sihot reservation:
+
+https://services.signallia.com/res/get?hotel_id=2&gds_no=1098576
+
+The `hotel_id` and `gds_no` query parameters of this web service are mandatory. Instead of passing the GDS number
+within `gds_no` you could alternatively also use the reservation number by passing the query parameters `res_id`
+and `sub_id` instead of the `gds_no` query parameter.
+ 
+Another GET web-service allows you to get the number of confirmed Sihot reservations:
+
+https://services.signallia.com/res/count?hotel_ids=2&day=2019-10-10&room_cat_prefix=1&res_max_days=21
+
+All query parameters are optional for this web service. If the `hotel_ids` query parameter get not passed then
+the service will count the reservations in all our Sihot hotels; The `hotel_ids` parameter does also support
+a list of Sihot hotel ids separated by a comma character. The `room_cat_prefix` query parameter does also allow
+to specify the full name of a Sihot room category, like e.g. `1JNR`. Please note that the `res_max_days`
+query parameter should be greater or equal to the number of days of the counted reservations – the default
+value is 27 days).
+
+Another web service allows to fetch the currently available units/rooms/apartments of the Sihot system, providing
+the query parameters `hotel_ids`, `room_cat_prefix` and `day`. For example the following URL is retrieving from
+Sihot all the available 1-Bedroom units within the hotel 2 (BHH) for the 10th of October 2019:
+
+https://services.signallia.com/avail_rooms?hotel_ids=2&room_cat_prefix=1&day=2019-10-10
+
+Additionally web services that are useful for debugging purposes are described in the section [Debugging](#debugging)
+underneath.
+ 
+#### Setup Web Server
+
+After setting up mod_wsgi using embedded mode (instead of daemon mode) the apache/linux server settings are used.
+
+For to change the encoding charsets in embedded mode you could change the environment variables
+LANG and LC_ALL of apache in /etc/apache2/envvars. Following the recommendations of the main developer of mod_wsgi
+(see http://blog.dscpl.com.au/2014/09/setting-lang-and-lcall-when-using.html) it would be better and saver
+to run mod_wsgi in daemon mode and specify there the language and locale settings by adding to the apache .conf file:
+
+    WSGIDaemonProcess my-site lang='en_US.UTF-8' locale='en_US.UTF-8'
+
+More useful hints and workarounds for common mod_wsgi issues and configuration problems you find here:
+    https://code.google.com/archive/p/modwsgi/wikis/ApplicationIssues.wiki
+Newer version:
+    https://modwsgi.readthedocs.io/en/develop/user-guides/application-issues.html
+
+#### Deployment 
+
+The deployment shell scripts `build_ws_res.cmd` and `build_ws_test.cmd` are used to prepare the roll-out of the
+web services. The first one available at https://services.signallia.com are the web services for to access our
+production servers and the second one is for to check the web services environment (available at 
+https://lint.signallia.com).
+
+For to run one of the deployment shell scripts, you first have to change the current working directory to the
+source folder. The shell script is copying all the needed python code from the actual source folder and the
+python path to the distribution folder on the same machine.
+
+After that you need to use a SFTP tool - like WinSCP.exe for to pass/synchronize the files in the distribution
+folder to the web server directories (lint and services underneath /var/www).
+
+#### Debugging
+
+For debugging you can check the log files in the log folder of the service folder (e.g. for the `services`
+web service within `/var/www/services/log`).
+
+Service specific log files created by the Apache server you find on the web server folder `/var/log/apache2`. The log
+file names are starting with the name of the service (`lint` or `services`), followed by an underscore character and
+the suffixes `error` and `access`. The file extension of these log files is `.log`.
+
+Additional log files you find in the web server folder `/var/log`, e.g. the Apache log files `syslog` and `auth.log`.
+
+There are also some extra web services available for debugging. A simple hello echo service can be reached by the
+URL - it will return the string you provided after the hello path ('debug_text' in the following example):
+
+https://services.signallia.com/hello/debug_text
+
+Another debug web service allows you to fetch any file from the web server that is placed in the `static` sub-folder
+of the services folder (for example from /var/www/services/static).
+
+Finally under the URL https://lint.signallia.com there is also a small web service available for debugging
+purposes that is displaying all the system environment variable of the web server (used by all our python
+web services).
 
 
 ### WatchPupPy Application
@@ -530,7 +878,7 @@ active hotels in the Sihot system (initially only ANY/999, BHC/1 and PBC/4):
 | LVI | Luna Villas | n | 105 |
 | PBC | Palm Beach Club | Y | 4 |
 | PLA | Platinum Sports Cruisers | n | 106 |
-| PMA | Paramount | n | 107 |
+| PMA | Paramount | Y | 107 |
 | PMY | The Palmyra | n | 108 |
 | PSF | Podere San Filippo | n | 109 |
 | RHF | Rhinefield Apartments | n | 110 |
@@ -643,6 +991,16 @@ hotel 4:
 | 3 BED | Sea View/Front/781 | 3BPB |
 
 
+#### PMA room category overloads
+
+| Room Size | Requested Apartment Feature | Sihot room category |
+| :---: | --- | :---: |
+| 1 BED | - | 1JNR |
+| 2 BED | - | 2BSU |
+| 3 BED | - | 3BPS |
+| 4 BED | - | 4BPS |
+
+
 #### Room specific overloads
 
 The two new `T_AP` columns `AP_SIHOT_CAT` and `AP_SIHOT_HOTEL` can be used for the individual mapping of each apartment
@@ -720,20 +1078,20 @@ lower-case booking types:
 The following table shows the mapping between the Sihot CHANNEL field IDs (stored in the `RO_SIHOT_RES_GROUP` column)
 and the Acumen reservation groups (with the `RO_RES_GROUP` column):
 
-| Acumen Reservation Group | Sihot Channel Id |
+| Sihot Channel Id | Acumen Reservation Group |
 | --- | --- |
-| Club Paradiso Guest | CG |
-| Club Paradiso Owner | CO |
-| Other | OT |
-| Owner | OW |
-| Owner Guest | OG |
-| Promo | FB |
-| RCI External | RE |
-| RCI External Guest | RG |
-| RCI Internal | RI |
-| RCI Owner Guest | RO |
-| Rental External | RR |
-| Rental SP | RS |
+| FB | Promo + Marketing Rental |
+| GU | Guest |
+| OT | Others |
+| OW | Keys Member + Owner |
+| RE | RCI External |
+| RI | RCI Internal |
+| RR | Rental External |
+| RS | Rental SG |
+
+This mapping got restructured on 9-Aug-2018 - the changes are logged in the Acumen/Oracle table T_LOG (double check
+with query: `select * from t_log where log_table = 'RESOCC_TYPES' and log_column = 'RO_SIHOT_RES_GROUP'
+order by log_code desc`).
 
 
 #### Mapping of Acumen SP Group to Sihot NN
@@ -789,7 +1147,9 @@ Sihot.PMS.
 For to minimize the amount of client data to migrate to Sihot.PMS we had to classify the Acumen clients by their type of
 ownership(s). For each product a owner type can be specified/configured within the new column `RS_SIHOT_GUEST_TYPE`.
 
-The current mapping is setting a general owner flag for to group all timeshare/resort owners together with less important owner types like e.g. tablet, lifestyle, experience or explorer. For special treatment we only need to specify distinguishable client types for Investors (new fractionals/share holders) and Keys Members.
+The current mapping is setting a owner flag string for to group all timeshare/resort owners together with less
+important owner types like e.g. tablet, lifestyle, experience or explorer. For special treatment we only need to specify
+distinguishable client types for Investors (new fractionals/share holders) and Keys Members.
 
 
 ### SIHOT package mappings
@@ -836,6 +1196,7 @@ configuration file):
 | Settings | resortCats | Room category defaults and apartment feature overloads for all hotels/resorts |
 | Settings | roAgencies | Agency Sihot/Acumen object Ids and market segment groupings |
 | Settings | roomChangeMaxDaysDiff | Number of days a check-in/-out/room-move can differ from the expected arrival/departure date |
+| Settings | SfIdResetResendFragments | Text fragments of ignorable errors where BssServer will try to resend the reservation data without the currently cached Salesforce Reservation Opportunity Id |
 | Settings | shAdultPersTypes | List of Sihot adult person type categories, e.g. ['1A', '5A'] |
 | Settings | shChildPersTypes | List of Sihot children person type categories, e.g. ['2A', '2B', '2C', '6A', '6B', '6C'] |
 | Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr` or `smtpTo`).
@@ -847,15 +1208,11 @@ configuration file):
 
 ## System Synchronizations
 
-Because lots of different data (like clients, reservations, reservation inventory, ownerships, sales inventory) need to be
-available redundantly in several of our systems (Acumen, Salesforce and Sihot) we have to ensure that any
+Because lots of different data (like clients, reservations, reservation inventory, ownerships, sales inventory) need to
+be available redundantly in several of our systems (Acumen, Salesforce and Sihot) we have to ensure that any
 changes of this data in one of the system will be propagated to other systems.
 
-For each type of data there should be defined a master system where the data get changed and validated exclusively, but because
-of the plan to replace Acumen with Salesforce and Sihot some types of data are maintained currently in several systems. Another
-exception is coming from the Reservation department because apart from the synchronization of reservations from Salesforce
-to Sihot they requested to synchronize also to synchronize any changes done within Sihot on the reservation data back to
-Salesforce (see the Owner reservations data type in the table underneath). 
+Each type of data (record set or field) must have a master which is the system where the data is most accurate. 
 
 | Type of data | Future Master System -> Synchronized onto | Current Master System(s) -> Synchronized onto |
 | --- | --- | --- |
@@ -868,8 +1225,8 @@ Salesforce (see the Owner reservations data type in the table underneath).
 | Sales inventory | Salesforce->Sihot | Acumen->None, Salesforce->None |
 
 Whereas the synchronization from/to Acumen and Salesforce can be done in various ways because we even can access the
-internal data structures (Oracle tables and Salesforce objects) directly, our Sihot system is (like most commercial systems)
-only providing an access via several APIs, which are much more restricted than a direct data access.
+internal data structures (Oracle tables and Salesforce objects) directly, our Sihot system is (like most commercial
+systems) only providing an access via several APIs, which are much more restricted than a direct data access.
 
 Sihot is providing the following pull interfaces:
 
@@ -882,7 +1239,7 @@ Additionally Sihot is providing the following live/push interfaces (via the Siho
 * Guest Changes
 * Occupation Changes
 
-The [AssCacheSync application](#asscachesync-application) can be used for to manually synchronize and verify client
+The [SysDataMan application](#sysdataman-application) can be used for to manually synchronize and/or compare client
 and reservation data between our three systems (Acumen, Salesforce and Sihot).
 
 
@@ -893,7 +1250,7 @@ will by associated by the Sihot guest object id. This id will be stored for each
 record in the two new columns `CD_SIHOT_OBJID` and `CD_SIHOT_OBJID2`. Client data is currently only synchronized
 from Acumen to Sihot together with the reservation synchronization.
 
-The two Acumen/Oracle log tables [Requested Unit Log](#requested-unit-log) and [Synchronization Log](#synchronization-log)
+The two Acumen log tables [Requested Unit Log](#requested-unit-log) and [Synchronization Log](#synchronization-log)
 are used for to detect any changes done in Acumen on the client/reservation data. The SihotResSync application is used
 to periodically pass any reservation changes from Acumen to Sihot.
 
@@ -930,7 +1287,8 @@ changes within the latest not synchronized requested unit log entry/record and a
 
 #### Synchronization Log
 
-The synchronization process is fully logged within the new `T_SRSL` table providing the following columns:
+Any synchronizations are fully logged within the `T_SRSL` table of the Acumen system, providing the
+following columns:
 
 | Column Name | Column Content |
 | --- | --- |
@@ -945,7 +1303,9 @@ The synchronization process is fully logged within the new `T_SRSL` table provid
 
 ### Synchronization between Salesforce and Sihot
 
-Recently we also started to implement the [AssServer application](#assserver-application) that will pass any changes of
+The [BssServer application](#bssserver-application) will pass any changes of
 reservation data and of room occupations (check-ins, check-outs and room-moves) done within Sihot to Salesforce (and
 optionally also to the AssCache database).
 
+Client and reservation data can be passed from Salesforce to Sihot by using the 
+[SihotServer Web Services](#sihotserver-web-services).
