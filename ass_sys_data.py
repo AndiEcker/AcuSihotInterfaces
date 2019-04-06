@@ -1360,16 +1360,18 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         sf_rec = Record(system=SDI_SF, direction=FAD_ONTO).add_system_fields(SF_CLIENT_MAPS['Account'] + SF_RES_MAP) \
             if sf_sent is None else sf_sent
+        sf_rec.merge_leafs(ass_res_data)
+        sf_rec.merge_leafs(sh_cl_data)
+        if sf_rec.val('ResSfId') and sf_rec['ResSfId'] != sf_res_id:
+            self.cae.dprint("Overwriting ResSfId {}".format(sf_rec['ResSfId']) + msg_sfx)
         sf_rec['ResSfId'] = sf_res_id
         ass_id = ass_res_data.val('AssId')
         if ass_id:
             sf_cl_id = self.cl_sf_id_by_ass_id(ass_id)
             if sf_cl_id:
+                if sf_rec.val('SfId') and sf_rec['SfId'] != sf_cl_id:
+                    self.cae.dprint("Overwriting SfId {}".format(sf_rec['SfId']) + msg_sfx)
                 sf_rec['SfId'] = sf_cl_id
-
-        sf_rec.merge_leafs(ass_res_data)
-        sf_rec.merge_leafs(sh_cl_data)
-
         if not sf_rec.val('ResRoomNo') and ass_res_data.val('ResPersons', 0, 'RoomNo'):
             sf_rec['ResRoomNo'] = ass_res_data.val('ResPersons', 0, 'RoomNo')
 

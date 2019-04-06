@@ -190,7 +190,7 @@ if not error_msg:
                         acumen_req.ora_db.commit()    # because this res get skipped in the run loop underneath
                     else:
                         acumen_req.ora_db.rollback()  # send but roll back changes in ResObjId and T_SRSL
-                    if rec.get('ResGdsNo'):
+                    if rec.val('ResGdsNo'):
                         hotel_move_gds_nos.append(rec['ResGdsNo'])
                 progress.finished(error_msg=error_msg)
 
@@ -214,7 +214,8 @@ if not error_msg:
                         continue        # skip HOTMOVE if new hotel is a non-Sihot-hotel
                     elif rec['ResLastHotelId'] not in hotel_ids:
                         rec['ResAction'] = ACTION_INSERT
-                    if rec.get('ResGdsNo') in hotel_move_gds_nos:
+                    if rec.val('ResGdsNo') in hotel_move_gds_nos:
+                        cae.dprint("  ##  HotMove ResObjId {} reset; GdsNo={}".format(rec['ResObjId'], rec['ResGdsNo']))
                         rec['ResObjId'] = ''
 
                     error_msg = acumen_req.send_res_to_sihot(rec)
