@@ -16,6 +16,21 @@ class TestResToSihot:
         assert not err_msg
         assert not res_to.get_warnings()
 
+    def test_rate_amount_update(self, console_app_env):
+        res_to = ResToSihot(console_app_env)
+        fld_vals = dict(ResHotelId='1', ResGdsNo='TEST-123456789',
+                        ResArrival=datetime.date(year=2019, month=12, day=24),
+                        ResDeparture=datetime.date(year=2019, month=12, day=30),
+                        ResAdults=1, ResChildren=1, ResRoomCat='1JNS', ResMktSegment='TO',
+                        ResRates0RateDay=datetime.date(year=2019, month=12, day=24), ResRates0RateAmount='120.60',
+                        ResRates1RateDay=datetime.date(year=2019, month=12, day=25), ResRates1RateAmount='150.60',
+                        ResRates2RateDay=datetime.date(year=2019, month=12, day=28), ResRates2RateAmount='180.60',
+                        AcuId='E578973',
+                        )
+        err_msg = res_to.send_res_to_sihot(rec=Record(fields=fld_vals), ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
+        assert not err_msg
+        assert not res_to.get_warnings()
+
 
 class TestFldMapXmlParser:
     ELEM_MAP = (

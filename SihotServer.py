@@ -9,7 +9,8 @@ Version History:
 
 0.1     first beta
 0.2     refactored to use ae_sys_data.
-0.3     prepared first production version
+0.3     prepared first production version.
+0.4     enhanced error handling and reporting to caller.
 
 DISTRIBUTE:
 
@@ -33,9 +34,10 @@ Web-Service server check/prepare:
 
 """
 
-__version__ = '0.3'
+__version__ = '0.4'
 
 # change working dir so bottle.py will be find by next import statement (also for relative paths and template lookup)
+from traceback import format_exc
 import os
 import sys
 os.chdir(os.path.dirname(__file__))
@@ -43,7 +45,7 @@ sys.path.append(os.path.dirname(__file__))
 
 from bottle import default_app, request, response, static_file, template, run
 
-from sys_data_ids import SDI_SF, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from sys_data_ids import SDI_SF, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_ENABLED
 from ae_sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE
 from ae_console_app import ConsoleApp, uprint
 from sfif import field_from_converters
@@ -82,8 +84,8 @@ def get_page(page_name):       # return a page that has been rendered using a te
 
 @app.route('/avail_rooms')
 def get_avail_rooms():
-    rd = request.json
-    rooms = asd.sh_avail_rooms(hotel_ids=rd['hotel_ids'], room_cat_prefix=rd['room_cat_prefix'], day=rd['day'])
+    rq = request.query
+    rooms = asd.sh_avail_rooms(hotel_ids=rq['hotel_ids'], room_cat_prefix=rq['room_cat_prefix'], day=rq['day'])
     return str(rooms)
 
 
@@ -137,50 +139,58 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 
 def sh_res_action(action, res_id=None, method='POST'):
     supported_actions = (ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE)
-    if action.upper() not in supported_actions:
-        body = "Reservation {} for ID {} with action {} not implemented; use one of supported actions ({})" \
-            .format(method, res_id, action, supported_actions)
-        add_log_entry(body, minimum_debug_level=DEBUG_LEVEL_ENABLED)
-        return body
+    err = msg = ""
+    res_json = dict()
 
-    if debug_level >= DEBUG_LEVEL_VERBOSE:
+    if action.upper() not in supported_actions:
+        err = "Reservation {} for ID {} with action {} not implemented; use one of supported actions ({})" \
+            .format(method, res_id, action, supported_actions)
+        add_log_entry(error_msg=err, importance=4)
+    elif debug_level >= DEBUG_LEVEL_VERBOSE:
         headers_string = ['{}: {}'.format(h, request.headers.get(h)) for h in request.headers.keys()]
         msg = "sh_res_action({}, {}, {}/{}) received request: URL={}; header={!r}; body={!r}; query={!r}" \
             .format(action, res_id, method, request.method, request.url, headers_string,
                     request.body.getvalue(), request.query_string)
-        uprint(msg)
-        uprint()
-        # return dict(Error="test", Message=msg)
+        add_log_entry(warning_msg=msg)
 
-    res_send = ResSender(cae)
-
-    res_json = request.json     # web service arguments as dict
-    if res_json is None:
-        err = "JSON arguments missing"
-        msg = "got request {!r} but body with JSON is empty".format(request)
-    else:
-        rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
-        rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # allow overwrite from json fields
-        for name, value in res_json.items():
-            rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
-        rec.pull(SDI_SF)
-
-        err, msg = res_send.send_rec(rec)
-
-    if err or msg:
-        add_log_entry(warning_msg=msg, error_msg=err, importance=3 if err else 2)
+    if not err:
+        res_json = request.json         # web service arguments as dict
+        if res_json is None:
+            err = "JSON arguments missing"
+            msg += "\n      got request {!r} but body with JSON is empty".format(request)
+            add_log_entry(error_msg=err, warning_msg=msg, importance=3)
 
     ret = dict(ErrorMessage=err, WarningMessage=msg)
     if not err:
-        res_no_tuple = res_send.get_res_no()
-        if res_no_tuple[0] is None:
-            ret.update(ErrorMessage=res_no_tuple[1])
-        else:
-            response.status = 400
-            ho_id, res_id, sub_id = res_no_tuple
-            ret.update(ResHotelId=ho_id, ResId=res_id, ResSubId=sub_id)
+        try:
+            res_send = ResSender(cae)
+            rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
+            rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # allow overwrite from json
+            for name, value in res_json.items():
+                rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
+            rec.pull(SDI_SF)
 
-    add_log_entry("sh_res_action() call with json arguments: {}, responding to SF: {}".format(res_json, ret))
+            err, msg = res_send.send_rec(rec)
+
+            if not err:
+                res_no_tuple = res_send.get_res_no()
+                if res_no_tuple[0] is None:
+                    err = res_no_tuple[1]
+                else:
+                    response.status = 400
+                    ho_id, res_id, sub_id = res_no_tuple
+                    ret.update(ResHotelId=ho_id, ResId=res_id, ResSubId=sub_id)
+        except Exception as e:
+            err = "exception='{}'\n{}".format(e, format_exc())
+
+    if err:
+        ret['ErrorMessage'] += err
+    if msg:
+        ret['WarningMessage'] += msg
+
+    add_log_entry(warning_msg="sh_res_action({}, {}, {}) call with json arguments: {}; responding to SF: {}"
+                  .format(action, res_id, method, res_json, ret), error_msg=ret['ErrorMessage'],
+                  importance=4, minimum_debug_level=DEBUG_LEVEL_ENABLED)
 
     return ret
 
@@ -197,4 +207,7 @@ class StripPathMiddleware(object):      # remove slash from request
 
 
 if __name__ == '__main__':      # use bottle server only in debug mode on dev machine
-    run(app=StripPathMiddleware(app), server='python_server', host='0.0.0.0', port=9090)
+    try:
+        run(app=StripPathMiddleware(app), server='python_server', host='0.0.0.0', port=9090)
+    except Exception as ex:
+        add_log_entry(error_msg="bottle run exception='{}'\n{}".format(ex, format_exc()))

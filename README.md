@@ -240,6 +240,9 @@ Field Name | Field Type | Description | Example Values |
 | ResPersons\<n\>RoomSeq | String | Room sequence number of occupant | '0' |
 | ResPersons\<n\>TypeOfPerson | String | Age/Type of n-th occupant | '1A', '2B' |
 | ResPriceCat | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
+| ResRates | List | List of daily price rates | ((24-12-2019, 120), (25-12-2019, 140), ...) |
+| ResRates\<n\>RateDay | Date | date of the price/rate segment | 24-12-2019 |
+| ResRates\<n\>RateAmount | String | daily amount (including board) as float string | '120.50' |
 | ResSfId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
 | ResSubId + | String | Sihot Reservation Sub-number | '1' |
 | ResRateSegment | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
@@ -748,39 +751,6 @@ scripts. These python scripts are prepared to by used on top of a Apache Linux w
 extension. For to access one of these services you first have to enter the correct user name and password
 (see .console_app_env.cfg).
 
-The first web-services for to create/upsert (PUSH) or for to update (PUT) reservations onto our Sihot system
-are available under the URL:
-
-https://services.signallia.com/res/upsert.
-
-Another GET web service provides the retrieval of the full data structure of a Sihot reservation:
-
-https://services.signallia.com/res/get?hotel_id=2&gds_no=1098576
-
-The `hotel_id` and `gds_no` query parameters of this web service are mandatory. Instead of passing the GDS number
-within `gds_no` you could alternatively also use the reservation number by passing the query parameters `res_id`
-and `sub_id` instead of the `gds_no` query parameter.
- 
-Another GET web-service allows you to get the number of confirmed Sihot reservations:
-
-https://services.signallia.com/res/count?hotel_ids=2&day=2019-10-10&room_cat_prefix=1&res_max_days=21
-
-All query parameters are optional for this web service. If the `hotel_ids` query parameter get not passed then
-the service will count the reservations in all our Sihot hotels; The `hotel_ids` parameter does also support
-a list of Sihot hotel ids separated by a comma character. The `room_cat_prefix` query parameter does also allow
-to specify the full name of a Sihot room category, like e.g. `1JNR`. Please note that the `res_max_days`
-query parameter should be greater or equal to the number of days of the counted reservations – the default
-value is 27 days).
-
-Another web service allows to fetch the currently available units/rooms/apartments of the Sihot system, providing
-the query parameters `hotel_ids`, `room_cat_prefix` and `day`. For example the following URL is retrieving from
-Sihot all the available 1-Bedroom units within the hotel 2 (BHH) for the 10th of October 2019:
-
-https://services.signallia.com/avail_rooms?hotel_ids=2&room_cat_prefix=1&day=2019-10-10
-
-Additionally web services that are useful for debugging purposes are described in the section [Debugging](#debugging)
-underneath.
- 
 #### Setup Web Server
 
 After setting up mod_wsgi using embedded mode (instead of daemon mode) the apache/linux server settings are used.
@@ -811,6 +781,57 @@ python path to the distribution folder on the same machine.
 After that you need to use a SFTP tool - like WinSCP.exe for to pass/synchronize the files in the distribution
 folder to the web server directories (lint and services underneath /var/www).
 
+#### Insert, Upsert or Delete Reservation
+
+A POST web-service that allows you to INSERT, UPSERT or DELETE reservations within Sihot is available under the URL:
+
+https://services.signallia.com/res/\<action\>.
+
+Depending on the action you want to perform you have to replace the \<action\> part of the URL with either 'insert', 
+'upsert' or 'delete'. The fields for to identify and specify the reservations are given in JSON format within
+the body of the web-service request.
+
+For to identify a reservation the Sihot XML interface needs at leat the following 9 additionally fields:
+ResHotelId, ResGdsNo, ResArrival, ResDeparture, ResAdults, ResChildren, ResRoomCat, ResMktSegment and AcuId. Instead
+of the field AcuId you could also use either the fields ShId or Surname for to identify the orderer of the reservation.
+
+For to specify the reservation data use the fields listed in this [section](#available-reservation-fields) and for
+to specify extra data of the orderer the fields in this [section](#available-client-fields) can be added.  
+
+#### Retrieve Reservation Data
+
+Another GET web service provides the retrieval of the full data structure of a Sihot reservation:
+
+https://services.signallia.com/res/get?hotel_id=2&gds_no=1098576
+
+The `hotel_id` and `gds_no` query parameters of this web service are mandatory. Instead of passing the GDS number
+within `gds_no` you could alternatively also use the reservation number by passing the query parameters `res_id`
+and `sub_id` instead of the `gds_no` query parameter.
+ 
+#### Count Existing Reservations
+
+Another GET web-service allows you to get the number of confirmed Sihot reservations:
+
+https://services.signallia.com/res/count?hotel_ids=2&day=2019-10-10&room_cat_prefix=1&res_max_days=21
+
+All query parameters are optional for this web service. If the `hotel_ids` query parameter get not passed then
+the service will count the reservations in all our Sihot hotels; The `hotel_ids` parameter does also support
+a list of Sihot hotel ids separated by a comma character. The `room_cat_prefix` query parameter does also allow
+to specify the full name of a Sihot room category, like e.g. `1JNR`. Please note that the `res_max_days`
+query parameter should be greater or equal to the number of days of the counted reservations – the default
+value is 27 days).
+
+#### Retrieve Available Units
+
+Another GET web service allows to fetch the currently available units/rooms/apartments of the Sihot system, providing
+the query parameters `hotel_ids`, `room_cat_prefix` and `day`. For example the following URL is retrieving from
+Sihot all the available 1-Bedroom units within the hotel 2 (BHH) for the 10th of October 2019:
+
+https://services.signallia.com/avail_rooms?hotel_ids=2&room_cat_prefix=1&day=2019-10-10
+
+Additionally web services that are useful for debugging purposes are described in the section [Debugging](#debugging)
+underneath.
+ 
 #### Debugging
 
 For debugging you can check the log files in the log folder of the service folder (e.g. for the `services`
