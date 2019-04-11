@@ -34,6 +34,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | [SihotOccLogChecker](#sihotocclogchecker-application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
 | [SihotResImport](#sihotresimport-application) | Create/Update/Cancel reservations from CSV/TXT/JSON files within Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
+| [SihotServer](#sihotserver-web-services) | Providing web services for to pass and retrieve data from Sihot.PMS | Kernel, Web |
 | [SysDataMan](#sysdataman-application) | Initialize, pull, compare or push data against Acumen, AssCache, Salesforce and/or Sihot | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
 | [WatchPupPy](#watchpuppy-application) | Supervise always running servers or periodically execute command | Kernel, Web |
@@ -784,6 +785,21 @@ python path to the distribution folder on the same machine.
 
 After that you need to use a SFTP tool - like WinSCP.exe for to pass/synchronize the files in the distribution
 folder to the web server directories (lint and services underneath /var/www).
+
+The web services that are available at https://services.signallia.com/ are currently configured to connect to the
+TEST systems of Acumen, Salesforce and Sihot. These services allow you to send reservations to Sihot, fetch
+reservations from Sihot, count available units within Sihot and more (details see further down).
+
+For to switch these web services from TEST to LIVE the following steps have to be done:
+
+1)	Open your SFTP tool (recommended WinSCP) and connect the web server web2v.acumen.es (using your Windows user
+    account credentials).
+2)	On the web server select the folder /var/www/services (the root of these web services).
+3)	In the selected folder delete the (hidden) config file .sys_env.cfg.
+4)	Finally copy the file .sys_envLIVE.cfg and paste it into the same folder as .sys_env.cfg.
+
+For to switch back to the TEST systems do the same steps 1..3, and in step 4 copy the file .sys_envTEST.cfg (instead
+of .sys_envLIVE.cfg). 
 
 #### Insert, Upsert or Delete Reservation
 
