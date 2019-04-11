@@ -240,16 +240,17 @@ Field Name | Field Type | Description | Example Values |
 | ResPersons\<n\>RoomSeq | String | Room sequence number of occupant | '0' |
 | ResPersons\<n\>TypeOfPerson | String | Age/Type of n-th occupant | '1A', '2B' |
 | ResPriceCat | String | Paid Sihot Room Category (mostly same as `ResRoomCat`) | '1STS', '1JNP', '2BSS' |
-| ResRates | List | List of daily price rates | ((24-12-2019, 120), (25-12-2019, 140), ...) |
+| ResRateBoard | String | ID of the mealplan/board/package for ResRates | 'RO', 'BB', 'HB' |
+| ResRates | List | List of daily price rates | (('120.60', '2019-12-24'), ('140.70', '2019-12-25'), ...) |
 | ResRates\<n\>RateDay | Date | date of the price/rate segment | 24-12-2019 |
 | ResRates\<n\>RateAmount | String | daily amount (including board) as float string | '120.50' |
-| ResSfId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
-| ResSubId + | String | Sihot Reservation Sub-number | '1' |
 | ResRateSegment | String | Sihot Price Rate/Segment (mostly same as `ResMktSegment`, but SIT for Siteminder) | 'XY', 'TK', 'TC' |
 | ResRoomCat * | String | Requested Sihot Room Category | '1STS', '1JNP', '2BSS' |
 | ResRoomNo | String | Sihot Room Number (optional) | '0426', 'A112' |
+| ResSfId | String | Salesforce Reservation Opportunity Id | '006000000QACjZZYpLk' |
 | ResSource | Char | Sihot Reservation Source | 'A'=Admin, 'S'=Sales, 'T'=Tour Operator |
 | ResStatus | Char | Sihot Reservation Type | 'S'=cancelled, '1'=guaranteed |
+| ResSubId + | String | Sihot Reservation Sub-number | '1' |
 | ResVoucherNo | String | Sihot Voucher number / OTA channel booking reference | 'abc123456789' |
 
 Please note that the first value of the ResPersons index value (represented by \<n\> in the above table) is 0 (zero) and
@@ -374,7 +375,10 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResPersons\<n\>RoomSeq | - | - | PERSON.ROOM-SEQ | rgc_room_seq |
 | ResPersons\<n\>TypeOfPerson | - | - | PERSON.PERS-TYPE | rgc_pers_type |
 | ResPriceCat | SH_PRICE_CAT | - | PCAT | - |
+| ResRateBoard | - | - | - |
 | ResRateSegment | RUL_SIHOT_RATE | - | RESERVATION.RATE-SEGMENT | rgr_room_rate |
+| ResRates\<n\>RateAcount | - |- | - |
+| ResRates\<n\>RateDay | - |- | - |
 | ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
 | ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgc_room_id+rgr_room_id |
 | ResSfId | MS_SF_DL_ID | ReservationOpportunityId+Opportunity.Id | NN2(?) | rgr_sf_id |

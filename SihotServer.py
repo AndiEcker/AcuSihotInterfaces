@@ -46,7 +46,7 @@ sys.path.append(os.path.dirname(__file__))
 from bottle import default_app, request, response, static_file, template, run
 
 from sys_data_ids import SDI_SF, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_ENABLED
-from ae_sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE
+from ae_sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE, field_name_idx_path
 from ae_console_app import ConsoleApp, uprint
 from sfif import field_from_converters
 from shif import ResSender
@@ -167,7 +167,9 @@ def sh_res_action(action, res_id=None, method='POST'):
             rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
             rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # allow overwrite from json
             for name, value in res_json.items():
-                rec.set_val(value, name, system=SDI_SF, direction=FAD_FROM, converter=field_from_converters.get(name))
+                idx_path = field_name_idx_path(name, return_root_fields=True)
+                rec.set_val(value, *idx_path, system=SDI_SF, direction=FAD_FROM,
+                            converter=field_from_converters.get(name))
             rec.pull(SDI_SF)
 
             err, msg = res_send.send_rec(rec)
@@ -177,11 +179,11 @@ def sh_res_action(action, res_id=None, method='POST'):
                 if res_no_tuple[0] is None:
                     err = res_no_tuple[1]
                 else:
-                    response.status = 400
+                    response.status = 200
                     ho_id, res_id, sub_id = res_no_tuple
                     ret.update(ResHotelId=ho_id, ResId=res_id, ResSubId=sub_id)
         except Exception as e:
-            err = "exception='{}'\n{}".format(e, format_exc())
+            err = "send exception='{}'\n{}".format(e, format_exc())
 
     if err:
         ret['ErrorMessage'] += err

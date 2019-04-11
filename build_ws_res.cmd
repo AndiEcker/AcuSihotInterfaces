@@ -1,8 +1,8 @@
 rem reservation interface
 md ..\_build_dist\AcuSihotInterfaces\ws_res
 
-rem copy .sys_envLIVE.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\.sys_env.cfg
-copy .sys_envTEST.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\.sys_env.cfg
+copy .sys_envLIVE.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\.sys_envLIVE.cfg
+copy .sys_envTEST.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\.sys_envTEST.cfg
 
 copy .console_app_env.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy SihotMktSegExceptions.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\

@@ -190,11 +190,32 @@ SH_RES_MAP = \
          lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
         ('RATE-SEGMENT', 'ResRateSegment', None,
          lambda f: not f.val(), ''),
-        ('RATE/', ),                # package/arrangement has also to be specified in PERSON:
-        ('RATE' + ELEM_PATH_SEP + 'R', 'ResBoard'),
-        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None, 'Y'),
-        ('/RATE', ),
-        ('RATE/', None, None,       # GSC package
+        ('RATE/', None, None,               # default package/arrangement has also to be specified in ResPersons/PERSON
+         lambda f: f.ina(ACTION_DELETE) or f.srv('ResRates', 0, 'RateAmount')),
+        ('RATE' + ELEM_PATH_SEP + 'R', 'ResBoard', None,
+         lambda f: f.ina(ACTION_DELETE) or f.srv('ResRates', 0, 'RateAmount')),
+        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None, 'Y',
+         lambda f: f.ina(ACTION_DELETE) or f.srv('ResRates', 0, 'RateAmount')),
+        ('/RATE', None, None,
+         lambda f: f.ina(ACTION_DELETE) or f.srv('ResRates', 0, 'RateAmount')),
+        ('RATE/', None, None,               # alternative to previous default RATE section for to specify daily prices
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResRates', 0, 'RateAmount')),
+        ('RATE' + ELEM_PATH_SEP + 'R', 'ResRateBoard', None,
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResRates', 0, 'RateAmount')),
+        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None, 'Y',
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResRates', 0, 'RateAmount')),
+        ('RATE' + ELEM_PATH_SEP + 'DAYS/', None, None,
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResRates', 0, 'RateAmount')),
+        ('RATE' + ELEM_PATH_SEP + 'DAYS' + ELEM_PATH_SEP + 'D', ('ResRates', 0, 'RateDay'), None,
+         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates', f.crx(), 'RateAmount'),
+         lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
+        ('RATE' + ELEM_PATH_SEP + 'DAYS' + ELEM_PATH_SEP + 'PRICE', ('ResRates', 0, 'RateAmount'), None,
+         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates', f.crx(), 'RateAmount')),
+        ('RATE' + ELEM_PATH_SEP + '/DAYS', None, None,
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResRates', 0, 'RateAmount')),
+        ('/RATE', None, None,
+         lambda f: f.ina(ACTION_DELETE) or not f.srv('ResRates', 0, 'RateAmount')),
+        ('RATE/', None, None,               # additional RATE section for external rental GSC package
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
         ('RATE' + ELEM_PATH_SEP + 'R', None, 'GSC',
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
@@ -202,23 +223,6 @@ SH_RES_MAP = \
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
         ('/RATE', None, None,
          lambda f: f.ina(ACTION_DELETE) or f.rfv('ResMktSegment') not in ('ER', )),
-        ('RATE/', None, None,       # daily prices
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates')),
-        ('RATE' + ELEM_PATH_SEP + 'R', 'ResBoard', None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates')),
-        ('RATE' + ELEM_PATH_SEP + 'ISDEFAULT', None, 'N',
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates')),
-        ('RATE' + ELEM_PATH_SEP + 'DAYS/', None, None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates')),
-        ('RATE' + ELEM_PATH_SEP + 'DAYS' + ELEM_PATH_SEP + 'D', ('ResRates', 0, 'RateDay'), None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates'),
-         lambda f, v: convert_date_from_sh(v), lambda f, v: convert_date_onto_sh(v)),
-        ('RATE' + ELEM_PATH_SEP + 'DAYS' + ELEM_PATH_SEP + 'PRICE', ('ResRates', 0, 'RateAmount'), None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates')),
-        ('RATE' + ELEM_PATH_SEP + '/DAYS', None, None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates')),
-        ('/RATE', None, None,
-         lambda f: f.ina(ACTION_DELETE) or not f.rfv('ResRates')),
         # The following fallback rate results in error Package TO not valid for hotel 1
         # ('RATE/', ),
         # ('R', 'RO_SIHOT_RATE'},
@@ -480,7 +484,7 @@ def complete_res_data(rec):
         ResRoomNo, ResNote, ResLongNote, ResFlightArrComment (flight no...), ResAllotmentNo, ResVoucherNo.
     mandatory fields:
         ShId or AcuId or Surname (to specify the orderer of the reservation), ResHotelId, ResArrival, ResDeparture,
-        ResRoomCat, ResMktSegment, ResGdsNo.
+        ResRoomCat, ResMktSegment, ResGdsNo, ResAdults, ResChildren.
     optional fields:
         ResPersons0PersSurname and ResPersons0PersForename (surname and forename)
         ResPersons1PersSurname and ResPersons1PersForename ( ... )
@@ -490,7 +494,8 @@ def complete_res_data(rec):
     default_values = dict(ResStatus='1',
                           ResAction=ACTION_INSERT,
                           ResBooked=datetime.datetime.today(),
-                          ResPriceCat=rec.val('ResRoomCat', system='', direction=''),
+                          # removed for Nitesh SihotResImport:
+                          # ResPriceCat=rec.val('ResRoomCat', system='', direction=''),
                           ResBoard='RO',  # room only (no board/meal-plan)
                           ResAccount='1',
                           ResSource='A',

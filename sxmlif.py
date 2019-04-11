@@ -505,6 +505,7 @@ class ResKernelGet(SihotXmlBuilder):
 
         :param obj_id:  Sihot reservation object id.
         :param scope:   search scope string (see 7.3.1.2 in Sihot KERNEL interface doc V 9.0)
+        :return:        reservation number as tuple of (hotel_id, res_id, sub_id) or (None, "error") if not found
         """
         msg = "ResKernelGet.fetch_res_no({}, {}) ".format(obj_id, scope)
         self.beg_xml(operation_code='RESERVATION-GET')
@@ -516,6 +517,6 @@ class ResKernelGet(SihotXmlBuilder):
             res_no = (self.response.hn, self.response.res_nr, self.response.sub_nr)
             self.cae.dprint(msg + "res_no={};\nxml=\n{}".format(res_no, self.xml))
         else:
-            res_no = None
+            res_no = (None, err_msg)
             uprint(msg + "error='{}'".format(err_msg))
         return res_no
