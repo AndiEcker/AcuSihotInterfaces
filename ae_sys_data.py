@@ -338,10 +338,6 @@ def idx_path_field_name(idx_path, add_sep=False):
     return field_name
 
 
-def current_index(value):
-    return value.current_idx
-
-
 def compose_current_index(value, idx_path, use_curr_idx) -> tuple:
     uci = use_curr_idx.copy()
 
@@ -359,6 +355,10 @@ def compose_current_index(value, idx_path, use_curr_idx) -> tuple:
         idx_path = idx_path[1:]
 
     return curr_idx
+
+
+def current_index(value):
+    return value.current_idx
 
 
 def init_current_index(value, idx_path, use_curr_idx) -> tuple:
@@ -558,6 +558,7 @@ class Values(list):                     # type: List[Union[Value, Record]]
     def value(self, *idx_path, system='', direction='', **kwargs):
         if len(idx_path) == 0:
             return self
+
         idx, *idx2 = idx_path
         return self[idx].value(*idx2, system=system, direction=direction, **kwargs)
 
@@ -738,7 +739,7 @@ class Record(OrderedDict):
         return field
 
     def set_node_child(self, fld_or_val, *idx_path, system=None, direction=None, protect=False,
-                       root_rec=None, root_idx=(), use_curr_idx=None):
+                       root_rec=None, root_idx=(), use_curr_idx=None, to_value_type=False):
         idx_len = len(idx_path)
         assert idx_len, "Record.set_node_child() expect 2 or more args - missing field name/-path"
         assert isinstance(idx_path[0], str), \
@@ -759,7 +760,8 @@ class Record(OrderedDict):
         if not isinstance(fld_or_val, NODE_CHILD_TYPES):
             use_current_index(self, idx_path, use_curr_idx, delta=-1)
             self.set_val(fld_or_val, *idx_path, system=system, direction=direction, protect=protect,
-                         root_rec=root_rec, root_idx=root_idx[:-1], use_curr_idx=use_curr_idx)
+                         root_rec=root_rec, root_idx=root_idx[:-1], use_curr_idx=use_curr_idx,
+                         to_value_type=to_value_type)
 
         elif fld_idx in self._fields:
             if idx_len == 1:
@@ -789,17 +791,17 @@ class Record(OrderedDict):
             rec = self.node_child(rec_path, use_curr_idx=use_curr_idx)
             if not rec:     # if no deeper Record instance exists, then create new Record via empty dict and set_val()
                 self.set_val(dict(), *rec_path, protect=protect, root_rec=root_rec, root_idx=root_idx[:-1],
-                             use_curr_idx=use_curr_idx)
+                             use_curr_idx=use_curr_idx, to_value_type=to_value_type)
                 rec = self.node_child(rec_path, use_curr_idx=use_curr_idx)
             use_current_index(self, idx_path, use_curr_idx, delta=len(rec_path))
             rec.set_node_child(fld_or_val, deep_fld_name, system=system, direction=direction, protect=protect,
                                root_rec=root_rec, root_idx=idx_path[:-1], use_curr_idx=use_curr_idx)
 
     def value(self, *idx_path, system=None, direction=None, **kwargs):
-        system, direction = use_rec_default_sys_dir(self, system, direction)
-
         if len(idx_path) == 0:
             return self
+
+        system, direction = use_rec_default_sys_dir(self, system, direction)
         idx, *idx2 = idx_path
 
         field = self.node_child((idx, ))
@@ -839,25 +841,29 @@ class Record(OrderedDict):
         return val
 
     def set_val(self, val, *idx_path, system=None, direction=None, flex_sys_dir=True,
-                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
-        assert len(idx_path), "Record.set_val() expects value and index path (at least of one field name)"
+                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None,
+                to_value_type=False):
+        if len(idx_path) == 0:
+            return self.add_fields(val)         # RETURN
+
         system, direction = use_rec_default_sys_dir(self, system, direction)
         root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_val")
 
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
         root_idx += (idx, )
-        if idx not in self._fields:
+        if idx in self._fields:
+            ssd = dict()
+            field = self.node_child(idx, selected_sys_dir=ssd)
+            system, direction = ssd.get('system', system), ssd.get('direction', direction)
+        else:
             assert extend, "Record.set_val() expects extend=True for to add new fields"
             field = _Field(root_rec=root_rec or self, root_idx=root_idx)
             self._add_field(field, idx)
             protect = False
-        else:
-            ssd = dict()
-            field = self.node_child(idx, selected_sys_dir=ssd)
-            system, direction = ssd.get('system', system), ssd.get('direction', direction)
+
         field.set_val(val, *idx2, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
                       protect=protect, extend=extend, converter=converter,
-                      root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+                      root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx, to_value_type=to_value_type)
         return self
 
     def leafs(self, system=None, direction=None, flex_sys_dir=True):
@@ -1402,6 +1408,12 @@ class Records(Values):              # type: List[Record]
 
     def set_val(self, val, *idx_path, system='', direction='', flex_sys_dir=True,
                 protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
+        if len(idx_path) == 0:
+            for idx, row in enumerate(val):
+                self.set_node_child(row, idx, system=system, direction=direction,
+                                    protect=protect, root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+            return self                                 # RETURN
+
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)  # type: (int, list)
         assert isinstance(idx, int), "Records expects first index of type int, but got {}".format(idx)
 
@@ -1633,25 +1645,39 @@ class _Field:
                          use_curr_idx=use_curr_idx, **kwargs)
 
     def set_val(self, val, *idx_path, system='', direction='', flex_sys_dir=True,
-                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None):
+                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None,
+                to_value_type=False):
         idx_len = len(idx_path)
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir or idx_len)
 
         if idx_len == 0:
-            val_is_value = isinstance(val, VALUE_TYPES)
             if converter:   # create system value if converter is specified and on leaf idx_path item
                 self.set_converter(converter, system=system, direction=direction, extend=extend,
                                    root_rec=root_rec, root_idx=root_idx)
                 value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
-            elif extend and (val_is_value or value is None or not isinstance(value, Value)):
-                value = val if val_is_value else Value()
-                self.set_value(value, system=system, direction=direction, protect=protect,
-                               root_rec=root_rec, root_idx=root_idx)
-            self.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx)
-            if val_is_value:
-                return self
 
-        elif isinstance(value, (Value, type(None))) and extend and not protect:
+            val_is_value = isinstance(val, VALUE_TYPES)
+            if val_is_value \
+                    or isinstance(val, (list, dict)) and to_value_type \
+                    or value is None \
+                    or not isinstance(value, Value):
+                assert extend and not protect, "_Field.set_val({}): value {} exists - pass extend={}/protect={}" \
+                                .format(val, value, extend, protect)
+                value = val if val_is_value \
+                    else (Record() if isinstance(val, dict)
+                          else ((Records() if isinstance(val[0], dict) else Values()) if isinstance(val, list)
+                                else Value())
+                          )
+                self.set_value(value, system=system, direction=direction,
+                               protect=protect, root_rec=root_rec, root_idx=root_idx)
+            self.set_env(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx)
+
+            if val_is_value:
+                return self             # RETURN
+
+        elif isinstance(value, (Value, type(None))):
+            assert extend and not protect, "_Field.set_val({}, {}): value {} exists - change extend={}/protect={}" \
+                .format(val, idx_path, value, extend, protect)
             value = Record() if isinstance(idx_path[0], str) \
                 else (Records() if idx_len > 1 or isinstance(val, dict) else Values())
             init_current_index(value, idx_path, use_curr_idx)

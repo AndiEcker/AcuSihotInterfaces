@@ -140,7 +140,10 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 def sh_res_action(action, res_id=None, method='POST'):
     supported_actions = (ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE)
     err = msg = ""
+    ret = dict(ErrorMessage=err, WarningMessage=msg)
     res_json = dict()
+    res_send = ResSender(cae)
+    rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
 
     if action.upper() not in supported_actions:
         err = "Reservation {} for ID {} with action {} not implemented; use one of supported actions ({})" \
@@ -153,25 +156,31 @@ def sh_res_action(action, res_id=None, method='POST'):
                     request.body.getvalue(), request.query_string)
         add_log_entry(warning_msg=msg)
 
-    if not err:
-        res_json = request.json         # web service arguments as dict
-        if res_json is None:
-            err = "JSON arguments missing"
-            msg += "\n      got request {!r} but body with JSON is empty".format(request)
-            add_log_entry(error_msg=err, warning_msg=msg, importance=3)
+    rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # overwrite with URL action
 
-    ret = dict(ErrorMessage=err, WarningMessage=msg)
     if not err:
         try:
-            res_send = ResSender(cae)
-            rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
-            rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # allow overwrite from json
+            res_json = request.json         # web service arguments as dict
+            if res_json is None:
+                err = "JSON arguments missing"
+                msg += "\n      got request {!r} but body with JSON is empty".format(request)
+                add_log_entry(error_msg=err, warning_msg=msg, importance=3)
+        except Exception as e:
+            err = "retrieve JSON arguments exception='{}'\n{}".format(e, format_exc())
+
+    if not err:
+        try:
             for name, value in res_json.items():
                 idx_path = field_name_idx_path(name, return_root_fields=True)
                 rec.set_val(value, *idx_path, system=SDI_SF, direction=FAD_FROM,
-                            converter=field_from_converters.get(name))
+                            converter=field_from_converters.get(idx_path[-1]) or field_from_converters.get(idx_path[0]),
+                            to_value_type=True)
             rec.pull(SDI_SF)
+        except Exception as e:
+            err = "parse JSON exception='{}'\n{}".format(e, format_exc())
 
+    if not err:
+        try:
             err, msg = res_send.send_rec(rec)
 
             if not err:
@@ -183,15 +192,16 @@ def sh_res_action(action, res_id=None, method='POST'):
                     ho_id, res_id, sub_id = res_no_tuple
                     ret.update(ResHotelId=ho_id, ResId=res_id, ResSubId=sub_id)
         except Exception as e:
-            err = "send exception='{}'\n{}".format(e, format_exc())
+            err = "send to Sihot exception='{}'\n{}".format(e, format_exc())
 
     if err:
         ret['ErrorMessage'] += err
     if msg:
         ret['WarningMessage'] += msg
 
-    add_log_entry(warning_msg="sh_res_action({}, {}, {}) call with json arguments: {}; responding to SF: {}"
-                  .format(action, res_id, method, res_json, ret), error_msg=ret['ErrorMessage'],
+    add_log_entry(warning_msg="sh_res_action({}, {}, {}) called with JSON: {}; responding to SF: {}"
+                  .format(action, res_id, method, res_json, ret),
+                  error_msg=ret['ErrorMessage'],
                   importance=4, minimum_debug_level=DEBUG_LEVEL_ENABLED)
 
     return ret

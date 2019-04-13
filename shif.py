@@ -865,8 +865,7 @@ class FldMapXmlParser(SihotXmlParser):
                 if len(curr_idx) == 3 and curr_idx[2] == 'PERSON.ROOM-SEQ' and val != '0':
                     self.cae.dprint(msg + "auto-correction of {} RoomSeq value {!r} to '0'".format(curr_idx, val))
                     val = '0'
-                self.cae.dprint(msg + "setting field {} to {!r}".format(curr_idx, val),
-                                minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                self.cae.dprint(msg + "setting field {} to {!r}".format(curr_idx, val))
                 self._rec.set_val(val, *curr_idx, system=SDI_SH, direction=FAD_FROM)
         self._collected_fields = list()
 

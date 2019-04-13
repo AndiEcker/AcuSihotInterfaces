@@ -1,11 +1,12 @@
 import pytest
-
+import datetime
 from collections import OrderedDict
+
+from sys_data_ids import SDI_SH
 from ae_sys_data import aspect_key, aspect_key_system, aspect_key_direction, correct_email, correct_phone, deeper, \
     field_name_idx_path, field_names_idx_paths, idx_path_field_name, \
     Value, Values, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
-    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP
-from sys_data_ids import SDI_SH
+    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP, compose_current_index
 
 
 @pytest.fixture()
@@ -180,6 +181,13 @@ class TestHelperMethods:
         r = Record()
         set_current_index(r, idx='fnX')
         assert current_index(r) == 'fnX'
+
+    def test_compose_current_index(self):
+        assert compose_current_index
+
+    def test_set_current_system_index(self):
+        rec = Record()
+        assert rec.set_current_system_index('TEST', '+') is None
 
 
 class TestValue:
@@ -1245,6 +1253,98 @@ class TestSetVal:
         assert vus.set_val('6', 2).val(2) == '6'
         vus.set_val([3], 1)
         assert vus.val(1) == [3]
+
+    def test_set_complex_val(self):
+        rec = Record(system='Xx', direction=FAD_FROM)
+        rec.add_system_fields((('fnAXx', 'fnA'),
+                               ('sfnAXx', 'fnB0sfnBA'), ('sfnBXx', 'fnB0sfnBB'),
+                               ('sfnAXx', 'fnB1sfnBA'), ('sfnBXx', 'fnB1sfnBB')))
+
+        # flat field exists (no sub records)
+        val = [dict(sfnAA='test', sfnAB=datetime.date(year=2022, month=6, day=3)),
+               dict(sfnAA='tst2', sfnAB=datetime.date(year=2040, month=9, day=6))]
+        rec.set_val(val, 'fnA', system='Xx', direction=FAD_FROM)
+        assert isinstance(rec['fnA'], list)
+        assert isinstance(rec.val('fnA'), list)
+        assert isinstance(rec.value('fnA', flex_sys_dir=True), Value)
+        assert rec.val('fnA')[1]['sfnAA'] == 'tst2'
+        # .. now overwrite with conversion to value types
+        rec.set_val(val, 'fnA', system='Xx', direction=FAD_FROM, to_value_type=True)
+        assert isinstance(rec['fnA'], list)
+        assert isinstance(rec.value('fnA', flex_sys_dir=True), Records)
+        assert rec.val('fnA', 1, 'sfnAA') == 'tst2'
+        # node field exists
+        val = [dict(sfnBA='test', sfnBB=datetime.date(year=2022, month=6, day=3)),
+               dict(sfnBA='tst2', sfnBB=datetime.date(year=2040, month=9, day=6))]
+        rec.set_val(val, 'fnB', system='Xx', direction=FAD_FROM)
+        assert isinstance(rec['fnB'], list)
+        assert isinstance(rec.val('fnB'), list)
+        assert isinstance(rec.value('fnB', flex_sys_dir=True), Records)
+        assert rec.val('fnB')[1]['sfnBA'] == 'tst2'
+        # .. now overwrite with conversion to value types
+        rec.set_val(val, 'fnB', system='Xx', direction=FAD_FROM, to_value_type=True)
+        assert isinstance(rec['fnB'], list)
+        assert isinstance(rec.value('fnB', flex_sys_dir=True), Records)
+        assert rec.val('fnB', 1, 'sfnBA') == 'tst2'
+        # field not exists
+        val = [dict(sfnCA='test', sfnCB=datetime.date(year=2022, month=6, day=3)),
+               dict(sfnCA='tst2', sfnCB=datetime.date(year=2040, month=9, day=6))]
+        rec.set_val(val, 'fnC', system='Xx', direction=FAD_FROM)
+        assert isinstance(rec['fnC'], list)
+        assert isinstance(rec.val('fnC'), list)
+        assert isinstance(rec.value('fnC', flex_sys_dir=True), Value)
+        assert rec.val('fnC')[1]['sfnCA'] == 'tst2'
+        # .. now overwrite with conversion to value types
+        rec.set_val(val, 'fnC', system='Xx', direction=FAD_FROM, to_value_type=True)
+        assert isinstance(rec['fnC'], list)
+        assert isinstance(rec.value('fnC', flex_sys_dir=True), Records)
+        assert rec.val('fnC', 1, 'sfnCA') == 'tst2'
+
+    def test_set_complex_node(self):
+        rec = Record(system='Xx', direction=FAD_FROM)
+        rec.add_system_fields((('fnAXx', 'fnA'),
+                               ('sfnAXx', 'fnB0sfnBA'), ('sfnBXx', 'fnB0sfnBB'),
+                               ('sfnAXx', 'fnB1sfnBA'), ('sfnBXx', 'fnB1sfnBB')))
+
+        # flat field exists (no sub records)
+        val = [dict(sfnAA='test', sfnAB=datetime.date(year=2022, month=6, day=3)),
+               dict(sfnAA='tst2', sfnAB=datetime.date(year=2040, month=9, day=6))]
+        rec.set_node_child(val, 'fnA', system='Xx', direction=FAD_FROM)
+        assert isinstance(rec['fnA'], list)
+        assert isinstance(rec.val('fnA'), list)
+        assert isinstance(rec.value('fnA', flex_sys_dir=True), Value)
+        assert rec.val('fnA')[1]['sfnAA'] == 'tst2'
+        # .. now overwrite with conversion to value types
+        rec.set_val(val, 'fnA', system='Xx', direction=FAD_FROM, to_value_type=True)
+        assert isinstance(rec['fnA'], list)
+        assert isinstance(rec.value('fnA', flex_sys_dir=True), Records)
+        assert rec.val('fnA', 1, 'sfnAA') == 'tst2'
+        # node field exists
+        val = [dict(sfnBA='test', sfnBB=datetime.date(year=2022, month=6, day=3)),
+               dict(sfnBA='tst2', sfnBB=datetime.date(year=2040, month=9, day=6))]
+        rec.set_node_child(val, 'fnB', system='Xx', direction=FAD_FROM)
+        assert isinstance(rec['fnB'], list)
+        assert isinstance(rec.val('fnB'), list)
+        assert isinstance(rec.value('fnB', flex_sys_dir=True), Records)
+        assert rec.val('fnB')[1]['sfnBA'] == 'tst2'
+        # .. now overwrite with conversion to value types
+        rec.set_val(val, 'fnB', system='Xx', direction=FAD_FROM, to_value_type=True)
+        assert isinstance(rec['fnB'], list)
+        assert isinstance(rec.value('fnB', flex_sys_dir=True), Records)
+        assert rec.val('fnB', 1, 'sfnBA') == 'tst2'
+        # field not exists
+        val = [dict(sfnCA='test', sfnCB=datetime.date(year=2022, month=6, day=3)),
+               dict(sfnCA='tst2', sfnCB=datetime.date(year=2040, month=9, day=6))]
+        rec.set_node_child(val, 'fnC', system='Xx', direction=FAD_FROM)
+        assert isinstance(rec['fnC'], list)
+        assert isinstance(rec.val('fnC'), list)
+        assert isinstance(rec.value('fnC', flex_sys_dir=True), Value)
+        assert rec.val('fnC')[1]['sfnCA'] == 'tst2'
+        # .. now overwrite with conversion to value types
+        rec.set_val(val, 'fnC', system='Xx', direction=FAD_FROM, to_value_type=True)
+        assert isinstance(rec['fnC'], list)
+        assert isinstance(rec.value('fnC', flex_sys_dir=True), Records)
+        assert rec.val('fnC', 1, 'sfnCA') == 'tst2'
 
 
 class TestContactValidation:

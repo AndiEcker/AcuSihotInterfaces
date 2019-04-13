@@ -10,7 +10,7 @@ class TestResToSihot:
                         ResHotelId='1', ResGdsNo='TEST-123456789',
                         ResArrival=datetime.date(year=2019, month=12, day=24),
                         ResDeparture=datetime.date(year=2019, month=12, day=30),
-                        ResAdults=1, ResChildren=1, ResRoomCat='1JNS', ResMktSegment='TO'
+                        ResAdults=1, ResChildren=1, ResRoomCat='1JNS', ResMktSegment='TO',
                         )
         err_msg = res_to.send_res_to_sihot(rec=Record(fields=fld_vals), ensure_client_mode=ECM_DO_NOT_SEND_CLIENT)
         assert not err_msg
@@ -22,6 +22,7 @@ class TestResToSihot:
                         ResArrival=datetime.date(year=2019, month=12, day=24),
                         ResDeparture=datetime.date(year=2019, month=12, day=30),
                         ResAdults=1, ResChildren=1, ResRoomCat='1JNS', ResMktSegment='TO',
+                        ResRateBoard='RO',
                         ResRates0RateDay=datetime.date(year=2019, month=12, day=24), ResRates0RateAmount='120.60',
                         ResRates1RateDay=datetime.date(year=2019, month=12, day=25), ResRates1RateAmount='150.60',
                         ResRates2RateDay=datetime.date(year=2019, month=12, day=28), ResRates2RateAmount='180.60',

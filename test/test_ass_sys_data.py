@@ -509,7 +509,7 @@ class TestSysDataResActions:
                             # RoomSeq is coming back sometimes with 1 although sent as 0
                             # 'RoomSeq',    # ..  meanwhile hard-coded to '0' in ASD.res_save()
                             # quick fix tests - TODO: fix
-                            'PersSurname', 'ResAccount',
+                            'PersSurname', 'ResAccount', 'ResPriceCat',
                             ] + orderer_fields
             )
         assert not asd.error_message
