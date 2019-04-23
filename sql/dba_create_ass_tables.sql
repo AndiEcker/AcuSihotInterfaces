@@ -138,7 +138,7 @@ CREATE TABLE res_groups
   rgr_order_cl_fk         INTEGER REFERENCES clients(cl_pk),
   rgr_used_ri_fk          INTEGER REFERENCES res_inventories(ri_pk),
   rgr_rci_deposit_ri_fk   INTEGER REFERENCES res_inventories(ri_pk),
-  rgr_gds_no              VARCHAR(24),
+  rgr_gds_no              VARCHAR(30),
   rgr_sf_id               VARCHAR(18),
   rgr_status              VARCHAR(3),
   rgr_source              VARCHAR(3),   -- added later in branch sys_data_generic
@@ -154,7 +154,7 @@ CREATE TABLE res_groups
   rgr_room_cat_id         VARCHAR(6),
   rgr_room_rate           VARCHAR(3),
   rgr_payment_inst        VARCHAR(3),
-  rgr_ext_book_id         VARCHAR(21),
+  rgr_ext_book_id         VARCHAR(33),
   rgr_ext_book_day        DATE,
   rgr_comment             TEXT,           -- VARCHAR(540) was too short
   rgr_long_comment        TEXT,           -- was VARCHAR(3999)

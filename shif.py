@@ -45,7 +45,7 @@ def convert_date_from_sh(xml_string):
 
 
 def convert_date_onto_sh(date):
-    return datetime.date.strftime(date, '%Y-%m-%d') if date else ''
+    return (date if isinstance(date, str) else datetime.date.strftime(date, '%Y-%m-%d')) if date else ''
 
 
 #  ELEMENT-FIELD-MAP-TUPLE-INDEXES  #################################
