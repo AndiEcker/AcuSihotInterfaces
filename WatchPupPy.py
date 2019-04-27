@@ -9,6 +9,7 @@
             config file write) in reset_last_run_time().
     1.0     add check of last T_SRSL for RU (SRSL_TABLE) and fix file path bug and on INI lock reset.
     1.1     wait at least 6 minutes between error notifications.
+    1.2     commented out pprint of notification message body.
 
 TODO:
     - investigate and fix bug with freeze if sendOutput option is specified with the value 1/enabled and unsuccessful
@@ -28,7 +29,7 @@ import time
 import datetime
 import subprocess
 from configparser import ConfigParser
-import pprint
+# import pprint
 
 from sys_data_ids import SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT
 from ae_console_app import ConsoleApp, Progress, uprint, full_stack_trace,\
@@ -38,7 +39,7 @@ from shif import ClientSearch
 from ass_sys_data import add_ass_options, init_ass_data
 
 
-__version__ = '1.1'
+__version__ = '1.2'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 MAX_SRSL_OUTAGE_HOURS = 18.0                # maximum time after last sync entry was logged (multiple on TEST system)
@@ -104,7 +105,7 @@ def user_notification(subject, body):
     parent_pid = os.getppid()
     pid = os.getpid()
     subject += " " + exe_name + " pid=" + str(parent_pid) + ("/" + str(pid) if pid != parent_pid else "")
-    body = pprint.pformat(body, indent=3, width=120)
+    # body = pprint.pformat(body, indent=3, width=120)
 
     if notification:
         err_message = notification.send_notification(body, subject=subject, body_style='plain')
@@ -366,7 +367,7 @@ while True:
             continue        # jump to begin of loop for to notify user, BREAK this loop and quit this app
         except Exception as ex:
             curr_time = datetime.datetime.now()
-            errors.append("{}. run raised unspecified exception: {} at {}\n      {}"
+            errors.append("{}. run raised unexpected exception: {} at {}\n      {}"
                           .format(run_starts, ex, curr_time, full_stack_trace(ex)))
             continue        # try directly again - don't reset last_run variable
 

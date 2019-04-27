@@ -1459,6 +1459,34 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             self.error_message += err_msg
         return self.error_message
 
+    def sf_res_occupants_upsert(self, rgr_sf_id, ho_id, res_id, sub_id, with_occ):
+        sh_res = ResFetch(self.cae).fetch_by_res_id(ho_id, res_id, sub_id)
+        if not isinstance(sh_res, Record):
+            self.error_message = sh_res
+            return sh_res
+
+        ass_res = Record(system=SDI_ASS, direction=FAD_ONTO)
+        if not self.res_save(sh_res, ass_res_rec=ass_res):
+            return self.error_message
+
+        send_occ = list()
+        oldest_dob = datetime.date.today()
+        for pers_idx, occ_rec in enumerate(ass_res.value('ResPersons', flex_sys_dir=True)):
+            is_adult = occ_rec.val('TypeOfPerson') == '1A'
+            if is_adult and with_occ == 'FirstAdult':
+                send_occ.append(occ_rec)
+                break
+            elif is_adult and occ_rec.val('PersDOB') < oldest_dob and with_occ == 'OldestAdult':
+                if send_occ:
+                    send_occ = list()
+                send_occ.append(occ_rec)
+                oldest_dob = occ_rec.val('PersDOB')
+            else:
+                send_occ.append(occ_rec)
+
+        self.error_message = self.connection(SDI_SF).occupants_upsert(rgr_sf_id, ho_id, res_id, sub_id, send_occ)
+        return self.error_message
+
     # #######################  SH helpers  ######################################################################
 
     def sh_apt_wk_yr(self, rec):

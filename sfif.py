@@ -891,11 +891,11 @@ class SfInterface:
         return result.get('PersonAccountId'), result.get('ReservationOpportunityId'), self.error_msg
 
     def room_change(self, res_sf_id, check_in, check_out, next_room_id):
-        room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out,
-                             RoomNo__c=next_room_id)
         msg = "SFIF.room_change({}, {}, {}, {})".format(res_sf_id, check_in, check_out, next_room_id)
         dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
 
+        room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out,
+                             RoomNo__c=next_room_id)
         result = self.apex_call('reservation_room_move', function_args=room_chg_data)
 
         if self.error_msg or result.get('ErrorMessage'):
@@ -947,3 +947,22 @@ class SfInterface:
             ret_val.update(ret)
 
         return ret_val
+
+    def occupants_upsert(self, res_sf_id, ho_id, res_id, sub_id, send_occ,
+                         sf_fields=('PersSurname', 'PersForename', 'PersDOB', 'TypeOfPerson')):
+        msg = "SFIF.occupants_upsert({}, {}, {}, {}, {})".format(res_sf_id, ho_id, res_id, sub_id, send_occ)
+        dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
+
+        sf_data = dict(ReservationOpportunityId=res_sf_id, HotelId__c=ho_id, Number__c=res_id, SubNumber__c=sub_id)
+        for occ_idx, occ_rec in enumerate(send_occ):
+            prefix = 'ResPersons' + str(occ_idx)
+            for fld in sf_fields:
+                sf_data[prefix + fld] = occ_rec.val(fld)
+
+        result = self.apex_call('reservation_occupants_upsert', function_args=sf_data)
+        if self.error_msg or result.get('ErrorMessage'):
+            self.error_msg += "SF err=\n{} in {}".format(ppf(result) if dbg else result.get('ErrorMessage'), msg)
+        elif dbg:
+            uprint(msg + " send-data=\n{}; result=\n{}'".format(ppf(sf_data), ppf(result)))
+
+        return self.error_msg

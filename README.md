@@ -564,19 +564,47 @@ empty:
 
 ### BssServer Application
 
-The BssServer is a server application that is providing a web-service that is listening/waiting for our Sihot system
-to connect (as a client) for to propagate/push the following live actions done within Sihot:
+The BssServer is a server application which is providing a special Sihot-compatible web-service because the Sihot
+live/push SXML interfaces are not compatible to any web-service standards (SOAP/WSDL/REST/XML/…). BssServer is 
+listening/waiting for our Sihot system to connect (as a client) for to process and propagate/push the following live 
+actions done within Sihot:
 
 * Change of Reservation Data
-* Room Check-Ins
-* Room Check-Outs
-* Room Moves
+* Change of Room/Occupation (Check-Ins, Check-Outs, Room Moves)
 
-Any of these Sihot actions will be cashed within the AssCache/Postgres database and later (after the reservations got
-fully implemented within Salesforce) also be propagated onto our Salesforce system. We could pass these
-notifications directly into the SF system (by-passing AssCache) if SF would be able to act as a server for
-web services, but most likely we need to implement a bridge like BssServer here because the Sihot live/push interfaces 
-are not compatible to any web-service standards (SOAP/WSDL/REST/XML/…).
+Sihot is sending to the BssServer the operation code `CR` for each reservation data change. The operation codes 
+for room check-ins is `CI`, for check-outs is `CO` and for room moves is `RM`.
+
+Any of these Sihot four actions will be directly cashed within the AssCache/Postgres database and later (after maximum
+6 minutes) also be bulk-propagated onto our Salesforce system.
+
+The Salesforce system does provide the `reservation_upsert()` method for to receive the Sihot reservation changes.
+As parameters are passed most of the [available reservation fields](#available-reservation-fields). If a reservation
+got already sent before to Salesforce then the reservation opportunity id (with a 006 prefix) will be sent within
+the additional parameter `ReservationOpportunityId` and the PersonAccount id within `PersonAccountId`.
+
+For to propagate the check-in/-out/room-move timestamps to Salesforce the BssServer is calling the method
+`reservation_room_move()` with the parameters `CheckInc` and `CheckOutc`. The current room id/number get passed
+within the parameter `RoomNoc`. Finally the parameter `ReservationOpportunityId` get passed for to identify
+the reservation within Salesforce by their reservation opportunity id.
+
+If the BssServer config option `roomChangeWithOccupants` has a non-empty value then BssServer is also sending
+occupants data from the Sihot rooming list to Salesforce on every room change. If this config value is
+`FirstAdult` then only the first adult of the rooming list get sent, if it is `OldestAdult` then only the data
+of the oldest adult in the rooming list get sent. For all other non-empty values all the pax of the rooming list 
+get sent to Salesforce.
+
+Occupants data will be sent to Salesforce by calling the method `reservation_occupants_upsert()`. For to identify
+the reservation within Salesforce you can use the parameters `ReservationOpportunityId` (if the reservation got
+already sent before to Salesforce) as well as `HotelIdc`, `Numberc` and `SubNumberc`. The data of the occupants
+get passed by parameter names with the prefix `ResPersons`, followed by an integer that is specifying the index
+(starting with zero for the first entry) of the occupants data list and terminated by the sub-field name. So e.g.
+the surname of the first person get sent within the parameter `ResPersons0PersSurname`, whereas the surname of
+the second person (if any) will be sent within the parameter `ResPersons1PersSurname`.
+
+Although Sihot does provide all the sub-field names that are documented in the section 
+[available reservation fields](#available-reservation-fields) under the `ResPersons` field,, the BssServer
+is currently only sending the fields `PersSurname`, `PersForename`, `PersDOB`, `TypeOfPerson`.
 
 
 ### ClientQuestionnaireExport Application

@@ -17,6 +17,7 @@
     1.2     Changed DB-Locks to RLocks and added outer locking on transaction commit level.
     1.3     Fixed bug to not overwrite rgr_sf_id.
     2.0     First version after merge of sys_data_generic branch.
+    2.1     Added send of occupants on room move to Salesforce.
 """
 import datetime
 import threading
@@ -35,7 +36,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
 from shif import client_data, ResFetch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '2.0'
+__version__ = '2.1'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
@@ -168,11 +169,8 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         sh_cl = Record()
 
     rgr_sf_id = ass_res_sf_id = ass_changed_res['rgr_sf_id']
-    ''' QUICK FIX: don't get rgr_sf_id from Acumen MS_SF_DL_ID because this is the deal opportunity (not ResOpp)
-        later added back because it looks like it is a ResOpp with record type Service Center Booking
-    '''
     if not rgr_sf_id:
-        # try to determine SF Reservation Opportunity ID from Acumen
+        # try to assign ResOpp-ID (of record type Service Center Booking) from Acumen MS_SF_DL_ID onto rgr_sf_id
         obj_id = ass_changed_res['rgr_obj_id']
         if obj_id:
             res = asd.load_view(asd.connection(SDI_ACU), 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
@@ -211,13 +209,13 @@ def res_from_sh_to_sf(asd, ass_changed_res):
 
 def room_change_to_sf(asd, ass_res):
     ho_id, res_id, sub_id = ass_res['rgr_ho_fk'], ass_res['rgr_res_id'], ass_res['rgr_sub_id']
+    sf_res_id = ass_res['rgr_sf_id']
     msg_pre = "room_change_to_sf({}/{}@{}): ".format(res_id, sub_id, ho_id)
     log_msg(msg_pre + "sync room change from SH Object Id={} to SF Opp Id={}"
-            .format(ass_res['rgr_obj_id'], ass_res['rgr_sf_id']),
+            .format(ass_res['rgr_obj_id'], sf_res_id),
             importance=4, notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
-    err_msg = asd.sf_ass_room_change(ass_res['rgr_sf_id'],
-                                     ass_res['rgr_time_in'], ass_res['rgr_time_out'], ass_res['rgr_room_id'])
+    err_msg = asd.sf_ass_room_change(sf_res_id, ass_res['rgr_time_in'], ass_res['rgr_time_out'], ass_res['rgr_room_id'])
     if err_msg:
         return msg_pre + "SF room push/update err='{}'; ass=\n{}".format(err_msg, ppf(ass_res))
 
@@ -226,6 +224,14 @@ def room_change_to_sf(asd, ass_res):
     if not asd.rgr_upsert(dict(rgr_room_last_sync=ass_res['rgr_room_last_sync']), chk_values, commit=True):
         err_msg = msg_pre + "last room sync timestamp ass_cache update err='{}'; ass=\n{}" \
                       .format(asd.error_message, ppf(ass_res))
+
+    # optionally send occupants data if roomChangeWithOccupants config var is set (hot reloaded w/o server restart)
+    with_occ = asd.cae.get_config('roomChangeWithOccupants')
+    if with_occ:
+        occ_msg = asd.sf_res_occupants_upsert(sf_res_id, ho_id, res_id, sub_id, with_occ)   # ignore any errors
+        if occ_msg:
+            log_msg(msg_pre + "occupants send err={}; SfOppId={}".format(sf_res_id, occ_msg),
+                    notify=debug_level >= DEBUG_LEVEL_VERBOSE)
 
     return err_msg
 
