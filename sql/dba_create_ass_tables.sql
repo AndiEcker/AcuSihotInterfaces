@@ -149,7 +149,7 @@ CREATE TABLE res_groups
   rgr_mkt_segment         VARCHAR(3),
   rgr_mkt_group           VARCHAR(3),
   rgr_group_no            VARCHAR(96),  -- added later in branch sys_data_generic
-  rgr_sh_pack             VARCHAR(3),   -- added later in branch sys_data_generic
+  rgr_sh_pack             VARCHAR(6),   -- added later in branch sys_data_generic
   rgr_room_id             VARCHAR(6),
   rgr_room_cat_id         VARCHAR(6),
   rgr_room_rate           VARCHAR(3),
@@ -209,7 +209,7 @@ CREATE TABLE res_group_clients
   rgc_flight_dep_comment  VARCHAR(42),            -- currently not used
   rgc_flight_dep_time     TIME,                   -- currently not used
   rgc_pers_type           VARCHAR(3),             -- 1A=adult, 2B=children
-  rgc_sh_pack             VARCHAR(3),
+  rgc_sh_pack             VARCHAR(6),
   rgc_room_id             VARCHAR(6),
   UNIQUE (rgc_rgr_fk, rgc_room_seq, rgc_pers_seq)
 );
