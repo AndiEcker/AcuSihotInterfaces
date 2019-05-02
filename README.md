@@ -378,7 +378,7 @@ for them within our systems (Acumen, Salesforce, Sihot and AssCache):
 | ResPriceCat | SH_PRICE_CAT | - | PCAT | - |
 | ResRateBoard | - | - | - |
 | ResRateSegment | RUL_SIHOT_RATE | - | RESERVATION.RATE-SEGMENT | rgr_room_rate |
-| ResRates\<n\>RateAcount | - |- | - |
+| ResRates\<n\>RateAmount | - |- | - |
 | ResRates\<n\>RateDay | - |- | - |
 | ResRoomCat | RUL_SIHOT_CAT | RoomCat__c | RESERVATION.CAT | rgr_room_cat_id |
 | ResRoomNo | RUL_SIHOT_ROOM | RoomNo__c | PERSON.RN | rgc_room_id+rgr_room_id |
@@ -811,23 +811,16 @@ For to run one of the deployment shell scripts, you first have to change the cur
 source folder. The shell script is copying all the needed python code from the actual source folder and the
 python path to the distribution folder on the same machine.
 
-After that you need to use a SFTP tool - like WinSCP.exe for to pass/synchronize the files in the distribution
-folder to the web server directories (lint and services underneath /var/www).
+After that you need to use a SFTP tool - like WinSCP.exe for connect the web server web2v.acumen.es (using your
+Windows user account credentials). Then pass/synchronize the files in the distribution
+folder to the web server directories (lint and services underneath /var/www):
 
 The web services that are available at https://services.signallia.com/ are currently configured to connect to the
 TEST systems of Acumen, Salesforce and Sihot. These services allow you to send reservations to Sihot, fetch
 reservations from Sihot, count available units within Sihot and more (details see further down).
 
-For to switch these web services from TEST to LIVE the following steps have to be done:
-
-1)	Open your SFTP tool (recommended WinSCP) and connect the web server web2v.acumen.es (using your Windows user
-    account credentials).
-2)	On the web server select the folder /var/www/services (the root of these web services).
-3)	In the selected folder delete the (hidden) config file .sys_env.cfg.
-4)	Finally copy the file .sys_envLIVE.cfg and paste it into the same folder as .sys_env.cfg.
-
-For to switch back to the TEST systems do the same steps 1..3, and in step 4 copy the file .sys_envTEST.cfg (instead
-of .sys_envLIVE.cfg). 
+All these web services are available for the TEST and the LIVE system environments. A separate configuration file
+is available for each system environment: `.sys_envTEST.cfg` for TEST and `.sys_envLIVE.cfg` for LIVE (production).
 
 #### Insert, Upsert or Delete Reservation
 
@@ -839,7 +832,7 @@ Depending on the action you want to perform you have to replace the \<action\> p
 'upsert' or 'delete'. The fields for to identify and specify the reservations are given in JSON format within
 the body of the web-service request.
 
-For to identify a reservation the Sihot XML interface needs at leat the following 9 additionally fields:
+For to identify a reservation the Sihot XML interface needs at least the following 9 additionally fields:
 ResHotelId, ResGdsNo, ResArrival, ResDeparture, ResAdults, ResChildren, ResRoomCat, ResMktSegment and AcuId. Instead
 of the field AcuId you could also use either the fields ShId or Surname for to identify the orderer of the reservation.
 
@@ -877,10 +870,7 @@ Sihot all the available 1-Bedroom units within the hotel 2 (BHH) for the 10th of
 
 https://services.signallia.com/avail_rooms?hotel_ids=2&room_cat_prefix=1&day=2019-10-10
 
-Additionally web services that are useful for debugging purposes are described in the section [Debugging](#debugging)
-underneath.
- 
-#### Debugging
+#### Web Services Debugging
 
 For debugging you can check the log files in the log folder of the service folder (e.g. for the `services`
 web service within `/var/www/services/log`).
@@ -902,6 +892,14 @@ of the services folder (for example from /var/www/services/static).
 Finally under the URL https://lint.signallia.com there is also a small web service available for debugging
 purposes that is displaying all the system environment variable of the web server (used by all our python
 web services).
+
+#### Using the TEST system environment
+
+Most of the URLs specified in the previous paragraphs are documented for the LIVE system environment. For to use
+instead the TEST systems you have to add the prefix `test_` in front of the URL path and directly after the slash
+character that is terminating the domain (services.signallia.com). Only one [debugging service](#web-services-debugging)
+which is available on the domain lint.signallia.com is independent from any of our system environments (because it is
+only displaying the configuration and environment settings of the Apache server).  
 
 
 ### WatchPupPy Application

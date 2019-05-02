@@ -181,7 +181,7 @@ class Setting:
             if not self._type and self._value is not None:
                 self._type = type(self._value)
         except Exception as ex:
-            uprint("Setting.value exception '{}' on evaluating the setting {} with value: {!r}"
+            uprint(" ***  Setting.value exception '{}' on evaluating the setting {} with value: {!r}"
                    .format(ex, self._name, value))
         return self._value
 
@@ -250,11 +250,11 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
         file = ori_std_out if end == "\r" else app_std_out
     enc = file.encoding
 
-    # creating new log file and backup of current one if the current one has more than 20 MB in size
     if _ca_instance is not None:
         if getattr(_ca_instance, 'multi_threading', False):            # add thread ident
             print_objects = (" <{: >6}>".format(threading.get_ident()),) + print_objects
         if getattr(_ca_instance, '_log_file_obj', False):
+            # creating new log file and backup of current one if the current one has more than 20 MB in size
             _ca_instance.log_file_check_rotation()
 
     # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
@@ -304,9 +304,10 @@ INI_EXT = '.ini'
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 log_file_def='', config_eval_vars=None, additional_cfg_files=None, log_max_size=20,
+                 log_file_def="", config_eval_vars=None, additional_cfg_files=None, log_max_size=20,
                  multi_threading=False, suppress_stdout=False,
-                 formatter_class=HelpFormatter, epilog=""):
+                 formatter_class=HelpFormatter, epilog="",
+                 sys_env_id=''):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version:         application version.
             :param app_desc:            application description.
@@ -321,6 +322,9 @@ class ConsoleApp:
             :param formatter_class:     alternative formatter class passed onto ArgumentParser instantiation.
             :param epilog:              optional epilog text for command line arguments/options help text (passed onto
                                         ArgumentParser instantiation).
+            :param sys_env_id:          system environment id used as file name suffix for to load all
+                                        the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
+                                        for to initialize second ConsoleApp instance with values from sys_envLIVE.cfg).
         """
         """
             :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
@@ -331,11 +335,14 @@ class ConsoleApp:
             :ivar _log_max_size         maximum size in MBytes of a log file.
             :ivar _log_file_name        path and file name of the log file.
             :ivar _log_file_index       index of the current rotation log file backup.
-            :ivar config_options        module variable with pre-/user-defined options (dict of Setting instances).
-            :var  _ca_instance          module variable referencing this (singleton) instance.
+            :ivar config_options        pre-/user-defined options (dict of Setting instances).
+            :var  _ca_instance          module variable referencing the main/first instance of this class.
         """
         global _ca_instance
-        _ca_instance = self
+        if _ca_instance is not None:
+            _ca_instance = self
+        elif not sys_env_id:
+            uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
 
         self._parsed_args = None
         self._log_file_obj = None       # has to be initialized before _ca_instance, else uprint() will throw exception
@@ -345,6 +352,7 @@ class ConsoleApp:
         self._nul_std_out = None
         self.multi_threading = multi_threading
         self.suppress_stdout = suppress_stdout
+        self.sys_env_id = sys_env_id
 
         self.startup_beg = datetime.datetime.now()
         self.config_options = dict()
@@ -367,11 +375,16 @@ class ConsoleApp:
         # prepare config parser, first compile list of cfg/ini files - the last one overwrites previously loaded values
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
         app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
-        config_files = [os.path.join(app_path, '.console_app_env.cfg'), os.path.join(cwd_path, '.console_app_env.cfg'),
-                        os.path.join(app_path, '.sys_envTEST.cfg'), os.path.join(cwd_path, '.sys_envTEST.cfg'),
-                        os.path.join(app_path, '.sys_env.cfg'), os.path.join(cwd_path, '.sys_env.cfg'),
-                        app_path_fnam + '.cfg', app_path_fnam + INI_EXT,
-                        cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT,
+        config_files = [os.path.join(app_path, '.console_app_env.cfg'),
+                        os.path.join(cwd_path, '.console_app_env.cfg'),
+                        os.path.join(app_path, '.sys_env' + (self.sys_env_id or 'TEST') + '.cfg'),
+                        os.path.join(cwd_path, '.sys_env' + (self.sys_env_id or 'TEST') + '.cfg'),
+                        os.path.join(app_path, '.sys_env.cfg'),
+                        os.path.join(cwd_path, '.sys_env.cfg'),
+                        app_path_fnam + '.cfg',
+                        app_path_fnam + INI_EXT,
+                        cwd_path_fnam + '.cfg',
+                        cwd_path_fnam + INI_EXT,
                         ]
         if additional_cfg_files:
             for cfg_fnam in additional_cfg_files:
@@ -469,34 +482,39 @@ class ConsoleApp:
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
                                             .format(name, given_value, allowed_values))
 
-        self._log_file_name = self.config_options['logFile'].value
-        if self._log_file_name:  # enable logging
-            try:
-                self._close_log_file()
-                self._open_log_file()
-                uprint('Log file:', self._log_file_name)
-            except Exception as ex:
-                uprint("****  ConsoleApp._parse_args(): enable logging exception=", ex)
+        if _ca_instance is self:
+            self._log_file_name = self.config_options['logFile'].value
+            if self._log_file_name:
+                try:                        # enable logging
+                    self._close_log_file()
+                    self._open_log_file()
+                    uprint(" ###  Activated log file", self._log_file_name)
+                except Exception as ex:
+                    uprint(" ***  ConsoleApp._parse_args(): exception while trying to enable logging:", ex)
 
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self.config_options['debugLevel'].value
         if _debug_level >= DEBUG_LEVEL_ENABLED:
-            uprint("Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):", _debug_level)
+            uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
+                   _debug_level)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
-            uprint("System Environment:")
-            uprint(" "*18, "python ver=", str(sys.version))
-            uprint(" "*18, "argv      =", str(sys.argv))
-            uprint(" "*18, "executable=", sys.executable)
-            uprint(" "*18, "cwd       =", os.getcwd())
-            uprint(" "*18, "__file__  =", __file__)
-            uprint(" "*18, "frozen    =", getattr(sys, 'frozen', False))
-            if getattr(sys, 'frozen', False):
-                uprint(" "*18, "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*'))
-            uprint(" " * 18, "main-cfg  =", self._main_cfg_fnam)
+            if _ca_instance is self:
+                uprint("  ##  System Environment:")
+                uprint(" "*18, "python ver=", str(sys.version))
+                uprint(" "*18, "argv      =", str(sys.argv))
+                uprint(" "*18, "executable=", sys.executable)
+                uprint(" "*18, "cwd       =", os.getcwd())
+                uprint(" "*18, "__file__  =", __file__)
+                uprint(" "*18, "frozen    =", getattr(sys, 'frozen', False))
+                if getattr(sys, 'frozen', False):
+                    uprint(" "*18, "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*'))
+                uprint(" " * 18, "main-cfg  =", self._main_cfg_fnam)
+            else:
+                uprint(" ###  Initialized additional ConsoleApp instance for system environment id", self.sys_env_id)
 
         self.startup_end = datetime.datetime.now()
         uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
-        uprint("####  Startup finished....  ####")
+        uprint("####  Startup finished....", self.sys_env_id, "####")
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
@@ -598,6 +616,8 @@ class ConsoleApp:
 
     def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
         if self.get_option('debugLevel') >= minimum_debug_level:
+            if self.sys_env_id:
+                objects = ('[' + self.sys_env_id + ']', ) + objects
             uprint(*objects, sep=sep, end=end, file=file)
 
     def app_name(self):
@@ -631,6 +651,10 @@ class ConsoleApp:
         if self._log_file_obj:
             app_std_out.log_file = None
             app_std_err.log_file = None
+            try:
+                self._log_file_obj.flush()
+            except Exception as ex:
+                self.dprint("Ignorable log file flush exception=", ex)
             self._log_file_obj.close()
             self._log_file_obj = None
 
@@ -670,6 +694,10 @@ class ConsoleApp:
                 self._rename_log_file()
 
         if self._nul_std_out and not self._nul_std_out.closed:
+            try:
+                self._nul_std_out.flush()
+            except Exception as ex:
+                self.dprint("Ignorable NUL stdout flush exception:", ex)
             self._nul_std_out.close()
 
         sys.exit(exit_code)

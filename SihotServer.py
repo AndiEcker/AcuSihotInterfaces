@@ -6,11 +6,11 @@ Outbound Example with twisted: https://salesforce.stackexchange.com/questions/94
 and https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_quickstart_intro.htm
 
 Version History:
-
-0.1     first beta
-0.2     refactored to use ae_sys_data.
-0.3     prepared first production version.
-0.4     enhanced error handling and reporting to caller.
+    0.1     first beta
+    0.2     refactored to use ae_sys_data.
+    0.3     prepared first production version.
+    0.4     enhanced error handling and reporting to caller.
+    0.5     added separate system environments and new URLs for the TEST/LIVE systems.
 
 DISTRIBUTE:
 
@@ -34,15 +34,15 @@ Web-Service server check/prepare:
 
 """
 
-__version__ = '0.4'
+__version__ = '0.5'
 
-# change working dir so bottle.py will be find by next import statement (also for relative paths and template lookup)
 from traceback import format_exc
 import os
 import sys
+
+# change working dir so bottle.py will be find by next import statement (also for relative paths and template lookup)
 os.chdir(os.path.dirname(__file__))
 sys.path.append(os.path.dirname(__file__))
-
 from bottle import default_app, request, response, static_file, template, run
 
 from sys_data_ids import SDI_SF, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_ENABLED
@@ -52,14 +52,20 @@ from sfif import field_from_converters
 from shif import ResSender
 from ass_sys_data import add_ass_options, init_ass_data
 
-cae = ConsoleApp(__version__, "Web Service Server", additional_cfg_files=['SihotMktSegExceptions.cfg'],
-                 multi_threading=True, suppress_stdout=True)
-ass_options = add_ass_options(cae, add_kernel_port=True)
 
-debug_level = cae.get_option('debugLevel')
-ass_data = init_ass_data(cae, ass_options)
-asd = ass_data['assSysData']
-notification = ass_data['notification']
+# initialize multiple, separate system environments for TEST and LIVE
+def init_env(sys_env_id):
+    cae = ConsoleApp(__version__, "Web Service {} Server".format(sys_env_id),
+                     additional_cfg_files=['SihotMktSegExceptions.cfg'],
+                     multi_threading=True, suppress_stdout=True, sys_env_id=sys_env_id)
+    ass_options = add_ass_options(cae, add_kernel_port=True)
+    ass_data = init_ass_data(cae, ass_options)
+    return cae, ass_data['assSysData'], ass_data['notification']
+
+
+cae_test, asd_test, notification_test = init_env('TEST')
+cae_live, asd_live, notification_live = init_env('LIVE')
+
 
 # app and application will be used when used as server plug-in in apache/nginx
 app = application = default_app()
@@ -85,7 +91,14 @@ def get_page(page_name):       # return a page that has been rendered using a te
 @app.route('/avail_rooms')
 def get_avail_rooms():
     rq = request.query
-    rooms = asd.sh_avail_rooms(hotel_ids=rq['hotel_ids'], room_cat_prefix=rq['room_cat_prefix'], day=rq['day'])
+    rooms = asd_live.sh_avail_rooms(hotel_ids=rq['hotel_ids'], room_cat_prefix=rq['room_cat_prefix'], day=rq['day'])
+    return str(rooms)
+
+
+@app.route('/test_avail_rooms')
+def get_test_avail_rooms():
+    rq = request.query
+    rooms = asd_test.sh_avail_rooms(hotel_ids=rq['hotel_ids'], room_cat_prefix=rq['room_cat_prefix'], day=rq['day'])
     return str(rooms)
 
 
@@ -93,33 +106,41 @@ def get_avail_rooms():
 def get_res_count():
     rqi = " ".join([k + "=" + str(v) for k, v in request.query.items()])
     return "Number of reservations" + (" with " + rqi if len(rqi) else "") \
-           + " is " + str(asd.sh_count_res(**request.query))
+           + " is " + str(asd_live.sh_count_res(**request.query))
+
+
+@app.route('/test_res/count')
+def get_test_res_count():
+    rqi = " ".join([k + "=" + str(v) for k, v in request.query.items()])
+    return "Number of reservations" + (" with " + rqi if len(rqi) else "") \
+           + " is " + str(asd_test.sh_count_res(**request.query))
 
 
 @app.route('/res/get')
 def get_res_data():
-    return asd.sh_res_data(**request.query)
+    return asd_live.sh_res_data(**request.query)
+
+
+@app.route('/test_res/get')
+def get_test_res_data():
+    return asd_test.sh_res_data(**request.query)
 
 
 @app.route('/res/<action>', method='POST')
 def push_res(action):
-    body = sh_res_action(action)
+    body = sh_res_action(cae_live, notification_live, action)
     return body
 
 
-'''
-'@app.route('/res/<action>/<res_id>', method='PUT')
-def put_res(action, res_id):
-    body = sh_res_action(action, res_id=res_id, method='PUT')
+@app.route('/test_res/<action>', method='POST')
+def push_test_res(action):
+    body = sh_res_action(cae_test, notification_test, action)
     return body
-'''
 
 
 # -----  HELPER METHODS  -------------------------------------------
 
-def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
-    if not error_msg and debug_level < minimum_debug_level:
-        return      # suppress notification - nothing to do/show
+def add_log_entry(warning_msg="", error_msg="", importance=2, notification=None):
     seps = '\n' * (importance - 2)
     msg = seps + ' ' * (4 - importance) + ('*' if error_msg else '#') * importance + '  ' + error_msg
     if warning_msg:
@@ -137,24 +158,26 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, minimum_debug_leve
 # ------  ROUTE/SERVICE HANDLERS  ----------------------------------
 
 
-def sh_res_action(action, res_id=None, method='POST'):
+def sh_res_action(cae, notification, action, res_id=None, method='POST'):
     supported_actions = (ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE)
     err = msg = ""
     ret = dict(ErrorMessage=err, WarningMessage=msg)
     res_json = dict()
+    debug_level = cae.get_option('debugLevel')
+
     res_send = ResSender(cae)
     rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)
 
     if action.upper() not in supported_actions:
         err = "Reservation {} for ID {} with action {} not implemented; use one of supported actions ({})" \
             .format(method, res_id, action, supported_actions)
-        add_log_entry(error_msg=err, importance=4)
+        add_log_entry(error_msg=err, importance=4, notification=notification)
     elif debug_level >= DEBUG_LEVEL_VERBOSE:
         headers_string = ['{}: {}'.format(h, request.headers.get(h)) for h in request.headers.keys()]
         msg = "sh_res_action({}, {}, {}/{}) received request: URL={}; header={!r}; body={!r}; query={!r}" \
             .format(action, res_id, method, request.method, request.url, headers_string,
                     request.body.getvalue(), request.query_string)
-        add_log_entry(warning_msg=msg)
+        add_log_entry(warning_msg=msg, notification=notification)
 
     rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # overwrite with URL action
 
@@ -164,7 +187,7 @@ def sh_res_action(action, res_id=None, method='POST'):
             if res_json is None:
                 err = "JSON arguments missing"
                 msg += "\n      got request {!r} but body with JSON is empty".format(request)
-                add_log_entry(error_msg=err, warning_msg=msg, importance=3)
+                add_log_entry(error_msg=err, warning_msg=msg, importance=3, notification=notification)
         except Exception as e:
             err = "retrieve JSON arguments exception='{}'\n{}".format(e, format_exc())
 
@@ -199,10 +222,12 @@ def sh_res_action(action, res_id=None, method='POST'):
     if msg:
         ret['WarningMessage'] += msg
 
-    add_log_entry(warning_msg="sh_res_action({}, {}, {}) called with JSON: {}; responding to SF: {}"
-                  .format(action, res_id, method, res_json, ret),
-                  error_msg=ret['ErrorMessage'],
-                  importance=4, minimum_debug_level=DEBUG_LEVEL_ENABLED)
+    if ret['ErrorMessage'] or debug_level >= DEBUG_LEVEL_ENABLED:
+        add_log_entry(warning_msg="sh_res_action({}, {}, {}) called with JSON: {}; responding to SF: {}"
+                      .format(action, res_id, method, res_json, ret),
+                      error_msg=ret['ErrorMessage'],
+                      importance=4,
+                      notification=notification)
 
     return ret
 
@@ -222,4 +247,5 @@ if __name__ == '__main__':      # use bottle server only in debug mode on dev ma
     try:
         run(app=StripPathMiddleware(app), server='python_server', host='0.0.0.0', port=9090)
     except Exception as ex:
-        add_log_entry(error_msg="bottle run exception='{}'\n{}".format(ex, format_exc()))
+        add_log_entry(error_msg="run() exception='{}'\n{}".format(ex, format_exc()),
+                      notification=notification_live or notification_test)
