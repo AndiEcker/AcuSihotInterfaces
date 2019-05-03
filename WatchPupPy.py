@@ -180,7 +180,7 @@ progress = Progress(cae.get_option('debugLevel'), total_count=1,
                     start_msg='Preparing environment checks and first run of {}'.format(exe_name))
 
 errors = list()
-run_starts = run_ends = err_count = 0
+run_starts = run_ends = err_count = check_count = 0
 tc_sc_id = tc_sc_mc = tc_ag_id = tc_ag_mc = ''
 while True:
     try:        # outer exception fallback - only for strange/unsuspected errors
@@ -191,7 +191,9 @@ while True:
         if err_msg:
             errors = list()
             err_count += 1
-            cae.dprint("####  WPP-Error #{}\n{}".format(err_count, err_msg), minimum_debug_level=DEBUG_LEVEL_DISABLED)
+            cae.dprint("####  WPP errors={}; run-starts={}; run-ends={}; checks={}; err-msg=\n{}"
+                       .format(err_count, run_starts, run_ends, check_count, err_msg),
+                       minimum_debug_level=DEBUG_LEVEL_DISABLED)
             user_notification("WatchPupPy notification", err_msg)
             if break_on_error or BREAK_PREFIX in err_msg:
                 break
@@ -213,6 +215,8 @@ while True:
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
         cae.dprint(" ###  Running checks (timer={}, last={}, interval={}) at={}"
                    .format(get_timer_corrected(), last_check, check_interval, datetime.datetime.now()))
+
+        check_count += 1
 
         # check environment and connections: AssCache, Acu/Oracle, Salesforce, Sihot servers and interfaces
         if SDI_ASS in asd.used_systems:

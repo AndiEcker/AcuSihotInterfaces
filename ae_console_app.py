@@ -339,7 +339,7 @@ class ConsoleApp:
             :var  _ca_instance          module variable referencing the main/first instance of this class.
         """
         global _ca_instance
-        if _ca_instance is not None:
+        if _ca_instance is None:
             _ca_instance = self
         elif not sys_env_id:
             uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
