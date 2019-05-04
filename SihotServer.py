@@ -33,6 +33,7 @@ Web-Service server check/prepare:
 - synchronize sync folder content to http/web server (using e.g. WinSCP or other SFTP client).
 
 """
+from functools import wraps
 
 __version__ = '0.5'
 
@@ -43,7 +44,7 @@ import sys
 # change working dir so bottle.py will be find by next import statement (also for relative paths and template lookup)
 os.chdir(os.path.dirname(__file__))
 sys.path.append(os.path.dirname(__file__))
-from bottle import default_app, request, response, static_file, template, run
+from bottle import default_app, request, response, static_file, template, run, makelist
 
 from sys_data_ids import SDI_SF, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_ENABLED
 from ae_sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE, field_name_idx_path
@@ -51,6 +52,10 @@ from ae_console_app import ConsoleApp, uprint
 from sfif import field_from_converters
 from shif import ResSender
 from ass_sys_data import add_ass_options, init_ass_data
+
+
+# app and application will be used when used as server plug-in in apache/nginx
+app = application = default_app()
 
 
 # initialize multiple, separate system environments for TEST and LIVE
@@ -67,8 +72,30 @@ cae_test, asd_test, notification_test = init_env('TEST')
 cae_live, asd_live, notification_live = init_env('LIVE')
 
 
-# app and application will be used when used as server plug-in in apache/nginx
-app = application = default_app()
+def route_also_test_sys_env(route_path, method='GET', **route_kwargs):
+    """
+    decorator adding system environment variables as args (cae, asd and notification) to route methods.
+    """
+    test_path_prefix = '/test'
+    ext_path = list()
+    for p in makelist(route_path):
+        assert p.startswith("/")
+        ext_path.append(p)
+        ext_path.append(test_path_prefix + p)
+    assert method
+
+    def decorator(func):
+        @app.route(path=ext_path, method=method, **route_kwargs)
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            path = request.path
+            assert path.startswith("/")
+            cae, asd, notification = \
+                (cae_test, asd_test, notification_test) if path.startswith(test_path_prefix) else \
+                (cae_live, asd_live, notification_live)
+            return func(cae, asd, notification, *args, **kwargs)
+        return wrapper
+    return decorator
 
 
 # ------  BOTTLE WEB SERVICE ROUTES  -------------------------------------------
@@ -88,57 +115,32 @@ def get_page(page_name):       # return a page that has been rendered using a te
     return template('page', page_name=page_name)
 
 
-@app.route('/avail_rooms')
-def get_avail_rooms():
+@route_also_test_sys_env('/avail_rooms')
+def get_avail_rooms(_, asd, _notification):
     rq = request.query
-    rooms = asd_live.sh_avail_rooms(hotel_ids=rq['hotel_ids'], room_cat_prefix=rq['room_cat_prefix'], day=rq['day'])
+    rooms = asd.sh_avail_rooms(hotel_ids=rq['hotel_ids'], room_cat_prefix=rq['room_cat_prefix'], day=rq['day'])
     return str(rooms)
 
 
-@app.route('/test_avail_rooms')
-def get_test_avail_rooms():
-    rq = request.query
-    rooms = asd_test.sh_avail_rooms(hotel_ids=rq['hotel_ids'], room_cat_prefix=rq['room_cat_prefix'], day=rq['day'])
-    return str(rooms)
-
-
-@app.route('/res/count')
-def get_res_count():
+@route_also_test_sys_env('/res/count')
+def get_res_count(_, asd, _notification):
     rqi = " ".join([k + "=" + str(v) for k, v in request.query.items()])
     return "Number of reservations" + (" with " + rqi if len(rqi) else "") \
-           + " is " + str(asd_live.sh_count_res(**request.query))
+           + " is " + str(asd.sh_count_res(**request.query))
 
 
-@app.route('/test_res/count')
-def get_test_res_count():
-    rqi = " ".join([k + "=" + str(v) for k, v in request.query.items()])
-    return "Number of reservations" + (" with " + rqi if len(rqi) else "") \
-           + " is " + str(asd_test.sh_count_res(**request.query))
+@route_also_test_sys_env('/res/get')
+def get_res_data(_, asd, _notification):
+    return asd.sh_res_data(**request.query)
 
 
-@app.route('/res/get')
-def get_res_data():
-    return asd_live.sh_res_data(**request.query)
-
-
-@app.route('/test_res/get')
-def get_test_res_data():
-    return asd_test.sh_res_data(**request.query)
-
-
-@app.route('/res/<action>', method='POST')
-def push_res(action):
-    body = sh_res_action(cae_live, notification_live, action)
+@route_also_test_sys_env('/res/<action>', method='POST')
+def push_res(cae, _, notification, action):
+    body = sh_res_action(cae, notification, action)
     return body
 
 
-@app.route('/test_res/<action>', method='POST')
-def push_test_res(action):
-    body = sh_res_action(cae_test, notification_test, action)
-    return body
-
-
-# -----  HELPER METHODS  -------------------------------------------
+# -----  HELPER FUNCTIONS  -------------------------------------------
 
 def add_log_entry(warning_msg="", error_msg="", importance=2, notification=None):
     seps = '\n' * (importance - 2)

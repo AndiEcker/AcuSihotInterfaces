@@ -34,7 +34,7 @@ from configparser import ConfigParser
 
 from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT,
                           DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE)
-from ae_console_app import ConsoleApp, Progress, full_stack_trace, MAIN_SECTION_DEF, DATE_TIME_ISO
+from ae_console_app import ConsoleApp, Progress, full_stack_trace, MAIN_SECTION_DEF, DATE_TIME_ISO, sys_env_text
 from sxmlif import PostMessage
 from shif import ClientSearch
 from ass_sys_data import add_ass_options, init_ass_data
@@ -118,7 +118,7 @@ def user_notification(subject, body):
     if notification:
         err_message = notification.send_notification(body, subject=subject, body_style='plain')
         if err_message:
-            cae.dprint("****  WatchPupPy notification error: {}. Unsent notification body:\n{}."
+            cae.dprint("****  WatchPupPy user notification error: {}. Unsent notification body:\n{}."
                        .format(err_message, body), minimum_debug_level=DEBUG_LEVEL_DISABLED)
     else:
         cae.dprint("****  " + subject + "\n" + body, minimum_debug_level=DEBUG_LEVEL_DISABLED)
@@ -180,7 +180,7 @@ progress = Progress(cae.get_option('debugLevel'), total_count=1,
                     start_msg='Preparing environment checks and first run of {}'.format(exe_name))
 
 errors = list()
-run_starts = run_ends = err_count = check_count = 0
+check_count = err_count = run_starts = run_ends = 0
 tc_sc_id = tc_sc_mc = tc_ag_id = tc_ag_mc = ''
 while True:
     try:        # outer exception fallback - only for strange/unsuspected errors
@@ -191,13 +191,20 @@ while True:
         if err_msg:
             errors = list()
             err_count += 1
-            cae.dprint("####  WPP errors={}; run-starts={}; run-ends={}; checks={}; err-msg=\n{}"
-                       .format(err_count, run_starts, run_ends, check_count, err_msg),
-                       minimum_debug_level=DEBUG_LEVEL_DISABLED)
-            user_notification("WatchPupPy notification", err_msg)
+            curr_time = datetime.datetime.now()
+            status_msg = "checks={}; errors={}; run starts={}; run ends={}; at {}; sys=\n{}\n....last err=\n{}" \
+                .format(check_count, err_count, run_starts, run_ends, curr_time, sys_env_text(), err_msg)
+            cae.dprint("####  " + status_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+            user_notification("WatchPupPy error notification", status_msg)
             if break_on_error or BREAK_PREFIX in err_msg:
                 break
+            curr_time = datetime.datetime.now()
             time.sleep(sleep_after_err)
+            wait_check = (datetime.datetime.now() - curr_time).seconds
+            if sleep_after_err - wait_check > 3:    # leave 3 seconds of tolerance because curr_time executed before
+                cae.dprint("  **  sleep({}) waited only {} s - using now()...".format(sleep_after_err, wait_check))
+                while (datetime.datetime.now() - curr_time).seconds < sleep_after_err:
+                    time.sleep(1.0)
 
         # wait for next check_interval, only directly after startup checks on first run
         next_check = last_check + check_interval

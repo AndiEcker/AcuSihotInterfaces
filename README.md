@@ -895,11 +895,17 @@ web services).
 
 #### Using the TEST system environment
 
-Most of the URLs specified in the previous paragraphs are documented for the LIVE system environment. For to use
-instead the TEST systems you have to add the prefix `test_` in front of the URL path and directly after the slash
-character that is terminating the domain (services.signallia.com). Only one [debugging service](#web-services-debugging)
-which is available on the domain lint.signallia.com is independent from any of our system environments (because it is
-only displaying the configuration and environment settings of the Apache server).  
+Most of the URLs specified in the previous paragraphs are not only available for the LIVE system environment. For to
+access the TEST systems instead, you have to add the prefix `/test` in front of the URL path, directly before the slash
+character that is terminating the domain (services.signallia.com).
+
+So for to get e.g. the reservation counts from the TEST systems you simply use the following - slightly extended - URL:
+
+https://services.signallia.com/test/res/count?hotel_ids=1&day=2020-10-20&room_cat_prefix=S&res_max_days=7
+
+Only some simple routes and e.g. the [debugging service](#web-services-debugging) (which is available on the domain
+lint.signallia.com) are independent from any of our system environments (lint is e.g. only displaying the
+configuration and environment settings of the Apache server, which is the same for the LIVE and the TEST systems).
 
 
 ### WatchPupPy Application

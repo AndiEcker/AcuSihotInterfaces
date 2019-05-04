@@ -120,6 +120,29 @@ def full_stack_trace(ex):
     return ret
 
 
+def sys_env_dict():
+    sed = dict()
+    sed['python_ver'] = sys.version
+    sed['argv'] = sys.argv
+    sed['executable'] = sys.executable
+    sed['cwd'] = os.getcwd()
+    sed['__file__'] = __file__
+    sed['frozen'] = getattr(sys, 'frozen', False)
+    if getattr(sys, 'frozen', False):
+        sed['bundle_dir'] = getattr(sys, '_MEIPASS', '*#ERR#*')
+    return sed
+
+
+def sys_env_text(ind_ch=" ", ind_len=18, key_ch="=", key_len=12, extra_sys_env_dict=None):
+    sed = sys_env_dict()
+    if extra_sys_env_dict:
+        sed.update(extra_sys_env_dict)
+    text = "\n".join(["{ind:{ind_ch}>{ind_len}}{key:{key_ch}<{key_len}}{val}"
+                     .format(ind="", ind_ch=ind_ch, ind_len=ind_len, key_ch=key_ch, key_len=key_len, key=k, val=v)
+                      for k, v in sed.items()])
+    return text
+
+
 def to_ascii(unicode_str):
     """
     converts unicode string into ascii representation (for fuzzy string comparision); copied from MiniQuark's answer in:
@@ -500,15 +523,7 @@ class ConsoleApp:
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             if _ca_instance is self:
                 uprint("  ##  System Environment:")
-                uprint(" "*18, "python ver=", str(sys.version))
-                uprint(" "*18, "argv      =", str(sys.argv))
-                uprint(" "*18, "executable=", sys.executable)
-                uprint(" "*18, "cwd       =", os.getcwd())
-                uprint(" "*18, "__file__  =", __file__)
-                uprint(" "*18, "frozen    =", getattr(sys, 'frozen', False))
-                if getattr(sys, 'frozen', False):
-                    uprint(" "*18, "bundle-dir=", getattr(sys, '_MEIPASS', '*#ERR#*'))
-                uprint(" " * 18, "main-cfg  =", self._main_cfg_fnam)
+                uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}))
             else:
                 uprint(" ###  Initialized additional ConsoleApp instance for system environment id", self.sys_env_id)
 
