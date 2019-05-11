@@ -266,7 +266,7 @@ class _DuplicateSysOut:
         return getattr(self.sys_out, attr)
 
 
-def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace'):
+def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace', **kwargs):
     if not file:
         # app_std_out cannot be specified as file argument default because get initialized after import of this module
         # .. within ConsoleApp._open_log_file(). Use ori_std_out for animation prints (see ae_tcp.py/TcpServer.run()).
@@ -289,6 +289,10 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     #           sep=sep, end=end, file=file, flush=flush)
     if _get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
         print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + print_objects
+
+    if kwargs:
+        print_objects += "\n   *  EXTRA KWARGS={}".format(kwargs)
+
     try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
     while True:
         try:
@@ -315,11 +319,6 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                 fixed_objects.append(obj)
             print_objects = fixed_objects
         try_counter += 1
-
-
-def dprint(*objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
-    if _ca_instance is None or _get_debug_level() >= minimum_debug_level:
-        uprint(*objects, sep=sep, end=end, file=file)
 
 
 INI_EXT = '.ini'
@@ -365,7 +364,7 @@ class ConsoleApp:
         if _ca_instance is None:
             _ca_instance = self
         elif not sys_env_id:
-            uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
+            self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
 
         self._parsed_args = None
         self._log_file_obj = None       # has to be initialized before _ca_instance, else uprint() will throw exception
@@ -392,8 +391,8 @@ class ConsoleApp:
         self._app_version = app_version
 
         if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
-            uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
-            uprint("####  Initialization......  ####")
+            self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
+            self.uprint("####  Initialization......  ####")
 
         # prepare config parser, first compile list of cfg/ini files - the last one overwrites previously loaded values
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
@@ -422,7 +421,7 @@ class ConsoleApp:
                         config_files.append(cfg_fnam)
                     else:
                         # this is an error, no need to: file=app_std_err if self.suppress_stdout else app_std_out
-                        uprint("****  Additional config file {} not found!".format(cfg_fnam))
+                        self.uprint("****  Additional config file {} not found!".format(cfg_fnam))
         # prepare load of config files (done in load_config()) where last existing INI/CFG file is default config file
         # .. to write to and if there is no INI file at all then create on demand a <APP_NAME>.INI file in the cwd
         self._cfg_parser = None
@@ -436,6 +435,9 @@ class ConsoleApp:
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
                         choices=debug_levels.keys())
         self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
+
+    def __del__(self):
+        self.shutdown()
 
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
         """
@@ -511,25 +513,25 @@ class ConsoleApp:
                 try:                        # enable logging
                     self._close_log_file()
                     self._open_log_file()
-                    uprint(" ###  Activated log file", self._log_file_name)
+                    self.uprint(" ###  Activated log file", self._log_file_name)
                 except Exception as ex:
-                    uprint(" ***  ConsoleApp._parse_args(): exception while trying to enable logging:", ex)
+                    self.uprint(" ***  ConsoleApp._parse_args(): exception while trying to enable logging:", ex)
 
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self.config_options['debugLevel'].value
         if _debug_level >= DEBUG_LEVEL_ENABLED:
-            uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
-                   _debug_level)
+            self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
+                        _debug_level)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             if _ca_instance is self:
-                uprint("  ##  System Environment:")
-                uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}))
+                self.uprint("  ##  System Environment:")
+                self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}))
             else:
-                uprint(" ###  Initialized additional ConsoleApp instance for system environment id", self.sys_env_id)
+                self.uprint(" ###  Initialized additional ConsoleApp instance for system env id", self.sys_env_id)
 
         self.startup_end = datetime.datetime.now()
-        uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
-        uprint("####  Startup finished....", self.sys_env_id, "####")
+        self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
+        self.uprint("####  Startup finished....####")
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
@@ -629,14 +631,30 @@ class ConsoleApp:
             self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
             self._cfg_parser.read(self._config_files, encoding='utf-8')
 
-    def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_VERBOSE):
+    def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_VERBOSE, **kwargs):
         if self.get_option('debugLevel') >= minimum_debug_level:
-            if self.sys_env_id:
-                objects = ('[' + self.sys_env_id + ']', ) + objects
-            uprint(*objects, sep=sep, end=end, file=file)
+            self.uprint(*objects, sep=sep, end=end, file=file, **kwargs)
+
+    def uprint(self, *objects, sep=' ', end='\n', file=None, **kwargs):
+        if self.sys_env_id:
+            objects = ('[' + self.sys_env_id + ']', ) + objects
+        uprint(*objects, sep=sep, end=end, file=file, **kwargs)
 
     def app_name(self):
         return self._app_name
+
+    def _append_eof_and_flush_file(self, stream_file, stream_name):
+        try:
+            try:
+                self.dprint(minimum_debug_level=DEBUG_LEVEL_DISABLED)           # ALWAYS add \nEoF\n to the end
+                self.dprint('EoF\n', minimum_debug_level=DEBUG_LEVEL_DISABLED)
+            except Exception as ex:
+                self.dprint("Ignorable {} end-of-file marker exception={}".format(stream_name, ex))     # log if verbose
+
+            stream_file.flush()
+
+        except Exception as ex:
+            self.dprint("Ignorable {} flush exception={}".format(stream_name, ex))  # only log on DEBUG_LEVEL_VERBOSE
 
     def _open_log_file(self):
         global app_std_out, app_std_err
@@ -664,12 +682,11 @@ class ConsoleApp:
     def _close_log_file(self):
         global app_std_out, app_std_err
         if self._log_file_obj:
+            self._append_eof_and_flush_file(self._log_file_obj, "log file")
+            app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
             app_std_out.log_file = None
-            app_std_err.log_file = None
-            try:
-                self._log_file_obj.flush()
-            except Exception as ex:
-                self.dprint("Ignorable log file flush exception=", ex)
+            sys.stderr = ori_std_err        # set back for to prevent stack overflow/recursion error with kivy logger:
+            sys.stdout = ori_std_out        # .. "Fatal Python error: Cannot recover from stack overflow"
             self._log_file_obj.close()
             self._log_file_obj = None
 
@@ -692,40 +709,36 @@ class ConsoleApp:
                 main_thread = threading.current_thread()
                 for t in threading.enumerate():
                     if t is not main_thread:
-                        uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()))
+                        self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()))
                         t.join()
         if exit_code:
-            uprint("****  Non-zero exit code:", exit_code)
+            self.uprint("****  Non-zero exit code:", exit_code)
 
-        uprint('####  Shutdown............  ####')
+        self.uprint("####  Shutdown............  ####")
 
-        if self._log_file_obj:
-            app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
-            app_std_out.log_file = None
-            sys.stdout = ori_std_out        # set back for to prevent stack overflow/recursion error with kivy logger:
-            sys.stderr = ori_std_err        # .. "Fatal Python error: Cannot recover from stack overflow"
-            self._close_log_file()
-            if self._log_file_index:
-                self._rename_log_file()
+        self._close_log_file()
+        if self._log_file_index:
+            self._rename_log_file()
 
         if self._nul_std_out and not self._nul_std_out.closed:
-            try:
-                self._nul_std_out.flush()
-            except Exception as ex:
-                self.dprint("Ignorable NUL stdout flush exception:", ex)
+            self._append_eof_and_flush_file(self._nul_std_out, "NUL stdout")
             self._nul_std_out.close()
+            self._nul_std_out = None
 
-        sys.exit(exit_code)
+        if _ca_instance is self:
+            sys.exit(exit_code)
 
 
 class Progress:
-    def __init__(self, debug_level,  # default next message built only if >= DEBUG_LEVEL_VERBOSE
+    def __init__(self, cae,
                  start_counter=0, total_count=0,  # pass either start_counter or total_counter (never both)
                  start_msg="", next_msg="",  # message templates/masks for start, processing and end
                  end_msg="Finished processing of {total_count} having {err_counter} failures:{err_msg}",
                  err_msg="{err_counter} failures on processing of {total_count} items, current={run_counter}:{err_msg}",
                  nothing_to_do_msg=''):
-        if not next_msg and debug_level >= DEBUG_LEVEL_VERBOSE:
+        self.cae = cae
+        if not next_msg and cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
+            # default next message built only if >= DEBUG_LEVEL_VERBOSE
             next_msg = "Processing '{processed_id}': " + \
                        ("left" if start_counter > 0 and total_count == 0 else "item") + \
                        " {run_counter} of {total_count}. {err_counter} errors={err_msg}"
@@ -747,12 +760,12 @@ class Progress:
             self._delta = 1
         elif start_counter <= 0:
             if nothing_to_do_msg:
-                uprint(_complete_msg_prefix(nothing_to_do_msg))
+                self.cae.uprint(_complete_msg_prefix(nothing_to_do_msg))
             return  # RETURN -- empty set - nothing to process
 
         if start_msg:
-            uprint(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
-                                                          total_count=self._total_count))
+            self.cae.uprint(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
+                                                                   total_count=self._total_count))
 
     def next(self, processed_id='', error_msg='', next_msg=''):
         self._run_counter += self._delta
@@ -760,8 +773,9 @@ class Progress:
             self._err_counter += 1
 
         if error_msg and self._err_msg:
-            uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                        err_counter=self._err_counter, err_msg=error_msg, processed_id=processed_id))
+            self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
+                                                 err_counter=self._err_counter, err_msg=error_msg,
+                                                 processed_id=processed_id))
 
         if not next_msg:
             next_msg = self._next_msg
@@ -771,14 +785,15 @@ class Progress:
             # when-writing-carriage-return-to-a-pycharm-console-the-whole-line-is-deleted
             # .. uprint('   ', pend, end='\r', flush=True)
             next_msg = '\r' + next_msg
-            uprint(next_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                   err_counter=self._err_counter, err_msg=error_msg, processed_id=processed_id))
+            self.cae.uprint(next_msg.format(run_counter=self._run_counter, total_count=self._total_count,
+                                            err_counter=self._err_counter, err_msg=error_msg,
+                                            processed_id=processed_id))
 
     def finished(self, error_msg=''):
         if error_msg and self._err_msg:
-            uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                        err_counter=self._err_counter, err_msg=error_msg))
-        uprint(self.get_end_message(error_msg=error_msg))
+            self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
+                                                 err_counter=self._err_counter, err_msg=error_msg))
+        self.cae.uprint(self.get_end_message(error_msg=error_msg))
 
     def get_end_message(self, error_msg=''):
         return self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
@@ -804,7 +819,7 @@ class NamedLocks:
         assert not sys_lock, "sys_lock is currently not implemented"
         self._sys_lock = sys_lock
         # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
-        self.dprint = _ca_instance.dprint if _ca_instance and getattr(_ca_instance, 'startup_end', False) else dprint
+        self.dprint = _ca_instance.dprint if _ca_instance and getattr(_ca_instance, 'startup_end', False) else uprint
 
         self.dprint("NamedLocks.__init__", lock_names)
 

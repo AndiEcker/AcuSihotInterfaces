@@ -18,6 +18,7 @@
     1.3     Fixed bug to not overwrite rgr_sf_id.
     2.0     First version after merge of sys_data_generic branch.
     2.1     Added send of occupants on room move to Salesforce.
+    2.2     beautified and hardened error notification and logging.
 """
 import datetime
 import threading
@@ -36,7 +37,7 @@ from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
 from shif import client_data, ResFetch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
-__version__ = '2.1'
+__version__ = '2.2'
 
 cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)

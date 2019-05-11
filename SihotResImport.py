@@ -11,6 +11,7 @@
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
     1.0     June-18: refactoring and clean-up
     1.1     08-03-19: migrated to use ae_sys_data (extended logging and notification messages).
+    1.2     11-05-19 beautified and hardened error notification and logging.
 
     TODO:
     - use new config sections (for each hotel and ANY) or AssCache instead of Acumen asd.
@@ -37,7 +38,7 @@ from sfif import add_sf_options
 from shif import add_sh_options, ClientToSihot, ResSender
 from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
-__version__ = '1.1'
+__version__ = '1.2'
 
 cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
@@ -1119,8 +1120,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             with open(fn, encoding='utf-16') as fp:
                 lines = fp.readlines()
 
-            progress = Progress(debug_level, start_counter=len(lines),
-                                start_msg="Loading and parsing import file " + fn,
+            progress = Progress(cae, start_counter=len(lines),
+                                start_msg=" ###  Loading and parsing import file " + fn,
                                 nothing_to_do_msg="No records found in import file " + fn)
 
             for idx, ln in enumerate(lines):
@@ -1159,8 +1160,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
             log_import("Processing clients", NO_FILE_PREFIX_CHAR + 'RciProcessClients', importance=4)
-            progress = Progress(debug_level, start_counter=len(imp_rows),
-                                start_msg="Sending {run_counter} clients to Sihot",
+            progress = Progress(cae, start_counter=len(imp_rows),
+                                start_msg=" ###  Sending {run_counter} clients to Sihot",
                                 nothing_to_do_msg="No client records to be send to Sihot")
             client_send = ClientToSihot(cae)
 
@@ -1223,8 +1224,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         # now parse RCI reservations
         if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
             log_import("Parsing reservations", NO_FILE_PREFIX_CHAR + 'RciParseRes', importance=4)
-            progress = Progress(debug_level, start_counter=len(imp_rows),
-                                start_msg="Parsing {run_counter} reservations",
+            progress = Progress(cae, start_counter=len(imp_rows),
+                                start_msg=" ###  Parsing {run_counter} reservations",
                                 nothing_to_do_msg="No reservation records to be parsed")
             for lni, imp_cols in enumerate(imp_rows):
                 fn, idx = imp_cols[RC_FILE_NAME], imp_cols[RC_LINE_NUM]
@@ -1256,8 +1257,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("JSON files: " + str(jso_files), NO_FILE_PREFIX_CHAR + 'JsonFileCollect', importance=1)
 
-        progress = Progress(debug_level, start_counter=len(jso_files),
-                            start_msg="Loading and parsing JSON import files",
+        progress = Progress(cae, start_counter=len(jso_files),
+                            start_msg=" ###  Loading and parsing JSON import files",
                             nothing_to_do_msg="No JSON files found in import folder " + cae.get_option('jsonPath'))
         for fn in jso_files:
             if got_cancelled():
@@ -1298,8 +1299,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
     if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
         log_import("Sending reservations to Sihot", NO_FILE_PREFIX_CHAR + 'SendResStart', importance=4)
-        progress = Progress(debug_level, start_counter=len(res_rows),
-                            start_msg="Prepare sending of {run_counter} reservation request changes to Sihot",
+        progress = Progress(cae, start_counter=len(res_rows),
+                            start_msg=" ###  Prepare sending of {run_counter} reservation request changes to Sihot",
                             nothing_to_do_msg="No reservations found for to be sent")
         res_sender = ResSender(cae)
 

@@ -12,6 +12,7 @@
             to allow sync of deleted RU records.
     1.1     28-02-19 migrated to use system data fields.
     1.2     08-03-19 extended logging and notification messages.
+    1.3     11-05-19 beautified and hardened error notification and logging.
 """
 import datetime
 
@@ -26,7 +27,7 @@ from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
 from shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
 from ass_sys_data import AssSysData
 
-__version__ = '1.2'
+__version__ = '1.3'
 
 ADMIN_MAIL_TO_LIST = ['ITDevmen@signallia.com']
 
@@ -102,8 +103,8 @@ if cae.get_option('clientsFirst'):
 
         acumen_cd = AcuClientToSihot(cae)
         error_msg = acumen_cd.fetch_from_acu_by_acu()
-        progress = Progress(debug_level, start_counter=len(acumen_cd.recs),
-                            start_msg='Prepare sending of {run_counter} client detail changes to Sihot',
+        progress = Progress(cae, start_counter=len(acumen_cd.recs),
+                            start_msg=' ###  Prepare sending of {run_counter} client detail changes to Sihot',
                             nothing_to_do_msg='SihotResSync: acumen client fetch returning no recs')
         if not error_msg:
             for rec in acumen_cd.recs:
@@ -144,7 +145,7 @@ if not error_msg:
                          and r['ResAction'] != ACTION_DELETE]
             if not migration_mode and room_recs:
                 cae.dprint("  ##  room swap pre-run has {} recs".format(len(room_recs)))
-                progress = Progress(debug_level, start_counter=len(room_recs),
+                progress = Progress(cae, start_counter=len(room_recs),
                                     start_msg=" ###  Prepare sending of {total_count} room swaps to Sihot",
                                     nothing_to_do_msg=" ***  SihotResSync: room swap fetch returning no recs")
                 for rec in room_recs:
@@ -166,7 +167,7 @@ if not error_msg:
             hotel_move_gds_nos = list()
             if not migration_mode and room_recs:
                 cae.dprint("  ##  hotel movement pre-run has {} recs".format(len(room_recs)))
-                progress = Progress(debug_level, start_counter=len(room_recs),
+                progress = Progress(cae, start_counter=len(room_recs),
                                     start_msg=" ###  Prepare sending of {total_count} hotel movements to Sihot",
                                     nothing_to_do_msg=" ***  SihotResSync: hotel movement fetch returning no recs")
                 for rec in room_recs:
@@ -198,7 +199,7 @@ if not error_msg:
 
             # now do the full run with room allocations (only skipping/excluding HOTMOVE to non-Sihot-hotel)
             synced_ids = list()
-            progress = Progress(debug_level, start_counter=len(acumen_req.recs),
+            progress = Progress(cae, start_counter=len(acumen_req.recs),
                                 start_msg=" ###  Prepare sending of {total_count} reservations to Sihot",
                                 nothing_to_do_msg=" ***  SihotResSync: acumen reservation fetch returning no recs")
             if acumen_req.recs:

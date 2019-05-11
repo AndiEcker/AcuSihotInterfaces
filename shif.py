@@ -1440,11 +1440,11 @@ class ResToSihot(FldMapXmlBuilder):
             self._warning_msgs.append(msg.format("skipping and ignoring this follow-up error"))
             err_msg = ""
 
-        elif "Could not find a key identifier" in err_msg and (rec['ShId'] or rec['ShId_P']):
-            self.cae.dprint(msg.format("ignoring client obj-id {}/{}".format(rec['ShId'], rec['ShId_P'])),
+        elif "Could not find a key identifier" in err_msg and (rec.val('ShId') or rec.val('ShId_P')):
+            self.cae.dprint(msg.format("ignoring client obj-id {}/{}".format(rec.val('ShId'), rec.val('ShId_P'))),
                             minimum_debug_level=DEBUG_LEVEL_ENABLED)
-            rec['ShId'] = ''            # use AcId/MATCHCODE instead
-            rec['ShId_P'] = ''
+            rec.set_val('ShId', '')             # use AcId/MATCHCODE instead
+            rec.set_val('ShId_P', '')
             err_msg = self._sending_res_to_sihot(rec)
 
         elif ("A database error has occurred." in err_msg or 'Room not available!' in err_msg) and obj_id:

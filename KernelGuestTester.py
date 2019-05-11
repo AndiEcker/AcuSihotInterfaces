@@ -28,8 +28,8 @@ if client_code:
     err_msg = acumen_client.fetch_from_acu_by_acu(client_code)
     if not err_msg and not len(acumen_client.recs):
         err_msg = acumen_client.fetch_from_acu_by_cd(client_code)
-    progress = Progress(cae.get_option('debugLevel'), start_counter=len(acumen_client.recs),
-                        start_msg='Prepare sending of {total_count} reservation requests' + client_msg,
+    progress = Progress(cae, start_counter=len(acumen_client.recs),
+                        start_msg=' ###  Prepare sending of {total_count} reservation requests' + client_msg,
                         nothing_to_do_msg='SihotMigration: acumen_client fetch returning no recs')
 
     uprint('####  Sending ...........  ####')

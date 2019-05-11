@@ -6,6 +6,7 @@
     0.4     added GDS number to alloc_trigger() - available since Sihot build/version 9.0.0.0787.CO.
     0.5     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.6     refactored to use system field records and migrated client_to_acu() to acif.py/AcumenClient.save_client().
+    0.7     beautified and hardened error notification and logging.
 """
 from traceback import format_exc
 
@@ -19,7 +20,7 @@ from acif import add_ac_options, AcumenClient
 from sxmlif import Request, RoomChange, SihotXmlBuilder
 from shif import add_sh_options, ClientFromSihot
 
-__version__ = '0.6'
+__version__ = '0.7'
 
 
 cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle", multi_threading=True)

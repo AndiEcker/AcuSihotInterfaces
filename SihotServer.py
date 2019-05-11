@@ -11,11 +11,9 @@ Version History:
     0.3     prepared first production version.
     0.4     enhanced error handling and reporting to caller.
     0.5     added separate system environments and new URLs for the TEST/LIVE systems.
+    0.6     beautified and hardened error notification and logging.
 
 DISTRIBUTE:
-
-Prerequisites - check values:
-- URL of web service (endpoint/class/action), e.g. 'https://services.signallia.com/res/upsert'
 
 Salesforce check/prepare:
 - Add host URL in Salesforce/Setup/Remote Site Settings for to authorize endpoint addresses:
@@ -35,7 +33,7 @@ Web-Service server check/prepare:
 """
 from functools import wraps
 
-__version__ = '0.5'
+__version__ = '0.6'
 
 from traceback import format_exc
 import os
@@ -46,7 +44,7 @@ os.chdir(os.path.dirname(__file__))
 sys.path.append(os.path.dirname(__file__))
 from bottle import default_app, request, response, static_file, template, run, makelist
 
-from sys_data_ids import SDI_SF, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_ENABLED
+from sys_data_ids import SDI_SF, SDI_SH, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_ENABLED
 from ae_sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE, field_name_idx_path
 from ae_console_app import ConsoleApp, uprint
 from sfif import field_from_converters
@@ -93,25 +91,28 @@ def route_also_test_sys_env(route_path, method='GET', **route_kwargs):
             cae, asd, notification = \
                 (cae_test, asd_test, notification_test) if path.startswith(test_path_prefix) else \
                 (cae_live, asd_live, notification_live)
-            return func(cae, asd, notification, *args, **kwargs)
+            cae.dprint("  ##  Client requested {} with args={} and kwargs={}".format(path, args, kwargs))
+            ret = func(cae, asd, notification, *args, **kwargs)
+            cae.dprint("  ##  Server response".format(ret))
+            return ret
         return wrapper
     return decorator
 
 
 # ------  BOTTLE WEB SERVICE ROUTES  -------------------------------------------
 
-@app.route('/hello/<name>')
-def get_hello(name='world'):
+@route_also_test_sys_env('/hello/<name>')
+def get_hello(_cae, _asd, _notification, name='world'):
     return "hello " + name
 
 
-@app.route('/static/<filename>')
-def get_static_static_file(filename):
+@route_also_test_sys_env('/static/<filename>')
+def get_static_static_file(_cae, _asd, _notification, filename):
     return static_file(filename, root='./static')
 
 
-@app.route('/page/<page_name>')
-def get_page(page_name):       # return a page that has been rendered using a template
+@route_also_test_sys_env('/page/<page_name>')
+def get_page(_cae, _asd, _notification, page_name):       # return a page that has been rendered using a template
     return template('page', page_name=page_name)
 
 
@@ -123,38 +124,49 @@ def get_avail_rooms(_, asd, _notification):
 
 
 @route_also_test_sys_env('/res/count')
-def get_res_count(_, asd, _notification):
+def get_res_count(_cae, asd, _notification):
     rqi = " ".join([k + "=" + str(v) for k, v in request.query.items()])
     return "Number of reservations" + (" with " + rqi if len(rqi) else "") \
            + " is " + str(asd.sh_count_res(**request.query))
 
 
 @route_also_test_sys_env('/res/get')
-def get_res_data(_, asd, _notification):
-    return asd.sh_res_data(**request.query)
+def get_res_data(_cae, asd, _notification):
+    rec = asd.sh_res_data(**request.query)
+    ret = dict(ErrorMessage="")
+    if isinstance(rec, Record):
+        # using FromSh rec values for to send datetime as ISO strings
+        ret.update(rec.to_dict(use_system_key=False, system=SDI_SH, direction=FAD_FROM))
+        if not ret.get('ResRoomNo', False) and rec.val('ResPersons', 0, 'RoomNo'):
+            ret['ResRoomNo'] = rec.val('ResPersons', 0, 'RoomNo')
+        # ret['ResRoomNo'] = rec.val('ResRoomNo') or rec.val('ResPersons', 0, 'RoomNo')
+    else:
+        ret['ErrorMessage'] = rec
+    return ret
 
 
 @route_also_test_sys_env('/res/<action>', method='POST')
-def push_res(cae, _, notification, action):
+def push_res(cae, _asd, notification, action):
     body = sh_res_action(cae, notification, action)
     return body
 
 
 # -----  HELPER FUNCTIONS  -------------------------------------------
 
-def add_log_entry(warning_msg="", error_msg="", importance=2, notification=None):
+def add_log_entry(warning_msg="", error_msg="", importance=2, cae=None, notification=None):
     seps = '\n' * (importance - 2)
     msg = seps + ' ' * (4 - importance) + ('*' if error_msg else '#') * importance + '  ' + error_msg
     if warning_msg:
         if error_msg:
             msg += '\n' + '.' * 6
         msg += warning_msg
-    uprint(msg)
+    _print_method = cae.dprint if cae else uprint
+    _print_method(msg)
     if error_msg and notification:
         notification_err = notification.send_notification(msg, subject="SihotServer error notification",
                                                           body_style='plain')
         if notification_err:
-            uprint(error_msg + "\n      Notification send error: " + notification_err)
+            _print_method(error_msg + "\n      Notification send error: " + notification_err)
 
 
 # ------  ROUTE/SERVICE HANDLERS  ----------------------------------
@@ -173,13 +185,13 @@ def sh_res_action(cae, notification, action, res_id=None, method='POST'):
     if action.upper() not in supported_actions:
         err = "Reservation {} for ID {} with action {} not implemented; use one of supported actions ({})" \
             .format(method, res_id, action, supported_actions)
-        add_log_entry(error_msg=err, importance=4, notification=notification)
+        add_log_entry(error_msg=err, importance=4, cae=cae, notification=notification)
     elif debug_level >= DEBUG_LEVEL_VERBOSE:
         headers_string = ['{}: {}'.format(h, request.headers.get(h)) for h in request.headers.keys()]
         msg = "sh_res_action({}, {}, {}/{}) received request: URL={}; header={!r}; body={!r}; query={!r}" \
             .format(action, res_id, method, request.method, request.url, headers_string,
                     request.body.getvalue(), request.query_string)
-        add_log_entry(warning_msg=msg, notification=notification)
+        add_log_entry(warning_msg=msg, cae=cae, notification=notification)
 
     rec.set_val(action.upper(), 'ResAction', system=SDI_SF, direction=FAD_FROM)  # overwrite with URL action
 
@@ -189,7 +201,7 @@ def sh_res_action(cae, notification, action, res_id=None, method='POST'):
             if res_json is None:
                 err = "JSON arguments missing"
                 msg += "\n      got request {!r} but body with JSON is empty".format(request)
-                add_log_entry(error_msg=err, warning_msg=msg, importance=3, notification=notification)
+                add_log_entry(error_msg=err, warning_msg=msg, importance=3, cae=cae, notification=notification)
         except Exception as e:
             err = "retrieve JSON arguments exception='{}'\n{}".format(e, format_exc())
 
@@ -229,7 +241,7 @@ def sh_res_action(cae, notification, action, res_id=None, method='POST'):
                       .format(action, res_id, method, res_json, ret),
                       error_msg=ret['ErrorMessage'],
                       importance=4,
-                      notification=notification)
+                      cae=cae, notification=notification)
 
     return ret
 
@@ -246,8 +258,11 @@ class StripPathMiddleware(object):      # remove slash from request
 
 
 if __name__ == '__main__':      # use bottle server only in debug mode on dev machine
+    err_code = 0
     try:
         run(app=StripPathMiddleware(app), server='python_server', host='0.0.0.0', port=9090)
     except Exception as ex:
         add_log_entry(error_msg="run() exception='{}'\n{}".format(ex, format_exc()),
-                      notification=notification_live or notification_test)
+                      cae=cae_live or cae_test, notification=notification_live or notification_test)
+        err_code = 9639
+    cae_live.shutdown(exit_code=err_code)   # shutdown second ConsoleApp instance first (close the logs, no sys.exit())

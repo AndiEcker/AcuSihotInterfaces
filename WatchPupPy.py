@@ -11,6 +11,7 @@
     1.1     wait at least 6 minutes between error notifications.
     1.2     commented out pprint of notification message body.
     1.3     added variable sleep_after_err and moved errors re-init before user_notification send.
+    1.4     beautified and hardened error notification and logging.
 
 TODO:
     - investigate and fix bug with freeze if sendOutput option is specified with the value 1/enabled and unsuccessful
@@ -40,7 +41,7 @@ from shif import ClientSearch
 from ass_sys_data import add_ass_options, init_ass_data
 
 
-__version__ = '1.3'
+__version__ = '1.4'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 MAX_SRSL_OUTAGE_HOURS = 18.0                # maximum time after last sync entry was logged (multiple on TEST system)
@@ -176,8 +177,7 @@ startup = get_timer_corrected()     # initialize timer and last check/run values
 cae.dprint(" ###  Startup {} timer value={}, last check={}, check interval={}, last run={}, run interval={}"
            .format("" if is_test else "production", startup, last_check, check_interval, last_run, command_interval),
            minimum_debug_level=DEBUG_LEVEL_DISABLED if is_test else DEBUG_LEVEL_VERBOSE)
-progress = Progress(cae.get_option('debugLevel'), total_count=1,
-                    start_msg='Preparing environment checks and first run of {}'.format(exe_name))
+progress = Progress(cae, total_count=1, start_msg='Preparing environment checks and first run of {}'.format(exe_name))
 
 errors = list()
 check_count = err_count = run_starts = run_ends = 0
@@ -191,20 +191,13 @@ while True:
         if err_msg:
             errors = list()
             err_count += 1
-            curr_time = datetime.datetime.now()
             status_msg = "checks={}; errors={}; run starts={}; run ends={}; at {}; sys=\n{}\n....last err=\n{}" \
-                .format(check_count, err_count, run_starts, run_ends, curr_time, sys_env_text(), err_msg)
+                .format(check_count, err_count, run_starts, run_ends, datetime.datetime.now(), sys_env_text(), err_msg)
             cae.dprint("####  " + status_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
             user_notification("WatchPupPy error notification", status_msg)
             if break_on_error or BREAK_PREFIX in err_msg:
                 break
-            curr_time = datetime.datetime.now()
-            time.sleep(sleep_after_err)
-            wait_check = (datetime.datetime.now() - curr_time).seconds
-            if sleep_after_err - wait_check > 3:    # leave 3 seconds of tolerance because curr_time executed before
-                cae.dprint("  **  sleep({}) waited only {} s - using now()...".format(sleep_after_err, wait_check))
-                while (datetime.datetime.now() - curr_time).seconds < sleep_after_err:
-                    time.sleep(1.0)
+            time.sleep(sleep_after_err)     # WAIT - prevent flood of email-notification/log-entries
 
         # wait for next check_interval, only directly after startup checks on first run
         next_check = last_check + check_interval

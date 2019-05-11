@@ -55,7 +55,7 @@ if client_code or gds_no:
             err_msg = acumen_res.fetch_all_valid_from_acu(where_group_order="RU_CODE = " + gds_no)
         else:
             err_msg = acumen_res.fetch_from_acu_by_cd(client_code)      # UNFILTERED !!! (possibly inactive hotel)
-    progress = Progress(cae.get_option('debugLevel'), start_counter=len(acumen_res.recs),
+    progress = Progress(cae, start_counter=len(acumen_res.recs),
                         start_msg='####  Prepare sending of {total_count} reservation requests' + client_msg,
                         nothing_to_do_msg='****  SihotMigration: acumen_res fetch returning no recs')
 

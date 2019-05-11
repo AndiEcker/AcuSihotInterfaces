@@ -803,9 +803,7 @@ Newer version:
 #### Deployment 
 
 The deployment shell scripts `build_ws_res.cmd` and `build_ws_test.cmd` are used to prepare the roll-out of the
-web services. The first one available at https://services.signallia.com are the web services for to access our
-production servers and the second one is for to check the web services environment (available at 
-https://lint.signallia.com).
+web services, available on the sub-domains `services` and `lint`.
 
 For to run one of the deployment shell scripts, you first have to change the current working directory to the
 source folder. The shell script is copying all the needed python code from the actual source folder and the
@@ -815,7 +813,7 @@ After that you need to use a SFTP tool - like WinSCP.exe for connect the web ser
 Windows user account credentials). Then pass/synchronize the files in the distribution
 folder to the web server directories (lint and services underneath /var/www):
 
-The web services that are available at https://services.signallia.com/ are currently configured to connect to the
+The web services that are available as https://\<domain\>/ are currently configured to connect to the
 TEST systems of Acumen, Salesforce and Sihot. These services allow you to send reservations to Sihot, fetch
 reservations from Sihot, count available units within Sihot and more (details see further down).
 
@@ -826,7 +824,7 @@ is available for each system environment: `.sys_envTEST.cfg` for TEST and `.sys_
 
 A POST web-service that allows you to INSERT, UPSERT or DELETE reservations within Sihot is available under the URL:
 
-https://services.signallia.com/res/\<action\>.
+https://\<domain\>/res/\<action\>.
 
 Depending on the action you want to perform you have to replace the \<action\> part of the URL with either 'insert', 
 'upsert' or 'delete'. The fields for to identify and specify the reservations are given in JSON format within
@@ -843,7 +841,7 @@ to specify extra data of the orderer the fields in this [section](#available-cli
 
 Another GET web service provides the retrieval of the full data structure of a Sihot reservation:
 
-https://services.signallia.com/res/get?hotel_id=2&gds_no=1098576
+https://\<domain\>/res/get?hotel_id=2&gds_no=1098576
 
 The `hotel_id` and `gds_no` query parameters of this web service are mandatory. Instead of passing the GDS number
 within `gds_no` you could alternatively also use the reservation number by passing the query parameters `res_id`
@@ -853,7 +851,7 @@ and `sub_id` instead of the `gds_no` query parameter.
 
 Another GET web-service allows you to get the number of confirmed Sihot reservations:
 
-https://services.signallia.com/res/count?hotel_ids=2&day=2019-10-10&room_cat_prefix=1&res_max_days=21
+https://\<domain\>/res/count?hotel_ids=2&day=2019-10-10&room_cat_prefix=1&res_max_days=21
 
 All query parameters are optional for this web service. If the `hotel_ids` query parameter get not passed then
 the service will count the reservations in all our Sihot hotels; The `hotel_ids` parameter does also support
@@ -868,12 +866,12 @@ Another GET web service allows to fetch the currently available units/rooms/apar
 the query parameters `hotel_ids`, `room_cat_prefix` and `day`. For example the following URL is retrieving from
 Sihot all the available 1-Bedroom units within the hotel 2 (BHH) for the 10th of October 2019:
 
-https://services.signallia.com/avail_rooms?hotel_ids=2&room_cat_prefix=1&day=2019-10-10
+https://\<domain\>/avail_rooms?hotel_ids=2&room_cat_prefix=1&day=2019-10-10
 
 #### Web Services Debugging
 
 For debugging you can check the log files in the log folder of the service folder (e.g. for the `services`
-web service within `/var/www/services/log`).
+sub-domain web service within `/var/www/services/log`).
 
 Service specific log files created by the Apache server you find on the web server folder `/var/log/apache2`. The log
 file names are starting with the name of the service (`lint` or `services`), followed by an underscore character and
@@ -884,12 +882,12 @@ Additional log files you find in the web server folder `/var/log`, e.g. the Apac
 There are also some extra web services available for debugging. A simple hello echo service can be reached by the
 URL - it will return the string you provided after the hello path ('debug_text' in the following example):
 
-https://services.signallia.com/hello/debug_text
+https://\<domain\>/hello/debug_text
 
 Another debug web service allows you to fetch any file from the web server that is placed in the `static` sub-folder
 of the services folder (for example from /var/www/services/static).
 
-Finally under the URL https://lint.signallia.com there is also a small web service available for debugging
+Finally under the sub-domain `lint` there is also a small https web service available for debugging
 purposes that is displaying all the system environment variable of the web server (used by all our python
 web services).
 
@@ -897,14 +895,14 @@ web services).
 
 Most of the URLs specified in the previous paragraphs are not only available for the LIVE system environment. For to
 access the TEST systems instead, you have to add the prefix `/test` in front of the URL path, directly before the slash
-character that is terminating the domain (services.signallia.com).
+character that is terminating the domain.
 
 So for to get e.g. the reservation counts from the TEST systems you simply use the following - slightly extended - URL:
 
-https://services.signallia.com/test/res/count?hotel_ids=1&day=2020-10-20&room_cat_prefix=S&res_max_days=7
+https://\<domain\>/test/res/count?hotel_ids=1&day=2020-10-20&room_cat_prefix=S&res_max_days=7
 
-Only some simple routes and e.g. the [debugging service](#web-services-debugging) (which is available on the domain
-lint.signallia.com) are independent from any of our system environments (lint is e.g. only displaying the
+Only some simple routes and e.g. the [debugging service](#web-services-debugging) which is available on the `lint`
+sub-domain are independent from any of our system environments (`lint` is e.g. only displaying the
 configuration and environment settings of the Apache server, which is the same for the LIVE and the TEST systems).
 
 

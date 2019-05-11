@@ -58,8 +58,8 @@ if cae.get_option('clientsFirst'):
     acu_res_hist = AcuResToSihot(cae)
 
     error_msg = acumen_cd.fetch_all_valid_from_acu()
-    progress = Progress(cae.get_option('debugLevel'), start_counter=len(acumen_cd.recs),
-                        start_msg='Prepare sending of {run_counter} client(s) to Sihot',
+    progress = Progress(cae, start_counter=len(acumen_cd.recs),
+                        start_msg=' ###  Prepare sending of {run_counter} client(s) to Sihot',
                         nothing_to_do_msg='SihotMigration: acumen_cd fetch returning no recs')
     if not error_msg:
         for rec in acumen_cd.recs:
@@ -107,8 +107,8 @@ try:
     acumen_res = AcuResToSihot(cae)
     error_msg = acumen_res.fetch_from_acu_by_aru(date_range=sync_date_range)
     if not error_msg:
-        progress = Progress(cae.get_option('debugLevel'), start_counter=len(acumen_res.recs),
-                            start_msg='Prepare the migration of {total_count} reservations to Sihot',
+        progress = Progress(cae, start_counter=len(acumen_res.recs),
+                            start_msg=' ###  Prepare the migration of {total_count} reservations to Sihot',
                             nothing_to_do_msg='SihotMigration: acumen_res.fetch_all_valid_from_acu() returning no recs')
         if include_cxl_res:
             all_recs = acumen_res.recs

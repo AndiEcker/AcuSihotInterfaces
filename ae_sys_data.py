@@ -1316,20 +1316,23 @@ class Record(OrderedDict):
                     column_expressions.append(expr + name)
         return column_expressions
 
-    def to_dict(self, filter_fields=None, key_type=str, push_onto=True, put_system_val=True, put_empty_val=False,
+    def to_dict(self, filter_fields=None, key_type=str, push_onto=True,
+                use_system_key=True, put_system_val=True, put_empty_val=False,
                 system=None, direction=None):
         """
         copy Record leaf values into a dict.
         :param filter_fields:   callable returning True for each field that need to be excluded in returned dict, pass
                                 None to include all fields (if put_empty_val == True).
-        :param push_onto:       pass False to prevent self.push(system).
         :param key_type:        type of dict keys: None=field name, tuple=index path tuple, str=index path string (def).
+        :param push_onto:       pass False to prevent self.push(system).
+        :param use_system_key:  pass False to put leaf field name/index; def=True for to use system field name/keys,
+                                specified by the system/direction args.
         :param put_system_val:  pass False to include/use main field val; def=True for to include system val specified
                                 by the system/direction args.
         :param put_empty_val:   pass True to also include fields with an empty value (None/'').
         :param system:          system id for to determine included leaf and field val (if put_system_val == True).
         :param direction:       direction id for to determine included leaf and field val (if put_system_val == True).
-        :return:                dict with leaf
+        :return:                dict of filtered leafs, having (sys) field names/idx_path-tuples as their key.
         """
         system, direction = use_rec_default_sys_dir(self, system, direction)
         if push_onto and system:
@@ -1343,7 +1346,7 @@ class Record(OrderedDict):
                 if key_type == tuple:
                     key = idx_path
                 elif key_type == str:
-                    key_path = tuple(idx_path[:-1] + (key, )) if system else idx_path
+                    key_path = tuple(idx_path[:-1] + (key, )) if system and use_system_key else idx_path
                     key = idx_path_field_name(key_path)
                 if put_system_val:
                     val = self.val(idx_path, system=system, direction=direction)
