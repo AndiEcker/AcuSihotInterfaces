@@ -1,3 +1,5 @@
+import glob
+
 import pytest
 
 # import datetime
@@ -62,4 +64,8 @@ class TestLockFile:
         time.sleep(1)
         lh2.unlock()
         lock_handle.unlock()
+        timed_out_log_files = list(glob.glob(LOCK_FILE_NAME + "*"))
+        assert len(timed_out_log_files) == 1
+        for fn in timed_out_log_files:
+            os.remove(fn)
         assert lock2_ret == ""

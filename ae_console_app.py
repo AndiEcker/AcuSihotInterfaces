@@ -363,8 +363,6 @@ class ConsoleApp:
         global _ca_instance
         if _ca_instance is None:
             _ca_instance = self
-        elif not sys_env_id:
-            self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
 
         self._parsed_args = None
         self._log_file_obj = None       # has to be initialized before _ca_instance, else uprint() will throw exception
@@ -419,7 +417,7 @@ class ConsoleApp:
                         config_files.append(add_cfg_path_fnam)
                     elif os.path.isfile(cfg_fnam):
                         config_files.append(cfg_fnam)
-                    else:
+                    elif not self.suppress_stdout:
                         # this is an error, no need to: file=app_std_err if self.suppress_stdout else app_std_out
                         self.uprint("****  Additional config file {} not found!".format(cfg_fnam))
         # prepare load of config files (done in load_config()) where last existing INI/CFG file is default config file
@@ -531,6 +529,8 @@ class ConsoleApp:
 
         self.startup_end = datetime.datetime.now()
         self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
+        if _ca_instance is not self and not self.sys_env_id:
+            self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
         self.uprint("####  Startup finished....####")
 
     def get_option(self, name, default_value=None):
@@ -646,8 +646,12 @@ class ConsoleApp:
     def _append_eof_and_flush_file(self, stream_file, stream_name):
         try:
             try:
-                self.dprint(minimum_debug_level=DEBUG_LEVEL_DISABLED)           # ALWAYS add \nEoF\n to the end
-                self.dprint('EoF\n', minimum_debug_level=DEBUG_LEVEL_DISABLED)
+                # ALWAYS add \nEoF\n to the end
+                # .. we cannot use uprint here because of recursions on log file rotation, so use built-in print()
+                # .. self.uprint()
+                # .. self.uprint('EoF')
+                print()
+                print('EoF')
             except Exception as ex:
                 self.dprint("Ignorable {} end-of-file marker exception={}".format(stream_name, ex))     # log if verbose
 
@@ -677,7 +681,8 @@ class ConsoleApp:
         dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=index_width) + file_ext
         if os.path.exists(dfn):
             os.remove(dfn)
-        os.rename(self._log_file_name, dfn)
+        if os.path.exists(self._log_file_name):     # prevent errors after unit test cleanup
+            os.rename(self._log_file_name, dfn)
 
     def _close_log_file(self):
         global app_std_out, app_std_err

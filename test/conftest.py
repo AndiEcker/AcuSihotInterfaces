@@ -16,6 +16,13 @@ from shif import ClientSearch, ClientToSihot, \
 from sys_data_ids import SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SF_SANDBOX, SDF_SH_CLIENT_PORT, SDI_SH
 
 
+@pytest.fixture()
+def sys_argv_restore():
+    old_argv = sys.argv
+    yield old_argv
+    sys.argv = old_argv
+
+
 @pytest.fixture(scope="module")
 def console_app_env():
     return ConsoleApp()
@@ -170,6 +177,7 @@ class ConsoleApp:
 
         self._env_cfg = cfg
         self.startup_beg = self.startup_end = datetime.datetime.now()
+        self.sys_env_id = 'MOCK'
 
     def get_config(self, name, section=None, default_value=None):
         if section == 'SihotRateSegments':
