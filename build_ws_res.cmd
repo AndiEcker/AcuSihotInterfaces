@@ -1,10 +1,10 @@
 rem reservation interface
 md ..\_build_dist\AcuSihotInterfaces\ws_res
 
+copy .console_app_env.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy .sys_envLIVE.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy .sys_envTEST.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 
-copy .console_app_env.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy SihotMktSegExceptions.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy SihotServer.py ..\_build_dist\AcuSihotInterfaces\ws_res\app.wsgi
 copy SihotServer.ini ..\_build_dist\AcuSihotInterfaces\ws_res\mod_wsgi.ini

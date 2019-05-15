@@ -64,6 +64,8 @@ class Notification:
                 self._user_password = ''
         else:
             mail_host = smtp_server_uri
+            self._user_name = ''
+            self._user_password = ''
         if ':' in mail_host:
             pos = mail_host.rindex(':')
             self._mail_host = mail_host[:pos]
@@ -142,7 +144,8 @@ class Notification:
                 # using s.starttls() could throwing error "STARTTLS extension not supported by server."
                 if self._mail_service == TSL_ENC_SERVICE_NAME:
                     s.starttls()
-                s.login(self._user_name, self._user_password)
+                if self._user_name:
+                    s.login(self._user_name, self._user_password)
                 unreached_recipients = s.send_message(message, self._mail_from, mail_to)
                 if unreached_recipients:
                     err_msg = 'Unreached Recipients: ' + str(unreached_recipients)

@@ -26,6 +26,11 @@ rem c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\WebResTes
 rem switch back to project source folder
 cd ..\..\AcuSihotInterfaces
 
-rem BUILD/copy to web service distribution folders
+rem copy hidden configuration files to dist folder
+copy .console_app_env.cfg ..\_build_dist\AcuSihotInterfaces\dist\
+copy .sys_envLIVE.cfg ..\_build_dist\AcuSihotInterfaces\dist\
+copy .sys_envTEST.cfg ..\_build_dist\AcuSihotInterfaces\dist\
+
+rem finally also BUILD/copy to web service distribution folders
 .\build_ws_test.cmd
 .\build_ws_res.cmd
