@@ -335,9 +335,10 @@ def run_sync_to_sf():
         if asd:
             asd.close_dbs()
 
+    notify = debug_level > DEBUG_LEVEL_VERBOSE or debug_level > DEBUG_LEVEL_ENABLED and sync_count
     log_msg("run_sync_to_sf() requested at {}; processed {} syncs; finished at {}; err?={}"
             .format(sync_run_requested, sync_count, datetime.datetime.now(), err_msg),
-            importance=3, is_error=bool(err_msg), notify=debug_level > DEBUG_LEVEL_VERBOSE or sync_count)
+            importance=3, is_error=bool(err_msg), notify=notify)
 
     sync_timer = None
     sync_run_requested = None

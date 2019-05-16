@@ -531,7 +531,7 @@ class ConsoleApp:
         self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
         if _ca_instance is not self and not self.sys_env_id:
             self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
-        self.uprint("####  Startup finished....####")
+        self.uprint("####  Startup finished....  ####")
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
