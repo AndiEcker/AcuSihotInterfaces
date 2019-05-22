@@ -12,7 +12,7 @@ CREATE TABLE clients
   cl_email                VARCHAR(96),      -- extended 18-03-2019 not rolled out, because views need to be recompiled
   cl_phone                VARCHAR(42),
   cl_surname              VARCHAR(69),      -- extended 18-03-2019 not rolled out, because views need to be recompiled
-  cl_firstname            VARCHAR(42),
+  cl_firstname            VARCHAR(45),
   UNIQUE (cl_ac_id, cl_sf_id, cl_sh_id),
   CHECK (cl_ac_id is not NULL or cl_sf_id is not NULL or cl_sh_id is not NULL)
 );
@@ -196,7 +196,7 @@ CREATE TABLE res_group_clients
   rgc_room_seq            INTEGER NOT NULL DEFAULT 0,
   rgc_pers_seq            INTEGER NOT NULL DEFAULT 0,
   rgc_surname             VARCHAR(69),
-  rgc_firstname           VARCHAR(42),
+  rgc_firstname           VARCHAR(45),
   rgc_email               VARCHAR(96),            -- Sihot values (cashed but not corrected, s.a. cl_email
   rgc_phone               VARCHAR(42),            -- .. and cl_phone)
   rgc_language            VARCHAR(3),

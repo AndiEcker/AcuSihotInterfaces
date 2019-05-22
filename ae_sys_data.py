@@ -2134,6 +2134,7 @@ class UsedSystems(OrderedDict):
         super().__init__()
         self._systems = self
         self._available_systems = available_systems
+        cae.dprint("UsedSystems.__init__({}, {}, {})".format(cae, available_systems, sys_credentials))
         for sys_id in available_systems:
             dbg_msg = list()
             credentials = dict()
@@ -2153,6 +2154,7 @@ class UsedSystems(OrderedDict):
             for cred_item in SYS_CRED_NEEDED.get(sys_id):
                 if cred_item not in credentials:
                     dbg_msg.append("requested credential {} undefined/incomplete; error ignored".format(cred_item))
+                    msg = "Skipping unused/disabled"
                     break    # ignore/skip not fully specified system - continue with next available system
             else:
                 # now collect features for this system with complete credentials
@@ -2167,7 +2169,8 @@ class UsedSystems(OrderedDict):
                 # finally add system to this used systems instance
                 self._add_system(sys_id, credentials, features=features)
                 dbg_msg.append("added system features={}".format(features))
-            cae.dprint("Initialized system {}: {}".format(sys_id, dbg_msg))
+                msg = "Fully initialized"
+            cae.dprint("{} system {}: {}".format(msg, sys_id, dbg_msg))
 
     def _add_system(self, sys_id, credentials, features=None):
         assert sys_id in self._available_systems, "UsedSystems._add_system(): unsupported system id {}".format(sys_id)

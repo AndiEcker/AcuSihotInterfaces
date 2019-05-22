@@ -13,10 +13,12 @@
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/WatchPupPy.py" />
-    <option name="PARAMETERS" value="--cmdLine=&quot;cmd.exe /c pause&quot; --cmdInterval=120" />
+    <option name="PARAMETERS" value="--cmdLine=&quot;cmd.exe /c pause&quot; --cmdInterval=120 -D=3" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />
-    <method />
+    <option name="REDIRECT_INPUT" value="false" />
+    <option name="INPUT_FILE" value="" />
+    <method v="2" />
   </configuration>
 </component>

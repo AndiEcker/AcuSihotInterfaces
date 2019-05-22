@@ -156,6 +156,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
 
     ret_dict['assSysData'] = asd = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger,
                                               sys_msg_prefix=used_systems_msg_prefix)
+    err_msg = asd.error_message     # save init error message (for to check used system - ignoring missing credentials)
     sys_ids = list()
     if asd.connection(SDI_ASS, raise_if_error=False):
         uprint('AssCache database name and user:', cae.get_option('assDSN'), cae.get_option('assUser'))
@@ -172,6 +173,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
         print_sh_options(cae)
         sys_ids.append(cae.get_option('shServerIP'))
     ret_dict['sysIds'] = sys_ids
+    asd.error_message = err_msg     # restore AssSysData.init error message (ignoring used system check errors)
 
     ret_dict['notification'], ret_dict['warningEmailAddresses'] = init_notification(cae, '/'.join(sys_ids))
 
