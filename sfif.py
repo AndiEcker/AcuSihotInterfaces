@@ -348,7 +348,8 @@ class SfInterface:
         try:
             self._conn = Salesforce(username=self._user, password=self._pw, security_token=self._tok,
                                     sandbox=self._sb, client_id=self._client)
-            uprint("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
+            if self._debug_level >= DEBUG_LEVEL_ENABLED:
+                uprint("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
         except SalesforceAuthenticationFailed as sf_ex:
             self.error_msg = "SfInterface._connect(): Salesforce {} authentication failed with exception: {}" \
                 .format('Sandbox' if self._sb else 'Production', sf_ex)
@@ -862,6 +863,7 @@ class SfInterface:
                                      or f.name() in ('RciId', ),
                                      push_onto=push_onto, put_system_val=put_system_val,
                                      system=SDI_SF, direction=FAD_ONTO)
+        dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
         sf_id = sf_args.pop('Id', None)
         if sf_id:
             sf_args['PersonAccountId'] = sf_id
@@ -871,12 +873,12 @@ class SfInterface:
 
         result = self.apex_call('reservation_upsert', function_args=sf_args)
 
-        if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+        if dbg:
             uprint("... sfif.res_upsert() err?={}; sent=\n{}, result=\n{}"
                    .format(self.error_msg, ppf(sf_args), ppf(result)))
 
         if result.get('ErrorMessage'):
-            msg = ppf(result) if self._debug_level >= DEBUG_LEVEL_ENABLED else result.get('ErrorMessage')
+            msg = ppf(result) if dbg else result.get('ErrorMessage')
             self.error_msg += "sfif.res_upsert() received err=\n{} from SF; rec=\n{}".format(msg, ppf(cl_res_rec))
         if not self.error_msg:
             if not cl_res_rec.val('ResSfId') and result.get('ReservationOpportunityId'):
@@ -885,7 +887,7 @@ class SfInterface:
                 msg = "sfif.res_upsert() ResSfId discrepancy; sent={} received={}; cl_res_rec=\n{}"\
                        .format(cl_res_rec.val('ResSfId'), result.get('ReservationOpportunityId'), ppf(cl_res_rec))
                 uprint(msg)
-                if msg and self._debug_level >= DEBUG_LEVEL_ENABLED:
+                if dbg:
                     self.error_msg += "\n      " + msg
 
         return result.get('PersonAccountId'), result.get('ReservationOpportunityId'), self.error_msg

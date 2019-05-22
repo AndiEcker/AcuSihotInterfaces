@@ -323,7 +323,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         else:                   # fetch config data from Acumen
             db = self.connection(SDI_ACU, raise_if_error=False)
             if not db:      # logon/connect error
-                self.error_message = "AssSysData: Missing credentials for to open Acumen database"
+                self.error_message += "\n      AssSysData: Missing credentials for to open Acumen database"
                 self._err(self.error_message, self._ctx_no_file + 'InitAcuDb')
                 return
 
@@ -401,28 +401,33 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         return self.used_systems.disconnect()
 
     def connection(self, sys_id, raise_if_error=True):
-        msg = "AssSysData.connection({}): ".format(sys_id)
+        msg = "AssSysData.connection(sys_id={}): ".format(sys_id)
         if not sys_id:
-            msg += "empty system id"
+            msg += "system id is empty"
         elif sys_id not in ALL_AVAILABLE_SYSTEMS:
-            msg += "invalid system id"
+            msg += "system id is invalid"
         elif sys_id not in self.used_systems:
-            msg += "unknown/unused system id"
+            msg += "system id is unknown/unused"
         elif not self.used_systems[sys_id].connection:
             msg += "system is not connected/initialized"
         else:
+            # no error, then return connection
             return self.used_systems[sys_id].connection
 
+        self.error_message = msg
         if raise_if_error:
-            self.error_message = msg
             raise ConnectionError(msg)
 
     def reconnect(self, sys_id):
         if sys_id in self.used_systems:
-            self.used_systems[sys_id].connect(self._crs[sys_id],
-                                              app_name=self.cae.app_name(),
-                                              debug_level=self.debug_level,
-                                              force_reconnect=True)
+            self.error_message = self.used_systems[sys_id].connect(
+                self._crs[sys_id],
+                app_name=self.cae.app_name(),
+                debug_level=self.debug_level,
+                force_reconnect=True,
+                )
+        else:
+            self.error_message = "AssSysData.reconnect(): unknown system id {}".format(sys_id)
 
     def load_view(self, db_opt, view, cols=None, where="", bind_vars=None):
         if db_opt:      # use existing db connection if passed by caller

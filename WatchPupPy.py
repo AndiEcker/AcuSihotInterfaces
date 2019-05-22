@@ -12,6 +12,7 @@
     1.2     commented out pprint of notification message body.
     1.3     added variable sleep_after_err and moved errors re-init before user_notification send.
     1.4     beautified and hardened error notification and logging.
+    1.5     enhanced debug messages and error logging.
 
 TODO:
     - investigate and fix bug with freeze if sendOutput option is specified with the value 1/enabled and unsuccessful
@@ -41,7 +42,7 @@ from shif import ClientSearch
 from ass_sys_data import add_ass_options, init_ass_data
 
 
-__version__ = '1.4'
+__version__ = '1.5'
 
 BREAK_PREFIX = 'User pressed Ctrl+C key'
 MAX_SRSL_OUTAGE_HOURS = 18.0                # maximum time after last sync entry was logged (multiple on TEST system)
