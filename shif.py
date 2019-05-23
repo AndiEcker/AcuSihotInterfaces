@@ -167,6 +167,7 @@ SH_RES_MAP = \
         # GUEST-OBJID used in SS/RES-SEARCH responses instead of GUEST-ID for parsing orderer - always hide in xml build
         ('RESERVATION' + ELEM_PATH_SEP + 'GUEST-OBJID', 'ShId'),
         ('RESERVATION' + ELEM_PATH_SEP + 'MATCHCODE', 'AcuId'),
+        ('RESERVATION' + ELEM_PATH_SEP + 'NAME', 'Surname'),
         ('VOUCHERNUMBER', 'ResVoucherNo', None,
          lambda f: f.ina(ACTION_DELETE)),
         ('EXT-KEY', 'ResGroupNo', None,
@@ -709,7 +710,7 @@ def obj_id_to_res_no(cae, obj_id):
     using RESERVATION-GET oc from KERNEL interface (see 7.3 in SIHOT KERNEL interface doc).
     :param cae:         Console App Environment instance.
     :param obj_id:      Sihot Reservation Object Id.
-    :return:            reservation number as tuple of (hotel_id, res_id, sub_id) or (None, "error") if not found
+    :return:            reservation ids as tuple of (hotel_id, res_id, sub_id, gds_no) or (None, "error") if not found
     """
     return ResKernelGet(cae).fetch_res_no(obj_id)
 

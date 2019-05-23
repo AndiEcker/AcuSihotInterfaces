@@ -156,7 +156,7 @@ class TestElemHelpers:
 class TestIdConverters:
     # test res of Z007184 from 26.12.17 until 3.1.2018
     def test_obj_id_to_res_no(self, console_app_env):
-        assert ('4', '33220', '1') == obj_id_to_res_no(console_app_env, '60544')
+        assert ('4', '33220', '1', '899993') == obj_id_to_res_no(console_app_env, '60544')
 
     def test_gds_no_to_obj_id(self, console_app_env):
         assert '60544' == gds_no_to_obj_id(console_app_env, '4', '899993')
@@ -218,11 +218,12 @@ class TestResSender:
         assert not err
         assert ho_id == rs.response.id
         assert gdsno == rs.response.gdsno
-        h, r, s = rs.get_res_no()
+        h, r, s, g = rs.get_res_no()
         assert ho_id == h
         assert r
         assert s
         assert '1' == s
+        assert gdsno == g
 
     def test_create_minimum_fields_with_mc(self, console_app_env):
         ho_id = '1'
@@ -243,11 +244,12 @@ class TestResSender:
         assert not err
         assert ho_id == rs.response.id
         assert gdsno == rs.response.gdsno
-        h, r, s = rs.get_res_no()
+        h, r, s, g = rs.get_res_no()
         assert ho_id == h
         assert r
         assert s
         assert '1' == s
+        assert gdsno == g
 
     def test_create_minimum_fields_with_objid(self, console_app_env):
         ho_id = '1'
@@ -267,11 +269,12 @@ class TestResSender:
         assert not err
         assert ho_id == rs.response.id
         assert gdsno == rs.response.gdsno
-        h, r, s = rs.get_res_no()
+        h, r, s, g = rs.get_res_no()
         assert ho_id == h
         assert r
         assert s
         assert '1' == s
+        assert gdsno == g
 
 
 class TestClientFromSihot:

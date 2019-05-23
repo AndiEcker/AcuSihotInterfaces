@@ -1026,9 +1026,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                     if res_no_ids[:2] != (col_values.get('rgr_ho_fk'), col_values.get('rgr_res_id'), ):
                         self._warn("Automatic/hidden update of reservation number from {}/{}@{} to {}/{}@{}"
                                    .format(col_values.get('rgr_ho_fk'), col_values.get('rgr_res_id'),
-                                           col_values.get('rgr_sub_id'), *res_no_ids),
+                                           col_values.get('rgr_sub_id'), *res_no_ids[:3]),
                                    self._ctx_no_file + "rgr_complete_ids()")
-                    col_values['rgr_ho_fk'], col_values['rgr_res_id'], col_values['rgr_sub_id'] = res_no_ids
+                    col_values['rgr_ho_fk'], col_values['rgr_res_id'], col_values['rgr_sub_id'] = res_no_ids[:3]
             elif col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id'):
                 col_values['rgr_sub_id'] = '0'
             ret = bool(col_values.get('rgr_ho_fk') and col_values.get('rgr_res_id') and col_values.get('rgr_sub_id'))

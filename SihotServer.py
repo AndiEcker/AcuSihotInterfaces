@@ -12,6 +12,7 @@ Version History:
     0.4     enhanced error handling and reporting to caller.
     0.5     added separate system environments and new URLs for the TEST/LIVE systems.
     0.6     beautified and hardened error notification and logging.
+    0.7     added ResGdsNo to json return of res_change() route method.
 
 DISTRIBUTE:
 
@@ -33,7 +34,7 @@ Web-Service server check/prepare:
 """
 from functools import wraps
 
-__version__ = '0.6'
+__version__ = '0.7'
 
 from traceback import format_exc
 import os
@@ -146,7 +147,7 @@ def get_res_data(_cae, asd, _notification):
 
 
 @route_also_test_sys_env('/res/<action>', method='POST')
-def push_res(cae, _asd, notification, action):
+def change_res(cae, _asd, notification, action):
     body = sh_res_action(cae, notification, action)
     return body
 
@@ -226,8 +227,8 @@ def sh_res_action(cae, notification, action, res_id=None, method='POST'):
                     err = res_no_tuple[1]
                 else:
                     response.status = 200
-                    ho_id, res_id, sub_id = res_no_tuple
-                    ret.update(ResHotelId=ho_id, ResId=res_id, ResSubId=sub_id)
+                    ho_id, res_id, sub_id, gds_no = res_no_tuple
+                    ret.update(ResHotelId=ho_id, ResId=res_id, ResSubId=sub_id, ResGdsNo=gds_no)
         except Exception as e:
             err = "send to Sihot exception='{}'\n{}".format(e, format_exc())
 
