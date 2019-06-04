@@ -712,6 +712,8 @@ def obj_id_to_res_no(cae, obj_id):
     :param obj_id:      Sihot Reservation Object Id.
     :return:            reservation ids as tuple of (hotel_id, res_id, sub_id, gds_no) or (None, "error") if not found
     """
+    if not obj_id:
+        return None, "obj_id_to_res_no() expects non-empty Sihot Reservation Object Id"
     return ResKernelGet(cae).fetch_res_no(obj_id)
 
 
@@ -1531,12 +1533,12 @@ class ResToSihot(FldMapXmlBuilder):
         else:
             err_msg = self.res_id_desc(rec, "ResToSihot.send_res_to_sihot(): sync with empty GDS number skipped")
 
+        warn_msg = self.get_warnings()
         if err_msg:
-            self.cae.dprint("ResToSihot.send_res_to_sihot() error: {}".format(err_msg),
-                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.uprint("ResToSihot.send_res_to_sihot() error={}; warnings={}".format(err_msg, warn_msg))
         else:
-            self.cae.dprint("ResToSihot.send_res_to_sihot() GDSNO={} RESPONDED OBJID={} MATCHCODE={}"
-                            .format(gds_no, self.response.objid, self.response.matchcode))
+            self.cae.dprint("ResToSihot.send_res_to_sihot() GDSNO={} RESPONDED OBJID={} MATCHCODE={} warnings={}"
+                            .format(gds_no, self.response.objid, self.response.matchcode, warn_msg))
 
         return err_msg
 
@@ -1713,6 +1715,9 @@ class ResSender(ResToSihot):
                          if self.debug_level >= DEBUG_LEVEL_ENABLED else "")
         elif self.debug_level >= DEBUG_LEVEL_ENABLED:
             msg = "Sent res: " + str(rec)
+        warn_msg = self.get_warnings()
+        if warn_msg:
+            msg += "\nwarnings={}".format(warn_msg)
         return err, msg
 
     def get_res_no(self):

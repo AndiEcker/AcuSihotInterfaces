@@ -13,6 +13,7 @@ Version History:
     0.5     added separate system environments and new URLs for the TEST/LIVE systems.
     0.6     beautified and hardened error notification and logging.
     0.7     added ResGdsNo to json return of res_change() route method.
+    0.8     enhanced error logging and skipping/handling of ignorable sihot errors.
 
 DISTRIBUTE:
 
@@ -34,7 +35,7 @@ Web-Service server check/prepare:
 """
 from functools import wraps
 
-__version__ = '0.7'
+__version__ = '0.8'
 
 from traceback import format_exc
 import os
@@ -94,7 +95,7 @@ def route_also_test_sys_env(route_path, method='GET', **route_kwargs):
                 (cae_live, asd_live, notification_live)
             cae.dprint("  ##  Client requested {} with args={} and kwargs={}".format(path, args, kwargs))
             ret = func(cae, asd, notification, *args, **kwargs)
-            cae.dprint("  ##  Server response".format(ret))
+            cae.dprint("  ##  Sihot Server response=\n{}".format(ret))
             return ret
         return wrapper
     return decorator
@@ -221,7 +222,7 @@ def sh_res_action(cae, notification, action, res_id=None, method='POST'):
         try:
             err, msg = res_send.send_rec(rec)
 
-            if not err:
+            if not err and res_send.response.objid:     # objid is empty if sihot error is skipped/ignorable
                 res_no_tuple = res_send.get_res_no()
                 if res_no_tuple[0] is None:
                     err = res_no_tuple[1]
