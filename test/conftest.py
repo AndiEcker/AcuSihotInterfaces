@@ -111,14 +111,14 @@ def salesforce_connection(console_app_env):
     debug_level = cae.get_option('debugLevel')
     sf_user = cae.get_option('sfUser')
     if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
-        uprint("conftest.salesforce_connection(): skipped because of unspecified credentials")
+        cae.uprint("conftest.salesforce_connection(): skipped because of unspecified credentials")
         return None
     sf_pw = cae.get_option('sfPassword')
     sf_token = cae.get_option('sfToken')
     sf_sandbox = cae.get_option(SDF_SF_SANDBOX, default_value='test' in sf_user.lower() or 'dbx' in sf_user.lower())
     sf_client = cae.app_name()
 
-    uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
+    cae.uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
     sf_conn = SfInterface(dict(User=sf_user, Password=sf_pw, Token=sf_token),
                           features=[SDF_SF_SANDBOX + '=True'] if sf_sandbox else None,
@@ -142,8 +142,9 @@ def uprint(*objects, sep=' ', end='\n', file=sys.stdout, encode_errors_def='back
 
 class ConsoleApp:
     def __init__(self, *args):
-        uprint("####  TEST Initialization.. ####")
-        uprint('ConsoleAppMock.__init__', args)
+        self.uprint = uprint
+        self.uprint("####  TEST Initialization.. ####")
+        self.uprint('ConsoleAppMock.__init__', args)
         cfg = ConfigParser()
         cfg.optionxform = str   # for case-sensitive config vars
         cfg.read(['../.console_app_env.cfg', '../.sys_envTEST.cfg'])
@@ -192,17 +193,17 @@ class ConsoleApp:
             ret = s.value
         else:
             ret = default_value
-        uprint('ConsoleAppMock.get_config', name, '=', ret, 'section=' + str(section))
+        self.uprint('ConsoleAppMock.get_config', name, '=', ret, 'section=' + str(section))
         return ret
 
     def get_option(self, name, default_value=None):
         ret = self._options[name] if name in self._options else default_value
         if name not in ('debugLevel', ):
-            uprint('ConsoleAppMock.get_option', name, '=', ret)
+            self.uprint('ConsoleAppMock.get_option', name, '=', ret)
         return ret
 
     def set_option(self, name, val, cfg_fnam=None, save_to_config=True):
-        uprint('ConsoleAppMock.set_option', name, val, cfg_fnam, save_to_config)
+        self.uprint('ConsoleAppMock.set_option', name, val, cfg_fnam, save_to_config)
         self._options[name]['val'] = val
         return ''
 
@@ -212,10 +213,9 @@ class ConsoleApp:
 
     def dprint(self, *objects, sep=' ', end='\n', file=sys.stdout, minimum_debug_level=1):  # 1==DEBUG_LEVEL_ENABLED
         if self.get_option('debugLevel') >= minimum_debug_level:
-            uprint(*objects, sep=sep, end=end, file=file)
+            self.uprint(*objects, sep=sep, end=end, file=file)
 
-    @staticmethod
-    def shutdown(exit_code=0):
+    def shutdown(self, exit_code=0):
         if exit_code:
-            uprint("****  Non-zero exit code:", exit_code)
-        uprint('####  Shutdown............  ####')
+            self.uprint("****  Non-zero exit code:", exit_code)
+        self.uprint('####  Shutdown............  ####')
