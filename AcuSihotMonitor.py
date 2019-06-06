@@ -20,7 +20,7 @@ from functools import partial
 from traceback import print_exc
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_CLIENT_PORT, SDI_ACU
-from ae_console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp, uprint
 from sxmlif import PostMessage, ConfigDict, CatRooms
 from acif import AcumenRes, AcuServer
 from shif import ResSearch
@@ -73,7 +73,7 @@ if True:        # added for to hide PyCharm inspection warning "module level imp
     from kivy.clock import Clock
     from kivy.core.window import Window
 
-    from ae_calendar import DateChangeScreen
+    from ae.calendar import DateChangeScreen
 
 
 """ TESTS """

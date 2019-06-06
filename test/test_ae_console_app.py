@@ -6,14 +6,14 @@ import time
 from argparse import ArgumentError
 import pytest
 
-from ae_console_app import ConsoleApp, NamedLocks, full_stack_trace, uprint, \
+from ae.console_app import ConsoleApp, NamedLocks, full_stack_trace, uprint, \
     DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT
 
 
 class TestLogFile:
     """
     this test has to run first because only the first ConsoleApp instance will be able to create a log file; to
-    workaround the module variable ae_console_app._ca_instance need to be reset to None before the next ConsoleApp init
+    workaround the module variable ae.console_app._ca_instance need to be reset to None before the next ConsoleApp init
     """
     def test_log_file_rotation(self, sys_argv_restore):
         log_file = '../log/test_log_file_rot.log'

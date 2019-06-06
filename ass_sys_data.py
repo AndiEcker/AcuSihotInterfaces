@@ -8,11 +8,12 @@ from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
                           DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SF_SANDBOX,
                           ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS)
-from ae_sys_data import correct_email, correct_phone, Records, Record, FAD_FROM, FAD_ONTO, UsedSystems, \
+from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, UsedSystems, \
     string_to_records
-from ae_db import OraDB, PostgresDB
-from ae_console_app import uprint, DATE_ISO
-from ae_notification import add_notification_options, init_notification
+from ae.validation import correct_email, correct_phone
+from ae.db import OraDB, PostgresDB
+from ae.console_app import uprint, DATE_ISO
+from ae.notification import add_notification_options, init_notification
 from acif import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient
 from sfif import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
                   sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal)

@@ -18,9 +18,9 @@ import datetime
 
 from sys_data_ids import (SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDI_ACU)
-from ae_console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, full_stack_trace
-from ae_notification import add_notification_options, init_notification
-from ae_sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
+from ae.console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, full_stack_trace
+from ae.notification import add_notification_options, init_notification
+from ae.sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
 
 from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
 from acif import add_ac_options, AcuClientToSihot, AcuResToSihot

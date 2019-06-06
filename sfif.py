@@ -8,9 +8,9 @@ from typing import Tuple, Dict, Any
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
 from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_DISABLED, SDF_SF_SANDBOX
-from ae_sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
+from ae.sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
 from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
-from ae_console_app import uprint
+from ae.console_app import uprint
 
 # default client salesforce object (was 'Lead' changed to Person-'Account' within sys_data_generic branch)
 DEF_CLIENT_OBJ = 'Account'

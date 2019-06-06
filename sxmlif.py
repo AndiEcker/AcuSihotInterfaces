@@ -8,8 +8,8 @@ from xml.etree.ElementTree import XMLParser, ParseError
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, \
     SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
-from ae_console_app import fix_encoding, uprint, round_traditional
-from ae_tcp import TcpClient
+from ae.console_app import fix_encoding, uprint, round_traditional
+from ae.tcp import TcpClient
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
 # .. so we use ISO-8859-15 instead ?!?!? (see

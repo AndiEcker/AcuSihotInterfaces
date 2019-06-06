@@ -5,7 +5,7 @@ import pytest
 # import datetime
 import time
 
-from ae_lockfile import *
+from ae.lockfile import *
 
 LOCK_FILE_NAME = 'f.lock'
 

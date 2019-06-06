@@ -11,7 +11,7 @@ import psycopg2
 # from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
-from ae_console_app import NamedLocks, uprint
+from ae.console_app import NamedLocks, uprint
 
 
 NAMED_BIND_VAR_PREFIX = ':'
@@ -44,10 +44,10 @@ class GenericDB:
         user = credentials.get('User')
         password = credentials.get('Password')
         dsn = credentials.get('DSN')
-        assert user and password, "ae_db.py/GenericDB has empty user name ({}) and/or password".format(user)
+        assert user and password, "db.py/GenericDB has empty user name ({}) and/or password".format(user)
         self.usr = user
         self.pwd = password
-        assert dsn and isinstance(dsn, str), "ae_db.py/GenericDB() has invalid dsn argument {}".format(dsn)
+        assert dsn and isinstance(dsn, str), "db.py/GenericDB() has invalid dsn argument {}".format(dsn)
         self.dsn = dsn
         self._features = features
         self._app_name = app_name

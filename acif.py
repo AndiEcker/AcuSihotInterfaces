@@ -4,9 +4,9 @@ Acumen interface constants and helpers
 import datetime
 
 from sys_data_ids import DEBUG_LEVEL_ENABLED, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
-from ae_console_app import uprint
-from ae_db import OraDB
-from ae_sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
+from ae.console_app import uprint
+from ae.db import OraDB
+from ae.sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
     string_to_records
 from shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
 from sxmlif import SihotXmlBuilder

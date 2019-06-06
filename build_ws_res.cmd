@@ -9,7 +9,7 @@ copy SihotMktSegExceptions.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy SihotServer.py ..\_build_dist\AcuSihotInterfaces\ws_res\app.wsgi
 copy SihotServer.ini ..\_build_dist\AcuSihotInterfaces\ws_res\mod_wsgi.ini
 copy acif.py ..\_build_dist\AcuSihotInterfaces\ws_res\
-copy ae_console_app.py ..\_build_dist\AcuSihotInterfaces\ws_res\
+copy ae\console_app.py ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy ae_db.py ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy ae_notification.py ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy ae_sys_data.py ..\_build_dist\AcuSihotInterfaces\ws_res\

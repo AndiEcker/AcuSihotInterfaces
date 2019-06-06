@@ -28,12 +28,12 @@ from functools import partial
 from traceback import format_exc
 import pprint
 
-from ae_db import NAMED_BIND_VAR_PREFIX, bind_var_prefix
+from ae.db import NAMED_BIND_VAR_PREFIX, bind_var_prefix
 from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
     SDI_ACU
-from ae_sys_data import Record, FAD_ONTO
-from ae_console_app import ConsoleApp, uprint
-from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
+from ae.sys_data import Record, FAD_ONTO
+from ae.console_app import ConsoleApp, uprint
+from ae.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
 from shif import client_data, ResFetch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData

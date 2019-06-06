@@ -1,5 +1,5 @@
 from sys_data_ids import DEBUG_LEVEL_VERBOSE
-from ae_console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp, uprint
 from shif import ClientSearch
 
 __version__ = '0.1'

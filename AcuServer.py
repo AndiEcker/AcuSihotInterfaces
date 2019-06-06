@@ -12,10 +12,10 @@ from traceback import format_exc
 
 from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_TIMEOUT,
                           SDF_SH_XML_ENCODING, SDF_SH_CLIENT_PORT)
-from ae_console_app import ConsoleApp, uprint
-from ae_notification import add_notification_options, init_notification
-from ae_db import OraDB
-from ae_tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
+from ae.console_app import ConsoleApp, uprint
+from ae.notification import add_notification_options, init_notification
+from ae.db import OraDB
+from ae.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from acif import add_ac_options, AcumenClient
 from sxmlif import Request, RoomChange, SihotXmlBuilder
 from shif import add_sh_options, ClientFromSihot

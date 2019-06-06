@@ -3,10 +3,11 @@ import datetime
 from collections import OrderedDict
 
 from sys_data_ids import SDI_SH
-from ae_sys_data import aspect_key, aspect_key_system, aspect_key_direction, correct_email, correct_phone, deeper, \
+from ae.sys_data import aspect_key, aspect_key_system, aspect_key_direction, deeper, \
     field_name_idx_path, field_names_idx_paths, idx_path_field_name, \
     Value, Values, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
     FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP, compose_current_index
+from ae.validation import correct_email, correct_phone
 
 
 @pytest.fixture()

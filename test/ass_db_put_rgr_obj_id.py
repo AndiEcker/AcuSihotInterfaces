@@ -1,5 +1,5 @@
-from ae_console_app import ConsoleApp, uprint
-from ae_db import PostgresDB
+from ae.console_app import ConsoleApp, uprint
+from ae.db import PostgresDB
 from shif import add_sh_options, print_sh_options, res_no_to_obj_id
 
 

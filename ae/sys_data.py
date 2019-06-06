@@ -9,6 +9,7 @@ from collections import OrderedDict
 from typing import Optional, Any, Union, List, Dict, Tuple, Iterable
 
 # data actions
+from ae.validation import correct_email, correct_phone
 from sys_data_ids import SYS_CRED_ITEMS, SYS_FEAT_ITEMS, DEBUG_LEVEL_DISABLED, SYS_CRED_NEEDED, DEBUG_LEVEL_VERBOSE
 
 ACTION_INSERT = 'INSERT'
@@ -108,142 +109,6 @@ def aspect_key_direction(key):
     return direction if direction in (FAD_FROM, FAD_ONTO) else ''
 
 
-def correct_email(email, changed=False, removed=None):
-    """ check and correct email address from a user input (removing all comments)
-
-    Special conversions that are not returned as changed/corrected are: the domain part of an email will be corrected
-    to lowercase characters, additionally emails with all letters in uppercase will be converted into lowercase.
-
-    Regular expressions are not working for all edge cases (see the answer to this SO question:
-    https://stackoverflow.com/questions/201323/using-a-regular-expression-to-validate-an-email-address) because RFC822
-    is very complex (even the reg expression recommended by RFC 5322 is not complete; there is also a
-    more readable form given in the informational RFC 3696). Additionally a regular expression
-    does not allow corrections. Therefore this function is using a procedural approach (using recommendations from
-    RFC 822 and https://en.wikipedia.org/wiki/Email_address).
-
-    :param email:       email address
-    :param changed:     (optional) flag if email address got changed (before calling this function) - will be returned
-                        unchanged if email did not get corrected.
-    :param removed:     (optional) list declared by caller for to pass back all the removed characters including
-                        the index in the format "<index>:<removed_character(s)>".
-    :return:            tuple of (possibly corrected email address, flag if email got changed/corrected)
-    """
-    if email is None:
-        return "", False
-
-    if removed is None:
-        removed = list()
-
-    in_local_part = True
-    in_quoted_part = False
-    in_comment = False
-    all_upper_case = True
-    local_part = ""
-    domain_part = ""
-    domain_beg_idx = -1
-    domain_end_idx = len(email) - 1
-    comment = ''
-    last_ch = ''
-    ch_before_comment = ''
-    for idx, ch in enumerate(email):
-        if ch.islower():
-            all_upper_case = False
-        next_ch = email[idx + 1] if idx + 1 < domain_end_idx else ''
-        if in_comment:
-            comment += ch
-            if ch == ')':
-                in_comment = False
-                removed.append(comment)
-                last_ch = ch_before_comment
-            continue
-        elif ch == '(' and not in_quoted_part \
-                and (idx == 0 or email[idx:].find(')@') >= 0 if in_local_part
-                     else idx == domain_beg_idx or email[idx:].find(')') == domain_end_idx - idx):
-            comment = str(idx) + ':('
-            ch_before_comment = last_ch
-            in_comment = True
-            changed = True
-            continue
-        elif ch == '"' \
-                and (not in_local_part
-                     or last_ch != '.' and idx and not in_quoted_part
-                     or next_ch not in ('.', '@') and last_ch != '\\' and in_quoted_part):
-            removed.append(str(idx) + ':' + ch)
-            changed = True
-            continue
-        elif ch == '@' and in_local_part and not in_quoted_part:
-            in_local_part = False
-            domain_beg_idx = idx + 1
-        elif ch.isalnum():
-            pass    # uppercase and lowercase Latin letters A to Z and a to z
-        elif ord(ch) > 127 and in_local_part:
-            pass    # international characters above U+007F
-        elif ch == '.' and in_local_part and not in_quoted_part and last_ch != '.' and idx and next_ch != '@':
-            pass    # if not the first or last unless quoted, and does not appear consecutively unless quoted
-        elif ch in ('-', '.') and not in_local_part and (last_ch != '.' or ch == '-') \
-                and idx not in (domain_beg_idx, domain_end_idx):
-            pass    # if not duplicated dot and not the first or last character in domain part
-        elif (ch in ' (),:;<>@[]' or ch in '\\"' and last_ch == '\\' or ch == '\\' and next_ch == '\\') \
-                and in_quoted_part:
-            pass    # in quoted part and in addition, a backslash or double-quote must be preceded by a backslash
-        elif ch == '"' and in_local_part:
-            in_quoted_part = not in_quoted_part
-        elif (ch in "!#$%&'*+-/=?^_`{|}~" or ch == '.'
-              and (last_ch and last_ch != '.' and next_ch != '@' or in_quoted_part)) \
-                and in_local_part:
-            pass    # special characters (in local part only and not at beg/end and no dup dot outside of quoted part)
-        else:
-            removed.append(str(idx) + ':' + ch)
-            changed = True
-            continue
-
-        if in_local_part:
-            local_part += ch
-        else:
-            domain_part += ch.lower()
-        last_ch = ch
-
-    if all_upper_case:
-        local_part = local_part.lower()
-
-    return local_part + domain_part, changed
-
-
-def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
-    """ check and correct phone number from a user input (removing all invalid characters including spaces)
-
-    :param phone:           phone number
-    :param changed:         (optional) flag if phone got changed (before calling this function) - will be returned
-                            unchanged if phone did not get corrected.
-    :param removed:         (optional) list declared by caller for to pass back all the removed characters including
-                            the index in the format "<index>:<removed_character(s)>".
-    :param keep_1st_hyphen  (optional, def=False) pass True for to keep at least the first occurring hyphen character.
-    :return:                tuple of (possibly corrected phone number, flag if phone got changed/corrected)
-    """
-
-    if phone is None:
-        return "", False
-
-    if removed is None:
-        removed = list()
-
-    corr_phone = ''
-    got_hyphen = False
-    for idx, ch in enumerate(phone):
-        if ch.isdigit():
-            corr_phone += ch
-        elif keep_1st_hyphen and ch == '-' and not got_hyphen:
-            got_hyphen = True
-            corr_phone += ch
-        else:
-            if ch == '+' and not corr_phone and not phone[idx + 1:].startswith('00'):
-                corr_phone = '00'
-            removed.append(str(idx) + ':' + ch)
-            changed = True
-
-    return corr_phone, changed
-
-
 def deeper(deepness, instance):
     """
     check and calculate resulting/remaining deepness for Record/_Field/Records.copy() when going one level deeper
@@ -315,6 +180,11 @@ def field_name_idx_path(field_name, return_root_fields=False):
 
 
 def field_names_idx_paths(field_names):
+    """
+    return list of the full idx paths names for all the fields specified in the field_names argument.
+    :param field_names:     list of field (main or system) names.
+    :return:                list of their idx paths names.
+    """
     return [field_name_idx_path(field_name, return_root_fields=True) for field_name in field_names]
 
 

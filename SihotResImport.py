@@ -29,10 +29,10 @@ from sys_data_ids import (DEBUG_LEVEL_VERBOSE, FORE_SURNAME_SEP,
                           SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES,
                           SDI_ACU)
-from ae_sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
-from ae_db import bind_var_prefix
-from ae_console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
-from ae_notification import add_notification_options, init_notification
+from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
+from ae.db import bind_var_prefix
+from ae.console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
+from ae.notification import add_notification_options, init_notification
 from acif import add_ac_options, ACU_RES_MAP, from_field_indexes
 from sfif import add_sf_options
 from shif import add_sh_options, ClientToSihot, ResSender

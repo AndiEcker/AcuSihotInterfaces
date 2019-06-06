@@ -1,7 +1,7 @@
 import os
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
-from ae_console_app import ConsoleApp, Progress, uprint
+from ae.console_app import ConsoleApp, Progress, uprint
 from sxmlif import SihotXmlBuilder, ResResponse
 from acif import add_ac_options, AcuResToSihot
 from shif import add_sh_options, ResFetch, ResSearch

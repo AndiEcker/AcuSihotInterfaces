@@ -68,7 +68,7 @@ def round_traditional(val, digits=0):
     return round(val + 10**(-len(str(val)) - 1), digits)
 
 
-def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='ae_console_app.fix_encoding()'):
+def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='ae.console_app.fix_encoding()'):
     """ used for to encode invalid char encodings in text that cannot be fixed with encoding="cp1252/utf-8/.. """
     ori_text = text
     if try_counter == 0:
@@ -269,7 +269,7 @@ class _DuplicateSysOut:
 def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace', **kwargs):
     if not file:
         # app_std_out cannot be specified as file argument default because get initialized after import of this module
-        # .. within ConsoleApp._open_log_file(). Use ori_std_out for animation prints (see ae_tcp.py/TcpServer.run()).
+        # .. within ConsoleApp._open_log_file(). Use ori_std_out for animation prints (see tcp.py/TcpServer.run()).
         file = ori_std_out if end == "\r" else app_std_out
     enc = file.encoding
 
@@ -297,7 +297,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     while True:
         try:
             print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects)
-            if getattr(_ca_instance, 'multi_threading', False):     # multi_threading not exists in ae_db unit tests
+            if getattr(_ca_instance, 'multi_threading', False):     # multi_threading not exists in ae.db unit tests
                 # prevent fluttered log file content by concatenating print_objects and adding end value
                 # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
                 # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe

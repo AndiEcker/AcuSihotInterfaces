@@ -10,11 +10,11 @@ from typing import Union, Tuple
 from sys_data_ids import (SDI_SH, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_DISABLED, FORE_SURNAME_SEP,
                           SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
-from ae_sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
+from ae.sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
                          FAT_IDX, FAD_FROM, FAD_ONTO, LIST_TYPES, ALL_FIELDS, CALLABLE_SUFFIX,
                          Record, Records, Value, current_index, compose_current_index, set_current_index,
                          field_name_idx_path)
-from ae_console_app import uprint, full_stack_trace
+from ae.console_app import uprint, full_stack_trace
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
 

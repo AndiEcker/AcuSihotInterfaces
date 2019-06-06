@@ -14,10 +14,9 @@ import pprint
 from copy import deepcopy
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDI_SF
-from ae_sys_data import correct_email, correct_phone
-from ae_console_app import ConsoleApp, uprint
-from ae_client_validation import add_validation_options, init_validation
-from ae_notification import add_notification_options, init_notification
+from ae.validation import correct_email, correct_phone, add_validation_options, init_validation
+from ae.console_app import ConsoleApp, uprint
+from ae.notification import add_notification_options, init_notification
 from shif import ResBulkFetcher, hotel_and_res_id
 from sfif import add_sf_options
 from ass_sys_data import AssSysData

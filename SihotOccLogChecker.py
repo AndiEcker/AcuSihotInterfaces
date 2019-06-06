@@ -8,8 +8,8 @@ import datetime
 from traceback import format_exc
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE
-from ae_console_app import ConsoleApp, uprint
-from ae_db import OraDB, PostgresDB
+from ae.console_app import ConsoleApp, uprint
+from ae.db import OraDB, PostgresDB
 from ass_sys_data import add_ass_options, init_ass_data
 
 __version__ = '0.2'

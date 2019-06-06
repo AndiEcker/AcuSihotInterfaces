@@ -5,9 +5,9 @@ import pytest
 
 from configparser import ConfigParser
 
-from ae_sys_data import Record, FAD_ONTO
-from ae_console_app import Setting
-from ae_db import OraDB
+from ae.sys_data import Record, FAD_ONTO
+from ae.console_app import Setting
+from ae.db import OraDB
 from ass_sys_data import AssSysData
 from sxmlif import PostMessage, ConfigDict, CatRooms, AvailCatInfo
 from sfif import SfInterface

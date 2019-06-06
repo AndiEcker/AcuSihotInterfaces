@@ -1,7 +1,7 @@
 import pytest
 
 from sys_data_ids import SDI_ACU
-from ae_sys_data import FAD_FROM
+from ae.sys_data import FAD_FROM
 from shif import ClientFromSihot, ResFromSihot
 from acif import AcuClientToSihot, AcuResToSihot, AcumenClient
 
