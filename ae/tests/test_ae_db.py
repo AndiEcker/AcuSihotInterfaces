@@ -1,4 +1,5 @@
 import datetime
+from ae.console_app import ConsoleApp
 from ae.db import OraDB, PostgresDB, bind_var_prefix
 
 UPDATED_TEST_STRING = 'Updated Test String'
@@ -10,11 +11,11 @@ test_table = None
 
 
 class TestOraDB:
-    def test_prepare_connect(self, console_app_env):
+    def test_prepare_connect(self):
         global test_db
-        cae = console_app_env
-        test_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
-                             DSN=cae.get_option('acuDSN')),
+        cae = ConsoleApp('0.0', 'test ae db ora')
+        test_db = OraDB(dict(User=cae.get_config('acuUser'), Password=cae.get_config('acuPassword'),
+                             DSN=cae.get_config('acuDSN')),
                         app_name='test_ae_db-ora', debug_level=cae.get_option('debugLevel'))
         assert not test_db.last_err_msg
 
@@ -65,10 +66,10 @@ class TestOraDB:
 
 
 class TestPostgresDB:
-    def test_connect(self, console_app_env):    # test_connect
+    def test_connect(self):    # test_connect
         global test_db
-        cae = console_app_env
-        test_db = PostgresDB(dict(User=cae.get_option('assRootUsr'), Password=cae.get_option('assRootPwd'), DSN='test',
+        cae = ConsoleApp('0.0', 'test ae db pg')
+        test_db = PostgresDB(dict(User=cae.get_config('assRootUsr'), Password=cae.get_config('assRootPwd'), DSN='test',
                                   SslArgs=cae.get_config('assSslArgs')),
                              app_name='test_ae_db-pg', debug_level=cae.get_option('debugLevel'))
         assert not test_db.connect()

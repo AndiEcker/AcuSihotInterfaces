@@ -16,7 +16,7 @@ class TestLogFile:
     workaround the module variable ae.console_app._ca_instance need to be reset to None before the next ConsoleApp init
     """
     def test_log_file_rotation(self, sys_argv_restore):
-        log_file = '../log/test_log_file_rot.log'
+        log_file = 'test_log_file_rot.log'
         cae = ConsoleApp('0.0', 'test_log_file_rotation', log_file_def=log_file, log_max_size=.001)
         # no longer needed since added sys_argv_restore:
         # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
