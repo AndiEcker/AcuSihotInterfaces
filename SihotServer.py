@@ -7,7 +7,7 @@ and https://developer.salesforce.com/docs/atlas.en-us.api.meta/api/sforce_api_qu
 
 Version History:
     0.1     first beta
-    0.2     refactored to use ae_sys_data.
+    0.2     refactored to use ae.sys_data.
     0.3     prepared first production version.
     0.4     enhanced error handling and reporting to caller.
     0.5     added separate system environments and new URLs for the TEST/LIVE systems.

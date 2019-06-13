@@ -6,7 +6,7 @@
     0.2     refactored for to upload to SF as Account/Lead all yesterday arrivals (before: only
             Rentals), implemented email/phone validation options and adapted for new SF instance, also renamed
             module from ShSfContactMigration to ShSfClientMigration.
-    0.3     only roughly refactored to use ae_sys_data - NOT TESTED.
+    0.3     only roughly refactored to use ae.sys_data - NOT TESTED.
 """
 from traceback import print_exc
 import pprint

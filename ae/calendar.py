@@ -11,7 +11,7 @@
     0.1:  first alpha
 
     TODO:
-    - enhance ae_calendar to be use dependency injection instead of hard-coded call back method names.
+    - enhance ae.calendar to be use dependency injection instead of hard-coded call back method names.
 
 """
 import datetime

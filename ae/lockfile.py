@@ -52,7 +52,7 @@ class LockFile:
             if self._auto_unlock_timeout is None or \
                     datetime.datetime.strptime(lock_time, _DATE_FORMAT) + self._auto_unlock_timeout > self._lock_time:
                 fp.close()
-                return "ae_lockfile.lock(): locking error (host={host}, file={path}, pid={pid}, time={time}, ex={ex})"\
+                return "ae.lockfile.lock(): locking error (host={host}, file={path}, pid={pid}, time={time}, ex={ex})"\
                     .format(host=host, path=self._path, pid=pid, time=lock_time, ex=ex)
 
             self._timed_out = True

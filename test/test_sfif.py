@@ -1,4 +1,3 @@
-# from ae_sys_data import Record
 from ae.sys_data import UsedSystems
 from sfif import *
 

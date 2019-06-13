@@ -32,7 +32,7 @@ def _normalize_col_values(col_values):
 
 
 class GenericDB:
-    def __init__(self, credentials, features=None, app_name='ae_db-gen', debug_level=DEBUG_LEVEL_DISABLED):
+    def __init__(self, credentials, features=None, app_name='ae.db-gen', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of generic database object (base class for real database like e.g. postgres or oracle).
         :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
@@ -341,7 +341,7 @@ class GenericDB:
 
 
 class OraDB(GenericDB):
-    def __init__(self, credentials, features=None, app_name='ae_db-ora', debug_level=DEBUG_LEVEL_DISABLED):
+    def __init__(self, credentials, features=None, app_name='ae.db-ora', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of oracle database object
         :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
@@ -381,7 +381,7 @@ class OraDB(GenericDB):
                 # .. now it is using a list of 3-tuples. So since V6 need to replace clientinfo with appcontext=app_ctx
                 NAMESPACE = "CLIENTCONTEXT"  # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
                 app_ctx = [(NAMESPACE, "APP", self._app_name), (NAMESPACE, "LANG", "Python"),
-                           (NAMESPACE, "MOD", "ae_db")]
+                           (NAMESPACE, "MOD", "ae.db")]
                 self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, appcontext=app_ctx)
             else:
                 # sys context old style (until V5 using clientinfo):
@@ -420,7 +420,7 @@ class OraDB(GenericDB):
 
 
 class PostgresDB(GenericDB):
-    def __init__(self, credentials, features=None, app_name='ae_db-pg', debug_level=DEBUG_LEVEL_DISABLED):
+    def __init__(self, credentials, features=None, app_name='ae.db-pg', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of postgres database object
         :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user

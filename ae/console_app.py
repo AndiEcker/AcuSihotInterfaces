@@ -396,10 +396,13 @@ class ConsoleApp:
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
         app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
         config_files = [os.path.join(app_path, '.console_app_env.cfg'),
+                        os.path.join(cwd_path, '..', '..', '.console_app_env.cfg'),   # ae* packages unit tests
                         os.path.join(cwd_path, '.console_app_env.cfg'),
                         os.path.join(app_path, '.sys_env' + (self.sys_env_id or 'TEST') + '.cfg'),
+                        os.path.join(cwd_path, '..', '..', '.sys_env' + (self.sys_env_id or 'TEST') + '.cfg'),
                         os.path.join(cwd_path, '.sys_env' + (self.sys_env_id or 'TEST') + '.cfg'),
                         os.path.join(app_path, '.sys_env.cfg'),
+                        os.path.join(cwd_path, '..', '..', '.sys_env.cfg'),
                         os.path.join(cwd_path, '.sys_env.cfg'),
                         app_path_fnam + '.cfg',
                         app_path_fnam + INI_EXT,
@@ -810,7 +813,7 @@ class NamedLocks:
     allow to create named lock(s) within the same app (migrate from https://stackoverflow.com/users/355230/martineau
     answer in stackoverflow on the question https://stackoverflow.com/questions/37624289/value-based-thread-lock.
 
-    Currently the sys_lock feature is not implemented. Use either ae_lockfile or the github extension portalocker (see
+    Currently the sys_lock feature is not implemented. Use either ae.lockfile or the github extension portalocker (see
     https://github.com/WoLpH/portalocker) or the encapsulating extension ilock (https://github.com/symonsoft/ilock).
     More on system wide named locking: https://stackoverflow.com/questions/6931342/system-wide-mutex-in-python-on-linux.
     """

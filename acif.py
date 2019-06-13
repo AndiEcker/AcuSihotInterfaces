@@ -169,7 +169,7 @@ def add_ac_options(cae):
     cae.add_option('acuDSN', "Acumen/Oracle data source name", ACU_DEF_DSN, 'd')
 
 
-''' migrate to ae_sys_data methods: 
+''' migrate to ae.sys_data methods: 
 
 row_field_name_map = {fmi[FMI_COL_NAME]: fmi[FMI_FLD_NAME] for fmi in ACU_CLIENT_MAP + ACU_RES_MAP}
 

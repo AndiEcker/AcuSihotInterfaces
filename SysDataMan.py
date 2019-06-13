@@ -5,7 +5,7 @@
     0.1     first beta.
     0.2     refactored using add_ass_options() and init_ass_data().
     0.3     renamed (from AssCacheSync) into SysDataMan, refactoring to use AssCache as fourth system, migration of
-            system data pull/push/compare actions onto ass_sys_data/ae_sys_data module methods and refactoring/move of
+            system data pull/push/compare actions onto ass_sys_data/ae_.sys_data module methods and refactoring/move of
             command line options filterRecords, filterFields, matchRecords and matchFields into the pull/push/compare
             command line options.
 """

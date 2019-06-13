@@ -1983,7 +1983,7 @@ class System:
                 self.conn_error = self.connection.connect()
                 if self.conn_error:
                     self.connection = None
-        self.app_name = app_name or 'ae_sys_data'
+        self.app_name = app_name or 'ae.sys_data'
         self.debug_level = debug_level
         return self.conn_error
 

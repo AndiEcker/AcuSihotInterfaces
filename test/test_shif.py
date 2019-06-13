@@ -1,4 +1,3 @@
-# from ae_sys_data import Record, _Field
 from shif import *
 
 

@@ -10,7 +10,7 @@
     0.8     15-07-17: refactoring moving clients and reservation_inventories to ass_sys_data.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
     1.0     June-18: refactoring and clean-up
-    1.1     08-03-19: migrated to use ae_sys_data (extended logging and notification messages).
+    1.1     08-03-19: migrated to use ae.sys_data (extended logging and notification messages).
     1.2     11-05-19 beautified and hardened error notification and logging.
 
     TODO:
