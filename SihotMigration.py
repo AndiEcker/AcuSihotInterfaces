@@ -4,7 +4,7 @@
     0.3     added error counter to Progress
 """
 
-from ae.console_app import ConsoleApp, Progress, uprint, full_stack_trace
+from ae.console_app import ConsoleApp, Progress, full_stack_trace
 from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
 from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
 from shif import add_sh_options, print_sh_options
@@ -33,27 +33,27 @@ cae.add_option('syncDateRange', "Restrict sync. of res. to: "
 cae.add_option('includeCxlRes', "Include also cancelled reservations (0=No, 1=Yes)", 1, 'I', choices=(0, 1))
 
 print_sh_options(cae)
-uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint("Migrate Clients First/Separate:",
-       ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
+cae.uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
+cae.uprint("Migrate Clients First/Separate:",
+           ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
 break_on_error = cae.get_option('breakOnError')
-uprint("Break on error:", 'Yes' if break_on_error else 'No')
+cae.uprint("Break on error:", 'Yes' if break_on_error else 'No')
 sync_date_range = cae.get_option('syncDateRange')
 future_only = sync_date_range == 'F'
-uprint("Migrate Reservation History:", 'No' if future_only else 'Yes')
+cae.uprint("Migrate Reservation History:", 'No' if future_only else 'Yes')
 if sync_date_range and not future_only:
-    uprint("!!!!  Synchronizing only reservations in date range: " + sync_date_ranges[sync_date_range])
+    cae.uprint("!!!!  Synchronizing only reservations in date range: " + sync_date_ranges[sync_date_range])
 include_cxl_res = cae.get_option('includeCxlRes')
 if include_cxl_res:
-    uprint("Include also cancelled reservations: Yes")
+    cae.uprint("Include also cancelled reservations: Yes")
 
 
 error_msg = ""
-uprint("####  Migration of .......  ####")
+cae.uprint("####  Migration of .......  ####")
 
 if cae.get_option('clientsFirst'):
-    uprint('####  ... Clients' + ('+Res' if cae.get_option('clientsFirst') == 2 else '....')
-           + ('.....' if future_only else 'Hist.') + '  ####')
+    cae.uprint('####  ... Clients' + ('+Res' if cae.get_option('clientsFirst') == 2 else '....')
+               + ('.....' if future_only else 'Hist.') + '  ####')
     acumen_cd = AcuClientToSihot(cae)
     acu_res_hist = AcuResToSihot(cae)
 
@@ -90,7 +90,7 @@ if cae.get_option('clientsFirst'):
                     else:
                         acu_res_hist.ora_db.commit()
             if error_msg:
-                uprint('****  Error sending new guest ' + rec['AcuId'] + ' to Sihot: ' + error_msg)
+                cae.uprint('****  Error sending new guest ' + rec['AcuId'] + ' to Sihot: ' + error_msg)
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     continue  # currently not used/returned-by-send_client_to_sihot()
                 elif break_on_error:
@@ -101,7 +101,7 @@ if cae.get_option('clientsFirst'):
         cae.shutdown(11)
 
 
-uprint("####  ... " + ("future Res......" if future_only else "Reservations....") + "  ####")
+cae.uprint("####  ... " + ("future Res......" if future_only else "Reservations....") + "  ####")
 
 try:
     acumen_res = AcuResToSihot(cae)
@@ -141,6 +141,6 @@ try:
         progress.finished(error_msg=error_msg)
 
 except Exception as ex:
-    uprint("\n\nMigration Req/ARU Changes exception: " + full_stack_trace(ex))
+    cae.uprint("\n\nMigration Req/ARU Changes exception: " + full_stack_trace(ex))
 
 cae.shutdown(12 if error_msg else 0)

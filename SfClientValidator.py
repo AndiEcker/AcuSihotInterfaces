@@ -10,7 +10,7 @@ import pprint
 from sys_data_ids import SDI_SF
 from ae.validation import correct_email, correct_phone, EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED, \
     add_validation_options, init_validation, clients_to_validate
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from ae.notification import add_notification_options, init_notification
 from sfif import add_sf_options
 from ass_sys_data import AssSysData
@@ -33,7 +33,7 @@ email_validation, email_validator, \
 
 asd = AssSysData(cae)
 if asd.error_message:
-    uprint("AssSysData initialization error: " + asd.error_message)
+    cae.uprint("AssSysData initialization error: " + asd.error_message)
     cae.shutdown(20)
 sf_conn = asd.connection(SDI_SF)
 
@@ -51,7 +51,7 @@ def add_log_msg(msg, is_error=False, importance=2):
         log_errors.append(msg)
     msg = " " * (4 - importance) + ("*" if is_error else "#") * importance + "  " + msg
     log_items.append(msg)
-    uprint(msg)
+    cae.uprint(msg)
 
 
 # fetch rental clients migrated with ShSfClientMigration app for to validate email address and phone numbers
@@ -233,14 +233,14 @@ if notification:
     mail_body = "\n\n".join(log_items)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
-        uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
+        cae.uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
         cae.shutdown(36)
     if warning_notification_emails and log_errors:
         mail_body = "\n\n".join(log_errors)
         subject = "Salesforce Client Validation errors/discrepancies" + (" (sandbox)" if sf_conn.is_sandbox() else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
-            uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
+            cae.uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
             cae.shutdown(39)
 
 cae.shutdown(42 if log_errors else 0)

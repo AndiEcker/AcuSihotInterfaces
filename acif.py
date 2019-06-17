@@ -4,7 +4,6 @@ Acumen interface constants and helpers
 import datetime
 
 from sys_data_ids import DEBUG_LEVEL_ENABLED, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
-from ae.console_app import uprint
 from ae.db import OraDB
 from ae.sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
     string_to_records
@@ -197,7 +196,7 @@ class AcuDbRows:
                                 app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
             err_msg = self.ora_db.connect()
             if err_msg:
-                uprint("AcuDbRows.__init__() db connect error: {}".format(err_msg))
+                cae.uprint("AcuDbRows.__init__() db connect error: {}".format(err_msg))
         else:
             self.ora_db = ora_db
 

@@ -6,8 +6,8 @@ import time
 from argparse import ArgumentError
 import pytest
 
-from ae.console_app import ConsoleApp, NamedLocks, full_stack_trace, uprint, \
-    DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT
+from ae.console_app import (
+    ConsoleApp, NamedLocks, full_stack_trace, DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT)
 
 
 class TestLogFile:
@@ -25,7 +25,7 @@ class TestLogFile:
         assert file_name_chk == log_file
         for i in range(MAX_NUM_LOG_FILES):
             for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
-                uprint("TestLogEntry{: >26}{: >26}".format(i, j))
+                cae.uprint("TestLogEntry{: >26}{: >26}".format(i, j))
         cae._close_log_file()
         assert os.path.exists(log_file)
         # clean up

@@ -31,7 +31,7 @@ from sys_data_ids import (DEBUG_LEVEL_VERBOSE, FORE_SURNAME_SEP,
                           SDI_ACU)
 from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
 from ae.db import bind_var_prefix
-from ae.console_app import ConsoleApp, Progress, fix_encoding, uprint, full_stack_trace
+from ae.console_app import ConsoleApp, Progress, fix_encoding, full_stack_trace
 from ae.notification import add_notification_options, init_notification
 from acif import add_ac_options, ACU_RES_MAP, from_field_indexes
 from sfif import add_sf_options
@@ -54,19 +54,19 @@ cae.add_option('breakOnError', "Abort importation if an error occurs (0=No, 1=Ye
 
 debug_level = cae.get_option('debugLevel')
 
-uprint("Import path/file-mask for OTA-JSON/RCI:", cae.get_option('jsonPath'), cae.get_option('rciPath'))
+cae.uprint("Import path/file-mask for OTA-JSON/RCI:", cae.get_option('jsonPath'), cae.get_option('rciPath'))
 notification, warning_notification_emails = init_notification(cae, cae.get_option('acuDSN')
                                                               + '/' + cae.get_option('shServerIP'))
 
-uprint("Acumen DSN:", cae.get_option('acuDSN'))
-uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
-       cae.get_option(SDF_SH_KERNEL_PORT))
-uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
-uprint("Use Kernel for clients:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else "No (WEB)")
-uprint("Use Kernel for reservations:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else "No (WEB)")
-uprint("Break on error:", "Yes" if cae.get_option('breakOnError') else "No")
+cae.uprint("Acumen DSN:", cae.get_option('acuDSN'))
+cae.uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+           cae.get_option(SDF_SH_KERNEL_PORT))
+cae.uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+cae.uprint("Use Kernel for clients:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else "No (WEB)")
+cae.uprint("Use Kernel for reservations:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else "No (WEB)")
+cae.uprint("Break on error:", "Yes" if cae.get_option('breakOnError') else "No")
 if cae.get_config('warningFragments'):
-    uprint('Warning Fragments:', cae.get_config('warningFragments'))
+    cae.uprint('Warning Fragments:', cae.get_config('warningFragments'))
 
 # max. length of label text shown in UI/screen log
 MAX_SCREEN_LOG_LEN = cae.get_config('max_text_len', default_value=69999)
@@ -120,7 +120,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         error_log.append(dict(message=msg, context=ctx, line=line + 1))
         import_log.append(dict(message=msg, context=ctx, line=line + 1))
         msg = ' ' * (4 - importance) + '*' * importance + '  ' + msg
-        uprint(msg)
+        cae.uprint(msg)
         if amend_screen_log:
             amend_screen_log(msg, True)
 
@@ -128,7 +128,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         seps = '\n' * (importance - 2)
         import_log.append(dict(message=seps + msg, context=ctx, line=line + 1))
         msg = seps + ' ' * (4 - importance) + '#' * importance + '  ' + msg
-        uprint(msg)
+        cae.uprint(msg)
         if amend_screen_log:
             amend_screen_log(msg)
 
@@ -1378,7 +1378,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             if notification_err:
                 error_text += "Notification send error: " + notification_err
                 log_import("Notification send error: " + notification_err, NO_FILE_PREFIX_CHAR + 'SendNotification')
-        uprint('****  Error Log:\n', error_text)
+        cae.uprint('****  Error Log:\n', error_text)
         with open(os.path.join(log_file_path, log_file_prefix + '_errors.log'), 'a') as fh:
             fh.write(fix_encoding(error_text, encoding=fh.encoding, context="SihotResImport Error Log Fix Encoding"))
 
@@ -1402,9 +1402,9 @@ if cae.get_option('acuPassword'):
     try:
         run_import(cae.get_option('acuUser'), cae.get_option('acuPassword'))
     except KeyboardInterrupt:
-        uprint("\n****  SihotResImport run cancelled by user\n")
+        cae.uprint("\n****  SihotResImport run cancelled by user\n")
     except Exception as ri_ex:
-        uprint("\n****  SihotResImport exception:\n", format_exc())
+        cae.uprint("\n****  SihotResImport exception:\n", format_exc())
 
 else:
     # no password given, then we need the kivy UI for to logon the user

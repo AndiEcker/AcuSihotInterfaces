@@ -1,4 +1,4 @@
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from ae.db import PostgresDB
 from acif import add_ac_options
 from ass_sys_data import AssSysData, EXT_REF_TYPE_RCI
@@ -18,12 +18,12 @@ debug_level = cae.get_option('debugLevel')
 acu_user = cae.get_option('acuUser')
 acu_password = cae.get_option('acuPassword')
 acu_dsn = cae.get_option('acuDSN')
-uprint("Acumen user/DSN:", acu_user, acu_dsn)
+cae.uprint("Acumen user/DSN:", acu_user, acu_dsn)
 
 pg_user = cae.get_option('assUser')
 pg_pw = cae.get_option('assPassword')
 pg_dsn = cae.get_option('assDSN')
-uprint("AssCache DB user@dbname:", pg_user, '@', pg_dsn)
+cae.uprint("AssCache DB user@dbname:", pg_user, '@', pg_dsn)
 
 
 # LOGGING HELPERS
@@ -35,7 +35,7 @@ def log_error(msg, ctx, importance=2, exit_code=0):
     msg = " " * (4 - importance) + "*" * importance + "  " + ctx + "   " + msg
     error_log.append(msg)
     import_log.append(msg)
-    uprint(msg)
+    cae.uprint(msg)
     if exit_code:
         cae.shutdown(exit_code)
 
@@ -44,7 +44,7 @@ def log_warning(msg, ctx, importance=2):
     seps = '\n' * (importance - 2)
     msg = seps + " " * (4 - importance) + "#" * importance + "  " + ctx + "   " + msg
     import_log.append(msg)
-    uprint(msg)
+    cae.uprint(msg)
 
 
 # logon to and prepare Acumen, Salesforce, Sihot and config data env

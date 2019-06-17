@@ -12,7 +12,7 @@ from traceback import format_exc
 
 from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_TIMEOUT,
                           SDF_SH_XML_ENCODING, SDF_SH_CLIENT_PORT)
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from ae.notification import add_notification_options, init_notification
 from ae.db import OraDB
 from ae.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
@@ -29,8 +29,8 @@ add_sh_options(cae, client_port=11000)
 add_notification_options(cae)
 
 debug_level = cae.get_option('debugLevel')
-uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+cae.uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
+cae.uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
 notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
 
 
@@ -39,7 +39,7 @@ def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
         if notification:
             notification.send_notification(msg_body=msg, subject='AcuServer notification', body_style='plain')
         else:
-            uprint(msg)
+            cae.uprint(msg)
 
 
 def oc_client_to_acu(req):
@@ -92,12 +92,12 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
                            commit=True)              # COMMIT
     if db_err:
         err_msg += "AcuServer.alloc_trigger() db insert error: " + db_err
-        uprint(err_msg)
+        cae.uprint(err_msg)
 
     db_err = ora_db.close()      # commit and close
     if db_err:
         err_msg += "AcuServer.alloc_trigger() db close error: " + db_err
-        uprint(err_msg)
+        cae.uprint(err_msg)
 
     return err_msg
 
@@ -164,7 +164,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             if notification:
                 notification.send_notification(msg_body=self.error_message, subject="AcuServer handler notification")
             else:
-                uprint("**** " + self.error_message)
+                cae.uprint("**** " + self.error_message)
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
@@ -206,7 +206,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
 if __name__ == '__main__':
     ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
-    uprint("Sihot client IP/port:", ip_addr, cae.get_option(SDF_SH_CLIENT_PORT))
+    cae.uprint("Sihot client IP/port:", ip_addr, cae.get_option(SDF_SH_CLIENT_PORT))
     server = TcpServer(ip_addr, cae.get_option(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 

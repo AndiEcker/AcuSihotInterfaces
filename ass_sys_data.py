@@ -12,7 +12,7 @@ from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, UsedSystems, \
     string_to_records
 from ae.validation import correct_email, correct_phone
 from ae.db import OraDB, PostgresDB
-from ae.console_app import uprint, DATE_ISO
+from ae.console_app import DATE_ISO
 from ae.notification import add_notification_options, init_notification
 from acif import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient
 from sfif import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
@@ -160,15 +160,15 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
     err_msg = asd.error_message     # save init error message (for to check used system - ignoring missing credentials)
     sys_ids = list()
     if asd.connection(SDI_ASS, raise_if_error=False):
-        uprint('AssCache database name and user:', cae.get_option('assDSN'), cae.get_option('assUser'))
+        cae.uprint('AssCache database name and user:', cae.get_option('assDSN'), cae.get_option('assUser'))
         sys_ids.append(cae.get_option('assDSN'))
     if asd.connection(SDI_ACU, raise_if_error=False):
-        uprint('Acumen database TNS and user:', cae.get_option('acuDSN'), cae.get_option('acuUser'))
+        cae.uprint('Acumen database TNS and user:', cae.get_option('acuDSN'), cae.get_option('acuUser'))
         sys_ids.append(cae.get_option('acuDSN'))
     if asd.connection(SDI_SF, raise_if_error=False):
         sf_sandbox = SDF_SF_SANDBOX + '=True' in asd.used_systems[SDI_SF].features
-        uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:",
-               cae.get_option('sfUser'))
+        cae.uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:",
+                   cae.get_option('sfUser'))
         sys_ids.append("SBox" if sf_sandbox else "Prod")
     if asd.connection(SDI_SH, raise_if_error=False):
         print_sh_options(cae)
@@ -184,7 +184,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
 
     if 'breakOnError' in ass_options:
         break_on_error = cae.get_option('breakOnError')
-        uprint('Break on error:', 'Yes' if break_on_error else 'No')
+        cae.uprint('Break on error:', 'Yes' if break_on_error else 'No')
         ret_dict['breakOnError'] = break_on_error
 
     return ret_dict
@@ -239,6 +239,7 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
 
 
 def _dummy_stub(msg, *args, **kwargs):
+    from ae.console_app import uprint
     uprint("******  Fallback call of ass_sys_data._dummy_stub() with:\n        msg='{}', args={}, kwargs={}"
            .format(msg, args, kwargs))
 
@@ -360,11 +361,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # load invalid email fragments (ClientHasNoEmail and OTA pseudo email fragments)
         self.invalid_email_fragments = cae.get_config('invalidEmailFragments', default_value=list())
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("Text fragments for to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
+            cae.uprint("Text fragments for to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
 
         self.sf_id_reset_fragments = cae.get_config('SfIdResetResendFragments') or list()
         if self.sf_id_reset_fragments and self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint('Error fragments to re-sync res change with reset ResSfId:', self.sf_id_reset_fragments)
+            cae.uprint('Error fragments to re-sync res change with reset ResSfId:', self.sf_id_reset_fragments)
 
         self.mail_re = re.compile(r'[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+.[a-zA-Z]{2,4}$')
 
@@ -380,7 +381,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # summary display of used systems
         if sys_msg_prefix or self.debug_level >= DEBUG_LEVEL_ENABLED:
-            uprint((sys_msg_prefix or "Used systems") + ":", self.used_systems)
+            cae.uprint((sys_msg_prefix or "Used systems") + ":", self.used_systems)
 
     def __del__(self):
         self.close_dbs()

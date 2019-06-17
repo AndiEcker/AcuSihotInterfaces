@@ -20,14 +20,13 @@ from functools import partial
 from traceback import print_exc
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_CLIENT_PORT, SDI_ACU
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from sxmlif import PostMessage, ConfigDict, CatRooms
 from acif import AcumenRes, AcuServer
 from shif import ResSearch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.4'
-
 
 ROOT_BOARD_NAME = 'All'
 BACK_BOARD_NAME = 'BACK'
@@ -51,13 +50,13 @@ ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True)
 
 # logon to and prepare AssCache and config data env, optional also connect to Acumen, Salesforce, Sihot
 ass_data = init_ass_data(cae, ass_options)
-asd = ass_data['assSysData']        # public instance for config/data fetches, could be redefined by logon
-
+asd = ass_data['assSysData']  # public instance for config/data fetches, could be redefined by logon
 
 """ KIVY IMPORTS - done here for (1) prevent PyCharm import inspection warning and (2) remove command line options """
-if True:        # added for to hide PyCharm inspection warning "module level import not at top of file"
+if True:  # added for to hide PyCharm inspection warning "module level import not at top of file"
     sys.argv = [sys.argv[0]]  # remove command line options for to prevent errors in kivy args_parse
-    from kivy.config import Config      # window size have to be specified before any other kivy imports
+    from kivy.config import Config  # window size have to be specified before any other kivy imports
+
     Config.set('graphics', 'width', '1800')
     Config.set('graphics', 'height', '999')
     from kivy.app import App
@@ -74,7 +73,6 @@ if True:        # added for to hide PyCharm inspection warning "module level imp
     from kivy.core.window import Window
 
     from ae.calendar import DateChangeScreen
-
 
 """ TESTS """
 
@@ -137,7 +135,7 @@ def sih_reservation_discrepancies(data_dict):
     if results:
         # error message
         results = (results,)
-    else:   # no error message then process fetched recs
+    else:  # no error message then process fetched recs
         err_sep = '//'
         results = list()
         for rec in req.recs:
@@ -150,8 +148,8 @@ def sih_reservation_discrepancies(data_dict):
                     if len(rd) != 1:
                         row_err += err_sep + 'Res. count AC=1 SH=' + str(len(rd)) + \
                                    ('(' + ','.join([(rd[n]['_RES-HOTEL'].val() or '') + '='
-                                                   + str(rd[n]['ARR'].val()) + '...'
-                                                   + str(rd[n]['DEP'].val()) for n in range(len(rd))]) + ')'
+                                                    + str(rd[n]['ARR'].val()) + '...'
+                                                    + str(rd[n]['DEP'].val()) for n in range(len(rd))]) + ')'
                                     if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE else '')
                     row_err = _sih_check_all_res(rec, rd, row_err, err_sep)
                 elif rd:
@@ -642,7 +640,7 @@ class AcuSihotMonitorApp(App):
                 if filter_type is datetime.date:
                     filter_value = filter_value.strftime(DATE_DISPLAY_FORMAT)
                 else:
-                    filter_value = str(filter_value)    # convert to string if multi_select
+                    filter_value = str(filter_value)  # convert to string if multi_select
                 filter_value += FILTER_CRITERIA_SEP
                 if self.landscape:
                     filter_value += filter_name
@@ -783,7 +781,8 @@ class AcuSihotMonitorApp(App):
         # save updated CHECKS to config/INI file
         err_msg = cae.set_config('checks', self.check_list)
         if err_msg:
-            uprint("AcuSihotMonitorApp.update_check_result() error={} checks_list={}".format(err_msg, self.check_list))
+            cae.uprint("AcuSihotMonitorApp.update_check_result() error={} checks_list={}"
+                       .format(err_msg, self.check_list))
 
     @staticmethod
     def column_attributes(column_names):
@@ -821,7 +820,7 @@ class AcuSihotMonitorApp(App):
         for k in data_dict:
             if k.endswith(FILTER_CRITERIA_SUFFIX):
                 dd = data_dict[k]
-                if isinstance(dd, datetime.datetime):   # also True if dd is datetime.date
+                if isinstance(dd, datetime.datetime):  # also True if dd is datetime.date
                     txt = dd.strftime(DATE_DISPLAY_FORMAT) + FILTER_CRITERIA_SEP + txt
                 elif dd:
                     txt = str(dd) + FILTER_CRITERIA_SEP + txt

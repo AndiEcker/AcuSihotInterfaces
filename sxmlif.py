@@ -8,7 +8,7 @@ from xml.etree.ElementTree import XMLParser, ParseError
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, \
     SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
-from ae.console_app import fix_encoding, uprint, round_traditional
+from ae.console_app import fix_encoding, round_traditional
 from ae.tcp import TcpClient
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
@@ -401,7 +401,7 @@ class SihotXmlBuilder:
                 err_msg = "server return code {} {}".format(err_num, err_msg)
 
         if err_msg:
-            uprint("****  SihotXmlBuilder.send_to_server() error: {}".format(err_msg))
+            self.cae.uprint("****  SihotXmlBuilder.send_to_server() error: {}".format(err_msg))
         return err_msg
 
     @staticmethod
@@ -519,5 +519,5 @@ class ResKernelGet(SihotXmlBuilder):
             self.cae.dprint(msg + "res_no={};\nxml=\n{}".format(res_no, self.xml))
         else:
             res_no = (None, err_msg)
-            uprint(msg + "error='{}'".format(err_msg))
+            self.cae.uprint(msg + "error='{}'".format(err_msg))
         return res_no

@@ -8,8 +8,6 @@ import time
 
 import requests
 
-from ae.console_app import uprint
-
 
 def correct_email(email, changed=False, removed=None):
     """ check and correct email address from a user input (removing all comments)
@@ -204,16 +202,16 @@ def add_validation_options(cae, email_def=EMAIL_DO_NOT_VALIDATE, phone_def=PHONE
 
 
 def init_validation(cae):
-    uprint("####  Initializing validation options and configuration settings")
+    cae.uprint("####  Initializing validation options and configuration settings")
     prefix = "      "
     email_validator = phone_validator = addr_validator = None
 
     email_validation = cae.get_option('emailsToValidate')
     if email_validation != EMAIL_DO_NOT_VALIDATE:
-        uprint(prefix + "Email validation:", validate_flag_info(email_validation))
+        cae.uprint(prefix + "Email validation:", validate_flag_info(email_validation))
         api_key = cae.get_config('emailValidatorApiKey')
         if not api_key:
-            uprint("****  SfClientValidator email validation configuration error: api key is missing")
+            cae.uprint("****  SfClientValidator email validation configuration error: api key is missing")
             cae.shutdown(12003)
         args = dict()
         pause_seconds = cae.get_config('emailValidatorPauseSeconds')
@@ -226,10 +224,10 @@ def init_validation(cae):
 
     phone_validation = cae.get_option('phonesToValidate')
     if phone_validation != PHONE_DO_NOT_VALIDATE:
-        uprint(prefix + "Phone validation:", validate_flag_info(phone_validation))
+        cae.uprint(prefix + "Phone validation:", validate_flag_info(phone_validation))
         api_key = cae.get_config('phoneValidatorApiKey')
         if not api_key:
-            uprint("****  SfClientValidator phone validation configuration error: api key is missing")
+            cae.uprint("****  SfClientValidator phone validation configuration error: api key is missing")
             cae.shutdown(12006)
         args = dict()
         pause_seconds = cae.get_config('phoneValidatorPauseSeconds')
@@ -245,10 +243,10 @@ def init_validation(cae):
 
     addr_validation = cae.get_option('addressesToValidate')
     if addr_validation != ADDR_DO_NOT_VALIDATE:
-        uprint(prefix + "Address validation:", validate_flag_info(addr_validation))
+        cae.uprint(prefix + "Address validation:", validate_flag_info(addr_validation))
         api_key = cae.get_config('addressValidatorApiKey')
         if not api_key:
-            uprint("****  SfClientValidator address validation configuration error: api key is missing")
+            cae.uprint("****  SfClientValidator address validation configuration error: api key is missing")
             cae.shutdown(12009)
         args = dict()
         pause_seconds = cae.get_config('addressValidatorPauseSeconds')
@@ -268,28 +266,28 @@ def init_validation(cae):
     # determine filter options
     filter_sf_clients = cae.get_option('filterSfClients')
     if filter_sf_clients:
-        uprint(prefix + "Filter clients matching SOQL where clause:", filter_sf_clients)
+        cae.uprint(prefix + "Filter clients matching SOQL where clause:", filter_sf_clients)
     filter_sf_rec_types = cae.get_option('filterSfRecTypes')
     if filter_sf_rec_types:
-        uprint(prefix + "Filter clients with record types:", filter_sf_rec_types)
+        cae.uprint(prefix + "Filter clients with record types:", filter_sf_rec_types)
 
     # determine config settings for extra filters and other preferences
     filter_email = cae.get_config('filterEmail', default_value='')
     if filter_email:
-        uprint(prefix + "Filter email addresses that are:", filter_email)
+        cae.uprint(prefix + "Filter email addresses that are:", filter_email)
     default_email_address = cae.get_config('defaultEmailAddress', default_value='')
     if default_email_address:
-        uprint(prefix + "Default email address:", default_email_address)
+        cae.uprint(prefix + "Default email address:", default_email_address)
     invalid_email_fragments = cae.get_config('invalidEmailFragments', default_value=list())
     if invalid_email_fragments:
-        uprint(prefix + "Invalid email fragments:", invalid_email_fragments)
+        cae.uprint(prefix + "Invalid email fragments:", invalid_email_fragments)
 
     ignore_case_fields = cae.get_config('ignoreCaseFields', default_value=list())
     if ignore_case_fields:
-        uprint(prefix + "Case ignored in Salesforce fields:", ignore_case_fields)
+        cae.uprint(prefix + "Case ignored in Salesforce fields:", ignore_case_fields)
     changeable_fields = cae.get_config('changeableFields', default_value=list())
     if changeable_fields:
-        uprint(prefix + "Salesforce fields that can be updated/changed:", changeable_fields)
+        cae.uprint(prefix + "Salesforce fields that can be updated/changed:", changeable_fields)
 
     return email_validation, email_validator, phone_validation, phone_validator, addr_validation, addr_validator, \
         filter_sf_clients, filter_sf_rec_types, filter_email, \
@@ -311,32 +309,37 @@ def clients_to_validate(conn, filter_sf_clients='', filter_sf_rec_types=None,
     :return:    list of client field dictionaries for to be processed/validated.
     """
     # assert not filter_sf_rec_types or isinstance(filter_sf_rec_types, collections.Iterable)
-    if addr_validation != ADDR_DO_NOT_VALIDATE:
-        uprint("****  SfInterface.clients_to_validate() error: address validation search is not implemented!")
+    assert addr_validation == ADDR_DO_NOT_VALIDATE, \
+        "****  SfInterface.clients_to_validate() error: address validation search is not implemented!"
+
     rec_type_filter_expr = "'" + "','".join(filter_sf_rec_types) + "'"
-    q = ("SELECT Id, Country__c"
-         + (", Email, CD_email_valid__c" if email_validation != EMAIL_DO_NOT_VALIDATE else "")
-         + (", HomePhone, CD_Htel_valid__c, MobilePhone, CD_mtel_valid__c, Work_Phone__c, CD_wtel_valid__c"
-            if phone_validation != PHONE_DO_NOT_VALIDATE else "")
-         + " FROM Contact WHERE"
-         + (" (" + filter_sf_clients + ") and " if filter_sf_clients else "")
-         + (" RecordType.DeveloperName in (" + rec_type_filter_expr + ") and " if filter_sf_rec_types else "")
-         + "("
-         + ("(Email != Null and CD_email_valid__c in ({email_validation}))" if email_validation else "")
-         + (" or " if email_validation != EMAIL_DO_NOT_VALIDATE and phone_validation != PHONE_DO_NOT_VALIDATE
-            else "")
-         + ("(HomePhone != NULL and CD_Htel_valid__c in ({phone_validation}))"
-            + " or (MobilePhone != NULL and CD_mtel_valid__c in ({phone_validation}))"
-            + " or (Work_Phone__c != NULL and CD_wtel_valid__c in ({phone_validation}))"
-            if phone_validation != PHONE_DO_NOT_VALIDATE
-            else "")
-         + ") ORDER BY Country__c").format(email_validation=email_validation, phone_validation=phone_validation)
-    res = conn.soql_query_all(q)
+    query = (
+        "SELECT Id, Country__c"
+        + (", Email, CD_email_valid__c" if email_validation != EMAIL_DO_NOT_VALIDATE else "")
+        + (", HomePhone, CD_Htel_valid__c, MobilePhone, CD_mtel_valid__c, Work_Phone__c, CD_wtel_valid__c"
+           if phone_validation != PHONE_DO_NOT_VALIDATE else "")
+        + " FROM Contact WHERE"
+        + (" (" + filter_sf_clients + ") and " if filter_sf_clients else "")
+        + (" RecordType.DeveloperName in (" + rec_type_filter_expr + ") and " if filter_sf_rec_types else "")
+        + "("
+        + ("(Email != Null and CD_email_valid__c in ({email_validation}))" if email_validation else "")
+        + (" or " if email_validation != EMAIL_DO_NOT_VALIDATE and phone_validation != PHONE_DO_NOT_VALIDATE
+           else "")
+        + ("(HomePhone != NULL and CD_Htel_valid__c in ({phone_validation}))"
+           + " or (MobilePhone != NULL and CD_mtel_valid__c in ({phone_validation}))"
+           + " or (Work_Phone__c != NULL and CD_wtel_valid__c in ({phone_validation}))"
+           if phone_validation != PHONE_DO_NOT_VALIDATE
+           else "")
+        + ") ORDER BY Country__c")\
+        .format(email_validation=email_validation, phone_validation=phone_validation)
+
+    res = conn.soql_query_all(query)
     if conn.error_msg or res['totalSize'] <= 0:
         client_dicts = list()
     else:
         client_dicts = [{k: v for k, v in rec.items() if k != 'attributes'} for rec in res['records']]
         assert len(client_dicts) == res['totalSize']
+
     return client_dicts
 
 

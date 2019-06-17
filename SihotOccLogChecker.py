@@ -8,7 +8,7 @@ import datetime
 from traceback import format_exc
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from ae.db import OraDB, PostgresDB
 from ass_sys_data import add_ass_options, init_ass_data
 
@@ -32,14 +32,14 @@ ass_options = add_ass_options(cae)
 debug_level = cae.get_option('debugLevel')
 
 sxml_log_file_name = cae.get_parameter('sxml_log_file_name')
-uprint("SXML log file:", sxml_log_file_name)
+cae.uprint("SXML log file:", sxml_log_file_name)
 date_from = cae.get_option('dateFrom')
 date_till = cae.get_option('dateTill')
-uprint("Date range including check-ins from", date_from.strftime(USER_DATE_FORMAT),
-       'and till/before', date_till.strftime(USER_DATE_FORMAT))
+cae.uprint("Date range including check-ins from", date_from.strftime(USER_DATE_FORMAT),
+           "and till/before", date_till.strftime(USER_DATE_FORMAT))
 correct_system = cae.get_option('correctSystem')
 if correct_system:
-    uprint("!!!!  Correcting {} Room Occupation Status".format(correct_system))
+    cae.uprint("!!!!  Correcting {} Room Occupation Status".format(correct_system))
 
 
 def convert_to_date_options_type(datetime_value):
@@ -47,22 +47,24 @@ def convert_to_date_options_type(datetime_value):
 
 
 if date_from > date_till:
-    uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({}).".format(date_from, date_till))
+    cae.uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
+               .format(date_from, date_till))
     cae.shutdown(18)
 elif date_till > convert_to_date_options_type(startup_date):
-    uprint("Future arrivals cannot be checked - corrected dateTill({}) will to {}."
-           .format(date_till, convert_to_date_options_type(startup_date)))
+    cae.uprint("Future arrivals cannot be checked - corrected dateTill({}) will to {}."
+               .format(date_till, convert_to_date_options_type(startup_date)))
     date_till = convert_to_date_options_type(startup_date)
 
 max_days_diff = cae.get_config('maxDaysDiff', default_value=3.0)
 if max_days_diff:
-    uprint("Maximum number of days after/before expected arrival/departure:", max_days_diff)
+    cae.uprint("Maximum number of days after/before expected arrival/departure:", max_days_diff)
 days_check_in_before = min(cae.get_config('daysCheckInBefore', default_value=0.0), max_days_diff)
 if days_check_in_before:
-    uprint("Searching for check-ins done maximum {} days before the expected arrival date".format(days_check_in_before))
+    cae.uprint("Searching for check-ins done maximum {} days before the expected arrival date"
+               .format(days_check_in_before))
 days_check_out_after = min(cae.get_config('daysCheckOutAfter', default_value=0.5), max_days_diff)   # 0.5 days == 12 hrs
 if days_check_out_after:
-    uprint("Searching for check-outs done maximum {} days after the expected departure".format(days_check_out_after))
+    cae.uprint("Searching check-outs done maximum {} days after the expected departure".format(days_check_out_after))
 
 
 '''
@@ -130,7 +132,7 @@ def add_log_msg(msg, is_error=False, importance=2):
         log_errors.append(msg)
     msg = " " * (4 - importance) + ("*" if is_error else "#") * importance + "  " + msg
     log_items.append(msg)
-    uprint(msg)
+    cae.uprint(msg)
 
 
 def notification_add_line(msg, is_error=False):

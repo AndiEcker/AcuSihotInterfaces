@@ -16,7 +16,7 @@ from traceback import format_exc
 from sys_data_ids import (DEBUG_LEVEL_VERBOSE, ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES,
                           parse_system_option_args)
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from ae.db import PostgresDB
 from ass_sys_data import add_ass_options, init_ass_data
 
@@ -84,25 +84,25 @@ def send_notification(exit_code=0):
     all_warnings = all_errors = ""
     if warn_log:
         all_warnings = "WARNINGS:\n\n{}".format("\n\n".join(warn_log))
-        uprint(all_warnings)
+        cae.uprint(all_warnings)
         warn_log = list()
     if error_log:
         all_errors = "ERRORS:\n\n{}".format("\n\n".join(error_log))
-        uprint(all_errors)
+        cae.uprint(all_errors)
         error_log = list()
 
     if notification and all_warnings:
         subject = "SysDataMan Warnings"
         send_err = notification.send_notification(all_warnings, subject=subject, mail_to=notification_warning_emails)
         if send_err:
-            uprint("****  {} send error: {}. warnings='{}'.".format(subject, send_err, all_warnings))
+            cae.uprint("****  {} send error: {}. warnings='{}'.".format(subject, send_err, all_warnings))
             if not exit_code:
                 exit_code = 36
     if notification and all_errors:
         subject = "SysDataMan Errors"
         send_err = notification.send_notification(all_errors, subject=subject)
         if send_err:
-            uprint("****  {} send error: {}. errors='{}'.".format(subject, send_err, all_errors))
+            cae.uprint("****  {} send error: {}. errors='{}'.".format(subject, send_err, all_errors))
             if not exit_code:
                 exit_code = 39
 
@@ -119,7 +119,7 @@ def log_error(msg, *args, importance=2, exit_code=0, **kwargs):
         msg += "; extra log_error kwargs={}".format(kwargs)
     error_log.append(msg)
     warn_log.append(msg)
-    uprint(msg)
+    cae.uprint(msg)
     if exit_code or importance > 2:
         exit_code = send_notification(exit_code)
         if ass_data['breakOnErrors']:
@@ -137,7 +137,7 @@ def log_warning(msg, *args, importance=2, **kwargs):
     if kwargs and _debug_level >= DEBUG_LEVEL_VERBOSE:
         msg += "; extra log_warning kwargs={}".format(kwargs)
     warn_log.append(msg)
-    uprint(msg)
+    cae.uprint(msg)
 
 
 def parse_action_args(args_str, eval_kwargs=False):
@@ -168,10 +168,10 @@ for act_compare in act_compares:
     sid, rty = parse_action_args(act_compare)
     actions.append("Compare {} with {}".format(ALL_AVAILABLE_RECORD_TYPES.get(rty), ALL_AVAILABLE_SYSTEMS.get(sid)))
 if not actions:
-    uprint("\nNo Action option specified (using command line options init, pull, push and/or compare)\n")
+    cae.uprint("\nNo Action option specified (using command line options init, pull, push and/or compare)\n")
     cae.show_help()
     cae.shutdown()
-uprint("Actions: " + "\n         ".join(actions))
+cae.uprint("Actions: " + "\n         ".join(actions))
 '''
 act_record_filters = cae.get_option('filterRecords')
 if not isinstance(act_record_filters, dict) or not act_record_filters:

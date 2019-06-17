@@ -16,7 +16,7 @@ import datetime
 import re
 from traceback import print_exc
 
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from shif import ResSearch, SH_DATE_FORMAT
 from shif import add_sh_options, print_sh_options
 
@@ -40,22 +40,22 @@ add_sh_options(cae)
 
 
 export_fnam = cae.get_option('exportFile')
-uprint("Export file:", export_fnam)
+cae.uprint("Export file:", export_fnam)
 date_from = cae.get_option('dateFrom')
 date_till = cae.get_option('dateTill')
-uprint("Date range including checkouts from", date_from.strftime(SH_DATE_FORMAT),
-       'and till/before', date_till.strftime(SH_DATE_FORMAT))
+cae.uprint("Date range including checkouts from", date_from.strftime(SH_DATE_FORMAT),
+           'and till/before', date_till.strftime(SH_DATE_FORMAT))
 print_sh_options(cae)
 
 column_separator = cae.get_config('columnSeparator', default_value=',')
-uprint("Column separator character:", column_separator)
+cae.uprint("Column separator character:", column_separator)
 max_len_of_stay = cae.get_config('maxLengthOfStay', default_value=42)
-uprint("Maximum length of stay:", max_len_of_stay,
-       " - includes arrivals back to", date_from - datetime.timedelta(days=max_len_of_stay))
+cae.uprint("Maximum length of stay:", max_len_of_stay,
+           " - includes arrivals back to", date_from - datetime.timedelta(days=max_len_of_stay))
 search_flags = cae.get_config('ResSearchFlags', default_value='ALL-HOTELS')
-uprint("Search flags:", search_flags)
+cae.uprint("Search flags:", search_flags)
 search_scope = cae.get_config('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
-uprint("Search scope:", search_scope)
+cae.uprint("Search scope:", search_scope)
 file_caption = cae.get_config('fileCaption',
                               default_value='UNIQUEID' + column_separator
                                             + 'CHECKIN' + column_separator + 'CHECKOUT' + column_separator
@@ -65,7 +65,7 @@ file_caption = cae.get_config('fileCaption',
                                             + 'LOCATIONID' + column_separator
                                             + 'STAYMONTH' + column_separator + 'STAYYEAR' + column_separator
                                             + 'LANGUAGE')
-uprint("File caption:", file_caption)
+cae.uprint("File caption:", file_caption)
 file_columns = cae.get_config('fileColumns',
                               default_value=['<unique_id>', 'ARR', 'DEP',
                                              LIST_MARKER_PREFIX + 'NAME2', LIST_MARKER_PREFIX + 'NAME',
@@ -77,13 +77,14 @@ file_columns = cae.get_config('fileColumns',
                                              '<check_out.month>', '<check_out.year>',
                                              LIST_MARKER_PREFIX + 'LANG',
                                              ])
-uprint("File columns:", file_columns)
+cae.uprint("File columns:", file_columns)
 
 if not export_fnam:
-    uprint("Invalid or empty export file name - please specify with the --exportFile option.")
+    cae.uprint("Invalid or empty export file name - please specify with the --exportFile option.")
     cae.shutdown(15)
 elif date_from >= date_till:
-    uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({}).".format(date_from, date_till))
+    cae.uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
+               .format(date_from, date_till))
     cae.shutdown(18)
 
 
@@ -129,7 +130,7 @@ try:
     # adding scope NOORDERER prevents to include/use LANG/COUNTRY/NAME/EMAIL of orderer
     recs = res_search.search_res(from_date=first_checkin, to_date=last_checkout, flags=search_flags, scope=search_scope)
     if recs and isinstance(recs, str):
-        uprint(" ***  Sihot.PMS reservation search error:", recs)
+        cae.uprint(" ***  Sihot.PMS reservation search error:", recs)
         cae.shutdown(21)
     elif recs and isinstance(recs, list):
         exp_file_exists = os.path.exists(export_fnam)
@@ -158,7 +159,7 @@ try:
                 for arr_index in range(len(rec['ResPersons'])):
                     unique_id = res_id + ('#' + str(arr_index) if arr_index >= 0 else '')
                     if unique_id in unique_ids:
-                        uprint("  **  Detected duplicate guest/client with unique-id=", unique_id)
+                        cae.uprint("  **  Detected duplicate guest/client with unique-id=", unique_id)
                     unique_ids.append(unique_id)
                     f.write(LINE_SEPARATOR)
                     first_col = True
@@ -182,10 +183,10 @@ try:
                         f.write(c_val)
             f.write(LINE_SEPARATOR)
     else:
-        uprint(" ***  Unspecified Sihot.PMS reservation search error")
+        cae.uprint(" ***  Unspecified Sihot.PMS reservation search error")
         cae.shutdown(24)
 except Exception as ex:
-    uprint(" ***  Exception:", str(ex))
+    cae.uprint(" ***  Exception:", str(ex))
     print_exc()
     cae.shutdown(27)
 

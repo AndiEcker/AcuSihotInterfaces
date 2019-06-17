@@ -18,7 +18,7 @@ import datetime
 
 from sys_data_ids import (SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDI_ACU)
-from ae.console_app import ConsoleApp, Progress, uprint, DATE_TIME_ISO, full_stack_trace
+from ae.console_app import ConsoleApp, Progress, DATE_TIME_ISO, full_stack_trace
 from ae.notification import add_notification_options, init_notification
 from ae.sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
 
@@ -52,32 +52,32 @@ cae.add_option('syncDateRange', "Restrict sync. of res. to: "
 
 
 debug_level = cae.get_option('debugLevel')
-uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
-       cae.get_option(SDF_SH_KERNEL_PORT))
-uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
-uprint('Use Kernel for clients:', 'Yes' if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else 'No (WEB)')
-uprint('Use Kernel for reservations:', 'Yes' if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else 'No (WEB)')
+cae.uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
+cae.uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+           cae.get_option(SDF_SH_KERNEL_PORT))
+cae.uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+cae.uprint('Use Kernel for clients:', 'Yes' if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else 'No (WEB)')
+cae.uprint('Use Kernel for reservations:', 'Yes' if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else 'No (WEB)')
 last_rt_prefix = cae.get_option('acuDSN')[-4:]
-uprint('Last unfinished run (-1=all finished):  ', cae.get_config(last_rt_prefix + 'lastRt'))
-uprint('Migrate Clients First/Separate:',
-       ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
-uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
+cae.uprint('Last unfinished run (-1=all finished):  ', cae.get_config(last_rt_prefix + 'lastRt'))
+cae.uprint('Migrate Clients First/Separate:',
+           ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
+cae.uprint('Break on error:', 'Yes' if cae.get_option('breakOnError') else 'No')
 notification, warning_notification_emails = init_notification(cae, cae.get_option('acuDSN')
                                                               + '/' + cae.get_option('shServerIP'))
 if cae.get_config('warningFragments'):
-    uprint('Warning Fragments:', cae.get_config('warningFragments'))
+    cae.uprint('Warning Fragments:', cae.get_config('warningFragments'))
 migration_mode = cae.get_option('migrationMode')
 if migration_mode:
-    uprint("!!!!  Migration mode (room swaps and hotel movements are disabled)")
+    cae.uprint("!!!!  Migration mode (room swaps and hotel movements are disabled)")
 sync_date_range = cae.get_option('syncDateRange')
 if sync_date_range:
-    uprint("!!!!  Synchronizing only reservations in date range: " + sync_date_ranges[sync_date_range])
+    cae.uprint("!!!!  Synchronizing only reservations in date range: " + sync_date_ranges[sync_date_range])
 
 
 lastUnfinishedRunTime = cae.get_config(last_rt_prefix + 'lastRt')
 if lastUnfinishedRunTime.startswith('@'):
-    uprint("****  Synchronization process is still running from last batch, started at ", lastUnfinishedRunTime[1:])
+    cae.uprint("****  Synchronization process is still running from last batch, started at ", lastUnfinishedRunTime[1:])
     cae.shutdown(4)
 app_env_err = cae.set_config(last_rt_prefix + 'lastRt', '@' + datetime.datetime.now().strftime(DATE_TIME_ISO))
 
@@ -92,14 +92,14 @@ def send_notification(what, sid, mail_body, data_dict=None):
     subject = 'SihotResSync notification ' + what + ' ' + sid
     send_err = notification.send_notification(mail_body, subject=subject, data_dict=data_dict, body_style='plain')
     if send_err:
-        uprint(" **** " + subject
-               + " send error: {}. data='{}' mail-body='{}'.".format(send_err, data_dict, mail_body))
+        cae.uprint(" **** " + subject
+                   + " send error: {}. data='{}' mail-body='{}'.".format(send_err, data_dict, mail_body))
 
 
 error_msg = ""
 if cae.get_option('clientsFirst'):
     try:
-        uprint("####  Sync CD Changes.....  ####")
+        cae.uprint("####  Sync CD Changes.....  ####")
 
         acumen_cd = AcuClientToSihot(cae)
         error_msg = acumen_cd.fetch_from_acu_by_acu()
@@ -128,7 +128,7 @@ if cae.get_option('clientsFirst'):
 sync_errors = []
 if not error_msg:
     try:
-        uprint("####  Sync Req/ARU Changes  ####")
+        cae.uprint("####  Sync Req/ARU Changes  ####")
 
         asd = AssSysData(cae)
         hotel_ids = asd.ho_id_list()     # determine active/valid Sihot-hotels
@@ -233,7 +233,7 @@ if not error_msg:
                     else:
                         synced_ids.append(rid)
             progress.finished(error_msg=error_msg)
-            uprint("####  Synced IDs: " + str(synced_ids))
+            cae.uprint("####  Synced IDs: " + str(synced_ids))
             send_notification("Synced Reservations", str(datetime.datetime.now()),
                               progress.get_end_message()
                               + "\n\n\nSYNCHRONIZED (" + acumen_req.res_id_label() + "):\n" + str(synced_ids)
@@ -252,11 +252,11 @@ try:
     set_opt_err = cae.set_config(last_rt_prefix + 'lastRt', str(-1))
 except Exception as ex:
     set_opt_err = 'Duplicate execution lock release exception: ' + str(ex)
-    uprint("\nDUP EXEC LOCK ERROR=", set_opt_err)
+    cae.uprint("\nDUP EXEC LOCK ERROR=", set_opt_err)
     app_env_err += '\n\n' + set_opt_err
 
 if app_env_err:
-    uprint("\nAPP ENV ERRORS:\n", app_env_err)
+    cae.uprint("\nAPP ENV ERRORS:\n", app_env_err)
     notification.send_notification(app_env_err, subject='SihotResSync environment error', mail_to=ADMIN_MAIL_TO_LIST)
 
 cae.shutdown(13 if set_opt_err else (12 if sync_errors else 0))

@@ -1,7 +1,7 @@
 import os
 
 from sys_data_ids import DEBUG_LEVEL_VERBOSE, SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
-from ae.console_app import ConsoleApp, Progress, uprint
+from ae.console_app import ConsoleApp, Progress
 from sxmlif import SihotXmlBuilder, ResResponse
 from acif import add_ac_options, AcuResToSihot
 from shif import add_sh_options, ResFetch, ResSearch
@@ -18,15 +18,15 @@ add_ac_options(cae)
 add_sh_options(cae, add_kernel_port=True)
 
 # select reservation by gdsNo (priority) or client ref/matchcode and if both is empty then send file WebResTester.req
-cae.add_option('gdsHotel', 'Test reservation identified with gds[@hotel]', '')  # 1098704@3')
-cae.add_option('client', 'Test reservations of a client identified with matchcode', '')  # Z008475')  # N617081')
+cae.add_option('gdsHotel', "Test reservation identified with gds[@hotel]", '')  # 1098704@3')
+cae.add_option('client', "Test reservations of a client identified with matchcode", '')  # Z008475')  # N617081')
 # E362344')  # C605765')
 
 
-uprint('Acumen Usr/DSN:', cae.get_option('acuUser'), cae.get_option('acuDSN'))
-uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
-       cae.get_option(SDF_SH_KERNEL_PORT))
-uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+cae.uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
+cae.uprint("Server IP/Web-/Kernel-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
+           cae.get_option(SDF_SH_KERNEL_PORT))
+cae.uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
 
 
 client_code = cae.get_option('client')
@@ -46,7 +46,7 @@ if client_code or gds_no:
     else:
         client_msg = ' of client {client} to Sihot'.format(client=client_code)
 
-    uprint('####  Fetching client res  ####')
+    cae.uprint('####  Fetching client res  ####')
 
     acumen_res = AcuResToSihot(cae)
     err_msg = acumen_res.fetch_from_acu_by_aru("RU_CODE = " + gds_no if gds_no else "CD_CODE = '" + client_code + "'")
@@ -69,7 +69,7 @@ if client_code or gds_no:
     progress.finished(error_msg=err_msg)
 
 elif os.path.isfile(RES_REQ_FILE):
-    uprint('####  Preparing XML .....  ####')
+    cae.uprint('####  Preparing XML .....  ####')
 
     with open(RES_REQ_FILE) as f:
         xml = f.read()
@@ -77,28 +77,28 @@ elif os.path.isfile(RES_REQ_FILE):
     sxb = SihotXmlBuilder(cae)
     sxb.xml = xml
 
-    uprint('####  Sending ...........  ####')
+    cae.uprint('####  Sending ...........  ####')
 
     err_msg = sxb.send_to_server()
 
-    uprint('####  Response ..........  ####')
+    cae.uprint('####  Response ..........  ####')
     if err_msg:
-        uprint("***   Send Error:", err_msg)
+        cae.uprint("***   Send Error:", err_msg)
     else:
-        uprint("##    SihotXmlBuilder attributes")
-        uprint(vars(sxb))
+        cae.uprint("##    SihotXmlBuilder attributes")
+        cae.uprint(vars(sxb))
 
     if getattr(sxb, 'response', None):
-        uprint(sxb.response)
-        uprint("##    SihotXmlParser attributes")
-        uprint(vars(sxb.response))
+        cae.uprint(sxb.response)
+        cae.uprint("##    SihotXmlParser attributes")
+        cae.uprint(vars(sxb.response))
 
 if xml:
-    uprint('####  Parse Sent XML ........  ####')
+    cae.uprint('####  Parse Sent XML ........  ####')
     sxp = ResResponse(cae)      # SihotXmlParser doesn't have gdsno attribute/base-tag
     sxp.parse_xml(xml)
-    uprint("##    ResResponse attributes")
-    uprint(vars(sxp))
+    cae.uprint("##    ResResponse attributes")
+    cae.uprint(vars(sxp))
     ho_id = sxp.id
     gds_no = sxp.gdsno
 
@@ -106,37 +106,37 @@ if xml:
 # cae.set_option('shServerIP', 'tf-sh-sihot1v.acumen.es')
 if ho_id and gds_no:
     # now check reservation with ResFetch/SS and ResSearch/RES-SEARCH
-    uprint("####  FetchRes ..............  ####")
+    cae.uprint("####  FetchRes ..............  ####")
     rfs = ResFetch(cae)
     ret = rfs.fetch_by_gds_no(ho_id=ho_id, gds_no=gds_no)
     if not isinstance(ret, dict):
-        uprint("***   ResFetch error", ret)
+        cae.uprint("***   ResFetch error", ret)
     else:
-        uprint("##    ResFetch attributes")
-        uprint(vars(rfs))
-        uprint("##    Request XML:")
-        uprint(rfs.xml)
-        uprint("##    Parsed Dict:")
-        uprint(ret)
-        uprint("##    Response XML:")
-        uprint(rfs.response.get_xml())
+        cae.uprint("##    ResFetch attributes")
+        cae.uprint(vars(rfs))
+        cae.uprint("##    Request XML:")
+        cae.uprint(rfs.xml)
+        cae.uprint("##    Parsed Dict:")
+        cae.uprint(ret)
+        cae.uprint("##    Response XML:")
+        cae.uprint(rfs.response.get_xml())
         with open(RES_SS_RESP, 'w') as f:
             f.write(rfs.response.get_xml())
 
-    uprint("####  ResSearch .............  ####")
+    cae.uprint("####  ResSearch .............  ####")
     rfs = ResSearch(cae)
     ret = rfs.search_res(hotel_id=ho_id, gds_no=gds_no)
     if not isinstance(ret, list):
-        uprint("***     ResSearch error", ret)
+        cae.uprint("***     ResSearch error", ret)
     else:
-        uprint("##    ResSearch attributes")
-        uprint(vars(rfs))
-        uprint("##    XML:")
-        uprint(rfs.xml)
-        uprint("##    Parsed List:")
-        uprint(ret)
-        uprint("##    Response XML:")
-        uprint(rfs.response.get_xml())
+        cae.uprint("##    ResSearch attributes")
+        cae.uprint(vars(rfs))
+        cae.uprint("##    XML:")
+        cae.uprint(rfs.xml)
+        cae.uprint("##    Parsed List:")
+        cae.uprint(ret)
+        cae.uprint("##    Response XML:")
+        cae.uprint(rfs.response.get_xml())
         with open(RES_RES_SEARCH_RESP, 'w') as f:
             f.write(rfs.response.get_xml())
 

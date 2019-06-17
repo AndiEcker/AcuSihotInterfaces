@@ -32,7 +32,7 @@ from ae.db import NAMED_BIND_VAR_PREFIX, bind_var_prefix
 from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
     SDI_ACU
 from ae.sys_data import Record, FAD_ONTO
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from ae.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
 from shif import client_data, ResFetch
@@ -49,11 +49,11 @@ debug_level = cae.get_option('debugLevel')
 ass_data = init_ass_data(cae, ass_options)
 
 interval = cae.get_option('cmdInterval')
-uprint("Sync to SF interval: {} seconds".format(interval))
+cae.uprint("Sync to SF interval: {} seconds".format(interval))
 
 sys_conns = ass_data['assSysData']
 if sys_conns.error_message:
-    uprint("BssServer startup error initializing AssSysData: ", sys_conns.error_message)
+    cae.uprint("BssServer startup error initializing AssSysData: ", sys_conns.error_message)
     cae.shutdown(exit_code=9)
 
 notification = ass_data['notification']
@@ -78,7 +78,7 @@ def log_msg(msg, *args, **kwargs):
             msg = seps + ' ' * (4 - importance) + ('*' if is_error else '#') * importance + '  ' + msg
             if args:
                 msg += " (args={})".format(ppf(args))
-            uprint(msg)
+            cae.uprint(msg)
             if notification and (is_error or notify):
                 notification.send_notification(msg_body=msg, subject='BssServer notification', body_style='plain')
 
@@ -636,7 +636,7 @@ try:
     # ?!?!?: if sihot is connecting as client then our listening server ip has to be either localhost or 127.0.0.1
     # .. and for connect to the Sihot WEB/KERNEL interfaces only the external IP address of the Sihot server is working
     ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
-    uprint("Sihot client IP/port:", ip_addr, cae.get_option(SDF_SH_CLIENT_PORT))
+    cae.uprint("Sihot client IP/port:", ip_addr, cae.get_option(SDF_SH_CLIENT_PORT))
     server = TcpServer(ip_addr, cae.get_option(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
 except (OSError, Exception) as tcp_ex:

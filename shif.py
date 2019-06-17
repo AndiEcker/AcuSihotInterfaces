@@ -14,7 +14,7 @@ from ae.sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEA
                          FAT_IDX, FAD_FROM, FAD_ONTO, LIST_TYPES, ALL_FIELDS, CALLABLE_SUFFIX,
                          Record, Records, Value, current_index, compose_current_index, set_current_index,
                          field_name_idx_path)
-from ae.console_app import uprint, full_stack_trace
+from ae.console_app import full_stack_trace
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
 
@@ -457,15 +457,15 @@ def add_sh_options(cae, client_port=None, add_kernel_port=False, add_maps_and_ke
 
 
 def print_sh_options(cae):
-    uprint("Sihot server IP/WEB-interface-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT))
+    cae.uprint("Sihot server IP/WEB-interface-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT))
     client_port = cae.get_option(SDF_SH_CLIENT_PORT)
     if client_port:
         ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
-        uprint("Sihot client IP/port for listening:", ip_addr, client_port)
+        cae.uprint("Sihot client IP/port for listening:", ip_addr, client_port)
     kernel_port = cae.get_option(SDF_SH_KERNEL_PORT)
     if kernel_port:
-        uprint("Sihot server KERNEL-interface-port:", kernel_port)
-    uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+        cae.uprint("Sihot server KERNEL-interface-port:", kernel_port)
+    cae.uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
 
 
 def client_data(cae, obj_id):
@@ -1615,7 +1615,7 @@ class GuestBulkFetcher(BulkFetcherBase):
             # MATCH-SM (holding the Salesforce/SF client ID) is not available in Kernel GUEST-SEARCH (only GUEST-GET)
             self.all_recs = ClientSearch(cae).search_clients(order_by='GUEST-NR', limit=600000)
         except Exception as ex:
-            uprint(" ***  Sihot interface guest bulk fetch exception: {}".format(ex))
+            cae.uprint(" ***  Sihot interface guest bulk fetch exception: {}".format(ex))
             print_exc()
             cae.shutdown(2130)
 
@@ -1651,12 +1651,12 @@ class ResBulkFetcher(BulkFetcherBase):
         self.date_from = cae.get_option('dateFrom')
         self.date_till = cae.get_option('dateTill')
         if self.date_from > self.date_till:
-            uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
-                   .format(self.date_from, self.date_till))
+            cae.uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
+                       .format(self.date_from, self.date_till))
             cae.shutdown(3318)
         elif not self.allow_future_arrivals and self.date_till > self.startup_date:
-            uprint("Future arrivals cannot be migrated - dateTill({}) has to be before {}.".format(self.date_till,
-                                                                                                   self.startup_date))
+            cae.uprint("Future arrivals cannot be migrated - dateTill({}) has to be before {}."
+                       .format(self.date_till, self.startup_date))
             cae.shutdown(3319)
 
         # fetch given date range in chunks for to prevent timeouts and Sihot server blocking issues
@@ -1674,14 +1674,15 @@ class ResBulkFetcher(BulkFetcherBase):
     def print_options(self):
         super(ResBulkFetcher, self).print_options()
 
-        uprint("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
-               'and till/before', self.date_till.strftime(SH_DATE_FORMAT))
-        uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.max_length_of_stay,
-               " and -pause in seconds between fetches", self.fetch_chunk_pause_seconds)
-        uprint("Search flags:", self.search_flags)
-        uprint("Search scope:", self.search_scope)
-        uprint("Allowed Market Sources:", self.allowed_mkt_src or "ALL")
-        uprint("Allowed Market Groups/Channels:", self.allowed_mkt_grp or "ALL")
+        cae = self.cae
+        cae.uprint("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
+                   "and till/before", self.date_till.strftime(SH_DATE_FORMAT))
+        cae.uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.max_length_of_stay,
+                   " and -pause in seconds between fetches", self.fetch_chunk_pause_seconds)
+        cae.uprint("Search flags:", self.search_flags)
+        cae.uprint("Search scope:", self.search_scope)
+        cae.uprint("Allowed Market Sources:", self.allowed_mkt_src or "ALL")
+        cae.uprint("Allowed Market Groups/Channels:", self.allowed_mkt_grp or "ALL")
 
     def date_range_str(self):
         from_date = self.date_from.strftime(SH_DATE_FORMAT)

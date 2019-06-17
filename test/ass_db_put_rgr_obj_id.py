@@ -1,4 +1,4 @@
-from ae.console_app import ConsoleApp, uprint
+from ae.console_app import ConsoleApp
 from ae.db import PostgresDB
 from shif import add_sh_options, print_sh_options, res_no_to_obj_id
 
@@ -21,7 +21,7 @@ ass_user = cae.get_config('assRootUsr')
 ass_pw = cae.get_config('assRootPwd')
 cae.set_option('assDSN', 'ass_cache@tf-sh-sihot1v.acumen.es', save_to_config=False)
 ass_dsn = cae.get_option('assDSN')
-uprint("AssCache credentials:", ass_user, "with", ass_pw, "on", ass_dsn)
+cae.uprint("AssCache credentials:", ass_user, "with", ass_pw, "on", ass_dsn)
 
 cae.set_option('shServerIP', 'tf-sh-sihot1v.acumen.es', save_to_config=False)
 print_sh_options(cae)
@@ -36,7 +36,7 @@ def log_error(msg, ctx, importance=2, exit_code=0):
     msg = " " * (4 - importance) + "*" * importance + "  " + ctx + "   " + msg
     error_log.append(msg)
     import_log.append(msg)
-    uprint(msg)
+    cae.uprint(msg)
     if exit_code:
         cae.shutdown(exit_code)
 
@@ -45,7 +45,7 @@ def log_warning(msg, ctx, importance=2):
     seps = '\n' * (importance - 2)
     msg = seps + " " * (4 - importance) + "#" * importance + "  " + ctx + "   " + msg
     import_log.append(msg)
-    uprint(msg)
+    cae.uprint(msg)
 
 
 # logon to and prepare AssCache db
