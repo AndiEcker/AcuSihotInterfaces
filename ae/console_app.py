@@ -1,12 +1,16 @@
 import sys
 import os
 import datetime
+
 from builtins import chr  # works like unichr() also in Python 2
-import re
+
 import inspect
+import logging
+import logging.config
 import pprint
-import unicodedata
+import re
 import threading
+import unicodedata
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter
@@ -358,7 +362,7 @@ class ConsoleApp:
             :ivar _log_file_name        path and file name of the log file.
             :ivar _log_file_index       index of the current rotation log file backup.
             :ivar config_options        pre-/user-defined options (dict of Setting instances).
-            :var  _ca_instance          module variable referencing the main/first instance of this class.
+            :var  _ca_instance          module variable referencing the main/first-created instance of this class.
         """
         global _ca_instance
         if _ca_instance is None:
@@ -387,10 +391,6 @@ class ConsoleApp:
 
         self._app_name = os.path.splitext(app_fnam)[0]
         self._app_version = app_version
-
-        if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
-            self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
-            self.uprint("####  Initialization......  ####")
 
         # prepare config parser, first compile list of cfg/ini files - the last one overwrites previously loaded values
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
@@ -430,6 +430,16 @@ class ConsoleApp:
         self._main_cfg_fnam = cwd_path_fnam + INI_EXT   # default will be overwritten by load_config()
         self._main_cfg_mod_time = None                  # initially assume there is no main config file
         self.load_config()
+
+        log_conf = self.get_config('logging_config')
+        if log_conf:
+            logging.config.dictConfig(log_conf)
+        else:
+            logging.basicConfig(level=logging.DEBUG, style='{')
+
+        if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
+            self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
+            self.uprint("####  Initialization......  ####")
 
         # prepare argument parser
         self._arg_parser = ArgumentParser(description=app_desc, formatter_class=formatter_class, epilog=epilog)

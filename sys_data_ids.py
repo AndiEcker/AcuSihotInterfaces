@@ -38,11 +38,11 @@ SYS_FEAT_ITEMS = [SDF_SF_SANDBOX,
                   ]
 
 
-# supported debugging levels
-DEBUG_LEVEL_DISABLED = 0
-DEBUG_LEVEL_ENABLED = 1
-DEBUG_LEVEL_VERBOSE = 2
-DEBUG_LEVEL_TIMESTAMPED = 3
+# supported debugging levels    ONLY SHOWING logging levels equal or above:
+DEBUG_LEVEL_DISABLED = 0        # ERROR/CRITICAL
+DEBUG_LEVEL_ENABLED = 1         # WARNING
+DEBUG_LEVEL_VERBOSE = 2         # INFO/DEBUG
+DEBUG_LEVEL_TIMESTAMPED = 3     # -"- plus timestamp in logging format
 debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
 
 
