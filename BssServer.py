@@ -469,7 +469,7 @@ def reload_oc_config():
         return ""
 
     # main config file has changed - so reload the changed configuration settings
-    cae.load_config()
+    cae.config_load()
     SUPPORTED_OCS = cae.get_config('SUPPORTED_OCS')
     if not SUPPORTED_OCS or not isinstance(SUPPORTED_OCS, dict):
         return "SUPPORTED_OCS is not or wrongly defined in main CFG/INI file"   # cae._main_cfg_fnam

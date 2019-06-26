@@ -16,7 +16,9 @@ from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter
 
 from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
-                          debug_levels, parse_system_option_args)
+                          debug_levels, parse_system_option_args, logging_levels)
+
+INI_EXT = '.ini'
 
 # default name of main config section
 MAIN_SECTION_DEF = 'Settings'
@@ -270,11 +272,13 @@ class _DuplicateSysOut:
         return getattr(self.sys_out, attr)
 
 
-def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace', **kwargs):
+def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace',
+           debug_level=None, **kwargs):
+    processing = end == "\r"
     if not file:
         # app_std_out cannot be specified as file argument default because get initialized after import of this module
         # .. within ConsoleApp._open_log_file(). Use ori_std_out for animation prints (see tcp.py/TcpServer.run()).
-        file = ori_std_out if end == "\r" else app_std_out
+        file = ori_std_out if processing else app_std_out
     enc = file.encoding
 
     if _ca_instance is not None:
@@ -297,11 +301,12 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     if kwargs:
         print_objects += "\n   *  EXTRA KWARGS={}".format(kwargs)
 
+    use_logging = not processing and debug_level in logging_levels and getattr(_ca_instance, 'logging_conf_dict', False)
     try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
     while True:
         try:
             print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects)
-            if getattr(_ca_instance, 'multi_threading', False):     # multi_threading not exists in ae.db unit tests
+            if use_logging or getattr(_ca_instance, 'multi_threading', False):
                 # prevent fluttered log file content by concatenating print_objects and adding end value
                 # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
                 # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
@@ -311,7 +316,12 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                     print_one_str += end
                     end = ""
                 print_strings = (print_one_str, )
-            print(*print_strings, sep=sep, end=end, file=file, flush=flush)
+
+            if use_logging:
+                logging.log(level=logging_levels[debug_level], msg=print_strings[0])
+            else:
+                print(*print_strings, sep=sep, end=end, file=file, flush=flush)
+
             break
         except UnicodeEncodeError:
             fixed_objects = list()
@@ -325,24 +335,19 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
         try_counter += 1
 
 
-INI_EXT = '.ini'
-
-
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 log_file_def="", config_eval_vars=None, additional_cfg_files=None, log_max_size=20,
+                 config_eval_vars=None, additional_cfg_files=None,
                  multi_threading=False, suppress_stdout=False,
                  formatter_class=HelpFormatter, epilog="",
-                 sys_env_id=''):
+                 sys_env_id='', logging_config=None):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
             :param app_version:         application version.
             :param app_desc:            application description.
             :param debug_level_def:     default debug level (DEBUG_LEVEL_DISABLED).
-            :param log_file_def:        default log file name.
             :param config_eval_vars:    dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
             :param additional_cfg_files: list of additional CFG/INI file names (opt. incl. abs/rel. path).
-            :param log_max_size:        maximum size in MBytes of a log file.
             :param multi_threading:     pass True if instance is used in multi-threading app.
             :param suppress_stdout:     pass True (for wsgi apps) for to prevent any python print outputs to stdout.
             :param formatter_class:     alternative formatter class passed onto ArgumentParser instantiation.
@@ -351,31 +356,31 @@ class ConsoleApp:
             :param sys_env_id:          system environment id used as file name suffix for to load all
                                         the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
                                         for to initialize second ConsoleApp instance with values from sys_envLIVE.cfg).
+            :param logging_config:      dict with logging configuration default values - supported keys:
+                                        config_var_name     config variable name for python logging configuration dict.
+                                        file_name_def       default log file name (def='').
+                                        file_size_max       maximum size in MBytes of a log file (def=20).
         """
         """
+            :var  _ca_instance          module variable referencing the main/first-created instance of this class.
+            :ivar config_options        pre-/user-defined options (dict of Setting instances).
             :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
                                         as flag to ensure that the command line arguments get re-parsed if add_option()
                                         get called after a first call to methods which are initiating the re-fetch of
                                         the args and INI/cfg vars (like e.g. get_option() or dprint()).
             :ivar _log_file_obj         file handle of currently opened log file (opened in self._parse_args()).
-            :ivar _log_max_size         maximum size in MBytes of a log file.
+            :ivar _log_file_max_size    maximum size in MBytes of a log file.
             :ivar _log_file_name        path and file name of the log file.
             :ivar _log_file_index       index of the current rotation log file backup.
-            :ivar config_options        pre-/user-defined options (dict of Setting instances).
-            :var  _ca_instance          module variable referencing the main/first-created instance of this class.
         """
         global _ca_instance
         if _ca_instance is None:
             _ca_instance = self
 
         self._parsed_args = None
-        self._log_file_obj = None       # has to be initialized before _ca_instance, else uprint() will throw exception
-        self._log_max_size = log_max_size
-        self._log_file_name = ""
-        self._log_file_index = 0
         self._nul_std_out = None
         self.multi_threading = multi_threading
-        self.suppress_stdout = suppress_stdout
+        self.suppress_stdout = True     # block initially until app-config/-logging is fully initialized
         self.sys_env_id = sys_env_id
 
         self.startup_beg = datetime.datetime.now()
@@ -384,59 +389,35 @@ class ConsoleApp:
 
         self.config_eval_vars = config_eval_vars or dict()
 
-        cwd_path = os.getcwd()
         app_path_fnam_ext = sys.argv[0]
         app_fnam = os.path.basename(app_path_fnam_ext)
-        app_path = os.path.dirname(app_path_fnam_ext)
-
+        self._app_path = os.path.dirname(app_path_fnam_ext)
         self._app_name = os.path.splitext(app_fnam)[0]
         self._app_version = app_version
 
-        # prepare config parser, first compile list of cfg/ini files - the last one overwrites previously loaded values
-        cwd_path_fnam = os.path.join(cwd_path, self._app_name)
-        app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
-        config_files = [os.path.join(app_path, '.console_app_env.cfg'),
-                        os.path.join(cwd_path, '..', '..', '.console_app_env.cfg'),   # ae* packages unit tests
-                        os.path.join(cwd_path, '.console_app_env.cfg'),
-                        os.path.join(app_path, '.sys_env' + (self.sys_env_id or 'TEST') + '.cfg'),
-                        os.path.join(cwd_path, '..', '..', '.sys_env' + (self.sys_env_id or 'TEST') + '.cfg'),
-                        os.path.join(cwd_path, '.sys_env' + (self.sys_env_id or 'TEST') + '.cfg'),
-                        os.path.join(app_path, '.sys_env.cfg'),
-                        os.path.join(cwd_path, '..', '..', '.sys_env.cfg'),
-                        os.path.join(cwd_path, '.sys_env.cfg'),
-                        app_path_fnam + '.cfg',
-                        app_path_fnam + INI_EXT,
-                        cwd_path_fnam + '.cfg',
-                        cwd_path_fnam + INI_EXT,
-                        ]
-        if additional_cfg_files:
-            for cfg_fnam in additional_cfg_files:
-                add_cfg_path_fnam = os.path.join(cwd_path, cfg_fnam)
-                if os.path.isfile(add_cfg_path_fnam):
-                    config_files.append(add_cfg_path_fnam)
-                else:
-                    add_cfg_path_fnam = os.path.join(app_path, cfg_fnam)
-                    if os.path.isfile(add_cfg_path_fnam):
-                        config_files.append(add_cfg_path_fnam)
-                    elif os.path.isfile(cfg_fnam):
-                        config_files.append(cfg_fnam)
-                    elif not self.suppress_stdout:
-                        # this is an error, no need to: file=app_std_err if self.suppress_stdout else app_std_out
-                        self.uprint("****  Additional config file {} not found!".format(cfg_fnam))
-        # prepare load of config files (done in load_config()) where last existing INI/CFG file is default config file
+        # prepare load of config files (done in config_load()) where last existing INI/CFG file is default config file
         # .. to write to and if there is no INI file at all then create on demand a <APP_NAME>.INI file in the cwd
         self._cfg_parser = None
-        self._config_files = config_files
-        self._main_cfg_fnam = cwd_path_fnam + INI_EXT   # default will be overwritten by load_config()
+        self._config_files = list()
+        self._main_cfg_fnam = None
         self._main_cfg_mod_time = None                  # initially assume there is no main config file
-        self.load_config()
+        self.config_init(app_path_fnam_ext, additional_cfg_files)
+        self.config_load()
 
-        log_conf = self.get_config('logging_config')
-        if log_conf:
-            logging.config.dictConfig(log_conf)
-        else:
+        if logging_config is None:
+            logging_config = dict()
+        self._log_file_obj = None
+        self._log_file_max_size = logging_config.get('file_size_max', 20)
+        self._log_file_name = ""    # will be initialized in self._parse_args() indirectly via logFile setting
+        self._log_file_index = 0
+        # check if app is using python logging module
+        lcd = self.get_config(logging_config.get('config_var_name', 'logging_config'))
+        if lcd:
             logging.basicConfig(level=logging.DEBUG, style='{')
+            logging.config.dictConfig(lcd)     # configure optional logging module
+        self.logging_conf_dict = _ca_instance.logging_conf_dict = lcd
 
+        self.suppress_stdout = suppress_stdout
         if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
             self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
             self.uprint("####  Initialization......  ####")
@@ -445,10 +426,11 @@ class ConsoleApp:
         self._arg_parser = ArgumentParser(description=app_desc, formatter_class=formatter_class, epilog=epilog)
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
                         choices=debug_levels.keys())
-        self.add_option('logFile', "Copy stdout and stderr into log file", log_file_def, 'L')
+        self.add_option('logFile', "Copy stdout and stderr into log file", logging_config.get('file_name_def', ''), 'L')
 
     def __del__(self):
-        self.shutdown()
+        if _ca_instance is self:
+            self.shutdown()
 
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
         """
@@ -518,7 +500,7 @@ class ConsoleApp:
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
                                             .format(name, given_value, allowed_values))
 
-        if _ca_instance is self:
+        if _ca_instance is self and not self.logging_conf_dict:
             self._log_file_name = self.config_options['logFile'].value
             if self._log_file_name:
                 try:                        # enable logging
@@ -576,12 +558,58 @@ class ConsoleApp:
             self._parse_args()
         return getattr(self._parsed_args, name)
 
+    def config_file_add(self, fnam):
+        if os.path.isfile(fnam):
+            self._config_files.append(fnam)
+            return True
+
+    def config_init(self, app_path_fnam_ext, additional_cfg_files=()):
+        cwd_path = os.getcwd()
+        app_path = self._app_path
+
+        # prepare config env, first compile cfg/ini files - the last one overwrites previously loaded values
+        cwd_path_fnam = os.path.join(cwd_path, self._app_name)
+        self._main_cfg_fnam = cwd_path_fnam + INI_EXT  # default will be overwritten by config_load()
+        sys_env_id = self.sys_env_id or 'TEST'
+        for cfg_path in (app_path, os.path.join(cwd_path, '..', ''), cwd_path, ):
+            for cfg_file in ('.console_app_env.cfg', '.sys_env' + sys_env_id + '.cfg', '.sys_env.cfg', ):
+                self.config_file_add(os.path.join(cfg_path, cfg_file))
+
+        app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
+        for cfg_file in (app_path_fnam + '.cfg', app_path_fnam + INI_EXT,
+                         cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT):
+            self.config_file_add(cfg_file)
+
+        if additional_cfg_files:
+            for cfg_fnam in additional_cfg_files:
+                add_cfg_path_fnam = os.path.join(cwd_path, cfg_fnam)
+                if not self.config_file_add(add_cfg_path_fnam):
+                    add_cfg_path_fnam = os.path.join(app_path, cfg_fnam)
+                    if not self.config_file_add(add_cfg_path_fnam):
+                        assert self.config_file_add(cfg_fnam), "Additional config file {} not found!".format(cfg_fnam)
+
     def _get_config_val(self, name, section=None, default_value=None, cfg_parser=None):
         global config_lock
         with config_lock:
             cfg_parser = cfg_parser or self._cfg_parser
             val = cfg_parser.get(section or MAIN_SECTION_DEF, name, fallback=default_value)
         return val
+
+    def config_load(self):
+        global config_lock
+        for cfg_fnam in reversed(self._config_files):
+            if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
+                self._main_cfg_fnam = cfg_fnam
+                self._main_cfg_mod_time = os.path.getmtime(self._main_cfg_fnam)
+                break
+
+        with config_lock:
+            self._cfg_parser = ConfigParser()
+            self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
+            self._cfg_parser.read(self._config_files, encoding='utf-8')
+
+    def config_main_file_modified(self):
+        return self._main_cfg_mod_time and os.path.getmtime(self._main_cfg_fnam) > self._main_cfg_mod_time
 
     def get_config(self, name, section=None, default_value=None, cfg_parser=None, value_type=None):
         if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
@@ -628,30 +656,14 @@ class ConsoleApp:
 
         return err_msg
 
-    def config_main_file_modified(self):
-        return self._main_cfg_mod_time and os.path.getmtime(self._main_cfg_fnam) > self._main_cfg_mod_time
-
-    def load_config(self):
-        global config_lock
-        for cfg_fnam in reversed(self._config_files):
-            if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
-                self._main_cfg_fnam = cfg_fnam
-                self._main_cfg_mod_time = os.path.getmtime(self._main_cfg_fnam)
-                break
-
-        with config_lock:
-            self._cfg_parser = ConfigParser()
-            self._cfg_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
-            self._cfg_parser.read(self._config_files, encoding='utf-8')
-
     def dprint(self, *objects, sep=' ', end='\n', file=None, minimum_debug_level=DEBUG_LEVEL_VERBOSE, **kwargs):
         if self.get_option('debugLevel') >= minimum_debug_level:
-            self.uprint(*objects, sep=sep, end=end, file=file, **kwargs)
+            self.uprint(*objects, sep=sep, end=end, file=file, debug_level=minimum_debug_level, **kwargs)
 
-    def uprint(self, *objects, sep=' ', end='\n', file=None, **kwargs):
+    def uprint(self, *objects, sep=' ', end='\n', file=None, debug_level=DEBUG_LEVEL_DISABLED, **kwargs):
         if self.sys_env_id:
             objects = ('[' + self.sys_env_id + ']', ) + objects
-        uprint(*objects, sep=sep, end=end, file=file, **kwargs)
+        uprint(*objects, sep=sep, end=end, file=file, debug_level=debug_level, **kwargs)
 
     def app_name(self):
         return self._app_name
@@ -714,7 +726,7 @@ class ConsoleApp:
                 global log_file_rotation_lock
                 log_file_rotation_lock.acquire()
             self._log_file_obj.seek(0, 2)  # due to non-posix-compliant Windows feature
-            if self._log_file_obj.tell() >= self._log_max_size * 1024 * 1024:
+            if self._log_file_obj.tell() >= self._log_file_max_size * 1024 * 1024:
                 self._close_log_file()
                 self._rename_log_file()
                 self._open_log_file()

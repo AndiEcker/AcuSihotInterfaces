@@ -5,8 +5,8 @@ import pprint
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, \
-    SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
+from sys_data_ids import (DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
+                          SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING)
 # fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
 from ae.console_app import fix_encoding, round_traditional
 from ae.tcp import TcpClient

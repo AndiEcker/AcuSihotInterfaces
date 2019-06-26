@@ -3,11 +3,13 @@ import sys
 import os
 import datetime
 import time
+import logging
 from argparse import ArgumentError
+
 import pytest
 
-from ae.console_app import (
-    ConsoleApp, NamedLocks, full_stack_trace, DEBUG_LEVEL_TIMESTAMPED, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT)
+from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_TIMESTAMPED
+from ae.console_app import ConsoleApp, NamedLocks, full_stack_trace, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT
 
 
 class TestLogFile:
@@ -17,7 +19,8 @@ class TestLogFile:
     """
     def test_log_file_rotation(self, sys_argv_restore):
         log_file = 'test_log_file_rot.log'
-        cae = ConsoleApp('0.0', 'test_log_file_rotation', log_file_def=log_file, log_max_size=.001)
+        cae = ConsoleApp('0.0', 'test_log_file_rotation',
+                         logging_config=dict(file_name_def=log_file, file_size_max=.001))
         # no longer needed since added sys_argv_restore:
         # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
         sys.argv = []
@@ -38,6 +41,73 @@ class TestLogFile:
         # no longer needed since added sys_argv_restore: sys.argv = old_args
 
 
+class TestPythonLogging:
+    def test_logging_config_dict_basic(self):
+        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
+        var_name = 'test_logging_config_var'
+        var_val = dict(version=1)
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict', additional_cfg_files=[file_name],
+                         logging_config=dict(config_var_name=var_name))
+
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val == var_val
+
+        os.remove(file_name)
+
+    def test_logging_config_dict_console(self):
+        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
+        var_name = 'test_logging_config_var'
+        var_val = dict(version=1,
+                       handlers=dict(console={'class': 'logging.StreamHandler',
+                                              'level': logging.INFO}))
+        print(str(var_val))
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_console', additional_cfg_files=[file_name],
+                         logging_config=dict(config_var_name=var_name))
+
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val == var_val
+
+        os.remove(file_name)
+
+    def test_logging_config_dict_file(self):
+        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
+        var_name = 'test_logging_config_var'
+        log_file = 'test_rot_file.log'
+        var_val = dict(version=1,
+                       handlers=dict(console={'class': 'logging.handlers.RotatingFileHandler',
+                                              'level': logging.INFO,
+                                              'filename': log_file,
+                                              'maxBytes': 33,
+                                              'backupCount': 3}))
+        print(str(var_val))
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_file', additional_cfg_files=[file_name],
+                         logging_config=dict(config_var_name=var_name))
+
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val == var_val
+
+        cae.uprint('TEST LOG ENTRY 0 uprint')
+        logging.info('TEST LOG ENTRY 1 info')
+        logging.debug('TEST LOG ENTRY 2 debug')
+        logging.warning('TEST LOG ENTRY 3 warning')
+        logging.error('TEST LOG ENTRY 4 error')
+
+        # sys.argv has to be reset for to allow get_option('debugLevel') calls
+        sys.argv = ['test']
+        cae.dprint('TEST LOG ENTRY 5 dprint', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+
+        os.remove(file_name)
+
+
 class TestConfigOptions:
     def test_set_config_with_reload(self):
         file_name = os.path.join(os.getcwd(), 'test_config.ini')
@@ -51,7 +121,7 @@ class TestConfigOptions:
         cfg_val = cae.get_config(var_name)
         assert cfg_val != val
 
-        cae.load_config()
+        cae.config_load()
         cfg_val = cae.get_config(var_name)
         assert cfg_val == val
 
@@ -406,7 +476,7 @@ class TestFullStackTrace:
         try:
             raise ValueError
         except ValueError as ex:
-            print(full_stack_trace(ex))
+            # print(full_stack_trace(ex))
             assert full_stack_trace(ex)
 
 
@@ -575,7 +645,7 @@ class TestConfigMainFileModified:
         assert cfg_val != new_var_val
         assert cae.config_main_file_modified()
 
-        cae.load_config()
+        cae.config_load()
         cfg_val = cae.get_config(var_name)
         assert cfg_val == new_var_val
 

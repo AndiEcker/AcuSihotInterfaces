@@ -1,6 +1,8 @@
 """
 System Data IDs, record types, needed credentials and Features
 """
+import logging
+
 
 SDI_ASS = 'Ass'                             # AssCache Interfaces
 SDI_ACU = 'Acu'                             # Acumen Interfaces
@@ -45,6 +47,8 @@ DEBUG_LEVEL_VERBOSE = 2         # INFO/DEBUG
 DEBUG_LEVEL_TIMESTAMPED = 3     # -"- plus timestamp in logging format
 debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
 
+logging_levels = {DEBUG_LEVEL_DISABLED: logging.ERROR, DEBUG_LEVEL_ENABLED: logging.WARNING,
+                  DEBUG_LEVEL_VERBOSE: logging.INFO, DEBUG_LEVEL_TIMESTAMPED: logging.DEBUG}
 
 # OTHER GLOBAL SYSTEM CONSTANTS
 
