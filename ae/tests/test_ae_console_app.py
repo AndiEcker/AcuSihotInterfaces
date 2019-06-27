@@ -79,12 +79,21 @@ class TestPythonLogging:
         file_name = os.path.join(os.getcwd(), 'test_conf.ini')
         var_name = 'test_logging_config_var'
         log_file = 'test_rot_file.log'
+
+        import glob
+        for log_file in glob.glob(log_file + '*'):
+            os.remove(log_file)     # remove log files from last test run
+
         var_val = dict(version=1,
                        handlers=dict(console={'class': 'logging.handlers.RotatingFileHandler',
                                               'level': logging.INFO,
                                               'filename': log_file,
                                               'maxBytes': 33,
-                                              'backupCount': 3}))
+                                              'backupCount': 3}),
+                       loggers={'root': dict(handlers=['console']),
+                                'ae': dict(handlers=['console']),
+                                'ae.console_app': dict(handlers=['console'])}
+                       )
         print(str(var_val))
         with open(file_name, 'w') as f:
             f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
@@ -95,11 +104,23 @@ class TestPythonLogging:
         cfg_val = cae.get_config(var_name)
         assert cfg_val == var_val
 
+        root_logger = logging.getLogger()
+        ae_logger = logging.getLogger('ae')
+        ae_cae_logger = logging.getLogger('ae.console_app')
+
         cae.uprint('TEST LOG ENTRY 0 uprint')
+        cae.uprint('TEST LOG ENTRY 0 uprint root', logger=root_logger)
+        cae.uprint('TEST LOG ENTRY 0 uprint ae', logger=ae_logger)
+        cae.uprint('TEST LOG ENTRY 0 uprint ae_cae', logger=ae_cae_logger)
+
         logging.info('TEST LOG ENTRY 1 info')
         logging.debug('TEST LOG ENTRY 2 debug')
         logging.warning('TEST LOG ENTRY 3 warning')
+
         logging.error('TEST LOG ENTRY 4 error')
+        root_logger.error('TEST LOG ENTRY 4 error root')
+        ae_logger.error('TEST LOG ENTRY 4 error ae')
+        ae_cae_logger.error('TEST LOG ENTRY 4 error ae_cae')
 
         # sys.argv has to be reset for to allow get_option('debugLevel') calls
         sys.argv = ['test']

@@ -272,6 +272,9 @@ class _DuplicateSysOut:
         return getattr(self.sys_out, attr)
 
 
+_logger = logging.getLogger(__name__)
+
+
 def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace',
            debug_level=None, **kwargs):
     processing = end == "\r"
@@ -298,15 +301,16 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     if _get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
         print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + print_objects
 
+    use_logger = not processing and debug_level in logging_levels and getattr(_ca_instance, 'logging_conf_dict', False)
+    logger = kwargs.pop('logger', _logger)
     if kwargs:
         print_objects += "\n   *  EXTRA KWARGS={}".format(kwargs)
 
-    use_logging = not processing and debug_level in logging_levels and getattr(_ca_instance, 'logging_conf_dict', False)
     try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
     while True:
         try:
             print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects)
-            if use_logging or getattr(_ca_instance, 'multi_threading', False):
+            if use_logger or getattr(_ca_instance, 'multi_threading', False):
                 # prevent fluttered log file content by concatenating print_objects and adding end value
                 # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
                 # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
@@ -317,8 +321,8 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                     end = ""
                 print_strings = (print_one_str, )
 
-            if use_logging:
-                logging.log(level=logging_levels[debug_level], msg=print_strings[0])
+            if use_logger:
+                logger.log(level=logging_levels[debug_level], msg=print_strings[0])
             else:
                 print(*print_strings, sep=sep, end=end, file=file, flush=flush)
 
@@ -413,8 +417,8 @@ class ConsoleApp:
         # check if app is using python logging module
         lcd = self.get_config(logging_config.get('config_var_name', 'logging_config'))
         if lcd:
-            logging.basicConfig(level=logging.DEBUG, style='{')
-            logging.config.dictConfig(lcd)     # configure optional logging module
+            # logging.basicConfig(level=logging.DEBUG, style='{')
+            logging.config.dictConfig(lcd)     # configure logging module
         self.logging_conf_dict = _ca_instance.logging_conf_dict = lcd
 
         self.suppress_stdout = suppress_stdout
