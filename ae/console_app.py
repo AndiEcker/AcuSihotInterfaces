@@ -275,8 +275,24 @@ class _DuplicateSysOut:
 _logger = logging.getLogger(__name__)
 
 
+def calling_module(called_module=__name__):
+    module = None
+    try:
+        # find the first stack frame that is *not* in this module
+        depth = 1
+        while True:
+            # noinspection PyProtectedMember
+            module = sys._getframe(depth).f_globals.get('__name__', '__main__')
+            if module != called_module:
+                break
+            depth += 1
+    except (AttributeError, ValueError):
+        pass
+    return module
+
+
 def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace',
-           debug_level=None, **kwargs):
+           debug_level=None, logger=None, **kwargs):
     processing = end == "\r"
     if not file:
         # app_std_out cannot be specified as file argument default because get initialized after import of this module
@@ -301,10 +317,13 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     if _get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
         print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + print_objects
 
-    use_logger = not processing and debug_level in logging_levels and getattr(_ca_instance, 'logging_conf_dict', False)
-    logger = kwargs.pop('logger', _logger)
     if kwargs:
         print_objects += "\n   *  EXTRA KWARGS={}".format(kwargs)
+
+    use_logger = not processing and debug_level in logging_levels and getattr(_ca_instance, 'logging_conf_dict', False)
+    if use_logger and logger is None:
+        module = calling_module()
+        logger = logging.getLogger(module) if module else _logger
 
     try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
     while True:
