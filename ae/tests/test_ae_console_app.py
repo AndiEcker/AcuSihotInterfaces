@@ -42,39 +42,6 @@ class TestLogFile:
 
 
 class TestPythonLogging:
-    def test_logging_config_dict_basic(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'test_logging_config_var'
-        var_val = dict(version=1)
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
-
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict', additional_cfg_files=[file_name],
-                         logging_config=dict(config_var_name=var_name))
-
-        cfg_val = cae.get_config(var_name)
-        assert cfg_val == var_val
-
-        os.remove(file_name)
-
-    def test_logging_config_dict_console(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'test_logging_config_var'
-        var_val = dict(version=1,
-                       handlers=dict(console={'class': 'logging.StreamHandler',
-                                              'level': logging.INFO}))
-        print(str(var_val))
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
-
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_console', additional_cfg_files=[file_name],
-                         logging_config=dict(config_var_name=var_name))
-
-        cfg_val = cae.get_config(var_name)
-        assert cfg_val == var_val
-
-        os.remove(file_name)
-
     def test_logging_config_dict_file(self):
         file_name = os.path.join(os.getcwd(), 'test_conf.ini')
         var_name = 'test_logging_config_var'
@@ -122,9 +89,41 @@ class TestPythonLogging:
         ae_logger.error('TEST LOG ENTRY 4 error ae')
         ae_cae_logger.error('TEST LOG ENTRY 4 error ae_cae')
 
-        # sys.argv has to be reset for to allow get_option('debugLevel') calls
-        sys.argv = ['test']
+        sys.argv = ['test']     # sys.argv has to be reset for to allow get_option('debugLevel') calls, done by dprint()
         cae.dprint('TEST LOG ENTRY 5 dprint', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+
+        os.remove(file_name)
+
+    def test_logging_config_dict_basic(self):
+        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
+        var_name = 'test_logging_config_var'
+        var_val = dict(version=1)
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict', additional_cfg_files=[file_name],
+                         logging_config=dict(config_var_name=var_name))
+
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val == var_val
+
+        os.remove(file_name)
+
+    def test_logging_config_dict_console(self):
+        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
+        var_name = 'test_logging_config_var'
+        var_val = dict(version=1,
+                       handlers=dict(console={'class': 'logging.StreamHandler',
+                                              'level': logging.INFO}))
+        print(str(var_val))
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_console', additional_cfg_files=[file_name],
+                         logging_config=dict(config_var_name=var_name))
+
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val == var_val
 
         os.remove(file_name)
 

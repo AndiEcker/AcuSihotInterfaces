@@ -442,8 +442,8 @@ class ConsoleApp:
 
         self.suppress_stdout = suppress_stdout
         if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
-            self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
-            self.uprint("####  Initialization......  ####")
+            self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc, logger=_logger)
+            self.uprint("####  Initialization......  ####", logger=_logger)
 
         # prepare argument parser
         self._arg_parser = ArgumentParser(description=app_desc, formatter_class=formatter_class, epilog=epilog)
@@ -529,27 +529,30 @@ class ConsoleApp:
                 try:                        # enable logging
                     self._close_log_file()
                     self._open_log_file()
-                    self.uprint(" ###  Activated log file", self._log_file_name)
+                    self.uprint(" ###  Activated log file", self._log_file_name, logger=_logger)
                 except Exception as ex:
-                    self.uprint(" ***  ConsoleApp._parse_args(): exception while trying to enable logging:", ex)
+                    self.uprint(" ***  ConsoleApp._parse_args(): exception while trying to enable logging:", ex,
+                                logger=_logger)
 
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self.config_options['debugLevel'].value
         if _debug_level >= DEBUG_LEVEL_ENABLED:
             self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
-                        _debug_level)
+                        _debug_level, logger=_logger)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             if _ca_instance is self:
-                self.uprint("  ##  System Environment:")
-                self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}))
+                self.uprint("  ##  System Environment:", logger=_logger)
+                self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}), logger=_logger)
             else:
-                self.uprint(" ###  Initialized additional ConsoleApp instance for system env id", self.sys_env_id)
+                self.uprint(" ###  Initialized additional ConsoleApp instance for system env id", self.sys_env_id,
+                            logger=_logger)
 
         self.startup_end = datetime.datetime.now()
-        self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
+        self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end, logger=_logger)
         if _ca_instance is not self and not self.sys_env_id:
-            self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
-        self.uprint("####  Startup finished....  ####")
+            self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID",
+                        logger=_logger)
+        self.uprint("####  Startup finished....  ####", logger=_logger)
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
@@ -701,12 +704,12 @@ class ConsoleApp:
                 print()
                 print('EoF')
             except Exception as ex:
-                self.dprint("Ignorable {} end-of-file marker exception={}".format(stream_name, ex))     # log if verbose
+                self.dprint("Ignorable {} end-of-file marker exception={}".format(stream_name, ex), logger=_logger)
 
             stream_file.flush()
 
         except Exception as ex:
-            self.dprint("Ignorable {} flush exception={}".format(stream_name, ex))  # only log on DEBUG_LEVEL_VERBOSE
+            self.dprint("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
 
     def _open_log_file(self):
         global app_std_out, app_std_err
@@ -762,12 +765,13 @@ class ConsoleApp:
                 main_thread = threading.current_thread()
                 for t in threading.enumerate():
                     if t is not main_thread:
-                        self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()))
+                        self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
+                                    logger=_logger)
                         t.join()
         if exit_code:
-            self.uprint("****  Non-zero exit code:", exit_code)
+            self.uprint("****  Non-zero exit code:", exit_code, logger=_logger)
 
-        self.uprint("####  Shutdown............  ####")
+        self.uprint("####  Shutdown............  ####", logger=_logger)
 
         self._close_log_file()
         if self._log_file_index:
@@ -813,12 +817,12 @@ class Progress:
             self._delta = 1
         elif start_counter <= 0:
             if nothing_to_do_msg:
-                self.cae.uprint(_complete_msg_prefix(nothing_to_do_msg))
+                self.cae.uprint(_complete_msg_prefix(nothing_to_do_msg), logger=_logger)
             return  # RETURN -- empty set - nothing to process
 
         if start_msg:
             self.cae.uprint(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
-                                                                   total_count=self._total_count))
+                                                                   total_count=self._total_count), logger=_logger)
 
     def next(self, processed_id='', error_msg='', next_msg=''):
         self._run_counter += self._delta
@@ -828,7 +832,7 @@ class Progress:
         if error_msg and self._err_msg:
             self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
                                                  err_counter=self._err_counter, err_msg=error_msg,
-                                                 processed_id=processed_id))
+                                                 processed_id=processed_id), logger=_logger)
 
         if not next_msg:
             next_msg = self._next_msg
@@ -840,13 +844,13 @@ class Progress:
             next_msg = '\r' + next_msg
             self.cae.uprint(next_msg.format(run_counter=self._run_counter, total_count=self._total_count,
                                             err_counter=self._err_counter, err_msg=error_msg,
-                                            processed_id=processed_id))
+                                            processed_id=processed_id), logger=_logger)
 
     def finished(self, error_msg=''):
         if error_msg and self._err_msg:
             self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                 err_counter=self._err_counter, err_msg=error_msg))
-        self.cae.uprint(self.get_end_message(error_msg=error_msg))
+                                                 err_counter=self._err_counter, err_msg=error_msg), logger=_logger)
+        self.cae.uprint(self.get_end_message(error_msg=error_msg), logger=_logger)
 
     def get_end_message(self, error_msg=''):
         return self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
@@ -872,7 +876,8 @@ class NamedLocks:
         assert not sys_lock, "sys_lock is currently not implemented"
         self._sys_lock = sys_lock
         # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
-        self.dprint = _ca_instance.dprint if _ca_instance and getattr(_ca_instance, 'startup_end', False) else uprint
+        cae = _ca_instance
+        self.print_func = cae.dprint if cae and getattr(cae, 'startup_end', False) else uprint
 
         self.dprint("NamedLocks.__init__", lock_names)
 
@@ -887,6 +892,11 @@ class NamedLocks:
         for lock_name in self._lock_names:
             self.dprint("NamedLocks.__exit__ b4 release ", lock_name)
             self.release(lock_name)
+
+    def dprint(self, *args, **kwargs):
+        if 'logger' not in kwargs:
+            kwargs['logger'] = _logger
+        return self.print_func(*args, **kwargs)
 
     def acquire(self, lock_name, *args, **kwargs):
         self.dprint("NamedLocks.acquire", lock_name, 'START')
