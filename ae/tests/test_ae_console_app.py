@@ -8,13 +8,13 @@ from argparse import ArgumentError
 
 import pytest
 
-from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_TIMESTAMPED
+from sys_data_ids import DEBUG_LEVEL_TIMESTAMPED, DEBUG_LEVEL_DISABLED
 from ae.console_app import (ConsoleApp, reset_main_cae, NamedLocks, full_stack_trace,
                             ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT)
 
 
 class TestPythonLogging:
-    def test_logging_config_dict_complex(self):
+    def test_logging_config_dict_complex(self, caplog):
         log_file = 'test_rot_file.log'
 
         var_val = dict(version=1,
@@ -39,22 +39,52 @@ class TestPythonLogging:
         ae_logger = logging.getLogger('ae')
         ae_cae_logger = logging.getLogger('ae.console_app')
 
-        cae.uprint('TEST LOG ENTRY 0 uprint')
-        cae.uprint('TEST LOG ENTRY 0 uprint root', logger=root_logger)
-        cae.uprint('TEST LOG ENTRY 0 uprint ae', logger=ae_logger)
-        cae.uprint('TEST LOG ENTRY 0 uprint ae_cae', logger=ae_cae_logger)
+        log_text = "TEST LOG ENTRY 0 uprint"
+        cae.uprint(log_text)
+        assert caplog.text.endswith(log_text + "\n")
 
-        logging.info('TEST LOG ENTRY 1 info')
-        logging.debug('TEST LOG ENTRY 2 debug')
-        logging.warning('TEST LOG ENTRY 3 warning')
+        log_text = "TEST LOG ENTRY 0 uprint root"
+        cae.uprint(log_text, logger=root_logger)
+        assert caplog.text.endswith(log_text + "\n")
 
-        logging.error('TEST LOG ENTRY 4 error logging')
-        root_logger.error('TEST LOG ENTRY 4 error root')
-        ae_logger.error('TEST LOG ENTRY 4 error ae')
-        ae_cae_logger.error('TEST LOG ENTRY 4 error ae_cae')
+        log_text = "TEST LOG ENTRY 0 uprint ae"
+        cae.uprint(log_text, logger=ae_logger)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = "TEST LOG ENTRY 0 uprint ae_cae"
+        cae.uprint(log_text, logger=ae_cae_logger)
+        assert caplog.text.endswith(log_text + "\n")
+
+        logging.info("TEST LOG ENTRY 1 info")       # will NOT be added to log
+        assert caplog.text.endswith(log_text + "\n")
+
+        logging.debug("TEST LOG ENTRY 2 debug")     # NOT logged
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = "TEST LOG ENTRY 3 warning"
+        logging.warning(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = "TEST LOG ENTRY 4 error logging"
+        logging.error(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = "TEST LOG ENTRY 4 error root"
+        root_logger.error(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = "TEST LOG ENTRY 4 error ae"
+        ae_logger.error(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = "TEST LOG ENTRY 4 error ae_cae"
+        ae_cae_logger.error(log_text)
+        assert caplog.text.endswith(log_text + "\n")
 
         sys.argv = ['test']     # sys.argv has to be reset for to allow get_option('debugLevel') calls, done by dprint()
-        cae.dprint('TEST LOG ENTRY 5 dprint', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+        log_text = "TEST LOG ENTRY 5 dprint"
+        cae.dprint(log_text, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+        assert caplog.text.endswith(log_text + "\n")
 
         logging.shutdown()
         import glob

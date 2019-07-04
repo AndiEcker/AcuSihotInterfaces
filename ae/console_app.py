@@ -340,7 +340,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                 # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
                 print_one_str = sep.join(print_strings)
                 sep = ""
-                if end:
+                if end and not use_logger:
                     print_one_str += end
                     end = ""
                 print_strings = (print_one_str, )
@@ -751,6 +751,8 @@ class ConsoleApp:
             sys.stdout = ori_std_out        # .. "Fatal Python error: Cannot recover from stack overflow"
             self._log_file_obj.close()
             self._log_file_obj = None
+        elif self.logging_conf_dict:
+            logging.shutdown()
 
     def log_file_check_rotation(self):
         if self._log_file_obj is not None:
