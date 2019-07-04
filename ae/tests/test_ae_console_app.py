@@ -9,16 +9,94 @@ from argparse import ArgumentError
 import pytest
 
 from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_TIMESTAMPED
-from ae.console_app import ConsoleApp, NamedLocks, full_stack_trace, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT
+from ae.console_app import (ConsoleApp, reset_main_cae, NamedLocks, full_stack_trace,
+                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT)
 
 
-class TestLogFile:
+class TestPythonLogging:
+    def test_logging_config_dict_complex(self):
+        log_file = 'test_rot_file.log'
+
+        var_val = dict(version=1,
+                       disable_existing_loggers=False,
+                       handlers=dict(console={'class': 'logging.handlers.RotatingFileHandler',
+                                              'level': logging.INFO,
+                                              'filename': log_file,
+                                              'maxBytes': 33,
+                                              'backupCount': 63}),
+                       loggers={'root': dict(handlers=['console']),
+                                'ae': dict(handlers=['console']),
+                                'ae.console_app': dict(handlers=['console'])}
+                       )
+        print(str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_file',
+                         logging_config=dict(py_logging_config_dict=var_val))
+
+        assert cae.logging_conf_dict == var_val
+
+        root_logger = logging.getLogger()
+        ae_logger = logging.getLogger('ae')
+        ae_cae_logger = logging.getLogger('ae.console_app')
+
+        cae.uprint('TEST LOG ENTRY 0 uprint')
+        cae.uprint('TEST LOG ENTRY 0 uprint root', logger=root_logger)
+        cae.uprint('TEST LOG ENTRY 0 uprint ae', logger=ae_logger)
+        cae.uprint('TEST LOG ENTRY 0 uprint ae_cae', logger=ae_cae_logger)
+
+        logging.info('TEST LOG ENTRY 1 info')
+        logging.debug('TEST LOG ENTRY 2 debug')
+        logging.warning('TEST LOG ENTRY 3 warning')
+
+        logging.error('TEST LOG ENTRY 4 error logging')
+        root_logger.error('TEST LOG ENTRY 4 error root')
+        ae_logger.error('TEST LOG ENTRY 4 error ae')
+        ae_cae_logger.error('TEST LOG ENTRY 4 error ae_cae')
+
+        sys.argv = ['test']     # sys.argv has to be reset for to allow get_option('debugLevel') calls, done by dprint()
+        cae.dprint('TEST LOG ENTRY 5 dprint', minimum_debug_level=DEBUG_LEVEL_ENABLED)
+
+        logging.shutdown()
+        import glob
+        for log_file in glob.glob(log_file + '*'):
+            os.remove(log_file)     # remove log files from last test run
+
+    def test_logging_config_dict_basic_from_ini(self):
+        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
+        var_name = 'py_logging_config_dict'
+        var_val = dict(version=1)
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', additional_cfg_files=[file_name])
+
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val == var_val
+
+        assert cae.logging_conf_dict == var_val
+
+        os.remove(file_name)
+
+    def test_logging_config_dict_console_from_init(self):
+        var_val = dict(version=1,
+                       handlers=dict(console={'class': 'logging.StreamHandler',
+                                              'level': logging.INFO}))
+        print(str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_console',
+                         logging_config=dict(py_logging_config_dict=var_val))
+
+        assert cae.logging_conf_dict == var_val
+
+
+class TestInternalLogFileRotation:
     """
     this test has to run first because only the first ConsoleApp instance will be able to create a log file; to
     workaround the module variable ae.console_app._ca_instance need to be reset to None before the next ConsoleApp init
     """
     def test_log_file_rotation(self, sys_argv_restore):
-        log_file = 'test_log_file_rot.log'
+        log_file = 'test_internal_log_file_rot.log'
+        reset_main_cae()        # ensure internal logging get enabled - even if we already created other cae instances
         cae = ConsoleApp('0.0', 'test_log_file_rotation',
                          logging_config=dict(file_name_def=log_file, file_size_max=.001))
         # no longer needed since added sys_argv_restore:
@@ -39,93 +117,6 @@ class TestLogFile:
             assert os.path.exists(rot_log_file)
             os.remove(rot_log_file)
         # no longer needed since added sys_argv_restore: sys.argv = old_args
-
-
-class TestPythonLogging:
-    def test_logging_config_dict_file(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'test_logging_config_var'
-        log_file = 'test_rot_file.log'
-
-        import glob
-        for log_file in glob.glob(log_file + '*'):
-            os.remove(log_file)     # remove log files from last test run
-
-        var_val = dict(version=1,
-                       handlers=dict(console={'class': 'logging.handlers.RotatingFileHandler',
-                                              'level': logging.INFO,
-                                              'filename': log_file,
-                                              'maxBytes': 33,
-                                              'backupCount': 3}),
-                       loggers={'root': dict(handlers=['console']),
-                                'ae': dict(handlers=['console']),
-                                'ae.console_app': dict(handlers=['console'])}
-                       )
-        print(str(var_val))
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
-
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_file', additional_cfg_files=[file_name],
-                         logging_config=dict(config_var_name=var_name))
-
-        cfg_val = cae.get_config(var_name)
-        assert cfg_val == var_val
-
-        root_logger = logging.getLogger()
-        ae_logger = logging.getLogger('ae')
-        ae_cae_logger = logging.getLogger('ae.console_app')
-
-        cae.uprint('TEST LOG ENTRY 0 uprint')
-        cae.uprint('TEST LOG ENTRY 0 uprint root', logger=root_logger)
-        cae.uprint('TEST LOG ENTRY 0 uprint ae', logger=ae_logger)
-        cae.uprint('TEST LOG ENTRY 0 uprint ae_cae', logger=ae_cae_logger)
-
-        logging.info('TEST LOG ENTRY 1 info')
-        logging.debug('TEST LOG ENTRY 2 debug')
-        logging.warning('TEST LOG ENTRY 3 warning')
-
-        logging.error('TEST LOG ENTRY 4 error')
-        root_logger.error('TEST LOG ENTRY 4 error root')
-        ae_logger.error('TEST LOG ENTRY 4 error ae')
-        ae_cae_logger.error('TEST LOG ENTRY 4 error ae_cae')
-
-        sys.argv = ['test']     # sys.argv has to be reset for to allow get_option('debugLevel') calls, done by dprint()
-        cae.dprint('TEST LOG ENTRY 5 dprint', minimum_debug_level=DEBUG_LEVEL_ENABLED)
-
-        os.remove(file_name)
-
-    def test_logging_config_dict_basic(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'test_logging_config_var'
-        var_val = dict(version=1)
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
-
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict', additional_cfg_files=[file_name],
-                         logging_config=dict(config_var_name=var_name))
-
-        cfg_val = cae.get_config(var_name)
-        assert cfg_val == var_val
-
-        os.remove(file_name)
-
-    def test_logging_config_dict_console(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'test_logging_config_var'
-        var_val = dict(version=1,
-                       handlers=dict(console={'class': 'logging.StreamHandler',
-                                              'level': logging.INFO}))
-        print(str(var_val))
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
-
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_console', additional_cfg_files=[file_name],
-                         logging_config=dict(config_var_name=var_name))
-
-        cfg_val = cae.get_config(var_name)
-        assert cfg_val == var_val
-
-        os.remove(file_name)
 
 
 class TestConfigOptions:

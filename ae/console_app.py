@@ -67,6 +67,11 @@ def _get_debug_level():
     return DEBUG_LEVEL_DISABLED
 
 
+def reset_main_cae():
+    global _ca_instance
+    _ca_instance = None
+
+
 def round_traditional(val, digits=0):
     """ needed because python round() is not working always, like e.g. round(0.074, 2) == 0.07 instead of 0.08
         taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer
@@ -379,10 +384,11 @@ class ConsoleApp:
             :param sys_env_id:          system environment id used as file name suffix for to load all
                                         the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
                                         for to initialize second ConsoleApp instance with values from sys_envLIVE.cfg).
-            :param logging_config:      dict with logging configuration default values - supported keys:
-                                        config_var_name     config variable name for python logging configuration dict.
-                                        file_name_def       default log file name (def='').
-                                        file_size_max       maximum size in MBytes of a log file (def=20).
+            :param logging_config:      dict with logging configuration default values - supported keys. If the key
+                                        py_logging_config_dict is a non-empty dict then all other keys are ignored:
+                                        py_logging_config_dict  config dict for python logging configuration.
+                                        file_name_def           default log file name for internal logging (def='').
+                                        file_size_max           max. size in MBytes of internal log file (def=20).
         """
         """
             :var  _ca_instance          module variable referencing the main/first-created instance of this class.
@@ -434,11 +440,11 @@ class ConsoleApp:
         self._log_file_name = ""    # will be initialized in self._parse_args() indirectly via logFile setting
         self._log_file_index = 0
         # check if app is using python logging module
-        lcd = self.get_config(logging_config.get('config_var_name', 'logging_config'))
+        lcd = logging_config.get('py_logging_config_dict', self.get_config('py_logging_config_dict'))
         if lcd:
             # logging.basicConfig(level=logging.DEBUG, style='{')
             logging.config.dictConfig(lcd)     # configure logging module
-        self.logging_conf_dict = _ca_instance.logging_conf_dict = lcd
+        self.logging_conf_dict = _ca_instance.logging_conf_dict = lcd or dict()
 
         self.suppress_stdout = suppress_stdout
         if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
