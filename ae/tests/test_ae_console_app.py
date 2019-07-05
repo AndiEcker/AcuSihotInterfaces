@@ -14,8 +14,10 @@ from ae.console_app import (ConsoleApp, reset_main_cae, NamedLocks, full_stack_t
 
 
 class TestPythonLogging:
+    # TODO STRANGE: if this is not the first test function then the "0 uprint ae_cae" test is failing
     def test_logging_config_dict_complex(self, caplog):
         log_file = 'test_rot_file.log'
+        entry_prefix = "TEST LOG ENTRY "
 
         var_val = dict(version=1,
                        disable_existing_loggers=False,
@@ -39,57 +41,70 @@ class TestPythonLogging:
         ae_logger = logging.getLogger('ae')
         ae_cae_logger = logging.getLogger('ae.console_app')
 
-        log_text = "TEST LOG ENTRY 0 uprint"
+        # ConsoleAppEnv uprint
+        log_text = entry_prefix + "0 uprint"
         cae.uprint(log_text)
         assert caplog.text.endswith(log_text + "\n")
 
-        log_text = "TEST LOG ENTRY 0 uprint root"
+        log_text = entry_prefix + "0 uprint root"
         cae.uprint(log_text, logger=root_logger)
         assert caplog.text.endswith(log_text + "\n")
 
-        log_text = "TEST LOG ENTRY 0 uprint ae"
+        log_text = entry_prefix + "0 uprint ae"
         cae.uprint(log_text, logger=ae_logger)
         assert caplog.text.endswith(log_text + "\n")
 
-        log_text = "TEST LOG ENTRY 0 uprint ae_cae"
+        log_text = entry_prefix + "0 uprint ae_cae"
         cae.uprint(log_text, logger=ae_cae_logger)
         assert caplog.text.endswith(log_text + "\n")
 
-        logging.info("TEST LOG ENTRY 1 info")       # will NOT be added to log
+        # logging
+        logging.info(entry_prefix + "1 info")       # will NOT be added to log
         assert caplog.text.endswith(log_text + "\n")
 
-        logging.debug("TEST LOG ENTRY 2 debug")     # NOT logged
+        logging.debug(entry_prefix + "2 debug")     # NOT logged
         assert caplog.text.endswith(log_text + "\n")
 
-        log_text = "TEST LOG ENTRY 3 warning"
+        log_text = entry_prefix + "3 warning"
         logging.warning(log_text)
         assert caplog.text.endswith(log_text + "\n")
 
-        log_text = "TEST LOG ENTRY 4 error logging"
+        log_text = entry_prefix + "4 error logging"
         logging.error(log_text)
         assert caplog.text.endswith(log_text + "\n")
 
-        log_text = "TEST LOG ENTRY 4 error root"
+        # loggers
+        log_text = entry_prefix + "4 error root"
         root_logger.error(log_text)
         assert caplog.text.endswith(log_text + "\n")
 
-        log_text = "TEST LOG ENTRY 4 error ae"
+        log_text = entry_prefix + "4 error ae"
         ae_logger.error(log_text)
         assert caplog.text.endswith(log_text + "\n")
 
-        log_text = "TEST LOG ENTRY 4 error ae_cae"
+        log_text = entry_prefix + "4 error ae_cae"
         ae_cae_logger.error(log_text)
         assert caplog.text.endswith(log_text + "\n")
 
+        # ConsoleAppEnv dprint
         sys.argv = ['test']     # sys.argv has to be reset for to allow get_option('debugLevel') calls, done by dprint()
-        log_text = "TEST LOG ENTRY 5 dprint"
+        log_text = entry_prefix + "5 dprint"
         cae.dprint(log_text, minimum_debug_level=DEBUG_LEVEL_DISABLED)
         assert caplog.text.endswith(log_text + "\n")
 
+        # final logging checks
         logging.shutdown()
+        file_contents = list()
         import glob
         for log_file in glob.glob(log_file + '*'):
+            with open(log_file) as fd:
+                fc = fd.read()
+            file_contents.append(fc)
             os.remove(log_file)     # remove log files from last test run
+        assert len(file_contents) == 15
+        for fc in file_contents:
+            assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(entry_prefix) \
+                or fc == ''
 
     def test_logging_config_dict_basic_from_ini(self):
         file_name = os.path.join(os.getcwd(), 'test_conf.ini')
@@ -106,6 +121,7 @@ class TestPythonLogging:
         assert cae.logging_conf_dict == var_val
 
         os.remove(file_name)
+        logging.shutdown()
 
     def test_logging_config_dict_console_from_init(self):
         var_val = dict(version=1,
@@ -117,6 +133,7 @@ class TestPythonLogging:
                          logging_config=dict(py_logging_config_dict=var_val))
 
         assert cae.logging_conf_dict == var_val
+        logging.shutdown()
 
 
 class TestInternalLogFileRotation:
