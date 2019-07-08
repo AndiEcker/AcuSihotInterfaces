@@ -3,10 +3,12 @@ import datetime
 from collections import OrderedDict
 
 from sys_data_ids import SDI_SH
-from ae.sys_data import aspect_key, aspect_key_system, aspect_key_direction, deeper, \
-    field_name_idx_path, field_names_idx_paths, idx_path_field_name, \
-    Value, Values, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
-    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP, compose_current_index
+from ae.sys_data import (
+    aspect_key, aspect_key_system, aspect_key_direction, deeper,
+    field_name_idx_path, field_names_idx_paths, idx_path_field_name,
+    Value, Values, Record, Records, _Field,
+    compose_current_index, current_index, init_current_index, use_current_index, set_current_index,
+    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP)
 from ae.validation import correct_email, correct_phone
 
 
@@ -142,6 +144,18 @@ class TestHelperMethods:
         assert idx_path_field_name(('test3no-sub',), add_sep=True) == 'test3no-sub'
         assert idx_path_field_name(('test', 33), add_sep=True) == 'test' + IDX_PATH_SEP + '33'
 
+    def test_compose_current_index(self):
+        idx_path = ('fn', 1, 'sfn')
+        assert compose_current_index(Record(), idx_path, Value((1, ))) == idx_path
+        idx_path = ('fn', 1)
+        assert compose_current_index(Record(), idx_path, Value((1, ))) == idx_path
+        idx_path = ('fn', )
+        assert compose_current_index(Record(), idx_path, Value((1, ))) == idx_path
+
+        rec = Record(fields=dict(fnA='', fnB1sfnA='', fnB1sfnB='sfB2v'))
+        idx_path = ('fnB', 1, 'sfnB')
+        assert compose_current_index(rec, idx_path, Value((1, ))) == idx_path
+
     def test_init_use_current_index(self):
         r = Record()
         init_current_index(r, ('fnA', ), None)
@@ -172,6 +186,9 @@ class TestHelperMethods:
 
         assert use_current_index(r, ('fnB', 0, 'fnBA'), Value((1, ))) == ('fnB', 0, 'fnBA')
 
+        with pytest.raises(AssertionError):
+            use_current_index(None, ('fnB', 0, 'fnBA'), Value((1,)))
+
     def test_set_current_index(self):
         rs = Records()
         set_current_index(rs, idx=2)
@@ -182,9 +199,6 @@ class TestHelperMethods:
         r = Record()
         set_current_index(r, idx='fnX')
         assert current_index(r) == 'fnX'
-
-    def test_compose_current_index(self):
-        assert compose_current_index
 
     def test_set_current_system_index(self):
         rec = Record()
@@ -205,11 +219,16 @@ class TestValue:
 
     def test_val_init(self):
         v = Value()
+        assert not v.initialized
         assert v.value() == []
+        assert not v.initialized
         assert v.val() == ''
+        assert not v.initialized
         with pytest.raises(AssertionError):
             v.set_val(Value().set_val('tvX'))
+        assert not v.initialized
         v.set_val('tvA')
+        assert v.initialized
         assert v.value() == ['tvA']
         assert v.val() == 'tvA'
         v.clear_leafs()
@@ -238,6 +257,7 @@ class TestValue:
         assert v.node_child(('test',)) is None
         assert v.node_child(('test', 3, 'subField')) is None
         assert v.node_child((2, 'test',)) is None
+        assert v.node_child(()) == v
 
 
 class TestField:

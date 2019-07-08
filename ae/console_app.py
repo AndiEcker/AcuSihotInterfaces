@@ -73,7 +73,7 @@ def reset_main_cae():
 
 
 def round_traditional(val, digits=0):
-    """ needed because python round() is not working always, like e.g. round(0.074, 2) == 0.07 instead of 0.08
+    """ needed because python round() is not working always, like e.g. round(0.075, 2) == 0.07 instead of 0.08
         taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer
     """
     return round(val + 10**(-len(str(val)) - 1), digits)
@@ -102,15 +102,14 @@ def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='
     else:
         try_method = ""
         text = None
-    if try_method and _get_debug_level() >= DEBUG_LEVEL_VERBOSE:
-        try:        # first try to put ori_text in error message
-            uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
-                                  ", " + DEF_ENCODING + " text:\n'" +
-                                  ori_text.encode(DEF_ENCODING, errors='backslashreplace').decode(DEF_ENCODING) + "'\n",
-                                  indent=12, width=120))
 
-        except UnicodeEncodeError:
-            uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method, indent=12, width=120))
+    if try_method and _get_debug_level() >= DEBUG_LEVEL_VERBOSE:
+        # push/print ori_text and error message to console/log
+        uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
+                              ", " + DEF_ENCODING + " text:\n'" +
+                              ori_text.encode(DEF_ENCODING, errors='backslashreplace').decode(DEF_ENCODING) + "'\n",
+                              indent=12, width=120))
+
     return text
 
 
@@ -164,18 +163,6 @@ def to_ascii(unicode_str):
     """
     nfkd_form = unicodedata.normalize('NFKD', unicode_str)
     return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
-
-
-PLACEHOLDER_PREFIX = '<<<'
-PLACEHOLDER_SUFFIX = '>>>'
-
-
-def substitute_placeholders(expr, key_values, value_prefix=""):
-    for key, val in key_values.items():
-        # if not isinstance(val, str):
-        #    val = str(val)
-        expr = expr.replace(PLACEHOLDER_PREFIX + key + PLACEHOLDER_SUFFIX, value_prefix + val)
-    return expr
 
 
 class Setting:
@@ -365,7 +352,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 config_eval_vars=None, additional_cfg_files=None,
+                 config_eval_vars=None, additional_cfg_files=(),
                  multi_threading=False, suppress_stdout=False,
                  formatter_class=HelpFormatter, epilog="",
                  sys_env_id='', logging_config=None):
@@ -612,13 +599,14 @@ class ConsoleApp:
                          cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT):
             self.config_file_add(cfg_file)
 
-        if additional_cfg_files:
-            for cfg_fnam in additional_cfg_files:
-                add_cfg_path_fnam = os.path.join(cwd_path, cfg_fnam)
+        err_msg = ""
+        for cfg_fnam in additional_cfg_files:
+            add_cfg_path_fnam = os.path.join(cwd_path, cfg_fnam)
+            if not self.config_file_add(add_cfg_path_fnam):
+                add_cfg_path_fnam = os.path.join(app_path, cfg_fnam)
                 if not self.config_file_add(add_cfg_path_fnam):
-                    add_cfg_path_fnam = os.path.join(app_path, cfg_fnam)
-                    if not self.config_file_add(add_cfg_path_fnam):
-                        assert self.config_file_add(cfg_fnam), "Additional config file {} not found!".format(cfg_fnam)
+                    err_msg = "Additional config file {} not found!".format(cfg_fnam)
+        return err_msg
 
     def _get_config_val(self, name, section=None, default_value=None, cfg_parser=None):
         global config_lock
@@ -894,6 +882,7 @@ class NamedLocks:
         for lock_name in self._lock_names:
             self.dprint("NamedLocks.__enter__ b4 acquire ", lock_name)
             self.acquire(lock_name)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb)
