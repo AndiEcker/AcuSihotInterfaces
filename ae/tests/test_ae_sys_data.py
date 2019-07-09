@@ -8,7 +8,7 @@ from ae.sys_data import (
     field_name_idx_path, field_names_idx_paths, idx_path_field_name,
     Value, Values, Record, Records, _Field,
     compose_current_index, current_index, init_current_index, use_current_index, set_current_index,
-    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP)
+    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP, ALL_FIELDS)
 from ae.validation import correct_email, correct_phone
 
 
@@ -99,6 +99,11 @@ class TestHelperMethods:
         assert field_name_idx_path('3') == ()
         assert field_name_idx_path('Test2') == ()           # index sys name field split exception
         assert field_name_idx_path('2Test2') == (2, 'Test2')
+        assert field_name_idx_path('2Test34') == (2, 'Test34')
+        assert field_name_idx_path('2Test345') == (2, 'Test', 3, '45')
+        assert field_name_idx_path('2Test3456') == (2, 'Test', 34, '56')
+        assert field_name_idx_path('23Test4567') == (23, 'Test', 45, '67')
+        assert field_name_idx_path('234Test5678') == (234, 'Test', 56, '78')
         assert field_name_idx_path('3Test') == (3, 'Test')
 
     def test_field_name_idx_path_sep(self):
@@ -235,6 +240,18 @@ class TestValue:
         assert v.value() == []
         assert v.val() == ''
 
+    def test_val_set(self):
+        v = Value()
+        v.set_val('tvA')
+        assert v.val() == 'tvA'
+        v[0] = 'tvB'
+        assert v.val() == 'tvB'
+        v[-1] = 'tvC'
+        assert v.val() == 'tvC'
+        with pytest.raises(IndexError):
+            v['test'] = 'tvD'
+        assert v.val() == 'tvC'
+
     def test_val_get(self):
         v = Value()
         assert v.val() == ''
@@ -258,6 +275,39 @@ class TestValue:
         assert v.node_child(('test', 3, 'subField')) is None
         assert v.node_child((2, 'test',)) is None
         assert v.node_child(()) == v
+
+
+class TestValues:
+    def test_node_child(self):
+        u = Values()
+        assert u.node_child(('test',)) is None
+        with pytest.raises(AssertionError):
+            u.node_child(('test',), moan=True)
+        assert u.node_child((0,)) is None
+        with pytest.raises(AssertionError):
+            u.node_child((0,), moan=True)
+        assert u.node_child(()) is None
+        with pytest.raises(AssertionError):
+            u.node_child((), moan=True)
+        assert u.node_child(('test',)) is None
+        with pytest.raises(AssertionError):
+            u.node_child(('test',), moan=True)
+        assert u.node_child('test') is None
+        with pytest.raises(AssertionError):
+            u.node_child('test', moan=True)
+        assert u.node_child(0) is None
+        with pytest.raises(AssertionError):
+            u.node_child(0, moan=True)
+        assert u.node_child(None) is None
+        with pytest.raises(AssertionError):
+            u.node_child(None, moan=True)
+
+    def test_set_value(self):
+        u = Values()
+        assert u.set_val('test_val', 0) is u
+        root_idx = ('test', )
+        assert u.set_value(Value().set_val('other_test_val'), 0, root_idx=root_idx) is u
+        assert u.val(0) == 'other_test_val'
 
 
 class TestField:
@@ -348,6 +398,11 @@ class TestRecord:
         print(r)
         d = dict(**r)
         assert d == r
+
+    def test_set_val_basics(self):
+        r = Record()
+        r.set_val(dict(fnA=33, fnB=66))
+        assert r.val('fnA') == 33
 
     def test_set_val_flex_sys(self):
         r = Record()
@@ -626,6 +681,12 @@ class TestRecord:
 
     def test_node_child(self, rec_2f_2s_incomplete):
         r = Record(system='Xx', direction='From')
+        assert r.node_child(()) is None
+        with pytest.raises(AssertionError):
+            r.node_child((), moan=True)
+        assert r.node_child((0,)) is None
+        with pytest.raises(AssertionError):
+            r.node_child((0,), moan=True)
         assert r.node_child(('test',)) is None
 
         r = rec_2f_2s_incomplete
@@ -687,6 +748,10 @@ class TestRecord:
         assert r2.val('fnB') == 66
 
         r2 = r.copy(fields_patches=dict(fnB={aspect_key(FAT_VAL): Value((99, ))}))
+        assert len(r2) == 3
+        assert r2.val('fnB') == 99
+
+        r2 = r.copy(fields_patches={ALL_FIELDS: {aspect_key(FAT_VAL): Value((99,))}})
         assert len(r2) == 3
         assert r2.val('fnB') == 99
 
@@ -780,6 +845,83 @@ class TestRecord:
         sys_r.set_val(123456, 'fn0Id')
         sys_r.push(SDI_SH)
 
+    def test_collect_system_fields(self):
+        SEP = '.'
+        r = Record(system='Xx', direction=FAD_ONTO)
+        r.add_system_fields((('Sys_Fld', 'Fld'),))
+        csf = r.collect_system_fields(('Invalid_Fld',), SEP)
+        assert not csf
+        csf = r.collect_system_fields(('Sys_Fld',), SEP)
+        assert len(csf) == 1
+        assert isinstance(csf[0], _Field)
+        assert csf[0].name() == 'Fld'
+        assert csf[0].name(system='Xx', direction=FAD_ONTO) == 'Sys_Fld'
+
+    def test_compare_leafs(self):
+        r = Record(fields=dict(fnA=33))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33)))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)), field_names=('fnA',))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)), exclude_fields=('fnB',))
+
+        r = Record(fields=dict(fnA=33, fnB=66))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)), field_names=('fnA',))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)), exclude_fields=('fnB',))
+
+        r = Record(fields=dict(fnA=33))
+        assert len(r.compare_leafs(Record(fields=dict(fnA=99)))) == 1
+        assert len(r.compare_leafs(Record(fields=dict(fnC=99)))) == 2
+
+    def test_compare_val(self):
+        d = datetime.date.today()
+        r = Record(fields=dict(fnA=33, fnB='66', fnC=d))
+        assert r.compare_val('fnA') == 33
+        assert r.compare_val('fnB') == '66'
+        assert r.compare_val('fnC') == d.toordinal()
+
+        mail = 'test.mail@test_domain.net'
+        pho = '00341234567890'
+        r = Record(fields=dict(SfId='x' * 30, Name='jesus', Email=mail, Phone=pho, Long='x' * 80, Empty=''))
+        assert r.compare_val('SfId') == 'x' * 15                    # SF-ID's get cut to 15 characters
+        assert r.compare_val('Name') == 'Jesus'                     # Names get Capitalized
+        assert r.compare_val('Email') == mail.replace('_', '')      # removing underscore in domain only!
+        assert r.compare_val('Phone') == pho
+        assert r.compare_val('Long') == 'x' * 39                    # Long strings speedup - only compare 1st 30 chars
+        assert r.compare_val('Empty') is None
+
+    def test_leaf_names(self, rec_2f_2s_incomplete, rec_2f_2s_complete):
+        r = Record(fields=dict(fnA=33, fnB='66', fnC=datetime.date.today()))
+        assert len(r.leaf_names()) == 3
+        assert 'fnA' in r.leaf_names()      # field creation order is not guaranteed
+        assert 'fnB' in r.leaf_names()
+        assert 'fnC' in r.leaf_names()
+
+        r = rec_2f_2s_incomplete
+        assert len(r.leaf_names()) == 1
+        assert r.leaf_names() == ('fnA',)
+        assert r.leaf_names(field_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names(col_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names(field_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(col_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(exclude_fields=('fnA',)) == ()
+
+        r = rec_2f_2s_complete
+        assert len(r.leaf_names()) == 3
+        assert r.leaf_names(field_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names(col_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names() == ('fnA', 'sfnA', 'sfnB')
+        assert r.leaf_names(field_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(col_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(exclude_fields=('sfnA', 'sfnB')) == ('fnA', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnB')) == ('sfnA', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA')) == ('sfnB', )
+
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='s') == ('sfnB', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='f') == ('sfnB', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='r') == ('fnB0sfnB', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='S') == (('fnB', 0, 'sfnB'),)
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='F') == (('fnB', 0, 'sfnB'),)
+
 
 class TestRecords:
     def test_typing(self):
@@ -855,9 +997,15 @@ class TestRecords:
         assert rs.value(3, 'fnA').val() == 33
         rs.set_value(Value().set_val(66), 3, 'fnA')
         assert rs.value(3, 'fnA').val() == 66
+        rs.set_value(Value().set_val(99), 3, 'fnA', root_rec=Record(), root_idx=('root_fn',))
+        assert rs.value(3, 'fnA').val() == 99
 
     def test_clear_leafs(self):
         rs = Records()
+        assert len(rs) == 0
+        rs.clear_leafs()
+        assert len(rs) == 0
+
         rs.set_node_child(33, 3, 'fnA')
         assert len(rs) == 4
 
@@ -1167,6 +1315,25 @@ class TestSystemDirections:
             assert r.val(*idx, system='Yy') == i + 5
 
     def test_multi_sys_converter_rec(self, rec_2f_2s_complete):
+        # PyCharm doesn't like assignments of lambda to vars: cnv = lambda f, v: v + 10
+        def cnv(_, v):
+            return v + 10
+
+        r = rec_2f_2s_complete
+        rX = r.copy().set_env(system='Xx', direction=FAD_FROM)
+        rX.add_system_fields((('fnAXx', 'fnA', 0, cnv),
+                              ('sfnAXx', 'fnB0sfnA', 1, cnv), ('sfnBXx', 'fnB0sfnB', 2, cnv),
+                              ('sfnAXx', 'fnB1sfnA', 3, cnv), ('sfnBXx', 'fnB1sfnB', 4, cnv)),
+                             sys_fld_indexes={FAT_IDX + FAD_FROM: 0, FAT_IDX: 1, FAT_VAL: 2, FAT_CNV: 3})
+        for i, idx in enumerate(r.leaf_indexes()):
+            assert isinstance(r.val(*idx), str)
+            assert r.val(*idx) in ('', 'sfA1v', 'sfA2v', 'sfB1v', 'sfB2v')
+            assert r.val(*idx, system='Xx') == i
+            r.node_child(idx).pull('Xx', r, idx)
+            assert r.val(*idx) == i + 10
+            assert r.val(*idx, system='Xx') == i
+
+    def test_multi_sys_dir_converter_rec(self, rec_2f_2s_complete):
         # PyCharm doesn't like assignments of lambda to vars: cnv = lambda f, v: v + 10
         def cnv(_, v):
             return v + 10

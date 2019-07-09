@@ -171,8 +171,6 @@ def field_name_idx_path(field_name, return_root_fields=False):
     if idx_path:
         if nam_i is not None:
             idx_path.append(field_name[nam_i:])
-        elif num_i is not None:
-            idx_path.append(int(field_name[num_i:]))
     elif return_root_fields:
         idx_path.append(field_name)
 
@@ -339,7 +337,7 @@ class Value(list):
         while True:
             try:
                 return super().__setitem__(key, value)
-            except IndexError:
+            except (IndexError, TypeError):
                 if not isinstance(key, int):
                     raise IndexError("Value() expects key of type int, but got {} of type {}".format(key, type(key)))
                 self.append(value)
@@ -434,14 +432,20 @@ class Values(list):                     # type: List[Union[Value, Record]]
 
     def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=(),
                   use_curr_idx=None):
-        assert len(idx_path), \
-            "Values/Records.set_value() idx_path '{}' must be non-empty tuple or list".format(idx_path)
+        assert len(idx_path), "Values/Records.set_value() idx_path '{}' must be non-empty tuple/list".format(idx_path)
 
-        idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
-        if root_idx:
-            root_idx += (idx, )
-        self[idx].set_value(value, *idx2, system=system, direction=direction, protect=protect,
-                            root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+        if isinstance(self, Records):
+            idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
+            if root_idx:
+                root_idx += (idx,)
+            self[idx].set_value(value, *idx2, system=system, direction=direction, protect=protect,
+                                root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+        else:
+            idx = idx_path[0]
+            assert isinstance(value, Value), "Values.set_value() value must be Value type, got {}".format(type(value))
+            assert len(idx_path) == 1, "Values.set_value() idx_path must be single index, got {}".format(idx_path)
+            assert isinstance(idx, int), "Values.set_value() idx_path index must be int, got {}".format(idx)
+            self[idx] = value
         return self
 
     def val(self, *idx_path, system='', direction='', flex_sys_dir=True, use_curr_idx=None, **kwargs):
@@ -557,8 +561,6 @@ class Record(OrderedDict):
         return bool(item)
 
     def __getitem__(self, key):
-        if isinstance(key, slice):
-            return super().__getitem__(key)
         ssd = dict()
         child = self.node_child(key, moan=True, selected_sys_dir=ssd)
         if child is None:
@@ -567,11 +569,8 @@ class Record(OrderedDict):
             else child.val(system=ssd.get('system', self.system), direction=ssd.get('direction', self.direction))
 
     def __setitem__(self, key, value):
-        if isinstance(key, slice):
-            super().__setitem__(key, value)
-        else:
-            idx_path = field_name_idx_path(key, return_root_fields=True)
-            self.set_node_child(value, *idx_path)
+        idx_path = field_name_idx_path(key, return_root_fields=True)
+        self.set_node_child(value, *idx_path)
 
     def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
         msg = "Record.node_child() expects "
@@ -790,15 +789,13 @@ class Record(OrderedDict):
 
         for name, fld_or_val in items:
             idx_path = field_name_idx_path(name, return_root_fields=True)
-            if root_rec is None:
-                root_rec = fld_or_val.root_rec() if isinstance(fld_or_val, _Field) else self
             if not root_idx and isinstance(fld_or_val, _Field):
                 root_idx = fld_or_val.root_idx()
 
             self.set_node_child(fld_or_val, *idx_path, protect=True, root_rec=root_rec, root_idx=root_idx)
         return self
 
-    def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes=None, extend=True):
+    def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes=None):
         """
         add/set fields from a system field tuple. This Record instance need to have system and direction specified/set.
         :param system_fields:   tuple/list of tuples/lists with system and main field names and optional field aspects.
@@ -809,7 +806,7 @@ class Record(OrderedDict):
                                 system (SDI_* constant). If the value aspect key (FAT_VAL) contains a callable then
                                 it will be set as the calculator (FAT_CAL) aspect; if contains a field value then also
                                 the clear_val of this field will be set to the specified value.
-        :param extend:          True=add field if not exists, False=set system aspects only on existing fields.
+        :old_param extend:      True=add field if not exists, False=set system aspects only on existing fields.
         :return:                self
         """
         msg = "add_system_fields() expects "
@@ -861,8 +858,9 @@ class Record(OrderedDict):
                 field = self.node_child(idx_path)
                 field_created = not bool(field)
                 if not field:
-                    if not extend:
-                        continue
+                    # ae:9-7-19 removed un-needed kwarg: extend=False (only used by ass_sys_data.res_save(), line 1208)
+                    # if not extend:
+                    #    continue
                     field = _Field(root_rec=self, root_idx=idx_path)
                     field.set_name(field_name)
 
@@ -1049,7 +1047,7 @@ class Record(OrderedDict):
             elif name_type == 'f':
                 ret_name = fld_name
             elif name_type == 'r':
-                ret_name = idx_path_field_name(idx_path)
+                ret_name = root_name
             elif name_type == 'S':
                 ret_name = tuple(idx_path[:-1]) + (sys_name, )
             elif name_type == 'F':
