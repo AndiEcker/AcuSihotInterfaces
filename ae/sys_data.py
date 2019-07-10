@@ -795,7 +795,8 @@ class Record(OrderedDict):
             self.set_node_child(fld_or_val, *idx_path, protect=True, root_rec=root_rec, root_idx=root_idx)
         return self
 
-    def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes=None):
+    def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes=None,
+                          system=None, direction=None, extend=True):
         """
         add/set fields from a system field tuple. This Record instance need to have system and direction specified/set.
         :param system_fields:   tuple/list of tuples/lists with system and main field names and optional field aspects.
@@ -806,14 +807,18 @@ class Record(OrderedDict):
                                 system (SDI_* constant). If the value aspect key (FAT_VAL) contains a callable then
                                 it will be set as the calculator (FAT_CAL) aspect; if contains a field value then also
                                 the clear_val of this field will be set to the specified value.
-        :old_param extend:      True=add field if not exists, False=set system aspects only on existing fields.
+        :param system:          system of the fields to be added - if not passed self.system will be used.
+        :param direction:       direction (FAD constants) of the fields to be added - if not passed used self.direction.
+        :param extend:          True=add not existing fields, False=apply new system aspects only on existing fields.
         :return:                self
         """
         msg = "add_system_fields() expects "
         assert isinstance(system_fields, (tuple, list)) and len(system_fields), \
             msg + "non-empty list or tuple in system_fields arg, got {}".format(system_fields)
-        assert self.system and self.direction, msg + "non-empty Record.system/.direction values"
-        sys_nam_key = aspect_key(FAT_IDX, system=self.system, direction=self.direction)
+        if not system or not direction:
+            system, direction = system or self.system, direction or self.direction
+        assert system and direction, msg + "non-empty system/direction values (either from args or self)"
+        sys_nam_key = aspect_key(FAT_IDX, system=system, direction=direction)
         if sys_fld_indexes is None:
             sys_fld_indexes = {sys_nam_key: 0,
                                FAT_IDX: 1,
@@ -825,7 +830,7 @@ class Record(OrderedDict):
             assert isinstance(sys_fld_indexes, dict), "sys_fld_indexes must be an instance of dict, got {} instead"\
                 .format(type(sys_fld_indexes))
             if sys_nam_key not in sys_fld_indexes:  # check if sys name key is specified without self.system
-                sys_nam_key = aspect_key(FAT_IDX, direction=self.direction)
+                sys_nam_key = aspect_key(FAT_IDX, direction=direction)
             assert FAT_IDX in sys_fld_indexes and sys_nam_key in sys_fld_indexes, \
                 msg + "field and system field name aspects in sys_fld_indexes arg {}".format(sys_fld_indexes)
         err = [_ for _ in system_fields if sys_nam_key not in sys_fld_indexes or sys_fld_indexes[sys_nam_key] >= len(_)]
@@ -858,44 +863,43 @@ class Record(OrderedDict):
                 field = self.node_child(idx_path)
                 field_created = not bool(field)
                 if not field:
-                    # ae:9-7-19 removed un-needed kwarg: extend=False (only used by ass_sys_data.res_save(), line 1208)
-                    # if not extend:
-                    #    continue
+                    if not extend:
+                        continue
                     field = _Field(root_rec=self, root_idx=idx_path)
                     field.set_name(field_name)
 
                 # add additional aspects: first always add converter and value (for to create separate system value)
                 cnv_func = None
-                cnv_key = FAT_CNV + self.direction
+                cnv_key = FAT_CNV + direction
                 if map_len > sfi.get(cnv_key, map_len):
                     cnv_func = fas[sfi.pop(cnv_key)]
                 elif map_len > sfi.get(FAT_CNV, map_len):
                     cnv_func = fas[sfi.pop(FAT_CNV)]
                 if cnv_func:
-                    field.set_converter(cnv_func, system=self.system, direction=self.direction, extend=True,
+                    field.set_converter(cnv_func, system=system, direction=direction, extend=True,
                                         root_rec=self, root_idx=idx_path)
                 # now add all other field aspects (allowing calculator function specified in FAT_VAL aspect)
                 for fa, fi in sfi.items():
                     if fa.startswith(FAT_CNV):
                         continue                    # skip converter for other direction
                     if map_len > fi and fas[fi] is not None \
-                            and fa[_ASP_TYPE_LEN:] in ('', self.direction, self.system, self.direction + self.system):
+                            and fa[_ASP_TYPE_LEN:] in ('', direction, system, direction + system):
                         if not fa.startswith(FAT_VAL):
-                            field.set_aspect(fas[fi], fa, system=self.system, direction=self.direction, protect=True)
+                            field.set_aspect(fas[fi], fa, system=system, direction=direction, protect=True)
                         elif callable(fas[fi]):     # is a calculator specified in value/FAT_VAL item
-                            field.set_calculator(fas[fi], system=self.system, direction=self.direction, protect=True)
+                            field.set_calculator(fas[fi], system=system, direction=direction, protect=True)
                         else:                       # init field and clear val
                             val = fas[fi]
                             if path_idx == 0:
-                                field.set_val(val, system=self.system, direction=self.direction, protect=True,
+                                field.set_val(val, system=system, direction=direction, protect=True,
                                               root_rec=self, root_idx=idx_path)
-                            field.set_clear_val(val, system=self.system, direction=self.direction)
+                            field.set_clear_val(val, system=system, direction=direction)
 
                 self.set_node_child(field, *idx_path, protect=field_created, root_rec=self, root_idx=())
                 # set sys field name and root_idx (after set_node_child() which is resetting sys root_idx to field name)
                 # multiple sys names for the same field - only use the first one (for parsing but allow for building)
-                if not field.name(system=self.system, direction=self.direction, flex_sys_dir=False):
-                    field.set_name(sys_name, system=self.system, direction=self.direction, protect=True)
+                if not field.name(system=system, direction=direction, flex_sys_dir=False):
+                    field.set_name(sys_name, system=system, direction=direction, protect=True)
 
                 if sys_name not in self.sys_name_field_map:
                     self.sys_name_field_map[sys_name] = field   # on sub-Records only put first row's field

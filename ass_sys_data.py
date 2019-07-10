@@ -1205,7 +1205,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         sh_ass_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
         sh_ass_rec.merge_leafs(res_rec, system=SDI_SH, direction=FAD_FROM)
-        sh_ass_rec.add_system_fields(ASS_CLIENT_MAP + ASS_RES_MAP)  # ae:9-7-19 removed un-needed kwarg: extend=False)
+        sh_ass_rec.add_system_fields(ASS_CLIENT_MAP + ASS_RES_MAP, extend=False)
         sh_ass_rec.pull(SDI_SH)
         sh_ass_rec.set_val(ord_cl_pk, 'AssId')
         sh_ass_rec.set_val(ri_pk, 'RinId')
