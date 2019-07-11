@@ -234,7 +234,7 @@ class TestHelperMethods:
         assert r.value('fnB', flex_sys_dir=True).current_idx == 2
         assert r.node_child(('fnB', 0)).current_idx == 'sfnA'
 
-        assert r.set_current_system_index('B', SEP, idx_val=0) is r
+        assert r.set_current_system_index('B', SEP, idx_val=0, idx_add=None) is r
         assert r.current_idx == 'fnA'
         assert r.value('fnB', flex_sys_dir=True).current_idx == 0
         assert r.node_child(('fnB', 0)).current_idx == 'sfnA'
@@ -1069,6 +1069,95 @@ class TestRecord:
         assert r.missing_fields(('fnB0sfnA', ('fnB0sfnB', 'fnY', 'fnZ'))) == []
         assert r.missing_fields(('fnX', 'fnB0sfnA', ('fnB0sfnB', 'fnY', 'fnZ'))) == [('fnX', )]
 
+    def test_sql_columns(self, rec_2f_2s_complete):
+        r = Record()
+        assert r.sql_columns(SDI_SH) == list()
+
+        r = rec_2f_2s_complete
+        assert r.sql_columns(SDI_SH) == list()
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_ONTO).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SDI_SH) == list()
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SDI_SH) == ['DbCol1', 'DbCol2']
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SDI_SH, col_names=('DbCol2', )) == ['DbCol2']
+
+    def test_sql_select(self, rec_2f_2s_complete):
+        r = Record()
+        assert r.sql_select(SDI_SH) == list()
+
+        r = rec_2f_2s_complete
+        assert r.sql_select(SDI_SH) == list()
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_ONTO).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SDI_SH) == list()
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SDI_SH) == ['DbCol1', 'DbCol2']
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['DbCol2']
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        r.node_child('fnX').set_sql_expression('db_expr')
+        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['DbCol2']
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        r.node_child('fnX').set_sql_expression('db_expr', system=SDI_SH, direction=FAD_FROM)
+        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['db_expr AS DbCol2']
+
+    def test_to_dict(self, rec_2f_2s_complete):
+        r = Record()
+        assert r.to_dict() == dict()
+
+        r = rec_2f_2s_complete.copy()
+        assert r.to_dict() == dict(fnB0sfnA='sfA1v', fnB0sfnB='sfB1v', fnB1sfnA='sfA2v', fnB1sfnB='sfB2v')
+        assert r.to_dict(filter_fields=lambda f: f.name() == 'sfnB') == dict(fnB0sfnA='sfA1v', fnB1sfnA='sfA2v')
+        assert r.to_dict(put_empty_val=True) == dict(fnA='',
+                                                     fnB0sfnA='sfA1v', fnB0sfnB='sfB1v',
+                                                     fnB1sfnA='sfA2v', fnB1sfnB='sfB2v')
+        assert r.to_dict(put_system_val=False) == dict(fnB0sfnA='sfA1v', fnB0sfnB='sfB1v',
+                                                       fnB1sfnA='sfA2v', fnB1sfnB='sfB2v')
+        assert r.to_dict(key_type=None) == dict(sfnA='sfA2v', sfnB='sfB2v')
+        assert r.to_dict(key_type=tuple) == {('fnB', 0, 'sfnA'): 'sfA1v', ('fnB', 0, 'sfnB'): 'sfB1v',
+                                             ('fnB', 1, 'sfnA'): 'sfA2v', ('fnB', 1, 'sfnB'): 'sfB2v'}
+        assert r.to_dict(put_system_val=False, key_type=None) == dict(sfnA='sfA2v', sfnB='sfB2v')
+        assert r.to_dict(put_empty_val=True, key_type=None) == dict(fnA='', sfnA='sfA2v', sfnB='sfB2v')
+
+        r = rec_2f_2s_complete.copy().set_env(system='Xx', direction=FAD_ONTO)
+        r.add_system_fields((('fnAX', 'fnA'), ('sfnAX', 'fnB0sfnA'), ('sfnBX', 'fnB0sfnB')))
+        assert r.to_dict() == dict(fnB0sfnAX='sfA1v', fnB0sfnBX='sfB1v', fnB1sfnAX='sfA2v', fnB1sfnBX='sfB2v')
+        assert r.to_dict(use_system_key=False) == dict(fnB0sfnA='sfA1v', fnB0sfnB='sfB1v',
+                                                       fnB1sfnA='sfA2v', fnB1sfnB='sfB2v')
+        assert r.to_dict(filter_fields=lambda f: f.name() == 'sfnB') == dict(fnB0sfnAX='sfA1v', fnB1sfnAX='sfA2v')
+        assert r.to_dict(filter_fields=lambda f: f.name() == 'sfnB', use_system_key=False) == dict(fnB0sfnA='sfA1v',
+                                                                                                   fnB1sfnA='sfA2v')
+        assert r.to_dict(put_empty_val=True) == dict(fnAX='',
+                                                     fnB0sfnAX='sfA1v', fnB0sfnBX='sfB1v',
+                                                     fnB1sfnAX='sfA2v', fnB1sfnBX='sfB2v')
+        assert r.to_dict(put_system_val=False) == dict(fnB0sfnAX='sfA1v', fnB0sfnBX='sfB1v',
+                                                       fnB1sfnAX='sfA2v', fnB1sfnBX='sfB2v')
+        assert r.to_dict(key_type=None) == dict(sfnAX='sfA2v', sfnBX='sfB2v')
+        assert r.to_dict(key_type=tuple) == {('fnB', 0, 'sfnAX'): 'sfA1v', ('fnB', 0, 'sfnBX'): 'sfB1v',
+                                             ('fnB', 1, 'sfnAX'): 'sfA2v', ('fnB', 1, 'sfnBX'): 'sfB2v'}
+        assert r.to_dict(put_system_val=False, key_type=None) == dict(sfnAX='sfA2v', sfnBX='sfB2v')
+        assert r.to_dict(put_empty_val=True, key_type=None) == dict(fnAX='', sfnAX='sfA2v', sfnBX='sfB2v')
+
+    def test_update(self):
+        r = Record()
+        assert r.update() is r
+
 
 class TestRecords:
     def test_typing(self):
@@ -1079,6 +1168,26 @@ class TestRecords:
         _ = Values      # added for to remove Pycharm warning
         rec_str = repr(Records())
         assert eval(rec_str) == Records()
+
+    def test_get_item(self):
+        rs = Records()
+
+        rs.set_val('fnAv1', 0, 'fnA')
+        assert isinstance(rs[0], Record)
+        assert len(rs) == 1
+        assert rs.val(0, 'fnA') == 'fnAv1'
+
+        rs.set_val('fnAv2', 1, 'fnA')
+        assert isinstance(rs[1], Record)
+        assert len(rs) == 2
+        assert rs.val(1, 'fnA') == 'fnAv2'
+
+        assert isinstance(rs[0:1], list)
+        assert isinstance(rs[1:2], list)
+        assert isinstance(rs[0:2], list)
+
+        with pytest.raises(AssertionError):
+            _ = rs[(0, 'fnA', 'Invalid')]
 
     def test_set_val_flex_sys(self):
         rs = Records()

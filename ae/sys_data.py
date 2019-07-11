@@ -815,8 +815,7 @@ class Record(OrderedDict):
         msg = "add_system_fields() expects "
         assert isinstance(system_fields, (tuple, list)) and len(system_fields), \
             msg + "non-empty list or tuple in system_fields arg, got {}".format(system_fields)
-        if not system or not direction:
-            system, direction = system or self.system, direction or self.direction
+        system, direction = use_rec_default_sys_dir(self, system, direction)
         assert system and direction, msg + "non-empty system/direction values (either from args or self)"
         sys_nam_key = aspect_key(FAT_IDX, system=system, direction=direction)
         if sys_fld_indexes is None:
@@ -1041,26 +1040,23 @@ class Record(OrderedDict):
                 continue
             fld_name = field.name()
             root_name = idx_path_field_name(idx_path)
-            if field_names and fld_name not in field_names and root_name not in field_names:
-                continue
-            if fld_name in exclude_fields or root_name in exclude_fields:
-                continue
-
-            if name_type == 's':
-                ret_name = sys_name
-            elif name_type == 'f':
-                ret_name = fld_name
-            elif name_type == 'r':
-                ret_name = root_name
-            elif name_type == 'S':
-                ret_name = tuple(idx_path[:-1]) + (sys_name, )
-            elif name_type == 'F':
-                ret_name = idx_path
-            else:
-                ret_name = root_name if len(idx_path) > 1 and idx_path[0] == fld_name \
-                    else (sys_name if system else fld_name)
-            if ret_name:
-                names.append(ret_name)
+            if not (field_names and fld_name not in field_names and root_name not in field_names
+                    or fld_name in exclude_fields or root_name in exclude_fields):
+                if name_type == 's':
+                    ret_name = sys_name
+                elif name_type == 'f':
+                    ret_name = fld_name
+                elif name_type == 'r':
+                    ret_name = root_name
+                elif name_type == 'S':
+                    ret_name = tuple(idx_path[:-1]) + (sys_name, )
+                elif name_type == 'F':
+                    ret_name = idx_path
+                else:
+                    ret_name = root_name if len(idx_path) > 1 and idx_path[0] == fld_name \
+                        else (sys_name if system else fld_name)
+                if ret_name:
+                    names.append(ret_name)
 
         return tuple(names)
 
@@ -1215,10 +1211,10 @@ class Record(OrderedDict):
             field = self.node_child(idx_path)
             key = field.name(system=system, direction=direction, flex_sys_dir=False)
             if key and (not filter_fields or not filter_fields(field)):
+                key_path = tuple(idx_path[:-1] + (key,)) if system and use_system_key else idx_path
                 if key_type == tuple:
-                    key = idx_path
+                    key = key_path
                 elif key_type == str:
-                    key_path = tuple(idx_path[:-1] + (key, )) if system and use_system_key else idx_path
                     key = idx_path_field_name(key_path)
                 if put_system_val:
                     val = self.val(idx_path, system=system, direction=direction)
@@ -1242,8 +1238,8 @@ class Records(Values):              # type: List[Record]
         if isinstance(key, slice):
             return super().__getitem__(key)
         child = self.node_child(key, moan=True)
-        if child is None:
-            raise KeyError("There is no item with the idx_path '{}' in this Records instance ({})".format(key, self))
+        # if child is None:   # should actually not happen because with moan=True node_child() will raise AssertionError
+        #     raise KeyError("There is no item with the idx_path '{}' in this Records instance ({})".format(key, self))
         return child
 
     def __setitem__(self, key, value):
