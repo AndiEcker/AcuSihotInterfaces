@@ -1320,7 +1320,7 @@ class TestRecords:
         assert r2.val('fnB', 2, 'sfnA') is None
         assert r2.val('fnB', 2, 'sfnB') is None
 
-        r2.value('fnB').append_record(from_rec=r1.value('fnB', 0), clear_leafs=False, root_rec=r2, root_idx=('fnB', ))
+        r2.value('fnB').append_record(root_rec=r2, root_idx=('fnB', ), from_rec=r1.value('fnB', 0), clear_leafs=False)
         assert r2.val('fnB', 2, 'sfnA') == 2
         assert r2.val('fnB', 2, 'sfnB') == 3
         assert r2['fnB'].root_rec() is r2
@@ -1328,13 +1328,30 @@ class TestRecords:
         assert r2['fnB'].root_idx() == ('fnB', )
         assert r2[('fnB', 2, 'sfnB')].root_idx() == ('fnB', 2, 'sfnB')
 
-        r1.value('fnB').append_record(from_rec=r2.value('fnB', 1), clear_leafs=False, root_rec=r1, root_idx=('fnB', ))
+        r1.value('fnB').append_record(root_rec=r1, root_idx=('fnB', ), from_rec=r2.value('fnB', 1), clear_leafs=False)
         assert r1.val('fnB', 1, 'sfnA') == 8
         assert r1.val('fnB', 1, 'sfnB') == 9
         assert r1['fnB'].root_rec() is r1
         assert r1[('fnB', 1, 'sfnB')].root_rec() is r1
         assert r1['fnB'].root_idx() == ('fnB', )
         assert r1[('fnB', 1, 'sfnB')].root_idx() == ('fnB', 1, 'sfnB')
+
+    def test_compare_records(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete
+        rs1 = r.value('fnB').copy(deepness=-1, root_rec=r, root_idx=('fnB',))
+        assert len(rs1.compare_records(Records(), ('sfnA', 'sfnB'))) == 2
+
+        rs2 = r.value('fnB').copy(deepness=-1, root_rec=r, root_idx=('fnB',))
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'))) == 0
+
+        rs2.set_val('ChangedVal', 0, 'sfnA')
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'))) == 2
+
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'), record_comparator=lambda r1, r2: list())) == 3
+
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'), record_comparator=lambda r1, r2: ['AAA'])) == 9
+
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'), record_comparator=lambda r1, r2: ['AAA', 'BBB'])) == 17
 
 
 class TestStructures:

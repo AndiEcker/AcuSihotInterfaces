@@ -1238,8 +1238,10 @@ class Records(Values):              # type: List[Record]
         if isinstance(key, slice):
             return super().__getitem__(key)
         child = self.node_child(key, moan=True)
-        # if child is None:   # should actually not happen because with moan=True node_child() will raise AssertionError
-        #     raise KeyError("There is no item with the idx_path '{}' in this Records instance ({})".format(key, self))
+        ''' should actually not happen because with moan=True node_child() will raise AssertionError
+        if child is None:
+            raise KeyError("There is no item with the idx_path '{}' in this Records instance ({})".format(key, self))
+        '''
         return child
 
     def __setitem__(self, key, value):
@@ -1322,12 +1324,11 @@ class Records(Values):              # type: List[Record]
             item_idx = idx_path + (idx, )
             yield from rec.leaf_indexes(*item_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def append_record(self, from_rec=None, clear_leafs=True, root_rec=None, root_idx=()):
+    def append_record(self, root_rec, root_idx=(), from_rec=None, clear_leafs=True):
+        assert isinstance(root_rec, Record), "Records.append_record() expects Record instance in the root_rec arg"
         recs_len = len(self)
         if from_rec is None:
             from_rec = self[0] if recs_len else Record(root_rec=root_rec, root_idx=root_idx)
-        if root_rec is None:
-            root_rec = from_rec
 
         new_rec = from_rec.copy(deepness=-1, root_rec=root_rec, root_idx=root_idx + (recs_len,))
         self.append(new_rec)
@@ -1437,8 +1438,10 @@ class _Field:
 
     def __getitem__(self, key):
         child = self.node_child(key, moan=True)
+        ''' should actually not happen because with moan=True node_child() will raise AssertionError
         if child is None:
             raise KeyError("There is no item with the idx_path '{}' in this _Field ({})".format(key, self))
+        '''
         return child
 
     def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
