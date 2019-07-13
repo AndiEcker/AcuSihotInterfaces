@@ -8,17 +8,196 @@ from argparse import ArgumentError
 
 import pytest
 
-from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_TIMESTAMPED
-from ae.console_app import ConsoleApp, NamedLocks, full_stack_trace, ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT
+from sys_data_ids import DEBUG_LEVEL_TIMESTAMPED, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from ae.console_app import (ConsoleApp, fix_encoding, round_traditional, reset_main_cae, sys_env_dict, to_ascii,
+                            Progress, NamedLocks, full_stack_trace,
+                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT, calling_module, DATE_TIME_ISO, DATE_ISO)
 
 
-class TestLogFile:
+class TestHelpers:
+    def test_round_traditional(self):
+        assert round_traditional(1.01) == 1
+        assert round_traditional(10.1, -1) == 10
+        assert round_traditional(1.123, 1) == 1.1
+        assert round_traditional(0.5) == 1
+        assert round_traditional(0.5001, 1) == 0.5
+
+        assert round_traditional(0.075, 2) == 0.08
+        assert round(0.075, 2) == 0.07
+
+    def test_fix_encoding_umlaut(self, capsys, sys_argv_restore):
+        assert fix_encoding('äöü') == '\\xe4\\xf6\\xfc'
+        assert fix_encoding('äöü', encoding=None) == '\\xe4\\xf6\\xfc'
+        assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-16') == 'äöü'
+        assert fix_encoding('äöü', encoding='cp1252') == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=0) == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=1) == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=3) == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=4) == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=5) is None
+
+    def test_fix_encoding_error(self, capsys, sys_argv_restore):
+        cae = ConsoleApp('0.0', 'test_fix_encoding_error', debug_level_def=DEBUG_LEVEL_VERBOSE)
+        sys.argv = list()
+        assert cae.get_option('debugLevel') == DEBUG_LEVEL_VERBOSE  # needed for to init logging env
+        assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
+        out, err = capsys.readouterr()
+        # STRANGE: capsys/capfd don't show uprint output - although it is shown in the pytest log/console
+        assert out.startswith('ae.console_app.fix_encoding()') or out == ''
+
+    def test_sys_env_dict(self):
+        assert sys_env_dict().get('python_ver')
+        assert sys_env_dict().get('cwd')
+        assert sys_env_dict().get('frozen') is False
+
+        assert sys_env_dict().get('bundle_dir') is None
+        sys.frozen = True
+        assert sys_env_dict().get('bundle_dir')
+        del sys.__dict__['frozen']
+        assert sys_env_dict().get('bundle_dir') is None
+
+    def test_to_ascii(self):
+        assert to_ascii('äöü') == 'aou'
+
+    def test_calling_module(self):
+        assert calling_module()
+        assert calling_module(called_module=__name__)
+        assert calling_module('')
+        assert calling_module('xxx_test')
+
+
+class TestPythonLogging:
+    def test_logging_config_dict_basic_from_ini(self):
+        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
+        var_name = 'py_logging_config_dict'
+        var_val = dict(version=1, disable_existing_loggers=False)
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', additional_cfg_files=[file_name])
+
+        cfg_val = cae.get_config(var_name)
+        assert cfg_val == var_val
+
+        assert cae.logging_conf_dict == var_val
+
+        os.remove(file_name)
+        logging.shutdown()
+
+    def test_logging_config_dict_console_from_init(self):
+        var_val = dict(version=1,
+                       disable_existing_loggers=False,
+                       handlers=dict(console={'class': 'logging.StreamHandler',
+                                              'level': logging.INFO}))
+        print(str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_console',
+                         logging_config=dict(py_logging_config_dict=var_val))
+
+        assert cae.logging_conf_dict == var_val
+        logging.shutdown()
+
+    def test_logging_config_dict_complex(self, caplog):
+        log_file = 'test_rot_file.log'
+        entry_prefix = "TEST LOG ENTRY "
+
+        var_val = dict(version=1,
+                       disable_existing_loggers=False,
+                       handlers=dict(console={'class': 'logging.handlers.RotatingFileHandler',
+                                              'level': logging.INFO,
+                                              'filename': log_file,
+                                              'maxBytes': 33,
+                                              'backupCount': 63}),
+                       loggers={'root': dict(handlers=['console']),
+                                'ae': dict(handlers=['console']),
+                                'ae.console_app': dict(handlers=['console'])}
+                       )
+        print(str(var_val))
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_file',
+                         logging_config=dict(py_logging_config_dict=var_val))
+
+        assert cae.logging_conf_dict == var_val
+
+        root_logger = logging.getLogger()
+        ae_logger = logging.getLogger('ae')
+        ae_cae_logger = logging.getLogger('ae.console_app')
+
+        # ConsoleAppEnv uprint
+        log_text = entry_prefix + "0 uprint"
+        cae.uprint(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = entry_prefix + "0 uprint root"
+        cae.uprint(log_text, logger=root_logger)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = entry_prefix + "0 uprint ae"
+        cae.uprint(log_text, logger=ae_logger)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = entry_prefix + "0 uprint ae_cae"
+        cae.uprint(log_text, logger=ae_cae_logger)
+        assert caplog.text.endswith(log_text + "\n")
+
+        # logging
+        logging.info(entry_prefix + "1 info")       # will NOT be added to log
+        assert caplog.text.endswith(log_text + "\n")
+
+        logging.debug(entry_prefix + "2 debug")     # NOT logged
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = entry_prefix + "3 warning"
+        logging.warning(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = entry_prefix + "4 error logging"
+        logging.error(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        # loggers
+        log_text = entry_prefix + "4 error root"
+        root_logger.error(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = entry_prefix + "4 error ae"
+        ae_logger.error(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        log_text = entry_prefix + "4 error ae_cae"
+        ae_cae_logger.error(log_text)
+        assert caplog.text.endswith(log_text + "\n")
+
+        # ConsoleAppEnv dprint
+        sys.argv = ['test']     # sys.argv has to be reset for to allow get_option('debugLevel') calls, done by dprint()
+        log_text = entry_prefix + "5 dprint"
+        cae.dprint(log_text, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+        assert caplog.text.endswith(log_text + "\n")
+
+        # final logging checks
+        logging.shutdown()
+        file_contents = list()
+        import glob
+        for log_file in glob.glob(log_file + '*'):
+            with open(log_file) as fd:
+                fc = fd.read()
+            file_contents.append(fc)
+            os.remove(log_file)     # remove log files from last test run
+        assert len(file_contents) == 17
+        for fc in file_contents:
+            assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(entry_prefix) \
+                or fc.startswith('  **  Additional instance') or fc == ''
+
+
+class TestInternalLogFileRotation:
     """
     this test has to run first because only the first ConsoleApp instance will be able to create a log file; to
     workaround the module variable ae.console_app._ca_instance need to be reset to None before the next ConsoleApp init
     """
     def test_log_file_rotation(self, sys_argv_restore):
-        log_file = 'test_log_file_rot.log'
+        log_file = 'test_internal_log_file_rot.log'
+        reset_main_cae()        # ensure internal logging get enabled - even if we already created other cae instances
         cae = ConsoleApp('0.0', 'test_log_file_rotation',
                          logging_config=dict(file_name_def=log_file, file_size_max=.001))
         # no longer needed since added sys_argv_restore:
@@ -41,95 +220,101 @@ class TestLogFile:
         # no longer needed since added sys_argv_restore: sys.argv = old_args
 
 
-class TestPythonLogging:
-    def test_logging_config_dict_basic(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'test_logging_config_var'
-        var_val = dict(version=1)
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+class TestConsoleAppBasics:
+    def test_app_name(self):
+        cae = ConsoleApp('0.0', 'test_app_name')
+        assert cae.app_name().startswith('test')
 
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict', additional_cfg_files=[file_name],
-                         logging_config=dict(config_var_name=var_name))
+    def test_add_option(self):
+        cae = ConsoleApp('0.0', 'test_add_option')
+        cae.add_option('test_opt', 'test_opt_description', 'test_opt_value', short_opt='')
 
-        cfg_val = cae.get_config(var_name)
-        assert cfg_val == var_val
+    def test_set_option(self):
+        cae = ConsoleApp('0.0', 'test_set_option')
+        cae.add_option('test_opt', 'test_opt_description', 'test_init_value')
+        cae.set_option('test_opt', 'test_val', save_to_config=False)
 
-        os.remove(file_name)
+    def test_add_parameter(self):
+        cae = ConsoleApp('0.0', 'test_add_parameter')
+        cae.add_parameter('test_arg')
 
-    def test_logging_config_dict_console(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'test_logging_config_var'
-        var_val = dict(version=1,
-                       handlers=dict(console={'class': 'logging.StreamHandler',
-                                              'level': logging.INFO}))
-        print(str(var_val))
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+    def test_get_parameter(self, sys_argv_restore):
+        cae = ConsoleApp('0.0', 'test_add_parameter')
+        cae.add_parameter('test_arg')
+        arg_val = 'test_arg_val'
+        sys.argv = ['test_app', arg_val]
+        assert cae.get_parameter('test_arg') == arg_val
 
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_console', additional_cfg_files=[file_name],
-                         logging_config=dict(config_var_name=var_name))
+    def test_show_help(self):
+        cae = ConsoleApp('0.0', 'test_add_parameter')
+        cae.show_help()
 
-        cfg_val = cae.get_config(var_name)
-        assert cfg_val == var_val
-
-        os.remove(file_name)
-
-    def test_logging_config_dict_file(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'test_logging_config_var'
-        log_file = 'test_rot_file.log'
-
-        import glob
-        for log_file in glob.glob(log_file + '*'):
-            os.remove(log_file)     # remove log files from last test run
-
-        var_val = dict(version=1,
-                       handlers=dict(console={'class': 'logging.handlers.RotatingFileHandler',
-                                              'level': logging.INFO,
-                                              'filename': log_file,
-                                              'maxBytes': 33,
-                                              'backupCount': 3}),
-                       loggers={'root': dict(handlers=['console']),
-                                'ae': dict(handlers=['console']),
-                                'ae.console_app': dict(handlers=['console'])}
-                       )
-        print(str(var_val))
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
-
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_file', additional_cfg_files=[file_name],
-                         logging_config=dict(config_var_name=var_name))
-
-        cfg_val = cae.get_config(var_name)
-        assert cfg_val == var_val
-
-        root_logger = logging.getLogger()
-        ae_logger = logging.getLogger('ae')
-        ae_cae_logger = logging.getLogger('ae.console_app')
-
-        cae.uprint('TEST LOG ENTRY 0 uprint')
-        cae.uprint('TEST LOG ENTRY 0 uprint root', logger=root_logger)
-        cae.uprint('TEST LOG ENTRY 0 uprint ae', logger=ae_logger)
-        cae.uprint('TEST LOG ENTRY 0 uprint ae_cae', logger=ae_cae_logger)
-
-        logging.info('TEST LOG ENTRY 1 info')
-        logging.debug('TEST LOG ENTRY 2 debug')
-        logging.warning('TEST LOG ENTRY 3 warning')
-
-        logging.error('TEST LOG ENTRY 4 error')
-        root_logger.error('TEST LOG ENTRY 4 error root')
-        ae_logger.error('TEST LOG ENTRY 4 error ae')
-        ae_cae_logger.error('TEST LOG ENTRY 4 error ae_cae')
-
-        # sys.argv has to be reset for to allow get_option('debugLevel') calls
-        sys.argv = ['test']
-        cae.dprint('TEST LOG ENTRY 5 dprint', minimum_debug_level=DEBUG_LEVEL_ENABLED)
-
-        os.remove(file_name)
+    def test_shutdown(self):
+        cae = ConsoleApp('0.0', 'test_app_name', multi_threading=True)
+        cae.shutdown(-69)
 
 
 class TestConfigOptions:
+    def test_set_config_basics(self, sys_argv_restore):
+        file_name = os.path.join(os.getcwd(), 'test.ini')
+        var_name = 'test_config_var'
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = InitialTestValue')
+        cae = ConsoleApp('0.0', 'test_set_config_basics')
+        cae.add_option(var_name, 'test_config_basics', 'init_test_val', short_opt='')
+        opt_test_val = 'opt_test_val'
+        sys.argv = ['test', '-t=' + opt_test_val]
+        assert cae.get_option(var_name) == opt_test_val
+
+        val = 'test_value'
+        assert not cae.set_config(var_name, val)
+        assert cae.get_config(var_name) == val
+
+        val = ('test_val1', 'test_val2')
+        assert not cae.set_config(var_name, val)
+        assert cae.get_config(var_name) == repr(val)
+
+        val = datetime.datetime.now()
+        assert not cae.set_config(var_name, val)
+        assert cae.get_config(var_name) == val.strftime(DATE_TIME_ISO)
+
+        val = datetime.date.today()
+        assert not cae.set_config(var_name, val)
+        assert cae.get_config(var_name) == val.strftime(DATE_ISO)
+
+        os.remove(file_name)
+
+    def test_set_config_without_ini(self, sys_argv_restore):
+        var_name = 'test_config_var'
+        cae = ConsoleApp('0.0', 'test_set_config_without_ini')
+        cae.add_option(var_name, 'test_set_config_without_ini', 'init_test_val', short_opt='t')
+        opt_test_val = 'opt_test_val'
+        sys.argv = ['test', '-t=' + opt_test_val]
+        assert cae.get_option(var_name) == opt_test_val
+
+        val = 'test_value'
+        assert cae.set_config(var_name, val)        # will be set, but returning error because test.ini does not exist
+        assert cae.get_config(var_name) == val
+
+        val = ('test_val1', 'test_val2')
+        assert cae.set_config(var_name, val)  # will be set, but returning error because test.ini does not exist
+        assert cae.get_config(var_name) == repr(val)
+
+        val = datetime.datetime.now()
+        assert cae.set_config(var_name, val)  # will be set, but returning error because test.ini does not exist
+        assert cae.get_config(var_name) == val.strftime(DATE_TIME_ISO)
+
+        val = datetime.date.today()
+        assert cae.set_config(var_name, val)  # will be set, but returning error because test.ini does not exist
+        assert cae.get_config(var_name) == val.strftime(DATE_ISO)
+
+    def test_set_config_error(self):
+        file_name = os.path.join(os.getcwd(), 'test_config.ini')
+        var_name = 'test_config_var'
+        cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
+        val = 'test_value'
+        assert cae.set_config(var_name, val)
+
     def test_set_config_with_reload(self):
         file_name = os.path.join(os.getcwd(), 'test_config.ini')
         var_name = 'test_config_var'
@@ -501,6 +686,20 @@ class TestFullStackTrace:
             assert full_stack_trace(ex)
 
 
+class TestProgress:
+    def test_init_start_msg(self):
+        msg = 'msg_text'
+        cae = ConsoleApp('0.0', 'test_progress_init')
+        progress = Progress(cae, total_count=1, start_msg=msg, nothing_to_do_msg=msg)
+        progress.finished(error_msg='t_err_msg')
+
+    def test_init_nothing_to_do(self):
+        msg = 'msg_text'
+        cae = ConsoleApp('0.0', 'test_progress_init')
+        progress = Progress(cae, nothing_to_do_msg=msg)
+        progress.next(error_msg='test_error_msg')
+
+
 class TestNamedLocks:
     def test_sequential(self):
         nl = NamedLocks()
@@ -630,6 +829,18 @@ class TestNamedLocks:
 
         nl2.release('test')
         assert len(nl2.active_lock_counters) == 0
+
+    def test_with_context_with(self):
+        with NamedLocks('test'):
+            pass
+
+    def test_error_context(self):
+        with NamedLocks('test2') as nl:
+            nl.release('test2')
+
+        with NamedLocks('test3') as nl:
+            assert 'test3' in nl.active_locks
+            assert nl.active_locks.pop('test3')
 
 
 class TestConfigMainFileModified:

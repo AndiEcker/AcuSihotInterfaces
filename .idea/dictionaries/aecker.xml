@@ -37,6 +37,9 @@
       <w>byteplant</w>
       <w>calcsumdayprice</w>
       <w>cancellationinfos</w>
+      <w>capfd</w>
+      <w>caplog</w>
+      <w>capsys</w>
       <w>catinfo</w>
       <w>cchandle</w>
       <w>cchandlevaliduntil</w>

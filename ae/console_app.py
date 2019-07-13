@@ -67,8 +67,13 @@ def _get_debug_level():
     return DEBUG_LEVEL_DISABLED
 
 
+def reset_main_cae():
+    global _ca_instance
+    _ca_instance = None
+
+
 def round_traditional(val, digits=0):
-    """ needed because python round() is not working always, like e.g. round(0.074, 2) == 0.07 instead of 0.08
+    """ needed because python round() is not working always, like e.g. round(0.075, 2) == 0.07 instead of 0.08
         taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer
     """
     return round(val + 10**(-len(str(val)) - 1), digits)
@@ -97,15 +102,14 @@ def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='
     else:
         try_method = ""
         text = None
-    if try_method and _get_debug_level() >= DEBUG_LEVEL_VERBOSE:
-        try:        # first try to put ori_text in error message
-            uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
-                                  ", " + DEF_ENCODING + " text:\n'" +
-                                  ori_text.encode(DEF_ENCODING, errors='backslashreplace').decode(DEF_ENCODING) + "'\n",
-                                  indent=12, width=120))
 
-        except UnicodeEncodeError:
-            uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method, indent=12, width=120))
+    if try_method and _get_debug_level() >= DEBUG_LEVEL_VERBOSE:
+        # push/print ori_text and error message to console/log
+        uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
+                              ", " + DEF_ENCODING + " text:\n'" +
+                              ori_text.encode(DEF_ENCODING, errors='backslashreplace').decode(DEF_ENCODING) + "'\n",
+                              indent=12, width=120))
+
     return text
 
 
@@ -159,18 +163,6 @@ def to_ascii(unicode_str):
     """
     nfkd_form = unicodedata.normalize('NFKD', unicode_str)
     return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
-
-
-PLACEHOLDER_PREFIX = '<<<'
-PLACEHOLDER_SUFFIX = '>>>'
-
-
-def substitute_placeholders(expr, key_values, value_prefix=""):
-    for key, val in key_values.items():
-        # if not isinstance(val, str):
-        #    val = str(val)
-        expr = expr.replace(PLACEHOLDER_PREFIX + key + PLACEHOLDER_SUFFIX, value_prefix + val)
-    return expr
 
 
 class Setting:
@@ -335,7 +327,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                 # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
                 print_one_str = sep.join(print_strings)
                 sep = ""
-                if end:
+                if end and not use_logger:
                     print_one_str += end
                     end = ""
                 print_strings = (print_one_str, )
@@ -360,7 +352,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 config_eval_vars=None, additional_cfg_files=None,
+                 config_eval_vars=None, additional_cfg_files=(),
                  multi_threading=False, suppress_stdout=False,
                  formatter_class=HelpFormatter, epilog="",
                  sys_env_id='', logging_config=None):
@@ -379,10 +371,11 @@ class ConsoleApp:
             :param sys_env_id:          system environment id used as file name suffix for to load all
                                         the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
                                         for to initialize second ConsoleApp instance with values from sys_envLIVE.cfg).
-            :param logging_config:      dict with logging configuration default values - supported keys:
-                                        config_var_name     config variable name for python logging configuration dict.
-                                        file_name_def       default log file name (def='').
-                                        file_size_max       maximum size in MBytes of a log file (def=20).
+            :param logging_config:      dict with logging configuration default values - supported keys. If the key
+                                        py_logging_config_dict is a non-empty dict then all other keys are ignored:
+                                        py_logging_config_dict  config dict for python logging configuration.
+                                        file_name_def           default log file name for internal logging (def='').
+                                        file_size_max           max. size in MBytes of internal log file (def=20).
         """
         """
             :var  _ca_instance          module variable referencing the main/first-created instance of this class.
@@ -434,16 +427,16 @@ class ConsoleApp:
         self._log_file_name = ""    # will be initialized in self._parse_args() indirectly via logFile setting
         self._log_file_index = 0
         # check if app is using python logging module
-        lcd = self.get_config(logging_config.get('config_var_name', 'logging_config'))
+        lcd = logging_config.get('py_logging_config_dict', self.get_config('py_logging_config_dict'))
         if lcd:
             # logging.basicConfig(level=logging.DEBUG, style='{')
             logging.config.dictConfig(lcd)     # configure logging module
-        self.logging_conf_dict = _ca_instance.logging_conf_dict = lcd
+        self.logging_conf_dict = _ca_instance.logging_conf_dict = lcd or dict()
 
         self.suppress_stdout = suppress_stdout
         if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
-            self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc)
-            self.uprint("####  Initialization......  ####")
+            self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc, logger=_logger)
+            self.uprint("####  Initialization......  ####", logger=_logger)
 
         # prepare argument parser
         self._arg_parser = ArgumentParser(description=app_desc, formatter_class=formatter_class, epilog=epilog)
@@ -529,27 +522,30 @@ class ConsoleApp:
                 try:                        # enable logging
                     self._close_log_file()
                     self._open_log_file()
-                    self.uprint(" ###  Activated log file", self._log_file_name)
+                    self.uprint(" ###  Activated log file", self._log_file_name, logger=_logger)
                 except Exception as ex:
-                    self.uprint(" ***  ConsoleApp._parse_args(): exception while trying to enable logging:", ex)
+                    self.uprint(" ***  ConsoleApp._parse_args(): exception while trying to enable logging:", ex,
+                                logger=_logger)
 
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self.config_options['debugLevel'].value
         if _debug_level >= DEBUG_LEVEL_ENABLED:
             self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
-                        _debug_level)
+                        _debug_level, logger=_logger)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             if _ca_instance is self:
-                self.uprint("  ##  System Environment:")
-                self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}))
+                self.uprint("  ##  System Environment:", logger=_logger)
+                self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}), logger=_logger)
             else:
-                self.uprint(" ###  Initialized additional ConsoleApp instance for system env id", self.sys_env_id)
+                self.uprint(" ###  Initialized additional ConsoleApp instance for system env id", self.sys_env_id,
+                            logger=_logger)
 
         self.startup_end = datetime.datetime.now()
-        self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end)
+        self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end, logger=_logger)
         if _ca_instance is not self and not self.sys_env_id:
-            self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID")
-        self.uprint("####  Startup finished....  ####")
+            self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID",
+                        logger=_logger)
+        self.uprint("####  Startup finished....  ####", logger=_logger)
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
@@ -603,13 +599,14 @@ class ConsoleApp:
                          cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT):
             self.config_file_add(cfg_file)
 
-        if additional_cfg_files:
-            for cfg_fnam in additional_cfg_files:
-                add_cfg_path_fnam = os.path.join(cwd_path, cfg_fnam)
+        err_msg = ""
+        for cfg_fnam in additional_cfg_files:
+            add_cfg_path_fnam = os.path.join(cwd_path, cfg_fnam)
+            if not self.config_file_add(add_cfg_path_fnam):
+                add_cfg_path_fnam = os.path.join(app_path, cfg_fnam)
                 if not self.config_file_add(add_cfg_path_fnam):
-                    add_cfg_path_fnam = os.path.join(app_path, cfg_fnam)
-                    if not self.config_file_add(add_cfg_path_fnam):
-                        assert self.config_file_add(cfg_fnam), "Additional config file {} not found!".format(cfg_fnam)
+                    err_msg = "Additional config file {} not found!".format(cfg_fnam)
+        return err_msg
 
     def _get_config_val(self, name, section=None, default_value=None, cfg_parser=None):
         global config_lock
@@ -701,12 +698,12 @@ class ConsoleApp:
                 print()
                 print('EoF')
             except Exception as ex:
-                self.dprint("Ignorable {} end-of-file marker exception={}".format(stream_name, ex))     # log if verbose
+                self.dprint("Ignorable {} end-of-file marker exception={}".format(stream_name, ex), logger=_logger)
 
             stream_file.flush()
 
         except Exception as ex:
-            self.dprint("Ignorable {} flush exception={}".format(stream_name, ex))  # only log on DEBUG_LEVEL_VERBOSE
+            self.dprint("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
 
     def _open_log_file(self):
         global app_std_out, app_std_err
@@ -742,6 +739,8 @@ class ConsoleApp:
             sys.stdout = ori_std_out        # .. "Fatal Python error: Cannot recover from stack overflow"
             self._log_file_obj.close()
             self._log_file_obj = None
+        elif self.logging_conf_dict:
+            logging.shutdown()
 
     def log_file_check_rotation(self):
         if self._log_file_obj is not None:
@@ -762,12 +761,13 @@ class ConsoleApp:
                 main_thread = threading.current_thread()
                 for t in threading.enumerate():
                     if t is not main_thread:
-                        self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()))
+                        self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
+                                    logger=_logger)
                         t.join()
         if exit_code:
-            self.uprint("****  Non-zero exit code:", exit_code)
+            self.uprint("****  Non-zero exit code:", exit_code, logger=_logger)
 
-        self.uprint("####  Shutdown............  ####")
+        self.uprint("####  Shutdown............  ####", logger=_logger)
 
         self._close_log_file()
         if self._log_file_index:
@@ -813,12 +813,12 @@ class Progress:
             self._delta = 1
         elif start_counter <= 0:
             if nothing_to_do_msg:
-                self.cae.uprint(_complete_msg_prefix(nothing_to_do_msg))
+                self.cae.uprint(_complete_msg_prefix(nothing_to_do_msg), logger=_logger)
             return  # RETURN -- empty set - nothing to process
 
         if start_msg:
             self.cae.uprint(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
-                                                                   total_count=self._total_count))
+                                                                   total_count=self._total_count), logger=_logger)
 
     def next(self, processed_id='', error_msg='', next_msg=''):
         self._run_counter += self._delta
@@ -828,7 +828,7 @@ class Progress:
         if error_msg and self._err_msg:
             self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
                                                  err_counter=self._err_counter, err_msg=error_msg,
-                                                 processed_id=processed_id))
+                                                 processed_id=processed_id), logger=_logger)
 
         if not next_msg:
             next_msg = self._next_msg
@@ -840,13 +840,13 @@ class Progress:
             next_msg = '\r' + next_msg
             self.cae.uprint(next_msg.format(run_counter=self._run_counter, total_count=self._total_count,
                                             err_counter=self._err_counter, err_msg=error_msg,
-                                            processed_id=processed_id))
+                                            processed_id=processed_id), logger=_logger)
 
     def finished(self, error_msg=''):
         if error_msg and self._err_msg:
             self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                 err_counter=self._err_counter, err_msg=error_msg))
-        self.cae.uprint(self.get_end_message(error_msg=error_msg))
+                                                 err_counter=self._err_counter, err_msg=error_msg), logger=_logger)
+        self.cae.uprint(self.get_end_message(error_msg=error_msg), logger=_logger)
 
     def get_end_message(self, error_msg=''):
         return self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
@@ -872,7 +872,8 @@ class NamedLocks:
         assert not sys_lock, "sys_lock is currently not implemented"
         self._sys_lock = sys_lock
         # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
-        self.dprint = _ca_instance.dprint if _ca_instance and getattr(_ca_instance, 'startup_end', False) else uprint
+        cae = _ca_instance
+        self.print_func = cae.dprint if cae and getattr(cae, 'startup_end', False) else uprint
 
         self.dprint("NamedLocks.__init__", lock_names)
 
@@ -881,12 +882,18 @@ class NamedLocks:
         for lock_name in self._lock_names:
             self.dprint("NamedLocks.__enter__ b4 acquire ", lock_name)
             self.acquire(lock_name)
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb)
         for lock_name in self._lock_names:
             self.dprint("NamedLocks.__exit__ b4 release ", lock_name)
             self.release(lock_name)
+
+    def dprint(self, *args, **kwargs):
+        if 'logger' not in kwargs:
+            kwargs['logger'] = _logger
+        return self.print_func(*args, **kwargs)
 
     def acquire(self, lock_name, *args, **kwargs):
         self.dprint("NamedLocks.acquire", lock_name, 'START')

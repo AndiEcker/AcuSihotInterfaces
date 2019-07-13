@@ -3,18 +3,13 @@ import datetime
 from collections import OrderedDict
 
 from sys_data_ids import SDI_SH
-from ae.sys_data import aspect_key, aspect_key_system, aspect_key_direction, deeper, \
-    field_name_idx_path, field_names_idx_paths, idx_path_field_name, \
-    Value, Values, Record, Records, _Field, current_index, init_current_index, use_current_index, set_current_index, \
-    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP, compose_current_index
+from ae.sys_data import (
+    aspect_key, aspect_key_system, aspect_key_direction, deeper,
+    field_name_idx_path, field_names_idx_paths, idx_path_field_name,
+    Value, Values, Record, Records, _Field,
+    compose_current_index, current_index, init_current_index, use_current_index, set_current_index,
+    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP, ALL_FIELDS)
 from ae.validation import correct_email, correct_phone
-
-
-@pytest.fixture()
-def rec_2f_2s_incomplete():     # two fields and only partly complete two sub-levels
-    r1 = Record(fields=dict(fnA='', fnB1sfnA='', fnB1sfnB='sfB2v'))
-    print(r1)
-    return r1
 
 
 @pytest.fixture()
@@ -23,6 +18,13 @@ def rec_2f_2s_complete():       # two fields and only partly complete two sub-le
                         ('fnB0sfnA', 'sfA1v'), ('fnB0sfnB', 'sfB1v'),
                         ('fnB1sfnA', 'sfA2v'), ('fnB1sfnB', 'sfB2v'))
                 )
+    print(r1)
+    return r1
+
+
+@pytest.fixture()
+def rec_2f_2s_incomplete():     # two fields and only partly complete two sub-levels
+    r1 = Record(fields=dict(fnA='', fnB1sfnA='', fnB1sfnB='sfB2v'))
     print(r1)
     return r1
 
@@ -97,6 +99,11 @@ class TestHelperMethods:
         assert field_name_idx_path('3') == ()
         assert field_name_idx_path('Test2') == ()           # index sys name field split exception
         assert field_name_idx_path('2Test2') == (2, 'Test2')
+        assert field_name_idx_path('2Test34') == (2, 'Test34')
+        assert field_name_idx_path('2Test345') == (2, 'Test', 3, '45')
+        assert field_name_idx_path('2Test3456') == (2, 'Test', 34, '56')
+        assert field_name_idx_path('23Test4567') == (23, 'Test', 45, '67')
+        assert field_name_idx_path('234Test5678') == (234, 'Test', 56, '78')
         assert field_name_idx_path('3Test') == (3, 'Test')
 
     def test_field_name_idx_path_sep(self):
@@ -142,6 +149,18 @@ class TestHelperMethods:
         assert idx_path_field_name(('test3no-sub',), add_sep=True) == 'test3no-sub'
         assert idx_path_field_name(('test', 33), add_sep=True) == 'test' + IDX_PATH_SEP + '33'
 
+    def test_compose_current_index(self):
+        idx_path = ('fn', 1, 'sfn')
+        assert compose_current_index(Record(), idx_path, Value((1, ))) == idx_path
+        idx_path = ('fn', 1)
+        assert compose_current_index(Record(), idx_path, Value((1, ))) == idx_path
+        idx_path = ('fn', )
+        assert compose_current_index(Record(), idx_path, Value((1, ))) == idx_path
+
+        rec = Record(fields=dict(fnA='', fnB1sfnA='', fnB1sfnB='sfB2v'))
+        idx_path = ('fnB', 1, 'sfnB')
+        assert compose_current_index(rec, idx_path, Value((1, ))) == idx_path
+
     def test_init_use_current_index(self):
         r = Record()
         init_current_index(r, ('fnA', ), None)
@@ -172,6 +191,9 @@ class TestHelperMethods:
 
         assert use_current_index(r, ('fnB', 0, 'fnBA'), Value((1, ))) == ('fnB', 0, 'fnBA')
 
+        with pytest.raises(AssertionError):
+            use_current_index(None, ('fnB', 0, 'fnBA'), Value((1,)))
+
     def test_set_current_index(self):
         rs = Records()
         set_current_index(rs, idx=2)
@@ -183,12 +205,44 @@ class TestHelperMethods:
         set_current_index(r, idx='fnX')
         assert current_index(r) == 'fnX'
 
-    def test_compose_current_index(self):
-        assert compose_current_index
+    def test_set_current_system_index(self, rec_2f_2s_complete):
+        SEP = '+'
+        r = Record()
+        assert r.current_idx is None
+        assert r.set_current_system_index('TEST', SEP) is None
 
-    def test_set_current_system_index(self):
-        rec = Record()
-        assert rec.set_current_system_index('TEST', '+') is None
+        r = rec_2f_2s_complete.set_env(system='Xx', direction=FAD_ONTO)
+        assert r.current_idx == 'fnA'
+        assert r.value('fnB', flex_sys_dir=True).current_idx == 0
+        r.add_system_fields((('A' + SEP + 'X', 'fnA'), ('B' + SEP + 'Y', 'fnB0sfnA'), ('B' + SEP + 'Z', 'fnB0sfnB')))
+        assert r.current_idx == 'fnA'
+        assert r.value('fnB', flex_sys_dir=True).current_idx == 0
+        assert r.node_child(('fnB', 0)).current_idx == 'sfnA'
+
+        assert r.set_current_system_index('A', SEP) is None
+        assert r.current_idx == 'fnA'
+        assert r.value('fnB', flex_sys_dir=True).current_idx == 0
+        assert r.node_child(('fnB', 0)).current_idx == 'sfnA'
+
+        assert r.set_current_system_index('B', SEP) is r
+        assert r.current_idx == 'fnA'
+        assert r.value('fnB', flex_sys_dir=True).current_idx == 1
+        assert r.node_child(('fnB', 0)).current_idx == 'sfnA'
+
+        assert r.set_current_system_index('B', SEP) is r
+        assert r.current_idx == 'fnA'
+        assert r.value('fnB', flex_sys_dir=True).current_idx == 2
+        assert r.node_child(('fnB', 0)).current_idx == 'sfnA'
+
+        assert r.set_current_system_index('B', SEP, idx_val=0, idx_add=None) is r
+        assert r.current_idx == 'fnA'
+        assert r.value('fnB', flex_sys_dir=True).current_idx == 0
+        assert r.node_child(('fnB', 0)).current_idx == 'sfnA'
+
+        assert r.set_current_system_index('B', SEP, idx_add=2) is r
+        assert r.current_idx == 'fnA'
+        assert r.value('fnB', flex_sys_dir=True).current_idx == 2
+        assert r.node_child(('fnB', 0)).current_idx == 'sfnA'
 
 
 class TestValue:
@@ -205,16 +259,33 @@ class TestValue:
 
     def test_val_init(self):
         v = Value()
+        assert not v.initialized
         assert v.value() == []
+        assert not v.initialized
         assert v.val() == ''
+        assert not v.initialized
         with pytest.raises(AssertionError):
             v.set_val(Value().set_val('tvX'))
+        assert not v.initialized
         v.set_val('tvA')
+        assert v.initialized
         assert v.value() == ['tvA']
         assert v.val() == 'tvA'
         v.clear_leafs()
         assert v.value() == []
         assert v.val() == ''
+
+    def test_val_set(self):
+        v = Value()
+        v.set_val('tvA')
+        assert v.val() == 'tvA'
+        v[0] = 'tvB'
+        assert v.val() == 'tvB'
+        v[-1] = 'tvC'
+        assert v.val() == 'tvC'
+        with pytest.raises(IndexError):
+            v['test'] = 'tvD'
+        assert v.val() == 'tvC'
 
     def test_val_get(self):
         v = Value()
@@ -238,6 +309,40 @@ class TestValue:
         assert v.node_child(('test',)) is None
         assert v.node_child(('test', 3, 'subField')) is None
         assert v.node_child((2, 'test',)) is None
+        assert v.node_child(()) == v
+
+
+class TestValues:
+    def test_node_child(self):
+        u = Values()
+        assert u.node_child(('test',)) is None
+        with pytest.raises(AssertionError):
+            u.node_child(('test',), moan=True)
+        assert u.node_child((0,)) is None
+        with pytest.raises(AssertionError):
+            u.node_child((0,), moan=True)
+        assert u.node_child(()) is None
+        with pytest.raises(AssertionError):
+            u.node_child((), moan=True)
+        assert u.node_child(('test',)) is None
+        with pytest.raises(AssertionError):
+            u.node_child(('test',), moan=True)
+        assert u.node_child('test') is None
+        with pytest.raises(AssertionError):
+            u.node_child('test', moan=True)
+        assert u.node_child(0) is None
+        with pytest.raises(AssertionError):
+            u.node_child(0, moan=True)
+        assert u.node_child(None) is None
+        with pytest.raises(AssertionError):
+            u.node_child(None, moan=True)
+
+    def test_set_value(self):
+        u = Values()
+        assert u.set_val('test_val', 0) is u
+        root_idx = ('test', )
+        assert u.set_value(Value().set_val('other_test_val'), 0, root_idx=root_idx) is u
+        assert u.val(0) == 'other_test_val'
 
 
 class TestField:
@@ -328,6 +433,11 @@ class TestRecord:
         print(r)
         d = dict(**r)
         assert d == r
+
+    def test_set_val_basics(self):
+        r = Record()
+        r.set_val(dict(fnA=33, fnB=66))
+        assert r.val('fnA') == 33
 
     def test_set_val_flex_sys(self):
         r = Record()
@@ -606,6 +716,12 @@ class TestRecord:
 
     def test_node_child(self, rec_2f_2s_incomplete):
         r = Record(system='Xx', direction='From')
+        assert r.node_child(()) is None
+        with pytest.raises(AssertionError):
+            r.node_child((), moan=True)
+        assert r.node_child((0,)) is None
+        with pytest.raises(AssertionError):
+            r.node_child((0,), moan=True)
         assert r.node_child(('test',)) is None
 
         r = rec_2f_2s_incomplete
@@ -670,6 +786,10 @@ class TestRecord:
         assert len(r2) == 3
         assert r2.val('fnB') == 99
 
+        r2 = r.copy(fields_patches={ALL_FIELDS: {aspect_key(FAT_VAL): Value((99,))}})
+        assert len(r2) == 3
+        assert r2.val('fnB') == 99
+
     def test_pop(self):
         r = Record(fields=dict(a=1, b=2))
         assert len(r) == 2
@@ -689,6 +809,13 @@ class TestRecord:
         assert r['fnA'].val(system='Xx', direction=FAD_FROM) == '33'
         assert r['fnA'].val(system='Xx') == '33'
 
+        r.set_val('sfnBv', 'fnB', 0, 'sfnB', system='Xx', direction=FAD_FROM)
+        r.pull('Xx')
+        assert r.val('fnB0sfnB') == 'sfnBv'
+        assert r['fnB0sfnB'].val() == 'sfnBv'
+        assert r['fnB0sfnB'].val(system='Xx', direction=FAD_FROM) == 'sfnBv'
+        assert r['fnB0sfnB'].val(system='Xx') == 'sfnBv'
+
     def test_push(self):
         r = Record(fields=dict(fnA=33), field_items=True)
         r['fnA'].set_name('fnA_systemXx', system='Xx', direction=FAD_ONTO)
@@ -705,7 +832,27 @@ class TestRecord:
         assert r.direction == FAD_ONTO
         assert r.action == 'ACTION'
     
-    def test_add_system_fields(self):
+    def test_add_system_fields_basic(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete.set_env(system='Xx', direction=FAD_FROM)
+        assert len(r) == 2
+        assert len(list(r.leafs())) == 5
+
+        r.add_system_fields((('fnAXx', 'fnA'), ('sfnX1Xx', 'fnX0sfnX1')))
+        assert len(r) == 3
+        assert len(list(r.leafs())) == 6
+        assert r.node_child('fnA').name(system='Xx', direction=FAD_FROM) == 'fnAXx'
+        assert r.node_child('fnB0sfnA').name(system='Xx', direction=FAD_FROM) == 'sfnA'
+        assert r.node_child('fnB0sfnB').name(system='Xx', direction=FAD_FROM) == 'sfnB'
+        assert r.node_child('fnX0sfnX1').name(system='Xx', direction=FAD_FROM) == 'sfnX1Xx'
+
+        r.add_system_fields((('sfnAXx', 'fnB0sfnA'), ('sfnX2Xx', 'fnX0sfnX2')), extend=False)
+        assert len(r) == 3
+        assert len(list(r.leafs())) == 6
+        assert r.node_child('fnB0sfnA').name(system='Xx', direction=FAD_FROM) == 'sfnAXx'
+        assert r.node_child('fnB0sfnB').name(system='Xx', direction=FAD_FROM) == 'sfnB'
+        assert r.node_child('fnX0sfnX2') is None
+
+    def test_add_system_fields_complex(self):
         SEP = '.'
         d = (
             ('F_CNT', 'Cnt'),
@@ -760,6 +907,257 @@ class TestRecord:
         sys_r.set_val(123456, 'fn0Id')
         sys_r.push(SDI_SH)
 
+    def test_collect_system_fields(self):
+        SEP = '.'
+        r = Record(system='Xx', direction=FAD_ONTO)
+        r.add_system_fields((('Sys_Fld', 'Fld'),))
+        csf = r.collect_system_fields(('Invalid_Fld',), SEP)
+        assert not csf
+        csf = r.collect_system_fields(('Sys_Fld',), SEP)
+        assert len(csf) == 1
+        assert isinstance(csf[0], _Field)
+        assert csf[0].name() == 'Fld'
+        assert csf[0].name(system='Xx', direction=FAD_ONTO) == 'Sys_Fld'
+
+    def test_compare_leafs(self):
+        r = Record(fields=dict(fnA=33))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33)))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)), field_names=('fnA',))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)), exclude_fields=('fnB',))
+
+        r = Record(fields=dict(fnA=33, fnB=66))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)), field_names=('fnA',))
+        assert not r.compare_leafs(Record(fields=dict(fnA=33, fnB=66)), exclude_fields=('fnB',))
+
+        r = Record(fields=dict(fnA=33))
+        assert len(r.compare_leafs(Record(fields=dict(fnA=99)))) == 1
+        assert len(r.compare_leafs(Record(fields=dict(fnC=99)))) == 2
+
+    def test_compare_val(self):
+        d = datetime.date.today()
+        r = Record(fields=dict(fnA=33, fnB='66', fnC=d))
+        assert r.compare_val('fnA') == 33
+        assert r.compare_val('fnB') == '66'
+        assert r.compare_val('fnC') == d.toordinal()
+
+        mail = 'test.mail@test_domain.net'
+        pho = '00341234567890'
+        r = Record(fields=dict(SfId='x' * 30, Name='jesus', Email=mail, Phone=pho, Long='x' * 80, Empty=''))
+        assert r.compare_val('SfId') == 'x' * 15                    # SF-ID's get cut to 15 characters
+        assert r.compare_val('Name') == 'Jesus'                     # Names get Capitalized
+        assert r.compare_val('Email') == mail.replace('_', '')      # removing underscore in domain only!
+        assert r.compare_val('Phone') == pho
+        assert r.compare_val('Long') == 'x' * 39                    # Long strings speedup - only compare 1st 30 chars
+        assert r.compare_val('Empty') is None
+
+    def test_leaf_names(self, rec_2f_2s_complete, rec_2f_2s_incomplete):
+        r = Record(fields=dict(fnA=33, fnB='66', fnC=datetime.date.today()))
+        assert len(r.leaf_names()) == 3
+        assert 'fnA' in r.leaf_names()      # field creation order is not guaranteed
+        assert 'fnB' in r.leaf_names()
+        assert 'fnC' in r.leaf_names()
+
+        r = rec_2f_2s_complete
+        assert len(r.leaf_names()) == 3
+        assert r.leaf_names(field_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names(col_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names() == ('fnA', 'sfnA', 'sfnB')
+        assert r.leaf_names(field_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(col_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(exclude_fields=('sfnA', 'sfnB')) == ('fnA', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnB')) == ('sfnA', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA')) == ('sfnB', )
+
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='s') == ('sfnB', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='f') == ('sfnB', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='r') == ('fnB0sfnB', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='S') == (('fnB', 0, 'sfnB'),)
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='F') == (('fnB', 0, 'sfnB'),)
+
+        # repeat some tests - now with system field names added
+        r.set_env(system='Xx', direction=FAD_FROM)
+        r.add_system_fields((('fnAXx', 'fnA'), ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB')))
+        assert len(r.leaf_names()) == 3
+        assert r.leaf_names(field_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names(col_names=('fnAXx',)) == ('fnA',)
+        assert r.leaf_names() == ('fnA', 'sfnA', 'sfnB')
+        assert r.leaf_names(field_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(col_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(exclude_fields=('sfnA', 'sfnB')) == ('fnA', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnB')) == ('sfnA', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA')) == ('sfnB', )
+
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='s') == ('sfnBXx', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='f') == ('sfnB', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='r') == ('fnB0sfnB', )
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='S') == (('fnB', 0, 'sfnBXx'),)
+        assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='F') == (('fnB', 0, 'sfnB'),)
+
+        r = rec_2f_2s_incomplete
+        assert len(r.leaf_names()) == 1
+        assert r.leaf_names() == ('fnA',)
+        assert r.leaf_names(field_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names(col_names=('fnA',)) == ('fnA',)
+        assert r.leaf_names(field_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(col_names=('Invalid_fn',)) == ()
+        assert r.leaf_names(exclude_fields=('fnA',)) == ()
+
+    def test_merge_leafs(self, rec_2f_2s_complete, rec_2f_2s_incomplete):
+        r = Record()
+        assert len(r) == 0
+        assert len(list(r.leafs())) == 0
+        r.merge_leafs(rec_2f_2s_incomplete)
+        assert len(r) == 2
+        assert len(list(r.leafs())) == 3
+        r.merge_leafs(rec_2f_2s_complete)
+        assert len(r) == 2
+        assert len(list(r.leafs())) == 5
+
+    def test_match_key(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete
+        assert r.match_key(()) == ()
+        assert r.match_key(('fnA',)) == ('', )
+        assert r.match_key(('fnA', 'fnB0sfnA', 'fnB0sfnB')) == ('', 'sfA1v', 'sfB1v')
+        assert r.match_key(('fnA', 'fnB0sfnA', 'fnB1sfnB')) == ('', 'sfA1v', 'sfB2v')
+        assert r.match_key(('fnB1sfnA', 'fnB1sfnB')) == ('sfA2v', 'sfB2v')
+
+    def test_merge_vals(self, rec_2f_2s_complete, rec_2f_2s_incomplete):
+        r = Record()
+        assert len(r) == 0
+        r.merge_vals(rec_2f_2s_complete, extend=False)
+        assert len(r) == 0
+        assert len(list(r.leafs())) == 0
+
+        r.merge_vals(rec_2f_2s_incomplete)
+        assert len(r) == 2
+        assert len(list(r.leafs())) == 3
+        assert not r.val('Invalid_fn')
+        assert r.val('fnA') == ''
+        assert r.val('fnB0sfnA') is None
+        assert r.val('fnB0sfnB') is None
+        assert r.val('fnB1sfnA') == ''
+        assert r.val('fnB1sfnB') == 'sfB2v'
+
+        r.merge_vals(rec_2f_2s_complete, extend=False)
+        assert len(r) == 2
+        assert len(list(r.leafs())) == 5
+        assert not r.val('Invalid_fn')
+        assert r.val('fnA') == ''
+        assert r.val('fnB0sfnA') == 'sfA1v'
+        assert r.val('fnB0sfnB') == 'sfB1v'
+        assert r.val('fnB1sfnA') == 'sfA2v'
+        assert r.val('fnB1sfnB') == 'sfB2v'
+
+        r.merge_vals(rec_2f_2s_complete)
+        assert len(r) == 2
+        assert len(list(r.leafs())) == 5
+        assert not r.val('Invalid_fn')
+        assert r.val('fnA') == ''
+        assert r.val('fnB0sfnA') == 'sfA1v'
+        assert r.val('fnB0sfnB') == 'sfB1v'
+        assert r.val('fnB1sfnA') == 'sfA2v'
+        assert r.val('fnB1sfnB') == 'sfB2v'
+
+    def test_missing_fields(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete
+        assert r.missing_fields(('fnX', ('fnY', 'fnZ'))) == [('fnX',), ('fnY', 'fnZ')]
+        assert r.missing_fields(('fnA', ('fnY', 'fnZ'))) == [('fnA',), ('fnY', 'fnZ')]  # fnA has empty value ('')
+        assert r.missing_fields(('fnB', ('fnY', 'fnZ'))) == [('fnY', 'fnZ')]
+        assert r.missing_fields(('fnB0sfnA', ('fnY', 'fnZ'))) == [('fnY', 'fnZ')]
+        assert r.missing_fields(('fnB0sfnB', ('fnY', 'fnZ'))) == [('fnY', 'fnZ')]
+        assert r.missing_fields(('fnB0sfnA', ('fnB0sfnB', 'fnY', 'fnZ'))) == []
+        assert r.missing_fields(('fnX', 'fnB0sfnA', ('fnB0sfnB', 'fnY', 'fnZ'))) == [('fnX', )]
+
+    def test_sql_columns(self, rec_2f_2s_complete):
+        r = Record()
+        assert r.sql_columns(SDI_SH) == list()
+
+        r = rec_2f_2s_complete
+        assert r.sql_columns(SDI_SH) == list()
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_ONTO).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SDI_SH) == list()
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SDI_SH) == ['DbCol1', 'DbCol2']
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SDI_SH, col_names=('DbCol2', )) == ['DbCol2']
+
+    def test_sql_select(self, rec_2f_2s_complete):
+        r = Record()
+        assert r.sql_select(SDI_SH) == list()
+
+        r = rec_2f_2s_complete
+        assert r.sql_select(SDI_SH) == list()
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_ONTO).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SDI_SH) == list()
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SDI_SH) == ['DbCol1', 'DbCol2']
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['DbCol2']
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        r.node_child('fnX').set_sql_expression('db_expr')
+        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['DbCol2']
+
+        r = rec_2f_2s_complete.copy()
+        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        r.node_child('fnX').set_sql_expression('db_expr', system=SDI_SH, direction=FAD_FROM)
+        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['db_expr AS DbCol2']
+
+    def test_to_dict(self, rec_2f_2s_complete):
+        r = Record()
+        assert r.to_dict() == dict()
+
+        r = rec_2f_2s_complete.copy()
+        assert r.to_dict() == dict(fnB0sfnA='sfA1v', fnB0sfnB='sfB1v', fnB1sfnA='sfA2v', fnB1sfnB='sfB2v')
+        assert r.to_dict(filter_fields=lambda f: f.name() == 'sfnB') == dict(fnB0sfnA='sfA1v', fnB1sfnA='sfA2v')
+        assert r.to_dict(put_empty_val=True) == dict(fnA='',
+                                                     fnB0sfnA='sfA1v', fnB0sfnB='sfB1v',
+                                                     fnB1sfnA='sfA2v', fnB1sfnB='sfB2v')
+        assert r.to_dict(put_system_val=False) == dict(fnB0sfnA='sfA1v', fnB0sfnB='sfB1v',
+                                                       fnB1sfnA='sfA2v', fnB1sfnB='sfB2v')
+        assert r.to_dict(key_type=None) == dict(sfnA='sfA2v', sfnB='sfB2v')
+        assert r.to_dict(key_type=tuple) == {('fnB', 0, 'sfnA'): 'sfA1v', ('fnB', 0, 'sfnB'): 'sfB1v',
+                                             ('fnB', 1, 'sfnA'): 'sfA2v', ('fnB', 1, 'sfnB'): 'sfB2v'}
+        assert r.to_dict(put_system_val=False, key_type=None) == dict(sfnA='sfA2v', sfnB='sfB2v')
+        assert r.to_dict(put_empty_val=True, key_type=None) == dict(fnA='', sfnA='sfA2v', sfnB='sfB2v')
+
+        r = rec_2f_2s_complete.copy().set_env(system='Xx', direction=FAD_ONTO)
+        r.add_system_fields((('fnAX', 'fnA'), ('sfnAX', 'fnB0sfnA'), ('sfnBX', 'fnB0sfnB')))
+        assert r.to_dict() == dict(fnB0sfnAX='sfA1v', fnB0sfnBX='sfB1v', fnB1sfnAX='sfA2v', fnB1sfnBX='sfB2v')
+        assert r.to_dict(use_system_key=False) == dict(fnB0sfnA='sfA1v', fnB0sfnB='sfB1v',
+                                                       fnB1sfnA='sfA2v', fnB1sfnB='sfB2v')
+        assert r.to_dict(filter_fields=lambda f: f.name() == 'sfnB') == dict(fnB0sfnAX='sfA1v', fnB1sfnAX='sfA2v')
+        assert r.to_dict(filter_fields=lambda f: f.name() == 'sfnB', use_system_key=False) == dict(fnB0sfnA='sfA1v',
+                                                                                                   fnB1sfnA='sfA2v')
+        assert r.to_dict(put_empty_val=True) == dict(fnAX='',
+                                                     fnB0sfnAX='sfA1v', fnB0sfnBX='sfB1v',
+                                                     fnB1sfnAX='sfA2v', fnB1sfnBX='sfB2v')
+        assert r.to_dict(put_system_val=False) == dict(fnB0sfnAX='sfA1v', fnB0sfnBX='sfB1v',
+                                                       fnB1sfnAX='sfA2v', fnB1sfnBX='sfB2v')
+        assert r.to_dict(key_type=None) == dict(sfnAX='sfA2v', sfnBX='sfB2v')
+        assert r.to_dict(key_type=tuple) == {('fnB', 0, 'sfnAX'): 'sfA1v', ('fnB', 0, 'sfnBX'): 'sfB1v',
+                                             ('fnB', 1, 'sfnAX'): 'sfA2v', ('fnB', 1, 'sfnBX'): 'sfB2v'}
+        assert r.to_dict(put_system_val=False, key_type=None) == dict(sfnAX='sfA2v', sfnBX='sfB2v')
+        assert r.to_dict(put_empty_val=True, key_type=None) == dict(fnAX='', sfnAX='sfA2v', sfnBX='sfB2v')
+
+    def test_update(self):
+        r = Record()
+        assert r.update() is r
+
 
 class TestRecords:
     def test_typing(self):
@@ -770,6 +1168,26 @@ class TestRecords:
         _ = Values      # added for to remove Pycharm warning
         rec_str = repr(Records())
         assert eval(rec_str) == Records()
+
+    def test_get_item(self):
+        rs = Records()
+
+        rs.set_val('fnAv1', 0, 'fnA')
+        assert isinstance(rs[0], Record)
+        assert len(rs) == 1
+        assert rs.val(0, 'fnA') == 'fnAv1'
+
+        rs.set_val('fnAv2', 1, 'fnA')
+        assert isinstance(rs[1], Record)
+        assert len(rs) == 2
+        assert rs.val(1, 'fnA') == 'fnAv2'
+
+        assert isinstance(rs[0:1], list)
+        assert isinstance(rs[1:2], list)
+        assert isinstance(rs[0:2], list)
+
+        with pytest.raises(AssertionError):
+            _ = rs[(0, 'fnA', 'Invalid')]
 
     def test_set_val_flex_sys(self):
         rs = Records()
@@ -835,9 +1253,15 @@ class TestRecords:
         assert rs.value(3, 'fnA').val() == 33
         rs.set_value(Value().set_val(66), 3, 'fnA')
         assert rs.value(3, 'fnA').val() == 66
+        rs.set_value(Value().set_val(99), 3, 'fnA', root_rec=Record(), root_idx=('root_fn',))
+        assert rs.value(3, 'fnA').val() == 99
 
     def test_clear_leafs(self):
         rs = Records()
+        assert len(rs) == 0
+        rs.clear_leafs()
+        assert len(rs) == 0
+
         rs.set_node_child(33, 3, 'fnA')
         assert len(rs) == 4
 
@@ -896,7 +1320,7 @@ class TestRecords:
         assert r2.val('fnB', 2, 'sfnA') is None
         assert r2.val('fnB', 2, 'sfnB') is None
 
-        r2.value('fnB').append_record(from_rec=r1.value('fnB', 0), clear_leafs=False, root_rec=r2, root_idx=('fnB', ))
+        r2.value('fnB').append_record(root_rec=r2, root_idx=('fnB', ), from_rec=r1.value('fnB', 0), clear_leafs=False)
         assert r2.val('fnB', 2, 'sfnA') == 2
         assert r2.val('fnB', 2, 'sfnB') == 3
         assert r2['fnB'].root_rec() is r2
@@ -904,13 +1328,30 @@ class TestRecords:
         assert r2['fnB'].root_idx() == ('fnB', )
         assert r2[('fnB', 2, 'sfnB')].root_idx() == ('fnB', 2, 'sfnB')
 
-        r1.value('fnB').append_record(from_rec=r2.value('fnB', 1), clear_leafs=False, root_rec=r1, root_idx=('fnB', ))
+        r1.value('fnB').append_record(root_rec=r1, root_idx=('fnB', ), from_rec=r2.value('fnB', 1), clear_leafs=False)
         assert r1.val('fnB', 1, 'sfnA') == 8
         assert r1.val('fnB', 1, 'sfnB') == 9
         assert r1['fnB'].root_rec() is r1
         assert r1[('fnB', 1, 'sfnB')].root_rec() is r1
         assert r1['fnB'].root_idx() == ('fnB', )
         assert r1[('fnB', 1, 'sfnB')].root_idx() == ('fnB', 1, 'sfnB')
+
+    def test_compare_records(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete
+        rs1 = r.value('fnB').copy(deepness=-1, root_rec=r, root_idx=('fnB',))
+        assert len(rs1.compare_records(Records(), ('sfnA', 'sfnB'))) == 2
+
+        rs2 = r.value('fnB').copy(deepness=-1, root_rec=r, root_idx=('fnB',))
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'))) == 0
+
+        rs2.set_val('ChangedVal', 0, 'sfnA')
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'))) == 2
+
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'), record_comparator=lambda r1, r2: list())) == 3
+
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'), record_comparator=lambda r1, r2: ['AAA'])) == 9
+
+        assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'), record_comparator=lambda r1, r2: ['AAA', 'BBB'])) == 17
 
 
 class TestStructures:
@@ -1147,6 +1588,25 @@ class TestSystemDirections:
             assert r.val(*idx, system='Yy') == i + 5
 
     def test_multi_sys_converter_rec(self, rec_2f_2s_complete):
+        # PyCharm doesn't like assignments of lambda to vars: cnv = lambda f, v: v + 10
+        def cnv(_, v):
+            return v + 10
+
+        r = rec_2f_2s_complete
+        rX = r.copy().set_env(system='Xx', direction=FAD_FROM)
+        rX.add_system_fields((('fnAXx', 'fnA', 0, cnv),
+                              ('sfnAXx', 'fnB0sfnA', 1, cnv), ('sfnBXx', 'fnB0sfnB', 2, cnv),
+                              ('sfnAXx', 'fnB1sfnA', 3, cnv), ('sfnBXx', 'fnB1sfnB', 4, cnv)),
+                             sys_fld_indexes={FAT_IDX + FAD_FROM: 0, FAT_IDX: 1, FAT_VAL: 2, FAT_CNV: 3})
+        for i, idx in enumerate(r.leaf_indexes()):
+            assert isinstance(r.val(*idx), str)
+            assert r.val(*idx) in ('', 'sfA1v', 'sfA2v', 'sfB1v', 'sfB2v')
+            assert r.val(*idx, system='Xx') == i
+            r.node_child(idx).pull('Xx', r, idx)
+            assert r.val(*idx) == i + 10
+            assert r.val(*idx, system='Xx') == i
+
+    def test_multi_sys_dir_converter_rec(self, rec_2f_2s_complete):
         # PyCharm doesn't like assignments of lambda to vars: cnv = lambda f, v: v + 10
         def cnv(_, v):
             return v + 10

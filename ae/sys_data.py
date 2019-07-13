@@ -171,8 +171,6 @@ def field_name_idx_path(field_name, return_root_fields=False):
     if idx_path:
         if nam_i is not None:
             idx_path.append(field_name[nam_i:])
-        elif num_i is not None:
-            idx_path.append(int(field_name[num_i:]))
     elif return_root_fields:
         idx_path.append(field_name)
 
@@ -339,7 +337,7 @@ class Value(list):
         while True:
             try:
                 return super().__setitem__(key, value)
-            except IndexError:
+            except (IndexError, TypeError):
                 if not isinstance(key, int):
                     raise IndexError("Value() expects key of type int, but got {} of type {}".format(key, type(key)))
                 self.append(value)
@@ -434,14 +432,20 @@ class Values(list):                     # type: List[Union[Value, Record]]
 
     def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=(),
                   use_curr_idx=None):
-        assert len(idx_path), \
-            "Values/Records.set_value() idx_path '{}' must be non-empty tuple or list".format(idx_path)
+        assert len(idx_path), "Values/Records.set_value() idx_path '{}' must be non-empty tuple/list".format(idx_path)
 
-        idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
-        if root_idx:
-            root_idx += (idx, )
-        self[idx].set_value(value, *idx2, system=system, direction=direction, protect=protect,
-                            root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+        if isinstance(self, Records):
+            idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
+            if root_idx:
+                root_idx += (idx,)
+            self[idx].set_value(value, *idx2, system=system, direction=direction, protect=protect,
+                                root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
+        else:
+            idx = idx_path[0]
+            assert isinstance(value, Value), "Values.set_value() value must be Value type, got {}".format(type(value))
+            assert len(idx_path) == 1, "Values.set_value() idx_path must be single index, got {}".format(idx_path)
+            assert isinstance(idx, int), "Values.set_value() idx_path index must be int, got {}".format(idx)
+            self[idx] = value
         return self
 
     def val(self, *idx_path, system='', direction='', flex_sys_dir=True, use_curr_idx=None, **kwargs):
@@ -557,8 +561,6 @@ class Record(OrderedDict):
         return bool(item)
 
     def __getitem__(self, key):
-        if isinstance(key, slice):
-            return super().__getitem__(key)
         ssd = dict()
         child = self.node_child(key, moan=True, selected_sys_dir=ssd)
         if child is None:
@@ -567,11 +569,8 @@ class Record(OrderedDict):
             else child.val(system=ssd.get('system', self.system), direction=ssd.get('direction', self.direction))
 
     def __setitem__(self, key, value):
-        if isinstance(key, slice):
-            super().__setitem__(key, value)
-        else:
-            idx_path = field_name_idx_path(key, return_root_fields=True)
-            self.set_node_child(value, *idx_path)
+        idx_path = field_name_idx_path(key, return_root_fields=True)
+        self.set_node_child(value, *idx_path)
 
     def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
         msg = "Record.node_child() expects "
@@ -790,15 +789,14 @@ class Record(OrderedDict):
 
         for name, fld_or_val in items:
             idx_path = field_name_idx_path(name, return_root_fields=True)
-            if root_rec is None:
-                root_rec = fld_or_val.root_rec() if isinstance(fld_or_val, _Field) else self
             if not root_idx and isinstance(fld_or_val, _Field):
                 root_idx = fld_or_val.root_idx()
 
             self.set_node_child(fld_or_val, *idx_path, protect=True, root_rec=root_rec, root_idx=root_idx)
         return self
 
-    def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes=None, extend=True):
+    def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes=None,
+                          system=None, direction=None, extend=True):
         """
         add/set fields from a system field tuple. This Record instance need to have system and direction specified/set.
         :param system_fields:   tuple/list of tuples/lists with system and main field names and optional field aspects.
@@ -809,14 +807,17 @@ class Record(OrderedDict):
                                 system (SDI_* constant). If the value aspect key (FAT_VAL) contains a callable then
                                 it will be set as the calculator (FAT_CAL) aspect; if contains a field value then also
                                 the clear_val of this field will be set to the specified value.
-        :param extend:          True=add field if not exists, False=set system aspects only on existing fields.
+        :param system:          system of the fields to be added - if not passed self.system will be used.
+        :param direction:       direction (FAD constants) of the fields to be added - if not passed used self.direction.
+        :param extend:          True=add not existing fields, False=apply new system aspects only on existing fields.
         :return:                self
         """
         msg = "add_system_fields() expects "
         assert isinstance(system_fields, (tuple, list)) and len(system_fields), \
             msg + "non-empty list or tuple in system_fields arg, got {}".format(system_fields)
-        assert self.system and self.direction, msg + "non-empty Record.system/.direction values"
-        sys_nam_key = aspect_key(FAT_IDX, system=self.system, direction=self.direction)
+        system, direction = use_rec_default_sys_dir(self, system, direction)
+        assert system and direction, msg + "non-empty system/direction values (either from args or self)"
+        sys_nam_key = aspect_key(FAT_IDX, system=system, direction=direction)
         if sys_fld_indexes is None:
             sys_fld_indexes = {sys_nam_key: 0,
                                FAT_IDX: 1,
@@ -828,7 +829,7 @@ class Record(OrderedDict):
             assert isinstance(sys_fld_indexes, dict), "sys_fld_indexes must be an instance of dict, got {} instead"\
                 .format(type(sys_fld_indexes))
             if sys_nam_key not in sys_fld_indexes:  # check if sys name key is specified without self.system
-                sys_nam_key = aspect_key(FAT_IDX, direction=self.direction)
+                sys_nam_key = aspect_key(FAT_IDX, direction=direction)
             assert FAT_IDX in sys_fld_indexes and sys_nam_key in sys_fld_indexes, \
                 msg + "field and system field name aspects in sys_fld_indexes arg {}".format(sys_fld_indexes)
         err = [_ for _ in system_fields if sys_nam_key not in sys_fld_indexes or sys_fld_indexes[sys_nam_key] >= len(_)]
@@ -868,36 +869,36 @@ class Record(OrderedDict):
 
                 # add additional aspects: first always add converter and value (for to create separate system value)
                 cnv_func = None
-                cnv_key = FAT_CNV + self.direction
+                cnv_key = FAT_CNV + direction
                 if map_len > sfi.get(cnv_key, map_len):
                     cnv_func = fas[sfi.pop(cnv_key)]
                 elif map_len > sfi.get(FAT_CNV, map_len):
                     cnv_func = fas[sfi.pop(FAT_CNV)]
                 if cnv_func:
-                    field.set_converter(cnv_func, system=self.system, direction=self.direction, extend=True,
+                    field.set_converter(cnv_func, system=system, direction=direction, extend=True,
                                         root_rec=self, root_idx=idx_path)
                 # now add all other field aspects (allowing calculator function specified in FAT_VAL aspect)
                 for fa, fi in sfi.items():
                     if fa.startswith(FAT_CNV):
                         continue                    # skip converter for other direction
                     if map_len > fi and fas[fi] is not None \
-                            and fa[_ASP_TYPE_LEN:] in ('', self.direction, self.system, self.direction + self.system):
+                            and fa[_ASP_TYPE_LEN:] in ('', direction, system, direction + system):
                         if not fa.startswith(FAT_VAL):
-                            field.set_aspect(fas[fi], fa, system=self.system, direction=self.direction, protect=True)
+                            field.set_aspect(fas[fi], fa, system=system, direction=direction, protect=True)
                         elif callable(fas[fi]):     # is a calculator specified in value/FAT_VAL item
-                            field.set_calculator(fas[fi], system=self.system, direction=self.direction, protect=True)
+                            field.set_calculator(fas[fi], system=system, direction=direction, protect=True)
                         else:                       # init field and clear val
                             val = fas[fi]
                             if path_idx == 0:
-                                field.set_val(val, system=self.system, direction=self.direction, protect=True,
+                                field.set_val(val, system=system, direction=direction, protect=True,
                                               root_rec=self, root_idx=idx_path)
-                            field.set_clear_val(val, system=self.system, direction=self.direction)
+                            field.set_clear_val(val, system=system, direction=direction)
 
                 self.set_node_child(field, *idx_path, protect=field_created, root_rec=self, root_idx=())
                 # set sys field name and root_idx (after set_node_child() which is resetting sys root_idx to field name)
                 # multiple sys names for the same field - only use the first one (for parsing but allow for building)
-                if not field.name(system=self.system, direction=self.direction, flex_sys_dir=False):
-                    field.set_name(sys_name, system=self.system, direction=self.direction, protect=True)
+                if not field.name(system=system, direction=direction, flex_sys_dir=False):
+                    field.set_name(sys_name, system=system, direction=direction, protect=True)
 
                 if sys_name not in self.sys_name_field_map:
                     self.sys_name_field_map[sys_name] = field   # on sub-Records only put first row's field
@@ -1039,26 +1040,23 @@ class Record(OrderedDict):
                 continue
             fld_name = field.name()
             root_name = idx_path_field_name(idx_path)
-            if field_names and fld_name not in field_names and root_name not in field_names:
-                continue
-            if fld_name in exclude_fields or root_name in exclude_fields:
-                continue
-
-            if name_type == 's':
-                ret_name = sys_name
-            elif name_type == 'f':
-                ret_name = fld_name
-            elif name_type == 'r':
-                ret_name = idx_path_field_name(idx_path)
-            elif name_type == 'S':
-                ret_name = tuple(idx_path[:-1]) + (sys_name, )
-            elif name_type == 'F':
-                ret_name = idx_path
-            else:
-                ret_name = root_name if len(idx_path) > 1 and idx_path[0] == fld_name \
-                    else (sys_name if system else fld_name)
-            if ret_name:
-                names.append(ret_name)
+            if not (field_names and fld_name not in field_names and root_name not in field_names
+                    or fld_name in exclude_fields or root_name in exclude_fields):
+                if name_type == 's':
+                    ret_name = sys_name
+                elif name_type == 'f':
+                    ret_name = fld_name
+                elif name_type == 'r':
+                    ret_name = root_name
+                elif name_type == 'S':
+                    ret_name = tuple(idx_path[:-1]) + (sys_name, )
+                elif name_type == 'F':
+                    ret_name = idx_path
+                else:
+                    ret_name = root_name if len(idx_path) > 1 and idx_path[0] == fld_name \
+                        else (sys_name if system else fld_name)
+                if ret_name:
+                    names.append(ret_name)
 
         return tuple(names)
 
@@ -1213,10 +1211,10 @@ class Record(OrderedDict):
             field = self.node_child(idx_path)
             key = field.name(system=system, direction=direction, flex_sys_dir=False)
             if key and (not filter_fields or not filter_fields(field)):
+                key_path = tuple(idx_path[:-1] + (key,)) if system and use_system_key else idx_path
                 if key_type == tuple:
-                    key = idx_path
+                    key = key_path
                 elif key_type == str:
-                    key_path = tuple(idx_path[:-1] + (key, )) if system and use_system_key else idx_path
                     key = idx_path_field_name(key_path)
                 if put_system_val:
                     val = self.val(idx_path, system=system, direction=direction)
@@ -1240,8 +1238,10 @@ class Records(Values):              # type: List[Record]
         if isinstance(key, slice):
             return super().__getitem__(key)
         child = self.node_child(key, moan=True)
+        ''' should actually not happen because with moan=True node_child() will raise AssertionError
         if child is None:
             raise KeyError("There is no item with the idx_path '{}' in this Records instance ({})".format(key, self))
+        '''
         return child
 
     def __setitem__(self, key, value):
@@ -1324,12 +1324,11 @@ class Records(Values):              # type: List[Record]
             item_idx = idx_path + (idx, )
             yield from rec.leaf_indexes(*item_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def append_record(self, from_rec=None, clear_leafs=True, root_rec=None, root_idx=()):
+    def append_record(self, root_rec, root_idx=(), from_rec=None, clear_leafs=True):
+        assert isinstance(root_rec, Record), "Records.append_record() expects Record instance in the root_rec arg"
         recs_len = len(self)
         if from_rec is None:
             from_rec = self[0] if recs_len else Record(root_rec=root_rec, root_idx=root_idx)
-        if root_rec is None:
-            root_rec = from_rec
 
         new_rec = from_rec.copy(deepness=-1, root_rec=root_rec, root_idx=root_idx + (recs_len,))
         self.append(new_rec)
@@ -1439,8 +1438,10 @@ class _Field:
 
     def __getitem__(self, key):
         child = self.node_child(key, moan=True)
+        ''' should actually not happen because with moan=True node_child() will raise AssertionError
         if child is None:
             raise KeyError("There is no item with the idx_path '{}' in this _Field ({})".format(key, self))
+        '''
         return child
 
     def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
