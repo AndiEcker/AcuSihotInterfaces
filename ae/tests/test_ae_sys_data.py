@@ -349,6 +349,32 @@ class TestField:
     def test_typing(self):
         assert isinstance(_Field(**{FAT_REC: Record(), FAT_RCX: ('test', )}), _Field)
 
+    def test_repr(self):
+        r = Record(fields=dict(test='xxx'), system='Xx', direction=FAD_ONTO)
+        r.add_system_fields((('tsf', 'test'), ))
+        r.set_val('sys_val', 'tsf', system='Xx', direction=FAD_ONTO, flex_sys_dir=False)
+        print(r)
+        f = r.node_child(('test',))
+        rep = repr(f)
+        assert 'tsf' in rep
+        assert 'test' in rep
+        assert 'xxx' in rep
+        assert 'sys_val' in rep
+
+    def test_node_child(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete
+        f = r.node_child(('fnA', ))
+        assert f.node_child(tuple()) is None
+        assert f.node_child((('invalid_idx_path[0]',),)) is None
+        assert f.node_child(datetime) is None
+        assert f.node_child('') is None
+        assert f.node_child(None) is None
+
+        f = _Field(root_rec=r, root_idx=('test',))
+        assert f.node_child(('test', )) is None
+        f.set_aspect('', FAT_VAL, allow_values=True)
+        assert f.node_child(('test', )) is None
+
     def test_field_val_init(self):
         r = Record()
         f = _Field(root_rec=r, root_idx=('test',))
@@ -364,8 +390,16 @@ class TestField:
         assert f.value() == [None]
         assert f.val() is None
 
+    def test_set_value(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete
+        v = Value()
+        r.set_value(v, 'fnB', 0, 'sfnA')
+        assert r.value('fnB', 0, 'sfnA') == v
+        assert r.value('fnB', 0, 'sfnA') is v
+
     def test_set_val(self):
-        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)}).set_val('f1v')
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
+        f.set_val('f1v')
         assert f.val() == 'f1v'
 
     def test_val_get(self):
@@ -412,7 +446,6 @@ class TestRecord:
     def test_field_lookup_sys_name(self):
         r = Record(fields=dict(test='xxx'), system='Xx', direction=FAD_ONTO)
         r.add_system_fields((('tsf', 'test'), ))
-        print(r)
 
         field = r.node_child(('test', ))
         assert field
@@ -705,13 +738,13 @@ class TestRecord:
 
     def test_missing_field(self):
         r = Record()
-        with pytest.raises(KeyError):
+        with pytest.raises(AssertionError):
             _ = r['fnA']
         r.set_node_child(12, 'fnA')
         assert r.val('fnA') == 12
         r.field_items = True
         assert r['fnA'].val() == 12
-        with pytest.raises(KeyError):
+        with pytest.raises(AssertionError):
             _ = r['fnMissing']
 
     def test_node_child(self, rec_2f_2s_incomplete):

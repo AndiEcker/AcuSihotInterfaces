@@ -395,7 +395,7 @@ class Values(list):                     # type: List[Union[Value, Record]]
         return ("Records" if isinstance(self, Records) else "Values") + "([" + ",".join(repr(v) for v in self) + "])"
 
     def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
-        msg = "Values/Records.node_child() expects "
+        msg = "node_child() of Values/Records instance {} expects ".format(self)
         if isinstance(idx_path, (tuple, list)):
             if len(idx_path) and not isinstance(idx_path[0], int):
                 assert not moan, msg + "int type in idx_path[0], got {} in {}".format(type(idx_path), idx_path)
@@ -419,7 +419,9 @@ class Values(list):                     # type: List[Union[Value, Record]]
             return None
 
         if len(idx_path) == 1:
-            return super().__getitem__(idx)
+            ret = super().__getitem__(idx)
+            assert ret is not None or not moan, msg + "valid key but got {} from idx_path {}".format(idx, idx_path)
+            return ret
 
         return self[idx].node_child(idx2, use_curr_idx=use_curr_idx, moan=moan, selected_sys_dir=selected_sys_dir)
 
@@ -563,8 +565,10 @@ class Record(OrderedDict):
     def __getitem__(self, key):
         ssd = dict()
         child = self.node_child(key, moan=True, selected_sys_dir=ssd)
+        ''' should actually not happen because with moan=True node_child() will raise AssertionError
         if child is None:
             raise KeyError("There is no item with the key '{}' in this Record/OrderedDict ({})".format(key, self))
+        '''
         return child if self.field_items or not isinstance(child, _Field) \
             else child.val(system=ssd.get('system', self.system), direction=ssd.get('direction', self.direction))
 
@@ -603,6 +607,7 @@ class Record(OrderedDict):
             if not idx2 and field.has_name(idx, selected_sys_dir=selected_sys_dir):
                 return field
         else:
+            assert not moan, msg + "valid key but got {} from idx_path {}".format(idx, idx_path)
             field = None
 
         return field
@@ -1423,7 +1428,8 @@ class _Field:
             if idx_key.startswith(FAT_IDX) and len(idx_key) > _ASP_TYPE_LEN:
                 sys_dir_names.append((idx_key, name))
         for idx_key, name in sys_dir_names:
-            val_key = self.aspect_exists(FAT_VAL, aspect_key_system(idx_key), aspect_key_direction(idx_key))
+            val_key = self.aspect_exists(FAT_VAL,
+                                         system=aspect_key_system(idx_key), direction=aspect_key_direction(idx_key))
             if val_key and len(val_key) > _ASP_TYPE_LEN:
                 vals += "|" + "{}={}".format(name, self._aspects.get(val_key))
             else:
@@ -1445,7 +1451,7 @@ class _Field:
         return child
 
     def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
-        msg = "_Field.node_child() expects "
+        msg = "node_child() of _Field {} expects ".format(self)
         if isinstance(idx_path, (tuple, list)):
             if len(idx_path) and not isinstance(idx_path[0], IDX_TYPES):
                 assert not moan, msg + "str or int in idx_path[0], got {} ({})".format(type(idx_path[0]), idx_path[0])
