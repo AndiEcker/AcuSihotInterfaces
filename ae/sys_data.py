@@ -549,6 +549,9 @@ class Record(OrderedDict):
     def __repr__(self):
         return "Record({})".format(", ".join(repr(self._fields.val(*k)) for k in self.leaf_indexes()))
 
+    def __str__(self):
+        return "Record({})".format(", ".join(k for k in self.keys()))
+
     def __contains__(self, idx_path):
         item = self.node_child(idx_path)
         ''' on executing self.pop() no __delitem__ will be called instead python OrderedDict first pops the item
@@ -1415,7 +1418,7 @@ class _Field:
         assert FAT_REC in self._aspects, "_Field need to have a root Record instance"
         assert FAT_RCX in self._aspects, "_Field need to have an index path from the root Record instance"
 
-        if FAT_VAL not in self._aspects:
+        if FAT_VAL not in self._aspects and FAT_CAL not in self._aspects:
             self._aspects[FAT_VAL] = Value()
         if FAT_IDX not in self._aspects:
             self._aspects[FAT_IDX] = self.root_idx()[0]
@@ -1596,7 +1599,7 @@ class _Field:
             for aspect_type in aspect_types:
                 keys.append(aspect_key(aspect_type, system=system, direction=direction))
         else:
-            assert not direction, "_Field.find_aspect_key({}, {}, {}) direction without system not allowed"\
+            assert not direction, "_Field.find_aspect_key({}, {}, {}) direction without system not allowed" \
                 .format(aspect_types, system, direction)
             if system:
                 for aspect_type in aspect_types:
@@ -1663,25 +1666,25 @@ class _Field:
 
     def set_aspect(self, aspect_value, type_or_key, system='', direction='', protect=False, allow_values=False):
         key = aspect_key(type_or_key, system=system, direction=direction)
-        if protect:
-            assert key not in self._aspects, "_Field.set_aspect({}, {}, {}, {}, {}, {}): {} already exists as ({})"\
-                .format(aspect_value, type_or_key, system, direction, protect, allow_values, key, self._aspects[key])
-        if not allow_values:
-            assert not key.startswith(FAT_VAL), \
-                "pass allow_values=True or set values of _Field instances with the methods set_value() or set_val()"
+        msg = "_Field.set_aspect({}, {}, {}, {}, {}, {}): ".format(
+            aspect_value, type_or_key, system, direction, protect, allow_values)
+        assert not protect or key not in self._aspects, \
+            msg + "{} already exists as {}, pass protect=True to overwrite".format(key, self._aspects[key])
+        assert allow_values or not key.startswith(FAT_VAL), \
+            msg + "pass allow_values=True or set values of _Field instances with the methods set_value() or set_val()"
 
         if aspect_value is None:
             self.del_aspect(key)
         else:
-            assert key != FAT_IDX or isinstance(aspect_value, (tuple, list)) or not field_name_idx_path(aspect_value),\
-                "_Field.set_aspect(): digits cannot be used in system-less/generic field name '{}'".format(aspect_value)
+            assert key != FAT_IDX or isinstance(aspect_value, (tuple, list)) or not field_name_idx_path(aspect_value), \
+                msg + "digits cannot be used in system-less/generic field name '{}'".format(aspect_value)
             self._aspects[key] = aspect_value
         return self
 
     def del_aspect(self, type_or_key, system='', direction=''):
         key = aspect_key(type_or_key, system=system, direction=direction)
-        assert key not in (FAT_VAL, FAT_IDX, FAT_REC, FAT_RCX), \
-            "_Field main name, value and root Record/index cannot be removed"
+        assert key not in (FAT_IDX, FAT_REC, FAT_RCX), "_Field main name and root Record/index cannot be removed"
+        assert key != FAT_VAL or FAT_CAL in self._aspects, "_Field main value only deletable when calculator exists"
         return self._aspects.pop(key)
 
     def set_aspects(self, allow_values=False, **aspects):
@@ -1742,7 +1745,10 @@ class _Field:
         return self.aspect_value(FAT_CAL, system=system, direction=direction)
 
     def set_calculator(self, calculator, system='', direction='', protect=False):
-        return self.set_aspect(calculator, FAT_CAL, system=system, direction=direction, protect=protect)
+        self.set_aspect(calculator, FAT_CAL, system=system, direction=direction, protect=protect)
+        if aspect_key(FAT_VAL, system=system, direction=direction) in self._aspects:
+            self.del_aspect(FAT_VAL, system=system, direction=direction)
+        return self
 
     def clear_val(self, system='', direction=''):
         return self.aspect_value(FAT_CLEAR_VAL, system=system, direction=direction)
@@ -1785,17 +1791,13 @@ class _Field:
         return self.aspect_value(FAT_CHK, system=system, direction=direction)
 
     def set_validator(self, validator, system='', direction='', protect=False, root_rec=None, root_idx=()):
-        assert system != '', "_Field validator can only be set for a given/non-empty system"
+        assert callable(validator), "validator of Field {} for {}{} has to be callable".format(self, direction, system)
         self._ensure_system_value(system, direction=direction, root_rec=root_rec, root_idx=root_idx)
         return self.set_aspect(validator, FAT_CHK, system=system, direction=direction, protect=protect)
 
-    def validate(self, val, system, direction):
+    def validate(self, val, system='', direction=''):
         validator = self.validator(system=system, direction=direction)
-        if validator:
-            assert callable(validator), "validator of Field {} for {}{} is not callable".format(self, direction, system)
-            if not validator(self, val):
-                return False
-        return True
+        return not callable(validator) or validator(self, val)
 
     def append_record(self, system='', direction='', flex_sys_dir=True, root_rec=None, root_idx=()):
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)

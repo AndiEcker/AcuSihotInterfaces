@@ -8,7 +8,8 @@ from ae.sys_data import (
     field_name_idx_path, field_names_idx_paths, idx_path_field_name,
     Value, Values, Record, Records, _Field,
     compose_current_index, current_index, init_current_index, use_current_index, set_current_index,
-    FAT_VAL, FAD_FROM, FAD_ONTO, FAT_REC, FAT_RCX, ACTION_DELETE, FAT_IDX, FAT_CNV, IDX_PATH_SEP, ALL_FIELDS)
+    FAD_FROM, FAD_ONTO, FAT_VAL, FAT_REC, FAT_RCX, FAT_SQE, FAT_CAL, FAT_IDX, FAT_CNV,
+    ACTION_DELETE, IDX_PATH_SEP, ALL_FIELDS, CALLABLE_SUFFIX)
 from ae.validation import correct_email, correct_phone
 
 
@@ -351,10 +352,19 @@ class TestField:
 
     def test_repr(self):
         r = Record(fields=dict(test='xxx'), system='Xx', direction=FAD_ONTO)
+        f = r.node_child(('test',))
+
+        rep = repr(f)
+        assert 'test' in rep
+        assert 'xxx' in rep
+
         r.add_system_fields((('tsf', 'test'), ))
+        rep = repr(f)
+        assert 'test' in rep
+        assert 'xxx' in rep
+
         r.set_val('sys_val', 'tsf', system='Xx', direction=FAD_ONTO, flex_sys_dir=False)
         print(r)
-        f = r.node_child(('test',))
         rep = repr(f)
         assert 'tsf' in rep
         assert 'test' in rep
@@ -419,6 +429,92 @@ class TestField:
         test_name = 'test'
         f.set_name(test_name)
         assert f.name() == test_name
+
+    def test_set_and_del_user_aspect(self):
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
+        fat = 'Uak'
+        uav = 'user_aspect_val'
+        assert not f.aspect_exists(fat)
+        assert f.set_aspect(uav, fat) is f
+        assert f.aspect_exists(fat)
+        assert f.aspect_value(fat) == uav
+        assert f.set_aspect(None, fat)      # delete/remove aspect
+        assert not f.aspect_exists(fat)
+
+    def test_find_aspect_key(self):
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
+        assert f.find_aspect_key(FAT_REC) == FAT_REC
+        assert f.find_aspect_key('Uak') is None
+
+    def test_set_aspects(self):
+        def call_val(_field):
+            return 'new_val'
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
+
+        assert f.set_aspects(**{FAT_SQE + CALLABLE_SUFFIX: call_val}) is f
+        assert f.aspect_value(FAT_SQE) == 'new_val'
+
+        assert f.set_aspects(allow_values=True, **{FAT_VAL + CALLABLE_SUFFIX: call_val}) is f
+        assert f.aspect_value(FAT_VAL) == 'new_val'
+
+    def test_del_name(self):
+        r = Record(fields=dict(test='xxx'), system='Xx', direction=FAD_ONTO)
+        r.add_system_fields((('tsf', 'test'), ))
+        f = r.node_child(('test',))
+
+        assert f.name(system='Xx', direction=FAD_ONTO) == 'tsf'
+        assert f.del_name(system='Xx', direction=FAD_ONTO) is f
+        assert f.name(system='Xx', direction=FAD_ONTO) == 'test'
+        assert f.name(system='Xx', direction=FAD_ONTO, flex_sys_dir=False) is None
+
+    def test_calculator(self):
+        def call_val(_field):
+            return cal_val
+
+        cal_val = 'init_val'
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
+        assert f.set_calculator(call_val)
+        assert f.calculator() is call_val
+        assert f.val() == 'init_val'
+        cal_val = 'new_val'
+        assert f.val() == 'new_val'
+
+        cal_val = 'init_val'
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',), FAT_CAL: call_val})
+        assert f.calculator() is call_val
+        assert f.val() == 'init_val'
+        cal_val = 'new_val'
+        assert f.val() == 'new_val'
+
+    def test_filter(self):
+        def filter_callable(_field):
+            return filtered
+
+        filtered = True
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
+        assert f.set_filter(filter_callable) is f
+        assert f.filter() is filter_callable
+        assert f.filter()(f)
+        filtered = False
+        assert not f.filter()(f)
+
+    def test_sql_expression(self):
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
+        sqe = 'SELECT * from test'
+        assert f.set_sql_expression(sqe) is f
+        assert f.sql_expression() == sqe
+
+    def test_validator(self):
+        def validator_callable(_field, _val):
+            return is_valid
+
+        is_valid = True
+        f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
+        assert f.set_validator(validator_callable) is f
+        assert f.validator() is validator_callable
+        assert f.validate(None)
+        is_valid = False
+        assert not f.validate(None)
 
 
 class TestRecord:
@@ -1385,6 +1481,24 @@ class TestRecords:
         assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'), record_comparator=lambda r1, r2: ['AAA'])) == 9
 
         assert len(rs1.compare_records(rs2, ('sfnA', 'sfnB'), record_comparator=lambda r1, r2: ['AAA', 'BBB'])) == 17
+
+    def test_merge_records(self, rec_2f_2s_complete):
+        rs1 = Records()
+        assert len(rs1) == 0
+        rs2 = rec_2f_2s_complete.value('fnB').copy(deepness=-1, root_rec=rec_2f_2s_complete, root_idx=('fnB',))
+
+        assert rs1.merge_records(rs2) is rs1
+        assert len(rs1) == len(rs2)
+        assert rs1 == rs2
+
+        assert rs1.merge_records(rs2, ('sfnA', )) is rs1
+        assert len(rs1) == len(rs2)
+        assert rs1 == rs2
+
+        old_len = len(rs1)
+        rs2.set_val('changed_val', 0, 'sfnA')
+        assert rs1.merge_records(rs2, ('sfnA', )) is rs1
+        assert len(rs1) == old_len + 1
 
 
 class TestStructures:
