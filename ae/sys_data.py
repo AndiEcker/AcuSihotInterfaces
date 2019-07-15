@@ -8,7 +8,6 @@ import keyword
 from collections import OrderedDict
 from typing import Optional, Any, Union, List, Dict, Tuple, Iterable
 
-# data actions
 from ae.validation import correct_email, correct_phone
 from sys_data_ids import SYS_CRED_ITEMS, SYS_FEAT_ITEMS, DEBUG_LEVEL_DISABLED, SYS_CRED_NEEDED, DEBUG_LEVEL_VERBOSE
 

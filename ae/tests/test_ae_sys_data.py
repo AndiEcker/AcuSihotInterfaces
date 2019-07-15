@@ -2,15 +2,18 @@ import pytest
 import datetime
 from collections import OrderedDict
 
-from sys_data_ids import SDI_SH
 from ae.sys_data import (
     aspect_key, aspect_key_system, aspect_key_direction, deeper,
     field_name_idx_path, field_names_idx_paths, idx_path_field_name,
     Value, Values, Record, Records, _Field,
     compose_current_index, current_index, init_current_index, use_current_index, set_current_index,
     FAD_FROM, FAD_ONTO, FAT_VAL, FAT_REC, FAT_RCX, FAT_SQE, FAT_CAL, FAT_IDX, FAT_CNV,
-    ACTION_DELETE, IDX_PATH_SEP, ALL_FIELDS, CALLABLE_SUFFIX)
-from ae.validation import correct_email, correct_phone
+    ACTION_DELETE, IDX_PATH_SEP, ALL_FIELDS, CALLABLE_SUFFIX, System)
+
+
+SS = 'Ss'       # test system ids
+SX = 'Xx'
+SY = 'Yy'
 
 
 @pytest.fixture()
@@ -32,17 +35,17 @@ def rec_2f_2s_incomplete():     # two fields and only partly complete two sub-le
 
 class TestHelperMethods:
     def test_aspect_key(self):
-        assert aspect_key(FAT_VAL, SDI_SH, FAD_FROM) == FAT_VAL + FAD_FROM + SDI_SH
+        assert aspect_key(FAT_VAL, SS, FAD_FROM) == FAT_VAL + FAD_FROM + SS
 
     def test_aspect_key_system(self):
-        assert aspect_key_system(FAT_VAL + FAD_FROM + SDI_SH) == SDI_SH
-        assert aspect_key_system(FAT_VAL + FAD_ONTO + SDI_SH) == SDI_SH
-        assert aspect_key_system(FAT_VAL + SDI_SH) == SDI_SH
+        assert aspect_key_system(FAT_VAL + FAD_FROM + SS) == SS
+        assert aspect_key_system(FAT_VAL + FAD_ONTO + SS) == SS
+        assert aspect_key_system(FAT_VAL + SS) == SS
 
     def test_aspect_key_direction(self):
-        assert aspect_key_direction(FAT_VAL + FAD_FROM + SDI_SH) == FAD_FROM
-        assert aspect_key_direction(FAT_VAL + FAD_ONTO + SDI_SH) == FAD_ONTO
-        assert aspect_key_direction(FAT_VAL + SDI_SH) == ''
+        assert aspect_key_direction(FAT_VAL + FAD_FROM + SS) == FAD_FROM
+        assert aspect_key_direction(FAT_VAL + FAD_ONTO + SS) == FAD_ONTO
+        assert aspect_key_direction(FAT_VAL + SS) == ''
 
     def test_deeper(self):
         f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test', )})
@@ -212,7 +215,7 @@ class TestHelperMethods:
         assert r.current_idx is None
         assert r.set_current_system_index('TEST', SEP) is None
 
-        r = rec_2f_2s_complete.set_env(system='Xx', direction=FAD_ONTO)
+        r = rec_2f_2s_complete.set_env(system=SX, direction=FAD_ONTO)
         assert r.current_idx == 'fnA'
         assert r.value('fnB', flex_sys_dir=True).current_idx == 0
         r.add_system_fields((('A' + SEP + 'X', 'fnA'), ('B' + SEP + 'Y', 'fnB0sfnA'), ('B' + SEP + 'Z', 'fnB0sfnB')))
@@ -351,7 +354,7 @@ class TestField:
         assert isinstance(_Field(**{FAT_REC: Record(), FAT_RCX: ('test', )}), _Field)
 
     def test_repr(self):
-        r = Record(fields=dict(test='xxx'), system='Xx', direction=FAD_ONTO)
+        r = Record(fields=dict(test='xxx'), system=SX, direction=FAD_ONTO)
         f = r.node_child(('test',))
 
         rep = repr(f)
@@ -363,7 +366,7 @@ class TestField:
         assert 'test' in rep
         assert 'xxx' in rep
 
-        r.set_val('sys_val', 'tsf', system='Xx', direction=FAD_ONTO, flex_sys_dir=False)
+        r.set_val('sys_val', 'tsf', system=SX, direction=FAD_ONTO, flex_sys_dir=False)
         print(r)
         rep = repr(f)
         assert 'tsf' in rep
@@ -458,14 +461,14 @@ class TestField:
         assert f.aspect_value(FAT_VAL) == 'new_val'
 
     def test_del_name(self):
-        r = Record(fields=dict(test='xxx'), system='Xx', direction=FAD_ONTO)
+        r = Record(fields=dict(test='xxx'), system=SX, direction=FAD_ONTO)
         r.add_system_fields((('tsf', 'test'), ))
         f = r.node_child(('test',))
 
-        assert f.name(system='Xx', direction=FAD_ONTO) == 'tsf'
-        assert f.del_name(system='Xx', direction=FAD_ONTO) is f
-        assert f.name(system='Xx', direction=FAD_ONTO) == 'test'
-        assert f.name(system='Xx', direction=FAD_ONTO, flex_sys_dir=False) is None
+        assert f.name(system=SX, direction=FAD_ONTO) == 'tsf'
+        assert f.del_name(system=SX, direction=FAD_ONTO) is f
+        assert f.name(system=SX, direction=FAD_ONTO) == 'test'
+        assert f.name(system=SX, direction=FAD_ONTO, flex_sys_dir=False) is None
 
     def test_calculator(self):
         def call_val(_field):
@@ -516,6 +519,84 @@ class TestField:
         is_valid = False
         assert not f.validate(None)
 
+    def test_clear_leafs(self):
+        r = Record(fields=dict(test='xxx'), system=SX, direction=FAD_ONTO)
+        f = r.node_child(('test',))
+
+        r.add_system_fields((('tsf', 'test', 'clear_val'),))
+        assert f.val() == 'clear_val'
+
+        assert f.clear_leafs(system=None, direction=None) is f
+        assert f.val() == 'clear_val'
+
+        f.set_val('new_val')
+        assert f.clear_leafs(system=None, direction=None) is f
+        assert f.val() == 'clear_val'
+
+        f.set_val('new_val', system=SX, direction=FAD_ONTO, flex_sys_dir=False)
+        assert f.clear_leafs(system=None, direction=None) is f
+        assert f.val(system=SX, direction=FAD_ONTO) == 'clear_val'
+
+    def test_pull(self):
+        r = Record(fields=dict(test='xxx'), system=SX, direction=FAD_FROM)
+        f = r.node_child(('test',))
+        r.add_system_fields((('tsf', 'test', 'init_val'),))
+
+        f.set_val('sys_val', system=SX, direction=FAD_FROM, flex_sys_dir=False)
+        assert f.pull(SX, r, ('test', )) is f
+        assert f.val() == 'sys_val'
+
+        f.set_val(None, system=SX, direction=FAD_FROM, flex_sys_dir=False)
+        assert f.pull(SX, r, ('test', )) is f
+        assert f.val() == ''
+
+    def test_push(self):
+        r = Record(fields=dict(test='xxx'), system=SX, direction=FAD_ONTO)
+        f = r.node_child(('test',))
+        r.add_system_fields((('tsf', 'test', 'init_val'),))
+        f.set_val('sys_val', system=SX, direction=FAD_ONTO, flex_sys_dir=False)
+
+        f.set_val('new_val')
+        assert f.push(SX, r, ('test', )) is f
+        assert f.val(system=SX, direction=FAD_ONTO, flex_sys_dir=False) == 'new_val'
+
+        f.set_val(None)
+        assert f.push(SX, r, ('test', )) is f
+        assert f.val(system=SX, direction=FAD_ONTO, flex_sys_dir=False) == ''
+
+    def test_system_record_val(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete.set_env(system=SX, direction=FAD_FROM)
+        f = r.node_child(('fnA',))
+        r.add_system_fields((('fnAXx', 'fnA', 'Av'), ('fnBXx', 'fnB'), ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB')))
+
+        assert f.system_record_val == f.srv
+        assert f.srv() == 'Av'
+        assert f.srv('fnA') == 'Av'
+        assert f.srv('fnB') == r.val('fnB')
+        assert f.srv('fnB', 0, 'sfnA') == 'sfA1v'
+        assert f.srv('fnB', 1, 'sfnA') == 'sfA2v'
+
+    def test_in_actions(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete.set_env(system=SX, direction=FAD_FROM)
+        f = r.node_child(('fnA',))
+
+        assert f.in_actions == f.ina
+
+        assert not f.ina(ACTION_DELETE)
+
+        r.set_env(action=ACTION_DELETE)
+        assert f.ina(ACTION_DELETE)
+
+    def test_parent(self, rec_2f_2s_complete):
+        r = rec_2f_2s_complete
+        f = r.node_child(('fnB', 1, 'sfnB'))
+
+        assert f.parent() is r.node_child(('fnB', 1))
+        assert f.parent(value_types=(Record, )) is r.node_child(('fnB', 1))
+        assert f.parent(value_types=(Records, )) is r.node_child(('fnB', )).value()
+        assert r.node_child(('fnB', )).parent() is r
+        assert r.node_child(('fnA', )).parent() is r
+
 
 class TestRecord:
     def test_typing(self):
@@ -540,13 +621,13 @@ class TestRecord:
         assert r.get('test').val() == 'xxx'
 
     def test_field_lookup_sys_name(self):
-        r = Record(fields=dict(test='xxx'), system='Xx', direction=FAD_ONTO)
+        r = Record(fields=dict(test='xxx'), system=SX, direction=FAD_ONTO)
         r.add_system_fields((('tsf', 'test'), ))
 
         field = r.node_child(('test', ))
         assert field
         assert field.root_idx() == ('test', )
-        assert field.root_idx(system='Xx', direction=FAD_ONTO) == ('tsf', )
+        assert field.root_idx(system=SX, direction=FAD_ONTO) == ('tsf', )
 
         assert r['tsf'] == 'xxx'
         assert r.val('tsf') == 'xxx'
@@ -572,30 +653,30 @@ class TestRecord:
         r = Record()
         r.set_val('fAv1', 'fnA', 1, 'sfnA')
         assert r.val('fnA', 1, 'sfnA') == 'fAv1'
-        r.set_val('fAvX1', 'fnA', 1, 'sfnA', system='Xx')
-        assert r.val('fnA', 1, 'sfnA', system='Xx') == 'fAvX1'
+        r.set_val('fAvX1', 'fnA', 1, 'sfnA', system=SX)
+        assert r.val('fnA', 1, 'sfnA', system=SX) == 'fAvX1'
         assert r.val('fnA', 1, 'sfnA') == 'fAvX1'
 
         r.set_val('fAv', 'fnA', 0, 'sfnA')
         assert r.val('fnA', 0, 'sfnA') == 'fAv'
-        r.set_val('fAvX', 'fnA', 0, 'sfnA', system='Xx')
-        assert r.val('fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        r.set_val('fAvX', 'fnA', 0, 'sfnA', system=SX)
+        assert r.val('fnA', 0, 'sfnA', system=SX) == 'fAvX'
         assert r.val('fnA', 0, 'sfnA') == 'fAvX'
 
     def test_set_val_exact_sys(self):
         r = Record()
         r.set_val('fAv', 'fnA', 0, 'sfnA')
         assert r.val('fnA', 0, 'sfnA') == 'fAv'
-        r.set_val('fAvX', 'fnA', 0, 'sfnA', flex_sys_dir=False, system='Xx')
-        assert r.val('fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        r.set_val('fAvX', 'fnA', 0, 'sfnA', flex_sys_dir=False, system=SX)
+        assert r.val('fnA', 0, 'sfnA', system=SX) == 'fAvX'
         assert r.val('fnA', 0, 'sfnA') == 'fAv'
 
     def test_set_val_sys_converter(self):
         r = Record()
         r.set_val('fAv', 'fnA', 0, 'sfnA')
         assert r.val('fnA', 0, 'sfnA') == 'fAv'
-        r.set_val('fAvX', 'fnA', 0, 'sfnA', system='Xx', converter=lambda f, v: v)
-        assert r.val('fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        r.set_val('fAvX', 'fnA', 0, 'sfnA', system=SX, converter=lambda f, v: v)
+        assert r.val('fnA', 0, 'sfnA', system=SX) == 'fAvX'
         assert r.val('fnA', 0, 'sfnA') == 'fAv'
 
     def test_val_use_curr_idx(self):
@@ -844,7 +925,7 @@ class TestRecord:
             _ = r['fnMissing']
 
     def test_node_child(self, rec_2f_2s_incomplete):
-        r = Record(system='Xx', direction='From')
+        r = Record(system=SX, direction='From')
         assert r.node_child(()) is None
         with pytest.raises(AssertionError):
             r.node_child((), moan=True)
@@ -861,41 +942,41 @@ class TestRecord:
         r[('fnB', 1, 'sfnB')] = 11
         assert r.val('fnB', 1, 'sfnB') == 11
         r.field_items = True
-        r[('fnB', 1, 'sfnB')].set_val(33, system='Xx', direction='From', flex_sys_dir=False)
-        r[('fnB', 1, 'sfnB')].set_name('sfnB_From_Xx', system='Xx', direction='From')
+        r[('fnB', 1, 'sfnB')].set_val(33, system=SX, direction='From', flex_sys_dir=False)
+        r[('fnB', 1, 'sfnB')].set_name('sfnB_From_Xx', system=SX, direction='From')
         assert r[('fnB', 1, 'sfnB')].val() == 11
-        assert r[('fnB', 1, 'sfnB')].val(system='Xx') == 33
-        assert r[('fnB', 1, 'sfnB')].val(system='Xx', direction='From') == 33
-        assert r.node_child(('fnB', 1, 'sfnB')).val(system='Xx') == 33
-        assert r.node_child(('fnB', 1, 'sfnB')).val(system='Xx', direction=None) == 33
-        assert r.node_child('fnB1sfnB').val(system='Xx') == 33
-        assert r.node_child('fnB1sfnB_From_Xx').val(system='Xx') == 33
-        assert r.node_child('fnB1sfnB_From_Xx').val(system='Xx') == 33
+        assert r[('fnB', 1, 'sfnB')].val(system=SX) == 33
+        assert r[('fnB', 1, 'sfnB')].val(system=SX, direction='From') == 33
+        assert r.node_child(('fnB', 1, 'sfnB')).val(system=SX) == 33
+        assert r.node_child(('fnB', 1, 'sfnB')).val(system=SX, direction=None) == 33
+        assert r.node_child('fnB1sfnB').val(system=SX) == 33
+        assert r.node_child('fnB1sfnB_From_Xx').val(system=SX) == 33
+        assert r.node_child('fnB1sfnB_From_Xx').val(system=SX) == 33
 
         # replace Records/Record children with Record child in fnB
-        r.set_env(system='Xx')
+        r.set_env(system=SX)
         sr = Record(fields=dict(sfnB_rec=66), field_items=True)
         # with pytest.raises(AssertionError):
-        #     r['fnB'].set_value(sr, system='Xx')
+        #     r['fnB'].set_value(sr, system=SX)
         with pytest.raises(AssertionError):
             r['fnB'].set_value(sr, protect=True)
         r['fnB'].set_value(sr)
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx') == 66
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction=None) == 66
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction='') == 66
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction=FAD_FROM) == 66
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction=FAD_ONTO) == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX) == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction=None) == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction='') == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction=FAD_FROM) == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction=FAD_ONTO) == 66
         with pytest.raises(AssertionError):
-            assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction='test') == 66
+            assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction='test') == 66
 
-        r.set_env(system='Xx', direction='From')
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx') == 66
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction=None) == 66
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction='') == 66
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction=FAD_FROM) == 66
-        assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction=FAD_ONTO) == 66
+        r.set_env(system=SX, direction='From')
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX) == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction=None) == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction='') == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction=FAD_FROM) == 66
+        assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction=FAD_ONTO) == 66
         with pytest.raises(AssertionError):
-            assert r.node_child(('fnB', 'sfnB_rec')).val(system='Xx', direction='test') == 66
+            assert r.node_child(('fnB', 'sfnB_rec')).val(system=SX, direction='test') == 66
 
     def test_copy(self):
         r = Record()
@@ -930,55 +1011,55 @@ class TestRecord:
 
     def test_pull(self):
         r = Record(fields=dict(fnA=-1), field_items=True)
-        r['fnA'].set_name('fnA_systemXx', system='Xx', direction=FAD_FROM)
-        r['fnA'].set_val('33', system='Xx', direction=FAD_FROM, converter=lambda fld, val: int(val))
-        r.pull('Xx')
+        r['fnA'].set_name('fnA_systemXx', system=SX, direction=FAD_FROM)
+        r['fnA'].set_val('33', system=SX, direction=FAD_FROM, converter=lambda fld, val: int(val))
+        r.pull(SX)
         assert r.val('fnA') == 33
         assert r['fnA'].val() == 33
-        assert r['fnA'].val(system='Xx', direction=FAD_FROM) == '33'
-        assert r['fnA'].val(system='Xx') == '33'
+        assert r['fnA'].val(system=SX, direction=FAD_FROM) == '33'
+        assert r['fnA'].val(system=SX) == '33'
 
-        r.set_val('sfnBv', 'fnB', 0, 'sfnB', system='Xx', direction=FAD_FROM)
-        r.pull('Xx')
+        r.set_val('sfnBv', 'fnB', 0, 'sfnB', system=SX, direction=FAD_FROM)
+        r.pull(SX)
         assert r.val('fnB0sfnB') == 'sfnBv'
         assert r['fnB0sfnB'].val() == 'sfnBv'
-        assert r['fnB0sfnB'].val(system='Xx', direction=FAD_FROM) == 'sfnBv'
-        assert r['fnB0sfnB'].val(system='Xx') == 'sfnBv'
+        assert r['fnB0sfnB'].val(system=SX, direction=FAD_FROM) == 'sfnBv'
+        assert r['fnB0sfnB'].val(system=SX) == 'sfnBv'
 
     def test_push(self):
         r = Record(fields=dict(fnA=33), field_items=True)
-        r['fnA'].set_name('fnA_systemXx', system='Xx', direction=FAD_ONTO)
-        r['fnA'].set_converter(lambda fld, val: str(val), system='Xx', direction=FAD_ONTO)
-        r.push('Xx')
+        r['fnA'].set_name('fnA_systemXx', system=SX, direction=FAD_ONTO)
+        r['fnA'].set_converter(lambda fld, val: str(val), system=SX, direction=FAD_ONTO)
+        r.push(SX)
         assert r.val('fnA') == 33
         assert r['fnA'].val() == 33
-        assert r['fnA'].val(system='Xx', direction=FAD_ONTO) == '33'
-        assert r['fnA'].val(system='Xx') == '33'
+        assert r['fnA'].val(system=SX, direction=FAD_ONTO) == '33'
+        assert r['fnA'].val(system=SX) == '33'
 
     def test_set_env(self):
-        r = Record().set_env(system='Xx', direction=FAD_ONTO, action='ACTION')
-        assert r.system == 'Xx'
+        r = Record().set_env(system=SX, direction=FAD_ONTO, action='ACTION')
+        assert r.system == SX
         assert r.direction == FAD_ONTO
         assert r.action == 'ACTION'
     
     def test_add_system_fields_basic(self, rec_2f_2s_complete):
-        r = rec_2f_2s_complete.set_env(system='Xx', direction=FAD_FROM)
+        r = rec_2f_2s_complete.set_env(system=SX, direction=FAD_FROM)
         assert len(r) == 2
         assert len(list(r.leafs())) == 5
 
         r.add_system_fields((('fnAXx', 'fnA'), ('sfnX1Xx', 'fnX0sfnX1')))
         assert len(r) == 3
         assert len(list(r.leafs())) == 6
-        assert r.node_child('fnA').name(system='Xx', direction=FAD_FROM) == 'fnAXx'
-        assert r.node_child('fnB0sfnA').name(system='Xx', direction=FAD_FROM) == 'sfnA'
-        assert r.node_child('fnB0sfnB').name(system='Xx', direction=FAD_FROM) == 'sfnB'
-        assert r.node_child('fnX0sfnX1').name(system='Xx', direction=FAD_FROM) == 'sfnX1Xx'
+        assert r.node_child('fnA').name(system=SX, direction=FAD_FROM) == 'fnAXx'
+        assert r.node_child('fnB0sfnA').name(system=SX, direction=FAD_FROM) == 'sfnA'
+        assert r.node_child('fnB0sfnB').name(system=SX, direction=FAD_FROM) == 'sfnB'
+        assert r.node_child('fnX0sfnX1').name(system=SX, direction=FAD_FROM) == 'sfnX1Xx'
 
         r.add_system_fields((('sfnAXx', 'fnB0sfnA'), ('sfnX2Xx', 'fnX0sfnX2')), extend=False)
         assert len(r) == 3
         assert len(list(r.leafs())) == 6
-        assert r.node_child('fnB0sfnA').name(system='Xx', direction=FAD_FROM) == 'sfnAXx'
-        assert r.node_child('fnB0sfnB').name(system='Xx', direction=FAD_FROM) == 'sfnB'
+        assert r.node_child('fnB0sfnA').name(system=SX, direction=FAD_FROM) == 'sfnAXx'
+        assert r.node_child('fnB0sfnB').name(system=SX, direction=FAD_FROM) == 'sfnB'
         assert r.node_child('fnX0sfnX2') is None
 
     def test_add_system_fields_complex(self):
@@ -1003,7 +1084,7 @@ class TestRecord:
             ('/F', None, None,
              lambda f: f.ina(ACTION_DELETE) or f.rfv('Cnt') <= 0),
         )
-        sys_r = Record(system=SDI_SH, direction=FAD_ONTO)
+        sys_r = Record(system=SS, direction=FAD_ONTO)
         sys_r.add_system_fields(d)
         assert sys_r.val('Cnt') == ''
 
@@ -1012,33 +1093,33 @@ class TestRecord:
         for k in data_r.leaf_indexes():
             if k[0] in sys_r:
                 sys_r.set_val(data_r.val(k), *k, root_rec=data_r)
-        sys_r.push(SDI_SH)
+        sys_r.push(SS)
         assert sys_r.val('Cnt') == 2
         assert data_r.val('fn', 0, 'PersSurname') is None
         assert sys_r.val('fn', 0, 'PersSurname') == 'Adult 0'
-        assert sys_r.val('fn', 0, 'PersSurname', system=SDI_SH, direction=FAD_ONTO) == 'Adult 0'
+        assert sys_r.val('fn', 0, 'PersSurname', system=SS, direction=FAD_ONTO) == 'Adult 0'
 
         assert data_r.val('fn', 0, 'PersForename') == 'John'
         assert sys_r.val('fn', 0, 'PersForename') == 'John'
-        assert sys_r.val('fn', 0, 'PersForename', system=SDI_SH, direction=FAD_ONTO) == 'John'
+        assert sys_r.val('fn', 0, 'PersForename', system=SS, direction=FAD_ONTO) == 'John'
 
         sys_r.set_val(0, 'Cnt')
-        assert sys_r.val('fn', 0, 'PersSurname', system=SDI_SH, direction=FAD_ONTO) == 'Child 1'
+        assert sys_r.val('fn', 0, 'PersSurname', system=SS, direction=FAD_ONTO) == 'Child 1'
 
         sys_r.set_val('Johnson', 'fn', 0, 'PersSurname')
         assert sys_r.val('fn', 0, 'PersSurname') == 'Child 1'   # != changed sys val because of flex_sys_dir=True
         sys_r.set_val('Johnson', 'fn', 0, 'PersSurname', flex_sys_dir=False)
         assert sys_r.val('fn', 0, 'PersSurname') == 'Johnson'   # .. now we are having a separate sys val
         sys_r.field_items = True
-        sys_r['fn0PersSurname'].del_aspect(FAT_VAL, system=SDI_SH, direction=FAD_ONTO)
+        sys_r['fn0PersSurname'].del_aspect(FAT_VAL, system=SS, direction=FAD_ONTO)
         assert sys_r.val('fn', 0, 'PersSurname') == 'Child 1'   # .. after delete of sys val: get main val/calculator
 
         sys_r.set_val(123456, 'fn0Id')
-        sys_r.push(SDI_SH)
+        sys_r.push(SS)
 
     def test_collect_system_fields(self):
         SEP = '.'
-        r = Record(system='Xx', direction=FAD_ONTO)
+        r = Record(system=SX, direction=FAD_ONTO)
         r.add_system_fields((('Sys_Fld', 'Fld'),))
         csf = r.collect_system_fields(('Invalid_Fld',), SEP)
         assert not csf
@@ -1046,7 +1127,7 @@ class TestRecord:
         assert len(csf) == 1
         assert isinstance(csf[0], _Field)
         assert csf[0].name() == 'Fld'
-        assert csf[0].name(system='Xx', direction=FAD_ONTO) == 'Sys_Fld'
+        assert csf[0].name(system=SX, direction=FAD_ONTO) == 'Sys_Fld'
 
     def test_compare_leafs(self):
         r = Record(fields=dict(fnA=33))
@@ -1105,7 +1186,7 @@ class TestRecord:
         assert r.leaf_names(exclude_fields=('fnA', 'sfnA'), name_type='F') == (('fnB', 0, 'sfnB'),)
 
         # repeat some tests - now with system field names added
-        r.set_env(system='Xx', direction=FAD_FROM)
+        r.set_env(system=SX, direction=FAD_FROM)
         r.add_system_fields((('fnAXx', 'fnA'), ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB')))
         assert len(r.leaf_names()) == 3
         assert r.leaf_names(field_names=('fnA',)) == ('fnA',)
@@ -1200,51 +1281,51 @@ class TestRecord:
 
     def test_sql_columns(self, rec_2f_2s_complete):
         r = Record()
-        assert r.sql_columns(SDI_SH) == list()
+        assert r.sql_columns(SS) == list()
 
         r = rec_2f_2s_complete
-        assert r.sql_columns(SDI_SH) == list()
+        assert r.sql_columns(SS) == list()
 
         r = rec_2f_2s_complete.copy()
-        r.set_env(system=SDI_SH, direction=FAD_ONTO).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
-        assert r.sql_columns(SDI_SH) == list()
+        r.set_env(system=SS, direction=FAD_ONTO).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SS) == list()
 
         r = rec_2f_2s_complete.copy()
-        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
-        assert r.sql_columns(SDI_SH) == ['DbCol1', 'DbCol2']
+        r.set_env(system=SS, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SS) == ['DbCol1', 'DbCol2']
 
         r = rec_2f_2s_complete.copy()
-        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
-        assert r.sql_columns(SDI_SH, col_names=('DbCol2', )) == ['DbCol2']
+        r.set_env(system=SS, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_columns(SS, col_names=('DbCol2',)) == ['DbCol2']
 
     def test_sql_select(self, rec_2f_2s_complete):
         r = Record()
-        assert r.sql_select(SDI_SH) == list()
+        assert r.sql_select(SS) == list()
 
         r = rec_2f_2s_complete
-        assert r.sql_select(SDI_SH) == list()
+        assert r.sql_select(SS) == list()
 
         r = rec_2f_2s_complete.copy()
-        r.set_env(system=SDI_SH, direction=FAD_ONTO).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
-        assert r.sql_select(SDI_SH) == list()
+        r.set_env(system=SS, direction=FAD_ONTO).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SS) == list()
 
         r = rec_2f_2s_complete.copy()
-        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
-        assert r.sql_select(SDI_SH) == ['DbCol1', 'DbCol2']
+        r.set_env(system=SS, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SS) == ['DbCol1', 'DbCol2']
 
         r = rec_2f_2s_complete.copy()
-        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
-        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['DbCol2']
+        r.set_env(system=SS, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        assert r.sql_select(SS, col_names=('DbCol2',)) == ['DbCol2']
 
         r = rec_2f_2s_complete.copy()
-        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        r.set_env(system=SS, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
         r.node_child('fnX').set_sql_expression('db_expr')
-        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['DbCol2']
+        assert r.sql_select(SS, col_names=('DbCol2',)) == ['DbCol2']
 
         r = rec_2f_2s_complete.copy()
-        r.set_env(system=SDI_SH, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
-        r.node_child('fnX').set_sql_expression('db_expr', system=SDI_SH, direction=FAD_FROM)
-        assert r.sql_select(SDI_SH, col_names=('DbCol2',)) == ['db_expr AS DbCol2']
+        r.set_env(system=SS, direction=FAD_FROM).add_system_fields((('DbCol1', 'fnA'), ('DbCol2', 'fnX')))
+        r.node_child('fnX').set_sql_expression('db_expr', system=SS, direction=FAD_FROM)
+        assert r.sql_select(SS, col_names=('DbCol2',)) == ['db_expr AS DbCol2']
 
     def test_to_dict(self, rec_2f_2s_complete):
         r = Record()
@@ -1264,7 +1345,7 @@ class TestRecord:
         assert r.to_dict(put_system_val=False, key_type=None) == dict(sfnA='sfA2v', sfnB='sfB2v')
         assert r.to_dict(put_empty_val=True, key_type=None) == dict(fnA='', sfnA='sfA2v', sfnB='sfB2v')
 
-        r = rec_2f_2s_complete.copy().set_env(system='Xx', direction=FAD_ONTO)
+        r = rec_2f_2s_complete.copy().set_env(system=SX, direction=FAD_ONTO)
         r.add_system_fields((('fnAX', 'fnA'), ('sfnAX', 'fnB0sfnA'), ('sfnBX', 'fnB0sfnB')))
         assert r.to_dict() == dict(fnB0sfnAX='sfA1v', fnB0sfnBX='sfB1v', fnB1sfnAX='sfA2v', fnB1sfnBX='sfB2v')
         assert r.to_dict(use_system_key=False) == dict(fnB0sfnA='sfA1v', fnB0sfnB='sfB1v',
@@ -1322,24 +1403,24 @@ class TestRecords:
         rs = Records()
         rs.set_val('fAv', 0, 'fnA', 0, 'sfnA')
         assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
-        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', system='Xx')
-        assert rs.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', system=SX)
+        assert rs.val(0, 'fnA', 0, 'sfnA', system=SX) == 'fAvX'
         assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAvX'
 
     def test_set_val_exact_sys(self):
         rs = Records()
         rs.set_val('fAv', 0, 'fnA', 0, 'sfnA')
         assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
-        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', flex_sys_dir=False, system='Xx')
-        assert rs.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', flex_sys_dir=False, system=SX)
+        assert rs.val(0, 'fnA', 0, 'sfnA', system=SX) == 'fAvX'
         assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
 
     def test_set_val_sys_converter(self):
         rs = Records()
         rs.set_val('fAv', 0, 'fnA', 0, 'sfnA')
         assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
-        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', system='Xx', converter=lambda f, v: v)
-        assert rs.val(0, 'fnA', 0, 'sfnA', system='Xx') == 'fAvX'
+        rs.set_val('fAvX', 0, 'fnA', 0, 'sfnA', system=SX, converter=lambda f, v: v)
+        assert rs.val(0, 'fnA', 0, 'sfnA', system=SX) == 'fAvX'
         assert rs.val(0, 'fnA', 0, 'sfnA') == 'fAv'
 
     def test_val_get(self):
@@ -1551,12 +1632,12 @@ class TestStructures:
         assert len(leafs) == 3
         leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
         assert len(leafs) == 3
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO))
         assert len(leafs) == 3
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO, flex_sys_dir=False))
         assert len(leafs) == 0
 
-        r.set_env(system='Xx', direction=FAD_ONTO)
+        r.set_env(system=SX, direction=FAD_ONTO)
         leafs = list(r.leafs())
         assert len(leafs) == 3
         leafs = list(r.leafs(flex_sys_dir=False))
@@ -1565,9 +1646,9 @@ class TestStructures:
         assert len(leafs) == 3
         leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
         assert len(leafs) == 3
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO))
         assert len(leafs) == 3
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO, flex_sys_dir=False))
         assert len(leafs) == 0
 
         r.add_system_fields((('fnAXx', 'fnA'), ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB')))
@@ -1579,9 +1660,9 @@ class TestStructures:
         assert len(leafs) == 5
         leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
         assert len(leafs) == 5
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO))
         assert len(leafs) == 5
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO, flex_sys_dir=False))
         assert len(leafs) == 5
 
         r = rec_2f_2s_complete
@@ -1593,12 +1674,12 @@ class TestStructures:
         assert len(leafs) == 5
         leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
         assert len(leafs) == 5
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO))
         assert len(leafs) == 5
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO, flex_sys_dir=False))
         assert len(leafs) == 0
 
-        r.set_env(system='Xx', direction=FAD_ONTO)
+        r.set_env(system=SX, direction=FAD_ONTO)
         leafs = list(r.leafs())
         assert len(leafs) == 5
         leafs = list(r.leafs(flex_sys_dir=False))
@@ -1607,9 +1688,9 @@ class TestStructures:
         assert len(leafs) == 5
         leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
         assert len(leafs) == 5
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO))
         assert len(leafs) == 5
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO, flex_sys_dir=False))
         assert len(leafs) == 0
 
         r.add_system_fields((('fnAXx', 'fnA'), ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB')))
@@ -1621,9 +1702,9 @@ class TestStructures:
         assert len(leafs) == 5
         leafs = list(r.leafs(system='', direction='', flex_sys_dir=False))
         assert len(leafs) == 5
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO))
         assert len(leafs) == 5
-        leafs = list(r.leafs(system='Xx', direction=FAD_ONTO, flex_sys_dir=False))
+        leafs = list(r.leafs(system=SX, direction=FAD_ONTO, flex_sys_dir=False))
         assert len(leafs) == 5
 
     def test_leaf_indexes(self, rec_2f_2s_incomplete, rec_2f_2s_complete):
@@ -1705,34 +1786,34 @@ class TestCopy:
 class TestSystemDirections:
     def test_multi_sys_name_rec(self, rec_2f_2s_complete):
         r = rec_2f_2s_complete
-        rX = r.copy().set_env(system='Xx', direction=FAD_FROM)
+        rX = r.copy().set_env(system=SX, direction=FAD_FROM)
         rX.add_system_fields((('fnAXx', 'fnA'), ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB')))
-        rY = r.copy().set_env(system='Yy', direction=FAD_ONTO)
+        rY = r.copy().set_env(system=SY, direction=FAD_ONTO)
         rY.add_system_fields((('fnAYy', 'fnA'), ('sfnAYy', 'fnB0sfnA'), ('sfnBYy', 'fnB0sfnB')))
         for idx in r.leaf_indexes():
             if len(idx) > 1 and idx[1] > 0:
                 continue
-            assert r.node_child(idx).name(system='Xx') == r.node_child(idx).name() + 'Xx'
-            assert r.node_child(idx).name(system='Yy') == r.node_child(idx).name() + 'Yy'
+            assert r.node_child(idx).name(system=SX) == r.node_child(idx).name() + SX
+            assert r.node_child(idx).name(system=SY) == r.node_child(idx).name() + SY
 
     def test_multi_sys_val_rec(self, rec_2f_2s_complete):
         r = rec_2f_2s_complete
-        rX = r.copy().set_env(system='Xx', direction=FAD_FROM)
+        rX = r.copy().set_env(system=SX, direction=FAD_FROM)
         rX.add_system_fields((('fnAXx', 'fnA', 0),
                               ('sfnAXx', 'fnB0sfnA', 1), ('sfnBXx', 'fnB0sfnB', 2),
                               ('sfnAXx', 'fnB1sfnA', 3), ('sfnBXx', 'fnB1sfnB', 4)))
         for i, idx in enumerate(r.leaf_indexes()):
             assert r[idx] == i
-            assert r.val(*idx, system='Xx') == i
+            assert r.val(*idx, system=SX) == i
 
-        rY = r.copy().set_env(system='Yy', direction=FAD_ONTO)
+        rY = r.copy().set_env(system=SY, direction=FAD_ONTO)
         rY.add_system_fields((('fnAXx', 'fnA', 5),
                               ('sfnAXx', 'fnB0sfnA', 6), ('sfnBXx', 'fnB0sfnB', 7),
                               ('sfnAXx', 'fnB1sfnA', 8), ('sfnBXx', 'fnB1sfnB', 9)))
         for i, idx in enumerate(r.leaf_indexes()):
             assert r[idx] == i + 5
-            assert r.val(*idx, system='Xx') == i + 5
-            assert r.val(*idx, system='Yy') == i + 5
+            assert r.val(*idx, system=SX) == i + 5
+            assert r.val(*idx, system=SY) == i + 5
 
     def test_multi_sys_converter_rec(self, rec_2f_2s_complete):
         # PyCharm doesn't like assignments of lambda to vars: cnv = lambda f, v: v + 10
@@ -1740,7 +1821,7 @@ class TestSystemDirections:
             return v + 10
 
         r = rec_2f_2s_complete
-        rX = r.copy().set_env(system='Xx', direction=FAD_FROM)
+        rX = r.copy().set_env(system=SX, direction=FAD_FROM)
         rX.add_system_fields((('fnAXx', 'fnA', 0, cnv),
                               ('sfnAXx', 'fnB0sfnA', 1, cnv), ('sfnBXx', 'fnB0sfnB', 2, cnv),
                               ('sfnAXx', 'fnB1sfnA', 3, cnv), ('sfnBXx', 'fnB1sfnB', 4, cnv)),
@@ -1748,10 +1829,10 @@ class TestSystemDirections:
         for i, idx in enumerate(r.leaf_indexes()):
             assert isinstance(r.val(*idx), str)
             assert r.val(*idx) in ('', 'sfA1v', 'sfA2v', 'sfB1v', 'sfB2v')
-            assert r.val(*idx, system='Xx') == i
-            r.node_child(idx).pull('Xx', r, idx)
+            assert r.val(*idx, system=SX) == i
+            r.node_child(idx).pull(SX, r, idx)
             assert r.val(*idx) == i + 10
-            assert r.val(*idx, system='Xx') == i
+            assert r.val(*idx, system=SX) == i
 
     def test_multi_sys_dir_converter_rec(self, rec_2f_2s_complete):
         # PyCharm doesn't like assignments of lambda to vars: cnv = lambda f, v: v + 10
@@ -1759,7 +1840,7 @@ class TestSystemDirections:
             return v + 10
 
         r = rec_2f_2s_complete
-        rX = r.copy().set_env(system='Xx', direction=FAD_FROM)
+        rX = r.copy().set_env(system=SX, direction=FAD_FROM)
         rX.add_system_fields((('fnAXx', 'fnA', 0, cnv),
                               ('sfnAXx', 'fnB0sfnA', 1, cnv), ('sfnBXx', 'fnB0sfnB', 2, cnv),
                               ('sfnAXx', 'fnB1sfnA', 3, cnv), ('sfnBXx', 'fnB1sfnB', 4, cnv)),
@@ -1767,19 +1848,19 @@ class TestSystemDirections:
         for i, idx in enumerate(r.leaf_indexes()):
             assert isinstance(r.val(*idx), str)
             assert r.val(*idx) in ('', 'sfA1v', 'sfA2v', 'sfB1v', 'sfB2v')
-            assert r.val(*idx, system='Xx') == i
-            r.node_child(idx).pull('Xx', r, idx)
+            assert r.val(*idx, system=SX) == i
+            r.node_child(idx).pull(SX, r, idx)
             assert r.val(*idx) == i + 10
-            assert r.val(*idx, system='Xx') == i
+            assert r.val(*idx, system=SX) == i
 
     def test_shorter_sys_idx_path(self, rec_2f_2s_complete):
         r = rec_2f_2s_complete
         str_val = "KEY1=val1,KEY2=val2,RCI=val3"
-        rX = r.copy().set_env(system='Xx', direction=FAD_FROM)
+        rX = r.copy().set_env(system=SX, direction=FAD_FROM)
         rX.add_system_fields((('fnAXx', 'fnA'),
                               ('fnBXx', 'fnB', str_val, lambda f, v: f.string_to_records(v, ['sfnA', 'sfnB']))),
                              sys_fld_indexes={FAT_IDX + FAD_FROM: 0, FAT_IDX: 1, FAT_VAL: 2, FAT_CNV + FAD_FROM: 3})
-        r.pull('Xx')
+        r.pull(SX)
         assert r.val('fnB', 0, 'sfnA') == 'KEY1'
         assert r.val('fnB', 0, 'sfnB') == 'val1'
         assert r.val('fnB', 1, 'sfnA') == 'KEY2'
@@ -1787,12 +1868,12 @@ class TestSystemDirections:
         assert r.val('fnB', 2, 'sfnA') == 'RCI'
         assert r.val('fnB', 2, 'sfnB') == 'val3'
 
-        rY = r.copy().set_env(system='Yy', direction=FAD_ONTO)
+        rY = r.copy().set_env(system=SY, direction=FAD_ONTO)
         rY.add_system_fields((('fnAXx', 'fnA'),
                               ('fnBXx', 'fnB',
                                lambda _, val: ",".join(k + "=" + v for rec in val for k, v in rec.items()))),
                              sys_fld_indexes={FAT_IDX + FAD_ONTO: 0, FAT_IDX: 1, FAT_CNV + FAD_ONTO: 3})
-        r.pull('Xx')
+        r.pull(SX)
         assert r.val('fnB', 0, 'sfnA') == 'KEY1'
         assert r.val('fnB', 0, 'sfnB') == 'val1'
         assert r.val('fnB', 1, 'sfnA') == 'KEY2'
@@ -1818,12 +1899,12 @@ class TestSetVal:
 
     def test_set_field_sys_val(self, rec_2f_2s_complete):
         r = rec_2f_2s_complete
-        rX = r.copy().set_env(system='Xx', direction=FAD_FROM)
+        rX = r.copy().set_env(system=SX, direction=FAD_FROM)
         rX.add_system_fields((('fnAXx', 'fnA'),
                               ('sfnAXx', 'fnB0sfnA'), ('sfnBXx', 'fnB0sfnB'),
                               ('sfnAXx', 'fnB1sfnA'), ('sfnBXx', 'fnB1sfnB')))
 
-        rX.set_val(1, 'fnA', system='Xx', direction=FAD_FROM, flex_sys_dir=False)
+        rX.set_val(1, 'fnA', system=SX, direction=FAD_FROM, flex_sys_dir=False)
         # sys/dir priorities: 1st=sys-name, 2nd=sys-rec, 3rd=system kwarg
         assert r.val('fnA') == ''               # field name idx 'fnA' and non-sys rec DOES NEVER use sys val
         assert r.val('fnAXx') == 1              # sys_name idx 'fnAXx' with non-sys Record DOES ALWAYS use sys val
@@ -1832,15 +1913,15 @@ class TestSetVal:
         assert rX.val('fnAXx', system='N') == 1  # even sys_name with unknown system DOES use sys val
         assert r.val('fnAXx', system='') == 1   # sys_name with system=='' DOES use sys val (overwrites system kwarg)
         assert r.val('fnAXx') == 1
-        assert r.val('fnAXx', system='Xx') == 1
-        assert r.val('fnA', system='Xx') == 1
+        assert r.val('fnAXx', system=SX) == 1
+        assert r.val('fnA', system=SX) == 1
 
         # check for deep field; sys_name idx 'sfnBXx' will ALWAYS use sys val
-        rX.set_val(3, 'fnB', 1, 'sfnB', system='Xx', direction=FAD_FROM, flex_sys_dir=False)
+        rX.set_val(3, 'fnB', 1, 'sfnB', system=SX, direction=FAD_FROM, flex_sys_dir=False)
         assert r.val('fnB', 1, 'sfnBXx') == 3
         assert r.val('fnB', 1, 'sfnB') == 'sfB2v'
-        assert r.val('fnB', 1, 'sfnBXx', system='Xx') == 3
-        assert r.val('fnB', 1, 'sfnB', system='Xx') == 3
+        assert r.val('fnB', 1, 'sfnBXx', system=SX) == 3
+        assert r.val('fnB', 1, 'sfnB', system=SX) == 3
 
         # .. but sys rec (rX) does if not accessed via field - even if using main field name
         assert rX['fnB', 1, 'sfnB'] == 3
@@ -1853,7 +1934,7 @@ class TestSetVal:
         assert rX.val('fnA') == 1           # .. sys rec val also use sys val - even if using main field name
         assert rX.val('fnAXx') == 1
         assert rX['fnA'].val() == ''        # .. BUT accessing the field will use the field value
-        assert rX['fnA'].val(system='Xx') == 1  # .. so to get the sys value the system has to be specified in val()
+        assert rX['fnA'].val(system=SX) == 1  # .. so to get the sys value the system has to be specified in val()
 
     def test_values_set_val(self):
         vus = Values()
@@ -1863,7 +1944,7 @@ class TestSetVal:
         assert vus.val(1) == [3]
 
     def test_set_complex_val(self):
-        rec = Record(system='Xx', direction=FAD_FROM)
+        rec = Record(system=SX, direction=FAD_FROM)
         rec.add_system_fields((('fnAXx', 'fnA'),
                                ('sfnAXx', 'fnB0sfnBA'), ('sfnBXx', 'fnB0sfnBB'),
                                ('sfnAXx', 'fnB1sfnBA'), ('sfnBXx', 'fnB1sfnBB')))
@@ -1871,45 +1952,45 @@ class TestSetVal:
         # flat field exists (no sub records)
         val = [dict(sfnAA='test', sfnAB=datetime.date(year=2022, month=6, day=3)),
                dict(sfnAA='tst2', sfnAB=datetime.date(year=2040, month=9, day=6))]
-        rec.set_val(val, 'fnA', system='Xx', direction=FAD_FROM)
+        rec.set_val(val, 'fnA', system=SX, direction=FAD_FROM)
         assert isinstance(rec['fnA'], list)
         assert isinstance(rec.val('fnA'), list)
         assert isinstance(rec.value('fnA', flex_sys_dir=True), Value)
         assert rec.val('fnA')[1]['sfnAA'] == 'tst2'
         # .. now overwrite with conversion to value types
-        rec.set_val(val, 'fnA', system='Xx', direction=FAD_FROM, to_value_type=True)
+        rec.set_val(val, 'fnA', system=SX, direction=FAD_FROM, to_value_type=True)
         assert isinstance(rec['fnA'], list)
         assert isinstance(rec.value('fnA', flex_sys_dir=True), Records)
         assert rec.val('fnA', 1, 'sfnAA') == 'tst2'
         # node field exists
         val = [dict(sfnBA='test', sfnBB=datetime.date(year=2022, month=6, day=3)),
                dict(sfnBA='tst2', sfnBB=datetime.date(year=2040, month=9, day=6))]
-        rec.set_val(val, 'fnB', system='Xx', direction=FAD_FROM)
+        rec.set_val(val, 'fnB', system=SX, direction=FAD_FROM)
         assert isinstance(rec['fnB'], list)
         assert isinstance(rec.val('fnB'), list)
         assert isinstance(rec.value('fnB', flex_sys_dir=True), Records)
         assert rec.val('fnB')[1]['sfnBA'] == 'tst2'
         # .. now overwrite with conversion to value types
-        rec.set_val(val, 'fnB', system='Xx', direction=FAD_FROM, to_value_type=True)
+        rec.set_val(val, 'fnB', system=SX, direction=FAD_FROM, to_value_type=True)
         assert isinstance(rec['fnB'], list)
         assert isinstance(rec.value('fnB', flex_sys_dir=True), Records)
         assert rec.val('fnB', 1, 'sfnBA') == 'tst2'
         # field not exists
         val = [dict(sfnCA='test', sfnCB=datetime.date(year=2022, month=6, day=3)),
                dict(sfnCA='tst2', sfnCB=datetime.date(year=2040, month=9, day=6))]
-        rec.set_val(val, 'fnC', system='Xx', direction=FAD_FROM)
+        rec.set_val(val, 'fnC', system=SX, direction=FAD_FROM)
         assert isinstance(rec['fnC'], list)
         assert isinstance(rec.val('fnC'), list)
         assert isinstance(rec.value('fnC', flex_sys_dir=True), Value)
         assert rec.val('fnC')[1]['sfnCA'] == 'tst2'
         # .. now overwrite with conversion to value types
-        rec.set_val(val, 'fnC', system='Xx', direction=FAD_FROM, to_value_type=True)
+        rec.set_val(val, 'fnC', system=SX, direction=FAD_FROM, to_value_type=True)
         assert isinstance(rec['fnC'], list)
         assert isinstance(rec.value('fnC', flex_sys_dir=True), Records)
         assert rec.val('fnC', 1, 'sfnCA') == 'tst2'
 
     def test_set_complex_node(self):
-        rec = Record(system='Xx', direction=FAD_FROM)
+        rec = Record(system=SX, direction=FAD_FROM)
         rec.add_system_fields((('fnAXx', 'fnA'),
                                ('sfnAXx', 'fnB0sfnBA'), ('sfnBXx', 'fnB0sfnBB'),
                                ('sfnAXx', 'fnB1sfnBA'), ('sfnBXx', 'fnB1sfnBB')))
@@ -1917,185 +1998,132 @@ class TestSetVal:
         # flat field exists (no sub records)
         val = [dict(sfnAA='test', sfnAB=datetime.date(year=2022, month=6, day=3)),
                dict(sfnAA='tst2', sfnAB=datetime.date(year=2040, month=9, day=6))]
-        rec.set_node_child(val, 'fnA', system='Xx', direction=FAD_FROM)
+        rec.set_node_child(val, 'fnA', system=SX, direction=FAD_FROM)
         assert isinstance(rec['fnA'], list)
         assert isinstance(rec.val('fnA'), list)
         assert isinstance(rec.value('fnA', flex_sys_dir=True), Value)
         assert rec.val('fnA')[1]['sfnAA'] == 'tst2'
         # .. now overwrite with conversion to value types
-        rec.set_val(val, 'fnA', system='Xx', direction=FAD_FROM, to_value_type=True)
+        rec.set_val(val, 'fnA', system=SX, direction=FAD_FROM, to_value_type=True)
         assert isinstance(rec['fnA'], list)
         assert isinstance(rec.value('fnA', flex_sys_dir=True), Records)
         assert rec.val('fnA', 1, 'sfnAA') == 'tst2'
         # node field exists
         val = [dict(sfnBA='test', sfnBB=datetime.date(year=2022, month=6, day=3)),
                dict(sfnBA='tst2', sfnBB=datetime.date(year=2040, month=9, day=6))]
-        rec.set_node_child(val, 'fnB', system='Xx', direction=FAD_FROM)
+        rec.set_node_child(val, 'fnB', system=SX, direction=FAD_FROM)
         assert isinstance(rec['fnB'], list)
         assert isinstance(rec.val('fnB'), list)
         assert isinstance(rec.value('fnB', flex_sys_dir=True), Records)
         assert rec.val('fnB')[1]['sfnBA'] == 'tst2'
         # .. now overwrite with conversion to value types
-        rec.set_val(val, 'fnB', system='Xx', direction=FAD_FROM, to_value_type=True)
+        rec.set_val(val, 'fnB', system=SX, direction=FAD_FROM, to_value_type=True)
         assert isinstance(rec['fnB'], list)
         assert isinstance(rec.value('fnB', flex_sys_dir=True), Records)
         assert rec.val('fnB', 1, 'sfnBA') == 'tst2'
         # field not exists
         val = [dict(sfnCA='test', sfnCB=datetime.date(year=2022, month=6, day=3)),
                dict(sfnCA='tst2', sfnCB=datetime.date(year=2040, month=9, day=6))]
-        rec.set_node_child(val, 'fnC', system='Xx', direction=FAD_FROM)
+        rec.set_node_child(val, 'fnC', system=SX, direction=FAD_FROM)
         assert isinstance(rec['fnC'], list)
         assert isinstance(rec.val('fnC'), list)
         assert isinstance(rec.value('fnC', flex_sys_dir=True), Value)
         assert rec.val('fnC')[1]['sfnCA'] == 'tst2'
         # .. now overwrite with conversion to value types
-        rec.set_val(val, 'fnC', system='Xx', direction=FAD_FROM, to_value_type=True)
+        rec.set_val(val, 'fnC', system=SX, direction=FAD_FROM, to_value_type=True)
         assert isinstance(rec['fnC'], list)
         assert isinstance(rec.value('fnC', flex_sys_dir=True), Records)
         assert rec.val('fnC', 1, 'sfnCA') == 'tst2'
 
 
-class TestContactValidation:
-    def test_correct_email(self):
-        # edge cases: empty string or None as email
-        r = list()
-        assert correct_email('', removed=r) == ('', False)
-        assert r == []
-        r = list()
-        assert correct_email(None, removed=r) == ('', False)
-        assert r == []
-        # special characters !#$%&'*+-/=?^_`{|}~; are allowed in local part
-        r = list()
-        assert correct_email('john_smith@example.com', removed=r) == ('john_smith@example.com', False)
-        assert r == []
-        r = list()
-        assert correct_email('john?smith@example.com', removed=r) == ('john?smith@example.com', False)
-        assert r == []
+class TestSystem:
+    sid = SX
+    cre = dict(User='test_user')
+    fea = ['extra_feature']
+    ana = 'test_app_name'
+    dlv = 99
 
-        # dot is not the first or last character unless quoted, and does not appear consecutively unless quoted
-        r = list()
-        assert correct_email(".john.smith@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["0:."]
-        r = list()
-        assert correct_email("john.smith.@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["10:."]
-        r = list()
-        assert correct_email("john..smith@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["5:."]
-        r = list()
-        assert correct_email('"john..smith"@example.com', removed=r) == ('"john..smith"@example.com', False)
-        assert r == []
-        r = list()
-        assert correct_email("john.smith@example..com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["19:."]
+    class SystemConnectionSuccessMock:
+        def connect(self):
+            return not self or ''
 
-        # space and "(),:;<>@[\] characters are allowed with restrictions (they are only allowed inside a quoted string,
-        # as described in the paragraph below, and in addition, a backslash or double-quote must be preceded
-        # by a backslash);
-        r = list()
-        assert correct_email(" john.smith@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["0: "]
-        r = list()
-        assert correct_email("john .smith@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["4: "]
-        r = list()
-        assert correct_email("john.smith @example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["10: "]
-        r = list()
-        assert correct_email("john.smith@ example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["11: "]
-        r = list()
-        assert correct_email("john.smith@ex ample.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["13: "]
-        r = list()
-        assert correct_email("john.smith@example .com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["18: "]
-        r = list()
-        assert correct_email("john.smith@example. com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["19: "]
-        r = list()
-        assert correct_email("john.smith@example.com  ", removed=r) == ("john.smith@example.com", True)
-        assert r == ["22: ", "23: "]
-        r = list()
-        assert correct_email('john(smith@example.com', removed=r) == ('johnsmith@example.com', True)
-        assert r == ["4:("]
-        r = list()
-        assert correct_email('"john(smith"@example.com', removed=r) == ('"john(smith"@example.com', False)
-        assert r == []
+        def close(self):
+            return not self or ''
 
-        # comments at begin or end of local and domain part
-        r = list()
-        assert correct_email("john.smith(comment)@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["10:(comment)"]
-        r = list()
-        assert correct_email("(comment)john.smith@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["0:(comment)"]
-        r = list()
-        assert correct_email("john.smith@example.com(comment)", removed=r) == ("john.smith@example.com", True)
-        assert r == ["22:(comment)"]
-        r = list()
-        assert correct_email("john.smith@(comment)example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["11:(comment)"]
-        r = list()
-        assert correct_email(".john.smith@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["0:."]
-        r = list()
-        assert correct_email("john.smith.@example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["10:."]
-        r = list()
-        assert correct_email("john.smith@.example.com", removed=r) == ("john.smith@example.com", True)
-        assert r == ["11:."]
-        r = list()
-        assert correct_email("john.smith@example.com.", removed=r) == ("john.smith@example.com", True)
-        assert r == ["22:."]
+        def disconnect(self):
+            return not self or ''
 
-        # international characters above U+007F
-        r = list()
-        assert correct_email('Heinz.Hübner@example.com', removed=r) == ('Heinz.Hübner@example.com', False)
-        assert r == []
+    class SystemConnectionFailureMock:
+        def connect(self):
+            return 'ConnectError' or self
 
-        # quoted may exist as a dot separated entity within the local-part, or it may exist when the outermost
-        # .. quotes are the outermost characters of the local-part
-        r = list()
-        assert correct_email('abc."def".xyz@example.com', removed=r) == ('abc."def".xyz@example.com', False)
-        assert r == []
-        assert correct_email('"abc"@example.com', removed=r) == ('"abc"@example.com', False)
-        assert r == []
-        assert correct_email('abc"def"xyz@example.com', removed=r) == ('abcdefxyz@example.com', True)
-        assert r == ['3:"', '7:"']
+    class SystemDisconnectionFailureMock:
+        def connect(self):
+            return not self or ''
 
-        # tests from https://en.wikipedia.org/wiki/Email_address
-        r = list()
-        assert correct_email('ex-indeed@strange-example.com', removed=r) == ('ex-indeed@strange-example.com', False)
-        assert r == []
-        r = list()
-        assert correct_email("#!$%&'*+-/=?^_`{}|~@example.org", removed=r) == ("#!$%&'*+-/=?^_`{}|~@example.org", False)
-        assert r == []
-        r = list()
-        assert correct_email('"()<>[]:,;@\\\\"!#$%&\'-/=?^_`{}| ~.a"@e.org', removed=r) \
-            == ('"()<>[]:,;@\\\\"!#$%&\'-/=?^_`{}| ~.a"@e.org', False)
-        assert r == []
+        def close(self):
+            return 'CloseError' or self
 
-        r = list()
-        assert correct_email("A@e@x@ample.com", removed=r) == ("A@example.com", True)
-        assert r == ["3:@", "5:@"]
-        r = list()
-        assert correct_email('this\ is\"not\\allowed@example.com', removed=r) == ('thisisnotallowed@example.com', True)
-        assert r == ["4:\\", "5: ", '8:"', '12:\\']
+        def disconnect(self):
+            return 'DisconnectError' or self
 
-    def test_correct_phone(self):
-        r = list()
-        assert correct_phone('+4455667788', removed=r) == ('004455667788', True)
-        assert r == ["0:+"]
+    @staticmethod
+    def check_connector_args(cre, fea, ana, dlv):
+        assert cre == TestSystem.cre
+        assert fea == TestSystem.fea
+        assert ana == TestSystem.ana
+        assert dlv == TestSystem.dlv
 
-        r = list()
-        assert correct_phone(' +4455667788', removed=r) == ('004455667788', True)
-        assert r == ["0: ", "1:+"]
+    @staticmethod
+    def connector_success_mock(credentials, features, app_name, debug_level):
+        TestSystem.check_connector_args(credentials, features, app_name, debug_level)
+        return TestSystem.SystemConnectionSuccessMock()
 
-        r = list()
-        assert correct_phone('+004455667788', removed=r) == ('004455667788', True)
-        assert r == ["0:+"]
+    @staticmethod
+    def connector_failure_mock(credentials, features, app_name, debug_level):
+        TestSystem.check_connector_args(credentials, features, app_name, debug_level)
+        return TestSystem.SystemConnectionFailureMock()
 
-        r = list()
-        assert correct_phone(' 44 5566/7788', removed=r) == ('4455667788', True)
-        assert r == ["0: ", "3: ", "8:/"]
+    @staticmethod
+    def disconnect_failure_mock(credentials, features, app_name, debug_level):
+        TestSystem.check_connector_args(credentials, features, app_name, debug_level)
+        return TestSystem.SystemDisconnectionFailureMock()
+
+    def test_init(self):
+        s = System(self.sid, credentials=self.cre, features=self.fea)
+        assert s.sys_id == self.sid
+        assert s.credentials == self.cre
+        assert s.features == self.fea
+        assert s.connection is None
+        assert s.conn_error == ''
+        assert s.app_name == ''
+        # assert s.debug_level == DEBUG_LEVEL_DISABLED
+
+
+
+    def test_connect_and_close(self):
+        s = System(self.sid, credentials=self.cre, features=self.fea)
+        assert s.connect(TestSystem.connector_success_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        assert s.disconnect() == ''
+
+        s = System(self.sid, credentials=self.cre, features=self.fea)
+        assert s.connect(TestSystem.connector_success_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        s.connection.close = None
+        assert s.disconnect() == ''
+
+        s = System(self.sid, credentials=self.cre, features=self.fea)
+        assert s.connect(TestSystem.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
+        assert s.disconnect() == ''
+
+        s = System(self.sid, credentials=self.cre, features=self.fea)
+        assert s.connect(TestSystem.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
+        assert s.disconnect() == ''
+
+        s = System(self.sid, credentials=self.cre, features=self.fea)
+        assert s.connect(TestSystem.disconnect_failure_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        assert s.disconnect() == 'CloseError'
+
+        s = System(self.sid, credentials=self.cre, features=self.fea)
+        assert s.connect(TestSystem.disconnect_failure_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        s.connection.close = None
+        assert s.disconnect() == 'DisconnectError'
