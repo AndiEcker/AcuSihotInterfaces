@@ -8,7 +8,8 @@ from ae.sys_data import (
     Value, Values, Record, Records, _Field,
     compose_current_index, current_index, init_current_index, use_current_index, set_current_index,
     FAD_FROM, FAD_ONTO, FAT_VAL, FAT_REC, FAT_RCX, FAT_SQE, FAT_CAL, FAT_IDX, FAT_CNV,
-    ACTION_DELETE, IDX_PATH_SEP, ALL_FIELDS, CALLABLE_SUFFIX, System)
+    ACTION_DELETE, IDX_PATH_SEP, ALL_FIELDS, CALLABLE_SUFFIX,
+    System, UsedSystems)
 
 
 SS = 'Ss'       # test system ids
@@ -2036,11 +2037,12 @@ class TestSetVal:
         assert rec.val('fnC', 1, 'sfnCA') == 'tst2'
 
 
-class TestSystem:
+class TestSystems:
     sid = SX
     cre = dict(User='test_user')
     fea = ['extra_feature']
     ana = 'test_app_name'
+    dld = -1
     dlv = 99
 
     class SystemConnectionSuccessMock:
@@ -2069,61 +2071,89 @@ class TestSystem:
 
     @staticmethod
     def check_connector_args(cre, fea, ana, dlv):
-        assert cre == TestSystem.cre
-        assert fea == TestSystem.fea
-        assert ana == TestSystem.ana
-        assert dlv == TestSystem.dlv
+        assert cre == TestSystems.cre
+        assert fea == TestSystems.fea
+        assert ana == TestSystems.ana
+        assert dlv == TestSystems.dld or dlv == TestSystems.dlv
 
     @staticmethod
     def connector_success_mock(credentials, features, app_name, debug_level):
-        TestSystem.check_connector_args(credentials, features, app_name, debug_level)
-        return TestSystem.SystemConnectionSuccessMock()
+        TestSystems.check_connector_args(credentials, features, app_name, debug_level)
+        return TestSystems.SystemConnectionSuccessMock()
 
     @staticmethod
     def connector_failure_mock(credentials, features, app_name, debug_level):
-        TestSystem.check_connector_args(credentials, features, app_name, debug_level)
-        return TestSystem.SystemConnectionFailureMock()
+        TestSystems.check_connector_args(credentials, features, app_name, debug_level)
+        return TestSystems.SystemConnectionFailureMock()
 
     @staticmethod
     def disconnect_failure_mock(credentials, features, app_name, debug_level):
-        TestSystem.check_connector_args(credentials, features, app_name, debug_level)
-        return TestSystem.SystemDisconnectionFailureMock()
+        TestSystems.check_connector_args(credentials, features, app_name, debug_level)
+        return TestSystems.SystemDisconnectionFailureMock()
 
-    def test_init(self):
-        s = System(self.sid, credentials=self.cre, features=self.fea)
+    def test_system_init(self):
+        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
         assert s.sys_id == self.sid
         assert s.credentials == self.cre
+        assert s.debug_level_disabled == self.dld
+        assert s.debug_level_verbose == self.dlv
         assert s.features == self.fea
         assert s.connection is None
         assert s.conn_error == ''
         assert s.app_name == ''
-        # assert s.debug_level == DEBUG_LEVEL_DISABLED
+        assert s.debug_level == self.dld
 
+    def test_system_repr(self):
+        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
+        assert self.sid in repr(s)
+        assert s.connect(TestSystems.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
+        assert s.conn_error in repr(s)
 
+        assert s.connect(TestSystems.connector_success_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        rep = repr(s)
+        assert s.credentials.get('User') in rep
+        assert repr(s.features) in rep
+        assert self.ana in rep
 
-    def test_connect_and_close(self):
-        s = System(self.sid, credentials=self.cre, features=self.fea)
-        assert s.connect(TestSystem.connector_success_mock, app_name=self.ana, debug_level=self.dlv) == ''
+    def test_system_connect_and_close(self):
+        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
+        assert s.connect(TestSystems.connector_success_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        assert s.conn_error == ''
         assert s.disconnect() == ''
+        assert s.conn_error == ''
 
-        s = System(self.sid, credentials=self.cre, features=self.fea)
-        assert s.connect(TestSystem.connector_success_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
+        assert s.connect(TestSystems.connector_success_mock, app_name=self.ana) == ''
+        assert s.conn_error == ''
         s.connection.close = None
         assert s.disconnect() == ''
+        assert s.conn_error == ''
 
-        s = System(self.sid, credentials=self.cre, features=self.fea)
-        assert s.connect(TestSystem.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
+        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
+        assert s.connect(TestSystems.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
+        assert s.conn_error == 'ConnectError'
         assert s.disconnect() == ''
+        assert s.conn_error == ''
 
-        s = System(self.sid, credentials=self.cre, features=self.fea)
-        assert s.connect(TestSystem.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
+        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
+        assert s.connect(TestSystems.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
+        assert s.conn_error == 'ConnectError'
         assert s.disconnect() == ''
+        assert s.conn_error == ''
 
-        s = System(self.sid, credentials=self.cre, features=self.fea)
-        assert s.connect(TestSystem.disconnect_failure_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
+        assert s.connect(TestSystems.disconnect_failure_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        assert s.conn_error == ''
         assert s.disconnect() == 'CloseError'
+        assert s.conn_error == 'CloseError'
 
-        s = System(self.sid, credentials=self.cre, features=self.fea)
-        assert s.connect(TestSystem.disconnect_failure_mock, app_name=self.ana, debug_level=self.dlv) == ''
+        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
+        assert s.connect(TestSystems.disconnect_failure_mock, app_name=self.ana, debug_level=self.dlv) == ''
         s.connection.close = None
         assert s.disconnect() == 'DisconnectError'
+        assert s.conn_error == 'DisconnectError'
+
+    def test_used_systems_init(self, console_app_env):
+        us = UsedSystems(console_app_env, self.dld, self.dlv, SS, SX, SY, **self.cre)
+        assert SS in us._available_systems and SX in us._available_systems and SY in us._available_systems
+        assert SS in us and SX in us and SY in us

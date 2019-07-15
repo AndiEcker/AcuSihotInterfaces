@@ -6,8 +6,9 @@ from typing import Dict, Any, Union, Tuple  # , Tuple
 
 from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
-                          DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SF_SANDBOX,
-                          ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS)
+                          DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
+                          SDF_SF_SANDBOX, ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS, SYS_CRED_ITEMS,
+                          SYS_CRED_NEEDED, SYS_FEAT_ITEMS)
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, UsedSystems, \
     string_to_records
 from ae.validation import correct_email, correct_phone
@@ -283,7 +284,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self.debug_level = cae.get_option('debugLevel')
 
-        self.used_systems = UsedSystems(cae, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, **sys_credentials)
+        self.used_systems = UsedSystems(
+            cae, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
+            sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS,
+            **sys_credentials)
         self._crs = {SDI_ASS: PostgresDB, SDI_ACU: OraDB, SDI_SF: SfInterface, SDI_SH: ShInterface}
         self.error_message = self.used_systems.connect(self._crs, app_name=cae.app_name(), debug_level=self.debug_level)
         if self.error_message:

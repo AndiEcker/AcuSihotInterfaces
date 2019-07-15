@@ -9,7 +9,6 @@ from collections import OrderedDict
 from typing import Optional, Any, Union, List, Dict, Tuple, Iterable
 
 from ae.validation import correct_email, correct_phone
-from sys_data_ids import SYS_CRED_ITEMS, SYS_FEAT_ITEMS, DEBUG_LEVEL_DISABLED, SYS_CRED_NEEDED, DEBUG_LEVEL_VERBOSE
 
 ACTION_INSERT = 'INSERT'
 ACTION_UPDATE = 'UPDATE'
@@ -21,7 +20,6 @@ ACTION_BUILD = 'BUILD'
 ACTION_PULL = 'PULL'
 ACTION_PUSH = 'PUSH'
 ACTION_COMPARE = 'COMPARE'
-
 
 # field aspect types/prefixes
 FAT_IDX = 'idx'                 # main/system field name within parent Record or list index within Records/Values
@@ -1954,7 +1952,7 @@ IDX_TYPES = (int, str)
 
 
 class System:
-    def __init__(self, sys_id: str, credentials: dict, features=None):
+    def __init__(self, sys_id: str, credentials: dict, debug_level_disabled, debug_level_verbose, features=None):
         """
         define new system
 
@@ -1964,25 +1962,29 @@ class System:
         """
         self.sys_id = sys_id
         self.credentials = credentials
+        self.debug_level_disabled = debug_level_disabled
+        self.debug_level_verbose = debug_level_verbose
         self.features = features or list()
 
         self.connection = None
         self.conn_error = ""
         self.app_name = ''
-        self.debug_level = DEBUG_LEVEL_DISABLED
+        self.debug_level = debug_level_disabled
 
     def __repr__(self):
         ret = self.sys_id
         if self.conn_error:
             ret += "!" + self.conn_error
-        if self.debug_level != DEBUG_LEVEL_DISABLED:
+        if self.debug_level != self.debug_level_disabled:
             cre = self.credentials
-            ret += "&" + (repr(cre) if self.debug_level >= DEBUG_LEVEL_VERBOSE else repr(cre.get('User')))
+            ret += "&" + (repr(cre) if self.debug_level >= self.debug_level_verbose else repr(cre.get('User')))
             ret += "_" + repr(self.features)
             ret += "@" + repr(self.app_name)
         return ret
 
-    def connect(self, connector, app_name='', debug_level=DEBUG_LEVEL_DISABLED, force_reconnect=False):
+    def connect(self, connector, app_name='', debug_level=None, force_reconnect=False):
+        if debug_level is None:
+            debug_level = self.debug_level_disabled
         self.conn_error = ""
         if not self.connection or self.conn_error or force_reconnect:
             self.connection = connector(self.credentials, features=self.features,
@@ -2008,15 +2010,20 @@ class System:
 
 
 class UsedSystems(OrderedDict):
-    def __init__(self, cae, *available_systems, **sys_credentials):
+    def __init__(self, cae, debug_level_disabled, debug_level_verbose, *available_systems,
+                 sys_cred_items=(), sys_cred_needed=None, sys_feat_items=(), **sys_credentials):
         super().__init__()
         self._systems = self
         self._available_systems = available_systems
-        cae.dprint("UsedSystems.__init__({}, {}, {})".format(cae, available_systems, sys_credentials))
+        if sys_cred_needed is None:
+            sys_cred_needed = dict()
+        cae.dprint("UsedSystems.__init__({}, {}, {}, {}, {}, {}, {}, {})"
+                   .format(cae, debug_level_disabled, debug_level_verbose, available_systems,
+                           sys_cred_items, sys_cred_needed, sys_feat_items, sys_credentials))
         for sys_id in available_systems:
             dbg_msg = list()
             credentials = dict()
-            for cred_item in SYS_CRED_ITEMS:
+            for cred_item in sys_cred_items:
                 sys_cred_item = sys_id.lower() + '_' + cred_item.lower()
                 cae_cred_item = sys_id.lower() + cred_item
                 found_cred = None
@@ -2029,7 +2036,7 @@ class UsedSystems(OrderedDict):
                 if found_cred is not None:
                     dbg_msg.append("found credential {}={}".format(cred_item, found_cred))
                     credentials[cred_item] = found_cred
-            for cred_item in SYS_CRED_NEEDED.get(sys_id):
+            for cred_item in sys_cred_needed.get(sys_id):
                 if cred_item not in credentials:
                     dbg_msg.append("requested credential {} undefined/incomplete; error ignored".format(cred_item))
                     msg = "Skipping unused/disabled"
@@ -2037,7 +2044,7 @@ class UsedSystems(OrderedDict):
             else:
                 # now collect features for this system with complete credentials
                 features = list()
-                for feat_item in SYS_FEAT_ITEMS:
+                for feat_item in sys_feat_items:
                     if feat_item.startswith(sys_id.lower()):
                         if cae.get_option(feat_item):
                             feat_item += '=' + str(cae.get_option(feat_item))
@@ -2045,15 +2052,15 @@ class UsedSystems(OrderedDict):
                             feat_item += '=' + str(cae.get_config(feat_item))
                         features.append(feat_item)
                 # finally add system to this used systems instance
-                self._add_system(sys_id, credentials, features=features)
+                self._add_system(sys_id, credentials, debug_level_disabled, debug_level_verbose, features=features)
                 dbg_msg.append("added system features={}".format(features))
                 msg = "Fully initialized"
             cae.dprint("{} system {}: {}".format(msg, sys_id, dbg_msg))
 
-    def _add_system(self, sys_id, credentials, features=None):
+    def _add_system(self, sys_id, credentials, debug_level_disabled, debug_level_verbose, features=None):
         assert sys_id in self._available_systems, "UsedSystems._add_system(): unsupported system id {}".format(sys_id)
         assert sys_id not in self._systems, "UsedSystems._add_system(): system id {} already specified".format(sys_id)
-        system = System(sys_id, credentials, features=features)
+        system = System(sys_id, credentials, debug_level_disabled, debug_level_verbose, features=features)
         self._systems[sys_id] = system
 
     def connect(self, connectors, **connector_args):

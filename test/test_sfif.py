@@ -1,4 +1,5 @@
 from ae.sys_data import UsedSystems
+from sys_data_ids import SYS_CRED_ITEMS, SYS_CRED_NEEDED, SYS_FEAT_ITEMS
 from sfif import *
 
 
@@ -248,7 +249,8 @@ class TestSfId:
 
 class TestConnection:
     def test_connection_manual(self, console_app_env):
-        us = UsedSystems(console_app_env, SDI_SF)
+        us = UsedSystems(console_app_env, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
+                         sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection
         assert sf_conn
@@ -267,7 +269,8 @@ class TestConnection:
                 print("mock-dprint() with args={}, kwargs={}".format(args, kwargs))
 
         cae = Cae()
-        us = UsedSystems(cae, SDI_SF)
+        us = UsedSystems(cae, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
+                         sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
         assert not us.connect({SDI_SF: SfInterface})
         assert SDI_SF not in us
 
@@ -276,7 +279,8 @@ class TestConnection:
         assert salesforce_connection.is_sandbox
 
     def test_connect(self, console_app_env):
-        us = UsedSystems(console_app_env, SDI_SF)
+        us = UsedSystems(console_app_env, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
+                         sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection
         res = sf_conn.soql_query_all("SELECT Id from Lead WHERE Name = '__test__connect__'")
@@ -295,7 +299,8 @@ class TestConnection:
             def dprint(*args, **kwargs):
                 print("mock-dprint() with args={}, kwargs={}".format(args, kwargs))
 
-        us = UsedSystems(Cae(), SDI_SF)
+        us = UsedSystems(Cae(), DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
+                         sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection
         assert sf_conn
