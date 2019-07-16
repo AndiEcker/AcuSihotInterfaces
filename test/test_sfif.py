@@ -1,4 +1,4 @@
-from ae.sys_data import UsedSystems
+from ae.systems import UsedSystems
 from sys_data_ids import SYS_CRED_ITEMS, SYS_CRED_NEEDED, SYS_FEAT_ITEMS
 from sfif import *
 
@@ -248,8 +248,8 @@ class TestSfId:
 
 
 class TestConnection:
-    def test_connection_manual(self, console_app_env):
-        us = UsedSystems(console_app_env, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
+    def test_connection_manual(self):
+        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
                          sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection
@@ -257,19 +257,7 @@ class TestConnection:
         assert sf_conn.is_sandbox
 
     def test_connection_missing_user(self):
-        class Cae:
-            @staticmethod   # only for PyCharm Inspections
-            def get_option(*_, **__): return None
-
-            @staticmethod
-            def get_config(*_, **__): return None
-
-            @staticmethod
-            def dprint(*args, **kwargs):
-                print("mock-dprint() with args={}, kwargs={}".format(args, kwargs))
-
-        cae = Cae()
-        us = UsedSystems(cae, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
+        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
                          sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
         assert not us.connect({SDI_SF: SfInterface})
         assert SDI_SF not in us
@@ -278,8 +266,8 @@ class TestConnection:
         assert salesforce_connection
         assert salesforce_connection.is_sandbox
 
-    def test_connect(self, console_app_env):
-        us = UsedSystems(console_app_env, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
+    def test_connect(self):
+        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
                          sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection
@@ -288,18 +276,7 @@ class TestConnection:
         assert res['totalSize'] == 0
 
     def test_connect_fail(self):
-        class Cae:
-            @staticmethod   # only for PyCharm Inspections
-            def get_option(*args, **__): return 3 if args[0] == 'debugLevel' else 'Some_Invalid_Value'
-
-            @staticmethod
-            def app_name(): return "app_name"
-
-            @staticmethod
-            def dprint(*args, **kwargs):
-                print("mock-dprint() with args={}, kwargs={}".format(args, kwargs))
-
-        us = UsedSystems(Cae(), DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
+        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
                          sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection

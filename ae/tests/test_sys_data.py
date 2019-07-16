@@ -3,13 +3,12 @@ import datetime
 from collections import OrderedDict
 
 from ae.sys_data import (
-    aspect_key, aspect_key_system, aspect_key_direction, deeper,
-    field_name_idx_path, field_names_idx_paths, idx_path_field_name,
-    Value, Values, Record, Records, _Field,
-    compose_current_index, current_index, init_current_index, use_current_index, set_current_index,
     FAD_FROM, FAD_ONTO, FAT_VAL, FAT_REC, FAT_RCX, FAT_SQE, FAT_CAL, FAT_IDX, FAT_CNV,
     ACTION_DELETE, IDX_PATH_SEP, ALL_FIELDS, CALLABLE_SUFFIX,
-    System, UsedSystems)
+    Value, Values, Record, Records, _Field,
+    aspect_key, aspect_key_system, aspect_key_direction, deeper,
+    field_name_idx_path, field_names_idx_paths, idx_path_field_name,
+    compose_current_index, current_index, init_current_index, use_current_index, set_current_index)
 
 
 SS = 'Ss'       # test system ids
@@ -318,6 +317,14 @@ class TestValue:
 
 
 class TestValues:
+    def test_typing(self):
+        assert isinstance(Values(), Values)
+        assert isinstance(Values(), list)
+
+    def test_repr_eval(self):
+        rep = repr(Values())
+        assert eval(rep) == Values()
+
     def test_node_child(self):
         u = Values()
         assert u.node_child(('test',)) is None
@@ -1377,8 +1384,8 @@ class TestRecords:
 
     def test_repr_eval(self):
         _ = Values      # added for to remove Pycharm warning
-        rec_str = repr(Records())
-        assert eval(rec_str) == Records()
+        rep = repr(Records())
+        assert eval(rep) == Records()
 
     def test_get_item(self):
         rs = Records()
@@ -2035,125 +2042,3 @@ class TestSetVal:
         assert isinstance(rec['fnC'], list)
         assert isinstance(rec.value('fnC', flex_sys_dir=True), Records)
         assert rec.val('fnC', 1, 'sfnCA') == 'tst2'
-
-
-class TestSystems:
-    sid = SX
-    cre = dict(User='test_user')
-    fea = ['extra_feature']
-    ana = 'test_app_name'
-    dld = -1
-    dlv = 99
-
-    class SystemConnectionSuccessMock:
-        def connect(self):
-            return not self or ''
-
-        def close(self):
-            return not self or ''
-
-        def disconnect(self):
-            return not self or ''
-
-    class SystemConnectionFailureMock:
-        def connect(self):
-            return 'ConnectError' or self
-
-    class SystemDisconnectionFailureMock:
-        def connect(self):
-            return not self or ''
-
-        def close(self):
-            return 'CloseError' or self
-
-        def disconnect(self):
-            return 'DisconnectError' or self
-
-    @staticmethod
-    def check_connector_args(cre, fea, ana, dlv):
-        assert cre == TestSystems.cre
-        assert fea == TestSystems.fea
-        assert ana == TestSystems.ana
-        assert dlv == TestSystems.dld or dlv == TestSystems.dlv
-
-    @staticmethod
-    def connector_success_mock(credentials, features, app_name, debug_level):
-        TestSystems.check_connector_args(credentials, features, app_name, debug_level)
-        return TestSystems.SystemConnectionSuccessMock()
-
-    @staticmethod
-    def connector_failure_mock(credentials, features, app_name, debug_level):
-        TestSystems.check_connector_args(credentials, features, app_name, debug_level)
-        return TestSystems.SystemConnectionFailureMock()
-
-    @staticmethod
-    def disconnect_failure_mock(credentials, features, app_name, debug_level):
-        TestSystems.check_connector_args(credentials, features, app_name, debug_level)
-        return TestSystems.SystemDisconnectionFailureMock()
-
-    def test_system_init(self):
-        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
-        assert s.sys_id == self.sid
-        assert s.credentials == self.cre
-        assert s.debug_level_disabled == self.dld
-        assert s.debug_level_verbose == self.dlv
-        assert s.features == self.fea
-        assert s.connection is None
-        assert s.conn_error == ''
-        assert s.app_name == ''
-        assert s.debug_level == self.dld
-
-    def test_system_repr(self):
-        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
-        assert self.sid in repr(s)
-        assert s.connect(TestSystems.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
-        assert s.conn_error in repr(s)
-
-        assert s.connect(TestSystems.connector_success_mock, app_name=self.ana, debug_level=self.dlv) == ''
-        rep = repr(s)
-        assert s.credentials.get('User') in rep
-        assert repr(s.features) in rep
-        assert self.ana in rep
-
-    def test_system_connect_and_close(self):
-        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
-        assert s.connect(TestSystems.connector_success_mock, app_name=self.ana, debug_level=self.dlv) == ''
-        assert s.conn_error == ''
-        assert s.disconnect() == ''
-        assert s.conn_error == ''
-
-        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
-        assert s.connect(TestSystems.connector_success_mock, app_name=self.ana) == ''
-        assert s.conn_error == ''
-        s.connection.close = None
-        assert s.disconnect() == ''
-        assert s.conn_error == ''
-
-        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
-        assert s.connect(TestSystems.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
-        assert s.conn_error == 'ConnectError'
-        assert s.disconnect() == ''
-        assert s.conn_error == ''
-
-        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
-        assert s.connect(TestSystems.connector_failure_mock, app_name=self.ana, debug_level=self.dlv) == 'ConnectError'
-        assert s.conn_error == 'ConnectError'
-        assert s.disconnect() == ''
-        assert s.conn_error == ''
-
-        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
-        assert s.connect(TestSystems.disconnect_failure_mock, app_name=self.ana, debug_level=self.dlv) == ''
-        assert s.conn_error == ''
-        assert s.disconnect() == 'CloseError'
-        assert s.conn_error == 'CloseError'
-
-        s = System(self.sid, self.cre, self.dld, self.dlv, features=self.fea)
-        assert s.connect(TestSystems.disconnect_failure_mock, app_name=self.ana, debug_level=self.dlv) == ''
-        s.connection.close = None
-        assert s.disconnect() == 'DisconnectError'
-        assert s.conn_error == 'DisconnectError'
-
-    def test_used_systems_init(self, console_app_env):
-        us = UsedSystems(console_app_env, self.dld, self.dlv, SS, SX, SY, **self.cre)
-        assert SS in us._available_systems and SX in us._available_systems and SY in us._available_systems
-        assert SS in us and SX in us and SY in us

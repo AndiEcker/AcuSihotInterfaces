@@ -9,8 +9,8 @@ from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
                           SDF_SF_SANDBOX, ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS, SYS_CRED_ITEMS,
                           SYS_CRED_NEEDED, SYS_FEAT_ITEMS)
-from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, UsedSystems, \
-    string_to_records
+from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
+from ae.systems import UsedSystems
 from ae.validation import correct_email, correct_phone
 from ae.db import OraDB, PostgresDB
 from ae.console_app import DATE_ISO
@@ -285,9 +285,13 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.debug_level = cae.get_option('debugLevel')
 
         self.used_systems = UsedSystems(
-            cae, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
+            DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
+            config_getters=(cae.get_option, cae.get_config),
             sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS,
             **sys_credentials)
+        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
+            for msg in self.used_systems.debug_messages:
+                self._warn(msg)
         self._crs = {SDI_ASS: PostgresDB, SDI_ACU: OraDB, SDI_SF: SfInterface, SDI_SH: ShInterface}
         self.error_message = self.used_systems.connect(self._crs, app_name=cae.app_name(), debug_level=self.debug_level)
         if self.error_message:
