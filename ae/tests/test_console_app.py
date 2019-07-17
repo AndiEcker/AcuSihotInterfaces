@@ -9,9 +9,11 @@ from argparse import ArgumentError
 import pytest
 
 from sys_data_ids import DEBUG_LEVEL_TIMESTAMPED, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
-from ae.console_app import (ConsoleApp, fix_encoding, round_traditional, reset_main_cae, sys_env_dict, to_ascii,
-                            Progress, NamedLocks, full_stack_trace,
-                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT, calling_module, DATE_TIME_ISO, DATE_ISO)
+from ae.console_app import (fix_encoding, round_traditional, reset_main_cae, sys_env_dict, to_ascii, full_stack_trace,
+                            uprint, _ca_instance,
+                            ConsoleApp, Progress, NamedLocks, Setting, _DuplicateSysOut,
+                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT, calling_module, DATE_TIME_ISO, DATE_ISO,
+                            )
 
 
 class TestHelpers:
@@ -25,7 +27,39 @@ class TestHelpers:
         assert round_traditional(0.075, 2) == 0.08
         assert round(0.075, 2) == 0.07
 
-    def test_fix_encoding_umlaut(self, capsys, sys_argv_restore):
+    def test_sys_env_dict(self):
+        assert sys_env_dict().get('python_ver')
+        assert sys_env_dict().get('cwd')
+        assert sys_env_dict().get('frozen') is False
+
+        assert sys_env_dict().get('bundle_dir') is None
+        sys.frozen = True
+        assert sys_env_dict().get('bundle_dir')
+        del sys.__dict__['frozen']
+        assert sys_env_dict().get('bundle_dir') is None
+
+    def test_to_ascii(self):
+        assert to_ascii('äöü') == 'aou'
+
+    def test_calling_module(self):
+        assert calling_module() == 'test_console_app'
+        assert calling_module('') == 'test_console_app'
+        assert calling_module('xxx_test') == 'test_console_app'
+        assert calling_module(called_module=__name__) == '_pytest.python'
+        assert calling_module(called_module=__name__, depth=2) == '_pytest.python'
+        assert calling_module(called_module=__name__, depth=3) == 'pluggy.callers'
+        assert calling_module(called_module=__name__, depth=4) == 'pluggy'
+        assert calling_module(called_module=__name__, depth=5) == 'pluggy'
+        assert calling_module(called_module=__name__, depth=6) == 'pluggy'
+
+        assert calling_module(called_module=__name__, depth=0) == 'ae.console_app'
+        assert calling_module(called_module=__name__, depth=-1) == 'ae.console_app'
+        assert calling_module(called_module=__name__, depth=-2) == 'ae.console_app'
+
+        assert calling_module(called_module=None, depth=-1) == 'ae.console_app'
+        assert calling_module(called_module=None, depth=None) is None
+
+    def test_fix_encoding_umlaut(self):
         assert fix_encoding('äöü') == '\\xe4\\xf6\\xfc'
         assert fix_encoding('äöü', encoding=None) == '\\xe4\\xf6\\xfc'
         assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
@@ -43,28 +77,25 @@ class TestHelpers:
         assert cae.get_option('debugLevel') == DEBUG_LEVEL_VERBOSE  # needed for to init logging env
         assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
         out, err = capsys.readouterr()
-        # STRANGE: capsys/capfd don't show uprint output - although it is shown in the pytest log/console
-        assert out.startswith('ae.console_app.fix_encoding()') or out == ''
+        # STRANGE: capsys/capfd don't show uprint output - out=='' although it is shown in the pytest log/console
+        # possible fix in pytest 3.7.4 (https://github.com/pytest-dev/pytest/issues/3819) - current pytest is 3.6.2
+        assert out.startswith('ae.console_app.fix_encoding()')  # uncomment for to pass test: or out == ''
 
-    def test_sys_env_dict(self):
-        assert sys_env_dict().get('python_ver')
-        assert sys_env_dict().get('cwd')
-        assert sys_env_dict().get('frozen') is False
+    def test_uprint(self, capsys):
+        uprint()
+        out, err = capsys.readouterr()
+        assert out == '\n' and err == ''
 
-        assert sys_env_dict().get('bundle_dir') is None
-        sys.frozen = True
-        assert sys_env_dict().get('bundle_dir')
-        del sys.__dict__['frozen']
-        assert sys_env_dict().get('bundle_dir') is None
+        _ca_instance.debug_level = DEBUG_LEVEL_TIMESTAMPED
+        _ca_instance.multi_threading = True
+        uprint(invalid_kwarg='ika')
+        out, err = capsys.readouterr()
+        assert 'ika' in out and err == ''
 
-    def test_to_ascii(self):
-        assert to_ascii('äöü') == 'aou'
-
-    def test_calling_module(self):
-        assert calling_module()
-        assert calling_module(called_module=__name__)
-        assert calling_module('')
-        assert calling_module('xxx_test')
+        us = chr(40960) + chr(1972)
+        uprint(us, encode_errors_def='strict')
+        out, err = capsys.readouterr()
+        assert us in out and err == ''
 
 
 class TestPythonLogging:
@@ -250,7 +281,7 @@ class TestConsoleAppBasics:
         cae.show_help()
 
     def test_shutdown(self):
-        cae = ConsoleApp('0.0', 'test_app_name', multi_threading=True)
+        cae = ConsoleApp('0.0', 'test_app_name')  # pytest freezes in debug run with kwarg: , multi_threading=True)
         cae.shutdown(-69)
 
 
@@ -884,3 +915,117 @@ class TestConfigMainFileModified:
         assert not cae.config_main_file_modified()
 
         os.remove(file_name)
+
+
+class TestSetting:
+    def test_init(self):
+        s = Setting()
+        assert s.value is None
+
+        s = Setting(value='test_val')
+        assert isinstance(s.value, str)
+        assert s.value == 'test_val'
+
+    def test_bool_values(self):
+        bs = 'True'
+        s = Setting(value=bs, value_type=bool)
+        assert isinstance(s.value, bool)
+        assert s.value is True
+
+        bn = 1
+        s = Setting(value=bn, value_type=bool)
+        assert isinstance(s.value, bool)
+        assert s.value is True
+
+    def test_byte_values(self):
+        bs = b'TEST'
+        s = Setting(value=bs)
+        assert isinstance(s.value, bytes)
+        assert s.value == bs
+
+        s = Setting(value=bs, value_type=str)
+        assert isinstance(s.value, str)
+        assert s.value == 'TEST'
+
+    def test_date_values(self):
+        ds = '2020-12-24'
+        s = Setting(value=ds, value_type=datetime.date)
+        assert isinstance(s.value, datetime.date)
+        assert s.value == datetime.datetime.strptime(ds, DATE_ISO).date()
+
+        dts = datetime.datetime.now().strftime(DATE_TIME_ISO)
+        s = Setting(value=dts, value_type=datetime.datetime)
+        assert isinstance(s.value, datetime.datetime)
+        assert s.value == datetime.datetime.strptime(dts, DATE_TIME_ISO)
+
+
+class TestDuplicateSysOut:
+    def test_init(self):
+        lfn = 'log_file.log'
+        lfo = open(lfn, 'w')
+        dso = _DuplicateSysOut(lfo)
+        assert dso.log_file == lfo
+        assert dso.sys_out is sys.stdout
+
+        dso = _DuplicateSysOut(lfo, sys_out=sys.stdout)
+        assert dso.log_file == lfo
+        assert dso.sys_out is sys.stdout
+
+        dso = _DuplicateSysOut(lfo, sys_out=sys.stderr)
+        assert dso.log_file == lfo
+        assert dso.sys_out is sys.stderr
+
+        lfo.close()
+        assert os.path.exists(lfn)
+        os.remove(lfn)
+
+    def test_flush_method_exists(self):
+        lfn = 'log_file.log'
+        lfo = open(lfn, 'w')
+        dso = _DuplicateSysOut(lfo)
+        assert hasattr(dso, 'flush')
+        assert callable(dso.flush)
+
+        lfo.close()
+        assert os.path.exists(lfn)
+        os.remove(lfn)
+
+    def test_write(self):
+        lfn = 'log_file.log'
+        lfo = open(lfn, 'w')
+        dso = _DuplicateSysOut(lfo)
+        msg = 'test_message'
+        dso.write(msg)
+        lfo.close()
+        with open(lfn) as f:
+            assert f.read() == msg
+
+        lfn = 'log_file.log'
+        lfo = open(lfn, 'w', encoding='utf-8')
+        dso = _DuplicateSysOut(lfo)
+        msg = chr(40960) + chr(1972)
+        dso.write(msg)
+        lfo.close()
+        with open(lfn, encoding='utf-8') as f:
+            assert f.read() == msg
+
+        lfn = 'log_file.log'
+        lfo = open(lfn, 'w')
+        dso = _DuplicateSysOut(lfo)
+        msg = chr(40960) + chr(1972)
+        dso.write(msg)
+        lfo.close()
+        with open(lfn) as f:
+            assert f.read() == '\\ua000\\u07b4'
+
+        lfn = 'log_file.log'
+        lfo = open(lfn, 'w', encoding='ascii')
+        dso = _DuplicateSysOut(lfo)
+        msg = chr(40960) + chr(1972)
+        dso.write(msg)
+        lfo.close()
+        with open(lfn, encoding='ascii') as f:
+            assert f.read() == '\\ua000\\u07b4'
+
+        assert os.path.exists(lfn)
+        os.remove(lfn)

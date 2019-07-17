@@ -173,7 +173,7 @@ class Setting:
         :param value: optional initial value or evaluable string expression.
         :param value_type: optional value type. cannot be changed later. will be determined latest in value getter.
         """
-        super(Setting, self).__init__()
+        super().__init__()
         self._name = name
         self._value = None
         self._type = None if value_type is type(None) else value_type
@@ -255,8 +255,7 @@ class _DuplicateSysOut:
                 self.log_file.write(message)
             except UnicodeEncodeError:
                 # log file has different encoding than console, so simply replace with backslash
-                enc = self.log_file.encoding
-                self.log_file.write(fix_encoding(message, encoding=enc))
+                self.log_file.write(fix_encoding(message, encoding=self.log_file.encoding))
         if not self.sys_out.closed:
             self.sys_out.write(message)
 
@@ -267,18 +266,17 @@ class _DuplicateSysOut:
 _logger = logging.getLogger(__name__)
 
 
-def calling_module(called_module=__name__):
+def calling_module(called_module=__name__, depth=1):
     module = None
     try:
         # find the first stack frame that is *not* in this module
-        depth = 1
         while True:
             # noinspection PyProtectedMember
             module = sys._getframe(depth).f_globals.get('__name__', '__main__')
             if module != called_module:
                 break
             depth += 1
-    except (AttributeError, ValueError):
+    except (TypeError, AttributeError, ValueError):
         pass
     return module
 
