@@ -48,9 +48,19 @@ class TestHelpers:
         assert calling_module(called_module=__name__) == '_pytest.python'
         assert calling_module(called_module=__name__, depth=2) == '_pytest.python'
         assert calling_module(called_module=__name__, depth=3) == 'pluggy.callers'
-        assert calling_module(called_module=__name__, depth=4) == 'pluggy'
-        assert calling_module(called_module=__name__, depth=5) == 'pluggy'
-        assert calling_module(called_module=__name__, depth=6) == 'pluggy'
+        assert calling_module(called_module=__name__, depth=4) == 'pluggy.manager'
+        assert calling_module(called_module=__name__, depth=5) == 'pluggy.manager'
+        assert calling_module(called_module=__name__, depth=6) == 'pluggy.hooks'
+        assert calling_module(called_module=__name__, depth=7) == '_pytest.python'
+        assert calling_module(called_module=__name__, depth=8) == '_pytest.runner'
+        assert calling_module(called_module=__name__, depth=9) == 'pluggy.callers'
+        assert calling_module(called_module=__name__, depth=10) == 'pluggy.manager'
+        assert calling_module(called_module=__name__, depth=11) == 'pluggy.manager'
+        assert calling_module(called_module=__name__, depth=12) == 'pluggy.hooks'
+        assert calling_module(called_module=__name__, depth=13) == '_pytest.runner'
+        assert calling_module(called_module=__name__, depth=14) == '_pytest.runner'
+        assert calling_module(called_module=__name__, depth=15) == '_pytest.runner'
+        assert calling_module(called_module=__name__, depth=16) == '_pytest.runner'
 
         assert calling_module(called_module=__name__, depth=0) == 'ae.console_app'
         assert calling_module(called_module=__name__, depth=-1) == 'ae.console_app'
@@ -79,11 +89,34 @@ class TestHelpers:
         out, err = capsys.readouterr()
         # STRANGE: capsys/capfd don't show uprint output - out=='' although it is shown in the pytest log/console
         # possible fix in pytest 3.7.4 (https://github.com/pytest-dev/pytest/issues/3819) - current pytest is 3.6.2
+        # STILL RETURNING EMPTY STRING after updating pytest to 5.0.1
+        # .. got pip to work behind NTLM proxy by running Admin CMD and setting (but used NP_PROXY instead of NO_PROXY):
+        # .. set NP_PROXY="acumen\aecker:xxxx@proxy.acumen.es:8080"
+        # So on 18-Jul I did an update of all my pip packages with:
+        # .. pip list --outdated --format=freeze | grep -v '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U
+        # .. BUT still got the following errors:
+        ''' - requests 2.19.1 has requirement idna<2.8,>=2.5, but you'll have idna 2.8 which is incompatible.
+            - Successfully installed kivy.deps.gstreamer
+            Exception:
+            Traceback (most recent call last):
+              File "c:\python35\lib\shutil.py", line 391, in _rmtree_unsafe
+                os.rmdir(path)
+            OSError: [WinError 145] The directory is not empty: 'C:\\Users\\AECKER~1.ACU\\AppData\\Local\\Temp\\
+            pip-install-1etj4rnz\\kivy.deps.gstreamer\\
+            kivy_deps.gstreamer-0.1.17.data\\data\\share\\gstreamer\\share\\locale\\eo\\lc_messages'
+            
+            During handling of the above exception, another exception occurred:
+            ...
+        After that I first tried to update pip with the command in the line above which worked without any error
+        Could not update kivy-examples
+        '''
+        print("OUT/ERR", out, err)      # TODO: out is always an empty string
         assert out.startswith('ae.console_app.fix_encoding()')  # uncomment for to pass test: or out == ''
 
     def test_uprint(self, capsys):
         uprint()
         out, err = capsys.readouterr()
+        print("OUT/ERR", out, err)      # TODO: out is always an empty string
         assert out == '\n' and err == ''
 
         _ca_instance.debug_level = DEBUG_LEVEL_TIMESTAMPED
@@ -280,9 +313,25 @@ class TestConsoleAppBasics:
         cae = ConsoleApp('0.0', 'test_add_parameter')
         cae.show_help()
 
+    def test_sys_env_id(self, capsys):
+        sei = 'TST'
+        cae = ConsoleApp('0.0', 'test_add_parameter', sys_env_id=sei)
+        assert cae.sys_env_id == sei
+        cae.uprint(sei)     # increase coverage
+        out, err = capsys.readouterr()
+        assert sei in out       # TODO: out is empty string
+
     def test_shutdown(self):
+        import gc
+        gc.disable()
+
         cae = ConsoleApp('0.0', 'test_app_name')  # pytest freezes in debug run with kwarg: , multi_threading=True)
         cae.shutdown(-69)
+
+        # noinspection PyShadowingNames
+        _ca_instance = cae
+        del cae
+        del _ca_instance        # TODO: this line should invoke _ca_instance.__del__() and .shutdown(0), BUT DOESN'T
 
 
 class TestConfigOptions:
@@ -342,9 +391,18 @@ class TestConfigOptions:
     def test_set_config_error(self):
         file_name = os.path.join(os.getcwd(), 'test_config.ini')
         var_name = 'test_config_var'
+        with open(file_name, 'w') as f:
+            f.write('[Settings]\n' + var_name + ' = OtherTestValue')
         cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
         val = 'test_value'
-        assert cae.set_config(var_name, val)
+
+        assert cae.set_config(var_name, val, cfg_fnam=os.path.join(os.getcwd(), 'not_existing.ini'))
+        with open(file_name, 'w'):      # open to lock file - so next set_config will fail
+            assert cae.set_config(var_name, val)
+
+        os.remove(file_name)
+        # new instance with not-existing additional config file
+        cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
 
     def test_set_config_with_reload(self):
         file_name = os.path.join(os.getcwd(), 'test_config.ini')

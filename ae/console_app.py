@@ -640,6 +640,7 @@ class ConsoleApp:
 
     def set_config(self, name, val, cfg_fnam=None, section=None):
         global config_lock
+        msg = "****  ConsoleApp.set_config({}, {}) ".format(name, val)
         if not cfg_fnam:
             cfg_fnam = self._main_cfg_fnam
         if not section:
@@ -649,8 +650,8 @@ class ConsoleApp:
             self.config_options[name].value = val
 
         if not os.path.isfile(cfg_fnam):
-            return "****  INI/CFG file " + str(cfg_fnam) + " not found. Please set the ini/cfg variable " \
-                   + section + "/" + str(name) + " manually to the value " + str(val)
+            return msg + "INI/CFG file {} not found. Please set the ini/cfg variable {}/{} manually to the value " \
+                .format(cfg_fnam, section, name, val)
 
         err_msg = ''
         with config_lock:
@@ -670,7 +671,7 @@ class ConsoleApp:
                 with open(cfg_fnam, 'w') as configfile:
                     cfg_parser.write(configfile)
             except Exception as ex:
-                err_msg = "****  ConsoleApp.set_option(" + str(name) + ", " + str(val) + ") exception: " + str(ex)
+                err_msg = msg + "exception: {}".format(ex)
 
         return err_msg
 
