@@ -16,6 +16,20 @@ from ae.console_app import (fix_encoding, round_traditional, reset_main_cae, sys
                             )
 
 
+@pytest.fixture()
+def config_fna_vna_vva():
+    def _setup_and_teardown(file_name='test_config.cfg', var_name='test_config_var', var_value='test_value'):
+        if os.path.sep not in file_name:
+            file_name = os.path.join(os.getcwd(), file_name)
+        with open(file_name, 'w') as f:
+            f.write("[Settings]\n{} = {}".format(var_name, var_value))
+
+        yield (file_name, var_name, var_value)
+
+        os.remove(file_name)
+    return _setup_and_teardown
+
+
 class TestHelpers:
     def test_round_traditional(self):
         assert round_traditional(1.01) == 1
@@ -132,12 +146,12 @@ class TestHelpers:
 
 
 class TestPythonLogging:
-    def test_logging_config_dict_basic_from_ini(self):
-        file_name = os.path.join(os.getcwd(), 'test_conf.ini')
-        var_name = 'py_logging_config_dict'
-        var_val = dict(version=1, disable_existing_loggers=False)
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + str(var_val))
+    def test_logging_config_dict_basic_from_ini(self, config_fna_vna_vva):
+        #file_name, var_name, var_val = config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False))
+        #var_val = config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False))
+        # WORKS: file_name, var_name, var_val = list(config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False)))[0]
+        # WORKS TOO: file_name, var_name, var_val = next(config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False)))
+        (file_name, var_name, var_val) = config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False))
 
         cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', additional_cfg_files=[file_name])
 
@@ -146,7 +160,6 @@ class TestPythonLogging:
 
         assert cae.logging_conf_dict == var_val
 
-        os.remove(file_name)
         logging.shutdown()
 
     def test_logging_config_dict_console_from_init(self):
@@ -332,14 +345,13 @@ class TestConsoleAppBasics:
         _ca_instance = cae
         del cae
         del _ca_instance        # TODO: this line should invoke _ca_instance.__del__() and .shutdown(0), BUT DOESN'T
+        gc.collect()
 
 
 class TestConfigOptions:
     def test_set_config_basics(self, sys_argv_restore):
-        file_name = os.path.join(os.getcwd(), 'test.ini')
-        var_name = 'test_config_var'
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = InitialTestValue')
+        file_name, var_name, _ = config_fna_vna_vva()
+
         cae = ConsoleApp('0.0', 'test_set_config_basics')
         cae.add_option(var_name, 'test_config_basics', 'init_test_val', short_opt='')
         opt_test_val = 'opt_test_val'
@@ -361,8 +373,6 @@ class TestConfigOptions:
         val = datetime.date.today()
         assert not cae.set_config(var_name, val)
         assert cae.get_config(var_name) == val.strftime(DATE_ISO)
-
-        os.remove(file_name)
 
     def test_set_config_without_ini(self, sys_argv_restore):
         var_name = 'test_config_var'
