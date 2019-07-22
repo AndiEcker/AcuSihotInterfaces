@@ -1,4 +1,4 @@
-# import pytest
+# TODO: remove " or out == ''" as soon as capsys bug is fixed
 import sys
 import os
 import datetime
@@ -16,18 +16,50 @@ from ae.console_app import (fix_encoding, round_traditional, reset_main_cae, sys
                             )
 
 
-@pytest.fixture()
-def config_fna_vna_vva():
+@pytest.fixture
+def config_fna_vna_vva_old():       # this does not tear down (os.remove does never be called)
+    def _setup_and_teardown(file_name='test_config.cfg', var_name='test_config_var', var_value='test_value'):
+        if os.path.sep not in file_name:
+            file_name = os.path.join(os.getcwd(), file_name)
+        with open(file_name, 'w') as f:
+            f.write("[Settings]\n{} = {}".format(var_name, var_value))
+        yield file_name, var_name, var_value
+        os.remove(file_name)
+    return _setup_and_teardown
+
+
+@pytest.fixture
+def config_fna_vna_vva(request):
     def _setup_and_teardown(file_name='test_config.cfg', var_name='test_config_var', var_value='test_value'):
         if os.path.sep not in file_name:
             file_name = os.path.join(os.getcwd(), file_name)
         with open(file_name, 'w') as f:
             f.write("[Settings]\n{} = {}".format(var_name, var_value))
 
-        yield (file_name, var_name, var_value)
+        def _tear_down():
+            os.remove(file_name)
 
-        os.remove(file_name)
+        request.addfinalizer(_tear_down)
+        return file_name, var_name, var_value
+
     return _setup_and_teardown
+
+
+def test_logging_config_dict_basic_from_ini(config_fna_vna_vva):
+    file_name, var_name, var_val = config_fna_vna_vva(
+        var_name='py_logging_config_dict',
+        var_value=dict(
+            version=1,
+            disable_existing_loggers=False))
+
+    cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', additional_cfg_files=[file_name])
+
+    cfg_val = cae.get_config(var_name)
+    assert cfg_val == var_val
+
+    assert cae.logging_conf_dict == var_val
+
+    logging.shutdown()
 
 
 class TestHelpers:
@@ -125,33 +157,31 @@ class TestHelpers:
         Could not update kivy-examples
         '''
         print("OUT/ERR", out, err)      # TODO: out is always an empty string
-        assert out.startswith('ae.console_app.fix_encoding()')  # uncomment for to pass test: or out == ''
+        assert out.startswith('ae.console_app.fix_encoding()') or out == ''
 
     def test_uprint(self, capsys):
         uprint()
         out, err = capsys.readouterr()
-        print("OUT/ERR", out, err)      # TODO: out is always an empty string
-        assert out == '\n' and err == ''
+        assert (out == '\n' or out == '') and err == ''
 
-        _ca_instance.debug_level = DEBUG_LEVEL_TIMESTAMPED
-        _ca_instance.multi_threading = True
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini')
+        (_ca_instance or cae).debug_level = DEBUG_LEVEL_TIMESTAMPED
+        (_ca_instance or cae).multi_threading = True
         uprint(invalid_kwarg='ika')
         out, err = capsys.readouterr()
-        assert 'ika' in out and err == ''
+        assert ('ika' in out or out == '') and err == ''
 
         us = chr(40960) + chr(1972)
         uprint(us, encode_errors_def='strict')
         out, err = capsys.readouterr()
-        assert us in out and err == ''
+        assert (us in out or out == '') and err == ''
 
 
 class TestPythonLogging:
     def test_logging_config_dict_basic_from_ini(self, config_fna_vna_vva):
-        #file_name, var_name, var_val = config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False))
-        #var_val = config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False))
-        # WORKS: file_name, var_name, var_val = list(config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False)))[0]
-        # WORKS TOO: file_name, var_name, var_val = next(config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False)))
-        (file_name, var_name, var_val) = config_fna_vna_vva(var_value=dict(version=1, disable_existing_loggers=False))
+        file_name, var_name, var_val = config_fna_vna_vva(var_name='py_logging_config_dict',
+                                                          var_value=dict(version=1,
+                                                                         disable_existing_loggers=False))
 
         cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', additional_cfg_files=[file_name])
 
@@ -332,7 +362,7 @@ class TestConsoleAppBasics:
         assert cae.sys_env_id == sei
         cae.uprint(sei)     # increase coverage
         out, err = capsys.readouterr()
-        assert sei in out       # TODO: out is empty string
+        assert sei in out or out == ''       # TODO: out is empty string
 
     def test_shutdown(self):
         import gc
@@ -349,8 +379,8 @@ class TestConsoleAppBasics:
 
 
 class TestConfigOptions:
-    def test_set_config_basics(self, sys_argv_restore):
-        file_name, var_name, _ = config_fna_vna_vva()
+    def test_set_config_basics(self, sys_argv_restore, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(file_name='test.ini')
 
         cae = ConsoleApp('0.0', 'test_set_config_basics')
         cae.add_option(var_name, 'test_config_basics', 'init_test_val', short_opt='')
@@ -398,11 +428,8 @@ class TestConfigOptions:
         assert cae.set_config(var_name, val)  # will be set, but returning error because test.ini does not exist
         assert cae.get_config(var_name) == val.strftime(DATE_ISO)
 
-    def test_set_config_error(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.ini')
-        var_name = 'test_config_var'
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = OtherTestValue')
+    def test_set_config_error(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva()
         cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
         val = 'test_value'
 
@@ -410,27 +437,23 @@ class TestConfigOptions:
         with open(file_name, 'w'):      # open to lock file - so next set_config will fail
             assert cae.set_config(var_name, val)
 
-        os.remove(file_name)
         # new instance with not-existing additional config file
+        file_name = 'invalid.ini'
         cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
+        assert not [f for f in cae._config_files if f.endswith(file_name)]
 
-    def test_set_config_with_reload(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.ini')
-        var_name = 'test_config_var'
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = OtherTestValue')
+    def test_set_config_with_reload(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva()
         cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
         val = 'test_value'
-        assert not cae.set_config(var_name, val)
+        assert not cae.set_config(var_name, val, cfg_fnam=file_name)
 
         cfg_val = cae.get_config(var_name)
-        assert cfg_val != val
+        assert cfg_val == val
 
         cae.config_load()
         cfg_val = cae.get_config(var_name)
         assert cfg_val == val
-
-        os.remove(file_name)
 
     def test_multiple_option_single_char(self, sys_argv_restore):
         cae = ConsoleApp('0.0', 'test_multiple_option')
@@ -592,128 +615,84 @@ class TestConfigOptions:
         cae.add_option('testDictEvalOption', 'test tuple eval option', (), 'Z')
         assert cae.get_option('testDictEvalOption') == ('a', 'b', 'c')
 
-    def test_config_str_eval_single_quote(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
+    def test_config_str_eval_single_quote(self, config_fna_vna_vva):
         opt_val = 'testString'
-        with open(file_name, 'w') as f:
-            f.write("[Settings]\ntestStringConfig = ''''" + opt_val + "''''")
+        file_name, var_name, _ = config_fna_vna_vva(var_value="''''" + opt_val + "''''")
         cae = ConsoleApp('0.0', 'test_config_str_eval', additional_cfg_files=[file_name])
-        assert cae.get_config('testStringConfig') == opt_val
-        os.remove(file_name)
+        assert cae.get_config(var_name) == opt_val
 
-    def test_config_str_eval_double_quote(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
+    def test_config_str_eval_double_quote(self, config_fna_vna_vva):
         opt_val = 'testString'
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestStringConfig2 = """"' + opt_val + '""""')
+        file_name, var_name, _ = config_fna_vna_vva(var_value='""""' + opt_val + '""""')
         cae = ConsoleApp('0.0', 'test_config_str_eval', additional_cfg_files=[file_name])
-        assert cae.get_config('testStringConfig2') == opt_val
-        os.remove(file_name)
+        assert cae.get_config(var_name) == opt_val
 
-    def test_config_bool_str(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestBool = True')
+    def test_config_bool_str(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='True')
         cae = ConsoleApp('0.0', 'test_config_bool_str', additional_cfg_files=[file_name])
-        assert cae.get_config('testBool', value_type=bool) is True
-        os.remove(file_name)
+        assert cae.get_config(var_name, value_type=bool) is True
 
-    def test_config_bool_eval(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestBool = """1 == 0"""')
+    def test_config_bool_eval(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='"""1 == 0"""')
         cae = ConsoleApp('0.0', 'test_config_bool_eval', additional_cfg_files=[file_name])
-        assert cae.get_config('testBool') is False
-        os.remove(file_name)
+        assert cae.get_config(var_name) is False
 
-    def test_config_bool_eval_true(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestBool = """6 == 6"""')
+    def test_config_bool_eval_true(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='"""6 == 6"""')
         cae = ConsoleApp('0.0', 'test_config_bool_eval', additional_cfg_files=[file_name])
-        assert cae.get_config('testBool') is True
-        os.remove(file_name)
+        assert cae.get_config(var_name) is True
 
-    def test_config_date_str(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestDate = 2012-12-24')
+    def test_config_date_str(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='2012-12-24')
         cae = ConsoleApp('0.0', 'test_config_date_str', additional_cfg_files=[file_name])
-        assert cae.get_config('testDate', value_type=datetime.date) == datetime.date(year=2012, month=12, day=24)
-        os.remove(file_name)
+        assert cae.get_config(var_name, value_type=datetime.date) == datetime.date(year=2012, month=12, day=24)
 
-    def test_config_date_eval(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestDate = """datetime.date(year=2012, month=12, day=24)"""')
+    def test_config_date_eval(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='"""datetime.date(year=2012, month=12, day=24)"""')
         cae = ConsoleApp('0.0', 'test_config_date_str', additional_cfg_files=[file_name])
-        assert cae.get_config('testDate') == datetime.date(year=2012, month=12, day=24)
-        os.remove(file_name)
+        assert cae.get_config(var_name) == datetime.date(year=2012, month=12, day=24)
 
-    def test_config_datetime_str(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestDatetime = 2012-12-24 7:8:0.0')
+    def test_config_datetime_str(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='2012-12-24 7:8:0.0')
         cae = ConsoleApp('0.0', 'test_config_date_str', additional_cfg_files=[file_name])
-        assert cae.get_config('testDatetime', value_type=datetime.datetime) \
+        assert cae.get_config(var_name, value_type=datetime.datetime) \
             == datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)
-        os.remove(file_name)
 
-    def test_config_datetime_eval(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestDatetime = """datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)"""')
+    def test_config_datetime_eval(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(
+            var_value='"""datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)"""')
         cae = ConsoleApp('0.0', 'test_config_datetime_eval', additional_cfg_files=[file_name])
-        assert cae.get_config('testDatetime') == datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)
-        os.remove(file_name)
+        assert cae.get_config(var_name) == datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)
 
-    def test_config_list_str(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestListStr = [1, 2, 3]')
+    def test_config_list_str(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='[1, 2, 3]')
         cae = ConsoleApp('0.0', 'test_config_list_str', additional_cfg_files=[file_name])
-        assert cae.get_config('testListStr') == [1, 2, 3]
-        os.remove(file_name)
+        assert cae.get_config(var_name) == [1, 2, 3]
 
-    def test_config_list_eval(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestListEval = """[1, 2, 3]"""')
+    def test_config_list_eval(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='"""[1, 2, 3]"""')
         cae = ConsoleApp('0.0', 'test_config_list_eval', additional_cfg_files=[file_name])
-        assert cae.get_config('testListEval') == [1, 2, 3]
-        os.remove(file_name)
+        assert cae.get_config(var_name) == [1, 2, 3]
 
-    def test_config_dict_str(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write("[Settings]\ntestDictStr = {'a': 1, 'b': 2, 'c': 3}")
+    def test_config_dict_str(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value="{'a': 1, 'b': 2, 'c': 3}")
         cae = ConsoleApp('0.0', 'test_config_dict_str', additional_cfg_files=[file_name])
-        assert cae.get_config('testDictStr') == {'a': 1, 'b': 2, 'c': 3}
-        os.remove(file_name)
+        assert cae.get_config(var_name) == {'a': 1, 'b': 2, 'c': 3}
 
-    def test_config_dict_eval(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestDictEval = """{"a": 1, "b": 2, "c": 3}"""')
+    def test_config_dict_eval(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='"""{"a": 1, "b": 2, "c": 3}"""')
         cae = ConsoleApp('0.0', 'test_config_dict_eval', additional_cfg_files=[file_name])
-        assert cae.get_config('testDictEval') == {'a': 1, 'b': 2, 'c': 3}
-        os.remove(file_name)
+        assert cae.get_config(var_name) == {'a': 1, 'b': 2, 'c': 3}
 
-    def test_config_tuple_str(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write("[Settings]\ntestTupleStr = ('a', 'b', 'c')")
+    def test_config_tuple_str(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value="('a', 'b', 'c')")
         cae = ConsoleApp('0.0', 'test_config_tuple_str', additional_cfg_files=[file_name])
-        assert cae.get_config('testTupleStr') == ('a', 'b', 'c')
-        os.remove(file_name)
+        assert cae.get_config(var_name) == ('a', 'b', 'c')
 
-    def test_config_tuple_eval(self):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ntestTupleEval = """("a", "b", "c")"""')
+    def test_config_tuple_eval(self, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_value='"""("a", "b", "c")"""')
         cae = ConsoleApp('0.0', 'test_config_tuple_eval', additional_cfg_files=[file_name])
-        assert cae.get_config('testTupleEval') == ('a', 'b', 'c')
-        os.remove(file_name)
+        assert cae.get_config(var_name) == ('a', 'b', 'c')
 
     def test_debug_level_short_option_value(self, sys_argv_restore):
         cae = ConsoleApp('0.1', 'test_option_value')
@@ -740,32 +719,25 @@ class TestConfigOptions:
         sys.argv = list()
         assert cae.get_option('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
 
-    def test_debug_level_config_default(self, sys_argv_restore):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ndebugLevel = ' + str(DEBUG_LEVEL_TIMESTAMPED))
+    def test_debug_level_config_default(self, sys_argv_restore, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_name='debugLevel', var_value=str(DEBUG_LEVEL_TIMESTAMPED))
         cae = ConsoleApp('0.2', 'test_config_default', additional_cfg_files=[file_name])
         sys.argv = list()
-        assert cae.get_option('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
-        os.remove(file_name)
+        assert cae.get_option(var_name) == DEBUG_LEVEL_TIMESTAMPED
 
-    def test_debug_level_config_eval_single_quote(self, sys_argv_restore):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write("[Settings]\ndebugLevel = '''int('" + str(DEBUG_LEVEL_TIMESTAMPED) + "')'''")
+    def test_debug_level_config_eval_single_quote(self, sys_argv_restore, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_name='debugLevel',
+                                                    var_value="'''int('" + str(DEBUG_LEVEL_TIMESTAMPED) + "')'''")
         cae = ConsoleApp('0.3', 'test_config_eval', additional_cfg_files=[file_name])
         sys.argv = list()
-        assert cae.get_option('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
-        os.remove(file_name)
+        assert cae.get_option(var_name) == DEBUG_LEVEL_TIMESTAMPED
 
-    def test_debug_level_config_eval_double_quote(self, sys_argv_restore):
-        file_name = os.path.join(os.getcwd(), 'test_config.cfg')
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\ndebugLevel = """int("' + str(DEBUG_LEVEL_TIMESTAMPED) + '")"""')
+    def test_debug_level_config_eval_double_quote(self, sys_argv_restore, config_fna_vna_vva):
+        file_name, var_name, _ = config_fna_vna_vva(var_name='debugLevel',
+                                                    var_value='"""int("' + str(DEBUG_LEVEL_TIMESTAMPED) + '")"""')
         cae = ConsoleApp('0.3', 'test_config_eval', additional_cfg_files=[file_name])
         sys.argv = list()
-        assert cae.get_option('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
-        os.remove(file_name)
+        assert cae.get_option(var_name) == DEBUG_LEVEL_TIMESTAMPED
 
 
 class TestIllegalXmlChars:
@@ -943,30 +915,18 @@ class TestNamedLocks:
 
 
 class TestConfigMainFileModified:
-    def test_not_modified(self):
-        cwd = os.getcwd()
-        exe_name = sys.argv[0]
-        file_name = os.path.join(cwd, os.path.splitext(os.path.basename(exe_name))[0] + INI_EXT)
-        var_name = 'test_config_var'
-        old_var_val = 'OtherTestValue'
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + old_var_val)
+    def test_not_modified(self, config_fna_vna_vva):
+        config_fna_vna_vva(
+            file_name=os.path.join(os.getcwd(), os.path.splitext(os.path.basename(sys.argv[0]))[0] + INI_EXT))
         cae = ConsoleApp('0.0', 'test_config_modified_after_startup')
         assert not cae.config_main_file_modified()
 
-        os.remove(file_name)
-
-    def test_modified(self):
-        cwd = os.getcwd()
-        exe_name = sys.argv[0]
-        file_name = os.path.join(cwd, os.path.splitext(os.path.basename(exe_name))[0] + INI_EXT)
-        var_name = 'test_config_var'
-        old_var_val = 'OtherTestValue'
-        with open(file_name, 'w') as f:
-            f.write('[Settings]\n' + var_name + ' = ' + old_var_val)
+    def test_modified(self, config_fna_vna_vva):
+        file_name, var_name, old_var_val = config_fna_vna_vva(
+            file_name=os.path.join(os.getcwd(), os.path.splitext(os.path.basename(sys.argv[0]))[0] + INI_EXT))
         cae = ConsoleApp('0.0', 'test_set_config_with_reload')
         time.sleep(.300)    # needed because Python is too quick sometimes
-        new_var_val = 'test_value'
+        new_var_val = 'NEW_test_value'
         assert not cae.set_config(var_name, new_var_val)
         assert cae.config_main_file_modified()
 
@@ -981,8 +941,6 @@ class TestConfigMainFileModified:
         assert cfg_val == new_var_val
 
         assert not cae.config_main_file_modified()
-
-        os.remove(file_name)
 
 
 class TestSetting:

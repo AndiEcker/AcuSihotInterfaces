@@ -305,10 +305,10 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),
     #           sep=sep, end=end, file=file, flush=flush)
     if _get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
-        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + print_objects
+        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO), ) + print_objects
 
     if kwargs:
-        print_objects += "\n   *  EXTRA KWARGS={}".format(kwargs)
+        print_objects += ("\n   *  EXTRA KWARGS={}".format(kwargs), )
 
     use_logger = not processing and debug_level in logging_levels and getattr(_ca_instance, 'logging_conf_dict', False)
     if use_logger and logger is None:
