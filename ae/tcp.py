@@ -6,7 +6,7 @@ from traceback import format_exc
 
 from abc import ABCMeta, abstractmethod
 
-from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
+from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
 from ae.console_app import uprint
 
 # import time         # needed only for testing

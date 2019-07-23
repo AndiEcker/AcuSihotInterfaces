@@ -29,8 +29,9 @@ from traceback import format_exc
 import pprint
 
 from ae.db import NAMED_BIND_VAR_PREFIX, bind_var_prefix
-from sys_data_ids import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
+from sys_data_ids import SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
     SDI_ACU
+from ae import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import Record, FAD_ONTO
 from ae.console_app import ConsoleApp
 from ae.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG

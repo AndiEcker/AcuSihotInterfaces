@@ -11,21 +11,19 @@ import pprint
 import re
 import threading
 import unicodedata
+import weakref
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter
 
-from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
-                          debug_levels, parse_system_option_args, logging_levels)
+from ae import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
+                debug_levels, logging_levels, DATE_TIME_ISO, DATE_ISO)
+from ae.setting import Setting
 
 INI_EXT = '.ini'
 
 # default name of main config section
 MAIN_SECTION_DEF = 'Settings'
-
-# default date/time formats in config files/variables
-DATE_TIME_ISO = '%Y-%m-%d %H:%M:%S.%f'
-DATE_ISO = '%Y-%m-%d'
 
 # core encoding that will always work independent from destination (console, file system, XMLParser, ...)
 DEF_ENCODING = 'ascii'
@@ -49,7 +47,7 @@ ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high))
 MAX_NUM_LOG_FILES = 99
 
 # initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
-_ca_instance = None
+ae_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, ConsoleApp]
 
 # global Locks for to prevent errors in log file rotation, config reloads and config reads
 log_file_rotation_lock = threading.Lock()
@@ -62,14 +60,10 @@ def _get_debug_level():
 
     :return: current debug level.
     """
-    if _ca_instance and 'debugLevel' in _ca_instance.config_options:
-        return _ca_instance.config_options['debugLevel'].value
+    main_instance = ae_instances.get('')
+    if main_instance and 'debugLevel' in main_instance.config_options:
+        return main_instance.config_options['debugLevel'].value
     return DEBUG_LEVEL_DISABLED
-
-
-def reset_main_cae():
-    global _ca_instance
-    _ca_instance = None
 
 
 def round_traditional(val, digits=0):
@@ -165,78 +159,6 @@ def to_ascii(unicode_str):
     return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
 
-class Setting:
-    def __init__(self, name='Unnamed', value=None, value_type=None):
-        """ create new Setting instance
-
-        :param name: optional name of the setting (only used for debugging/error-message).
-        :param value: optional initial value or evaluable string expression.
-        :param value_type: optional value type. cannot be changed later. will be determined latest in value getter.
-        """
-        super().__init__()
-        self._name = name
-        self._value = None
-        self._type = None if value_type is type(None) else value_type
-        if value is not None:
-            self.value = value
-
-    @property
-    def value(self):
-        value = self._value
-        try:
-            if self._type != type(value):
-                if isinstance(value, bytes):    # convert bytes to string?
-                    value = str(value, encoding='utf-8')  # value.decode('utf-8', 'replace') -> shows warning in PyCharm
-                if isinstance(value, str):
-                    eval_expr = self._eval_str(value)
-                    self._value = eval(eval_expr) if eval_expr else \
-                        (bool(eval(value)) if self._type == bool else
-                         (datetime.datetime.strptime(value, DATE_TIME_ISO)
-                          if self._type == datetime.datetime and len(value) > 10 else
-                          (datetime.datetime.strptime(value, DATE_ISO).date()
-                           if self._type in (datetime.date, datetime.datetime) else
-                           (self._type(value) if self._type else value))))
-                elif self._type:
-                    self._value = self._type(value)
-            # the value type gets only once initialized, but after _eval_str() for to auto-detect complex types
-            if not self._type and self._value is not None:
-                self._type = type(self._value)
-        except Exception as ex:
-            uprint(" ***  Setting.value exception '{}' on evaluating the setting {} with value: {!r}"
-                   .format(ex, self._name, value))
-        return self._value
-
-    @value.setter
-    def value(self, value):
-        if not self._type and not isinstance(value, str) and value is not None:
-            self._type = type(value)
-        self._value = value
-
-    def append_value(self, value):
-        self.value.append(value)
-        return self.value
-
-    def convert_value(self, value):
-        self.value = value
-        return self.value       # using self.value instead of value to call getter for evaluation/type-correction
-
-    @staticmethod
-    def _eval_str(str_val):
-        """ check str_val if needs to be evaluated and return non-empty-and-stripped-eval-string if yes else '' """
-        if (str_val.startswith("'''") and str_val.endswith("'''")) \
-                or (str_val.startswith('"""') and str_val.endswith('"""')):
-            ret = str_val[3:-3]
-        elif (str_val.startswith("[") and str_val.endswith("]")) \
-                or (str_val.startswith("{") and str_val.endswith("}")) \
-                or (str_val.startswith("(") and str_val.endswith(")")) \
-                or (str_val.startswith("'") and str_val.endswith("'")) \
-                or (str_val.startswith('"') and str_val.endswith('"')):
-            ret = str_val
-        else:
-            ret = ''
-        return ret
-
-
 # save original stdout/stderr
 ori_std_out = sys.stdout
 ori_std_err = sys.stderr
@@ -282,7 +204,7 @@ def calling_module(called_module=__name__, depth=1):
 
 
 def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace',
-           debug_level=None, logger=None, **kwargs):
+           debug_level=None, logger=None, cae_instance=None, **kwargs):
     processing = end == "\r"
     if not file:
         # app_std_out cannot be specified as file argument default because get initialized after import of this module
@@ -290,12 +212,14 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
         file = ori_std_out if processing else app_std_out
     enc = file.encoding
 
-    if _ca_instance is not None:
-        if getattr(_ca_instance, 'multi_threading', False):            # add thread ident
+    if cae_instance is None:
+        cae_instance = ae_instances.get('')
+    if cae_instance is not None:
+        if getattr(cae_instance, 'multi_threading', False):            # add thread ident
             print_objects = (" <{: >6}>".format(threading.get_ident()),) + print_objects
-        if getattr(_ca_instance, '_log_file_obj', False):
+        if getattr(cae_instance, '_log_file_obj', False):
             # creating new log file and backup of current one if the current one has more than 20 MB in size
-            _ca_instance.log_file_check_rotation()
+            cae_instance.log_file_check_rotation()
 
     # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
     # ..UnicodeEncodeError: 'charmap' codec can't encode character '\x9f' in position 191: character maps to <undefined>
@@ -305,12 +229,13 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects),
     #           sep=sep, end=end, file=file, flush=flush)
     if _get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
-        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO), ) + print_objects
+        print_objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + print_objects
 
     if kwargs:
         print_objects += ("\n   *  EXTRA KWARGS={}".format(kwargs), )
 
-    use_logger = not processing and debug_level in logging_levels and getattr(_ca_instance, 'logging_conf_dict', False)
+    use_logger = not processing and debug_level in logging_levels \
+        and getattr(cae_instance, 'logging_conf_dict', False)
     if use_logger and logger is None:
         module = calling_module()
         logger = logging.getLogger(module) if module else _logger
@@ -319,7 +244,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     while True:
         try:
             print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects)
-            if use_logger or getattr(_ca_instance, 'multi_threading', False):
+            if use_logger or getattr(cae_instance, 'multi_threading', False):
                 # prevent fluttered log file content by concatenating print_objects and adding end value
                 # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
                 # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
@@ -350,33 +275,35 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
 
 class ConsoleApp:
     def __init__(self, app_version, app_desc, debug_level_def=DEBUG_LEVEL_DISABLED,
-                 config_eval_vars=None, additional_cfg_files=(),
+                 config_eval_vars=None, additional_cfg_files=(), option_value_stripper=None,
                  multi_threading=False, suppress_stdout=False,
                  formatter_class=HelpFormatter, epilog="",
                  sys_env_id='', logging_config=None):
         """ encapsulating ConfigParser and ArgumentParser for python console applications
-            :param app_version:         application version.
-            :param app_desc:            application description.
-            :param debug_level_def:     default debug level (DEBUG_LEVEL_DISABLED).
-            :param config_eval_vars:    dict of additional application specific data values that are used in eval
-                                        expressions (e.g. AcuSihotMonitor.ini).
-            :param additional_cfg_files: list of additional CFG/INI file names (opt. incl. abs/rel. path).
-            :param multi_threading:     pass True if instance is used in multi-threading app.
-            :param suppress_stdout:     pass True (for wsgi apps) for to prevent any python print outputs to stdout.
-            :param formatter_class:     alternative formatter class passed onto ArgumentParser instantiation.
-            :param epilog:              optional epilog text for command line arguments/options help text (passed onto
-                                        ArgumentParser instantiation).
-            :param sys_env_id:          system environment id used as file name suffix for to load all
-                                        the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
-                                        for to initialize second ConsoleApp instance with values from sys_envLIVE.cfg).
-            :param logging_config:      dict with logging configuration default values - supported keys. If the key
-                                        py_logging_config_dict is a non-empty dict then all other keys are ignored:
-                                        py_logging_config_dict  config dict for python logging configuration.
-                                        file_name_def           default log file name for internal logging (def='').
-                                        file_size_max           max. size in MBytes of internal log file (def=20).
+            :param app_version:             application version.
+            :param app_desc:                application description.
+            :param debug_level_def:         default debug level (DEBUG_LEVEL_DISABLED).
+            :param config_eval_vars:        dict of additional application specific data values that are used in eval
+                                            expressions (e.g. AcuSihotMonitor.ini).
+            :param additional_cfg_files:    list of additional CFG/INI file names (opt. incl. abs/rel. path).
+            :param option_value_stripper:   function for to strip option value for to check if is an allowed value.
+            :param multi_threading:         pass True if instance is used in multi-threading app.
+            :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
+            :param formatter_class:         alternative formatter class passed onto ArgumentParser instantiation.
+            :param epilog:                  optional epilog text for command line arguments/options help text (passed
+                                            onto ArgumentParser instantiation).
+            :param sys_env_id:              system environment id used as file name suffix for to load all
+                                            the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
+                                            for to init second ConsoleApp instance with values from sys_envLIVE.cfg).
+            :param logging_config:          dict with logging configuration default values - supported keys. If the key
+                                            py_logging_config_dict is a non-empty dict then all other keys are ignored:
+                                            py_logging_config_dict  config dict for python logging configuration.
+                                            file_name_def           default log file name for internal logging (def='').
+                                            file_size_max           max. size in MBytes of internal log file (def=20).
         """
         """
-            :var  _ca_instance          module variable referencing the main/first-created instance of this class.
+            :var  ae_instances          module dict var, referencing all instances of this class. The main/first-created
+                                        instance has an empty string as the dict key.
             :ivar config_options        pre-/user-defined options (dict of Setting instances).
             :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
                                         as flag to ensure that the command line arguments get re-parsed if add_option()
@@ -387,15 +314,18 @@ class ConsoleApp:
             :ivar _log_file_name        path and file name of the log file.
             :ivar _log_file_index       index of the current rotation log file backup.
         """
-        global _ca_instance
-        if _ca_instance is None:
-            _ca_instance = self
+        global ae_instances
+        if ae_instances.get('') is None:
+            ae_instances[''] = self
+        self.sys_env_id = sys_env_id
+        if sys_env_id not in ae_instances:
+            ae_instances[sys_env_id] = self
 
         self._parsed_args = None
         self._nul_std_out = None
+        self._shut_down = False
         self.multi_threading = multi_threading
         self.suppress_stdout = True     # block initially until app-config/-logging is fully initialized
-        self.sys_env_id = sys_env_id
 
         self.startup_beg = datetime.datetime.now()
         self.config_options = dict()
@@ -416,6 +346,7 @@ class ConsoleApp:
         self._main_cfg_fnam = None
         self._main_cfg_mod_time = None                  # initially assume there is no main config file
         self.config_init(app_path_fnam_ext, additional_cfg_files)
+        self._option_value_stripper = option_value_stripper
         self.config_load()
 
         if logging_config is None:
@@ -429,7 +360,7 @@ class ConsoleApp:
         if lcd:
             # logging.basicConfig(level=logging.DEBUG, style='{')
             logging.config.dictConfig(lcd)     # configure logging module
-        self.logging_conf_dict = _ca_instance.logging_conf_dict = lcd or dict()
+        self.logging_conf_dict = ae_instances.get('').logging_conf_dict = lcd or dict()
 
         self.suppress_stdout = suppress_stdout
         if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
@@ -443,7 +374,7 @@ class ConsoleApp:
         self.add_option('logFile', "Copy stdout and stderr into log file", logging_config.get('file_name_def', ''), 'L')
 
     def __del__(self):
-        if _ca_instance is self:
+        if ae_instances.get('') is self and not self._shut_down:
             self.shutdown()
 
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
@@ -506,15 +437,14 @@ class ConsoleApp:
             self.config_options[name].value = getattr(self._parsed_args, name)
             if name in self.config_choices:
                 for given_value in self.config_options[name].value:
-                    system, rec_type, opt_args = parse_system_option_args(given_value)
-                    if system and rec_type:
-                        given_value = system + rec_type     # split off option args before checking allowed choices
+                    if self._option_value_stripper:
+                        given_value = self._option_value_stripper(given_value)
                     allowed_values = self.config_choices[name]
                     if given_value not in allowed_values:
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
                                             .format(name, given_value, allowed_values))
 
-        if _ca_instance is self and not self.logging_conf_dict:
+        if ae_instances.get('') is self and not self.logging_conf_dict:
             self._log_file_name = self.config_options['logFile'].value
             if self._log_file_name:
                 try:                        # enable logging
@@ -531,7 +461,7 @@ class ConsoleApp:
             self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
                         _debug_level, logger=_logger)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
-            if _ca_instance is self:
+            if ae_instances.get('') is self:
                 self.uprint("  ##  System Environment:", logger=_logger)
                 self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}), logger=_logger)
             else:
@@ -540,7 +470,7 @@ class ConsoleApp:
 
         self.startup_end = datetime.datetime.now()
         self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end, logger=_logger)
-        if _ca_instance is not self and not self.sys_env_id:
+        if ae_instances.get('') is not self and not self.sys_env_id:
             self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID",
                         logger=_logger)
         self.uprint("####  Startup finished....  ####", logger=_logger)
@@ -681,7 +611,7 @@ class ConsoleApp:
 
     def uprint(self, *objects, sep=' ', end='\n', file=None, debug_level=DEBUG_LEVEL_DISABLED, **kwargs):
         if self.sys_env_id:
-            objects = ('[' + self.sys_env_id + ']', ) + objects
+            objects = ('{' + self.sys_env_id + '}', ) + objects
         uprint(*objects, sep=sep, end=end, file=file, debug_level=debug_level, **kwargs)
 
     def app_name(self):
@@ -754,7 +684,7 @@ class ConsoleApp:
             if self.multi_threading:
                 log_file_rotation_lock.release()
 
-    def shutdown(self, exit_code=0):
+    def shutdown(self, exit_code=0, testing=False):
         if self.multi_threading:
             with config_lock:
                 main_thread = threading.current_thread()
@@ -762,7 +692,7 @@ class ConsoleApp:
                     if t is not main_thread:
                         self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
                                     logger=_logger)
-                        t.join()
+                        t.join(0.9 if testing else None)
         if exit_code:
             self.uprint("****  Non-zero exit code:", exit_code, logger=_logger)
 
@@ -777,165 +707,7 @@ class ConsoleApp:
             self._nul_std_out.close()
             self._nul_std_out = None
 
-        if _ca_instance is self:
-            sys.exit(exit_code)
-
-
-class Progress:
-    def __init__(self, cae,
-                 start_counter=0, total_count=0,  # pass either start_counter or total_counter (never both)
-                 start_msg="", next_msg="",  # message templates/masks for start, processing and end
-                 end_msg="Finished processing of {total_count} having {err_counter} failures:{err_msg}",
-                 err_msg="{err_counter} failures on processing of {total_count} items, current={run_counter}:{err_msg}",
-                 nothing_to_do_msg=''):
-        self.cae = cae
-        if not next_msg and cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
-            # default next message built only if >= DEBUG_LEVEL_VERBOSE
-            next_msg = "Processing '{processed_id}': " + \
-                       ("left" if start_counter > 0 and total_count == 0 else "item") + \
-                       " {run_counter} of {total_count}. {err_counter} errors={err_msg}"
-
-        def _complete_msg_prefix(msg, pch='#'):
-            return (pch in msg and msg) or msg and " " + pch * 3 + "  " + msg or ""
-
-        self._next_msg = _complete_msg_prefix(next_msg)
-        self._end_msg = _complete_msg_prefix(end_msg)
-        self._err_msg = _complete_msg_prefix(err_msg, '*')
-
-        self._err_counter = 0
-        self._run_counter = start_counter + 1  # def=decrementing run_counter
-        self._total_count = start_counter
-        self._delta = -1
-        if total_count > 0:  # incrementing run_counter
-            self._run_counter = 0
-            self._total_count = total_count
-            self._delta = 1
-        elif start_counter <= 0:
-            if nothing_to_do_msg:
-                self.cae.uprint(_complete_msg_prefix(nothing_to_do_msg), logger=_logger)
-            return  # RETURN -- empty set - nothing to process
-
-        if start_msg:
-            self.cae.uprint(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
-                                                                   total_count=self._total_count), logger=_logger)
-
-    def next(self, processed_id='', error_msg='', next_msg=''):
-        self._run_counter += self._delta
-        if error_msg:
-            self._err_counter += 1
-
-        if error_msg and self._err_msg:
-            self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                 err_counter=self._err_counter, err_msg=error_msg,
-                                                 processed_id=processed_id), logger=_logger)
-
-        if not next_msg:
-            next_msg = self._next_msg
-        if next_msg:
-            # using uprint with end parameter instead of leading \r will NOT GET DISPLAYED within PyCharm,
-            # .. also not with flush - see http://stackoverflow.com/questions/34751441/
-            # when-writing-carriage-return-to-a-pycharm-console-the-whole-line-is-deleted
-            # .. uprint('   ', pend, end='\r', flush=True)
-            next_msg = '\r' + next_msg
-            self.cae.uprint(next_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                            err_counter=self._err_counter, err_msg=error_msg,
-                                            processed_id=processed_id), logger=_logger)
-
-    def finished(self, error_msg=''):
-        if error_msg and self._err_msg:
-            self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                 err_counter=self._err_counter, err_msg=error_msg), logger=_logger)
-        self.cae.uprint(self.get_end_message(error_msg=error_msg), logger=_logger)
-
-    def get_end_message(self, error_msg=''):
-        return self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                    err_counter=self._err_counter, err_msg=error_msg)
-
-
-class NamedLocks:
-    """
-    allow to create named lock(s) within the same app (migrate from https://stackoverflow.com/users/355230/martineau
-    answer in stackoverflow on the question https://stackoverflow.com/questions/37624289/value-based-thread-lock.
-
-    Currently the sys_lock feature is not implemented. Use either ae.lockfile or the github extension portalocker (see
-    https://github.com/WoLpH/portalocker) or the encapsulating extension ilock (https://github.com/symonsoft/ilock).
-    More on system wide named locking: https://stackoverflow.com/questions/6931342/system-wide-mutex-in-python-on-linux.
-    """
-    locks_change_lock = threading.Lock()
-    active_locks = {}
-    active_lock_counters = {}
-
-    def __init__(self, *lock_names, reentrant_locks=True, sys_lock=False):
-        self._lock_names = lock_names
-        self._lock_class = threading.RLock if reentrant_locks else threading.Lock
-        assert not sys_lock, "sys_lock is currently not implemented"
-        self._sys_lock = sys_lock
-        # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
-        cae = _ca_instance
-        self.print_func = cae.dprint if cae and getattr(cae, 'startup_end', False) else uprint
-
-        self.dprint("NamedLocks.__init__", lock_names)
-
-    def __enter__(self):
-        self.dprint("NamedLocks.__enter__")
-        for lock_name in self._lock_names:
-            self.dprint("NamedLocks.__enter__ b4 acquire ", lock_name)
-            self.acquire(lock_name)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb)
-        for lock_name in self._lock_names:
-            self.dprint("NamedLocks.__exit__ b4 release ", lock_name)
-            self.release(lock_name)
-
-    def dprint(self, *args, **kwargs):
-        if 'logger' not in kwargs:
-            kwargs['logger'] = _logger
-        return self.print_func(*args, **kwargs)
-
-    def acquire(self, lock_name, *args, **kwargs):
-        self.dprint("NamedLocks.acquire", lock_name, 'START')
-
-        while True:     # break at the end - needed for to retry after conflicted add/del of same lock name in threads
-            with self.locks_change_lock:
-                lock_exists = lock_name in self.active_locks
-                lock_instance = self.active_locks[lock_name] if lock_exists else self._lock_class()
-
-            # request the lock - out of locks_change_lock context, for to not block other instances of this class
-            lock_acquired = lock_instance.acquire(*args, **kwargs)
-
-            if lock_acquired:
-                with self.locks_change_lock:
-                    if lock_exists != (lock_name in self.active_locks):  # if lock state has changed, then redo/retry
-                        self.dprint("NamedLocks.acquire", lock_name, 'RETRY')
-                        lock_instance.release()
-                        continue
-                    if lock_exists:
-                        self.active_lock_counters[lock_name] += 1
-                    else:
-                        self.active_locks[lock_name] = lock_instance
-                        self.active_lock_counters[lock_name] = 1
-            break
-
-        self.dprint("NamedLocks.acquire", lock_name, 'END')
-
-        return lock_acquired
-
-    def release(self, lock_name, *args, **kwargs):
-        self.dprint("NamedLocks.release", lock_name, 'START')
-
-        with self.locks_change_lock:
-            if lock_name not in self.active_lock_counters or lock_name not in self.active_locks:
-                self.dprint("NamedLocks.release", lock_name, 'IDX-ERR')
-                return
-            elif self.active_lock_counters[lock_name] == 1:
-                self.active_lock_counters.pop(lock_name)
-                lock = self.active_locks.pop(lock_name)
-            else:
-                self.active_lock_counters[lock_name] -= 1
-                lock = self.active_locks[lock_name]
-
-        lock.release(*args, **kwargs)
-
-        self.dprint("NamedLocks.release", lock_name, 'END')
+        if ae_instances.get('') is self:
+            self._shut_down = True
+            if not testing:
+                sys.exit(exit_code)

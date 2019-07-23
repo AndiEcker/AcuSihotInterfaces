@@ -7,7 +7,7 @@
 import datetime
 from traceback import format_exc
 
-from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae import DEBUG_LEVEL_VERBOSE
 from ae.console_app import ConsoleApp
 from ae.db import OraDB, PostgresDB
 from ass_sys_data import add_ass_options, init_ass_data

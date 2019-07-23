@@ -13,8 +13,9 @@ import argparse
 import pprint
 from traceback import format_exc
 
-from sys_data_ids import (DEBUG_LEVEL_VERBOSE, ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES,
-                          parse_system_option_args)
+from sys_data_ids import (ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES,
+                          parse_system_option_args, strip_system_rec_type)
+from ae import DEBUG_LEVEL_VERBOSE
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console_app import ConsoleApp
 from ae.db import PostgresDB
@@ -26,6 +27,7 @@ PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
 
 cae = ConsoleApp(__version__, "Initialize, pull, compare or push AssCache data against Acumen, Sihot and/or Salesforce",
+                 option_value_stripper=strip_system_rec_type,
                  formatter_class=argparse.RawDescriptionHelpFormatter,
                  epilog="A dictionary holding additional key-word-arguments can be appended"
                         " directly after the system and record type ids"

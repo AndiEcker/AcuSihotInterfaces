@@ -10,8 +10,9 @@
 """
 from traceback import format_exc
 
-from sys_data_ids import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, SDF_SH_TIMEOUT,
+from sys_data_ids import (SDF_SH_TIMEOUT,
                           SDF_SH_XML_ENCODING, SDF_SH_CLIENT_PORT)
+from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.console_app import ConsoleApp
 from ae.notification import add_notification_options, init_notification
 from ae.db import OraDB

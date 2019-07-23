@@ -1,8 +1,6 @@
 """
 System Data IDs, record types, needed credentials and Features
 """
-import logging
-
 
 SDI_ASS = 'Ass'                             # AssCache Interfaces
 SDI_ACU = 'Acu'                             # Acumen Interfaces
@@ -39,16 +37,6 @@ SYS_FEAT_ITEMS = [SDF_SF_SANDBOX,
                   SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_CLIENT_MAP, SDF_SH_RES_MAP,
                   ]
 
-
-# supported debugging levels    ONLY SHOWING logging levels equal or above:
-DEBUG_LEVEL_DISABLED = 0        # ERROR/CRITICAL
-DEBUG_LEVEL_ENABLED = 1         # WARNING
-DEBUG_LEVEL_VERBOSE = 2         # INFO/DEBUG
-DEBUG_LEVEL_TIMESTAMPED = 3     # -"- plus timestamp in logging format
-debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
-
-logging_levels = {DEBUG_LEVEL_DISABLED: logging.ERROR, DEBUG_LEVEL_ENABLED: logging.WARNING,
-                  DEBUG_LEVEL_VERBOSE: logging.INFO, DEBUG_LEVEL_TIMESTAMPED: logging.DEBUG}
 
 # OTHER GLOBAL SYSTEM CONSTANTS
 
@@ -90,3 +78,10 @@ def parse_system_option_args(args_str):
     if rec_type in ALL_AVAILABLE_RECORD_TYPES and system in ALL_AVAILABLE_SYSTEMS:
         return system, rec_type, arg_dict_str
     return None, None, None
+
+
+def strip_system_rec_type(opt_value):
+    system, rec_type, opt_args = parse_system_option_args(opt_value)
+    if system and rec_type:
+        opt_value = system + rec_type  # split off option args before checking allowed choices
+    return opt_value

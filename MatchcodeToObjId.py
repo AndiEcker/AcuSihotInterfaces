@@ -1,4 +1,4 @@
-from sys_data_ids import DEBUG_LEVEL_VERBOSE
+from ae import DEBUG_LEVEL_VERBOSE
 from ae.console_app import ConsoleApp
 from shif import ClientSearch
 

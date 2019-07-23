@@ -3,7 +3,8 @@ Acumen interface constants and helpers
 """
 import datetime
 
-from sys_data_ids import DEBUG_LEVEL_ENABLED, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
+from sys_data_ids import EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
+from ae import DEBUG_LEVEL_ENABLED
 from ae.db import OraDB
 from ae.sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
     string_to_records

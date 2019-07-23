@@ -10,9 +10,9 @@ import cx_Oracle
 import psycopg2
 # from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-from sys_data_ids import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
-from ae.console_app import NamedLocks, uprint
-
+from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae.console_app import uprint
+from ae.lockname import NamedLocks
 
 NAMED_BIND_VAR_PREFIX = ':'
 bind_var_prefix = "CV_"   # for to allow new value in SET clause and old value in WHERE clause for same column/-name

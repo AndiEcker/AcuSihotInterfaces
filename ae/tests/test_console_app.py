@@ -8,24 +8,11 @@ from argparse import ArgumentError
 
 import pytest
 
-from sys_data_ids import DEBUG_LEVEL_TIMESTAMPED, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE
-from ae.console_app import (fix_encoding, round_traditional, reset_main_cae, sys_env_dict, to_ascii, full_stack_trace,
-                            uprint, _ca_instance,
-                            ConsoleApp, Progress, NamedLocks, Setting, _DuplicateSysOut,
-                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT, calling_module, DATE_TIME_ISO, DATE_ISO,
-                            )
-
-
-@pytest.fixture
-def config_fna_vna_vva_old():       # this does not tear down (os.remove does never be called)
-    def _setup_and_teardown(file_name='test_config.cfg', var_name='test_config_var', var_value='test_value'):
-        if os.path.sep not in file_name:
-            file_name = os.path.join(os.getcwd(), file_name)
-        with open(file_name, 'w') as f:
-            f.write("[Settings]\n{} = {}".format(var_name, var_value))
-        yield file_name, var_name, var_value
-        os.remove(file_name)
-    return _setup_and_teardown
+from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO
+from ae.console_app import (fix_encoding, round_traditional, sys_env_dict, to_ascii, full_stack_trace, uprint,
+                            ae_instances,
+                            ConsoleApp, _DuplicateSysOut,
+                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT, calling_module, )
 
 
 @pytest.fixture
@@ -36,148 +23,44 @@ def config_fna_vna_vva(request):
         with open(file_name, 'w') as f:
             f.write("[Settings]\n{} = {}".format(var_name, var_value))
 
-        def _tear_down():
+        def _tear_down():       # using yield instead of finalizer does not execute the teardown part
             os.remove(file_name)
-
         request.addfinalizer(_tear_down)
+
         return file_name, var_name, var_value
 
     return _setup_and_teardown
 
 
-def test_logging_config_dict_basic_from_ini(config_fna_vna_vva):
-    file_name, var_name, var_val = config_fna_vna_vva(
-        var_name='py_logging_config_dict',
-        var_value=dict(
-            version=1,
-            disable_existing_loggers=False))
-
-    cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', additional_cfg_files=[file_name])
-
-    cfg_val = cae.get_config(var_name)
-    assert cfg_val == var_val
-
-    assert cae.logging_conf_dict == var_val
-
-    logging.shutdown()
-
-
-class TestHelpers:
-    def test_round_traditional(self):
-        assert round_traditional(1.01) == 1
-        assert round_traditional(10.1, -1) == 10
-        assert round_traditional(1.123, 1) == 1.1
-        assert round_traditional(0.5) == 1
-        assert round_traditional(0.5001, 1) == 0.5
-
-        assert round_traditional(0.075, 2) == 0.08
-        assert round(0.075, 2) == 0.07
-
-    def test_sys_env_dict(self):
-        assert sys_env_dict().get('python_ver')
-        assert sys_env_dict().get('cwd')
-        assert sys_env_dict().get('frozen') is False
-
-        assert sys_env_dict().get('bundle_dir') is None
-        sys.frozen = True
-        assert sys_env_dict().get('bundle_dir')
-        del sys.__dict__['frozen']
-        assert sys_env_dict().get('bundle_dir') is None
-
-    def test_to_ascii(self):
-        assert to_ascii('äöü') == 'aou'
-
-    def test_calling_module(self):
-        assert calling_module() == 'test_console_app'
-        assert calling_module('') == 'test_console_app'
-        assert calling_module('xxx_test') == 'test_console_app'
-        assert calling_module(called_module=__name__) == '_pytest.python'
-        assert calling_module(called_module=__name__, depth=2) == '_pytest.python'
-        assert calling_module(called_module=__name__, depth=3) == 'pluggy.callers'
-        assert calling_module(called_module=__name__, depth=4) == 'pluggy.manager'
-        assert calling_module(called_module=__name__, depth=5) == 'pluggy.manager'
-        assert calling_module(called_module=__name__, depth=6) == 'pluggy.hooks'
-        assert calling_module(called_module=__name__, depth=7) == '_pytest.python'
-        assert calling_module(called_module=__name__, depth=8) == '_pytest.runner'
-        assert calling_module(called_module=__name__, depth=9) == 'pluggy.callers'
-        assert calling_module(called_module=__name__, depth=10) == 'pluggy.manager'
-        assert calling_module(called_module=__name__, depth=11) == 'pluggy.manager'
-        assert calling_module(called_module=__name__, depth=12) == 'pluggy.hooks'
-        assert calling_module(called_module=__name__, depth=13) == '_pytest.runner'
-        assert calling_module(called_module=__name__, depth=14) == '_pytest.runner'
-        assert calling_module(called_module=__name__, depth=15) == '_pytest.runner'
-        assert calling_module(called_module=__name__, depth=16) == '_pytest.runner'
-
-        assert calling_module(called_module=__name__, depth=0) == 'ae.console_app'
-        assert calling_module(called_module=__name__, depth=-1) == 'ae.console_app'
-        assert calling_module(called_module=__name__, depth=-2) == 'ae.console_app'
-
-        assert calling_module(called_module=None, depth=-1) == 'ae.console_app'
-        assert calling_module(called_module=None, depth=None) is None
-
-    def test_fix_encoding_umlaut(self):
-        assert fix_encoding('äöü') == '\\xe4\\xf6\\xfc'
-        assert fix_encoding('äöü', encoding=None) == '\\xe4\\xf6\\xfc'
-        assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-16') == 'äöü'
-        assert fix_encoding('äöü', encoding='cp1252') == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=0) == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=1) == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=3) == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=4) == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=5) is None
-
-    def test_fix_encoding_error(self, capsys, sys_argv_restore):
-        cae = ConsoleApp('0.0', 'test_fix_encoding_error', debug_level_def=DEBUG_LEVEL_VERBOSE)
-        sys.argv = list()
-        assert cae.get_option('debugLevel') == DEBUG_LEVEL_VERBOSE  # needed for to init logging env
-        assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
-        out, err = capsys.readouterr()
-        # STRANGE: capsys/capfd don't show uprint output - out=='' although it is shown in the pytest log/console
-        # possible fix in pytest 3.7.4 (https://github.com/pytest-dev/pytest/issues/3819) - current pytest is 3.6.2
-        # STILL RETURNING EMPTY STRING after updating pytest to 5.0.1
-        # .. got pip to work behind NTLM proxy by running Admin CMD and setting (but used NP_PROXY instead of NO_PROXY):
-        # .. set NP_PROXY="acumen\aecker:xxxx@proxy.acumen.es:8080"
-        # So on 18-Jul I did an update of all my pip packages with:
-        # .. pip list --outdated --format=freeze | grep -v '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U
-        # .. BUT still got the following errors:
-        ''' - requests 2.19.1 has requirement idna<2.8,>=2.5, but you'll have idna 2.8 which is incompatible.
-            - Successfully installed kivy.deps.gstreamer
-            Exception:
-            Traceback (most recent call last):
-              File "c:\python35\lib\shutil.py", line 391, in _rmtree_unsafe
-                os.rmdir(path)
-            OSError: [WinError 145] The directory is not empty: 'C:\\Users\\AECKER~1.ACU\\AppData\\Local\\Temp\\
-            pip-install-1etj4rnz\\kivy.deps.gstreamer\\
-            kivy_deps.gstreamer-0.1.17.data\\data\\share\\gstreamer\\share\\locale\\eo\\lc_messages'
-            
-            During handling of the above exception, another exception occurred:
-            ...
-        After that I first tried to update pip with the command in the line above which worked without any error
-        Could not update kivy-examples
-        '''
-        print("OUT/ERR", out, err)      # TODO: out is always an empty string
-        assert out.startswith('ae.console_app.fix_encoding()') or out == ''
-
-    def test_uprint(self, capsys):
-        uprint()
-        out, err = capsys.readouterr()
-        assert (out == '\n' or out == '') and err == ''
-
-        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini')
-        (_ca_instance or cae).debug_level = DEBUG_LEVEL_TIMESTAMPED
-        (_ca_instance or cae).multi_threading = True
-        uprint(invalid_kwarg='ika')
-        out, err = capsys.readouterr()
-        assert ('ika' in out or out == '') and err == ''
-
-        us = chr(40960) + chr(1972)
-        uprint(us, encode_errors_def='strict')
-        out, err = capsys.readouterr()
-        assert (us in out or out == '') and err == ''
+class TestInternalLogFileRotation:
+    """ this test has to run first because only the 1st ConsoleApp instance will be able to create an internal log file
+    """
+    def test_log_file_rotation(self, sys_argv_restore):
+        log_file = 'test_internal_log_file_rot.log'
+        cae = ConsoleApp('0.0', 'test_log_file_rotation',
+                         logging_config=dict(file_name_def=log_file, file_size_max=.001))
+        # no longer needed since added sys_argv_restore:
+        # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
+        sys.argv = []
+        file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
+        assert file_name_chk == log_file
+        for i in range(MAX_NUM_LOG_FILES):
+            for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                cae.uprint("TestLogEntry{: >26}{: >26}".format(i, j))
+        cae._close_log_file()
+        assert os.path.exists(log_file)
+        # clean up
+        os.remove(log_file)
+        for i in range(MAX_NUM_LOG_FILES):
+            fn, ext = os.path.splitext(log_file)
+            rot_log_file = fn + "-{:0>{index_width}}".format(i+1, index_width=len(str(MAX_NUM_LOG_FILES))) + ext
+            assert os.path.exists(rot_log_file)
+            os.remove(rot_log_file)
 
 
 class TestPythonLogging:
+    """ test python logging module support
+    """
     def test_logging_config_dict_basic_from_ini(self, config_fna_vna_vva):
         file_name, var_name, var_val = config_fna_vna_vva(var_name='py_logging_config_dict',
                                                           var_value=dict(version=1,
@@ -286,45 +169,151 @@ class TestPythonLogging:
         logging.shutdown()
         file_contents = list()
         import glob
-        for log_file in glob.glob(log_file + '*'):
-            with open(log_file) as fd:
+        for lf in glob.glob(log_file + '*'):
+            with open(lf) as fd:
                 fc = fd.read()
             file_contents.append(fc)
-            os.remove(log_file)     # remove log files from last test run
-        assert len(file_contents) == 17
+            os.remove(lf)     # remove log files from last test run
+        assert len(file_contents) in (15, 17)       # +2 '  **  Additional instance' entries
         for fc in file_contents:
             assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(entry_prefix) \
                 or fc.startswith('  **  Additional instance') or fc == ''
 
 
-class TestInternalLogFileRotation:
-    """
-    this test has to run first because only the first ConsoleApp instance will be able to create a log file; to
-    workaround the module variable ae.console_app._ca_instance need to be reset to None before the next ConsoleApp init
-    """
-    def test_log_file_rotation(self, sys_argv_restore):
-        log_file = 'test_internal_log_file_rot.log'
-        reset_main_cae()        # ensure internal logging get enabled - even if we already created other cae instances
-        cae = ConsoleApp('0.0', 'test_log_file_rotation',
-                         logging_config=dict(file_name_def=log_file, file_size_max=.001))
-        # no longer needed since added sys_argv_restore:
-        # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
-        sys.argv = []
-        file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
-        assert file_name_chk == log_file
-        for i in range(MAX_NUM_LOG_FILES):
-            for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
-                cae.uprint("TestLogEntry{: >26}{: >26}".format(i, j))
-        cae._close_log_file()
-        assert os.path.exists(log_file)
-        # clean up
-        os.remove(log_file)
-        for i in range(MAX_NUM_LOG_FILES):
-            fn, ext = os.path.splitext(log_file)
-            rot_log_file = fn + "-{:0>{index_width}}".format(i+1, index_width=len(str(MAX_NUM_LOG_FILES))) + ext
-            assert os.path.exists(rot_log_file)
-            os.remove(rot_log_file)
-        # no longer needed since added sys_argv_restore: sys.argv = old_args
+class TestHelpers:
+    def test_round_traditional(self):
+        assert round_traditional(1.01) == 1
+        assert round_traditional(10.1, -1) == 10
+        assert round_traditional(1.123, 1) == 1.1
+        assert round_traditional(0.5) == 1
+        assert round_traditional(0.5001, 1) == 0.5
+
+        assert round_traditional(0.075, 2) == 0.08
+        assert round(0.075, 2) == 0.07
+
+    def test_sys_env_dict(self):
+        assert sys_env_dict().get('python_ver')
+        assert sys_env_dict().get('cwd')
+        assert sys_env_dict().get('frozen') is False
+
+        assert sys_env_dict().get('bundle_dir') is None
+        sys.frozen = True
+        assert sys_env_dict().get('bundle_dir')
+        del sys.__dict__['frozen']
+        assert sys_env_dict().get('bundle_dir') is None
+
+    def test_to_ascii(self):
+        assert to_ascii('äöü') == 'aou'
+
+    def test_calling_module(self):
+        assert calling_module() == 'test_console_app'
+        assert calling_module('') == 'test_console_app'
+        assert calling_module('xxx_test') == 'test_console_app'
+        assert calling_module(called_module=__name__) == '_pytest.python'
+        assert calling_module(called_module=__name__, depth=2) == '_pytest.python'
+        assert calling_module(called_module=__name__, depth=3) == 'pluggy.callers'
+        assert calling_module(called_module=__name__, depth=4) == 'pluggy.manager'
+        assert calling_module(called_module=__name__, depth=5) == 'pluggy.manager'
+        assert calling_module(called_module=__name__, depth=6) == 'pluggy.hooks'
+        assert calling_module(called_module=__name__, depth=7) == '_pytest.python'
+        assert calling_module(called_module=__name__, depth=8) == '_pytest.runner'
+        assert calling_module(called_module=__name__, depth=9) == 'pluggy.callers'
+        assert calling_module(called_module=__name__, depth=10) == 'pluggy.manager'
+        assert calling_module(called_module=__name__, depth=11) == 'pluggy.manager'
+        assert calling_module(called_module=__name__, depth=12) == 'pluggy.hooks'
+        assert calling_module(called_module=__name__, depth=13) == '_pytest.runner'
+        assert calling_module(called_module=__name__, depth=14) == '_pytest.runner'
+        assert calling_module(called_module=__name__, depth=15) == '_pytest.runner'
+        assert calling_module(called_module=__name__, depth=16) == '_pytest.runner'
+
+        assert calling_module(called_module=__name__, depth=0) == 'ae.console_app'
+        assert calling_module(called_module=__name__, depth=-1) == 'ae.console_app'
+        assert calling_module(called_module=__name__, depth=-2) == 'ae.console_app'
+
+        assert calling_module(called_module=None, depth=-1) == 'ae.console_app'
+        assert calling_module(called_module=None, depth=None) is None
+
+    def test_fix_encoding_umlaut(self):
+        assert fix_encoding('äöü') == '\\xe4\\xf6\\xfc'
+        assert fix_encoding('äöü', encoding=None) == '\\xe4\\xf6\\xfc'
+        assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-16') == 'äöü'
+        assert fix_encoding('äöü', encoding='cp1252') == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=0) == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=1) == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=3) == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=4) == 'äöü'
+        assert fix_encoding('äöü', encoding='utf-8', try_counter=5) is None
+
+    def test_fix_encoding_error(self, capsys, sys_argv_restore):
+        cae = ConsoleApp('0.0', 'test_fix_encoding_error', debug_level_def=DEBUG_LEVEL_VERBOSE)
+        sys.argv = list()
+        assert cae.get_option('debugLevel') == DEBUG_LEVEL_VERBOSE  # needed for to init logging env
+        assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
+        out, err = capsys.readouterr()
+        # STRANGE: capsys/capfd don't show uprint output - out=='' although it is shown in the pytest log/console
+        # possible fix in pytest 3.7.4 (https://github.com/pytest-dev/pytest/issues/3819) - current pytest is 3.6.2
+        # STILL RETURNING EMPTY STRING after updating pytest to 5.0.1
+        # .. got pip to work behind NTLM proxy by running Admin CMD and setting (but used NP_PROXY instead of NO_PROXY):
+        # .. set NP_PROXY="acumen\aecker:xxxx@proxy.acumen.es:8080"
+        # So on 18-Jul I did an update of all my pip packages with:
+        # .. pip list --outdated --format=freeze | grep -v '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U
+        # .. BUT still got the following errors:
+        ''' - requests 2.19.1 has requirement idna<2.8,>=2.5, but you'll have idna 2.8 which is incompatible.
+            - Successfully installed kivy.deps.gstreamer
+            Exception:
+            Traceback (most recent call last):
+              File "c:\python35\lib\shutil.py", line 391, in _rmtree_unsafe
+                os.rmdir(path)
+            OSError: [WinError 145] The directory is not empty: 'C:\\Users\\AECKER~1.ACU\\AppData\\Local\\Temp\\
+            pip-install-1etj4rnz\\kivy.deps.gstreamer\\
+            kivy_deps.gstreamer-0.1.17.data\\data\\share\\gstreamer\\share\\locale\\eo\\lc_messages'
+
+            During handling of the above exception, another exception occurred:
+            ...
+        After that I first tried to update pip with the command in the line above which worked without any error
+        Could not update kivy-examples
+        '''
+        print("OUT/ERR", out, err)  # TODO: out is always an empty string
+        assert out.startswith('ae.console_app.fix_encoding()') or out == ''
+
+    def test_uprint(self, capsys):
+        uprint()
+        out, err = capsys.readouterr()
+        assert (out == '\n' or out == '') and err == ''
+
+        cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', multi_threading=True)
+        (ae_instances or cae).debug_level = DEBUG_LEVEL_TIMESTAMPED
+        (ae_instances or cae).multi_threading = True
+        uprint(invalid_kwarg='ika')
+        out, err = capsys.readouterr()
+        assert ('ika' in out or out == '') and err == ''
+
+        us = chr(40960) + chr(1972) + chr(2013) + 'äöü'
+        uprint(us, encode_errors_def='strict')
+        out, err = capsys.readouterr()
+        assert (us in out or out == '') and err == ''
+
+        uprint(us, cae_instance=cae)
+        uprint(us, file=sys.stdout)
+        uprint(us, file=sys.stderr)
+        fna = 'uprint.txt'
+        fhd = open(fna, 'w', encoding='ascii', errors='strict')
+        uprint(us, file=fhd)
+        fhd.close()
+        os.remove(fna)
+        uprint(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
+        out, err = capsys.readouterr()
+        print(out)
+        assert us in out or out == ''
+        assert us in err
+
+        # print invalid/surrogate code point/char for to force UnicodeEncodeError exception in uprint (testing coverage)
+        us = chr(0xD801)
+        uprint(us, encode_errors_def='strict')
+
+        # multi_threading has to be reset for to prevent debug test run freeze (added multi_threading for coverage)
+        cae.multi_threading = False
 
 
 class TestConsoleAppBasics:
@@ -369,12 +358,11 @@ class TestConsoleAppBasics:
         gc.disable()
 
         cae = ConsoleApp('0.0', 'test_app_name')  # pytest freezes in debug run with kwarg: , multi_threading=True)
-        cae.shutdown(-69)
+        cae.shutdown(-69, testing=True)
 
         # noinspection PyShadowingNames
-        _ca_instance = cae
-        del cae
-        del _ca_instance        # TODO: this line should invoke _ca_instance.__del__() and .shutdown(0), BUT DOESN'T
+        ae_instances[''] = cae
+        del cae     # TODO: this line should invoke ae_instances.__del__() and .shutdown(0), BUT DOESN'T
         gc.collect()
 
 
@@ -757,163 +745,6 @@ class TestFullStackTrace:
             assert full_stack_trace(ex)
 
 
-class TestProgress:
-    def test_init_start_msg(self):
-        msg = 'msg_text'
-        cae = ConsoleApp('0.0', 'test_progress_init')
-        progress = Progress(cae, total_count=1, start_msg=msg, nothing_to_do_msg=msg)
-        progress.finished(error_msg='t_err_msg')
-
-    def test_init_nothing_to_do(self):
-        msg = 'msg_text'
-        cae = ConsoleApp('0.0', 'test_progress_init')
-        progress = Progress(cae, nothing_to_do_msg=msg)
-        progress.next(error_msg='test_error_msg')
-
-
-class TestNamedLocks:
-    def test_sequential(self):
-        nl = NamedLocks()
-        assert len(nl.active_lock_counters) == 0
-        nl2 = NamedLocks()
-        assert len(nl2.active_lock_counters) == 0
-
-        assert nl.acquire('test', timeout=0.01)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-        assert len(nl2.active_lock_counters) == 1 and nl2.active_lock_counters['test'] == 1
-
-        nl.release('test')
-        assert len(nl.active_lock_counters) == 0
-        assert len(nl2.active_lock_counters) == 0
-
-        assert nl2.acquire('test', timeout=.01)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-        assert len(nl2.active_lock_counters) == 1 and nl2.active_lock_counters['test'] == 1
-
-        nl2.release('test')
-        assert len(nl.active_lock_counters) == 0
-        assert len(nl2.active_lock_counters) == 0
-
-    def test_locking_with_timeout(self):
-        nl = NamedLocks(reentrant_locks=False)
-        assert nl.acquire('test', timeout=0.01)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2 = NamedLocks(reentrant_locks=False)
-        assert not nl2.acquire('test', timeout=.01)
-        assert len(nl2.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl.release('test')
-        assert len(nl2.active_lock_counters) == 0
-        assert nl2.acquire('test', timeout=.01)
-        assert len(nl2.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2.release('test')
-        assert len(nl2.active_lock_counters) == 0
-
-    def test_reentrant_locking_with_timeout(self):
-        nl = NamedLocks()
-        assert nl.acquire('test', timeout=0.01)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2 = NamedLocks()
-        assert nl2.acquire('test', timeout=.01)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 2
-
-        nl.release('test')
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2.release('test')
-        assert len(nl2.active_lock_counters) == 0
-
-        assert nl2.acquire('test', timeout=.01)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2.release('test')
-        assert len(nl.active_lock_counters) == 0
-
-    def test_non_blocking_args(self):
-        nl = NamedLocks(reentrant_locks=False)
-        assert nl.acquire('test')
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2 = NamedLocks(reentrant_locks=False)
-        assert nl2.acquire('otherTest')
-        assert len(nl.active_lock_counters) == 2 and nl.active_lock_counters['test'] == 1 \
-            and nl.active_lock_counters['otherTest'] == 1
-
-        nl2.release('otherTest')
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        assert not nl2.acquire('test', blocking=False)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        assert not nl2.acquire('test', False)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        assert not nl2.acquire('test', timeout=.01)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl.release('test')
-        assert len(nl2.active_lock_counters) == 0
-
-        assert nl2.acquire('test', blocking=False)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2.release('test')
-        assert len(nl2.active_lock_counters) == 0
-
-    def test_reentrant_non_blocking_args(self):
-        nl = NamedLocks()
-        assert nl.acquire('test')
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2 = NamedLocks()
-        assert nl2.acquire('otherTest')
-        assert len(nl.active_lock_counters) == 2 and nl.active_lock_counters['test'] == 1 \
-            and nl.active_lock_counters['otherTest'] == 1
-        nl2.release('otherTest')
-
-        assert nl2.acquire('test', blocking=False)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 2
-
-        assert nl2.acquire('test', False)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 3
-
-        assert nl2.acquire('test', timeout=.01)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 4
-
-        nl.release('test')
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 3
-
-        nl.release('test')
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 2
-
-        nl.release('test')
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl.release('test')
-        assert len(nl2.active_lock_counters) == 0
-
-        assert nl2.acquire('test', blocking=False)
-        assert len(nl.active_lock_counters) == 1 and nl.active_lock_counters['test'] == 1
-
-        nl2.release('test')
-        assert len(nl2.active_lock_counters) == 0
-
-    def test_with_context_with(self):
-        with NamedLocks('test'):
-            pass
-
-    def test_error_context(self):
-        with NamedLocks('test2') as nl:
-            nl.release('test2')
-
-        with NamedLocks('test3') as nl:
-            assert 'test3' in nl.active_locks
-            assert nl.active_locks.pop('test3')
-
-
 class TestConfigMainFileModified:
     def test_not_modified(self, config_fna_vna_vva):
         config_fna_vna_vva(
@@ -941,48 +772,6 @@ class TestConfigMainFileModified:
         assert cfg_val == new_var_val
 
         assert not cae.config_main_file_modified()
-
-
-class TestSetting:
-    def test_init(self):
-        s = Setting()
-        assert s.value is None
-
-        s = Setting(value='test_val')
-        assert isinstance(s.value, str)
-        assert s.value == 'test_val'
-
-    def test_bool_values(self):
-        bs = 'True'
-        s = Setting(value=bs, value_type=bool)
-        assert isinstance(s.value, bool)
-        assert s.value is True
-
-        bn = 1
-        s = Setting(value=bn, value_type=bool)
-        assert isinstance(s.value, bool)
-        assert s.value is True
-
-    def test_byte_values(self):
-        bs = b'TEST'
-        s = Setting(value=bs)
-        assert isinstance(s.value, bytes)
-        assert s.value == bs
-
-        s = Setting(value=bs, value_type=str)
-        assert isinstance(s.value, str)
-        assert s.value == 'TEST'
-
-    def test_date_values(self):
-        ds = '2020-12-24'
-        s = Setting(value=ds, value_type=datetime.date)
-        assert isinstance(s.value, datetime.date)
-        assert s.value == datetime.datetime.strptime(ds, DATE_ISO).date()
-
-        dts = datetime.datetime.now().strftime(DATE_TIME_ISO)
-        s = Setting(value=dts, value_type=datetime.datetime)
-        assert isinstance(s.value, datetime.datetime)
-        assert s.value == datetime.datetime.strptime(dts, DATE_TIME_ISO)
 
 
 class TestDuplicateSysOut:
