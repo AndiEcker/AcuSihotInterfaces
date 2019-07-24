@@ -76,7 +76,7 @@ class LockFile:
             try:
                 _lock_func(self._fp.fileno(), _unlock_flags, _LOCK_LEN)
             except IOError:
-                if not self._timed_out:     # hide error after auto_unlock_timeout Q&D ?!?!?
+                if not self._timed_out:     # hide error after auto_unlock_timeout
                     raise
             self._fp.close()
             self._fp = None

@@ -13,8 +13,8 @@ class NamedLocks:
     More on system wide named locking: https://stackoverflow.com/questions/6931342/system-wide-mutex-in-python-on-linux.
     """
     locks_change_lock = threading.Lock()
-    active_locks = {}
-    active_lock_counters = {}
+    active_locks = dict()
+    active_lock_counters = dict()
 
     def __init__(self, *lock_names, reentrant_locks=True, sys_lock=False):
         self._lock_names = lock_names

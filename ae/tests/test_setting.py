@@ -1,3 +1,4 @@
+import pytest
 import datetime
 
 from ae import DATE_ISO, DATE_TIME_ISO
@@ -44,3 +45,9 @@ class TestSetting:
         s = Setting(value=dts, value_type=datetime.datetime)
         assert isinstance(s.value, datetime.datetime)
         assert s.value == datetime.datetime.strptime(dts, DATE_TIME_ISO)
+
+    def test_value_exception(self):
+        ds = '2020-66-99'
+        s = Setting(value=ds, value_type=datetime.date)
+        with pytest.raises(ValueError):
+            _ = s.value

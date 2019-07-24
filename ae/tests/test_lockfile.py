@@ -1,8 +1,5 @@
-import glob
-
 import pytest
-
-# import datetime
+import glob
 import time
 
 from ae.lockfile import *
@@ -52,20 +49,37 @@ class TestLockFile:
         assert lock_handle.lock() == ""
         lock_handle.unlock()
 
+        lock_handle.unlock()
+
     def test_timed_out_lock(self):
         lock_handle = LockFile(LOCK_FILE_NAME)
         assert lock_handle.lock() == ""
         time.sleep(.1)
         lh2 = LockFile(LOCK_FILE_NAME, auto_unlock_timeout=datetime.timedelta(microseconds=1))
-        lock2_ret = lh2.lock()
-        assert lock2_ret == ""
+        assert lh2.lock() == ""
         # had to first call unlock on the first lock to prevent exception on os.rename in lh2.unlock() call
         lock_handle.unlock()
         time.sleep(1)
         lh2.unlock()
         lock_handle.unlock()
+
+        # second try
+        lock_handle = LockFile(LOCK_FILE_NAME)
+        assert lock_handle.lock() == ""
+        time.sleep(.1)
+        lh2 = LockFile(LOCK_FILE_NAME, auto_unlock_timeout=datetime.timedelta(microseconds=1))
+        assert lh2.lock() == ""
+        # had to first call unlock on the first lock to prevent exception on os.rename in lh2.unlock() call
+        lock_handle.unlock()
+        time.sleep(1)
+        lh2._timed_out = False
+        with pytest.raises(PermissionError):
+            lh2.unlock()
+        lh2._timed_out = True
+        lh2.unlock()
+        lock_handle.unlock()
+
         timed_out_log_files = list(glob.glob(LOCK_FILE_NAME + "*"))
-        assert len(timed_out_log_files) == 1
+        assert len(timed_out_log_files) == 2
         for fn in timed_out_log_files:
             os.remove(fn)
-        assert lock2_ret == ""

@@ -518,7 +518,7 @@ class ConsoleApp:
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
         self._main_cfg_fnam = cwd_path_fnam + INI_EXT  # default will be overwritten by config_load()
         sys_env_id = self.sys_env_id or 'TEST'
-        for cfg_path in (app_path, os.path.join(cwd_path, '..', ''), cwd_path, ):
+        for cfg_path in (app_path, os.path.join(cwd_path, '..'), cwd_path, ):
             for cfg_file in ('.console_app_env.cfg', '.sys_env' + sys_env_id + '.cfg', '.sys_env.cfg', ):
                 self.config_file_add(os.path.join(cfg_path, cfg_file))
 
