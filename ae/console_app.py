@@ -55,12 +55,16 @@ config_lock = threading.Lock()
 config_read_lock = threading.Lock()
 
 
+def main_ae_instance():
+    return ae_instances.get('')
+
+
 def _get_debug_level():
     """ determining the debug level of the console app env instance of the currently running app.
 
     :return: current debug level.
     """
-    main_instance = ae_instances.get('')
+    main_instance = main_ae_instance()
     if main_instance and 'debugLevel' in main_instance.config_options:
         return main_instance.config_options['debugLevel'].value
     return DEBUG_LEVEL_DISABLED
@@ -213,7 +217,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     enc = file.encoding
 
     if cae_instance is None:
-        cae_instance = ae_instances.get('')
+        cae_instance = main_ae_instance()
     if cae_instance is not None:
         if getattr(cae_instance, 'multi_threading', False):            # add thread ident
             print_objects = (" <{: >6}>".format(threading.get_ident()),) + print_objects
@@ -315,8 +319,9 @@ class ConsoleApp:
             :ivar _log_file_index       index of the current rotation log file backup.
         """
         global ae_instances
-        if ae_instances.get('') is None:
-            ae_instances[''] = self
+        main_instance = main_ae_instance()
+        if main_instance is None:
+            ae_instances[''] = main_instance = self
         self.sys_env_id = sys_env_id
         if sys_env_id not in ae_instances:
             ae_instances[sys_env_id] = self
@@ -360,7 +365,9 @@ class ConsoleApp:
         if lcd:
             # logging.basicConfig(level=logging.DEBUG, style='{')
             logging.config.dictConfig(lcd)     # configure logging module
-        self.logging_conf_dict = ae_instances.get('').logging_conf_dict = lcd or dict()
+        else:
+            lcd = dict()
+        self.logging_conf_dict = main_instance.logging_conf_dict = lcd
 
         self.suppress_stdout = suppress_stdout
         if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
@@ -374,7 +381,7 @@ class ConsoleApp:
         self.add_option('logFile', "Copy stdout and stderr into log file", logging_config.get('file_name_def', ''), 'L')
 
     def __del__(self):
-        if ae_instances.get('') is self and not self._shut_down:
+        if main_ae_instance() is self and not self._shut_down:
             self.shutdown()
 
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
@@ -444,7 +451,7 @@ class ConsoleApp:
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
                                             .format(name, given_value, allowed_values))
 
-        if ae_instances.get('') is self and not self.logging_conf_dict:
+        if main_ae_instance() is self and not self.logging_conf_dict:
             self._log_file_name = self.config_options['logFile'].value
             if self._log_file_name:
                 try:                        # enable logging
@@ -461,7 +468,7 @@ class ConsoleApp:
             self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
                         _debug_level, logger=_logger)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
-            if ae_instances.get('') is self:
+            if main_ae_instance() is self:
                 self.uprint("  ##  System Environment:", logger=_logger)
                 self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}), logger=_logger)
             else:
@@ -470,7 +477,7 @@ class ConsoleApp:
 
         self.startup_end = datetime.datetime.now()
         self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end, logger=_logger)
-        if ae_instances.get('') is not self and not self.sys_env_id:
+        if main_ae_instance() is not self and not self.sys_env_id:
             self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID",
                         logger=_logger)
         self.uprint("####  Startup finished....  ####", logger=_logger)
@@ -518,7 +525,7 @@ class ConsoleApp:
         cwd_path_fnam = os.path.join(cwd_path, self._app_name)
         self._main_cfg_fnam = cwd_path_fnam + INI_EXT  # default will be overwritten by config_load()
         sys_env_id = self.sys_env_id or 'TEST'
-        for cfg_path in (app_path, os.path.join(cwd_path, '..'), cwd_path, ):
+        for cfg_path in (os.path.join(cwd_path, '..', '..'), app_path, os.path.join(cwd_path, '..'), cwd_path, ):
             for cfg_file in ('.console_app_env.cfg', '.sys_env' + sys_env_id + '.cfg', '.sys_env.cfg', ):
                 self.config_file_add(os.path.join(cfg_path, cfg_file))
 
@@ -707,7 +714,7 @@ class ConsoleApp:
             self._nul_std_out.close()
             self._nul_std_out = None
 
-        if ae_instances.get('') is self:
+        if main_ae_instance() is self:
             self._shut_down = True
             if not testing:
                 sys.exit(exit_code)

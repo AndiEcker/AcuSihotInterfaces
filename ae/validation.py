@@ -5,6 +5,7 @@
 """
 import json
 import time
+from string import ascii_letters, digits
 
 import requests
 
@@ -35,6 +36,7 @@ def correct_email(email, changed=False, removed=None):
     if removed is None:
         removed = list()
 
+    letters_or_digits = ascii_letters + digits
     in_local_part = True
     in_quoted_part = False
     in_comment = False
@@ -75,8 +77,8 @@ def correct_email(email, changed=False, removed=None):
         elif ch == '@' and in_local_part and not in_quoted_part:
             in_local_part = False
             domain_beg_idx = idx + 1
-        elif ch.isalnum():
-            pass    # uppercase and lowercase Latin letters A to Z and a to z
+        elif ch in letters_or_digits:  # ch.isalnum():
+            pass  # uppercase and lowercase Latin letters A to Z and a to z (isalnum() includes also umlauts)
         elif ord(ch) > 127 and in_local_part:
             pass    # international characters above U+007F
         elif ch == '.' and in_local_part and not in_quoted_part and last_ch != '.' and idx and next_ch != '@':
@@ -180,7 +182,7 @@ def validate_flag_info(validate_flag):
     elif validate_flag in (EMAIL_ALL, PHONE_ALL, ADDR_ALL):
         info = "All"
     else:
-        info = validate_flag + " (undeclared)"
+        info = str(validate_flag) + " (undeclared)"
 
     return info
 
@@ -210,14 +212,12 @@ def init_validation(cae):
     if email_validation != EMAIL_DO_NOT_VALIDATE:
         cae.uprint(prefix + "Email validation:", validate_flag_info(email_validation))
         api_key = cae.get_config('emailValidatorApiKey')
-        if not api_key:
-            cae.uprint("****  SfClientValidator email validation configuration error: api key is missing")
-            cae.shutdown(12003)
+        assert api_key, "init_validation() email configuration error: api key emailValidatorApiKey is missing"
         args = dict()
-        pause_seconds = cae.get_config('emailValidatorPauseSeconds')
+        pause_seconds = cae.get_config('emailValidatorPauseSeconds', value_type=float)
         if pause_seconds:
             args['pause_seconds'] = pause_seconds
-        max_retries = cae.get_config('emailValidatorMaxRetries')
+        max_retries = cae.get_config('emailValidatorMaxRetries', value_type=int)
         if max_retries:
             args['max_retries'] = max_retries
         email_validator = EmailValidator(cae.get_config('emailValidatorBaseUrl'), api_key, **args)
@@ -226,14 +226,12 @@ def init_validation(cae):
     if phone_validation != PHONE_DO_NOT_VALIDATE:
         cae.uprint(prefix + "Phone validation:", validate_flag_info(phone_validation))
         api_key = cae.get_config('phoneValidatorApiKey')
-        if not api_key:
-            cae.uprint("****  SfClientValidator phone validation configuration error: api key is missing")
-            cae.shutdown(12006)
+        assert api_key, "init_validation() phone configuration error: api key phoneValidatorApiKey is missing"
         args = dict()
-        pause_seconds = cae.get_config('phoneValidatorPauseSeconds')
+        pause_seconds = cae.get_config('phoneValidatorPauseSeconds', value_type=float)
         if pause_seconds:
             args['pause_seconds'] = pause_seconds
-        max_retries = cae.get_config('phoneValidatorMaxRetries')
+        max_retries = cae.get_config('phoneValidatorMaxRetries', value_type=int)
         if max_retries:
             args['max_retries'] = max_retries
         alternative_country = cae.get_config('phoneValidatorAlternativeCountry')
@@ -245,14 +243,12 @@ def init_validation(cae):
     if addr_validation != ADDR_DO_NOT_VALIDATE:
         cae.uprint(prefix + "Address validation:", validate_flag_info(addr_validation))
         api_key = cae.get_config('addressValidatorApiKey')
-        if not api_key:
-            cae.uprint("****  SfClientValidator address validation configuration error: api key is missing")
-            cae.shutdown(12009)
+        assert api_key, "init_validation() address configuration error: api key addressValidatorApiKey is missing"
         args = dict()
-        pause_seconds = cae.get_config('addressValidatorPauseSeconds')
+        pause_seconds = cae.get_config('addressValidatorPauseSeconds', value_type=float)
         if pause_seconds:
             args['pause_seconds'] = pause_seconds
-        max_retries = cae.get_config('addressValidatorMaxRetries')
+        max_retries = cae.get_config('addressValidatorMaxRetries', value_type=int)
         if max_retries:
             args['max_retries'] = max_retries
         search_url = cae.get_config('addressValidatorSearchUrl')
@@ -294,7 +290,7 @@ def init_validation(cae):
         default_email_address, invalid_email_fragments, ignore_case_fields, changeable_fields
 
 
-def clients_to_validate(conn, filter_sf_clients='', filter_sf_rec_types=None,
+def clients_to_validate(conn, filter_sf_clients='', filter_sf_rec_types=(),
                         email_validation=EMAIL_NOT_VALIDATED, phone_validation=PHONE_DO_NOT_VALIDATE,
                         addr_validation=ADDR_DO_NOT_VALIDATE):
     """
