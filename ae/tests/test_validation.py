@@ -20,13 +20,13 @@ class TestOfflineContactValidation:
         # edge cases: empty string or None as email
         assert correct_email('') == ('', False)
         assert correct_email(None) == ('', False)
-
         r = list()
         assert correct_email('', removed=r) == ('', False)
         assert r == []
         r = list()
         assert correct_email(None, removed=r) == ('', False)
         assert r == []
+
         # special characters !#$%&'*+-/=?^_`{|}~; are allowed in local part
         r = list()
         assert correct_email('john_smith@example.com', removed=r) == ('john_smith@example.com', False)

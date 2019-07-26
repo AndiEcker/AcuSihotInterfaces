@@ -290,7 +290,7 @@ class ConsoleApp:
             :param config_eval_vars:        dict of additional application specific data values that are used in eval
                                             expressions (e.g. AcuSihotMonitor.ini).
             :param additional_cfg_files:    list of additional CFG/INI file names (opt. incl. abs/rel. path).
-            :param option_value_stripper:   function for to strip option value for to check if is an allowed value.
+            :param option_value_stripper:   function for to strip/reformat Setting option value for validation.
             :param multi_threading:         pass True if instance is used in multi-threading app.
             :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
             :param formatter_class:         alternative formatter class passed onto ArgumentParser instantiation.

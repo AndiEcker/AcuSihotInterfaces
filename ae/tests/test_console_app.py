@@ -468,8 +468,14 @@ class TestConfigOptions:
         cae.add_option('testAppOptChoicesSCWC', 'test multiple choices', [], 'Z', choices=['a', '1'], multiple=True)
         assert cae.get_option('testAppOptChoicesSCWC') == ['a', '1']
 
+    def test_multiple_option_stripped_value_with_choices(self, sys_argv_restore):
+        cae = ConsoleApp('0.0', 'test_multiple_option_stripped_with_choices', option_value_stripper=lambda v: v[-1])
+        sys.argv = ['test', "-Z=x6", "-Z=yyy9"]
+        cae.add_option('testAppOptChoicesSVWC', 'test multiple choices', [], 'Z', choices=['6', '9'], multiple=True)
+        assert cae.get_option('testAppOptChoicesSVWC') == ['x6', 'yyy9']
+
     def test_multiple_option_single_char_fail_with_invalid_choices(self, sys_argv_restore):
-        cae = ConsoleApp('0.0', 'test_multiple_option_with_choices')
+        cae = ConsoleApp('0.0', 'test_multiple_option_fail_with_choices')
         sys.argv = ['test', "-Z=x", "-Z=9"]
         cae.add_option('testAppOptChoices', 'test multiple choices', [], 'Z', choices=['a', '1'], multiple=True)
         with pytest.raises(ArgumentError):
