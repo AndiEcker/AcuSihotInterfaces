@@ -44,7 +44,7 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
                               (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
 ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
 
-MAX_NUM_LOG_FILES = 99
+MAX_NUM_LOG_FILES = 69
 
 # initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
 ae_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, ConsoleApp]
@@ -338,6 +338,8 @@ class ConsoleApp:
 
         self.config_eval_vars = config_eval_vars or dict()
 
+        if not sys.argv:    # prevent unit tests to fail on sys.argv == list()
+            sys.argv.append(os.path.join(os.getcwd(), 'TesT.exe'))
         app_path_fnam_ext = sys.argv[0]
         app_fnam = os.path.basename(app_path_fnam_ext)
         self._app_path = os.path.dirname(app_path_fnam_ext)
@@ -468,12 +470,10 @@ class ConsoleApp:
             self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
                         _debug_level, logger=_logger)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
-            if main_ae_instance() is self:
-                self.uprint("  ##  System Environment:", logger=_logger)
-                self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}), logger=_logger)
-            else:
-                self.uprint(" ###  Initialized additional ConsoleApp instance for system env id", self.sys_env_id,
-                            logger=_logger)
+            if self.sys_env_id or main_ae_instance() is not self:
+                self.uprint(" ###  Initialized ConsoleApp instance for system env id", self.sys_env_id, logger=_logger)
+            self.uprint("  ##  System Environment:", logger=_logger)
+            self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}), logger=_logger)
 
         self.startup_end = datetime.datetime.now()
         self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end, logger=_logger)
@@ -631,8 +631,8 @@ class ConsoleApp:
                 # .. we cannot use uprint here because of recursions on log file rotation, so use built-in print()
                 # .. self.uprint()
                 # .. self.uprint('EoF')
-                print()
-                print('EoF')
+                print(file=stream_file)
+                print('EoF', file=stream_file)
             except Exception as ex:
                 self.dprint("Ignorable {} end-of-file marker exception={}".format(stream_name, ex), logger=_logger)
 
@@ -665,16 +665,19 @@ class ConsoleApp:
         if os.path.exists(self._log_file_name):     # prevent errors after unit test cleanup
             os.rename(self._log_file_name, dfn)
 
-    def _close_log_file(self):
+    def _close_log_file(self, full_reset=False):
         global app_std_out, app_std_err
         if self._log_file_obj:
             self._append_eof_and_flush_file(self._log_file_obj, "log file")
             app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
             app_std_out.log_file = None
-            sys.stderr = ori_std_err        # set back for to prevent stack overflow/recursion error with kivy logger:
+            sys.stderr = ori_std_err        # set back for to prevent stack overflow/recursion with kivy logger
             sys.stdout = ori_std_out        # .. "Fatal Python error: Cannot recover from stack overflow"
             self._log_file_obj.close()
             self._log_file_obj = None
+            if full_reset:
+                app_std_err = ori_std_err   # set back for allow full reset of log for unit tests
+                app_std_out = ori_std_out
         elif self.logging_conf_dict:
             logging.shutdown()
 

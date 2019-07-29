@@ -32,30 +32,63 @@ def config_fna_vna_vva(request):
     return _setup_and_teardown
 
 
-class TestInternalLogFileRotation:
-    """ this test has to run first because only the 1st ConsoleApp instance will be able to create an internal log file
-    """
+class TestInternalLogging:
     def test_log_file_rotation(self, sys_argv_restore):
+        """ this test has to run first because only the 1st ConsoleApp instance can create an internal log file
+        """
         log_file = 'test_internal_log_file_rot.log'
         cae = ConsoleApp('0.0', 'test_log_file_rotation',
+                         multi_threading=True,
                          logging_config=dict(file_name_def=log_file, file_size_max=.001))
         # no longer needed since added sys_argv_restore:
         # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
         sys.argv = []
         file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
         assert file_name_chk == log_file
-        for i in range(MAX_NUM_LOG_FILES):
+        for i in range(MAX_NUM_LOG_FILES + 9):
             for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
                 cae.uprint("TestLogEntry{: >26}{: >26}".format(i, j))
         cae._close_log_file()
         assert os.path.exists(log_file)
         # clean up
         os.remove(log_file)
-        for i in range(MAX_NUM_LOG_FILES):
+        for i in range(MAX_NUM_LOG_FILES + 9):
             fn, ext = os.path.splitext(log_file)
             rot_log_file = fn + "-{:0>{index_width}}".format(i+1, index_width=len(str(MAX_NUM_LOG_FILES))) + ext
-            assert os.path.exists(rot_log_file)
-            os.remove(rot_log_file)
+            if os.path.exists(rot_log_file):
+                os.remove(rot_log_file)
+
+    def test_open_log_file_with_suppressed_stdout(self):
+        """ another test that need to work with the first instance
+        """
+        log_file = 'test_internal_log_file_rot.log'
+        cae = ConsoleApp('0.0', 'test_log_file_rotation',
+                         suppress_stdout=True,      # added for coverage - only works for first ConsoleApp instance
+                         logging_config=dict(file_name_def=log_file, file_size_max=.001))
+        cae._close_log_file(full_reset=True)
+        sys.argv = []
+        file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
+        assert file_name_chk == log_file
+
+    def test_invalid_log_file_name(self, sys_argv_restore):
+        log_file = ':/:invalid:/:'
+        cae = ConsoleApp('0.0', 'test_invalid_log_file_name', logging_config=dict(file_name_def=log_file))
+        sys.argv = []
+        file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
+        assert file_name_chk == log_file
+
+    def test_log_file_flush(self, sys_argv_restore):
+        log_file = 'test_internal_log_flush.log'
+        cae = ConsoleApp('0.0', 'test_log_file_flush', logging_config=dict(file_name_def=log_file))
+        sys.argv = []
+        file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
+        assert file_name_chk == log_file
+        # cause/provoke _append_eof_and_flush_file() exceptions for coverage
+        cae._append_eof_and_flush_file(cae._log_file_obj, 'stream file')
+        cae._append_eof_and_flush_file(None, 'invalid stream file')
+        cae._log_file_obj.close()
+        cae._append_eof_and_flush_file(cae._log_file_obj, 'stream file')
+        os.remove(log_file)
 
 
 class TestPythonLogging:
@@ -177,7 +210,7 @@ class TestPythonLogging:
         assert len(file_contents) in (15, 17)       # +2 '  **  Additional instance' entries
         for fc in file_contents:
             assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(entry_prefix) \
-                or fc.startswith('  **  Additional instance') or fc == ''
+                or fc.startswith('TesT  V 0.0') or fc.startswith('  **  Additional instance') or fc == ''
 
 
 class TestHelpers:
@@ -335,23 +368,28 @@ class TestConsoleAppBasics:
         cae.add_parameter('test_arg')
 
     def test_get_parameter(self, sys_argv_restore):
-        cae = ConsoleApp('0.0', 'test_add_parameter')
+        cae = ConsoleApp('0.0', 'test_get_parameter')
         cae.add_parameter('test_arg')
         arg_val = 'test_arg_val'
         sys.argv = ['test_app', arg_val]
         assert cae.get_parameter('test_arg') == arg_val
 
     def test_show_help(self):
-        cae = ConsoleApp('0.0', 'test_add_parameter')
+        cae = ConsoleApp('0.0', 'test_show_help')
         cae.show_help()
 
     def test_sys_env_id(self, capsys):
         sei = 'TST'
-        cae = ConsoleApp('0.0', 'test_add_parameter', sys_env_id=sei)
+        cae = ConsoleApp('0.0', 'test_sys_env_id', sys_env_id=sei)
         assert cae.sys_env_id == sei
         cae.uprint(sei)     # increase coverage
         out, err = capsys.readouterr()
         assert sei in out or out == ''       # TODO: out is empty string
+
+        # special case for error code path coverage
+        ae_instances[''] = ConsoleApp('0.0', 'test_sys_env_id_COPY')
+        cae.sys_env_id = ''
+        assert cae.get_option('debugLevel') == DEBUG_LEVEL_DISABLED
 
     def test_shutdown(self):
         import gc
@@ -362,7 +400,7 @@ class TestConsoleAppBasics:
 
         # noinspection PyShadowingNames
         ae_instances[''] = cae
-        del cae     # TODO: this line should invoke ae_instances.__del__() and .shutdown(0), BUT DOESN'T
+        del cae
         gc.collect()
 
 
@@ -416,14 +454,14 @@ class TestConfigOptions:
         assert cae.set_config(var_name, val)  # will be set, but returning error because test.ini does not exist
         assert cae.get_config(var_name) == val.strftime(DATE_ISO)
 
-    def test_set_config_error(self, config_fna_vna_vva):
+    def test_set_config_file_error(self, config_fna_vna_vva):
         file_name, var_name, _ = config_fna_vna_vva()
-        cae = ConsoleApp('0.0', 'test_set_config_with_reload', additional_cfg_files=[file_name])
+        cae = ConsoleApp('0.0', 'test_set_config_file_error', additional_cfg_files=[file_name])
         val = 'test_value'
 
         assert cae.set_config(var_name, val, cfg_fnam=os.path.join(os.getcwd(), 'not_existing.ini'))
         with open(file_name, 'w'):      # open to lock file - so next set_config will fail
-            assert cae.set_config(var_name, val)
+            assert cae.set_config(var_name, val, cfg_fnam=file_name)
 
         # new instance with not-existing additional config file
         file_name = 'invalid.ini'
@@ -732,6 +770,11 @@ class TestConfigOptions:
         cae = ConsoleApp('0.3', 'test_config_eval', additional_cfg_files=[file_name])
         sys.argv = list()
         assert cae.get_option(var_name) == DEBUG_LEVEL_TIMESTAMPED
+
+    def test_sys_env_id_with_debug(self, sys_argv_restore):
+        cae = ConsoleApp('0.1', 'test_sys_env_id_with_debug', sys_env_id='OTHER')
+        sys.argv = ['test', '-D=' + str(DEBUG_LEVEL_TIMESTAMPED)]
+        assert cae.get_option('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
 
 
 class TestIllegalXmlChars:
