@@ -1,18 +1,22 @@
 # TODO: remove " or out == ''" as soon as capsys bug is fixed
+import pytest
+
 import sys
 import os
 import datetime
+import glob
 import time
 import logging
+import threading
+
 from argparse import ArgumentError
 
-import pytest
 
 from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO
 from ae.console_app import (fix_encoding, round_traditional, sys_env_dict, to_ascii, full_stack_trace, uprint,
-                            ae_instances,
+                            ae_instances, calling_module,
                             ConsoleApp, _DuplicateSysOut,
-                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT, calling_module, )
+                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT)
 
 
 @pytest.fixture
@@ -32,14 +36,19 @@ def config_fna_vna_vva(request):
     return _setup_and_teardown
 
 
+main_cae_instance = None
+
+
 class TestInternalLogging:
     def test_log_file_rotation(self, sys_argv_restore):
         """ this test has to run first because only the 1st ConsoleApp instance can create an internal log file
         """
-        log_file = 'test_internal_log_file_rot.log'
+        global main_cae_instance
+        log_file = 'test_internal_log.log'
         cae = ConsoleApp('0.0', 'test_log_file_rotation',
                          multi_threading=True,
                          logging_config=dict(file_name_def=log_file, file_size_max=.001))
+        main_cae_instance = cae     # keep reference to prevent garbage collection
         # no longer needed since added sys_argv_restore:
         # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
         sys.argv = []
@@ -61,21 +70,19 @@ class TestInternalLogging:
     def test_open_log_file_with_suppressed_stdout(self):
         """ another test that need to work with the first instance
         """
-        log_file = 'test_internal_log_file_rot.log'
-        cae = ConsoleApp('0.0', 'test_log_file_rotation',
-                         suppress_stdout=True,      # added for coverage - only works for first ConsoleApp instance
-                         logging_config=dict(file_name_def=log_file, file_size_max=.001))
-        cae._close_log_file(full_reset=True)
+        cae = main_cae_instance
+        cae.suppress_stdout = True
         sys.argv = []
-        file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
-        assert file_name_chk == log_file
+        cae._parsed_args = False
+        cae._close_log_file(full_reset=True)
+        _ = cae.get_option('debugLevel')   # get_option() has to be called at least once for to create log file
+        cae._close_log_file()
+        os.remove(cae._log_file_name)
 
     def test_invalid_log_file_name(self, sys_argv_restore):
         log_file = ':/:invalid:/:'
-        cae = ConsoleApp('0.0', 'test_invalid_log_file_name', logging_config=dict(file_name_def=log_file))
-        sys.argv = []
-        file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
-        assert file_name_chk == log_file
+        cae = ConsoleApp('0.0', 'test_invalid_log_file_name')
+        cae.activate_internal_logging(log_file)     # only for coverage of exception
 
     def test_log_file_flush(self, sys_argv_restore):
         log_file = 'test_internal_log_flush.log'
@@ -83,12 +90,8 @@ class TestInternalLogging:
         sys.argv = []
         file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
         assert file_name_chk == log_file
-        # cause/provoke _append_eof_and_flush_file() exceptions for coverage
-        cae._append_eof_and_flush_file(cae._log_file_obj, 'stream file')
-        cae._append_eof_and_flush_file(None, 'invalid stream file')
-        cae._log_file_obj.close()
-        cae._append_eof_and_flush_file(cae._log_file_obj, 'stream file')
-        os.remove(log_file)
+        # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-file object
+        cae._append_eof_and_flush_file(cae, 'invalid stream file object')
 
 
 class TestPythonLogging:
@@ -198,17 +201,18 @@ class TestPythonLogging:
         cae.dprint(log_text, minimum_debug_level=DEBUG_LEVEL_DISABLED)
         assert caplog.text.endswith(log_text + "\n")
 
-        # final logging checks
-        logging.shutdown()
+        # final checks of log file contents
+        cae._close_log_file()       # does also logging.shutdown()
         file_contents = list()
-        import glob
         for lf in glob.glob(log_file + '*'):
             with open(lf) as fd:
                 fc = fd.read()
             file_contents.append(fc)
             os.remove(lf)     # remove log files from last test run
-        assert len(file_contents) in (15, 17)       # +2 '  **  Additional instance' entries
+        assert len(file_contents) >= 15     # in (15, 17) # +2 '  **  Additional instance' entries, but meanwhile 21
         for fc in file_contents:
+            if fc.startswith(' <'):
+                fc = fc[fc.index('> ') + 2:]
             assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(entry_prefix) \
                 or fc.startswith('TesT  V 0.0') or fc.startswith('  **  Additional instance') or fc == ''
 
@@ -279,9 +283,9 @@ class TestHelpers:
         assert fix_encoding('äöü', encoding='utf-8', try_counter=5) is None
 
     def test_fix_encoding_error(self, capsys, sys_argv_restore):
-        cae = ConsoleApp('0.0', 'test_fix_encoding_error', debug_level_def=DEBUG_LEVEL_VERBOSE)
+        cae = main_cae_instance
         sys.argv = list()
-        assert cae.get_option('debugLevel') == DEBUG_LEVEL_VERBOSE  # needed for to init logging env
+        cae.config_options['debugLevel'].value = DEBUG_LEVEL_VERBOSE
         assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
         out, err = capsys.readouterr()
         # STRANGE: capsys/capfd don't show uprint output - out=='' although it is shown in the pytest log/console
@@ -307,7 +311,7 @@ class TestHelpers:
         After that I first tried to update pip with the command in the line above which worked without any error
         Could not update kivy-examples
         '''
-        print("OUT/ERR", out, err)  # TODO: out is always an empty string
+        print("OUT/ERR", out, err)
         assert out.startswith('ae.console_app.fix_encoding()') or out == ''
 
     def test_uprint(self, capsys):
@@ -384,7 +388,7 @@ class TestConsoleAppBasics:
         assert cae.sys_env_id == sei
         cae.uprint(sei)     # increase coverage
         out, err = capsys.readouterr()
-        assert sei in out or out == ''       # TODO: out is empty string
+        assert sei in out or out == ''
 
         # special case for error code path coverage
         ae_instances[''] = ConsoleApp('0.0', 'test_sys_env_id_COPY')
@@ -392,16 +396,20 @@ class TestConsoleAppBasics:
         assert cae.get_option('debugLevel') == DEBUG_LEVEL_DISABLED
 
     def test_shutdown(self):
-        import gc
-        gc.disable()
+        def thr():
+            while running:
+                pass
 
         cae = ConsoleApp('0.0', 'test_app_name')  # pytest freezes in debug run with kwarg: , multi_threading=True)
         cae.shutdown(-69, testing=True)
 
-        # noinspection PyShadowingNames
-        ae_instances[''] = cae
-        del cae
-        gc.collect()
+        cae.multi_threading = True
+        cae.shutdown(-96, testing=True)
+
+        running = True
+        threading.Thread(target=thr).start()
+        cae.shutdown(-123, testing=True)
+        running = False
 
 
 class TestConfigOptions:
@@ -776,32 +784,13 @@ class TestConfigOptions:
         sys.argv = ['test', '-D=' + str(DEBUG_LEVEL_TIMESTAMPED)]
         assert cae.get_option('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
 
-
-class TestIllegalXmlChars:
-    def test_xml_char1(self):
-        illegal_char = chr(1)       # '&#1;'
-        xml = "test xml string with " + illegal_char + " character"
-        test_xml = ILLEGAL_XML_SUB.sub('_', xml)
-        assert test_xml == xml.replace(illegal_char, '_')
-
-
-class TestFullStackTrace:
-    def test_full_stack_trace(self):
-        try:
-            raise ValueError
-        except ValueError as ex:
-            # print(full_stack_trace(ex))
-            assert full_stack_trace(ex)
-
-
-class TestConfigMainFileModified:
-    def test_not_modified(self, config_fna_vna_vva):
+    def test_config_main_file_not_modified(self, config_fna_vna_vva):
         config_fna_vna_vva(
             file_name=os.path.join(os.getcwd(), os.path.splitext(os.path.basename(sys.argv[0]))[0] + INI_EXT))
         cae = ConsoleApp('0.0', 'test_config_modified_after_startup')
         assert not cae.config_main_file_modified()
 
-    def test_modified(self, config_fna_vna_vva):
+    def test_config_main_file_modified(self, config_fna_vna_vva):
         file_name, var_name, old_var_val = config_fna_vna_vva(
             file_name=os.path.join(os.getcwd(), os.path.splitext(os.path.basename(sys.argv[0]))[0] + INI_EXT))
         cae = ConsoleApp('0.0', 'test_set_config_with_reload')
@@ -821,6 +810,23 @@ class TestConfigMainFileModified:
         assert cfg_val == new_var_val
 
         assert not cae.config_main_file_modified()
+
+
+class TestIllegalXmlChars:
+    def test_xml_char1(self):
+        illegal_char = chr(1)       # '&#1;'
+        xml = "test xml string with " + illegal_char + " character"
+        test_xml = ILLEGAL_XML_SUB.sub('_', xml)
+        assert test_xml == xml.replace(illegal_char, '_')
+
+
+class TestFullStackTrace:
+    def test_full_stack_trace(self):
+        try:
+            raise ValueError
+        except ValueError as ex:
+            # print(full_stack_trace(ex))
+            assert full_stack_trace(ex)
 
 
 class TestDuplicateSysOut:

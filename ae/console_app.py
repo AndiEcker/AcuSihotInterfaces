@@ -269,7 +269,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
             fixed_objects = list()
             for obj in print_objects:
                 if isinstance(obj, str) or isinstance(obj, bytes):
-                    obj = fix_encoding(obj, enc, try_counter)
+                    obj = fix_encoding(obj, encoding=enc, try_counter=try_counter)
                     if not obj:
                         raise
                 fixed_objects.append(obj)
@@ -454,15 +454,7 @@ class ConsoleApp:
                                             .format(name, given_value, allowed_values))
 
         if main_ae_instance() is self and not self.logging_conf_dict:
-            self._log_file_name = self.config_options['logFile'].value
-            if self._log_file_name:
-                try:                        # enable logging
-                    self._close_log_file()
-                    self._open_log_file()
-                    self.uprint(" ###  Activated log file", self._log_file_name, logger=_logger)
-                except Exception as ex:
-                    self.uprint(" ***  ConsoleApp._parse_args(): exception while trying to enable logging:", ex,
-                                logger=_logger)
+            self.activate_internal_logging(self.config_options['logFile'].value)
 
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self.config_options['debugLevel'].value
@@ -641,9 +633,19 @@ class ConsoleApp:
         except Exception as ex:
             self.dprint("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
 
-    def _open_log_file(self):
+    def activate_internal_logging(self, log_file):
+        if log_file:
+            try:  # enable logging
+                self._close_log_file()
+                self._open_log_file(log_file)
+                self.uprint(" ###  Activated log file", log_file, logger=_logger)
+                self._log_file_name = log_file
+            except Exception as ex:
+                self.uprint(" ***  ConsoleApp._parse_args(): exception while enabling logging:", ex, logger=_logger)
+
+    def _open_log_file(self, log_file):
         global app_std_out, app_std_err
-        self._log_file_obj = open(self._log_file_name, "w")
+        self._log_file_obj = open(log_file, "w")
         if app_std_out == ori_std_out:      # first call/open-of-log-file?
             if self.suppress_stdout:
                 std_out = self._nul_std_out = open(os.devnull, 'w')
@@ -667,6 +669,7 @@ class ConsoleApp:
 
     def _close_log_file(self, full_reset=False):
         global app_std_out, app_std_err
+
         if self._log_file_obj:
             self._append_eof_and_flush_file(self._log_file_obj, "log file")
             app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
@@ -675,11 +678,12 @@ class ConsoleApp:
             sys.stdout = ori_std_out        # .. "Fatal Python error: Cannot recover from stack overflow"
             self._log_file_obj.close()
             self._log_file_obj = None
-            if full_reset:
-                app_std_err = ori_std_err   # set back for allow full reset of log for unit tests
-                app_std_out = ori_std_out
         elif self.logging_conf_dict:
             logging.shutdown()
+
+        if full_reset:
+            app_std_err = ori_std_err   # set back for allow full reset of log for unit tests
+            app_std_out = ori_std_out
 
     def log_file_check_rotation(self):
         if self._log_file_obj is not None:
@@ -690,7 +694,7 @@ class ConsoleApp:
             if self._log_file_obj.tell() >= self._log_file_max_size * 1024 * 1024:
                 self._close_log_file()
                 self._rename_log_file()
-                self._open_log_file()
+                self._open_log_file(self._log_file_name)
             if self.multi_threading:
                 log_file_rotation_lock.release()
 
