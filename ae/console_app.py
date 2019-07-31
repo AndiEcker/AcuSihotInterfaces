@@ -2,47 +2,22 @@ import sys
 import os
 import datetime
 
-from builtins import chr  # works like unichr() also in Python 2
-
-import inspect
 import logging
 import logging.config
-import pprint
-import re
 import threading
-import unicodedata
 import weakref
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter
 
 from ae import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
-                debug_levels, logging_levels, DATE_TIME_ISO, DATE_ISO)
+                debug_levels, logging_levels, DATE_TIME_ISO, DATE_ISO, sys_env_text, force_encoding, calling_module)
 from ae.setting import Setting
 
 INI_EXT = '.ini'
 
 # default name of main config section
 MAIN_SECTION_DEF = 'Settings'
-
-# core encoding that will always work independent from destination (console, file system, XMLParser, ...)
-DEF_ENCODING = 'ascii'
-
-# illegal characters in XML
-# .. taken from https://stackoverflow.com/questions/1707890/fast-way-to-filter-illegal-xml-unicode-chars-in-python
-ILLEGAL_XML_CHARS = [(0x00, 0x08), (0x0B, 0x0C), (0x0E, 0x1F),
-                     (0x7F, 0x84), (0x86, 0x9F),
-                     (0xFDD0, 0xFDDF), (0xFFFE, 0xFFFF)]
-if sys.maxunicode >= 0x10000:  # not narrow build of Python
-    ILLEGAL_XML_CHARS.extend([(0x1FFFE, 0x1FFFF), (0x2FFFE, 0x2FFFF),
-                              (0x3FFFE, 0x3FFFF), (0x4FFFE, 0x4FFFF),
-                              (0x5FFFE, 0x5FFFF), (0x6FFFE, 0x6FFFF),
-                              (0x7FFFE, 0x7FFFF), (0x8FFFE, 0x8FFFF),
-                              (0x9FFFE, 0x9FFFF), (0xAFFFE, 0xAFFFF),
-                              (0xBFFFE, 0xBFFFF), (0xCFFFE, 0xCFFFF),
-                              (0xDFFFE, 0xDFFFF), (0xEFFFE, 0xEFFFF),
-                              (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
-ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
 
 MAX_NUM_LOG_FILES = 69
 
@@ -70,99 +45,6 @@ def _get_debug_level():
     return DEBUG_LEVEL_DISABLED
 
 
-def round_traditional(val, digits=0):
-    """ needed because python round() is not working always, like e.g. round(0.075, 2) == 0.07 instead of 0.08
-        taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer
-    """
-    return round(val + 10**(-len(str(val)) - 1), digits)
-
-
-def fix_encoding(text, encoding=DEF_ENCODING, try_counter=2, pex=None, context='ae.console_app.fix_encoding()'):
-    """ used for to encode invalid char encodings in text that cannot be fixed with encoding="cp1252/utf-8/.. """
-    ori_text = text
-    if try_counter == 0:
-        try_method = "replacing &#128 with €, &#1; with ¿1¿ and &#7; with ¿7¿ for Sihot XML"
-        text = text.replace('&#1;', '¿1¿').replace('&#7;', '¿7¿').replace('&#128;', '€')
-    elif try_counter == 1:
-        try_method = "replacing &#NNN; with chr(NNN) for Sihot XML"
-        text = re.compile("&#([0-9]+);").sub(lambda m: chr(int(m.group(0)[2:-1])), text)
-    elif try_counter == 2:
-        if not encoding:
-            encoding = DEF_ENCODING
-        try_method = "recode to backslash-replaced " + encoding + " encoding"
-        text = text.encode(encoding, errors='backslashreplace').decode(encoding)
-    elif try_counter == 3:
-        try_method = "replacing invalid unicode code points with ¿_¿"
-        text = ILLEGAL_XML_SUB.sub('¿_¿', text)
-    elif try_counter == 4:
-        try_method = "replacing &#NNN; and &#xNNN; with ¿?¿"
-        text = re.compile("&#([0-9]+);|&#x([0-9a-fA-F]+);").sub('¿?¿', text)
-    else:
-        try_method = ""
-        text = None
-
-    if try_method and _get_debug_level() >= DEBUG_LEVEL_VERBOSE:
-        # push/print ori_text and error message to console/log
-        uprint(pprint.pformat(context + ": " + (str(pex) + '- ' if pex else '') + try_method +
-                              ", " + DEF_ENCODING + " text:\n'" +
-                              ori_text.encode(DEF_ENCODING, errors='backslashreplace').decode(DEF_ENCODING) + "'\n",
-                              indent=12, width=120))
-
-    return text
-
-
-def full_stack_trace(ex):
-    ret = "Exception {!r}. Traceback:\n".format(ex)
-
-    tb = sys.exc_info()[2]
-    for item in reversed(inspect.getouterframes(tb.tb_frame)[1:]):
-        ret += 'File "{1}", line {2}, in {3}\n'.format(*item)
-        if item[4]:
-            for line in item[4]:
-                ret += ' '*4 + line.lstrip()
-    for item in inspect.getinnerframes(tb):
-        ret += 'file "{1}", line {2}, in {3}\n'.format(*item)
-        if item[4]:
-            for line in item[4]:
-                ret += ' '*4 + line.lstrip()
-    return ret
-
-
-def sys_env_dict():
-    sed = dict()
-    sed['python_ver'] = sys.version
-    sed['argv'] = sys.argv
-    sed['executable'] = sys.executable
-    sed['cwd'] = os.getcwd()
-    sed['__file__'] = __file__
-    sed['frozen'] = getattr(sys, 'frozen', False)
-    if getattr(sys, 'frozen', False):
-        sed['bundle_dir'] = getattr(sys, '_MEIPASS', '*#ERR#*')
-    return sed
-
-
-def sys_env_text(ind_ch=" ", ind_len=18, key_ch="=", key_len=12, extra_sys_env_dict=None):
-    sed = sys_env_dict()
-    if extra_sys_env_dict:
-        sed.update(extra_sys_env_dict)
-    text = "\n".join(["{ind:{ind_ch}>{ind_len}}{key:{key_ch}<{key_len}}{val}"
-                     .format(ind="", ind_ch=ind_ch, ind_len=ind_len, key_ch=key_ch, key_len=key_len, key=k, val=v)
-                      for k, v in sed.items()])
-    return text
-
-
-def to_ascii(unicode_str):
-    """
-    converts unicode string into ascii representation (for fuzzy string comparision); copied from MiniQuark's answer in:
-    https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string
-
-    :param unicode_str:     string to convert
-    :return:                converted string (replaced accents, diacritics, ... into normal ascii characters)
-    """
-    nfkd_form = unicodedata.normalize('NFKD', unicode_str)
-    return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
-
-
 # save original stdout/stderr
 ori_std_out = sys.stdout
 ori_std_err = sys.stderr
@@ -181,7 +63,7 @@ class _DuplicateSysOut:
                 self.log_file.write(message)
             except UnicodeEncodeError:
                 # log file has different encoding than console, so simply replace with backslash
-                self.log_file.write(fix_encoding(message, encoding=self.log_file.encoding))
+                self.log_file.write(force_encoding(message, encoding=self.log_file.encoding))
         if not self.sys_out.closed:
             self.sys_out.write(message)
 
@@ -190,21 +72,6 @@ class _DuplicateSysOut:
 
 
 _logger = logging.getLogger(__name__)
-
-
-def calling_module(called_module=__name__, depth=1):
-    module = None
-    try:
-        # find the first stack frame that is *not* in this module
-        while True:
-            # noinspection PyProtectedMember
-            module = sys._getframe(depth).f_globals.get('__name__', '__main__')
-            if module != called_module:
-                break
-            depth += 1
-    except (TypeError, AttributeError, ValueError):
-        pass
-    return module
 
 
 def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace',
@@ -244,8 +111,8 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
         module = calling_module()
         logger = logging.getLogger(module) if module else _logger
 
-    try_counter = 2     # skip try_counter 0 and 1 because it is very specific to the Sihot XML interface and XMLParser
-    while True:
+    retries = 1
+    while retries:
         try:
             print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects)
             if use_logger or getattr(cae_instance, 'multi_threading', False):
@@ -257,24 +124,21 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                 if end and not use_logger:
                     print_one_str += end
                     end = ""
-                print_strings = (print_one_str, )
+                print_strings = (print_one_str,)
 
             if use_logger:
                 logger.log(level=logging_levels[debug_level], msg=print_strings[0])
             else:
                 print(*print_strings, sep=sep, end=end, file=file, flush=flush)
-
             break
         except UnicodeEncodeError:
             fixed_objects = list()
             for obj in print_objects:
                 if isinstance(obj, str) or isinstance(obj, bytes):
-                    obj = fix_encoding(obj, encoding=enc, try_counter=try_counter)
-                    if not obj:
-                        raise
+                    obj = force_encoding(obj, encoding=enc)
                 fixed_objects.append(obj)
             print_objects = fixed_objects
-        try_counter += 1
+            retries -= 1
 
 
 class ConsoleApp:
@@ -698,7 +562,13 @@ class ConsoleApp:
             if self.multi_threading:
                 log_file_rotation_lock.release()
 
-    def shutdown(self, exit_code=0, testing=False):
+    def shutdown(self, exit_code=0, timeout=None):
+        """ shutdown console app environment
+
+        :param exit_code:   application OS exit code (def=0).
+        :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
+                            Pass None for to block thread joining and for to not call sys.exit(exit_code).
+        """
         if self.multi_threading:
             with config_lock:
                 main_thread = threading.current_thread()
@@ -706,7 +576,7 @@ class ConsoleApp:
                     if t is not main_thread:
                         self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
                                     logger=_logger)
-                        t.join(0.9 if testing else None)
+                        t.join(timeout)
         if exit_code:
             self.uprint("****  Non-zero exit code:", exit_code, logger=_logger)
 
@@ -723,5 +593,5 @@ class ConsoleApp:
 
         if main_ae_instance() is self:
             self._shut_down = True
-            if not testing:
+            if timeout is None:
                 sys.exit(exit_code)

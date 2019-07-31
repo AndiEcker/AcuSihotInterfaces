@@ -1,14 +1,13 @@
 # SiHOT xml interface
 import datetime
 import pprint
+import re
 
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
 from sys_data_ids import (SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING)
-from ae import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED
-# fix_encoding() needed for to clean and re-parse XML on invalid char code exception/error
-from ae.console_app import fix_encoding, round_traditional
+from ae import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, round_traditional
 from ae.tcp import TcpClient
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
@@ -71,20 +70,16 @@ class SihotXmlParser:  # XMLParser interface
 
     def parse_xml(self, xml):
         self.cae.dprint("SihotXmlParser.parse_xml():", xml)
-        try_counter = 0
-        xml_cleaned = xml
-        while True:
-            try:
-                self._xml = xml_cleaned
-                self._parser = XMLParser(target=self)
-                self._parser.feed(xml_cleaned)
-                break
-            except ParseError as pex:
-                xml_cleaned = fix_encoding(xml_cleaned, try_counter=try_counter, pex=pex,
-                                           context="SihotXmlParser.parse_xml() ParseError exception")
-                if not xml_cleaned:
-                    raise
-            try_counter += 1
+        self._xml = xml
+        self._parser = XMLParser(target=self)
+        try:
+            self._parser.feed(xml)
+        except ParseError:
+            # replacing '&#128;' with '€', '&#1;' with '¿1¿' and '&#7;' with '¿7¿' for Sihot XML
+            self._xml = self._xml.replace('&#1;', '¿1¿').replace('&#7;', '¿7¿').replace('&#128;', '€')
+            # replacing '&#NNN;' with chr(NNN) for Sihot XML
+            self._xml = re.compile("&#([0-9]+);").sub(lambda m: chr(int(m.group(0)[2:-1])), self._xml)
+            self._parser.feed(self._xml)
 
     def get_xml(self):
         return self._xml

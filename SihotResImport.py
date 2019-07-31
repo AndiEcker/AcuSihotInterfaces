@@ -29,10 +29,10 @@ from sys_data_ids import (FORE_SURNAME_SEP,
                           SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES,
                           SDI_ACU)
-from ae import DEBUG_LEVEL_VERBOSE
+from ae import DEBUG_LEVEL_VERBOSE, full_stack_trace, force_encoding
 from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
 from ae.db import bind_var_prefix
-from ae.console_app import ConsoleApp, fix_encoding, full_stack_trace
+from ae.console_app import ConsoleApp
 from ae.progress import Progress
 from ae.notification import add_notification_options, init_notification
 from acif import add_ac_options, ACU_RES_MAP, from_field_indexes
@@ -1370,7 +1370,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         log_msg = '\n\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in import_log
                               if _['context'][0] == NO_FILE_PREFIX_CHAR or sfn in _['context'])
         with open(os.path.join(ddn, log_file_prefix + '_' + imp_file_name + '_import.log'), 'a') as fh:
-            fh.write(fix_encoding(log_msg, encoding=fh.encoding, context="SihotResImport File Log Fix Encoding"))
+            fh.write(force_encoding(log_msg, encoding=fh.encoding))
 
     if error_log:
         error_text = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in error_log)
@@ -1382,11 +1382,11 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_import("Notification send error: " + notification_err, NO_FILE_PREFIX_CHAR + 'SendNotification')
         cae.uprint('****  Error Log:\n', error_text)
         with open(os.path.join(log_file_path, log_file_prefix + '_errors.log'), 'a') as fh:
-            fh.write(fix_encoding(error_text, encoding=fh.encoding, context="SihotResImport Error Log Fix Encoding"))
+            fh.write(force_encoding(error_text, encoding=fh.encoding))
 
     log_msg = '\n'.join(_['context'] + '@' + str(_['line']) + ':' + _['message'] for _ in import_log)
     with open(os.path.join(log_file_path, log_file_prefix + '_import.log'), 'a') as fh:
-        fh.write(fix_encoding(log_msg, encoding=fh.encoding, context="SihotResImport Import Log Fix Encoding"))
+        fh.write(force_encoding(log_msg, encoding=fh.encoding))
 
     if not amend_screen_log:        # import running in console mode (no UI)
         quit_app(error_log)
@@ -1432,7 +1432,7 @@ else:
 
 
     class SihotResImportApp(App):
-        file_count = NumericProperty(0)
+        file_count = NumericProperty()
         file_names = StringProperty()
         user_name = StringProperty(cae.get_option('acuUser'))
         user_password = StringProperty(cae.get_option('acuPassword'))

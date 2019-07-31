@@ -35,8 +35,9 @@ from configparser import ConfigParser
 # import pprint
 
 from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT)
-from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_TIME_ISO
-from ae.console_app import ConsoleApp, full_stack_trace, MAIN_SECTION_DEF, sys_env_text
+from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_TIME_ISO, full_stack_trace, \
+    sys_env_text
+from ae.console_app import ConsoleApp, MAIN_SECTION_DEF
 from ae.progress import Progress
 from sxmlif import PostMessage
 from shif import ClientSearch
@@ -194,7 +195,8 @@ while True:
             errors = list()
             err_count += 1
             status_msg = "checks={}; errors={}; run starts={}; run ends={}; at {}; sys=\n{}\n....last err=\n{}" \
-                .format(check_count, err_count, run_starts, run_ends, datetime.datetime.now(), sys_env_text(), err_msg)
+                .format(check_count, err_count, run_starts, run_ends, datetime.datetime.now(),
+                        sys_env_text(file=__file__), err_msg)
             cae.dprint("####  " + status_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
             user_notification("WatchPupPy error notification", status_msg)
             if break_on_error or BREAK_PREFIX in err_msg:

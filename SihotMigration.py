@@ -4,7 +4,8 @@
     0.3     added error counter to Progress
 """
 
-from ae.console_app import ConsoleApp, full_stack_trace
+from ae.console_app import ConsoleApp
+from ae import full_stack_trace
 from ae.progress import Progress
 from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
 from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE

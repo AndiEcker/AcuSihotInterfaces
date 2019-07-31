@@ -12,11 +12,8 @@ import threading
 from argparse import ArgumentError
 
 
-from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO
-from ae.console_app import (fix_encoding, round_traditional, sys_env_dict, to_ascii, full_stack_trace, uprint,
-                            ae_instances, calling_module,
-                            ConsoleApp, _DuplicateSysOut,
-                            ILLEGAL_XML_SUB, MAX_NUM_LOG_FILES, INI_EXT)
+from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO
+from ae.console_app import (uprint, ae_instances, ConsoleApp, _DuplicateSysOut, MAX_NUM_LOG_FILES, INI_EXT)
 
 
 @pytest.fixture
@@ -218,102 +215,6 @@ class TestPythonLogging:
 
 
 class TestHelpers:
-    def test_round_traditional(self):
-        assert round_traditional(1.01) == 1
-        assert round_traditional(10.1, -1) == 10
-        assert round_traditional(1.123, 1) == 1.1
-        assert round_traditional(0.5) == 1
-        assert round_traditional(0.5001, 1) == 0.5
-
-        assert round_traditional(0.075, 2) == 0.08
-        assert round(0.075, 2) == 0.07
-
-    def test_sys_env_dict(self):
-        assert sys_env_dict().get('python_ver')
-        assert sys_env_dict().get('cwd')
-        assert sys_env_dict().get('frozen') is False
-
-        assert sys_env_dict().get('bundle_dir') is None
-        sys.frozen = True
-        assert sys_env_dict().get('bundle_dir')
-        del sys.__dict__['frozen']
-        assert sys_env_dict().get('bundle_dir') is None
-
-    def test_to_ascii(self):
-        assert to_ascii('äöü') == 'aou'
-
-    def test_calling_module(self):
-        assert calling_module() == 'test_console_app'
-        assert calling_module('') == 'test_console_app'
-        assert calling_module('xxx_test') == 'test_console_app'
-        assert calling_module(called_module=__name__) == '_pytest.python'
-        assert calling_module(called_module=__name__, depth=2) == '_pytest.python'
-        assert calling_module(called_module=__name__, depth=3) == 'pluggy.callers'
-        assert calling_module(called_module=__name__, depth=4) == 'pluggy.manager'
-        assert calling_module(called_module=__name__, depth=5) == 'pluggy.manager'
-        assert calling_module(called_module=__name__, depth=6) == 'pluggy.hooks'
-        assert calling_module(called_module=__name__, depth=7) == '_pytest.python'
-        assert calling_module(called_module=__name__, depth=8) == '_pytest.runner'
-        assert calling_module(called_module=__name__, depth=9) == 'pluggy.callers'
-        assert calling_module(called_module=__name__, depth=10) == 'pluggy.manager'
-        assert calling_module(called_module=__name__, depth=11) == 'pluggy.manager'
-        assert calling_module(called_module=__name__, depth=12) == 'pluggy.hooks'
-        assert calling_module(called_module=__name__, depth=13) == '_pytest.runner'
-        assert calling_module(called_module=__name__, depth=14) == '_pytest.runner'
-        assert calling_module(called_module=__name__, depth=15) == '_pytest.runner'
-        assert calling_module(called_module=__name__, depth=16) == '_pytest.runner'
-
-        assert calling_module(called_module=__name__, depth=0) == 'ae.console_app'
-        assert calling_module(called_module=__name__, depth=-1) == 'ae.console_app'
-        assert calling_module(called_module=__name__, depth=-2) == 'ae.console_app'
-
-        assert calling_module(called_module=None, depth=-1) == 'ae.console_app'
-        assert calling_module(called_module=None, depth=None) is None
-
-    def test_fix_encoding_umlaut(self):
-        assert fix_encoding('äöü') == '\\xe4\\xf6\\xfc'
-        assert fix_encoding('äöü', encoding=None) == '\\xe4\\xf6\\xfc'
-        assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-16') == 'äöü'
-        assert fix_encoding('äöü', encoding='cp1252') == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=0) == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=1) == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=3) == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=4) == 'äöü'
-        assert fix_encoding('äöü', encoding='utf-8', try_counter=5) is None
-
-    def test_fix_encoding_error(self, capsys, sys_argv_restore):
-        cae = main_cae_instance
-        sys.argv = list()
-        cae.config_options['debugLevel'].value = DEBUG_LEVEL_VERBOSE
-        assert fix_encoding('äöü', encoding='utf-8') == 'äöü'
-        out, err = capsys.readouterr()
-        # STRANGE: capsys/capfd don't show uprint output - out=='' although it is shown in the pytest log/console
-        # possible fix in pytest 3.7.4 (https://github.com/pytest-dev/pytest/issues/3819) - current pytest is 3.6.2
-        # STILL RETURNING EMPTY STRING after updating pytest to 5.0.1
-        # .. got pip to work behind NTLM proxy by running Admin CMD and setting (but used NP_PROXY instead of NO_PROXY):
-        # .. set NP_PROXY="acumen\aecker:xxxx@proxy.acumen.es:8080"
-        # So on 18-Jul I did an update of all my pip packages with:
-        # .. pip list --outdated --format=freeze | grep -v '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U
-        # .. BUT still got the following errors:
-        ''' - requests 2.19.1 has requirement idna<2.8,>=2.5, but you'll have idna 2.8 which is incompatible.
-            - Successfully installed kivy.deps.gstreamer
-            Exception:
-            Traceback (most recent call last):
-              File "c:\python35\lib\shutil.py", line 391, in _rmtree_unsafe
-                os.rmdir(path)
-            OSError: [WinError 145] The directory is not empty: 'C:\\Users\\AECKER~1.ACU\\AppData\\Local\\Temp\\
-            pip-install-1etj4rnz\\kivy.deps.gstreamer\\
-            kivy_deps.gstreamer-0.1.17.data\\data\\share\\gstreamer\\share\\locale\\eo\\lc_messages'
-
-            During handling of the above exception, another exception occurred:
-            ...
-        After that I first tried to update pip with the command in the line above which worked without any error
-        Could not update kivy-examples
-        '''
-        print("OUT/ERR", out, err)
-        assert out.startswith('ae.console_app.fix_encoding()') or out == ''
-
     def test_uprint(self, capsys):
         uprint()
         out, err = capsys.readouterr()
@@ -395,21 +296,31 @@ class TestConsoleAppBasics:
         cae.sys_env_id = ''
         assert cae.get_option('debugLevel') == DEBUG_LEVEL_DISABLED
 
-    def test_shutdown(self):
+    def test_shutdown_basics(self):
         def thr():
             while running:
                 pass
 
-        cae = ConsoleApp('0.0', 'test_app_name')  # pytest freezes in debug run with kwarg: , multi_threading=True)
-        cae.shutdown(-69, testing=True)
+        cae = ConsoleApp('0.0', 'shutdown_basics')
+        cae.shutdown(-69, timeout=0.9)
 
         cae.multi_threading = True
-        cae.shutdown(-96, testing=True)
+        cae.shutdown(-96, timeout=0.9)
 
         running = True
         threading.Thread(target=thr).start()
-        cae.shutdown(-123, testing=True)
+        cae.shutdown(-123, timeout=0.9)
         running = False
+
+    def test_shutdown_coverage(self):
+        cae = ConsoleApp('0.0', 'shutdown_coverage')
+        cae.shutdown(-369, timeout=0.9)
+
+        cae._log_file_index = 1
+        cae.shutdown(0, timeout=0.1)
+
+        cae._nul_std_out = open(os.devnull, 'w')
+        cae.shutdown(0, timeout=0.1)
 
 
 class TestConfigOptions:
@@ -810,23 +721,6 @@ class TestConfigOptions:
         assert cfg_val == new_var_val
 
         assert not cae.config_main_file_modified()
-
-
-class TestIllegalXmlChars:
-    def test_xml_char1(self):
-        illegal_char = chr(1)       # '&#1;'
-        xml = "test xml string with " + illegal_char + " character"
-        test_xml = ILLEGAL_XML_SUB.sub('_', xml)
-        assert test_xml == xml.replace(illegal_char, '_')
-
-
-class TestFullStackTrace:
-    def test_full_stack_trace(self):
-        try:
-            raise ValueError
-        except ValueError as ex:
-            # print(full_stack_trace(ex))
-            assert full_stack_trace(ex)
 
 
 class TestDuplicateSysOut:
