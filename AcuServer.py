@@ -14,9 +14,9 @@ from sys_data_ids import (SDF_SH_TIMEOUT,
                           SDF_SH_XML_ENCODING, SDF_SH_CLIENT_PORT)
 from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.console_app import ConsoleApp
-from ae.notification import add_notification_options, init_notification
-from ae.db import OraDB
-from ae.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
+from ae_notification.notification import add_notification_options, init_notification
+from ae_db.db import OraDB
+from ae_tcp.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from acif import add_ac_options, AcumenClient
 from sxmlif import Request, RoomChange, SihotXmlBuilder
 from shif import add_sh_options, ClientFromSihot

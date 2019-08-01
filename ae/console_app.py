@@ -565,10 +565,11 @@ class ConsoleApp:
     def shutdown(self, exit_code=0, timeout=None):
         """ shutdown console app environment
 
-        :param exit_code:   application OS exit code (def=0).
+        :param exit_code:   application OS exit code (def=0). Pass None for to not call sys.exit(exit_code).
         :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
-                            Pass None for to block thread joining and for to not call sys.exit(exit_code).
+                            Pass None for to block shutdown until all other threads have joined/finished.
         """
+        self.uprint("####  Shutdown............  ", exit_code, timeout, logger=_logger)
         if self.multi_threading:
             with config_lock:
                 main_thread = threading.current_thread()
@@ -577,10 +578,6 @@ class ConsoleApp:
                         self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
                                     logger=_logger)
                         t.join(timeout)
-        if exit_code:
-            self.uprint("****  Non-zero exit code:", exit_code, logger=_logger)
-
-        self.uprint("####  Shutdown............  ####", logger=_logger)
 
         self._close_log_file()
         if self._log_file_index:
@@ -593,5 +590,5 @@ class ConsoleApp:
 
         if main_ae_instance() is self:
             self._shut_down = True
-            if timeout is None:
+            if exit_code is not None:
                 sys.exit(exit_code)

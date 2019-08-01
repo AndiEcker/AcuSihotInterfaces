@@ -31,10 +31,10 @@ from sys_data_ids import (FORE_SURNAME_SEP,
                           SDI_ACU)
 from ae import DEBUG_LEVEL_VERBOSE, full_stack_trace, force_encoding
 from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
-from ae.db import bind_var_prefix
+from ae_db.db import bind_var_prefix
 from ae.console_app import ConsoleApp
 from ae.progress import Progress
-from ae.notification import add_notification_options, init_notification
+from ae_notification.notification import add_notification_options, init_notification
 from acif import add_ac_options, ACU_RES_MAP, from_field_indexes
 from sfif import add_sf_options
 from shif import add_sh_options, ClientToSihot, ResSender

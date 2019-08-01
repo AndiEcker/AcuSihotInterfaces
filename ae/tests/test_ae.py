@@ -35,19 +35,33 @@ class TestHelpers:
         assert calling_module(called_module=None, depth=None) is None
 
     def test_force_encoding_umlaut(self):
-        assert force_encoding('äöü') == '\\xe4\\xf6\\xfc'
+        s = 'äöü'
+        assert force_encoding(s) == '\\xe4\\xf6\\xfc'
 
-        assert force_encoding('äöü', encoding='utf-8') == 'äöü'
-        assert force_encoding('äöü', encoding='utf-16') == 'äöü'
-        assert force_encoding('äöü', encoding='cp1252') == 'äöü'
+        assert force_encoding(s, encoding='utf-8') == s
+        assert force_encoding(s, encoding='utf-16') == s
+        assert force_encoding(s, encoding='cp1252') == s
 
-        assert force_encoding('äöü', encoding='utf-8', errors='strict') == 'äöü'
-        assert force_encoding('äöü', encoding='utf-8', errors='replace') == 'äöü'
-        assert force_encoding('äöü', encoding='utf-8', errors='ignore') == 'äöü'
-        assert force_encoding('äöü', encoding='utf-8', errors='') == 'äöü'
+        assert force_encoding(s, encoding='utf-8', errors='strict') == s
+        assert force_encoding(s, encoding='utf-8', errors='replace') == s
+        assert force_encoding(s, encoding='utf-8', errors='ignore') == s
+        assert force_encoding(s, encoding='utf-8', errors='') == s
 
         with pytest.raises(TypeError):
-            assert force_encoding('äöü', encoding=None) == '\\xe4\\xf6\\xfc'
+            assert force_encoding(s, encoding=None) == '\\xe4\\xf6\\xfc'
+
+    def test_force_encoding_bytes(self):
+        s = 'äöü'
+
+        assert s.encode('ascii', errors='replace') == b'???'
+        ba = s.encode('ascii', errors='backslashreplace')   # == b'\\xe4\\xf6\\xfc'
+        assert force_encoding(ba, encoding='ascii') == str(ba, encoding='ascii')
+        assert force_encoding(ba) == str(ba, encoding='ascii')
+
+        bw = s.encode('cp1252')                             # == b'\xe4\xf6\xfc'
+        assert force_encoding(bw, encoding='cp1252') == s
+        with pytest.raises(UnicodeDecodeError):
+            force_encoding(bw)
 
     def test_full_stack_trace(self):
         try:

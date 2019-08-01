@@ -41,9 +41,15 @@ ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high))
 
 
 def calling_module(called_module=__name__, depth=1):
+    """ determine/find the first stack frame that is *not* in this/called module.
+
+    :param called_module:   the module name from which this function get called.
+    :param depth:           the calling level from which on to search (def=1 which refers the next higher module).
+                            Pass higher value if you want to get the module name from a higher level in the call stack.
+    :return:                The module name of a higher level within the call stack.
+    """
     module = None
     try:
-        # find the first stack frame that is *not* in this module
         while True:
             # noinspection PyProtectedMember
             module = sys._getframe(depth).f_globals.get('__name__', '__main__')
@@ -56,13 +62,24 @@ def calling_module(called_module=__name__, depth=1):
 
 
 def force_encoding(text, encoding=DEF_ENCODING, errors='backslashreplace'):
-    """ force the encoding of text (str or bytes) """
+    """ force/ensure the encoding of text (str or bytes) without any UnicodeDecodeError/UnicodeEncodeError
+        :param text:        text as str/byte.
+        :param encoding:    encoding (def=DEF_ENCODING).
+        :param errors:      encode error handling (def='backslashreplace').
+
+        :return:            text as str (with all characters checked/converted/replaced for to be encode-able).
+    """
     if isinstance(text, str):
         text = text.encode(encoding=encoding, errors=errors)
     return text.decode(encoding=encoding)
 
 
 def full_stack_trace(ex):
+    """ get full stack trace from an exception.
+
+    :param ex:  exception instance.
+    :return:    str with stack trace info.
+    """
     ret = "Exception {!r}. Traceback:\n".format(ex)
 
     tb = sys.exc_info()[2]
@@ -80,13 +97,29 @@ def full_stack_trace(ex):
 
 
 def round_traditional(val, digits=0):
-    """ needed because python round() is not working always, like e.g. round(0.075, 2) == 0.07 instead of 0.08
+    """ round numeric value traditional.
+
+        Needed because python round() is working differently, e.g. round(0.075, 2) == 0.07 instead of 0.08
         taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer
+
+        :param val:     float value to be round.
+        :param digits:  number of digits to be round (def=0 - rounds to an integer value).
+
+        :return:        rounded value.
     """
     return round(val + 10**(-len(str(val)) - 1), digits)
 
 
 def sys_env_dict(file=__file__):
+    """ returns dict with python system run-time environment values.
+
+    Args:
+        file (str): optional file name (def=__file__/ae.__init__.py)
+
+    Returns:
+        dict:       python system run-time environment values like python_ver, argv, cwd, executable, __file__, frozen
+                    and bundle_dir.
+    """
     sed = dict()
     sed['python_ver'] = sys.version
     sed['argv'] = sys.argv

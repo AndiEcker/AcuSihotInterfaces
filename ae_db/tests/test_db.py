@@ -1,6 +1,6 @@
 import datetime
 from ae.console_app import ConsoleApp
-from ae.db import OraDB, PostgresDB, bind_var_prefix
+from ae_db.db import OraDB, PostgresDB, bind_var_prefix
 
 UPDATED_TEST_STRING = 'Updated Test String'
 TEST_DATE = datetime.datetime(2018, 1, 21, 22, 33, 44)

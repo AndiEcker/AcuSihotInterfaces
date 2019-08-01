@@ -1,5 +1,5 @@
 from ae.console_app import ConsoleApp
-from ae.db import PostgresDB
+from ae_db.db import PostgresDB
 from acif import add_ac_options
 from ass_sys_data import AssSysData, EXT_REF_TYPE_RCI
 

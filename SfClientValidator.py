@@ -8,10 +8,10 @@
 import pprint
 
 from sys_data_ids import SDI_SF
-from ae.validation import correct_email, correct_phone, EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED, \
+from ae_validation.validation import correct_email, correct_phone, EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED, \
     add_validation_options, init_validation, clients_to_validate
 from ae.console_app import ConsoleApp
-from ae.notification import add_notification_options, init_notification
+from ae_notification.notification import add_notification_options, init_notification
 from sfif import add_sf_options
 from ass_sys_data import AssSysData
 

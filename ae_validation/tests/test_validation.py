@@ -3,7 +3,7 @@ import os
 import sys
 
 from ae.console_app import ConsoleApp
-from ae.validation import (
+from ae_validation.validation import (
     correct_email, correct_phone, validate_flag_info, add_validation_options, init_validation, clients_to_validate,
     EmailValidator, PhoneValidator,
     EMAIL_DO_NOT_VALIDATE, EMAIL_NOT_VALIDATED, EMAIL_INVALIDATED, EMAIL_VALID, EMAIL_INVALID, EMAIL_ALL,

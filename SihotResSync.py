@@ -21,7 +21,7 @@ from sys_data_ids import (SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, S
 from ae.console_app import ConsoleApp
 from ae import DATE_TIME_ISO, full_stack_trace
 from ae.progress import Progress
-from ae.notification import add_notification_options, init_notification
+from ae_notification.notification import add_notification_options, init_notification
 from ae.sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
 
 from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE

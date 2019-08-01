@@ -11,9 +11,9 @@ from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
 from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_ISO
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.systems import UsedSystems
-from ae.validation import correct_email, correct_phone
-from ae.db import OraDB, PostgresDB
-from ae.notification import add_notification_options, init_notification
+from ae_validation.validation import correct_email, correct_phone
+from ae_db.db import OraDB, PostgresDB
+from ae_notification.notification import add_notification_options, init_notification
 from acif import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient
 from sfif import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
                   sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal)

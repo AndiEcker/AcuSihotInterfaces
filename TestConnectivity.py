@@ -1,6 +1,6 @@
 from ae.console_app import ConsoleApp
-from ae.notification import add_notification_options, init_notification
-from ae.db import OraDB
+from ae_notification.notification import add_notification_options, init_notification
+from ae_db.db import OraDB
 from acif import add_ac_options
 
 __version__ = '0.1'

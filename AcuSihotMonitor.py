@@ -73,7 +73,7 @@ if True:  # added for to hide PyCharm inspection warning "module level import no
     from kivy.clock import Clock
     from kivy.core.window import Window
 
-    from ae.calendar import DateChangeScreen
+    from ae_calendar.calendar import DateChangeScreen
 
 """ TESTS """
 

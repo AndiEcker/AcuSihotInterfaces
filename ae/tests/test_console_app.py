@@ -51,16 +51,16 @@ class TestInternalLogging:
         sys.argv = []
         file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
         assert file_name_chk == log_file
-        for i in range(MAX_NUM_LOG_FILES + 9):
-            for j in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
-                cae.uprint("TestLogEntry{: >26}{: >26}".format(i, j))
+        for idx in range(MAX_NUM_LOG_FILES + 9):
+            for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                cae.uprint("TestLogEntry{: >26}{: >26}".format(idx, line_no))
         cae._close_log_file()
         assert os.path.exists(log_file)
         # clean up
         os.remove(log_file)
-        for i in range(MAX_NUM_LOG_FILES + 9):
+        for idx in range(MAX_NUM_LOG_FILES + 9):
             fn, ext = os.path.splitext(log_file)
-            rot_log_file = fn + "-{:0>{index_width}}".format(i+1, index_width=len(str(MAX_NUM_LOG_FILES))) + ext
+            rot_log_file = fn + "-{:0>{index_width}}".format(idx, index_width=len(str(MAX_NUM_LOG_FILES))) + ext
             if os.path.exists(rot_log_file):
                 os.remove(rot_log_file)
 
@@ -302,25 +302,25 @@ class TestConsoleAppBasics:
                 pass
 
         cae = ConsoleApp('0.0', 'shutdown_basics')
-        cae.shutdown(-69, timeout=0.9)
+        cae.shutdown(exit_code=None)
 
         cae.multi_threading = True
-        cae.shutdown(-96, timeout=0.9)
+        cae.shutdown(exit_code=None, timeout=0.6)       # tests freezing in debug run without timeout/thread-join
 
         running = True
         threading.Thread(target=thr).start()
-        cae.shutdown(-123, timeout=0.9)
+        cae.shutdown(exit_code=None, timeout=0.6)
         running = False
 
     def test_shutdown_coverage(self):
         cae = ConsoleApp('0.0', 'shutdown_coverage')
-        cae.shutdown(-369, timeout=0.9)
+        cae.shutdown(exit_code=None, timeout=0.9)
 
         cae._log_file_index = 1
-        cae.shutdown(0, timeout=0.1)
+        cae.shutdown(exit_code=None, timeout=0.1)
 
         cae._nul_std_out = open(os.devnull, 'w')
-        cae.shutdown(0, timeout=0.1)
+        cae.shutdown(exit_code=None, timeout=0.1)
 
 
 class TestConfigOptions:

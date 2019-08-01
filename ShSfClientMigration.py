@@ -15,9 +15,9 @@ from copy import deepcopy
 
 from sys_data_ids import SDI_SF
 from ae import DEBUG_LEVEL_VERBOSE
-from ae.validation import correct_email, correct_phone, add_validation_options, init_validation
+from ae_validation.validation import correct_email, correct_phone, add_validation_options, init_validation
 from ae.console_app import ConsoleApp
-from ae.notification import add_notification_options, init_notification
+from ae_notification.notification import add_notification_options, init_notification
 from shif import ResBulkFetcher, hotel_and_res_id
 from sfif import add_sf_options
 from ass_sys_data import AssSysData

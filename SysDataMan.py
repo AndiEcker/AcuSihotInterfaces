@@ -18,7 +18,7 @@ from sys_data_ids import (ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES,
 from ae import DEBUG_LEVEL_VERBOSE
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console_app import ConsoleApp
-from ae.db import PostgresDB
+from ae_db.db import PostgresDB
 from ass_sys_data import add_ass_options, init_ass_data
 
 __version__ = '0.3'

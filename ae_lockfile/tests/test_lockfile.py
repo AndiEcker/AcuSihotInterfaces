@@ -2,7 +2,7 @@ import pytest
 import glob
 import time
 
-from ae.lockfile import *
+from ae_lockfile.lockfile import *
 
 LOCK_FILE_NAME = 'f.lock'
 

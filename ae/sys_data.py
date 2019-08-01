@@ -6,7 +6,7 @@ import keyword
 from collections import OrderedDict
 from typing import Optional, Any, Union, List, Dict, Tuple, Iterable
 
-from ae.validation import correct_email, correct_phone
+from ae_validation.validation import correct_email, correct_phone
 
 ACTION_INSERT = 'INSERT'
 ACTION_UPDATE = 'UPDATE'
