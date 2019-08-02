@@ -728,16 +728,16 @@ class TestDuplicateSysOut:
         lfn = 'log_file.log'
         lfo = open(lfn, 'w')
         dso = _DuplicateSysOut(lfo)
-        assert dso.log_file == lfo
-        assert dso.sys_out is sys.stdout
+        assert dso.log_file_obj == lfo
+        assert dso.sys_out_obj is sys.stdout
 
-        dso = _DuplicateSysOut(lfo, sys_out=sys.stdout)
-        assert dso.log_file == lfo
-        assert dso.sys_out is sys.stdout
+        dso = _DuplicateSysOut(lfo, sys_out_obj=sys.stdout)
+        assert dso.log_file_obj == lfo
+        assert dso.sys_out_obj is sys.stdout
 
-        dso = _DuplicateSysOut(lfo, sys_out=sys.stderr)
-        assert dso.log_file == lfo
-        assert dso.sys_out is sys.stderr
+        dso = _DuplicateSysOut(lfo, sys_out_obj=sys.stderr)
+        assert dso.log_file_obj == lfo
+        assert dso.sys_out_obj is sys.stderr
 
         lfo.close()
         assert os.path.exists(lfn)

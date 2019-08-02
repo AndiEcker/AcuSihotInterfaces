@@ -3,31 +3,32 @@ import re
 import sys
 import inspect
 import logging
+from typing import AnyStr, Dict, List, Optional, Tuple
 import unicodedata
 
 
-DEBUG_LEVEL_DISABLED = 0        # ERROR/CRITICAL
-DEBUG_LEVEL_ENABLED = 1         # WARNING
-DEBUG_LEVEL_VERBOSE = 2         # INFO/DEBUG
-DEBUG_LEVEL_TIMESTAMPED = 3     # -"- plus timestamp in logging format
+DEBUG_LEVEL_DISABLED: int = 0       # ERROR/CRITICAL
+DEBUG_LEVEL_ENABLED: int = 1        # WARNING
+DEBUG_LEVEL_VERBOSE: int = 2        # INFO/DEBUG
+DEBUG_LEVEL_TIMESTAMPED: int = 3    # -"- plus timestamp in logging format
 
-debug_levels = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
+debug_levels: Dict[int, str] = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
 
-logging_levels = {DEBUG_LEVEL_DISABLED: logging.ERROR, DEBUG_LEVEL_ENABLED: logging.WARNING,
-                  DEBUG_LEVEL_VERBOSE: logging.INFO, DEBUG_LEVEL_TIMESTAMPED: logging.DEBUG}
+logging_levels: Dict[int, int] = {DEBUG_LEVEL_DISABLED: logging.ERROR, DEBUG_LEVEL_ENABLED: logging.WARNING,
+                                  DEBUG_LEVEL_VERBOSE: logging.INFO, DEBUG_LEVEL_TIMESTAMPED: logging.DEBUG}
 
 # default date/time formats in config files/variables
-DATE_TIME_ISO = '%Y-%m-%d %H:%M:%S.%f'
-DATE_ISO = '%Y-%m-%d'
+DATE_TIME_ISO: str = '%Y-%m-%d %H:%M:%S.%f'
+DATE_ISO: str = '%Y-%m-%d'
 
 # core encoding that will always work independent from destination (console, file system, XMLParser, ...)
-DEF_ENCODING = 'ascii'
+DEF_ENCODING: str = 'ascii'
 
 # illegal unicode/XML characters
 # .. taken from https://stackoverflow.com/questions/1707890/fast-way-to-filter-illegal-xml-unicode-chars-in-python
-ILLEGAL_XML_CHARS = [(0x00, 0x08), (0x0B, 0x0C), (0x0E, 0x1F),
-                     (0x7F, 0x84), (0x86, 0x9F),
-                     (0xFDD0, 0xFDDF), (0xFFFE, 0xFFFF)]
+ILLEGAL_XML_CHARS: List[Tuple[int, int]] = [(0x00, 0x08), (0x0B, 0x0C), (0x0E, 0x1F),
+                                            (0x7F, 0x84), (0x86, 0x9F),
+                                            (0xFDD0, 0xFDDF), (0xFFFE, 0xFFFF)]
 if sys.maxunicode >= 0x10000:  # not narrow build of Python
     ILLEGAL_XML_CHARS.extend([(0x1FFFE, 0x1FFFF), (0x2FFFE, 0x2FFFF),
                               (0x3FFFE, 0x3FFFF), (0x4FFFE, 0x4FFFF),
@@ -40,7 +41,7 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
 ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
 
 
-def calling_module(called_module=__name__, depth=1):
+def calling_module(called_module: str = __name__, depth: int = 1) -> Optional[str]:
     """ determine/find the first stack frame that is *not* in this/called module.
 
     :param called_module:   the module name from which this function get called.
@@ -61,20 +62,20 @@ def calling_module(called_module=__name__, depth=1):
     return module
 
 
-def force_encoding(text, encoding=DEF_ENCODING, errors='backslashreplace'):
+def force_encoding(text: AnyStr, encoding: str = DEF_ENCODING, errors: str = 'backslashreplace') -> str:
     """ force/ensure the encoding of text (str or bytes) without any UnicodeDecodeError/UnicodeEncodeError
-        :param text:        text as str/byte.
-        :param encoding:    encoding (def=DEF_ENCODING).
-        :param errors:      encode error handling (def='backslashreplace').
+    :param text:        text as str/byte.
+    :param encoding:    encoding (def=DEF_ENCODING).
+    :param errors:      encode error handling (def='backslashreplace').
 
-        :return:            text as str (with all characters checked/converted/replaced for to be encode-able).
+    :return:            text as str (with all characters checked/converted/replaced for to be encode-able).
     """
     if isinstance(text, str):
         text = text.encode(encoding=encoding, errors=errors)
     return text.decode(encoding=encoding)
 
 
-def full_stack_trace(ex):
+def full_stack_trace(ex: Exception) -> str:
     """ get full stack trace from an exception.
 
     :param ex:  exception instance.
@@ -96,7 +97,7 @@ def full_stack_trace(ex):
     return ret
 
 
-def round_traditional(val, digits=0):
+def round_traditional(val: float, digits: int = 0) -> float:
     """ round numeric value traditional.
 
         Needed because python round() is working differently, e.g. round(0.075, 2) == 0.07 instead of 0.08
@@ -110,14 +111,11 @@ def round_traditional(val, digits=0):
     return round(val + 10**(-len(str(val)) - 1), digits)
 
 
-def sys_env_dict(file=__file__):
+def sys_env_dict(file: str = __file__) -> dict:
     """ returns dict with python system run-time environment values.
 
-    Args:
-        file (str): optional file name (def=__file__/ae.__init__.py)
-
-    Returns:
-        dict:       python system run-time environment values like python_ver, argv, cwd, executable, __file__, frozen
+    :param file:    optional file name (def=__file__/ae.__init__.py)
+    :return:        python system run-time environment values like python_ver, argv, cwd, executable, __file__, frozen
                     and bundle_dir.
     """
     sed = dict()
@@ -132,7 +130,18 @@ def sys_env_dict(file=__file__):
     return sed
 
 
-def sys_env_text(file=__file__, ind_ch=" ", ind_len=18, key_ch="=", key_len=12, extra_sys_env_dict=None):
+def sys_env_text(file: str = __file__, ind_ch: str = " ", ind_len: int = 18, key_ch: str = " =", key_len: int = 12,
+                 extra_sys_env_dict: Optional[Dict] = None) -> str:
+    """ compile formatted text block with system environment info.
+
+    :param file:                main module file name (def=__file__).
+    :param ind_ch:              indent character (def=" ").
+    :param ind_len:             indent depths (def=18 characters).
+    :param key_ch:              key-value separator character (def=" =").
+    :param key_len:             key-name maximum length (def=12 characters).
+    :param extra_sys_env_dict:  dict with additional system info items.
+    :return:                    text block with system environment info.
+    """
     sed = sys_env_dict(file=file)
     if extra_sys_env_dict:
         sed.update(extra_sys_env_dict)
@@ -142,10 +151,9 @@ def sys_env_text(file=__file__, ind_ch=" ", ind_len=18, key_ch="=", key_len=12, 
     return text
 
 
-def to_ascii(unicode_str):
-    """
-    converts unicode string into ascii representation (for fuzzy string comparision); copied from MiniQuark's answer in:
-    https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string
+def to_ascii(unicode_str: str) -> str:
+    """ converts unicode string into ascii representation (for fuzzy string comparision); copied from MiniQuark's answer
+        in: https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string
 
     :param unicode_str:     string to convert
     :return:                converted string (replaced accents, diacritics, ... into normal ascii characters)

@@ -5,6 +5,7 @@ import datetime
 import logging
 import logging.config
 import threading
+from typing import AnyStr, Optional, TextIO
 import weakref
 
 from configparser import ConfigParser
@@ -14,15 +15,12 @@ from ae import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, 
                 debug_levels, logging_levels, DATE_TIME_ISO, DATE_ISO, sys_env_text, force_encoding, calling_module)
 from ae.setting import Setting
 
-INI_EXT = '.ini'
+INI_EXT: str = '.ini'
 
 # default name of main config section
-MAIN_SECTION_DEF = 'Settings'
+MAIN_SECTION_DEF: str = 'Settings'
 
-MAX_NUM_LOG_FILES = 69
-
-# initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
-ae_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, ConsoleApp]
+MAX_NUM_LOG_FILES: int = 69
 
 # global Locks for to prevent errors in log file rotation, config reloads and config reads
 log_file_rotation_lock = threading.Lock()
@@ -30,11 +28,15 @@ config_lock = threading.Lock()
 config_read_lock = threading.Lock()
 
 
-def main_ae_instance():
+# initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
+ae_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, ConsoleApp]
+
+
+def main_ae_instance() -> Optional["ConsoleApp"]:
     return ae_instances.get('')
 
 
-def _get_debug_level():
+def _get_debug_level() -> int:
     """ determining the debug level of the console app env instance of the currently running app.
 
     :return: current debug level.
@@ -53,22 +55,22 @@ app_std_err = ori_std_err
 
 
 class _DuplicateSysOut:
-    def __init__(self, log_file, sys_out=ori_std_out):
-        self.log_file = log_file
-        self.sys_out = sys_out
+    def __init__(self, log_file_obj: TextIO, sys_out_obj: TextIO = ori_std_out) -> None:
+        self.log_file_obj = log_file_obj
+        self.sys_out_obj = sys_out_obj
 
-    def write(self, message):
-        if self.log_file and not self.log_file.closed:
+    def write(self, message: AnyStr) -> None:
+        if self.log_file_obj and not self.log_file_obj.closed:
             try:
-                self.log_file.write(message)
+                self.log_file_obj.write(message)
             except UnicodeEncodeError:
                 # log file has different encoding than console, so simply replace with backslash
-                self.log_file.write(force_encoding(message, encoding=self.log_file.encoding))
-        if not self.sys_out.closed:
-            self.sys_out.write(message)
+                self.log_file_obj.write(force_encoding(message, encoding=self.log_file_obj.encoding))
+        if not self.sys_out_obj.closed:
+            self.sys_out_obj.write(message)
 
-    def __getattr__(self, attr):
-        return getattr(self.sys_out, attr)
+    def __getattr__(self, attr: str) -> object:
+        return getattr(self.sys_out_obj, attr)
 
 
 _logger = logging.getLogger(__name__)
@@ -477,7 +479,11 @@ class ConsoleApp:
             objects = ('{' + self.sys_env_id + '}', ) + objects
         uprint(*objects, sep=sep, end=end, file=file, debug_level=debug_level, **kwargs)
 
-    def app_name(self):
+    def app_name(self) -> str:
+        """ determine the name of the application.
+
+        :return:    application name.
+        """
         return self._app_name
 
     def _append_eof_and_flush_file(self, stream_file, stream_name):
@@ -515,11 +521,11 @@ class ConsoleApp:
                 std_out = self._nul_std_out = open(os.devnull, 'w')
             else:
                 std_out = ori_std_out
-            app_std_out = sys.stdout = _DuplicateSysOut(self._log_file_obj, sys_out=std_out)
-            app_std_err = sys.stderr = _DuplicateSysOut(self._log_file_obj, sys_out=ori_std_err)
+            app_std_out = sys.stdout = _DuplicateSysOut(self._log_file_obj, sys_out_obj=std_out)
+            app_std_err = sys.stderr = _DuplicateSysOut(self._log_file_obj, sys_out_obj=ori_std_err)
         else:
-            app_std_out.log_file = self._log_file_obj
-            app_std_err.log_file = self._log_file_obj
+            app_std_out.log_file_obj = self._log_file_obj
+            app_std_err.log_file_obj = self._log_file_obj
 
     def _rename_log_file(self):
         self._log_file_index = 0 if self._log_file_index >= MAX_NUM_LOG_FILES else self._log_file_index + 1
@@ -536,10 +542,10 @@ class ConsoleApp:
 
         if self._log_file_obj:
             self._append_eof_and_flush_file(self._log_file_obj, "log file")
-            app_std_err.log_file = None     # prevent calls of _DuplicateSysOut.log_file.write() to prevent exception
-            app_std_out.log_file = None
-            sys.stderr = ori_std_err        # set back for to prevent stack overflow/recursion with kivy logger
-            sys.stdout = ori_std_out        # .. "Fatal Python error: Cannot recover from stack overflow"
+            app_std_err.log_file_obj = None     # prevent exception/calls of _DuplicateSysOut.log_file_obj.write()
+            app_std_out.log_file_obj = None
+            sys.stderr = ori_std_err            # set back for to prevent stack overflow/recursion with kivy logger
+            sys.stdout = ori_std_out            # .. "Fatal Python error: Cannot recover from stack overflow"
             self._log_file_obj.close()
             self._log_file_obj = None
         elif self.logging_conf_dict:
