@@ -105,8 +105,8 @@ def aspect_key_direction(key):
 
 
 def deeper(deepness, instance):
-    """
-    check and calculate resulting/remaining deepness for Record/_Field/Records.copy() when going one level deeper
+    """ check and calculate resulting/remaining deepness for Record/_Field/Records.copy() when going one level deeper.
+
     :param deepness:    <0 will be returned unchanged until last level is reached (-1==full deep copy, -2==deep copy
                         until deepest Value, -3==deep copy until deepest _Field.
     :param instance:    instance to be processed/copied (if this method is returning != 0/zero).
@@ -124,8 +124,8 @@ def deeper(deepness, instance):
 
 
 def field_name_idx_path(field_name, return_root_fields=False):
-    """
-    converts a field name path string into an index path tuple.
+    """ converts a field name path string into an index path tuple.
+
     :param field_name:          field name str or field name path string or field name tuple
                                 or int (for Records index).
     :param return_root_fields:  pass True to also return len()==1-tuple for fields with no deeper path (def=False).
@@ -182,8 +182,8 @@ def field_names_idx_paths(field_names):
 
 
 def idx_path_field_name(idx_path, add_sep=False):
-    """
-    convert index path tuple/list into field name string.
+    """ convert index path tuple/list into field name string.
+
     :param idx_path:    index path to convert.
     :param add_sep:     pass True to always separate index with IDX_PATH_SEP. False/Def will only put a separator char
                         if field value is a Record (for to separate the root field name from the sub field name).
@@ -473,13 +473,13 @@ class Values(list):                     # type: List[Union[Value, Record]]
         return self
 
     def copy(self, deepness=0, root_rec=None, root_idx=(), **kwargs):
-        """
-        copy the values/records of this list (Values or Records)
+        """ copy the values/records of this list (Values or Records).
+
         :param deepness:        deep copy levels: <0==see deeper(), 0==only copy current instance, >0==deep copy
                                 to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
         :param root_rec:        destination root record.
         :param root_idx:        destination index path (tuple of field names and/or list/Records indexes).
-        :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
+        :param kwargs:          additional arguments (will be passed on - most of them used by Record.copy).
         :return:                new/extended record instance.
         """
         ret = type(self)()      # create new instance of this list/class (Values or Records)
@@ -800,8 +800,9 @@ class Record(OrderedDict):
 
     def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes=None,
                           system=None, direction=None, extend=True):
-        """
-        add/set fields from a system field tuple. This Record instance need to have system and direction specified/set.
+        """ add/set fields from a system field tuple. This Record instance need to have system and direction
+        specified/set.
+
         :param system_fields:   tuple/list of tuples/lists with system and main field names and optional field aspects.
                                 The index of the field names and aspects within the inner tuples/lists get specified
                                 by sys_fld_indexes.
@@ -973,8 +974,8 @@ class Record(OrderedDict):
         return val
 
     def copy(self, deepness=0, root_rec=None, root_idx=(), onto_rec=None, filter_fields=None, fields_patches=None):
-        """
-        copy the fields of this record
+        """ copy the fields of this record
+
         :param deepness:        deep copy level: <0==see deeper(), 0==only copy this record instance, >0==deep copy
                                 to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
         :param root_rec:        destination root record - using onto_rec/new record if not specified.
@@ -1190,8 +1191,8 @@ class Record(OrderedDict):
     def to_dict(self, filter_fields=None, key_type=str, push_onto=True,
                 use_system_key=True, put_system_val=True, put_empty_val=False,
                 system=None, direction=None):
-        """
-        copy Record leaf values into a dict.
+        """ copy Record leaf values into a dict.
+
         :param filter_fields:   callable returning True for each field that need to be excluded in returned dict, pass
                                 None to include all fields (if put_empty_val == True).
         :param key_type:        type of dict keys: None=field name, tuple=index path tuple, str=index path string (def).

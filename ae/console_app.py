@@ -342,20 +342,24 @@ class ConsoleApp:
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
+        The returned value has the same type as the value specified in the add_option() call and is the value from
+        either (ordered by precedence - first specified/found value will be returned):
 
-            The returned value has the same type as the value specified in the add_option() call and is the value from
-            either (ordered by precedence - first specified/found value will be returned):
-            - command line arguments option
-            - default section of the INI/CFG file(s) that got specified in the additional_cfg_files parameter of this
-              object instantiation (see __init__() method of this class).
-            - default section of INI file in the current working directory (cwd)
-            - default section of CFG file in the current working directory (cwd)
-            - default section of INI file in the application directory (where the main py or exe file is placed)
-            - default section of CFG file in the application directory (where the main py or exe file is placed)
-            - default section of .console_app_env.cfg in the cwd
-            - default section of .console_app_env.cfg in the application directory
-            - value argument passed into the add_option() method call (defining the option)
-            - default_value argument passed into this method (should actually not happen-add_option() didn't get called)
+        * command line arguments option
+        * default section of the INI/CFG file(s) specified by the additional_cfg_files parameter of ``ConsoleApp``
+        * default section of INI file in the current working directory (cwd)
+        * default section of CFG file in the current working directory (cwd)
+        * default section of INI file in the application directory (where the main py or exe file is placed)
+        * default section of CFG file in the application directory (where the main py or exe file is placed)
+        * default section of .console_app_env.cfg in the cwd
+        * default section of .console_app_env.cfg in the application directory
+        * value argument passed into the add_option() method call (defining the option)
+        * default_value argument passed into this method (should actually not happen-add_option() didn't get called)
+
+        :param name:            name of the option/setting.
+        :param default_value:   default value of the option (if not specified in any INI/CFG file).
+
+        :return:                value of the option.
         """
         if not self._parsed_args:
             self._parse_args()
@@ -371,6 +375,11 @@ class ConsoleApp:
         return getattr(self._parsed_args, name)
 
     def config_file_add(self, fnam):
+        """
+
+        :param fnam:
+        :return:
+        """
         if os.path.isfile(fnam):
             self._config_files.append(fnam)
             return True

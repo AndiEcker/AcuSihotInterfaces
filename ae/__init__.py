@@ -63,7 +63,8 @@ def calling_module(called_module: str = __name__, depth: int = 1) -> Optional[st
 
 
 def force_encoding(text: AnyStr, encoding: str = DEF_ENCODING, errors: str = 'backslashreplace') -> str:
-    """ force/ensure the encoding of text (str or bytes) without any UnicodeDecodeError/UnicodeEncodeError
+    """ force/ensure the encoding of text (str or bytes) without any UnicodeDecodeError/UnicodeEncodeError.
+
     :param text:        text as str/byte.
     :param encoding:    encoding (def=DEF_ENCODING).
     :param errors:      encode error handling (def='backslashreplace').

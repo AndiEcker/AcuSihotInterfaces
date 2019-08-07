@@ -3,6 +3,9 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/ae/.pytest_cache" />
+      <excludeFolder url="file://$MODULE_DIR$/ae/docs/_build" />
+      <excludeFolder url="file://$MODULE_DIR$/ae/docs/_static" />
+      <excludeFolder url="file://$MODULE_DIR$/ae/docs/_templates" />
       <excludeFolder url="file://$MODULE_DIR$/build" />
       <excludeFolder url="file://$MODULE_DIR$/log" />
       <excludeFolder url="file://$MODULE_DIR$/temp" />
