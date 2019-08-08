@@ -20,16 +20,16 @@ ACTION_PUSH = 'PUSH'
 ACTION_COMPARE = 'COMPARE'
 
 # field aspect types/prefixes
-FAT_IDX = 'idx'                 # main/system field name within parent Record or list index within Records/Values
-FAT_VAL = 'vle'                 # main/system field value - storing one of the VALUE_TYPES instance
-FAT_CLEAR_VAL = 'vwc'           # field default/clear value (init by _Field.set_clear_val(), used by clear_leafs())
-FAT_REC = 'rrd'                 # root Record instance
-FAT_RCX = 'rrx'                 # field index path (idx_path) from the root Record instance
-FAT_CAL = 'clc'                 # calculator callable
-FAT_CHK = 'chk'                 # validator callable
-FAT_CNV = 'cnv'                 # system value converter callable
-FAT_FLT = 'flt'                 # field filter callable
-FAT_SQE = 'sqc'                 # SQL expression for to fetch field value from db
+FAT_IDX = 'idx'                 #: main/system field name within parent Record or list index within Records/Values
+FAT_VAL = 'vle'                 #: main/system field value - storing one of the VALUE_TYPES instance
+FAT_CLEAR_VAL = 'vwc'           #: field default/clear value (init by _Field.set_clear_val(), used by clear_leafs())
+FAT_REC = 'rrd'                 #: root Record instance
+FAT_RCX = 'rrx'                 #: field index path (idx_path) from the root Record instance
+FAT_CAL = 'clc'                 #: calculator callable
+FAT_CHK = 'chk'                 #: validator callable
+FAT_CNV = 'cnv'                 #: system value converter callable
+FAT_FLT = 'flt'                 #: field filter callable
+FAT_SQE = 'sqc'                 #: SQL expression for to fetch field value from db
 
 ALL_FATS = (FAT_IDX, FAT_VAL, FAT_CLEAR_VAL, FAT_REC, FAT_RCX, FAT_CAL, FAT_CHK, FAT_CNV, FAT_FLT, FAT_SQE)
 
@@ -508,8 +508,8 @@ class Record(OrderedDict):
     # .. question https://stackoverflow.com/questions/3387691/how-to-perfectly-override-a-dict/47361653#47361653
     def __init__(self, template=None, fields=None, system='', direction='', action='', root_rec=None, root_idx=(),
                  field_items=False):
-        """
-        ordered collection of _Field items.
+        """ Create new Record instance, which is an ordered collection of _Field items.
+
         :param template:    pass Records instance to use first item/[0] as template (after deep copy and vals cleared).
         :param fields:      OrderedDict/dict of _Field instances (field order is not preserved when using dict)
                             or Record instance (fields will be referenced, not copied!)
@@ -519,7 +519,7 @@ class Record(OrderedDict):
         :param action:      current action (see ACTION_INSERT, ACTION_SEARCH, ACTION_DELETE, ...)
         :param root_rec:    root record of this record (def=self will be a root record).
         :param root_idx:    root index of this record (def=()).
-        :param field_items  pass True to get Record items - using __getitem__() - as of type _Field (not as val()).
+        :param field_items: pass True to get Record items - using __getitem__() - as of type _Field (not as val()).
         """
         super().__init__()
         self._fields = self     # using internal store of OrderedDict() while keeping code better readable/maintainable
@@ -1805,8 +1805,8 @@ class _Field:
         return value.append_record(root_rec=root_rec, root_idx=root_idx)
 
     def clear_leafs(self, system='', direction='', flex_sys_dir=True, reset_lists=True):
-        """
-        clear/reset field values and if reset_lists == True also Records/Values lists to one item.
+        """ clear/reset field values and if reset_lists == True also Records/Values lists to one item.
+
         :param system:          system of the field value to clear, pass None for to clear all field values.
         :param direction:       direction of the field value to clear.
         :param flex_sys_dir:    if True then also clear field value if system is given and field has no system value.
@@ -1841,13 +1841,13 @@ class _Field:
         return self
 
     def copy(self, deepness=0, root_rec=None, root_idx=(), **kwargs):
-        """
-        copy the aspects (names, indexes, values, ...) of this field
+        """ copy the aspects (names, indexes, values, ...) of this field.
+
         :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
                                 to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
         :param root_rec:        destination root record.
         :param root_idx:        destination index path (tuple of field names and/or list/Records/Values indexes).
-        :param kwargs           additional arguments (will be passed on - most of them used by Record.copy).
+        :param kwargs:          additional arguments (will be passed on - most of them used by Record.copy).
         :return:                new/extended record instance.
         """
         aspects = self._aspects

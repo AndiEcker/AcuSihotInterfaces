@@ -12,15 +12,14 @@ from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter
 
 from ae import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
-                debug_levels, logging_levels, DATE_TIME_ISO, DATE_ISO, sys_env_text, force_encoding, calling_module)
+                DEBUG_LEVELS, LOGGING_LEVELS, DATE_TIME_ISO, DATE_ISO, sys_env_text, force_encoding, calling_module)
 from ae.setting import Setting
 
-INI_EXT: str = '.ini'
+INI_EXT: str = '.ini'                   #: INI file extension
 
-# default name of main config section
-MAIN_SECTION_DEF: str = 'Settings'
+MAIN_SECTION_DEF: str = 'Settings'      #: default name of main config section
 
-MAX_NUM_LOG_FILES: int = 69
+MAX_NUM_LOG_FILES: int = 69             #: maximum number of log files
 
 # global Locks for to prevent errors in log file rotation, config reloads and config reads
 log_file_rotation_lock = threading.Lock()
@@ -33,11 +32,15 @@ ae_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictiona
 
 
 def main_ae_instance() -> Optional["ConsoleApp"]:
+    """ determine the main instance of the :class:`ConsoleApp` in the current running application.
+
+    :return:    main :class:`~ae.console_app.ConsoleApp` instance or None (if app is not fully initialized yet).
+    """
     return ae_instances.get('')
 
 
 def _get_debug_level() -> int:
-    """ determining the debug level of the console app env instance of the currently running app.
+    """ determining the debug level of the main :class:`ConsoleApp` instance of the currently running app.
 
     :return: current debug level.
     """
@@ -76,8 +79,23 @@ class _DuplicateSysOut:
 _logger = logging.getLogger(__name__)
 
 
-def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_errors_def='backslashreplace',
-           debug_level=None, logger=None, cae_instance=None, **kwargs):
+def uprint(*print_objects: tuple, sep: str = " ", end: str = "\n", file: TextIO = None, flush: bool = False,
+           encode_errors_def: str = 'backslashreplace', debug_level: int = None, logger: logging.Logger = None,
+           cae_instance: "ConsoleApp" = None, **kwargs: dict) -> None:
+    """ universal/unbreakable print function - replacing python print() built-in.
+
+    :param print_objects:       tuple of objects to be printed.
+    :param sep:                 separator character between each printed object/string (def=" ").
+    :param end:                 finalizing character added to the end of this print (def="\n").
+    :param file:                file object to be printed to (def=None, which uses default output stream/stdout).
+    :param flush:               flush stream after printing.
+    :param encode_errors_def:   default error handling for to encode.
+    :param debug_level:         current debug level.
+    :param logger:
+    :param cae_instance:
+    :param kwargs:
+    :return:
+    """
     processing = end == "\r"
     if not file:
         # app_std_out cannot be specified as file argument default because get initialized after import of this module
@@ -89,7 +107,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
         cae_instance = main_ae_instance()
     if cae_instance is not None:
         if getattr(cae_instance, 'multi_threading', False):            # add thread ident
-            print_objects = (" <{: >6}>".format(threading.get_ident()),) + print_objects
+            print_objects = (" <{: >6}>".format(threading.get_ident()), ) + print_objects
         if getattr(cae_instance, '_log_file_obj', False):
             # creating new log file and backup of current one if the current one has more than 20 MB in size
             cae_instance.log_file_check_rotation()
@@ -107,7 +125,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
     if kwargs:
         print_objects += ("\n   *  EXTRA KWARGS={}".format(kwargs), )
 
-    use_logger = not processing and debug_level in logging_levels \
+    use_logger = not processing and debug_level in LOGGING_LEVELS \
         and getattr(cae_instance, 'logging_conf_dict', False)
     if use_logger and logger is None:
         module = calling_module()
@@ -129,7 +147,7 @@ def uprint(*print_objects, sep=" ", end="\n", file=None, flush=False, encode_err
                 print_strings = (print_one_str,)
 
             if use_logger:
-                logger.log(level=logging_levels[debug_level], msg=print_strings[0])
+                logger.log(level=LOGGING_LEVELS[debug_level], msg=print_strings[0])
             else:
                 print(*print_strings, sep=sep, end=end, file=file, flush=flush)
             break
@@ -149,27 +167,28 @@ class ConsoleApp:
                  multi_threading=False, suppress_stdout=False,
                  formatter_class=HelpFormatter, epilog="",
                  sys_env_id='', logging_config=None):
-        """ encapsulating ConfigParser and ArgumentParser for python console applications
-            :param app_version:             application version.
-            :param app_desc:                application description.
-            :param debug_level_def:         default debug level (DEBUG_LEVEL_DISABLED).
-            :param config_eval_vars:        dict of additional application specific data values that are used in eval
-                                            expressions (e.g. AcuSihotMonitor.ini).
-            :param additional_cfg_files:    list of additional CFG/INI file names (opt. incl. abs/rel. path).
-            :param option_value_stripper:   function for to strip/reformat Setting option value for validation.
-            :param multi_threading:         pass True if instance is used in multi-threading app.
-            :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
-            :param formatter_class:         alternative formatter class passed onto ArgumentParser instantiation.
-            :param epilog:                  optional epilog text for command line arguments/options help text (passed
-                                            onto ArgumentParser instantiation).
-            :param sys_env_id:              system environment id used as file name suffix for to load all
-                                            the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
-                                            for to init second ConsoleApp instance with values from sys_envLIVE.cfg).
-            :param logging_config:          dict with logging configuration default values - supported keys. If the key
-                                            py_logging_config_dict is a non-empty dict then all other keys are ignored:
-                                            py_logging_config_dict  config dict for python logging configuration.
-                                            file_name_def           default log file name for internal logging (def='').
-                                            file_size_max           max. size in MBytes of internal log file (def=20).
+        """ encapsulating ConfigParser and ArgumentParser for python console applications.
+
+        :param app_version:             application version.
+        :param app_desc:                application description.
+        :param debug_level_def:         default debug level (DEBUG_LEVEL_DISABLED).
+        :param config_eval_vars:        dict of additional application specific data values that are used in eval
+                                        expressions (e.g. AcuSihotMonitor.ini).
+        :param additional_cfg_files:    list of additional CFG/INI file names (opt. incl. abs/rel. path).
+        :param option_value_stripper:   function for to strip/reformat Setting option value for validation.
+        :param multi_threading:         pass True if instance is used in multi-threading app.
+        :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
+        :param formatter_class:         alternative formatter class passed onto ArgumentParser instantiation.
+        :param epilog:                  optional epilog text for command line arguments/options help text (passed
+                                        onto ArgumentParser instantiation).
+        :param sys_env_id:              system environment id used as file name suffix for to load all
+                                        the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
+                                        for to init second ConsoleApp instance with values from sys_envLIVE.cfg).
+        :param logging_config:          dict with logging configuration default values - supported keys. If the key
+                                        py_logging_config_dict is a non-empty dict then all other keys are ignored:
+                                        py_logging_config_dict  config dict for python logging configuration.
+                                        file_name_def           default log file name for internal logging (def='').
+                                        file_size_max           max. size in MBytes of internal log file (def=20).
         """
         """
             :var  ae_instances          module dict var, referencing all instances of this class. The main/first-created
@@ -245,7 +264,7 @@ class ConsoleApp:
         # prepare argument parser
         self._arg_parser = ArgumentParser(description=app_desc, formatter_class=formatter_class, epilog=epilog)
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
-                        choices=debug_levels.keys())
+                        choices=DEBUG_LEVELS.keys())
         self.add_option('logFile', "Copy stdout and stderr into log file", logging_config.get('file_name_def', ''), 'L')
 
     def __del__(self):
@@ -325,7 +344,7 @@ class ConsoleApp:
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self.config_options['debugLevel'].value
         if _debug_level >= DEBUG_LEVEL_ENABLED:
-            self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in debug_levels.items()]) + "):",
+            self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in DEBUG_LEVELS.items()]) + "):",
                         _debug_level, logger=_logger)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
             if self.sys_env_id or main_ae_instance() is not self:
@@ -342,6 +361,7 @@ class ConsoleApp:
 
     def get_option(self, name, default_value=None):
         """ get the value of the option specified by it's name.
+
         The returned value has the same type as the value specified in the add_option() call and is the value from
         either (ordered by precedence - first specified/found value will be returned):
 

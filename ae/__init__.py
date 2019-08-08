@@ -7,28 +7,33 @@ from typing import AnyStr, Dict, List, Optional, Tuple
 import unicodedata
 
 
-DEBUG_LEVEL_DISABLED: int = 0       # ERROR/CRITICAL
-DEBUG_LEVEL_ENABLED: int = 1        # WARNING
-DEBUG_LEVEL_VERBOSE: int = 2        # INFO/DEBUG
-DEBUG_LEVEL_TIMESTAMPED: int = 3    # -"- plus timestamp in logging format
+DEBUG_LEVEL_DISABLED: int = 0       #: lowest debug level - only display logging levels ERROR/CRITICAL.
+DEBUG_LEVEL_ENABLED: int = 1        #: minimum debugging info - display logging levels WARNING or higher.
+DEBUG_LEVEL_VERBOSE: int = 2        #: verbose debug info - display logging levels INFO/DEBUG or higher.
+DEBUG_LEVEL_TIMESTAMPED: int = 3    #: highest/verbose debug info - including timestamps in the log output.
 
-debug_levels: Dict[int, str] = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}
 
-logging_levels: Dict[int, int] = {DEBUG_LEVEL_DISABLED: logging.ERROR, DEBUG_LEVEL_ENABLED: logging.WARNING,
+DEBUG_LEVELS: Dict[int, str] = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}    #: debug level names
+
+LOGGING_LEVELS: Dict[int, int] = {DEBUG_LEVEL_DISABLED: logging.ERROR, DEBUG_LEVEL_ENABLED: logging.WARNING,
                                   DEBUG_LEVEL_VERBOSE: logging.INFO, DEBUG_LEVEL_TIMESTAMPED: logging.DEBUG}
+""" association between ae debug levels and python logging levels.
+"""
 
-# default date/time formats in config files/variables
-DATE_TIME_ISO: str = '%Y-%m-%d %H:%M:%S.%f'
-DATE_ISO: str = '%Y-%m-%d'
+DATE_TIME_ISO: str = '%Y-%m-%d %H:%M:%S.%f'     #: ISO string format for datetime values in config files/variables
+DATE_ISO: str = '%Y-%m-%d'                      #: ISO string format for date values in config files/variables
 
-# core encoding that will always work independent from destination (console, file system, XMLParser, ...)
 DEF_ENCODING: str = 'ascii'
+""" core encoding that will always work independent from destination (console, file system, XMLParser, ...).
+"""
 
-# illegal unicode/XML characters
-# .. taken from https://stackoverflow.com/questions/1707890/fast-way-to-filter-illegal-xml-unicode-chars-in-python
 ILLEGAL_XML_CHARS: List[Tuple[int, int]] = [(0x00, 0x08), (0x0B, 0x0C), (0x0E, 0x1F),
                                             (0x7F, 0x84), (0x86, 0x9F),
                                             (0xFDD0, 0xFDDF), (0xFFFE, 0xFFFF)]
+""" illegal unicode/XML characters.
+
+taken from https://stackoverflow.com/questions/1707890/fast-way-to-filter-illegal-xml-unicode-chars-in-python.
+"""
 if sys.maxunicode >= 0x10000:  # not narrow build of Python
     ILLEGAL_XML_CHARS.extend([(0x1FFFE, 0x1FFFF), (0x2FFFE, 0x2FFFF),
                               (0x3FFFE, 0x3FFFF), (0x4FFFE, 0x4FFFF),
@@ -38,15 +43,20 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
                               (0xBFFFE, 0xBFFFF), (0xCFFFE, 0xCFFFF),
                               (0xDFFFE, 0xDFFFF), (0xEFFFE, 0xEFFFF),
                               (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
+
 ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
+""" pre-compiled regular expression for to find illegal unicode/XML characters in a string.
+"""
 
 
 def calling_module(called_module: str = __name__, depth: int = 1) -> Optional[str]:
-    """ determine/find the first stack frame that is *not* in this/called module.
+    """ determine/find the first stack frame that is *not* in the module specified by ``called_module``.
 
-    :param called_module:   the module name from which this function get called.
+    :param called_module:   skipped module name; for normal usages pass here the module name from which this
+                            function get called.
     :param depth:           the calling level from which on to search (def=1 which refers the next higher module).
-                            Pass higher value if you want to get the module name from a higher level in the call stack.
+                            Pass 2 or a even higher value if you want to get the module name from a higher level
+                            in the call stack.
     :return:                The module name of a higher level within the call stack.
     """
     module = None
@@ -101,13 +111,13 @@ def full_stack_trace(ex: Exception) -> str:
 def round_traditional(val: float, digits: int = 0) -> float:
     """ round numeric value traditional.
 
-        Needed because python round() is working differently, e.g. round(0.075, 2) == 0.07 instead of 0.08
-        taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer
+    Needed because python round() is working differently, e.g. round(0.075, 2) == 0.07 instead of 0.08
+    taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer.
 
-        :param val:     float value to be round.
-        :param digits:  number of digits to be round (def=0 - rounds to an integer value).
+    :param val:     float value to be round.
+    :param digits:  number of digits to be round (def=0 - rounds to an integer value).
 
-        :return:        rounded value.
+    :return:        rounded value.
     """
     return round(val + 10**(-len(str(val)) - 1), digits)
 
@@ -115,7 +125,7 @@ def round_traditional(val: float, digits: int = 0) -> float:
 def sys_env_dict(file: str = __file__) -> dict:
     """ returns dict with python system run-time environment values.
 
-    :param file:    optional file name (def=__file__/ae.__init__.py)
+    :param file:    optional file name (def=__file__/ae.__init__.py).
     :return:        python system run-time environment values like python_ver, argv, cwd, executable, __file__, frozen
                     and bundle_dir.
     """
@@ -132,7 +142,7 @@ def sys_env_dict(file: str = __file__) -> dict:
 
 
 def sys_env_text(file: str = __file__, ind_ch: str = " ", ind_len: int = 18, key_ch: str = " =", key_len: int = 12,
-                 extra_sys_env_dict: Optional[Dict] = None) -> str:
+                 extra_sys_env_dict: Optional[Dict[str, str]] = None) -> str:
     """ compile formatted text block with system environment info.
 
     :param file:                main module file name (def=__file__).
@@ -153,11 +163,13 @@ def sys_env_text(file: str = __file__, ind_ch: str = " ", ind_len: int = 18, key
 
 
 def to_ascii(unicode_str: str) -> str:
-    """ converts unicode string into ascii representation (for fuzzy string comparision); copied from MiniQuark's answer
-        in: https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string
+    """ converts unicode string into ascii representation.
 
-    :param unicode_str:     string to convert
-    :return:                converted string (replaced accents, diacritics, ... into normal ascii characters)
+    Useful for fuzzy string comparision; copied from MiniQuark's answer
+    in: https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string
+
+    :param unicode_str:     string to convert.
+    :return:                converted string (replaced accents, diacritics, ... into normal ascii characters).
     """
     nfkd_form = unicodedata.normalize('NFKD', unicode_str)
     return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
