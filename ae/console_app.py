@@ -12,7 +12,8 @@ from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter
 
 from ae import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
-                DEBUG_LEVELS, LOGGING_LEVELS, DATE_TIME_ISO, DATE_ISO, sys_env_text, force_encoding, calling_module)
+                DEBUG_LEVELS, LOGGING_LEVELS, DATE_TIME_ISO, DATE_ISO,
+                calling_module, sys_env_text, force_encoding, to_ascii)
 from ae.setting import Setting
 
 INI_EXT: str = '.ini'                   #: INI file extension
@@ -27,16 +28,22 @@ config_lock = threading.Lock()
 config_read_lock = threading.Lock()
 
 
-# initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access at this module level
-ae_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, ConsoleApp]
+# The following line is throwing an error in the Sphinx docs make:
+# app_instances: weakref.WeakValueDictionary[str, "ConsoleApp"] = weakref.WeakValueDictionary() #: dict of app instances
+app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, ConsoleApp]
+""" `app_instances` is holding the references for all :class:`ConsoleApp` instances created at run time.
+
+It gets automatically initialized in ConsoleApp.__init__() for to allow log file split/rotation and debugLevel access
+at this module level.
+"""
 
 
-def main_ae_instance() -> Optional["ConsoleApp"]:
+def main_app_instance() -> Optional["ConsoleApp"]:
     """ determine the main instance of the :class:`ConsoleApp` in the current running application.
 
     :return:    main :class:`~ae.console_app.ConsoleApp` instance or None (if app is not fully initialized yet).
     """
-    return ae_instances.get('')
+    return app_instances.get('')
 
 
 def _get_debug_level() -> int:
@@ -44,7 +51,7 @@ def _get_debug_level() -> int:
 
     :return: current debug level.
     """
-    main_instance = main_ae_instance()
+    main_instance = main_app_instance()
     if main_instance and 'debugLevel' in main_instance.config_options:
         return main_instance.config_options['debugLevel'].value
     return DEBUG_LEVEL_DISABLED
@@ -58,11 +65,22 @@ app_std_err = ori_std_err
 
 
 class _DuplicateSysOut:
+    """ private helper class used by :class:`ConsoleApp` for to duplicate the standard output stream to an log file.
+    """
     def __init__(self, log_file_obj: TextIO, sys_out_obj: TextIO = ori_std_out) -> None:
+        """ initialise a new T-stream-object
+
+        :param log_file_obj:    log file stream.
+        :param sys_out_obj:     standard output stream (def=sys.stdout)
+        """
         self.log_file_obj = log_file_obj
         self.sys_out_obj = sys_out_obj
 
     def write(self, message: AnyStr) -> None:
+        """ write string to log and standard output streams.
+
+        :param message:     string to output.
+        """
         if self.log_file_obj and not self.log_file_obj.closed:
             try:
                 self.log_file_obj.write(message)
@@ -73,27 +91,35 @@ class _DuplicateSysOut:
             self.sys_out_obj.write(message)
 
     def __getattr__(self, attr: str) -> object:
+        """ get attribute value from standard output stream.
+
+        :param attr:    name of the attribute to retrieve/return.
+        :return:        value of the attribute.
+        """
         return getattr(self.sys_out_obj, attr)
 
 
-_logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__)       #: default logger for this module
 
 
-def uprint(*print_objects: tuple, sep: str = " ", end: str = "\n", file: TextIO = None, flush: bool = False,
-           encode_errors_def: str = 'backslashreplace', debug_level: int = None, logger: logging.Logger = None,
-           cae_instance: "ConsoleApp" = None, **kwargs: dict) -> None:
+def uprint(*print_objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = None, flush: bool = False,
+           encode_errors_def: str = 'backslashreplace', debug_level: Optional[int] = None,
+           logger: Optional[logging.Logger] = None, cae_instance: Optional["ConsoleApp"] = None,
+           **kwargs) -> None:
     """ universal/unbreakable print function - replacing python print() built-in.
+
+    This method get also exposed by any instance of :class:`ConsoleApp` - which is the recommended usage.
 
     :param print_objects:       tuple of objects to be printed.
     :param sep:                 separator character between each printed object/string (def=" ").
     :param end:                 finalizing character added to the end of this print (def="\n").
-    :param file:                file object to be printed to (def=None, which uses default output stream/stdout).
-    :param flush:               flush stream after printing.
-    :param encode_errors_def:   default error handling for to encode.
-    :param debug_level:         current debug level.
-    :param logger:
-    :param cae_instance:
-    :param kwargs:
+    :param file:                output stream object to be printed to (def=None which will use standard output streams).
+    :param flush:               flush stream after printing (def=False).
+    :param encode_errors_def:   default error handling for to encode (def='backslashreplace').
+    :param debug_level:         current debug level (def=None).
+    :param logger:              used logger for to output `print_objects` (def=None).
+    :param cae_instance:        used instance of :class:`ConsoleApp` (def=None which trying to use the main instance).
+    :param kwargs:              additional kwargs dict (items will be printed to the output stream).
     :return:
     """
     processing = end == "\r"
@@ -104,7 +130,7 @@ def uprint(*print_objects: tuple, sep: str = " ", end: str = "\n", file: TextIO 
     enc = file.encoding
 
     if cae_instance is None:
-        cae_instance = main_ae_instance()
+        cae_instance = main_app_instance()
     if cae_instance is not None:
         if getattr(cae_instance, 'multi_threading', False):            # add thread ident
             print_objects = (" <{: >6}>".format(threading.get_ident()), ) + print_objects
@@ -131,7 +157,7 @@ def uprint(*print_objects: tuple, sep: str = " ", end: str = "\n", file: TextIO 
         module = calling_module()
         logger = logging.getLogger(module) if module else _logger
 
-    retries = 1
+    retries = 2
     while retries:
         try:
             print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), print_objects)
@@ -154,8 +180,12 @@ def uprint(*print_objects: tuple, sep: str = " ", end: str = "\n", file: TextIO 
         except UnicodeEncodeError:
             fixed_objects = list()
             for obj in print_objects:
-                if isinstance(obj, str) or isinstance(obj, bytes):
+                if not isinstance(obj, str) and not isinstance(obj, bytes):
+                    obj = str(obj)
+                if retries == 2:
                     obj = force_encoding(obj, encoding=enc)
+                else:
+                    obj = to_ascii(obj)
                 fixed_objects.append(obj)
             print_objects = fixed_objects
             retries -= 1
@@ -191,7 +221,7 @@ class ConsoleApp:
                                         file_size_max           max. size in MBytes of internal log file (def=20).
         """
         """
-            :var  ae_instances          module dict var, referencing all instances of this class. The main/first-created
+            :var  app_instances         module dict var, referencing all instances of this class. The main/first-created
                                         instance has an empty string as the dict key.
             :ivar config_options        pre-/user-defined options (dict of Setting instances).
             :ivar _parsed_args          ArgumentParser.parse_args() return - used for to retrieve command line args and
@@ -203,13 +233,13 @@ class ConsoleApp:
             :ivar _log_file_name        path and file name of the log file.
             :ivar _log_file_index       index of the current rotation log file backup.
         """
-        global ae_instances
-        main_instance = main_ae_instance()
+        global app_instances
+        main_instance = main_app_instance()
         if main_instance is None:
-            ae_instances[''] = main_instance = self
+            app_instances[''] = main_instance = self
         self.sys_env_id = sys_env_id
-        if sys_env_id not in ae_instances:
-            ae_instances[sys_env_id] = self
+        if sys_env_id not in app_instances:
+            app_instances[sys_env_id] = self
 
         self._parsed_args = None
         self._nul_std_out = None
@@ -268,7 +298,7 @@ class ConsoleApp:
         self.add_option('logFile', "Copy stdout and stderr into log file", logging_config.get('file_name_def', ''), 'L')
 
     def __del__(self):
-        if main_ae_instance() is self and not self._shut_down:
+        if main_app_instance() is self and not self._shut_down:
             self.shutdown()
 
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
@@ -338,7 +368,7 @@ class ConsoleApp:
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
                                             .format(name, given_value, allowed_values))
 
-        if main_ae_instance() is self and not self.logging_conf_dict:
+        if main_app_instance() is self and not self.logging_conf_dict:
             self.activate_internal_logging(self.config_options['logFile'].value)
 
         # finished argument parsing - now print chosen option values to the console
@@ -347,14 +377,14 @@ class ConsoleApp:
             self.uprint("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in DEBUG_LEVELS.items()]) + "):",
                         _debug_level, logger=_logger)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
-            if self.sys_env_id or main_ae_instance() is not self:
+            if self.sys_env_id or main_app_instance() is not self:
                 self.uprint(" ###  Initialized ConsoleApp instance for system env id", self.sys_env_id, logger=_logger)
             self.uprint("  ##  System Environment:", logger=_logger)
             self.uprint(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}), logger=_logger)
 
         self.startup_end = datetime.datetime.now()
         self.uprint(self._app_name, " V", self._app_version, "  Args  parsed", self.startup_end, logger=_logger)
-        if main_ae_instance() is not self and not self.sys_env_id:
+        if main_app_instance() is not self and not self.sys_env_id:
             self.uprint("  **  Additional instance of ConsoleApp requested with empty system environment ID",
                         logger=_logger)
         self.uprint("####  Startup finished....  ####", logger=_logger)
@@ -623,7 +653,7 @@ class ConsoleApp:
             self._nul_std_out.close()
             self._nul_std_out = None
 
-        if main_ae_instance() is self:
+        if main_app_instance() is self:
             self._shut_down = True
             if exit_code is not None:
                 sys.exit(exit_code)

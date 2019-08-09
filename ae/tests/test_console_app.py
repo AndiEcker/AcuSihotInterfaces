@@ -13,7 +13,8 @@ from argparse import ArgumentError
 
 
 from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO
-from ae.console_app import (uprint, ae_instances, ConsoleApp, _DuplicateSysOut, MAX_NUM_LOG_FILES, INI_EXT)
+from ae.console_app import (
+    uprint, app_instances, main_app_instance, ConsoleApp, _DuplicateSysOut, MAX_NUM_LOG_FILES, INI_EXT)
 
 
 @pytest.fixture
@@ -221,8 +222,8 @@ class TestHelpers:
         assert (out == '\n' or out == '') and err == ''
 
         cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', multi_threading=True)
-        (ae_instances or cae).debug_level = DEBUG_LEVEL_TIMESTAMPED
-        (ae_instances or cae).multi_threading = True
+        (main_app_instance() or cae).debug_level = DEBUG_LEVEL_TIMESTAMPED
+        (main_app_instance() or cae).multi_threading = True
         uprint(invalid_kwarg='ika')
         out, err = capsys.readouterr()
         assert ('ika' in out or out == '') and err == ''
@@ -292,7 +293,7 @@ class TestConsoleAppBasics:
         assert sei in out or out == ''
 
         # special case for error code path coverage
-        ae_instances[''] = ConsoleApp('0.0', 'test_sys_env_id_COPY')
+        app_instances[''] = ConsoleApp('0.0', 'test_sys_env_id_COPY')
         cae.sys_env_id = ''
         assert cae.get_option('debugLevel') == DEBUG_LEVEL_DISABLED
 

@@ -1,6 +1,6 @@
 import threading
 
-from ae.console_app import main_ae_instance, uprint, _logger
+from ae.console_app import main_app_instance, uprint, _logger
 
 
 class NamedLocks:
@@ -22,7 +22,7 @@ class NamedLocks:
         assert not sys_lock, "sys_lock is currently not implemented"
         self._sys_lock = sys_lock
         # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
-        cae = main_ae_instance()
+        cae = main_app_instance()
         self.print_func = cae.dprint if cae and getattr(cae, 'startup_end', False) else uprint
 
         self.dprint("NamedLocks.__init__", lock_names)
