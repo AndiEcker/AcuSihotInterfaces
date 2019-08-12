@@ -54,8 +54,8 @@ _ASP_SYS_MIN_LEN = 2
 
 
 def aspect_key(type_or_key, system='', direction=''):
-    """
-    compiles an aspect dict key from the given args
+    """ compiles an aspect dict key from the given args
+
     :param type_or_key:     either FAT_* type or full key (including already the system and direction)-
     :param system:          system id string (if type_or_key is a pure FAT_* constant).
     :param direction:       direction string FAD_* constant (if type_or_key is a pure FAT_* constant).
@@ -83,8 +83,8 @@ def aspect_key(type_or_key, system='', direction=''):
 
 
 def aspect_key_system(key):
-    """
-    determines the system id string from an aspect key.
+    """ determines the system id string from an aspect key.
+
     :param key:     aspect key string.
     :return:        system id (SDI_* constant).
     """
@@ -95,8 +95,8 @@ def aspect_key_system(key):
 
 
 def aspect_key_direction(key):
-    """
-    determines the direction id string from an aspect key.
+    """ determines the direction id string from an aspect key.
+
     :param key:     aspect key string.
     :return:        direction id (FAD_* constant).
     """
@@ -173,8 +173,8 @@ def field_name_idx_path(field_name, return_root_fields=False):
 
 
 def field_names_idx_paths(field_names):
-    """
-    return list of the full idx paths names for all the fields specified in the field_names argument.
+    """ return list of the full idx paths names for all the fields specified in the field_names argument.
+
     :param field_names:     list of field (main or system) names.
     :return:                list of their idx paths names.
     """
@@ -752,8 +752,8 @@ class Record(OrderedDict):
             yield from field.leaf_indexes(*fld_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
     def _add_field(self, field, idx=''):
-        """
-        add _Field instance to this Record instance.
+        """ add _Field instance to this Record instance.
+
         :param field:   _Field instance to add.
         :param idx:     name/key/idx string for to map and identify this field (mostly identical to field.name()).
         :return:        self.
@@ -773,8 +773,7 @@ class Record(OrderedDict):
         return self
 
     def add_fields(self, fields, root_rec=None, root_idx=()):
-        """
-        adding fields to this Record instance.
+        """ adding fields to this Record instance.
 
         :param fields:      either a dict, a Record or a list with (key/field_name, val/_Field) tuples.
                             Key strings that are containing digits/numbers are interpreted as name/idx paths (then also
@@ -1154,8 +1153,8 @@ class Record(OrderedDict):
         return self
 
     def sql_columns(self, from_system, col_names=()):
-        """
-        return list of sql column names for given system.
+        """ return list of sql column names for given system.
+
         :param from_system: system from which the data will be selected/fetched.
         :param col_names:   optionally restrict to select columns to names given in this list.
         :return:            list of sql column names.
@@ -1170,8 +1169,8 @@ class Record(OrderedDict):
         return column_names
 
     def sql_select(self, from_system, col_names=()):
-        """
-        return list of sql column names/expressions for given system.
+        """ return list of sql column names/expressions for given system.
+
         :param from_system: system from which the data will be selected/fetched.
         :param col_names:   optionally restrict to select columns to names given in this list.
         :return:            list of sql column names/expressions.

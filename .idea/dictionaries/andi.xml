@@ -1,12 +1,14 @@
 <component name="ProjectDictionaryState">
   <dictionary name="andi">
     <words>
+      <w>argparse</w>
       <w>autodoc</w>
       <w>automodule</w>
       <w>bysource</w>
       <w>ecker</w>
       <w>genindex</w>
       <w>lockname</w>
+      <w>meth</w>
       <w>modindex</w>
       <w>quickstart</w>
       <w>toctree</w>
