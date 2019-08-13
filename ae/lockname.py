@@ -1,33 +1,36 @@
 import threading
+from typing import Dict, Union
 
 from ae.console_app import main_app_instance, uprint, _logger
 
 
 class NamedLocks:
-    """
-    allow to create named lock(s) within the same app (migrate from https://stackoverflow.com/users/355230/martineau
-    answer in stackoverflow on the question https://stackoverflow.com/questions/37624289/value-based-thread-lock.
+    """ create named lock(s) within the same app.
+
+    Migrated from https://stackoverflow.com/users/355230/martineau answer in stackoverflow on the question
+    https://stackoverflow.com/questions/37624289/value-based-thread-lock.
 
     Currently the sys_lock feature is not implemented. Use either ae.lockfile or the github extension portalocker (see
     https://github.com/WoLpH/portalocker) or the encapsulating extension ilock (https://github.com/symonsoft/ilock).
     More on system wide named locking: https://stackoverflow.com/questions/6931342/system-wide-mutex-in-python-on-linux.
     """
-    locks_change_lock = threading.Lock()
-    active_locks = dict()
-    active_lock_counters = dict()
+    locks_change_lock: threading.Lock = threading.Lock()    #: lock used for to change status of all NamedLock instances
+    active_locks: Dict[str, Union[threading.Lock, threading.RLock]] = dict()    #: all active RLock/Lock instances
+    active_lock_counters: Dict[str, int] = dict()                               #: lock counters for reentrant locks
 
-    def __init__(self, *lock_names, reentrant_locks=True, sys_lock=False):
+    def __init__(self, *lock_names: str, reentrant_locks: bool = True, sys_lock: bool = False):
         self._lock_names = lock_names
         self._lock_class = threading.RLock if reentrant_locks else threading.Lock
         assert not sys_lock, "sys_lock is currently not implemented"
         self._sys_lock = sys_lock
         # map class intern dprint method to cae.dprint() or to global dprint (referencing the module method dprint())
         cae = main_app_instance()
-        self.print_func = cae.dprint if cae and getattr(cae, 'startup_end', False) else uprint
+        self._print_func = cae.dprint if cae and getattr(cae, 'startup_end', False) else uprint
 
         self.dprint("NamedLocks.__init__", lock_names)
 
     def __enter__(self):
+        """ context enter method. """
         self.dprint("NamedLocks.__enter__")
         for lock_name in self._lock_names:
             self.dprint("NamedLocks.__enter__ b4 acquire ", lock_name)
@@ -35,17 +38,26 @@ class NamedLocks:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """ context exit method. """
         self.dprint("NamedLocks __exit__", exc_type, exc_val, exc_tb)
         for lock_name in self._lock_names:
             self.dprint("NamedLocks.__exit__ b4 release ", lock_name)
             self.release(lock_name)
 
     def dprint(self, *args, **kwargs):
+        """ print function which is suppressing printout if debug level is too low. """
         if 'logger' not in kwargs:
             kwargs['logger'] = _logger
-        return self.print_func(*args, **kwargs)
+        return self._print_func(*args, **kwargs)
 
-    def acquire(self, lock_name, *args, **kwargs):
+    def acquire(self, lock_name: str, *args, **kwargs) -> bool:
+        """ acquire the named lock specified by the `lock_name` argument.
+
+        :param lock_name:   name of the lock to acquire.
+        :param args:        args that will be passed to the acquire method of the underlying RLock/Lock instance.
+        :param kwargs:      kwargs that will be passed to the acquire method of the underlying RLock/Lock instance.
+        :return:            True if named lock got acquired successfully, else False.
+        """
         self.dprint("NamedLocks.acquire", lock_name, 'START')
 
         while True:     # break at the end - needed for to retry after conflicted add/del of same lock name in threads
@@ -73,7 +85,11 @@ class NamedLocks:
 
         return lock_acquired
 
-    def release(self, lock_name, *args, **kwargs):
+    def release(self, lock_name: str):
+        """ release the named lock specified by the `lock_name` argument.
+
+        :param lock_name:   name of the lock to release.
+        """
         self.dprint("NamedLocks.release", lock_name, 'START')
 
         with self.locks_change_lock:
@@ -87,6 +103,6 @@ class NamedLocks:
                 self.active_lock_counters[lock_name] -= 1
                 lock = self.active_locks[lock_name]
 
-        lock.release(*args, **kwargs)
+        lock.release()
 
         self.dprint("NamedLocks.release", lock_name, 'END')

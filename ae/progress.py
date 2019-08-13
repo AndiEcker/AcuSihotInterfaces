@@ -1,15 +1,18 @@
 from ae import DEBUG_LEVEL_VERBOSE
-from ae.console_app import _logger
+from ae.console_app import ConsoleApp, _logger
 
 
 class Progress:
-    def __init__(self, cae,
-                 start_counter=0, total_count=0,  # pass either start_counter or total_counter (never both)
-                 start_msg="", next_msg="",  # message templates/masks for start, processing and end
-                 end_msg="Finished processing of {total_count} having {err_counter} failures:{err_msg}",
-                 err_msg="{err_counter} failures on processing of {total_count} items, current={run_counter}:{err_msg}",
-                 nothing_to_do_msg=''):
-        self.cae = cae
+    """ helper class for to easily display progress of long running tasks with several items on the console/log output.
+    """
+    def __init__(
+            self, cae: ConsoleApp,
+            start_counter: int = 0, total_count: int = 0,  # pass either start_counter or total_counter (not both)
+            start_msg: str = "", next_msg: str = "",       # message templates/masks for start, processing and end
+            end_msg: str = "Finished processing of {total_count} having {err_counter} failures:{err_msg}",
+            err_msg: str = "{err_counter} errors on processing {total_count} items, current={run_counter}:{err_msg}",
+            nothing_to_do_msg: str = ''):
+        self.cae: ConsoleApp = cae          #: internal reference to the used :class:`console_app.ConsoleApp` instance
         if not next_msg and cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE:
             # default next message built only if >= DEBUG_LEVEL_VERBOSE
             next_msg = "Processing '{processed_id}': " + \
@@ -40,7 +43,13 @@ class Progress:
             self.cae.uprint(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
                                                                    total_count=self._total_count), logger=_logger)
 
-    def next(self, processed_id='', error_msg='', next_msg=''):
+    def next(self, processed_id: str = '', error_msg: str = '', next_msg: str = ''):
+        """ log the processing of the next item of this long-running task.
+
+        :param processed_id:    id(s) of the next item (to be displayed on console/logging output).
+        :param error_msg:       pass the error message to display if the next item produced any errors.
+        :param next_msg:        message to output.
+        """
         self._run_counter += self._delta
         if error_msg:
             self._err_counter += 1
@@ -62,12 +71,21 @@ class Progress:
                                             err_counter=self._err_counter, err_msg=error_msg,
                                             processed_id=processed_id), logger=_logger)
 
-    def finished(self, error_msg=''):
+    def finished(self, error_msg: str = ''):
+        """ display end of processing for the current item.
+
+        :param error_msg:   optional error message to display if current items produced any error.
+        """
         if error_msg and self._err_msg:
             self.cae.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
                                                  err_counter=self._err_counter, err_msg=error_msg), logger=_logger)
         self.cae.uprint(self.get_end_message(error_msg=error_msg), logger=_logger)
 
-    def get_end_message(self, error_msg=''):
+    def get_end_message(self, error_msg: str = '') -> str:
+        """ determine message text for finishing the currently processed item.
+
+        :param error_msg:   optional error message to display if current items produced any error.
+        :return:            message text for to display.
+        """
         return self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
                                     err_counter=self._err_counter, err_msg=error_msg)

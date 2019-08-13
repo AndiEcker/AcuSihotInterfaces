@@ -29,6 +29,7 @@ author = 'Andi Ecker'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
+    'sphinx_autodoc_annotation',
     'sphinx_autodoc_typehints',
     'sphinx.ext.coverage',
 ]
@@ -63,5 +64,5 @@ autodoc_default_options = {
     'special-members': True,
     'undoc-members': True,
     'show-inheritance': True,
-    'exclude-members': '__weakref__'
+    'exclude-members': '__weakref__, __dict__, __module__'
 }

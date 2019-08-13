@@ -33,9 +33,9 @@ config_read_lock = threading.Lock()
 app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, ConsoleApp]
 """ `app_instances` is holding the references for all :class:`ConsoleApp` instances created at run time.
 
-The first created :class:`ConsoleApp` instance is called the main instance and has an empty string as the dict key.
-This week dict gets automatically initialized in :func:`ConsoleApp.__init__` for to allow log file split/rotation
-and debugLevel access at this module level.
+The first created :class:`ConsoleApp` instance is called the main app instance and has an empty string as the dict key.
+This weak dict gets automatically initialized in :func:`ConsoleApp.__init__` for to allow log file split/rotation
+and debugLevel access at module level.
 """
 
 
@@ -308,6 +308,8 @@ class ConsoleApp:
         self.add_option('logFile', "Copy stdout and stderr into log file", logging_config.get('file_name_def', ''), 'L')
 
     def __del__(self):
+        """ deallocate this instance and call :func:`ConsoleApp.shutdown` if it is the main app instance.
+        """
         if main_app_instance() is self and not self._shut_down:
             self.shutdown()
 

@@ -4,20 +4,20 @@ manage data for to interface from and onto other/external systems
 import datetime
 import keyword
 from collections import OrderedDict
-from typing import Optional, Any, Union, List, Dict, Tuple, Iterable
+from typing import Any, Dict, Iterable, List, NewType, Optional, Sequence, Tuple, TypeVar, Union
 
 from ae_validation.validation import correct_email, correct_phone
 
-ACTION_INSERT = 'INSERT'
-ACTION_UPDATE = 'UPDATE'
-ACTION_UPSERT = 'UPSERT'
-ACTION_DELETE = 'DELETE'
-ACTION_SEARCH = 'SEARCH'
-ACTION_PARSE = 'PARSE'
-ACTION_BUILD = 'BUILD'
-ACTION_PULL = 'PULL'
-ACTION_PUSH = 'PUSH'
-ACTION_COMPARE = 'COMPARE'
+ACTION_INSERT = 'INSERT'        #: insert action
+ACTION_UPDATE = 'UPDATE'        #: update action
+ACTION_UPSERT = 'UPSERT'        #: insert or update (if already exists) action
+ACTION_DELETE = 'DELETE'        #: delete action
+ACTION_SEARCH = 'SEARCH'        #: search action
+ACTION_PARSE = 'PARSE'          #: parse action
+ACTION_BUILD = 'BUILD'          #: build action
+ACTION_PULL = 'PULL'            #: pull-from-system action
+ACTION_PUSH = 'PUSH'            #: push-to-system action
+ACTION_COMPARE = 'COMPARE'      #: compare action
 
 # field aspect types/prefixes
 FAT_IDX = 'idx'                 #: main/system field name within parent Record or list index within Records/Values
@@ -32,28 +32,34 @@ FAT_FLT = 'flt'                 #: field filter callable
 FAT_SQE = 'sqc'                 #: SQL expression for to fetch field value from db
 
 ALL_FATS = (FAT_IDX, FAT_VAL, FAT_CLEAR_VAL, FAT_REC, FAT_RCX, FAT_CAL, FAT_CHK, FAT_CNV, FAT_FLT, FAT_SQE)
+""" tuple of all pre-defined field aspect types/prefixes """
 
-# field aspect directions
-FAD_FROM = 'From'
-FAD_ONTO = 'Onto'
+FAD_FROM = 'From'               #: FROM field aspect direction
+FAD_ONTO = 'Onto'               #: ONTO field aspect direction
 
-# separator character used for idx_path values (especially if field has a Record value)
-# don't use dot char because this is used e.g. for to separate system field names in xml element name paths.
 IDX_PATH_SEP = '/'
+""" separator character used for idx_path values (especially if field has a Record value).
 
-# special key of fields_patches argument of Record.copy() for to allow aspect value patching for all fields
+don't use dot char because this is used e.g. for to separate system field names in xml element name paths.
+"""
+
 ALL_FIELDS = '**'
+""" special key of fields_patches argument of Record.copy() for to allow aspect value patching for all fields. """
 
-# suffix for aspect keys - used by _Field.set_aspects()
-CALLABLE_SUFFIX = '()'
+CALLABLE_SUFFIX = '()'          #: suffix for aspect keys - used by _Field.set_aspects()
 
-# aspect key string lengths/structure
-_ASP_TYPE_LEN = 3
-_ASP_DIR_LEN = 4
-_ASP_SYS_MIN_LEN = 2
+_ASP_TYPE_LEN = 3               #: aspect key type string length
+_ASP_DIR_LEN = 4                #: aspect key direction string length
+_ASP_SYS_MIN_LEN = 2            #: aspect key system id string length
 
 
-def aspect_key(type_or_key, system='', direction=''):
+IdxPathItem = TypeVar('IdxPathItem', int, str)
+IdxPathSeq = NewType('IdxPathSeq', Sequence[IdxPathItem])
+NodeType = TypeVar('NodeType', 'Record', 'Records')
+ListType = TypeVar('ListType', 'Values', 'Records')
+
+
+def aspect_key(type_or_key: str, system: str = '', direction: str = '') -> str:
     """ compiles an aspect dict key from the given args
 
     :param type_or_key:     either FAT_* type or full key (including already the system and direction)-
@@ -82,7 +88,7 @@ def aspect_key(type_or_key, system='', direction=''):
     return key
 
 
-def aspect_key_system(key):
+def aspect_key_system(key: str) -> str:
     """ determines the system id string from an aspect key.
 
     :param key:     aspect key string.
@@ -94,7 +100,7 @@ def aspect_key_system(key):
     return key[beg:]
 
 
-def aspect_key_direction(key):
+def aspect_key_direction(key: str) -> str:
     """ determines the direction id string from an aspect key.
 
     :param key:     aspect key string.
@@ -104,7 +110,7 @@ def aspect_key_direction(key):
     return direction if direction in (FAD_FROM, FAD_ONTO) else ''
 
 
-def deeper(deepness, instance):
+def deeper(deepness: int, instance: Any) -> int:
     """ check and calculate resulting/remaining deepness for Record/_Field/Records.copy() when going one level deeper.
 
     :param deepness:    <0 will be returned unchanged until last level is reached (-1==full deep copy, -2==deep copy
@@ -123,10 +129,10 @@ def deeper(deepness, instance):
     return remaining
 
 
-def field_name_idx_path(field_name, return_root_fields=False):
+def field_name_idx_path(field_name: Union[int, str, IdxPathSeq], return_root_fields: bool = False) -> IdxPathSeq:
     """ converts a field name path string into an index path tuple.
 
-    :param field_name:          field name str or field name path string or field name tuple
+    :param field_name:          field name str or field name index/path string or field index tuple
                                 or int (for Records index).
     :param return_root_fields:  pass True to also return len()==1-tuple for fields with no deeper path (def=False).
     :return:                    index path tuple (idx_path) or empty tuple if the field has no deeper path and
@@ -135,7 +141,7 @@ def field_name_idx_path(field_name, return_root_fields=False):
     if isinstance(field_name, int):
         return (field_name, ) if return_root_fields else ()
     elif isinstance(field_name, (tuple, list)):
-        return field_name if return_root_fields or len(field_name) > 1 else None
+        return tuple(field_name) if return_root_fields or len(field_name) > 1 else ()
 
     idx_path = list()
     nam_i = num_i = None
@@ -172,16 +178,16 @@ def field_name_idx_path(field_name, return_root_fields=False):
     return tuple(idx_path)
 
 
-def field_names_idx_paths(field_names):
+def field_names_idx_paths(field_names: Sequence[IdxPathSeq]) -> List[IdxPathSeq]:
     """ return list of the full idx paths names for all the fields specified in the field_names argument.
 
-    :param field_names:     list of field (main or system) names.
+    :param field_names:     sequence/list/tuple of field (main or system) names.
     :return:                list of their idx paths names.
     """
     return [field_name_idx_path(field_name, return_root_fields=True) for field_name in field_names]
 
 
-def idx_path_field_name(idx_path, add_sep=False):
+def idx_path_field_name(idx_path: IdxPathSeq, add_sep: bool = False) -> str:
     """ convert index path tuple/list into field name string.
 
     :param idx_path:    index path to convert.
@@ -201,27 +207,39 @@ def idx_path_field_name(idx_path, add_sep=False):
     return field_name
 
 
-def compose_current_index(value, idx_path, use_curr_idx) -> tuple:
+def compose_current_index(node: Union[ListType, NodeType], idx_path: IdxPathSeq, use_curr_idx: List) -> tuple:
+    """ determine tuple with the current indexes.
+
+    :param node:            root node (Record or Records instance) to process.
+    :param idx_path:        index path relative to root node passed in `node` arg.
+    :param use_curr_idx:    list of indexes within `idx_path` where the current index has to be used.
+    :return:                tuple of current indexes.
+    """
     uci = use_curr_idx.copy()
 
     curr_idx = ()
     while True:
-        idx, *idx2 = use_current_index(value, idx_path, uci, check_idx_type=True)
+        idx, *idx2 = use_current_index(node, idx_path, uci, check_idx_type=True)
         curr_idx += (idx, )
         if not idx2:
             break
-        elif value.node_child((idx, )) is None:       # if idx not exists then assume sub-path idx2 is correct
+        elif node.node_child((idx,)) is None:       # if idx not exists then assume sub-path idx2 is correct
             curr_idx += tuple(idx2)
             break
 
-        value = value.value(idx, flex_sys_dir=True)
+        node = node.value(idx, flex_sys_dir=True)
         idx_path = idx_path[1:]
 
     return curr_idx
 
 
-def current_index(value):
-    return value.current_idx
+def current_index(node: Union[ListType, NodeType]) -> IdxPathItem:
+    """ get current index of passed `node`.
+
+    :param node:    instance of Record or Records (real node) or Values (simple list).
+    :return:        current index value.
+    """
+    return node.current_idx
 
 
 def init_current_index(value, idx_path, use_curr_idx) -> tuple:
