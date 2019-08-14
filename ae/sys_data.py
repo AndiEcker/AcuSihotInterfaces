@@ -4,7 +4,7 @@ manage data for to interface from and onto other/external systems
 import datetime
 import keyword
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, List, NewType, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
 
 from ae_validation.validation import correct_email, correct_phone
 
@@ -53,10 +53,13 @@ _ASP_DIR_LEN = 4                #: aspect key direction string length
 _ASP_SYS_MIN_LEN = 2            #: aspect key system id string length
 
 
-IdxPathItem = TypeVar('IdxPathItem', int, str)
-IdxPathSeq = NewType('IdxPathSeq', Sequence[IdxPathItem])
-NodeType = TypeVar('NodeType', 'Record', 'Records')
-ListType = TypeVar('ListType', 'Values', 'Records')
+IdxItemType = Union[int, str]                                   #: types of idx_path items
+IdxPathType = Tuple[IdxItemType, ...]                           #: idx_path type
+NodeType = TypeVar('NodeType', 'Record', 'Records')             #: Union['Record', 'Records']
+ListType = TypeVar('ListType', 'Values', 'Records')             #: Union['Values', 'Records']
+ValueType = TypeVar('ValueType',
+                    'Value', 'Values', 'Record', 'Records')     #: Union['Value', 'Values', 'Record', 'Records']
+NodeChildType = TypeVar('NodeChildType', '_Field', 'Record')    #: Union['_Field', 'Record']
 
 
 def aspect_key(type_or_key: str, system: str = '', direction: str = '') -> str:
@@ -129,7 +132,7 @@ def deeper(deepness: int, instance: Any) -> int:
     return remaining
 
 
-def field_name_idx_path(field_name: Union[int, str, IdxPathSeq], return_root_fields: bool = False) -> IdxPathSeq:
+def field_name_idx_path(field_name: Union[int, str, IdxPathType], return_root_fields: bool = False) -> IdxPathType:
     """ converts a field name path string into an index path tuple.
 
     :param field_name:          field name str or field name index/path string or field index tuple
@@ -178,7 +181,7 @@ def field_name_idx_path(field_name: Union[int, str, IdxPathSeq], return_root_fie
     return tuple(idx_path)
 
 
-def field_names_idx_paths(field_names: Sequence[IdxPathSeq]) -> List[IdxPathSeq]:
+def field_names_idx_paths(field_names: Sequence[IdxPathType]) -> List[IdxPathType]:
     """ return list of the full idx paths names for all the fields specified in the field_names argument.
 
     :param field_names:     sequence/list/tuple of field (main or system) names.
@@ -187,7 +190,7 @@ def field_names_idx_paths(field_names: Sequence[IdxPathSeq]) -> List[IdxPathSeq]
     return [field_name_idx_path(field_name, return_root_fields=True) for field_name in field_names]
 
 
-def idx_path_field_name(idx_path: IdxPathSeq, add_sep: bool = False) -> str:
+def idx_path_field_name(idx_path: IdxPathType, add_sep: bool = False) -> str:
     """ convert index path tuple/list into field name string.
 
     :param idx_path:    index path to convert.
@@ -207,12 +210,12 @@ def idx_path_field_name(idx_path: IdxPathSeq, add_sep: bool = False) -> str:
     return field_name
 
 
-def compose_current_index(node: Union[ListType, NodeType], idx_path: IdxPathSeq, use_curr_idx: List) -> tuple:
+def compose_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: List) -> IdxPathType:
     """ determine tuple with the current indexes.
 
-    :param node:            root node (Record or Records instance) to process.
+    :param node:            root node/list (Record or Records/Values instance) to process.
     :param idx_path:        index path relative to root node passed in `node` arg.
-    :param use_curr_idx:    list of indexes within `idx_path` where the current index has to be used.
+    :param use_curr_idx:    list of index counters within `idx_path` where the current index has to be used.
     :return:                tuple of current indexes.
     """
     uci = use_curr_idx.copy()
@@ -233,7 +236,7 @@ def compose_current_index(node: Union[ListType, NodeType], idx_path: IdxPathSeq,
     return curr_idx
 
 
-def current_index(node: Union[ListType, NodeType]) -> IdxPathItem:
+def current_index(node: Union[ListType, NodeType]) -> IdxItemType:
     """ get current index of passed `node`.
 
     :param node:    instance of Record or Records (real node) or Values (simple list).
@@ -242,17 +245,98 @@ def current_index(node: Union[ListType, NodeType]) -> IdxPathItem:
     return node.current_idx
 
 
-def init_current_index(value, idx_path, use_curr_idx) -> tuple:
+def init_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: List) -> IdxPathType:
+    """ determine current index of `node` and if not set the initialize to the first index path item.
 
-    idx, *idx2 = use_current_index(value, idx_path, use_curr_idx, check_idx_type=True)
+    :param node:            root node/list (Record or Records/Values instance) to process.
+    :param idx_path:        index path relative to root node passed in `node` arg.
+    :param use_curr_idx:    list of index counters within `idx_path` where the current index has to be used.
+    :return:                tuple of current indexes.
+    """
 
-    if value.current_idx is None:
-        set_current_index(value, idx)
+    idx, *idx2 = use_current_index(node, idx_path, use_curr_idx, check_idx_type=True)
+
+    if node.current_idx is None:
+        set_current_index(node, idx)
 
     return (idx, ) + tuple(idx2)
 
 
-def string_to_records(str_val, field_names, rec_sep=',', fld_sep='=', root_rec=None, root_idx=()):
+def set_current_index(node: Union[ListType, NodeType], idx: Optional[IdxItemType] = None,
+                      add: Optional[int] = None) -> IdxItemType:
+    """ set current index of `node`.
+
+    :param node:            root node/list (Record or Records/Values instance) to process.
+    :param idx:             index value to set (str for field name; int for list index); if given `add` will be ignored.
+    :param add:             value to add to list index; will be ignored if `idx` arg get passed.
+    :return:                the finally set/new index value.
+    """
+    allowed_types = (Values, Records, Record)
+    msg = "set_current_index() expects "
+    assert isinstance(node, allowed_types), msg + "node arg of type {}, but got {}".format(allowed_types, type(node))
+    assert isinstance(idx, IDX_TYPES) ^ isinstance(add, int), msg + "either int/str in idx or int in add"
+
+    if idx is None:
+        idx = node.current_idx + add
+
+    node.current_idx = idx
+
+    if isinstance(node, LIST_TYPES):
+        if node.idx_min is None or idx < node.idx_min:
+            node.idx_min = idx
+        if node.idx_max is None or idx > node.idx_max:
+            node.idx_max = idx
+
+    return idx
+
+
+def use_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: List,
+                      check_idx_type: bool = False, delta: int = 1) -> IdxPathType:
+    """ determine index path of `node` by using current index of `node` if exists and is enabled by `use_curr_idx` arg.
+
+    :param node:            root node/list (Record or Records/Values instance) to process.
+    :param idx_path:        index path relative to root node passed in `node` arg.
+    :param use_curr_idx:    list of index counters within `idx_path` where the current index has to be used.
+    :param check_idx_type:  pass True to additionally check if the index type is correct (def=False).
+    :param delta:           value for to decrease the list index counters within `use_curr_idx` (def=1).
+    :return:                tuple of current indexes.
+    """
+    msg = "use_current_index() expects "
+    assert isinstance(idx_path, (tuple, list)) and len(idx_path), msg + "non-empty idx_path"
+    assert isinstance(use_curr_idx, (List, type(None))), msg + "None/List type for use_curr_idx"
+
+    idx, *idx2 = idx_path
+
+    if isinstance(node, LIST_TYPES):
+        idx_type = int
+    elif isinstance(node, Record):
+        idx_type = str
+    else:
+        assert False, msg + "value type of Values, Records or Record, but got {}".format(type(node))
+    if check_idx_type:
+        assert isinstance(idx, idx_type), "index type {} in idx_path[0], but got {}".format(idx_type, type(idx))
+
+    if use_curr_idx:
+        for level, val in enumerate(use_curr_idx):
+            if val == 0 and node.current_idx is not None:
+                idx = node.current_idx
+            use_curr_idx[level] -= delta
+
+    return (idx, ) + tuple(idx2)
+
+
+def string_to_records(str_val: str, field_names: Sequence, rec_sep: str = ',', fld_sep: str = '=',
+                      root_rec: 'Record' = None, root_idx: IdxPathType = ()) -> 'Records':
+    """ convert formatted string into a :class:`Records` instance containing several :class:`Record` instances.
+
+    :param str_val:     formatted string to convert.
+    :param field_names: list/tuple of field names of each record
+    :param rec_sep:     character(s) used in `str_val` for to separate the records.
+    :param fld_sep:     character(s) used in `str_val` for to separate the field values of each record.
+    :param root_rec:    root to which the returned records will be added.
+    :param root_idx:    index from root where the returned records will be added.
+    :return:            converted :class:`Records` instance.
+    """
     recs = Records()
     if str_val:
         for rec_idx, rec_str in enumerate(str_val.split(rec_sep)):  # type: (int, str)
@@ -264,7 +348,13 @@ def string_to_records(str_val, field_names, rec_sep=',', fld_sep='=', root_rec=N
     return recs
 
 
-def template_idx_path(idx_path, is_sub_rec=False):
+def template_idx_path(idx_path: IdxPathType, is_sub_rec: bool = False) -> bool:
+    """ check/determine if `idx_path` is referring to template item.
+
+    :param idx_path:    index path to check.
+    :param is_sub_rec:  pass True to only check sub-record-fields (will then return always False for root-fields).
+    :return:            True if `idx_path` is referencing a template item (with index zero/0), else False.
+    """
     if len(idx_path) < 2:
         return not is_sub_rec
     for idx in idx_path:
@@ -273,52 +363,17 @@ def template_idx_path(idx_path, is_sub_rec=False):
     return False
 
 
-def set_current_index(value, idx=None, add=None):
-    allowed_types = (Values, Records, Record)
-    msg = "set_current_index() expects "
-    assert isinstance(value, allowed_types), msg + "value arg of type {}, but got {}".format(allowed_types, type(value))
-    assert isinstance(idx, IDX_TYPES) ^ isinstance(add, int), msg + "either int/str in idx or int in add"
+def use_rec_default_root_rec_idx(rec: 'Record', root_rec: Optional['Record'], idx: IdxPathType = (),
+                                 root_idx: IdxPathType = (), met: str = "") -> Tuple['Record', IdxPathType]:
+    """ helper function for to determine resulting root record and root index.
 
-    if idx is None:
-        idx = value.current_idx + add
-
-    value.current_idx = idx
-
-    if isinstance(value, LIST_TYPES):
-        if value.idx_min is None or idx < value.idx_min:
-            value.idx_min = idx
-        if value.idx_max is None or idx > value.idx_max:
-            value.idx_max = idx
-
-    return idx
-
-
-def use_current_index(value, idx_path, use_curr_idx, check_idx_type=False, delta=1):
-    msg = "use_current_index() expects "
-    assert isinstance(idx_path, (tuple, list)) and len(idx_path), msg + "non-empty idx_path"
-    assert isinstance(use_curr_idx, (Value, type(None))), msg + "None/Value in use_curr_idx"
-
-    idx, *idx2 = idx_path
-
-    if isinstance(value, LIST_TYPES):
-        idx_type = int
-    elif isinstance(value, Record):
-        idx_type = str
-    else:
-        assert False, msg + "value type of Values, Records or Record, but got {}".format(type(value))
-    if check_idx_type:
-        assert isinstance(idx, idx_type), "index type {} in idx_path[0], but got {}".format(idx_type, type(idx))
-
-    if use_curr_idx:
-        for level, val in enumerate(use_curr_idx):
-            if val == 0 and value.current_idx is not None:
-                idx = value.current_idx
-            use_curr_idx[level] -= delta
-
-    return (idx, ) + tuple(idx2)
-
-
-def use_rec_default_root_rec_idx(rec, root_rec, idx=(), root_idx=(), met=""):
+    :param rec:         current :class:`Record` instance.
+    :param root_rec:    default root record (def=`rec`).
+    :param idx:         current index of `rec`.
+    :param root_idx:    default root index.
+    :param met:         calling method/function name (used only for assert error message, def='').
+    :return:            resulting root record and root index (as tuple).
+    """
     if root_rec is None:
         root_rec = rec
         if root_idx is not None:
@@ -329,7 +384,14 @@ def use_rec_default_root_rec_idx(rec, root_rec, idx=(), root_idx=(), met=""):
     return root_rec, root_idx
 
 
-def use_rec_default_sys_dir(rec, system, direction):
+def use_rec_default_sys_dir(rec: 'Record', system: str, direction: str) -> Tuple[str, str]:
+    """ helper function for to determine resulting system/direction.
+
+    :param rec:         current :class:`Record` instance.
+    :param system:      default system id.
+    :param direction:   default direction (see FAD_* constants).
+    :return:            resulting system and direction (as tuple).
+    """
     if system is None:
         system = rec.system
     if direction is None:

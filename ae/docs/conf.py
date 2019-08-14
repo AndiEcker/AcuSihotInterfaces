@@ -29,7 +29,7 @@ author = 'Andi Ecker'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx_autodoc_annotation',
+    # 'sphinx_autodoc_annotation',
     'sphinx_autodoc_typehints',
     'sphinx.ext.coverage',
 ]
