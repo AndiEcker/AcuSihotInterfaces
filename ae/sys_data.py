@@ -1,5 +1,36 @@
-"""
-manage data for to interface from and onto other/external systems
+""" manage data structures for to interface from and onto other/external systems.
+
+Data structures are trees and are specified by using the classes :class:`Records`, :class:`Record`, :class:`Values`,
+:class:`Value` and :class:`_Field`. The root of such data structure can be defined by an instance of either
+:class:`Records` or :class:`Record`.
+
+Each :class:`Records` instance is a collection of 0..n :class:`Record` instances.
+
+Each :class:`Record` instance is a collection of 1..n :class:`_Field` instances.
+
+Each :class:`_Field` instance can hold one instance of either :class:`Records', :class:`Record`, :class:`Values`
+or :class:`Value`.
+
+.. graphviz::
+
+    graph {
+        "Records" -- "Record";
+        "Record" -- { "_Field A" "_Field B" "_Field C" "_Field D"};
+        "_Field A" -- "Value (_Field A)";
+        "_Field B" -- "Values";
+        "Values" -- "Value (Values)";
+        "_Field C" -- "Record (sub-record)";
+        "Record (sub-record)" -- "_Field CA" -- "Value (_Field CA)";
+        "_Field D" -- "Records (sub-records)" -- "Record (records-sub-record)";
+        "Record (records-sub-record)" -- "_Field DA" -- "Value (_Field DA)";
+    }
+
+The leafs of such a tree data structure are always instances of the class :class:`Value`. Each :class:`Value`
+instance is able to store separate representations of a data value for each used system.
+
+Value representations can be automatically converted by specifying a converter callable for each
+:class:`_Field` instance.
+
 """
 import datetime
 import keyword
@@ -400,7 +431,17 @@ def use_rec_default_sys_dir(rec: 'Record', system: str, direction: str) -> Tuple
 
 
 class Value(list):
-    def __getitem__(self, key):
+    """ represents a value.
+
+    This class inherits directly from the Python list class. Each instance can hold either a (single/atomic) value
+    (which can be anything: numeric, char/string or any object) or a list of these single/atomic values.
+    """
+    def __getitem__(self, key: int) -> Any:
+        """ determine atomic value.
+
+        :param key:     list index if value is a list.
+        :return:        list item value.
+        """
         try:
             return super().__getitem__(key)
         except IndexError:
@@ -408,7 +449,12 @@ class Value(list):
                 return None
             return ''
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: int, value: Any) -> None:
+        """ set/initialize list item identified by `key` to the value passed in `value`.
+
+        :param key:     list index if value is a list.
+        :param value:   the new value of the list item.
+        """
         while True:
             try:
                 return super().__setitem__(key, value)
@@ -417,31 +463,67 @@ class Value(list):
                     raise IndexError("Value() expects key of type int, but got {} of type {}".format(key, type(key)))
                 self.append(value)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """ representation which can be used to serialize and re-create :class:`Value` instance.
+
+        :return: Value representation string.
+        """
         return "Value([" + ",".join(repr(v) for v in self) + "])"
 
     @property
     def initialized(self):
+        """ flag if this :class:`Value` instance got already initialized.
+
+        :return: True if already set to a value, else False.
+        """
         return len(self)
 
-    def node_child(self, idx_path, moan=False, **__):
+    def node_child(self, idx_path: IdxPathType, moan: bool = False, **__) -> Optional['Value']:
+        """ check if `idx_path` is correct (has to be empty) and if yes then return self.
+
+        This method is for to simplify the data structure hierarchy implementation.
+
+        :param idx_path:    this argument has to be an empty tuple/list.
+        :param moan:        pass True for to raise AssertionError if `idx_path` is not empty.
+        :return:            self or None (if `idx_path` is not empty and `moan` == False).
+        """
         if len(idx_path):
             assert not moan, "Value instance has no deeper node, but requesting {}".format(idx_path)
             return None
         return self
 
-    def value(self, *idx_path, **__):
+    def value(self, *idx_path: IdxItemType, **__) -> Optional['Value']:
+        """ check if `idx_path` is correct (has to be empty) and if yes then return self.
+
+        This method is for to simplify the data structure hierarchy implementation.
+
+        :param idx_path:    this argument has to be an empty tuple.
+        :return:            self or None (if `idx_path` is not empty and `moan` == False).
+        """
         assert isinstance(idx_path, (tuple, list)) and len(idx_path) == 0, \
             "Value.value() expects empty idx_path list, but got {}".format(idx_path)
         return self
 
     def val(self, *idx_path, **__):
+        """ check if `idx_path` is correct (either empty or contain one int) and if yes then return list item.
+
+        This method is for to simplify the data structure hierarchy implementation.
+
+        :param idx_path:    this argument is either empty or contains a list index.
+        :return:            atomic/single value or list item value or empty string.
+        """
         idx_len = len(idx_path)
         if idx_len == 0 or (idx_len == 1 and isinstance(idx_path[0], int)):
             return self[idx_path[0] if idx_len else -1]
         return ''
 
-    def set_val(self, val, *idx_path, **__):
+    def set_val(self, val: Any, *idx_path: IdxItemType, **__):
+        """ set a/the value of this instance.
+
+        :param val:         simple/atomic value to be set.
+        :param idx_path:    this argument is either empty or contains a list index.
+        :return:            self.
+        """
         assert isinstance(idx_path, (tuple, list)) and len(idx_path) <= 1, \
             "Value.set_val({}) idx_path list {} has more than one entry".format(val, idx_path)
         assert not isinstance(val, VALUE_TYPES), "Value.set_val({}) got unexpected value type {}".format(val, type(val))
@@ -449,14 +531,19 @@ class Value(list):
         return self
 
     def copy(self, *_, **__):
-        """
-        copy the value of this Value instance into a new one
+        """ copy the value of this Value instance into a new one.
+
         :return:                new Value instance containing the same immutable value.
         """
         return Value(super().copy())
 
     def clear_leafs(self, **__):
-        # use self[-1] = '' for to clear only the newest/top val
+        """ clear/reset the value of this instance.
+
+        use self[-1] = '' for to clear only the newest/top val.
+
+        :return:    self.
+        """
         self.clear()
         return self
 

@@ -19,3 +19,12 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
 )
+
+""" additional installations:
+- pip install pytest
+- pip install sphinx
+- pip install sphinx-autodoc-typehints
+- pip install sphinx-autodoc-annotation
+- sudo apt-get install graphviz
+
+"""
