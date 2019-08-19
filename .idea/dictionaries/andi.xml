@@ -11,6 +11,7 @@
       <w>lockname</w>
       <w>meth</w>
       <w>modindex</w>
+      <w>penwidth</w>
       <w>quickstart</w>
       <w>toctree</w>
       <w>typehints</w>

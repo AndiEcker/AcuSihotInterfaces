@@ -1,31 +1,44 @@
 """ manage data structures for to interface from and onto other/external systems.
 
-Data structures are trees and are specified by using the classes :class:`Records`, :class:`Record`, :class:`Values`,
-:class:`Value` and :class:`_Field`. The root of such data structure can be defined by an instance of either
-:class:`Records` or :class:`Record`.
+Any kind of data structures - like lists, mappings and trees - can be specified by using a combination of the class
+instances that are declared within this module:
 
-Each :class:`Records` instance is a collection of 0..n :class:`Record` instances.
+* A list gets represented by a instance of one of the classes :class:`Records` or :class:`Values`. Each
+  :class:`Records` instance is a collection of 0..n :class:`Record` instances. A :class:`Values` instance
+  is a collection of 1..n :class:`_Field` instances.
+* A mapping get represented by an instance of the class :class:`Record`, whereas each mapping item gets
+  represented by an instance of the private class :class:`_Field`.
+* A node of a tree structure can be represented by instances of the classes :class:`Records`, :class:`Values` or
+  :class:`Record`.
 
-Each :class:`Record` instance is a collection of 1..n :class:`_Field` instances.
+The root of such a data structure can be defined by an instance of either :class:`Records` or :class:`Record`. All the
+leafs of such a data structure are instances of the :class:`Value` class.
 
-Each :class:`_Field` instance can hold one instance of either :class:`Records', :class:`Record`, :class:`Values`
-or :class:`Value`.
+Each :class:`_Field` instance can hold for each system an separate instance of one of the classes :class:`Records`,
+:class:`Record`, :class:`Values` or :class:`Value`. The following diagram is showing all the possible combinations:
 
 .. graphviz::
 
-    graph {
-        "Records" -- "Record";
-        "Record" -- { "_Field A" "_Field B" "_Field C" "_Field D"};
-        "_Field A" -- "Value (_Field A)";
-        "_Field B" -- "Values";
-        "Values" -- "Value (Values)";
-        "_Field C" -- "Record (sub-record)";
-        "Record (sub-record)" -- "_Field CA" -- "Value (_Field CA)";
-        "_Field D" -- "Records (sub-records)" -- "Record (records-sub-record)";
-        "Record (records-sub-record)" -- "_Field DA" -- "Value (_Field DA)";
+    digraph {
+        node [shape=record]
+        rec1 [label="{<rec1>Record | { <A>A | <B>B | <C>C | <D>D } }"]
+        "Records" -> rec1 [arrowhead=crow style=tapered penwidth=3]
+        rec1:A -> "Value (_Field A)"
+        rec1:B -> "Values"
+        "Values" -> "Value (Values)"  [arrowhead=crow style=tapered penwidth=3]
+        rec2 [label="{<rec2>Record (sub-record) | { <CA>CA | <CB>CB | <CN>... } }"]
+        rec1:C -> rec2
+        rec2:CA -> "Value (_Field CA)"
+        rec3 [label="{<rec3>Record (records-sub-record) | { <DA>DA | <DB>DB | <DN>... } }"]
+        rec1:D -> "Records (sub-records)"
+        "Records (sub-records)" -> rec3 [arrowhead=crow style=tapered penwidth=3]
+        rec3:DA -> "Value (_Field DA)"
     }
 
-The leafs of such a tree data structure are always instances of the class :class:`Value`. Each :class:`Value`
+
+
+
+Each :class:`Value`
 instance is able to store separate representations of a data value for each used system.
 
 Value representations can be automatically converted by specifying a converter callable for each
