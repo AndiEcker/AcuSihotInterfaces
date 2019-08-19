@@ -12,38 +12,30 @@ instances that are declared within this module:
   :class:`Record`.
 
 The root of such a data structure can be defined by an instance of either :class:`Records` or :class:`Record`. All the
-leafs of such a data structure are instances of the :class:`Value` class.
-
-Each :class:`_Field` instance can hold for each system an separate instance of one of the classes :class:`Records`,
-:class:`Record`, :class:`Values` or :class:`Value`. The following diagram is showing all the possible combinations:
+leafs of such a data structure are instances of the :class:`Value` class. The following diagram is showing
+all the possible combinations (of a single system):
 
 .. graphviz::
 
     digraph {
         node [shape=record]
-        rec1 [label="{<rec1>Record | { <A>A | <B>B | <C>C | <D>D } }"]
-        "Records" -> rec1 [arrowhead=crow style=tapered penwidth=3]
-        rec1:A -> "Value (_Field A)"
+        rec1 [label="{<rec1>Record (root) | { <A>A | <B>B | <C>C | <D>D } }"]
+        "Records (root)" -> rec1 [arrowhead=crow style=tapered penwidth=3]
+        rec1:A -> "Value (_Field A)" [minlen=3]
         rec1:B -> "Values"
-        "Values" -> "Value (Values)"  [arrowhead=crow style=tapered penwidth=3]
+        "Values" -> "Value (Values)" [minlen=2 arrowhead=crow style=tapered penwidth=3]
         rec2 [label="{<rec2>Record (sub-record) | { <CA>CA | <CB>CB | <CN>... } }"]
         rec1:C -> rec2
-        rec2:CA -> "Value (_Field CA)"
-        rec3 [label="{<rec3>Record (records-sub-record) | { <DA>DA | <DB>DB | <DN>... } }"]
+        rec2:CA -> "Value (_Field CA)" [minlen=2]
+        rec3 [label="{<rec3>Record (sub-records-sub-record) | { <DA>DA | <DB>DB | <DN>... } }"]
         rec1:D -> "Records (sub-records)"
         "Records (sub-records)" -> rec3 [arrowhead=crow style=tapered penwidth=3]
         rec3:DA -> "Value (_Field DA)"
     }
 
-
-
-
-Each :class:`Value`
-instance is able to store separate representations of a data value for each used system.
-
-Value representations can be automatically converted by specifying a converter callable for each
-:class:`_Field` instance.
-
+Additionally each :class:`_Field` instance can hold for each system a separate value, which
+gets represented by an instance of one of the 4 classes :class:`Records`, :class:`Record`,
+:class:`Values` or :class:`Value`.
 """
 import datetime
 import keyword
@@ -99,6 +91,7 @@ _ASP_SYS_MIN_LEN = 2            #: aspect key system id string length
 
 IdxItemType = Union[int, str]                                   #: types of idx_path items
 IdxPathType = Tuple[IdxItemType, ...]                           #: idx_path type
+IdxType = Union[IdxPathType, str]
 NodeType = TypeVar('NodeType', 'Record', 'Records')             #: Union['Record', 'Records']
 ListType = TypeVar('ListType', 'Values', 'Records')             #: Union['Values', 'Records']
 ValueType = TypeVar('ValueType',
@@ -378,7 +371,7 @@ def string_to_records(str_val: str, field_names: Sequence, rec_sep: str = ',', f
     :param rec_sep:     character(s) used in `str_val` for to separate the records.
     :param fld_sep:     character(s) used in `str_val` for to separate the field values of each record.
     :param root_rec:    root to which the returned records will be added.
-    :param root_idx:    index from root where the returned records will be added.
+    :param root_idx:    index path from root where the returned records will be added.
     :return:            converted :class:`Records` instance.
     """
     recs = Records()
@@ -562,14 +555,29 @@ class Value(list):
 
 
 class Values(list):                     # type: List[Union[Value, Record]]
-    def __init__(self, seq=()):
+    """ ordered/mutable sequence/list, which contains 0..n instances of the class :class:`Value`.
+    """
+    def __init__(self, seq: Iterable = ()):
+        """ create new :class:`Values` instance.
+
+        :param seq:     Iterable used to initialize the new instance (pass list, tuple or other iterable).
+        """
         super().__init__(seq)
         self.current_idx = self.idx_min = self.idx_max = None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return ("Records" if isinstance(self, Records) else "Values") + "([" + ",".join(repr(v) for v in self) + "])"
 
-    def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
+    def node_child(self, idx_path: IdxPathType, use_curr_idx: list = None, moan: bool = False,
+                   selected_sys_dir: Optional[dict] = None) -> Optional[Union[Value, 'Record']]:
+        """ determine and return node instance specified by `idx_path` if exists in this instance or underneath.
+
+        :param idx_path:            index path to the node, relative to this instance.
+        :param use_curr_idx:        list of counters for to specify if and which current indexes have to be used.
+        :param moan:                flag for to check data integrity; pass True to raise AssertionError if not.
+        :param selected_sys_dir:    optional dict for to return the currently selected system/direction.
+        :return:                    found node instance or None if not found.
+        """
         msg = "node_child() of Values/Records instance {} expects ".format(self)
         if isinstance(idx_path, (tuple, list)):
             if len(idx_path) and not isinstance(idx_path[0], int):
@@ -600,15 +608,37 @@ class Values(list):                     # type: List[Union[Value, Record]]
 
         return self[idx].node_child(idx2, use_curr_idx=use_curr_idx, moan=moan, selected_sys_dir=selected_sys_dir)
 
-    def value(self, *idx_path, system='', direction='', **kwargs):
+    def value(self, *idx_path: IdxItemType, system: str = '', direction: str = '', **kwargs) \
+            -> Optional[ValueType]:
+        """ determine the ValueType instance referenced by `idx_path` of this :class:`Values`/:class:`Records` instance.
+
+        :param idx_path:    index path items.
+        :param system:      system id.
+        :param direction:   direction id.
+        :param kwargs:      extra args (will be passed to underlying data structure).
+        :return:            found Value or Values instance, or None if not found.
+        """
         if len(idx_path) == 0:
             return self
 
         idx, *idx2 = idx_path
         return self[idx].value(*idx2, system=system, direction=direction, **kwargs)
 
-    def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=(),
-                  use_curr_idx=None):
+    def set_value(self, value: ValueType, *idx_path: IdxItemType, system: str = '', direction: str = '',
+                  protect: bool = False, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
+                  use_curr_idx: list = None) -> Union['Values', 'Records']:
+        """ set the ValueType instance referenced by `idx_path` of this :class:`Values`/:class:`Records` instance.
+
+        :param value:           ValueType instance to set/change.
+        :param idx_path:        index path items.
+        :param system:          system id.
+        :param direction:       direction id.
+        :param protect:         pass True to prevent replacement of already existing `ValueType`.
+        :param root_rec:        root record.
+        :param root_idx:        root index.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :return:                self (this instance of :class:`Values` or :class:`Records`).
+        """
         assert len(idx_path), "Values/Records.set_value() idx_path '{}' must be non-empty tuple/list".format(idx_path)
 
         if isinstance(self, Records):
@@ -625,7 +655,18 @@ class Values(list):                     # type: List[Union[Value, Record]]
             self[idx] = value
         return self
 
-    def val(self, *idx_path, system='', direction='', flex_sys_dir=True, use_curr_idx=None, **kwargs):
+    def val(self, *idx_path: IdxItemType, system: str = '', direction: str = '', flex_sys_dir: bool = True,
+            use_curr_idx: list = None, **kwargs) -> Any:
+        """ determine the user/system value referenced by `idx_path` of this :class:`Values`/:class:`Records` instance.
+
+        :param idx_path:        index path items.
+        :param system:          system id.
+        :param direction:       direction id.
+        :param flex_sys_dir:    pass True to allow fallback to system-independent value.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :param kwargs:          extra args (will be passed to underlying data structure).
+        :return:                found user/system value, or None if not found or empty string if value was not set yet.
+        """
         idx_len = len(idx_path)
         if idx_len == 0:
             val = list(self)
@@ -638,7 +679,17 @@ class Values(list):                     # type: List[Union[Value, Record]]
                 val = None
         return val
 
-    def set_val(self, val, *idx_path, protect=False, extend=True, use_curr_idx=None):
+    def set_val(self, val: Any, *idx_path: IdxItemType, protect: bool = False, extend: bool = True,
+                use_curr_idx: list = None) -> 'Values':
+        """ set the user/system value referenced by `idx_path` of this :class:`Values` instance.
+
+        :param val:             user/system value to set/change.
+        :param idx_path:        index path items.
+        :param protect:         pass True to prevent replacement of already existing `ValueType`.
+        :param extend:          pass True to allow extension of data structure.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :return:                self (this instance of :class:`Values`).
+        """
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
         assert isinstance(idx, int) and len(idx2) == 0, "Values expects one int index, but got {}".format(idx_path)
         value = val if isinstance(val, Value) else Value((val, ))
@@ -652,15 +703,16 @@ class Values(list):                     # type: List[Union[Value, Record]]
             self[idx] = value
         return self
 
-    def copy(self, deepness=0, root_rec=None, root_idx=(), **kwargs):
-        """ copy the values/records of this list (Values or Records).
+    def copy(self, deepness: int = 0, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (), **kwargs) \
+            -> Union['Values', 'Records']:
+        """ copy the values/records of this :class:`Values`/:class:`Records` instance.
 
         :param deepness:        deep copy levels: <0==see deeper(), 0==only copy current instance, >0==deep copy
                                 to deepness value - _Field occupies two deepness: 1st=_Field, 2nd=Value).
         :param root_rec:        destination root record.
         :param root_idx:        destination index path (tuple of field names and/or list/Records indexes).
         :param kwargs:          additional arguments (will be passed on - most of them used by Record.copy).
-        :return:                new/extended record instance.
+        :return:                new instance of self (which is an instance of :class:`Values` or :class:`Records`).
         """
         ret = type(self)()      # create new instance of this list/class (Values or Records)
         for idx, rec in enumerate(self):
@@ -669,7 +721,16 @@ class Values(list):                     # type: List[Union[Value, Record]]
             ret.append(rec)
         return ret
 
-    def clear_leafs(self, system='', direction='', flex_sys_dir=True, reset_lists=True):
+    def clear_leafs(self, system: str = '', direction: str = '', flex_sys_dir: bool = True, reset_lists: bool = True) \
+            -> Union['Values', 'Records']:
+        """ clear/reset the user/system values of all the leafs of this :class:`Values`/:class:`Records` instance.
+
+        :param system:          system id.
+        :param direction:       direction id (FAD_* constants).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :param reset_lists:     pass False to prevent the reset of all the underlying lists.
+        :return:
+        """
         if reset_lists:
             self[1:] = []
         for rec in self:
@@ -683,11 +744,16 @@ class Values(list):                     # type: List[Union[Value, Record]]
 
 
 class Record(OrderedDict):
-    # isinstance(..., dict) not working if using MutableMapping instead of OrderedDict
-    # dict should not be used because **instance will then not work see the answer of Groxx in the stackoverflow
-    # .. question https://stackoverflow.com/questions/3387691/how-to-perfectly-override-a-dict/47361653#47361653
-    def __init__(self, template=None, fields=None, system='', direction='', action='', root_rec=None, root_idx=(),
-                 field_items=False):
+    """ instances of this mapping class are used to represent record-like data structures.
+
+    isinstance(..., dict) not working if using MutableMapping instead of OrderedDict as super class. And dict
+    cannot be used as super class because instance as kwarg will then not work: see the Groxx's answer in stackoverflow
+    question at https://stackoverflow.com/questions/3387691/how-to-perfectly-override-a-dict/47361653#47361653.
+    """
+    def __init__(self, template: Optional['Records'] = None, fields: Optional[dict] = None,
+                 system: str = '', direction: str = '', action: str = '',
+                 root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
+                 field_items: bool = False):
         """ Create new Record instance, which is an ordered collection of _Field items.
 
         :param template:    pass Records instance to use first item/[0] as template (after deep copy and vals cleared).
@@ -721,13 +787,13 @@ class Record(OrderedDict):
         self.sys_name_field_map = dict()    # map system field name as key to _Field instance (as value).
         self.collected_system_fields = list()   # system fields found by collect_system_fields()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "Record({})".format(", ".join(repr(self._fields.val(*k)) for k in self.leaf_indexes()))
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "Record({})".format(", ".join(k for k in self.keys()))
 
-    def __contains__(self, idx_path):
+    def __contains__(self, idx_path: IdxPathType) -> bool:
         item = self.node_child(idx_path)
         ''' on executing self.pop() no __delitem__ will be called instead python OrderedDict first pops the item
             then is calling this method, although super().__contains__() still returns True but then calls __getitem__()
@@ -740,7 +806,7 @@ class Record(OrderedDict):
         '''
         return bool(item)
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: IdxPathType) -> Any:
         ssd = dict()
         child = self.node_child(key, moan=True, selected_sys_dir=ssd)
         ''' should actually not happen because with moan=True node_child() will raise AssertionError
@@ -750,11 +816,20 @@ class Record(OrderedDict):
         return child if self.field_items or not isinstance(child, _Field) \
             else child.val(system=ssd.get('system', self.system), direction=ssd.get('direction', self.direction))
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: IdxPathType, value: Any):
         idx_path = field_name_idx_path(key, return_root_fields=True)
         self.set_node_child(value, *idx_path)
 
-    def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
+    def node_child(self, idx_path: IdxType, use_curr_idx: Optional[list] = None, moan: bool = False,
+                   selected_sys_dir: Optional[dict] = None) -> Optional[ValueType]:
+        """ get the node child specified by `idx_path` relative to this :class:`Record` instance.
+
+        :param idx_path:            index path or field name index string.
+        :param use_curr_idx:        list of counters for to specify if and which current indexes have to be used.
+        :param moan:                flag for to check data integrity; pass True to raise AssertionError if not.
+        :param selected_sys_dir:    optional dict for to return the currently selected system/direction.
+        :return:                    found node instance or None if not found.
+        """
         msg = "Record.node_child() expects "
         if not isinstance(idx_path, (tuple, list)):
             if not isinstance(idx_path, str):
@@ -1578,10 +1653,12 @@ class Records(Values):              # type: List[Record]
 
 
 class _Field:
-    # following type hint is for instance (not class) variable - see https://stackoverflow.com/.
-    # .. questions/47532472/can-python-class-variables-become-instance-variables-when-altered-in-init
-    # _aspects = ...  # type: Dict[str, Any]
+    """ Internal/Private class for to create record field instances.
 
+    System-specific representations of the value of a :class:`_Field` instance can be (automatically) converted
+    by specifying a converter callable.
+
+    """
     def __init__(self, root_rec=None, root_idx=(), allow_values=False, **aspects):
         self._aspects = dict()
         self.add_aspects(allow_values=allow_values, **aspects)
