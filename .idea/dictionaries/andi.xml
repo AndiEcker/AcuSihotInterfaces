@@ -4,6 +4,7 @@
       <w>argparse</w>
       <w>autodoc</w>
       <w>automodule</w>
+      <w>autosummary</w>
       <w>bysource</w>
       <w>ecker</w>
       <w>genindex</w>

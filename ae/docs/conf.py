@@ -33,6 +33,7 @@ extensions = [
     'sphinx_autodoc_typehints',
     'sphinx.ext.coverage',
     'sphinx.ext.graphviz',
+    'sphinx.ext.autosummary',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -67,3 +68,5 @@ autodoc_default_options = {
     'show-inheritance': True,
     'exclude-members': '__weakref__, __dict__, __module__'
 }
+
+autosummary_generate = True

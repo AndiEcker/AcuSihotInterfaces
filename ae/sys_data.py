@@ -19,18 +19,18 @@ all the possible combinations (of a single system):
 
     digraph {
         node [shape=record]
-        rec1 [label="{<rec1>Record (root) | { <A>A | <B>B | <C>C | <D>D } }"]
+        rec1 [label="{<rec1>Record (root) | { <A>Field A | <B>Field B | <C>Field C | <D>Field D } }"]
         "Records (root)" -> rec1 [arrowhead=crow style=tapered penwidth=3]
-        rec1:A -> "Value (_Field A)" [minlen=3]
+        rec1:A -> "Value (of Field A)" [minlen=3]
         rec1:B -> "Values"
-        "Values" -> "Value (Values)" [minlen=2 arrowhead=crow style=tapered penwidth=3]
-        rec2 [label="{<rec2>Record (sub-record) | { <CA>CA | <CB>CB | <CN>... } }"]
+        "Values" -> "Value (of one Values item)" [minlen=2 arrowhead=crow style=tapered penwidth=3]
+        rec2 [label="{<rec2>Record (sub-record) | { <CA>Field CA | <CB>Field CB | <CN>... } }"]
         rec1:C -> rec2
-        rec2:CA -> "Value (_Field CA)" [minlen=2]
-        rec3 [label="{<rec3>Record (sub-records-sub-record) | { <DA>DA | <DB>DB | <DN>... } }"]
+        rec2:CA -> "Value (of Field CA)" [minlen=2]
+        rec3 [label="{<rec3>Record (sub-records-sub-record) | { <DA>Field DA | <DB>Field DB | <DN>... } }"]
         rec1:D -> "Records (sub-records)"
         "Records (sub-records)" -> rec3 [arrowhead=crow style=tapered penwidth=3]
-        rec3:DA -> "Value (_Field DA)"
+        rec3:DA -> "Value (of Field DA)"
     }
 
 Additionally each :class:`_Field` instance can hold for each system a separate value, which

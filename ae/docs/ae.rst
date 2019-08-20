@@ -1,6 +1,12 @@
 Core Module contents of the ae package
 ======================================
 
+.. autosummary::
+    :toctree: _autosummary
+
+    ae
+
+
 .. automodule:: ae
 
 
