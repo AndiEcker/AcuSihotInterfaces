@@ -97,7 +97,7 @@ ListType = TypeVar('ListType', 'Values', 'Records')             #: Union['Values
 ValueType = TypeVar('ValueType',
                     'Value', 'Values', 'Record', 'Records')     #: Union['Value', 'Values', 'Record', 'Records']
 NodeChildType = TypeVar('NodeChildType', '_Field', 'Record')    #: Union['_Field', 'Record']
-FieldValCallable = Callable[['Field', Any], Any]
+FieldValCallable = Callable[['_Field', Any], Any]
 
 
 def aspect_key(type_or_key: str, system: str = '', direction: str = '') -> str:
@@ -1024,7 +1024,7 @@ class Record(OrderedDict):
                 converter: Optional[FieldValCallable] = None,
                 root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
                 use_curr_idx: Optional[list] = None, to_value_type: bool = False) -> 'Record':
-        """
+        """ set the user/system value referenced by `idx_path` of this :class:`Record` instance.
 
         :param val:             user/system value to be set/replaced.
         :param idx_path:        index path of the Value to be set.
