@@ -40,7 +40,7 @@ gets represented by an instance of one of the 4 classes :class:`Records`, :class
 import datetime
 import keyword
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union, Generator
 
 from ae_validation.validation import correct_email, correct_phone
 
@@ -91,12 +91,13 @@ _ASP_SYS_MIN_LEN = 2            #: aspect key system id string length
 
 IdxItemType = Union[int, str]                                   #: types of idx_path items
 IdxPathType = Tuple[IdxItemType, ...]                           #: idx_path type
-IdxType = Union[IdxPathType, str]
+IdxTypes = Union[IdxItemType, IdxPathType]
 NodeType = TypeVar('NodeType', 'Record', 'Records')             #: Union['Record', 'Records']
 ListType = TypeVar('ListType', 'Values', 'Records')             #: Union['Values', 'Records']
 ValueType = TypeVar('ValueType',
                     'Value', 'Values', 'Record', 'Records')     #: Union['Value', 'Values', 'Record', 'Records']
 NodeChildType = TypeVar('NodeChildType', '_Field', 'Record')    #: Union['_Field', 'Record']
+FieldValCallable = Callable[['Field', Any], Any]
 
 
 def aspect_key(type_or_key: str, system: str = '', direction: str = '') -> str:
@@ -768,7 +769,10 @@ class Record(OrderedDict):
         :param field_items: pass True to get Record items - using __getitem__() - as of type _Field (not as val()).
         """
         super().__init__()
-        self._fields = self     # using internal store of OrderedDict() while keeping code better readable/maintainable
+
+        # using internal store of OrderedDict() while keeping code better readable/maintainable
+        self._fields = self     # type: Record[str, _Field]
+
         self.system = system
         self.direction = direction
         self.action = action
@@ -793,7 +797,7 @@ class Record(OrderedDict):
     def __str__(self) -> str:
         return "Record({})".format(", ".join(k for k in self.keys()))
 
-    def __contains__(self, idx_path: IdxPathType) -> bool:
+    def __contains__(self, idx_path: IdxTypes) -> bool:
         item = self.node_child(idx_path)
         ''' on executing self.pop() no __delitem__ will be called instead python OrderedDict first pops the item
             then is calling this method, although super().__contains__() still returns True but then calls __getitem__()
@@ -820,7 +824,7 @@ class Record(OrderedDict):
         idx_path = field_name_idx_path(key, return_root_fields=True)
         self.set_node_child(value, *idx_path)
 
-    def node_child(self, idx_path: IdxType, use_curr_idx: Optional[list] = None, moan: bool = False,
+    def node_child(self, idx_path: IdxTypes, use_curr_idx: Optional[list] = None, moan: bool = False,
                    selected_sys_dir: Optional[dict] = None) -> Optional[ValueType]:
         """ get the node child specified by `idx_path` relative to this :class:`Record` instance.
 
@@ -849,7 +853,7 @@ class Record(OrderedDict):
         # defensive programming: using self._fields.keys() although self._fields.items() gets item via get() in 3.5, for
         # .. to ensure _Field instances independent from self.field_items value (having py-tests for get() not items())
         for fld_nam in self._fields.keys():
-            field = self._fields.get(fld_nam)   # type: Union[_Field, None]
+            field = self._fields.get(fld_nam)   # WAS type: Union[_Field, None]
             if fld_nam == idx:
                 if not idx2:
                     break
@@ -865,8 +869,22 @@ class Record(OrderedDict):
 
         return field
 
-    def set_node_child(self, fld_or_val, *idx_path, system=None, direction=None, protect=False,
-                       root_rec=None, root_idx=(), use_curr_idx=None, to_value_type=False):
+    def set_node_child(self, fld_or_val: Any, *idx_path: IdxItemType, system: str = None, direction: str = None,
+                       protect: bool = False, root_rec: Optional['Record'] = None, root_idx: Optional[IdxPathType] = (),
+                       use_curr_idx: Optional[list] = None, to_value_type: bool = False) -> 'Record':
+        """ set/replace the child of the node specified by `idx_path` with the value of `fld_or_val`.
+
+        :param fld_or_val:      field or value - for to be set.
+        :param idx_path:        index path of the node child to set/replace.
+        :param system:          system id (pass None to use default system id of this `Record` instance).
+        :param direction:       direction id (pass None to use default direction id of this `Record` instance).
+        :param protect:         pass True to prevent the replacement of a node child.
+        :param root_rec:        root record of this data structure.
+        :param root_idx:        root index path of this node.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :param to_value_type:   pass True ensure conversion of `fld_or_val` to a Value instance.
+        :return:                self (this Record instance).
+        """
         idx_len = len(idx_path)
         assert idx_len, "Record.set_node_child() expect 2 or more args - missing field name/-path"
         assert isinstance(idx_path[0], str), \
@@ -924,7 +942,17 @@ class Record(OrderedDict):
             rec.set_node_child(fld_or_val, deep_fld_name, system=system, direction=direction, protect=protect,
                                root_rec=root_rec, root_idx=idx_path[:-1], use_curr_idx=use_curr_idx)
 
-    def value(self, *idx_path, system=None, direction=None, **kwargs):
+        return self
+
+    def value(self, *idx_path: IdxItemType, system: str = None, direction: str = None, **kwargs) -> Optional[ValueType]:
+        """ search the Value specified by `idx_path` and return it if found.
+
+        :param idx_path:    index path of Value.
+        :param system:      system id (pass None to use default system id of this `Record` instance).
+        :param direction:   direction id (pass None to use default direction id of this `Record` instance).
+        :param kwargs:      additional keyword args (to be passed onto underlying data structure).
+        :return:            found Value instance of None if not found.
+        """
         if len(idx_path) == 0:
             return self
 
@@ -935,8 +963,21 @@ class Record(OrderedDict):
         if field:
             return field.value(*idx2, system=system, direction=direction, **kwargs)
 
-    def set_value(self, value, *idx_path, system=None, direction=None, protect=False, root_rec=None, root_idx=(),
-                  use_curr_idx=None):
+    def set_value(self, value: ValueType, *idx_path: IdxItemType, system: str = None, direction: str = None,
+                  protect: bool = False, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
+                  use_curr_idx: Optional[list] = None) -> 'Record':
+        """ set/replace the Value instance of the node specified by `idx_path`.
+
+        :param value:           Value instance to be set/replaced.
+        :param idx_path:        index path of the Value to be set.
+        :param system:          system id (pass None to use default system id of this `Record` instance).
+        :param direction:       direction id (pass None to use default direction id of this `Record` instance).
+        :param protect:         pass True to protect existing node value from to be changed/replaced.
+        :param root_rec:        root Record instance of this data structure.
+        :param root_idx:        root index to this node/Record instance.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :return:                self (this Record instance).
+        """
         system, direction = use_rec_default_sys_dir(self, system, direction)
         root_rec, root_idx = use_rec_default_root_rec_idx(self, root_rec, root_idx=root_idx, met="Record.set_value")
         idx, *idx2 = init_current_index(self, idx_path, use_curr_idx)
@@ -946,7 +987,18 @@ class Record(OrderedDict):
                         root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
         return self
 
-    def val(self, *idx_path, system=None, direction=None, flex_sys_dir=True, use_curr_idx=None, **kwargs):
+    def val(self, *idx_path: IdxItemType, system: str = None, direction: str = None, flex_sys_dir: bool = True,
+            use_curr_idx: Optional[list] = None, **kwargs) -> Any:
+        """ determine the user/system value referenced by `idx_path` of this :class:`Record` instance.
+
+        :param idx_path:        index path items.
+        :param system:          system id (pass None to use default system id of this `Record` instance).
+        :param direction:       direction id (pass None to use default direction id of this `Record` instance).
+        :param flex_sys_dir:    pass True to allow fallback to system-independent value.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :param kwargs:          extra args (will be passed to underlying data structure).
+        :return:                found user/system value, or None if not found or empty string if value was not set yet.
+        """
         system, direction = use_rec_default_sys_dir(self, system, direction)
 
         idx_len = len(idx_path)
@@ -967,9 +1019,27 @@ class Record(OrderedDict):
                 val = None
         return val
 
-    def set_val(self, val, *idx_path, system=None, direction=None, flex_sys_dir=True,
-                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None,
-                to_value_type=False):
+    def set_val(self, val: Any, *idx_path: IdxItemType, system: str = None, direction: str = None,
+                flex_sys_dir: bool = True, protect: bool = False, extend: bool = True,
+                converter: Optional[FieldValCallable] = None,
+                root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
+                use_curr_idx: Optional[list] = None, to_value_type: bool = False) -> 'Record':
+        """
+
+        :param val:             user/system value to be set/replaced.
+        :param idx_path:        index path of the Value to be set.
+        :param system:          system id (pass None to use default system id of this `Record` instance).
+        :param direction:       direction id (pass None to use default direction id of this `Record` instance).
+        :param flex_sys_dir:    pass True to allow fallback to system-independent value.
+        :param protect:         pass True to protect existing node value from to be changed/replaced.
+        :param extend:          pass False to prevent extension of data structure.
+        :param converter:       converter callable for to convert user values between systems.
+        :param root_rec:        root Record instance of this data structure.
+        :param root_idx:        root index to this node/Record instance.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :param to_value_type:   pass True ensure conversion of `val` to a Value instance.
+        :return:                self (this Record instance).
+        """
         if len(idx_path) == 0:
             return self.add_fields(val)         # RETURN
 
@@ -993,20 +1063,37 @@ class Record(OrderedDict):
                       root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx, to_value_type=to_value_type)
         return self
 
-    def leafs(self, system=None, direction=None, flex_sys_dir=True):
+    def leafs(self, system: str = None, direction: str = None, flex_sys_dir: bool = True) \
+            -> Generator['_Field', None, None]:
+        """ generate leafs/_Field-instances of this :class:`Record` instance.
+
+        :param system:          system id (pass None to use default system id of this `Record` instance).
+        :param direction:       direction id (pass None to use default direction id of this `Record` instance).
+        :param flex_sys_dir:    pass True to allow fallback to system-independent value.
+        :return:                leaf/_Field-instance generator.
+        """
         system, direction = use_rec_default_sys_dir(self, system, direction)
         for idx in self._fields.keys():
             field = self._fields.get(idx)
             yield from field.leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def leaf_indexes(self, *idx_path, system=None, direction=None, flex_sys_dir=True):
+    def leaf_indexes(self, *idx_path: IdxItemType, system: str = None, direction: str = None,
+                     flex_sys_dir: bool = True) -> Generator[IdxPathType, None, None]:
+        """ generate leaf-/_Field-index paths for all fields of this :class:`Record` instance.
+
+        :param idx_path:        index path to be added as base index path (index path to this `Record` instance).
+        :param system:          system id (pass None to use default system id of this `Record` instance).
+        :param direction:       direction id (pass None to use default direction id of this `Record` instance).
+        :param flex_sys_dir:    pass True to allow fallback to system-independent value.
+        :return:                leaf/_Field-instance generator.
+        """
         system, direction = use_rec_default_sys_dir(self, system, direction)
         for idx in self._fields.keys():
             field = self._fields.get(idx)
             fld_idx = idx_path + (idx, )
             yield from field.leaf_indexes(*fld_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def _add_field(self, field, idx=''):
+    def _add_field(self, field: '_Field', idx: str = '') -> 'Record':
         """ add _Field instance to this Record instance.
 
         :param field:   _Field instance to add.
@@ -1027,7 +1114,7 @@ class Record(OrderedDict):
         super().__setitem__(idx, field)     # self._fields[idx] = field
         return self
 
-    def add_fields(self, fields, root_rec=None, root_idx=()):
+    def add_fields(self, fields: Iterable, root_rec: Optional['Record'] = None, root_idx: IdxPathType = ()) -> 'Record':
         """ adding fields to this Record instance.
 
         :param fields:      either a dict, a Record or a list with (key/field_name, val/_Field) tuples.
@@ -1052,10 +1139,12 @@ class Record(OrderedDict):
             self.set_node_child(fld_or_val, *idx_path, protect=True, root_rec=root_rec, root_idx=root_idx)
         return self
 
-    def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes=None,
-                          system=None, direction=None, extend=True):
-        """ add/set fields from a system field tuple. This Record instance need to have system and direction
-        specified/set.
+    def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes: Dict = None,
+                          system: str = None, direction: str = None, extend: bool = True) -> 'Record':
+        """ add/set fields to this :class:`Record` instance from the field definition passed into `system_fields`.
+
+        Make sure before you call this method that this :class:`Record` instance has the system and direction
+        attributes specified/set.
 
         :param system_fields:   tuple/list of tuples/lists with system and main field names and optional field aspects.
                                 The index of the field names and aspects within the inner tuples/lists get specified
@@ -1163,7 +1252,13 @@ class Record(OrderedDict):
 
         return self
     
-    def collect_system_fields(self, sys_fld_name_path, path_sep):
+    def collect_system_fields(self, sys_fld_name_path: Sequence, path_sep: str) -> List['_Field']:
+        """ compile list of system :class:`_Field` instances of this :class:`Record` instance.
+
+        :param sys_fld_name_path:   sequence/tuple/list of system field names/keys.
+        :param path_sep:            system field name/key separator character(s).
+        :return:                    list of :class:'_Field` instances which are having system field name/keys set.
+        """
         self.collected_system_fields = list()
 
         deep_sys_fld_name = sys_fld_name_path[-1]
@@ -1175,7 +1270,16 @@ class Record(OrderedDict):
 
         return self.collected_system_fields
 
-    def compare_leafs(self, rec, field_names=(), exclude_fields=()):
+    def compare_leafs(self, rec: 'Record', field_names: Iterable = (), exclude_fields: Iterable = ()) -> List[str]:
+        """ compare the leaf 'compare' values of this :class:`Record` instance with the one passed into `rec`.
+
+        'Compare' values are simplified user/system values generated by :func:`Record.compare_val`.
+
+        :param rec:             other :class:`Record` instance to compare to.
+        :param field_names:     field names to include in compare; pass empty tuple (==default) to include all fields.
+        :param exclude_fields:  field names to exclude from compare.
+        :return:                list of str with the differences between self and `rec`.
+        """
         def _excluded():
             return (field_names and idx_path[0] not in field_names and idx_path[-1] not in field_names) \
                                 or (idx_path[0] in exclude_fields or idx_path[-1] in exclude_fields)
