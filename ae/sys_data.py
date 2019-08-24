@@ -811,7 +811,7 @@ class Record(OrderedDict):
         '''
         return bool(item)
 
-    def __getitem__(self, key: IdxPathType) -> Any:
+    def __getitem__(self, key: IdxTypes) -> Any:
         ssd = dict()
         child = self.node_child(key, moan=True, selected_sys_dir=ssd)
         ''' should actually not happen because with moan=True node_child() will raise AssertionError
@@ -821,7 +821,7 @@ class Record(OrderedDict):
         return child if self.field_items or not isinstance(child, _Field) \
             else child.val(system=ssd.get('system', self.system), direction=ssd.get('direction', self.direction))
 
-    def __setitem__(self, key: IdxPathType, value: Any):
+    def __setitem__(self, key: IdxTypes, value: Any):
         idx_path = field_name_idx_path(key, return_root_fields=True)
         self.set_node_child(value, *idx_path)
 
@@ -1972,13 +1972,27 @@ class Records(Values):              # type: List[Record]
 
 
 class _Field:
-    """ Internal/Private class for to create record field instances.
+    """ Internal/Private class used by :class:`Record` for to create record field instances.
 
-    System-specific representations of the value of a :class:`_Field` instance can be (automatically) converted
-    by specifying a converter callable.
+    An instance of :class:`_Field` is representing one record field. The field properties are internally stored
+    within a private dict (:ivar:'_Field._aspects) and are called the 'aspects' of a field.
 
+    Field aspects get used by a field instance e.g. for to:
+    * store field value(s)
+    * define callable(s) for to convert, filter or validate field values
+    * associate the root record and root index
+    * store any other user-defined field properties (like SQL column expressions, comments, ...)
+
+    The :var:`FAT_ALL` constant contains all pre-defined aspects (see the other FAT_* constants defined at the
+    top of this module). These values are called 'aspect keys' and are used as dict keys in the private dict.
+
+    Each aspect can additionally have a separate property for each systems/directions - in this case the aspect
+    key gets extended with direction/system ids. The two available direction ids are pre-defined by the constants
+    :var:`FAD_FROM` and :var:`FAD_ONTO`. The system ids are not defined in this module, they have to be defined
+    by the application. Aspect keys can be compiled with the function :func:`aspect_key`.
     """
-    def __init__(self, root_rec=None, root_idx=(), allow_values=False, **aspects):
+    def __init__(self, root_rec: Optional[Record] = None, root_idx: IdxPathType = (), allow_values: bool = False,
+                 **aspects):
         self._aspects = dict()
         self.add_aspects(allow_values=allow_values, **aspects)
         if root_rec is not None:
@@ -2024,7 +2038,16 @@ class _Field:
         '''
         return child
 
-    def node_child(self, idx_path, use_curr_idx=None, moan=False, selected_sys_dir=None):
+    def node_child(self, idx_path: IdxTypes, use_curr_idx: Optional[list] = None, moan: bool = False, 
+                   selected_sys_dir: Optional[dict] = None) -> Optional[ValueType]:
+        """ get the node child specified by `idx_path` relative to this :class:`_Field` instance.
+
+        :param idx_path:            index path or field name index string.
+        :param use_curr_idx:        list of counters for to specify if and which current indexes have to be used.
+        :param moan:                flag for to check data integrity; pass True to raise AssertionError if not.
+        :param selected_sys_dir:    optional dict for to return the currently selected system/direction.
+        :return:                    found node instance or None if not found.
+        """
         msg = "node_child() of _Field {} expects ".format(self)
         if isinstance(idx_path, (tuple, list)):
             if len(idx_path) and not isinstance(idx_path[0], IDX_TYPES):
@@ -2047,7 +2070,16 @@ class _Field:
 
         return value.node_child(idx_path, use_curr_idx=use_curr_idx, moan=moan, selected_sys_dir=selected_sys_dir)
 
-    def value(self, *idx_path, system='', direction='', flex_sys_dir=False):
+    def value(self, *idx_path: IdxItemType, system: str = '', direction: str = '', flex_sys_dir: bool = False
+              ) -> Optional[ValueType]:
+        """ search the Value specified by `idx_path` and return it if found.
+
+        :param idx_path:        index path of Value.
+        :param system:          system id ('' stands for the main/system-independent value).
+        :param direction:       direction id ('' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass True to allow fallback to main (non-user/-system) value.
+        :return:                found Value instance of None if not found.
+        """
         value = None
         val_or_cal = self.aspect_value(FAT_VAL, FAT_CAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         if val_or_cal is not None:
@@ -2064,8 +2096,21 @@ class _Field:
             value = value.value(*idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         return value
 
-    def set_value(self, value, *idx_path, system='', direction='', protect=False, root_rec=None, root_idx=(),
-                  use_curr_idx=None):
+    def set_value(self, value: ValueType, *idx_path: IdxItemType, system: str = '', direction: str = '',
+                  protect: bool = False, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
+                  use_curr_idx: Optional[list] = None) -> '_Field':
+        """ set/replace the Value instance of the node specified by `idx_path`.
+
+        :param value:           Value instance to be set/replaced.
+        :param idx_path:        index path of the Value to be set.
+        :param system:          system id ('' stands for the main/system-independent value).
+        :param direction:       direction id ('' stands for the main/system-independent value).
+        :param protect:         pass True to protect existing node value from to be changed/replaced.
+        :param root_rec:        root Record instance of this data structure.
+        :param root_idx:        root index to this node/Record instance.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :return:                self (this _Field instance).
+        """
         msg = "_Field.set_value({}, {}, {}, {}, {}): ".format(value, idx_path, system, direction, protect)
         assert isinstance(value, VALUE_TYPES), msg + "expects value types {}, got {}".format(VALUE_TYPES, type(value))
 
@@ -2093,14 +2138,43 @@ class _Field:
 
         return self
 
-    def val(self, *idx_path, system='', direction='', flex_sys_dir=True, use_curr_idx=None, **kwargs):
+    def val(self, *idx_path: IdxItemType, system: str = '', direction: str = '', flex_sys_dir: bool = True,
+            use_curr_idx: Optional[list] = None, **kwargs) -> Any:
+        """ determine the user/system value referenced by `idx_path`.
+
+        :param idx_path:        index path items.
+        :param system:          system id ('' stands for the main/system-independent value).
+        :param direction:       direction id ('' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :param kwargs:          extra args (will be passed to underlying data structure).
+        :return:                found user/system value, or None if not found or empty string if value was not set yet.
+        """
         value = self.value(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         return value.val(*idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
                          use_curr_idx=use_curr_idx, **kwargs)
 
-    def set_val(self, val, *idx_path, system='', direction='', flex_sys_dir=True,
-                protect=False, extend=True, converter=None, root_rec=None, root_idx=(), use_curr_idx=None,
-                to_value_type=False):
+    def set_val(self, val: Any, *idx_path: IdxItemType, system: str = '', direction: str = '',
+                flex_sys_dir: bool = True, protect: bool = False, extend: bool = True,
+                converter: Optional[FieldValCallable] = None,
+                root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
+                use_curr_idx: Optional[list] = None, to_value_type: bool = False) -> '_Field':
+        """ set the user/system value referenced by `idx_path`.
+
+        :param val:             user/system value to be set/replaced.
+        :param idx_path:        index path of the Value to be set.
+        :param system:          system id ('' stands for the main/system-independent value).
+        :param direction:       direction id ('' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :param protect:         pass True to protect existing node value from to be changed/replaced.
+        :param extend:          pass False to prevent extension of data structure.
+        :param converter:       converter callable for to convert user values between systems.
+        :param root_rec:        root Record instance of this data structure.
+        :param root_idx:        root index to this node/Record instance.
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :param to_value_type:   pass True ensure conversion of `val` to a Value instance.
+        :return:                self (this _Field instance).
+        """
         idx_len = len(idx_path)
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir or idx_len)
 
@@ -2332,6 +2406,11 @@ class _Field:
             self.set_value(Value(), system=system, direction=direction, root_rec=root_rec, root_idx=root_idx)
 
     def converter(self, system='', direction=''):
+        """
+
+        Separate system-specific representations of the field value can be (automatically) converted
+        by specifying a converter callable aspect.
+        """
         return self.aspect_value(FAT_CNV, system=system, direction=direction)
 
     def set_converter(self, converter, system='', direction='', extend=False, root_rec=None, root_idx=()):
