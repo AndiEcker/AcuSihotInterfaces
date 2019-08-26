@@ -33,9 +33,23 @@ all the possible combinations (of a single system):
         rec3:DA -> "Value (of Field DA)"
     }
 
-Additionally each :class:`_Field` instance can hold for each system a separate value, which
+The :class:`Record` instance that is placed at highest in a data structure is called the 'root record',
+and the :class:`_Field` instances at the lowest level in a data structure are called the 'leafs'. Each
+leaf is providing a reference to its root record as well as a 'root index' which is a tuple of indexes/keys.
+The items of a root index are either numeric array indexes (for list data structures) or a field name
+string (for records). In the above graph example the record 'Record (root)' is the root record and
+the field DA is a leaf with the root index ("D", 0, 'DA').
+
+Each :class:`_Field` instance can optionally hold for each system a separate value, which
 gets represented by an instance of one of the 4 classes :class:`Records`, :class:`Record`,
-:class:`Values` or :class:`Value`.
+:class:`Values` or :class:`Value`. For to reference a system field value from a root record
+you have to specify the root index of the field and additionally a system id and a direction id.
+
+System Ids are user-defined strings that are uniquely identifying a system and should consist of at least
+two characters (see :ivar:`_ASP_SYS_MIN_LEN`). The two pre-defined direction ids :ivar:`FAD_FROM` and
+:ivar:`FAD_FROM` are specifying the data flow direction: either for pulling data from a system or for
+pushing data onto a system. The methods :func:`Record.pull` and :func:`Record.push` are used to move
+and convert system-specific data from/onto a record.
 """
 import datetime
 import keyword
@@ -2216,15 +2230,32 @@ class _Field:
                       use_curr_idx=use_curr_idx)
         return self
 
-    def leaf_value(self, system='', direction='', flex_sys_dir=False):
-        # return field node value for to allow the caller to check if possibly exists a deeper located sys field
+    def leaf_value(self, system: str = '', direction: str = '', flex_sys_dir: bool = False) -> ValueType:
+        """ determine the leaf value of this field (and optionally system/direction).
+
+        :param system:          system id ('' stands for the main/system-independent value).
+        :param direction:       direction id ('' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :return:                the main or user/system value of this leaf/field or None if deeper value
+                                exists and `flex_sys_dir is False.
+
+        Used also for to check if a deeper located sys field exists in the current data structure.
+        """
         value = self.value(system=system, direction=direction, flex_sys_dir=True)
         if not flex_sys_dir and not isinstance(value, NODE_TYPES) \
                 and not self.aspect_value(FAT_IDX, system=system, direction=direction, flex_sys_dir=flex_sys_dir):
             value = None
         return value
 
-    def leafs(self, system='', direction='', flex_sys_dir=True):
+    def leafs(self, system: str = '', direction: str = '', flex_sys_dir: bool = True
+              ) -> Generator['_Field', None, None]:
+        """ generate leafs/_Field-instances of this :class:`_Field` instance.
+
+        :param system:          system id ('' stands for the main/system-independent value).
+        :param direction:       direction id ('' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :return:                leaf/_Field-instance generator.
+        """
         value = self.leaf_value(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         if isinstance(value, NODE_TYPES):
             yield from value.leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
