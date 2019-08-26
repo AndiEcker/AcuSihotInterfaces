@@ -46,9 +46,9 @@ gets represented by an instance of one of the 4 classes :class:`Records`, :class
 you have to specify the root index of the field and additionally a system id and a direction id.
 
 System Ids are user-defined strings that are uniquely identifying a system and should consist of at least
-two characters (see :ivar:`_ASP_SYS_MIN_LEN`). The two pre-defined direction ids :ivar:`FAD_FROM` and
-:ivar:`FAD_FROM` are specifying the data flow direction: either for pulling data from a system or for
-pushing data onto a system. The methods :func:`Record.pull` and :func:`Record.push` are used to move
+two characters (see :data:`_ASP_SYS_MIN_LEN`). The two pre-defined direction ids :data:`FAD_FROM` and
+:data:`FAD_FROM` are specifying the data flow direction: either for pulling data from a system or for
+pushing data onto a system. The methods :meth:`Record.pull` and :meth:`Record.push` are used to move
 and convert system-specific data from/onto a record.
 """
 import datetime
@@ -103,6 +103,7 @@ _ASP_DIR_LEN = 4                #: aspect key direction string length
 _ASP_SYS_MIN_LEN = 2            #: aspect key system id string length
 
 
+AspectKeyType = str                                             #: type of a _Field aspect key
 IdxItemType = Union[int, str]                                   #: types of idx_path items
 IdxPathType = Tuple[IdxItemType, ...]                           #: idx_path type
 IdxTypes = Union[IdxItemType, IdxPathType]
@@ -115,7 +116,7 @@ FieldCallable = Callable[['_Field'], bool]
 FieldValCallable = Callable[['_Field', Any], Any]
 
 
-def aspect_key(type_or_key: str, system: str = '', direction: str = '') -> str:
+def aspect_key(type_or_key: str, system: AspectKeyType = '', direction: AspectKeyType = '') -> str:
     """ compiles an aspect dict key from the given args
 
     :param type_or_key:     either FAT_* type or full key (including already the system and direction)-
@@ -437,7 +438,7 @@ def use_rec_default_root_rec_idx(rec: 'Record', root_rec: Optional['Record'], id
     return root_rec, root_idx
 
 
-def use_rec_default_sys_dir(rec: 'Record', system: str, direction: str) -> Tuple[str, str]:
+def use_rec_default_sys_dir(rec: 'Record', system: AspectKeyType, direction: AspectKeyType) -> Tuple[str, str]:
     """ helper function for to determine resulting system/direction.
 
     :param rec:         current :class:`Record` instance.
@@ -624,8 +625,8 @@ class Values(list):                     # type: List[Union[Value, Record]]
 
         return self[idx].node_child(idx2, use_curr_idx=use_curr_idx, moan=moan, selected_sys_dir=selected_sys_dir)
 
-    def value(self, *idx_path: IdxItemType, system: str = '', direction: str = '', **kwargs) \
-            -> Optional[ValueType]:
+    def value(self, *idx_path: IdxItemType, system: AspectKeyType = '', direction: AspectKeyType = '', **kwargs
+              ) -> Optional[ValueType]:
         """ determine the ValueType instance referenced by `idx_path` of this :class:`Values`/:class:`Records` instance.
 
         :param idx_path:    index path items.
@@ -640,9 +641,11 @@ class Values(list):                     # type: List[Union[Value, Record]]
         idx, *idx2 = idx_path
         return self[idx].value(*idx2, system=system, direction=direction, **kwargs)
 
-    def set_value(self, value: ValueType, *idx_path: IdxItemType, system: str = '', direction: str = '',
+    def set_value(self, value: ValueType, *idx_path: IdxItemType,
+                  system: AspectKeyType = '', direction: AspectKeyType = '',
                   protect: bool = False, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
-                  use_curr_idx: list = None) -> Union['Values', 'Records']:
+                  use_curr_idx: list = None
+                  ) -> Union['Values', 'Records']:
         """ set the ValueType instance referenced by `idx_path` of this :class:`Values`/:class:`Records` instance.
 
         :param value:           ValueType instance to set/change.
@@ -671,7 +674,8 @@ class Values(list):                     # type: List[Union[Value, Record]]
             self[idx] = value
         return self
 
-    def val(self, *idx_path: IdxItemType, system: str = '', direction: str = '', flex_sys_dir: bool = True,
+    def val(self, *idx_path: IdxItemType,
+            system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True,
             use_curr_idx: list = None, **kwargs) -> Any:
         """ determine the user/system value referenced by `idx_path` of this :class:`Values`/:class:`Records` instance.
 
@@ -719,8 +723,8 @@ class Values(list):                     # type: List[Union[Value, Record]]
             self[idx] = value
         return self
 
-    def copy(self, deepness: int = 0, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (), **kwargs) \
-            -> Union['Values', 'Records']:
+    def copy(self, deepness: int = 0, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (), **kwargs
+             ) -> Union['Values', 'Records']:
         """ copy the values/records of this :class:`Values`/:class:`Records` instance.
 
         :param deepness:        deep copy levels: <0==see deeper(), 0==only copy current instance, >0==deep copy
@@ -737,8 +741,9 @@ class Values(list):                     # type: List[Union[Value, Record]]
             ret.append(rec)
         return ret
 
-    def clear_leafs(self, system: str = '', direction: str = '', flex_sys_dir: bool = True, reset_lists: bool = True) \
-            -> Union['Values', 'Records']:
+    def clear_leafs(self, system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True,
+                    reset_lists: bool = True
+                    ) -> Union['Values', 'Records']:
         """ clear/reset the user/system values of all the leafs of this :class:`Values`/:class:`Records` instance.
 
         :param system:          system id.
@@ -767,7 +772,7 @@ class Record(OrderedDict):
     question at https://stackoverflow.com/questions/3387691/how-to-perfectly-override-a-dict/47361653#47361653.
     """
     def __init__(self, template: Optional['Records'] = None, fields: Optional[dict] = None,
-                 system: str = '', direction: str = '', action: str = '',
+                 system: AspectKeyType = '', direction: AspectKeyType = '', action: str = '',
                  root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
                  field_items: bool = False):
         """ Create new Record instance, which is an ordered collection of _Field items.
@@ -884,7 +889,8 @@ class Record(OrderedDict):
 
         return field
 
-    def set_node_child(self, fld_or_val: Any, *idx_path: IdxItemType, system: str = None, direction: str = None,
+    def set_node_child(self, fld_or_val: Any, *idx_path: IdxItemType,
+                       system: AspectKeyType = None, direction: AspectKeyType = None,
                        protect: bool = False, root_rec: Optional['Record'] = None, root_idx: Optional[IdxPathType] = (),
                        use_curr_idx: Optional[list] = None, to_value_type: bool = False) -> 'Record':
         """ set/replace the child of the node specified by `idx_path` with the value of `fld_or_val`.
@@ -903,7 +909,7 @@ class Record(OrderedDict):
         idx_len = len(idx_path)
         assert idx_len, "Record.set_node_child() expect 2 or more args - missing field name/-path"
         assert isinstance(idx_path[0], str), \
-            "First item of Record idx_path '{}', specifying the field name, has to be of type string but is {}"\
+            "First item of Record idx_path '{}', specifying the field name, has to be of type string but is {}" \
             .format(idx_path, type(idx_path[0]))
         if idx_len == 1:
             nam_path = field_name_idx_path(idx_path[0])
@@ -959,7 +965,8 @@ class Record(OrderedDict):
 
         return self
 
-    def value(self, *idx_path: IdxItemType, system: str = None, direction: str = None, **kwargs) -> Optional[ValueType]:
+    def value(self, *idx_path: IdxItemType, system: AspectKeyType = None, direction: AspectKeyType = None, **kwargs
+              ) -> Optional[ValueType]:
         """ search the Value specified by `idx_path` and return it if found.
 
         :param idx_path:    index path of Value.
@@ -978,7 +985,8 @@ class Record(OrderedDict):
         if field:
             return field.value(*idx2, system=system, direction=direction, **kwargs)
 
-    def set_value(self, value: ValueType, *idx_path: IdxItemType, system: str = None, direction: str = None,
+    def set_value(self, value: ValueType, *idx_path: IdxItemType,
+                  system: AspectKeyType = None, direction: AspectKeyType = None,
                   protect: bool = False, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
                   use_curr_idx: Optional[list] = None) -> 'Record':
         """ set/replace the Value instance of the node specified by `idx_path`.
@@ -1002,7 +1010,8 @@ class Record(OrderedDict):
                         root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
         return self
 
-    def val(self, *idx_path: IdxItemType, system: str = None, direction: str = None, flex_sys_dir: bool = True,
+    def val(self, *idx_path: IdxItemType,
+            system: AspectKeyType = None, direction: AspectKeyType = None, flex_sys_dir: bool = True,
             use_curr_idx: Optional[list] = None, **kwargs) -> Any:
         """ determine the user/system value referenced by `idx_path` of this :class:`Record` instance.
 
@@ -1034,11 +1043,12 @@ class Record(OrderedDict):
                 val = None
         return val
 
-    def set_val(self, val: Any, *idx_path: IdxItemType, system: str = None, direction: str = None,
+    def set_val(self, val: Any, *idx_path: IdxItemType, system: AspectKeyType = None, direction: AspectKeyType = None,
                 flex_sys_dir: bool = True, protect: bool = False, extend: bool = True,
                 converter: Optional[FieldValCallable] = None,
                 root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
-                use_curr_idx: Optional[list] = None, to_value_type: bool = False) -> 'Record':
+                use_curr_idx: Optional[list] = None, to_value_type: bool = False
+                ) -> 'Record':
         """ set the user/system value referenced by `idx_path` of this :class:`Record` instance.
 
         :param val:             user/system value to be set/replaced.
@@ -1125,7 +1135,8 @@ class Record(OrderedDict):
         return self
 
     def add_system_fields(self, system_fields: Iterable[Iterable[Any]], sys_fld_indexes: Dict = None,
-                          system: str = None, direction: str = None, extend: bool = True) -> 'Record':
+                          system: AspectKeyType = None, direction: AspectKeyType = None, extend: bool = True
+                          ) -> 'Record':
         """ add/set fields to this :class:`Record` instance from the field definition passed into `system_fields`.
 
         Make sure before you call this method that this :class:`Record` instance has the system and direction
@@ -1258,7 +1269,7 @@ class Record(OrderedDict):
     def compare_leafs(self, rec: 'Record', field_names: Iterable = (), exclude_fields: Iterable = ()) -> List[str]:
         """ compare the leaf 'compare' values of this :class:`Record` instance with the one passed into `rec`.
 
-        'Compare values' are simplified user/system values generated by :func:`Record.compare_val`.
+        'Compare values' are simplified user/system values generated by :meth:`Record.compare_val`.
 
         :param rec:             other :class:`Record` instance to compare to.
         :param field_names:     field names to include in compare; pass empty tuple (==default) to include all fields.
@@ -1376,7 +1387,8 @@ class Record(OrderedDict):
 
         return onto_rec
 
-    def clear_leafs(self, system: str = '', direction: str = '', flex_sys_dir: bool = True, reset_lists: bool = True
+    def clear_leafs(self, system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True,
+                    reset_lists: bool = True
                     ) -> 'Record':
         """ clear the leaf values including this :class:`Record` instance and all deeper data structures.
 
@@ -1391,8 +1403,8 @@ class Record(OrderedDict):
             field.clear_leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir, reset_lists=reset_lists)
         return self
 
-    def leafs(self, system: str = None, direction: str = None, flex_sys_dir: bool = True) \
-            -> Generator['_Field', None, None]:
+    def leafs(self, system: AspectKeyType = None, direction: AspectKeyType = None, flex_sys_dir: bool = True
+              ) -> Generator['_Field', None, None]:
         """ generate leafs/_Field-instances of this :class:`Record` instance.
 
         :param system:          system id (pass None to use default system id of this `Record` instance).
@@ -1405,7 +1417,7 @@ class Record(OrderedDict):
             field = self._fields.get(idx)
             yield from field.leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def leaf_indexes(self, *idx_path: IdxItemType, system: str = None, direction: str = None,
+    def leaf_indexes(self, *idx_path: IdxItemType, system: AspectKeyType = None, direction: AspectKeyType = None,
                      flex_sys_dir: bool = True) -> Generator[IdxPathType, None, None]:
         """ generate leaf-/_Field-index paths for all fields of this :class:`Record` instance.
 
@@ -1421,7 +1433,8 @@ class Record(OrderedDict):
             fld_idx = idx_path + (idx, )
             yield from field.leaf_indexes(*fld_idx, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def leaf_names(self, system: str = '', direction: str = '', col_names: Iterable = (), field_names: Iterable = (),
+    def leaf_names(self, system: AspectKeyType = '', direction: AspectKeyType = '',
+                   col_names: Iterable = (), field_names: Iterable = (),
                    exclude_fields: Iterable = (), name_type: Optional[str] = None) -> Tuple[IdxTypes, ...]:
         """ compile a tuple of name types (specified by `name_type`) for this :class:`Record` instance.
 
@@ -1476,7 +1489,8 @@ class Record(OrderedDict):
 
         return tuple(names)
 
-    def merge_leafs(self, rec: 'Record', system: str = '', direction: str = '', flex_sys_dir: bool = True,
+    def merge_leafs(self, rec: 'Record',
+                    system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True,
                     extend: bool = True) -> 'Record':
         """ merge the leafs of the other record in `rec` into this :class:`Record` instance.
 
@@ -1506,7 +1520,8 @@ class Record(OrderedDict):
         """
         return tuple([self.val(fn) for fn in match_fields])
 
-    def merge_vals(self, rec: 'Record', system: str = '', direction: str = '', flex_sys_dir: bool = True,
+    def merge_vals(self, rec: 'Record',
+                   system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True,
                    extend: bool = True) -> 'Record':
         """ merge user/system values of the other record in `rec` into this :class:`Record` instance.
 
@@ -1553,7 +1568,7 @@ class Record(OrderedDict):
             super().__delitem__(idx)
         return field
 
-    def pull(self, from_system: str) -> 'Record':
+    def pull(self, from_system: AspectKeyType) -> 'Record':
         """ pull all user/system values and convert them into field values.
 
         :param from_system:     system id of the system to pull from.
@@ -1568,7 +1583,7 @@ class Record(OrderedDict):
             field.pull(from_system, self, idx_path)
         return self
 
-    def push(self, onto_system: str) -> 'Record':
+    def push(self, onto_system: AspectKeyType) -> 'Record':
         """ push field values of this :class:`Record` instance to the related user/system values (converted).
 
         :param onto_system:     system id of the system to push to.
@@ -1601,7 +1616,7 @@ class Record(OrderedDict):
                         set_current_index(value, idx=idx_val, add=idx_add)
                         return self
 
-    def set_env(self, system: str = None, direction: str = None, action: str = None,
+    def set_env(self, system: AspectKeyType = None, direction: AspectKeyType = None, action: str = None,
                 root_rec: Optional['Record'] = None, root_idx: IdxPathType = ()) -> 'Record':
         """ set the environment (system/direction/action) of this :class:`Record` instance.
 
@@ -1629,7 +1644,7 @@ class Record(OrderedDict):
 
         return self
 
-    def sql_columns(self, from_system: str, col_names: Iterable = ()) -> List[str]:
+    def sql_columns(self, from_system: AspectKeyType, col_names: Iterable = ()) -> List[str]:
         """ return list of sql column names for given system.
 
         :param from_system: system from which the data will be selected/fetched.
@@ -1645,7 +1660,7 @@ class Record(OrderedDict):
                     column_names.append(name)
         return column_names
 
-    def sql_select(self, from_system: str, col_names: Iterable = ()) -> List[str]:
+    def sql_select(self, from_system: AspectKeyType, col_names: Iterable = ()) -> List[str]:
         """ return list of sql column names/expressions for given system.
 
         :param from_system: system from which the data will be selected/fetched.
@@ -1668,7 +1683,7 @@ class Record(OrderedDict):
                 key_type: Union[Type[str], Type[tuple], Type[type(None)]] = str,
                 push_onto: bool = True,
                 use_system_key: bool = True, put_system_val: bool = True, put_empty_val: bool = False,
-                system: str = None, direction: str = None) -> Dict[IdxTypes, Any]:
+                system: AspectKeyType = None, direction: AspectKeyType = None) -> Dict[IdxTypes, Any]:
         """ copy Record leaf values into a dict.
 
         :param filter_fields:   callable returning True for each field that need to be excluded in returned dict, pass
@@ -1725,7 +1740,7 @@ class Records(Values):              # type: List[Record]
     Each instance of this :class:`Records` class is a list of 0..n :class:`Record` instances.
 
     The not overwritten methods of the inherited :class:`Values` class are also available - like e.g.
-    :func:`Values.node_child` or :func:`Values.val`.
+    :meth:`Values.node_child` or :meth:`Values.val`.
     """
     def __init__(self, seq: Iterable = ()):
         """ create new :class:`Records` instance.
@@ -1752,7 +1767,8 @@ class Records(Values):              # type: List[Record]
             idx_path = field_name_idx_path(key, return_root_fields=True)
             self.set_node_child(value, *idx_path)
 
-    def set_node_child(self, rec_or_fld_or_val, *idx_path: IdxItemType, system: str = '', direction: str = '',
+    def set_node_child(self, rec_or_fld_or_val, *idx_path: IdxItemType,
+                       system: AspectKeyType = '', direction: AspectKeyType = '',
                        protect: bool = False,
                        root_rec: Optional[Record] = None, root_idx: IdxPathType = (),
                        use_curr_idx: Optional[list] = None) -> 'Records':
@@ -1794,7 +1810,7 @@ class Records(Values):              # type: List[Record]
                                root_rec=root_rec, root_idx=root_idx, use_curr_idx=use_curr_idx)
         return self
 
-    def set_val(self, val: Any, *idx_path: IdxItemType, system: str = '', direction: str = '',
+    def set_val(self, val: Any, *idx_path: IdxItemType, system: AspectKeyType = '', direction: AspectKeyType = '',
                 flex_sys_dir: bool = True, protect: bool = False, extend: bool = True,
                 converter: Optional[FieldValCallable] = None,
                 root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
@@ -1921,7 +1937,7 @@ class Records(Values):              # type: List[Record]
                 self.match_index[match_key] = [self[idx]]
         return self
 
-    def leafs(self, system: str = '', direction: str = '', flex_sys_dir: bool = True
+    def leafs(self, system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True
               ) -> Generator['_Field', None, None]:
         """ generate leafs/_Field-instances of this :class:`Records` instance.
 
@@ -1933,7 +1949,7 @@ class Records(Values):              # type: List[Record]
         for rec in self:
             yield from rec.leafs(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def leaf_indexes(self, *idx_path: IdxItemType, system: str = '', direction: str = '',
+    def leaf_indexes(self, *idx_path: IdxItemType, system: AspectKeyType = '', direction: AspectKeyType = '',
                      flex_sys_dir: bool = True) -> Generator[IdxPathType, None, None]:
         """ generate leaf-/_Field-index paths for all fields of this :class:`Records` instance.
 
@@ -1968,9 +1984,9 @@ class Records(Values):              # type: List[Record]
                     self.append(rec)
         return self
 
-    def set_env(self, system: str = '', direction: str = '',
+    def set_env(self, system: AspectKeyType = '', direction: AspectKeyType = '',
                 root_rec: Optional[Record] = None, root_idx: IdxPathType = ()) -> 'Records':
-        """ set the environment (system/direction/action) of each record of this :class:`Records` instance.
+        """ set the environment (system/direction/action) of each record underneath this :class:`Records` instance.
 
         :param system:          system id (pass None to leave unchanged).
         :param direction:       direction id (pass None to leave unchanged).
@@ -1989,7 +2005,7 @@ class _Field:
     """ Internal/Private class used by :class:`Record` for to create record field instances.
 
     An instance of :class:`_Field` is representing one record field. The field properties are internally stored
-    within a private dict (:ivar:'_Field._aspects) and are called the 'aspects' of a field.
+    within a private dict (:data:'_Field._aspects) and are called the 'aspects' of a field.
 
     Field aspects get used by a field instance e.g. for to:
     * store field value(s)
@@ -1997,12 +2013,12 @@ class _Field:
     * associate the root record and root index
     * store any other user-defined field properties (like SQL column expressions, comments, ...)
 
-    The :var:`FAT_ALL` constant contains all pre-defined aspects (see the other FAT_* constants defined at the
+    The :data:`FAT_ALL` constant contains all pre-defined aspects (see the other FAT_* constants defined at the
     top of this module). These values are called 'aspect keys' and are used as dict keys in the private dict.
 
     Each aspect can additionally have a separate property for each systems/directions - in this case the aspect
     key gets extended with direction/system ids. The two available direction ids are pre-defined by the constants
-    :var:`FAD_FROM` and :var:`FAD_ONTO`. The system ids are not defined in this module, they have to be defined
+    :data:`FAD_FROM` and :data:`FAD_ONTO`. The system ids are not defined in this module, they have to be defined
     by the application. Aspect keys can be compiled with the function :func:`aspect_key`.
     """
     def __init__(self, root_rec: Optional[Record] = None, root_idx: IdxPathType = (), allow_values: bool = False,
@@ -2084,7 +2100,8 @@ class _Field:
 
         return value.node_child(idx_path, use_curr_idx=use_curr_idx, moan=moan, selected_sys_dir=selected_sys_dir)
 
-    def value(self, *idx_path: IdxItemType, system: str = '', direction: str = '', flex_sys_dir: bool = False
+    def value(self, *idx_path: IdxItemType,
+              system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = False
               ) -> Optional[ValueType]:
         """ search the Value specified by `idx_path` and return it if found.
 
@@ -2104,13 +2121,14 @@ class _Field:
             else:
                 value = val_or_cal
         assert not flex_sys_dir and value is None or isinstance(value, VALUE_TYPES), \
-            "_Field.value({}, {}, {}, {}): value '{}'/'{}' has to be of type {}"\
+            "_Field.value({}, {}, {}, {}): value '{}'/'{}' has to be of type {}" \
             .format(idx_path, system, direction, flex_sys_dir, val_or_cal, value, VALUE_TYPES)
         if value and len(idx_path) > 0:
             value = value.value(*idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         return value
 
-    def set_value(self, value: ValueType, *idx_path: IdxItemType, system: str = '', direction: str = '',
+    def set_value(self, value: ValueType, *idx_path: IdxItemType,
+                  system: AspectKeyType = '', direction: AspectKeyType = '',
                   protect: bool = False, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
                   use_curr_idx: Optional[list] = None) -> '_Field':
         """ set/replace the Value instance of the node specified by `idx_path`.
@@ -2152,7 +2170,8 @@ class _Field:
 
         return self
 
-    def val(self, *idx_path: IdxItemType, system: str = '', direction: str = '', flex_sys_dir: bool = True,
+    def val(self, *idx_path: IdxItemType,
+            system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True,
             use_curr_idx: Optional[list] = None, **kwargs) -> Any:
         """ determine the user/system value referenced by `idx_path`.
 
@@ -2168,7 +2187,7 @@ class _Field:
         return value.val(*idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir,
                          use_curr_idx=use_curr_idx, **kwargs)
 
-    def set_val(self, val: Any, *idx_path: IdxItemType, system: str = '', direction: str = '',
+    def set_val(self, val: Any, *idx_path: IdxItemType, system: AspectKeyType = '', direction: AspectKeyType = '',
                 flex_sys_dir: bool = True, protect: bool = False, extend: bool = True,
                 converter: Optional[FieldValCallable] = None,
                 root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
@@ -2230,14 +2249,15 @@ class _Field:
                       use_curr_idx=use_curr_idx)
         return self
 
-    def leaf_value(self, system: str = '', direction: str = '', flex_sys_dir: bool = False) -> ValueType:
+    def leaf_value(self, system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = False
+                   ) -> ValueType:
         """ determine the leaf value of this field (and optionally system/direction).
 
         :param system:          system id ('' stands for the main/system-independent value).
         :param direction:       direction id ('' stands for the main/system-independent value).
         :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
         :return:                the main or user/system value of this leaf/field or None if deeper value
-                                exists and `flex_sys_dir is False.
+                                exists and `flex_sys_dir` is False.
 
         Used also for to check if a deeper located sys field exists in the current data structure.
         """
@@ -2247,9 +2267,9 @@ class _Field:
             value = None
         return value
 
-    def leafs(self, system: str = '', direction: str = '', flex_sys_dir: bool = True
+    def leafs(self, system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True
               ) -> Generator['_Field', None, None]:
-        """ generate leafs/_Field-instances of this :class:`_Field` instance.
+        """ generate all sub-leafs/_Field-instances underneath this :class:`_Field` instance.
 
         :param system:          system id ('' stands for the main/system-independent value).
         :param direction:       direction id ('' stands for the main/system-independent value).
@@ -2262,14 +2282,38 @@ class _Field:
         elif value is not None:
             yield self
 
-    def leaf_indexes(self, *idx_path, system='', direction='', flex_sys_dir=True):
+    def leaf_indexes(self, *idx_path: IdxItemType, system: AspectKeyType = '', direction: AspectKeyType = '',
+                     flex_sys_dir: bool = True) -> Generator[IdxPathType, None, None]:
+        """ generate leaf-/_Field-index paths for all sub-fields underneath (if exist) or this :class:`_Field` instance.
+
+        :param idx_path:        index path to this `_Field` instance.
+        :param system:          system id ('' stands for the main/system-independent value).
+        :param direction:       direction id ('' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :return:                leaf/_Field-instance generator.
+        """
         value = self.leaf_value(system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         if isinstance(value, NODE_TYPES):
             yield from value.leaf_indexes(*idx_path, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         elif value is not None:
             yield idx_path
 
-    def find_aspect_key(self, *aspect_types, system='', direction=''):
+    def find_aspect_key(self, *aspect_types: AspectKeyType, system: AspectKeyType = '', direction: AspectKeyType = ''
+                        ) -> Optional[AspectKeyType]:
+        """ search for the passed `aspect_types` in this :class:`_Field` instance.
+
+        :param aspect_types:    aspect types (dict key prefixes) to search for.
+        :param system:          system id ('' stands for the main/system-independent value).
+        :param direction:       direction id ('' stands for the main/system-independent value).
+        :return:                the full aspect key of the first found aspect that is matching the
+                                passed aspect type and optionally also the passed system and direction ids.
+
+        The search will done in the following order:
+        * all passed aspect types including the passed system/direction ids.
+        * all passed aspect types including the passed system and both directions (if direction id get not passed).
+        * all passed aspect types including the passed system and without direction id.
+        * all passed aspect types without system and direction ids.
+        """
         keys = list()
         if direction and system:
             for aspect_type in aspect_types:
@@ -2293,7 +2337,16 @@ class _Field:
 
         return None
 
-    def set_env(self, system='', direction='', root_rec=None, root_idx=None):
+    def set_env(self, system: AspectKeyType = '', direction: AspectKeyType = '',
+                root_rec: Record = None, root_idx: IdxPathType = ()) -> '_Field':
+        """ set the environment (system/direction/action) of each record underneath this :class:`Records` instance.
+
+        :param system:          system id (pass None to leave unchanged).
+        :param direction:       direction id (pass None to leave unchanged).
+        :param root_rec:        root Record instance of this data structure.
+        :param root_idx:        root index to this node/Record instance.
+        :return:                self (this :class:`_Field` instance).
+        """
         # we cannot use self.value() for calculator fields because the rec structure might not be complete
         # value = self.value(system=system, direction=direction, flex_sys_dir=True)
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=True)
@@ -2303,7 +2356,16 @@ class _Field:
             self.set_system_root_rec_idx(system=system, direction=direction, root_rec=root_rec, root_idx=root_idx)
         return self
 
-    def set_system_root_rec_idx(self, system=None, direction=None, root_rec=None, root_idx=None):
+    def set_system_root_rec_idx(self, system: AspectKeyType = None, direction: AspectKeyType = None,
+                                root_rec: Record = None, root_idx: IdxPathType = None) -> '_Field':
+        """ set the root record and index of the data structure where this :class:`_Field` instance is included.
+
+        :param system:          system id (pass None to leave unchanged).
+        :param direction:       direction id (pass None to leave unchanged).
+        :param root_rec:        new root Record instance of this data structure (pass None to leave unchanged).
+        :param root_idx:        root index to this node/Record instance (pass None to determine).
+        :return:                self (this :class:`_Field` instance).
+        """
         root_rec, root_idx = use_rec_default_root_rec_idx(self.root_rec(), root_rec,
                                                           idx=self.root_idx(), root_idx=root_idx,
                                                           met="_Field.set_system_root_rec")
@@ -2319,6 +2381,9 @@ class _Field:
                 self.set_root_idx(root_idx)
 
         return self
+
+    """ aspect specific methods
+    """
 
     def aspect_exists(self, *aspect_types, system='', direction='', flex_sys_dir=False):
         if flex_sys_dir:
@@ -2366,7 +2431,7 @@ class _Field:
     def set_aspects(self, allow_values=False, **aspects):
         for key, data in aspects.items():
             if key.endswith(CALLABLE_SUFFIX):
-                assert callable(data), "_Field.set_aspects() expects callable for aspect {} with the {}-suffix"\
+                assert callable(data), "_Field.set_aspects() expects callable for aspect {} with the {}-suffix" \
                     .format(key, CALLABLE_SUFFIX)
                 key = key[:-len(CALLABLE_SUFFIX)]
                 data = data(self)
