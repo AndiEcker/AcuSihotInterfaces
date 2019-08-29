@@ -1,4 +1,6 @@
 # TODO: remove " or out == ''" as soon as capsys bug is fixed
+from typing import cast
+
 import pytest
 
 import sys
@@ -88,8 +90,11 @@ class TestInternalLogging:
         sys.argv = []
         file_name_chk = cae.get_option('logFile')   # get_option() has to be called at least once for to create log file
         assert file_name_chk == log_file
+
+    def test_exception_log_file_flush(self):
+        cae = ConsoleApp('0.0', 'test_exception_log_file_flush')
         # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-file object
-        cae._append_eof_and_flush_file(cae, 'invalid stream file object')
+        cae._append_eof_and_flush_file(cast('TextIO', None), 'invalid stream file object')
 
 
 class TestPythonLogging:
@@ -757,40 +762,39 @@ class TestDuplicateSysOut:
 
     def test_write(self):
         lfn = 'log_file.log'
-        lfo = open(lfn, 'w')
-        dso = _DuplicateSysOut(lfo)
-        msg = 'test_message'
-        dso.write(msg)
-        lfo.close()
-        with open(lfn) as f:
-            assert f.read() == msg
+        try:
+            lfo = open(lfn, 'w')
+            dso = _DuplicateSysOut(lfo)
+            msg = 'test_message'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn) as f:
+                assert f.read() == msg
 
-        lfn = 'log_file.log'
-        lfo = open(lfn, 'w', encoding='utf-8')
-        dso = _DuplicateSysOut(lfo)
-        msg = chr(40960) + chr(1972)
-        dso.write(msg)
-        lfo.close()
-        with open(lfn, encoding='utf-8') as f:
-            assert f.read() == msg
+            lfo = open(lfn, 'w', encoding='utf-8')
+            dso = _DuplicateSysOut(lfo)
+            msg = chr(40960) + chr(1972)
+            dso.write(msg)
+            lfo.close()
+            with open(lfn, encoding='utf-8') as f:
+                assert f.read() == msg
 
-        lfn = 'log_file.log'
-        lfo = open(lfn, 'w')
-        dso = _DuplicateSysOut(lfo)
-        msg = chr(40960) + chr(1972)
-        dso.write(msg)
-        lfo.close()
-        with open(lfn) as f:
-            assert f.read() == '\\ua000\\u07b4'
+            lfo = open(lfn, 'w', encoding='ascii')
+            dso = _DuplicateSysOut(lfo)
+            msg = chr(40960) + chr(1972)
+            dso.write(msg)
+            lfo.close()
+            with open(lfn, encoding='ascii') as f:
+                assert f.read() == '\\ua000\\u07b4'
 
-        lfn = 'log_file.log'
-        lfo = open(lfn, 'w', encoding='ascii')
-        dso = _DuplicateSysOut(lfo)
-        msg = chr(40960) + chr(1972)
-        dso.write(msg)
-        lfo.close()
-        with open(lfn, encoding='ascii') as f:
-            assert f.read() == '\\ua000\\u07b4'
+            lfo = open(lfn, 'w')
+            dso = _DuplicateSysOut(lfo)
+            msg = chr(40960) + chr(1972)
+            dso.write(msg)
+            lfo.close()
+            with open(lfn) as f:
+                assert f.read() == '\\ua000\\u07b4'
 
-        assert os.path.exists(lfn)
-        os.remove(lfn)
+        finally:
+            if os.path.exists(lfn):
+                os.remove(lfn)
