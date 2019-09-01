@@ -29,7 +29,7 @@ from sys_data_ids import (FORE_SURNAME_SEP,
                           SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES,
                           SDI_ACU)
-from ae import DEBUG_LEVEL_VERBOSE, full_stack_trace, force_encoding
+from ae.core import DEBUG_LEVEL_VERBOSE, force_encoding, full_stack_trace
 from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
 from ae_db.db import bind_var_prefix
 from ae.console_app import ConsoleApp

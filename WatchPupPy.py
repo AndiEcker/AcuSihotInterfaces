@@ -35,7 +35,7 @@ from configparser import ConfigParser
 # import pprint
 
 from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT)
-from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_TIME_ISO, full_stack_trace, \
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_TIME_ISO, full_stack_trace, \
     sys_env_text
 from ae.console_app import ConsoleApp, MAIN_SECTION_DEF
 from ae.progress import Progress

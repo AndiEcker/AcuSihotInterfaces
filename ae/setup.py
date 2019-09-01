@@ -12,7 +12,8 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/AndiEcker/aepy",
-    # ae uses only core libs, so not needed to put: packages=setuptools.find_packages(),
+    # packages=setuptools.find_packages(),
+    packages=setuptools.find_namespace_packages(include=['ae.*']),  # find all namespace packages
     classifiers=[
         "Development Status :: 1 - Planning",
         "Natural Language :: English",

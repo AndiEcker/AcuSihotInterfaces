@@ -11,9 +11,8 @@ import weakref
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter, Namespace
 
-from ae import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED,
-                DEBUG_LEVELS, LOGGING_LEVELS, DATE_TIME_ISO, DATE_ISO,
-                calling_module, sys_env_text, force_encoding, to_ascii)
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, \
+    DEBUG_LEVELS, LOGGING_LEVELS, DATE_TIME_ISO, DATE_ISO, calling_module, force_encoding, sys_env_text, to_ascii
 from ae.setting import Setting
 
 INI_EXT: str = '.ini'                   #: INI file extension

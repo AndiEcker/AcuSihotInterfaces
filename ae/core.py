@@ -1,18 +1,15 @@
+import inspect
+import logging
 import os
 import re
 import sys
-import inspect
-import logging
-from typing import AnyStr, Dict, List, Optional, Tuple
 import unicodedata
-
+from typing import Dict, List, Tuple, Optional, AnyStr, Pattern
 
 DEBUG_LEVEL_DISABLED: int = 0       #: lowest debug level - only display logging levels ERROR/CRITICAL.
 DEBUG_LEVEL_ENABLED: int = 1        #: minimum debugging info - display logging levels WARNING or higher.
 DEBUG_LEVEL_VERBOSE: int = 2        #: verbose debug info - display logging levels INFO/DEBUG or higher.
 DEBUG_LEVEL_TIMESTAMPED: int = 3    #: highest/verbose debug info - including timestamps in the log output.
-
-
 DEBUG_LEVELS: Dict[int, str] = {0: 'disabled', 1: 'enabled', 2: 'verbose', 3: 'timestamped'}    #: debug level names
 
 LOGGING_LEVELS: Dict[int, int] = {DEBUG_LEVEL_DISABLED: logging.ERROR, DEBUG_LEVEL_ENABLED: logging.WARNING,
@@ -44,12 +41,16 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
                               (0xDFFFE, 0xDFFFF), (0xEFFFE, 0xEFFFF),
                               (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
 
-ILLEGAL_XML_SUB = re.compile(u'[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
-""" pre-compiled regular expression for to find illegal unicode/XML characters in a string.
-"""
+
+def illegal_xml_sub() -> Pattern[str]:
+    """ generate pre-compiled regular expression for to find illegal unicode/XML characters in a string.
+
+    :return: re module compatible substitution expression for to detect illegal unicode chars.
+    """
+    return re.compile('[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))
 
 
-def calling_module(called_module: str = __name__, depth: int = 1) -> Optional[str]:
+def calling_module(called_module: Optional[str] = __name__, depth: int = 1) -> Optional[str]:
     """ determine/find the first stack frame that is *not* in the module specified by ``called_module``.
 
     :param called_module:   skipped module name; for normal usages pass here the module name from which this
@@ -125,7 +126,7 @@ def round_traditional(val: float, digits: int = 0) -> float:
 def sys_env_dict(file: str = __file__) -> dict:
     """ returns dict with python system run-time environment values.
 
-    :param file:    optional file name (def=__file__/ae.__init__.py).
+    :param file:    optional file name (def=__file__/ae.core.py).
     :return:        python system run-time environment values like python_ver, argv, cwd, executable, __file__, frozen
                     and bundle_dir.
     """

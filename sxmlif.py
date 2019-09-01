@@ -7,7 +7,7 @@ import re
 from xml.etree.ElementTree import XMLParser, ParseError
 
 from sys_data_ids import (SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING)
-from ae import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, round_traditional
+from ae.core import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, round_traditional
 from ae_tcp.tcp import TcpClient
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol

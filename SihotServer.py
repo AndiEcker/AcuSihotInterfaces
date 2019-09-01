@@ -47,7 +47,7 @@ sys.path.append(os.path.dirname(__file__))
 from bottle import default_app, request, response, static_file, template, run, makelist
 
 from sys_data_ids import SDI_SF, SDI_SH
-from ae import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE, field_name_idx_path
 from ae.console_app import ConsoleApp, uprint
 from sfif import field_from_converters

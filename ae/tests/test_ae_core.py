@@ -1,8 +1,9 @@
+from typing import cast
+
 import pytest
 import sys
-from ae import (calling_module, force_encoding, full_stack_trace, round_traditional, sys_env_dict, sys_env_text,
-                to_ascii,
-                ILLEGAL_XML_SUB)
+from ae.core import (illegal_xml_sub, calling_module, force_encoding, full_stack_trace, round_traditional,
+                     sys_env_dict, sys_env_text, to_ascii)
 
 
 class TestHelpers:
@@ -32,7 +33,7 @@ class TestHelpers:
         assert calling_module(called_module=__name__, depth=-2) == 'ae'
 
         assert calling_module(called_module=None, depth=-1) == 'ae'
-        assert calling_module(called_module=None, depth=None) is None
+        assert calling_module(called_module=None, depth=cast(int, None)) is None
 
     def test_force_encoding_umlaut(self):
         s = 'äöü'
@@ -48,7 +49,7 @@ class TestHelpers:
         assert force_encoding(s, encoding='utf-8', errors='') == s
 
         with pytest.raises(TypeError):
-            assert force_encoding(s, encoding=None) == '\\xe4\\xf6\\xfc'
+            assert force_encoding(s, encoding=cast(str, None)) == '\\xe4\\xf6\\xfc'
 
     def test_force_encoding_bytes(self):
         s = 'äöü'
@@ -103,5 +104,5 @@ class TestIllegalXmlChars:
     def test_xml_char1(self):
         illegal_char = chr(1)       # '&#1;'
         xml = "test xml string with " + illegal_char + " character"
-        test_xml = ILLEGAL_XML_SUB.sub('_', xml)
+        test_xml = illegal_xml_sub.sub('_', xml)
         assert test_xml == xml.replace(illegal_char, '_')

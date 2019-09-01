@@ -13,8 +13,7 @@ import threading
 
 from argparse import ArgumentError
 
-
-from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO
 from ae.console_app import (
     uprint, app_instances, main_app_instance, ConsoleApp, _DuplicateSysOut, MAX_NUM_LOG_FILES, INI_EXT)
 

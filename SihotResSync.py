@@ -19,7 +19,7 @@ import datetime
 from sys_data_ids import (SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDI_ACU)
 from ae.console_app import ConsoleApp
-from ae import DATE_TIME_ISO, full_stack_trace
+from ae.core import DATE_TIME_ISO, full_stack_trace
 from ae.progress import Progress
 from ae_notification.notification import add_notification_options, init_notification
 from ae.sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE

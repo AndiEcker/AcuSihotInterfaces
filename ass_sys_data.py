@@ -8,7 +8,7 @@ from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
                           SDF_SF_SANDBOX, ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS, SYS_CRED_ITEMS,
                           SYS_CRED_NEEDED, SYS_FEAT_ITEMS)
-from ae import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_ISO
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_ISO
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.systems import UsedSystems
 from ae_validation.validation import correct_email, correct_phone

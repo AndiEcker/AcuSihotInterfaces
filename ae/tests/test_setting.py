@@ -1,7 +1,7 @@
 import pytest
 import datetime
 
-from ae import DATE_ISO, DATE_TIME_ISO
+from ae.core import DATE_TIME_ISO, DATE_ISO
 from ae.setting import Setting
 
 

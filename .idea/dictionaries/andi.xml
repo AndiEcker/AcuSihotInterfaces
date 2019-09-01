@@ -1,6 +1,7 @@
 <component name="ProjectDictionaryState">
   <dictionary name="andi">
     <words>
+      <w>aepy</w>
       <w>argparse</w>
       <w>autodoc</w>
       <w>automodule</w>
@@ -14,6 +15,7 @@
       <w>minlen</w>
       <w>modindex</w>
       <w>penwidth</w>
+      <w>pluggy</w>
       <w>quickstart</w>
       <w>toctree</w>
       <w>typehints</w>

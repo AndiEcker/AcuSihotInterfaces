@@ -20,7 +20,7 @@ from functools import partial
 from traceback import print_exc
 
 from sys_data_ids import SDF_SH_CLIENT_PORT, SDI_ACU
-from ae import DEBUG_LEVEL_VERBOSE
+from ae.core import DEBUG_LEVEL_VERBOSE
 from ae.console_app import ConsoleApp
 from sxmlif import PostMessage, ConfigDict, CatRooms
 from acif import AcumenRes, AcuServer

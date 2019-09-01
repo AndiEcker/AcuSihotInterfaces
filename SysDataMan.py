@@ -15,7 +15,7 @@ from traceback import format_exc
 
 from sys_data_ids import (ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES,
                           parse_system_option_args, strip_system_rec_type)
-from ae import DEBUG_LEVEL_VERBOSE
+from ae.core import DEBUG_LEVEL_VERBOSE
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console_app import ConsoleApp
 from ae_db.db import PostgresDB
