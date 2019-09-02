@@ -493,6 +493,13 @@ class Value(list):
         """
         return "Value([" + ",".join(repr(v) for v in self) + "])"
 
+    def __str__(self) -> str:
+        """ string representation of this :class:`Value` instance.
+
+        :return: Value string.
+        """
+        return "Value([" + ",".join(repr(v) for v in self) + "])"
+
     @property
     def initialized(self):
         """ flag if this :class:`Value` instance got already initialized.
@@ -584,6 +591,9 @@ class Values(list):                     # type: List[Union[Value, Record]]
 
     def __repr__(self) -> str:
         return ("Records" if isinstance(self, Records) else "Values") + "([" + ",".join(repr(v) for v in self) + "])"
+
+    def __str__(self) -> str:
+        return ("Records" if isinstance(self, Records) else "Values") + "([" + ",".join(str(v) for v in self) + "])"
 
     def node_child(self, idx_path: IdxPathType, use_curr_idx: list = None, moan: bool = False,
                    selected_sys_dir: Optional[dict] = None) -> Optional[Union[Value, 'Record']]:
@@ -812,7 +822,8 @@ class Record(OrderedDict):
         self.collected_system_fields = list()   # system fields found by collect_system_fields()
 
     def __repr__(self) -> str:
-        return "Record({})".format(", ".join(repr(self._fields.val(*k)) for k in self.leaf_indexes()))
+        return "Record(fields={}".format(", ".join(repr(idx_path_field_name(k)) + ": " + repr(self._fields.val(*k))
+                                         for k in self.leaf_indexes()))
 
     def __str__(self) -> str:
         return "Record({})".format(", ".join(k for k in self.keys()))

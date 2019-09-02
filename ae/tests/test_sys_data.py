@@ -647,10 +647,15 @@ class TestRecord:
         assert r.get('tsf') is None
 
     def test_unpacking(self):
-        r = Record(fields=dict(testA='', testB=''))
+        r = Record(fields=dict(testA='', testB=33))
         print(r)
-        d = dict(**r)
-        assert d == r
+        d = OrderedDict(**r)
+        for k, v in d.items():
+            assert k in r
+            assert r[k] == v
+        for k, v in r.items():
+            assert k in d
+            assert d[k] == v.val()
 
     def test_set_val_basics(self):
         r = Record()

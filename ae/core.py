@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import unicodedata
+from functools import lru_cache
 from typing import Dict, List, Tuple, Optional, AnyStr, Pattern
 
 DEBUG_LEVEL_DISABLED: int = 0       #: lowest debug level - only display logging levels ERROR/CRITICAL.
@@ -42,6 +43,7 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
                               (0xFFFFE, 0xFFFFF), (0x10FFFE, 0x10FFFF)])
 
 
+@lru_cache(maxsize=1)
 def illegal_xml_sub() -> Pattern[str]:
     """ generate pre-compiled regular expression for to find illegal unicode/XML characters in a string.
 
@@ -142,7 +144,7 @@ def sys_env_dict(file: str = __file__) -> dict:
     return sed
 
 
-def sys_env_text(file: str = __file__, ind_ch: str = " ", ind_len: int = 18, key_ch: str = " =", key_len: int = 12,
+def sys_env_text(file: str = __file__, ind_ch: str = " ", ind_len: int = 18, key_ch: str = "=", key_len: int = 12,
                  extra_sys_env_dict: Optional[Dict[str, str]] = None) -> str:
     """ compile formatted text block with system environment info.
 
@@ -158,7 +160,7 @@ def sys_env_text(file: str = __file__, ind_ch: str = " ", ind_len: int = 18, key
     if extra_sys_env_dict:
         sed.update(extra_sys_env_dict)
     text = "\n".join(["{ind:{ind_ch}>{ind_len}}{key:{key_ch}<{key_len}}{val}"
-                     .format(ind="", ind_ch=ind_ch, ind_len=ind_len, key_ch=key_ch, key_len=key_len, key=k, val=v)
+                     .format(ind="", ind_ch=ind_ch, ind_len=ind_len, key=k, key_ch=key_ch, key_len=key_len, val=v)
                       for k, v in sed.items()])
     return text
 

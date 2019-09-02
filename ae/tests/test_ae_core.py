@@ -8,9 +8,9 @@ from ae.core import (illegal_xml_sub, calling_module, force_encoding, full_stack
 
 class TestHelpers:
     def test_calling_module(self):
-        assert calling_module() == 'test_ae'
-        assert calling_module('') == 'test_ae'
-        assert calling_module('xxx_test') == 'test_ae'
+        assert calling_module() == 'test_ae_core'
+        assert calling_module('') == 'test_ae_core'
+        assert calling_module('xxx_test') == 'test_ae_core'
         assert calling_module(called_module=__name__) == '_pytest.python'
         assert calling_module(called_module=__name__, depth=2) == '_pytest.python'
         assert calling_module(called_module=__name__, depth=3) == 'pluggy.callers'
@@ -28,11 +28,11 @@ class TestHelpers:
         assert calling_module(called_module=__name__, depth=15) == '_pytest.runner'
         assert calling_module(called_module=__name__, depth=16) == '_pytest.runner'
 
-        assert calling_module(called_module=__name__, depth=0) == 'ae'
-        assert calling_module(called_module=__name__, depth=-1) == 'ae'
-        assert calling_module(called_module=__name__, depth=-2) == 'ae'
+        assert calling_module(called_module=__name__, depth=0) == 'ae.core'
+        assert calling_module(called_module=__name__, depth=-1) == 'ae.core'
+        assert calling_module(called_module=__name__, depth=-2) == 'ae.core'
 
-        assert calling_module(called_module=None, depth=-1) == 'ae'
+        assert calling_module(called_module=None, depth=-1) == 'ae.core'
         assert calling_module(called_module=None, depth=cast(int, None)) is None
 
     def test_force_encoding_umlaut(self):
@@ -104,5 +104,5 @@ class TestIllegalXmlChars:
     def test_xml_char1(self):
         illegal_char = chr(1)       # '&#1;'
         xml = "test xml string with " + illegal_char + " character"
-        test_xml = illegal_xml_sub.sub('_', xml)
+        test_xml = illegal_xml_sub().sub('_', xml)
         assert test_xml == xml.replace(illegal_char, '_')

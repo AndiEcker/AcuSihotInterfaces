@@ -749,7 +749,7 @@ class TestDuplicateSysOut:
         os.remove(lfn)
 
     def test_flush_method_exists(self):
-        lfn = 'log_file.log'
+        lfn = 'ca_dub_sys_flush_test.txt'
         lfo = open(lfn, 'w')
         dso = _DuplicateSysOut(lfo)
         assert hasattr(dso, 'flush')
@@ -760,11 +760,11 @@ class TestDuplicateSysOut:
         os.remove(lfn)
 
     def test_write(self):
-        lfn = 'log_file.log'
+        lfn = 'ca_dup_sys_write_test.txt'
         try:
             lfo = open(lfn, 'w')
             dso = _DuplicateSysOut(lfo)
-            msg = 'test_message'
+            msg = 'test_ascii_message'
             dso.write(msg)
             lfo.close()
             with open(lfn) as f:
@@ -772,7 +772,7 @@ class TestDuplicateSysOut:
 
             lfo = open(lfn, 'w', encoding='utf-8')
             dso = _DuplicateSysOut(lfo)
-            msg = chr(40960) + chr(1972)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
             dso.write(msg)
             lfo.close()
             with open(lfn, encoding='utf-8') as f:
@@ -780,7 +780,7 @@ class TestDuplicateSysOut:
 
             lfo = open(lfn, 'w', encoding='ascii')
             dso = _DuplicateSysOut(lfo)
-            msg = chr(40960) + chr(1972)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
             dso.write(msg)
             lfo.close()
             with open(lfn, encoding='ascii') as f:
@@ -788,11 +788,14 @@ class TestDuplicateSysOut:
 
             lfo = open(lfn, 'w')
             dso = _DuplicateSysOut(lfo)
-            msg = chr(40960) + chr(1972)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
             dso.write(msg)
             lfo.close()
             with open(lfn) as f:
-                assert f.read() == '\\ua000\\u07b4'
+                if f.encoding == 'ascii':
+                    assert f.read() == '\\ua000\\u07b4'
+                else:
+                    assert f.read() == msg      # msg == '\ua000\u07b4'
 
         finally:
             if os.path.exists(lfn):
