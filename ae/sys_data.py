@@ -116,7 +116,7 @@ FieldCallable = Callable[['_Field'], bool]
 FieldValCallable = Callable[['_Field', Any], Any]
 
 
-def aspect_key(type_or_key: str, system: AspectKeyType = '', direction: AspectKeyType = '') -> str:
+def aspect_key(type_or_key: str, system: AspectKeyType = '', direction: AspectKeyType = '') -> AspectKeyType:
     """ compiles an aspect dict key from the given args
 
     :param type_or_key:     either FAT_* type or full key (including already the system and direction)-
@@ -1229,7 +1229,7 @@ class Record(OrderedDict):
                 elif map_len > sfi.get(FAT_CNV, map_len):
                     cnv_func = fas[sfi.pop(FAT_CNV)]
                 if cnv_func:
-                    field.set_converter(cnv_func, system=system, direction=direction, extend=True,
+                    field.set_converter(cnv_func, system=system, direction=direction, protect=False,
                                         root_rec=self, root_idx=idx_path)
                 # now add all other field aspects (allowing calculator function specified in FAT_VAL aspect)
                 for fa, fi in sfi.items():
@@ -2224,7 +2224,7 @@ class _Field:
 
         if idx_len == 0:
             if converter:   # create system value if converter is specified and on leaf idx_path item
-                self.set_converter(converter, system=system, direction=direction, extend=extend,
+                self.set_converter(converter, system=system, direction=direction, protect=not extend,
                                    root_rec=root_rec, root_idx=root_idx)
                 value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
@@ -2354,8 +2354,8 @@ class _Field:
 
         :param system:          system id (pass None to leave unchanged).
         :param direction:       direction id (pass None to leave unchanged).
-        :param root_rec:        root Record instance of this data structure.
-        :param root_idx:        root index to this node/Record instance.
+        :param root_rec:        root Record instance of this field, system and direction.
+        :param root_idx:        root index to this node/:class:`_Field` instance.
         :return:                self (this :class:`_Field` instance).
         """
         # we cannot use self.value() for calculator fields because the rec structure might not be complete
@@ -2396,7 +2396,19 @@ class _Field:
     """ aspect specific methods
     """
 
-    def aspect_exists(self, *aspect_types, system='', direction='', flex_sys_dir=False):
+    def aspect_exists(self, *aspect_types: AspectKeyType,
+                      system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = False
+                      ) -> AspectKeyType:
+        """ check if aspect exists and return full aspect key (including system/direction) if yes.
+
+        :param aspect_types:    aspect types (dict key prefixes) to search for.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :return:                the full aspect key of the first found aspect that is matching the
+                                passed aspect type and optionally also the passed system and direction ids.
+        :return:
+        """
         if flex_sys_dir:
             key = self.find_aspect_key(*aspect_types, system=system, direction=direction)
         else:
@@ -2408,7 +2420,18 @@ class _Field:
                 key = None
         return key
 
-    def aspect_value(self, *aspect_types, system='', direction='', flex_sys_dir=False):
+    def aspect_value(self, *aspect_types: AspectKeyType,
+                     system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = False
+                     ) -> Any:
+        """
+
+        :param aspect_types:    aspect types (dict key prefixes) to search for.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :return:                the value of the first found aspect that is matching the passed aspect type and
+                                optionally also the passed system and direction ids or None if not found.
+        """
         key = self.aspect_exists(*aspect_types, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         if key:
             val = self._aspects.get(key)
@@ -2416,7 +2439,32 @@ class _Field:
             val = None
         return val
 
-    def set_aspect(self, aspect_value, type_or_key, system='', direction='', protect=False, allow_values=False):
+    def del_aspect(self, type_or_key: AspectKeyType, system: AspectKeyType = '', direction: AspectKeyType = '') -> Any:
+        """ remove aspect from this field.
+
+        :param type_or_key:     either FAT_* type or full key (including already the system and direction)-
+        :param system:          system id string (if type_or_key is a pure FAT_* constant).
+        :param direction:       direction string FAD_* constant (if type_or_key is a pure FAT_* constant).
+        :return:                the aspect value of the removed aspect.
+        """
+        key = aspect_key(type_or_key, system=system, direction=direction)
+        assert key not in (FAT_IDX, FAT_REC, FAT_RCX), "_Field main name and root Record/index cannot be removed"
+        assert key != FAT_VAL or FAT_CAL in self._aspects, "_Field main value only deletable when calculator exists"
+        return self._aspects.pop(key)
+
+    def set_aspect(self, aspect_value: Any, type_or_key: AspectKeyType,
+                   system: AspectKeyType = '', direction: AspectKeyType = '',
+                   protect: bool = False, allow_values: bool = False) -> '_Field':
+        """ set/change the value of an aspect identified by `type_or_key`, `system` and `direction`.
+
+        :param aspect_value:    the value to set on the aspect.
+        :param type_or_key:     either FAT_* type or full key (including already the system and direction)-
+        :param system:          system id string (if type_or_key is a pure FAT_* constant).
+        :param direction:       direction string FAD_* constant (if type_or_key is a pure FAT_* constant).
+        :param protect:         pass True to prevent overwrite of already existing/set aspect value.
+        :param allow_values:    pass True to allow change of field value aspect (:data:`FAT_VAL` aspect key).
+        :return:                self (this :class:`_Field` instance).
+        """
         key = aspect_key(type_or_key, system=system, direction=direction)
         msg = "_Field.set_aspect({}, {}, {}, {}, {}, {}): ".format(
             aspect_value, type_or_key, system, direction, protect, allow_values)
@@ -2433,13 +2481,13 @@ class _Field:
             self._aspects[key] = aspect_value
         return self
 
-    def del_aspect(self, type_or_key, system='', direction=''):
-        key = aspect_key(type_or_key, system=system, direction=direction)
-        assert key not in (FAT_IDX, FAT_REC, FAT_RCX), "_Field main name and root Record/index cannot be removed"
-        assert key != FAT_VAL or FAT_CAL in self._aspects, "_Field main value only deletable when calculator exists"
-        return self._aspects.pop(key)
+    def set_aspects(self, allow_values: bool = False, **aspects: Any) -> '_Field':
+        """ set multiple aspects provided in `aspects`.
 
-    def set_aspects(self, allow_values=False, **aspects):
+        :param allow_values:    pass True to allow change of field value aspect (:data:`FAT_VAL` aspect key).
+        :param aspects:         dict of aspects where the dict key is the full/complete aspect key.
+        :return:                self (this :class:`_Field` instance).
+        """
         for key, data in aspects.items():
             if key.endswith(CALLABLE_SUFFIX):
                 assert callable(data), "_Field.set_aspects() expects callable for aspect {} with the {}-suffix" \
@@ -2449,21 +2497,46 @@ class _Field:
             self.set_aspect(data, key, allow_values=allow_values)
         return self
 
-    def add_aspects(self, allow_values=False, **aspects):
+    def add_aspects(self, allow_values: bool = False, **aspects: Any) -> '_Field':
+        """ add multiple aspects provided in `aspects`.
+
+        :param allow_values:    pass True to allow change of field value aspect (:data:`FAT_VAL` aspect key).
+        :param aspects:         dict of aspects where the dict key is the full/complete aspect key.
+        :return:                self (this :class:`_Field` instance).
+        """
         for key, data in aspects.items():
             # adding any other aspect to instance aspects w/o system/direction from kwargs
             self.set_aspect(data, key, protect=True, allow_values=allow_values)
         return self
 
-    def name(self, system='', direction='', flex_sys_dir=True):
+    def name(self, system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True) -> str:
+        """ determine one of the names of this field.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :return:                main or system-specific name of this field.
+        """
         return self.aspect_value(FAT_IDX, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
 
-    def del_name(self, system='', direction=''):
+    def del_name(self, system: AspectKeyType, direction: AspectKeyType = '') -> '_Field':
+        """ remove system-specific name from this field.
+
+        :param system:          system id (has to be non-empty system id).
+        :param direction:       direction id (def='' stands for both directions).
+        :return:                self (this :class:`_Field` instance).
+        """
         assert system, "_Field.del_name() expects to pass at least a non-empty system"
         self.del_aspect(FAT_IDX, system=system, direction=direction)
         return self
 
-    def has_name(self, name, selected_sys_dir=None):
+    def has_name(self, name: str, selected_sys_dir: Optional[dict] = None) -> AspectKeyType:
+        """ check if this field has a name identical to the one passed in `name`.
+
+        :param name:                name to search for.
+        :param selected_sys_dir:    pass dict for to get back the system and direction ids of the found name.
+        :return:                    full aspect key of the found name (including system/direction) or None if not found.
+        """
         for asp_key, asp_val in self._aspects.items():
             if asp_key.startswith(FAT_IDX) and asp_val == name:
                 if selected_sys_dir is not None:
@@ -2471,7 +2544,16 @@ class _Field:
                     selected_sys_dir['direction'] = aspect_key_direction(asp_key)
                 return asp_key
 
-    def set_name(self, name, system='', direction='', protect=False):
+    def set_name(self, name: str, system: AspectKeyType = '', direction: AspectKeyType = '', protect: bool = False
+                 ) -> '_Field':
+        """ set/change one of the names of this field.
+
+        :param name:            the new name of this field.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param protect:         pass True to prevent overwrite of already set/existing name.
+        :return:                self (this :class:`_Field` instance).
+        """
         self.set_aspect(name, FAT_IDX, system=system, direction=direction, protect=protect)
         if system:
             root_idx = self.root_idx(system=system, direction=direction)
@@ -2479,84 +2561,238 @@ class _Field:
                 self.set_root_idx(root_idx[:-1] + (name, ), system=system, direction=direction)
         return self
 
-    def root_rec(self, system='', direction='') -> Optional[Record]:
+    def root_rec(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Optional[Record]:
+        """ determine and return root record of this field with given system and direction ids.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                root record instance or None if not set.
+        """
         return self.aspect_value(FAT_REC, system=system, direction=direction, flex_sys_dir=True)
 
-    def set_root_rec(self, rec, system='', direction=''):
+    def set_root_rec(self, rec: Record, system: AspectKeyType = '', direction: AspectKeyType = '') -> '_Field':
+        """ set/change the root record of this field, system and direction.
+
+        :param rec:             root record instance.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                self (this :class:`_Field` instance).
+        """
         self.set_aspect(rec, FAT_REC, system=system, direction=direction)
         return self
 
-    def root_idx(self, system='', direction='') -> tuple:
+    def root_idx(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> IdxPathType:
+        """ return the root index of this field for the specified `system` and `direction` ids.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                root index of this field.
+        """
         return self.aspect_value(FAT_RCX, system=system, direction=direction, flex_sys_dir=True)
 
-    def set_root_idx(self, idx_path, system='', direction=''):
+    def set_root_idx(self, idx_path: IdxPathType, system: AspectKeyType = '', direction: AspectKeyType = ''
+                     ) -> '_Field':
+        """ set/change the root record of this field, system and direction.
+
+        :param idx_path:        root index for this field/system/direction.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                self (this :class:`_Field` instance).
+        """
         self.set_aspect(idx_path, FAT_RCX, system=system, direction=direction)
         return self
 
-    def calculator(self, system='', direction=''):
+    def calculator(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Optional[FieldCallable]:
+        """ return the calculation callable for this field, `system` and `direction`.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                callable used for to calculate the value of this field or None if not set/exists/found.
+        """
         return self.aspect_value(FAT_CAL, system=system, direction=direction)
 
-    def set_calculator(self, calculator, system='', direction='', protect=False):
+    def set_calculator(self, calculator: FieldCallable, system: AspectKeyType = '', direction: AspectKeyType = '',
+                       protect: bool = False) -> '_Field':
+        """ set/change the field value calculator of this field, system and direction.
+
+        :param calculator:      new callable used for to calculate the value of this field.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param protect:         pass True to prevent overwrite of already set/existing calculator callable.
+        :return:                self (this :class:`_Field` instance).
+        """
         self.set_aspect(calculator, FAT_CAL, system=system, direction=direction, protect=protect)
         if aspect_key(FAT_VAL, system=system, direction=direction) in self._aspects:
             self.del_aspect(FAT_VAL, system=system, direction=direction)
         return self
 
-    def clear_val(self, system='', direction=''):
+    def clear_val(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Any:
+        """ return the initial field value (the clear value) of this field, `system` and `direction`.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                the found clear/init value or None if not set/found.
+        """
         return self.aspect_value(FAT_CLEAR_VAL, system=system, direction=direction)
 
-    def set_clear_val(self, val, system='', direction=''):
-        return self.set_aspect(val, FAT_CLEAR_VAL, system=system, direction=direction)
+    def set_clear_val(self, clr_val, system: AspectKeyType = '', direction: AspectKeyType = '') -> '_Field':
+        """ set/change the clear/init value of this field, `system` and `direction`.
 
-    def _ensure_system_value(self, system, direction='', root_rec=None, root_idx=()):
+         :param clr_val:         new clear/init value of this field.
+         :param system:          system id (def='' stands for the main/system-independent value).
+         :param direction:       direction id (def='' stands for the main/system-independent value).
+         :return:                self (this :class:`_Field` instance).
+         """
+        return self.set_aspect(clr_val, FAT_CLEAR_VAL, system=system, direction=direction)
+
+    def _ensure_system_value(self, system: AspectKeyType, direction: AspectKeyType = '',
+                             root_rec: Record = None, root_idx: IdxPathType = ()):
+        """ check if a field value for the specified `system`/`direction` exists and if not then create it.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param root_rec:        root Record instance of this field, system and direction.
+        :param root_idx:        root index to this node/:class:`_Field` instance.
+        """
         if not self.aspect_exists(FAT_VAL, system=system, direction=direction):
             self.set_value(Value(), system=system, direction=direction, root_rec=root_rec, root_idx=root_idx)
 
-    def converter(self, system='', direction=''):
-        """
+    def converter(self, system: AspectKeyType, direction: AspectKeyType = '') -> Optional[FieldValCallable]:
+        """ return the converter callable for this field, `system` and `direction`.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                callable used for to convert the field value between systems or None if not set.
 
         Separate system-specific representations of the field value can be (automatically) converted
         by specifying a converter callable aspect.
         """
+        assert system != '', "_Field converter can only be retrieved for a given/non-empty system"
         return self.aspect_value(FAT_CNV, system=system, direction=direction)
 
-    def set_converter(self, converter, system='', direction='', extend=False, root_rec=None, root_idx=()):
+    def set_converter(self, converter: FieldValCallable,
+                      system: AspectKeyType, direction: AspectKeyType = '', protect: bool = True,
+                      root_rec: Record = None, root_idx: IdxPathType = ()) -> '_Field':
+        """ set/change the field value converter of this field, system and direction.
+
+        :param converter:       new callable used for to convert the value of this field between systems.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param protect:         pass False to allow overwrite of already set converter callable.
+        :param root_rec:        root Record instance of this field, system and direction.
+        :param root_idx:        root index to this node/:class:`_Field` instance.
+        :return:                self (this :class:`_Field` instance).
+        """
         assert system != '', "_Field converter can only be set for a given/non-empty system"
         self._ensure_system_value(system, direction=direction, root_rec=root_rec, root_idx=root_idx)
-        return self.set_aspect(converter, FAT_CNV, system=system, direction=direction, protect=not extend)
+        return self.set_aspect(converter, FAT_CNV, system=system, direction=direction, protect=protect)
 
-    def convert(self, val, system, direction):
+    def convert(self, val: Any, system: AspectKeyType, direction: AspectKeyType) -> Any:
+        """ convert field value from/onto system.
+
+        :param val:             field value to convert.
+        :param system:          system to convert from/onto.
+        :param direction:       conversion direction (from or onto - see :data:`FAD_FROM` and :data:`FAD_ONTO`).
+        :return:                converted field value.
+        """
         converter = self.converter(system=system, direction=direction)
         if converter:
             assert callable(converter), "converter of Field {} for {}{} is not callable".format(self, direction, system)
             val = converter(self, val)
         return val
 
-    def filter(self, system='', direction=''):
+    def filter(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Optional[FieldCallable]:
+        """ return the filter callable for this field, `system` and `direction`.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                callable used for to filter this field/parent-record or None if not set.
+        """
         return self.aspect_value(FAT_FLT, system=system, direction=direction)
 
-    def set_filter(self, filter_fields, system='', direction='', protect=False):
-        return self.set_aspect(filter_fields, FAT_FLT, system=system, direction=direction, protect=protect)
+    def set_filter(self, filter: FieldCallable,
+                   system: AspectKeyType = '', direction: AspectKeyType = '', protect: bool = False
+                   ) -> '_Field':
+        """ set/change the filter callable of this field, system and direction.
 
-    def sql_expression(self, system='', direction=''):
+        :param filter:          new callable used for to filter this field or the parent record.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param protect:         pass True to prevent overwrite of already set/existing filter callable.
+        :return:                self (this :class:`_Field` instance).
+        """
+        return self.set_aspect(filter, FAT_FLT, system=system, direction=direction, protect=protect)
+
+    def sql_expression(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Optional[str]:
+        """ return the sql column expression for this field, `system` and `direction`.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                sql column expression string if set or None if not set.
+        """
         return self.aspect_value(FAT_SQE, system=system, direction=direction)
 
-    def set_sql_expression(self, sql_expression, system='', direction='', protect=False):
+    def set_sql_expression(self, sql_expression: str,
+                           system: AspectKeyType = '', direction: AspectKeyType = '', protect: bool = False
+                           ) -> '_Field':
+        """ set/change sql column expression of this field, system and direction.
+
+        :param sql_expression:  new sql column expression used for to fetch associated db column of this field.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param protect:         pass True to prevent overwrite of already set/existing filter callable.
+        :return:                self (this :class:`_Field` instance).
+        """
         return self.set_aspect(sql_expression, FAT_SQE, system=system, direction=direction, protect=protect)
 
-    def validator(self, system='', direction=''):
+    def validator(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Optional[FieldValCallable]:
+        """ return the validation callable for this field, `system` and `direction`.
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                validation callable if set or None if not set.
+        """
         return self.aspect_value(FAT_CHK, system=system, direction=direction)
 
-    def set_validator(self, validator, system='', direction='', protect=False, root_rec=None, root_idx=()):
+    def set_validator(self, validator: FieldValCallable,
+                      system: AspectKeyType = '', direction: AspectKeyType = '', protect: bool = False,
+                      root_rec: Record = None, root_idx: IdxPathType = ()) -> '_Field':
+        """ set/change the field value validator of this field, system and direction.
+
+        :param validator:       new callable used for to validate the value of this field, systems and direction.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param protect:         pass False to allow overwrite of already set converter callable.
+        :param root_rec:        root Record instance of this field, system and direction.
+        :param root_idx:        root index to this node/:class:`_Field` instance.
+        :return:                self (this :class:`_Field` instance).
+        """
         assert callable(validator), "validator of Field {} for {}{} has to be callable".format(self, direction, system)
         self._ensure_system_value(system, direction=direction, root_rec=root_rec, root_idx=root_idx)
         return self.set_aspect(validator, FAT_CHK, system=system, direction=direction, protect=protect)
 
-    def validate(self, val, system='', direction=''):
+    def validate(self, val: Any, system: AspectKeyType = '', direction: AspectKeyType = '') -> bool:
+        """ validate field value for specified `system` and `direction`.
+
+        :param val:             field value to validate (if ok to be set as new field value).
+        :param system:          system id of new field value.
+        :param direction:       direction id of new field value.
+        :return:                True if `val` is ok to be set as new field value else False.
+        """
         validator = self.validator(system=system, direction=direction)
         return not callable(validator) or validator(self, val)
 
-    def append_record(self, system='', direction='', flex_sys_dir=True, root_rec=None, root_idx=()):
+    def append_record(self, system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True,
+                      root_rec: Record = None, root_idx: IdxPathType = ()) -> Record:
+        """ append new record to the :class:`Records` value of this field/system/direction.
+
+        :param system:          system id of the field value to extend.
+        :param direction:       direction id of the field value to extend.
+        :param flex_sys_dir:    pass False to prevent fallback to system-independent value.
+        :param root_rec:        root Record instance of this field, system and direction.
+        :param root_idx:        root index to this node/:class:`_Field` instance.
+        :return:                added/appended :class:`Record` instance.
+        """
         value = self.aspect_value(FAT_VAL, system=system, direction=direction, flex_sys_dir=flex_sys_dir)
         assert isinstance(value, Records), "append_record() expects Records type but got {}".format(type(value))
         root_rec, root_idx = use_rec_default_root_rec_idx(self.root_rec(system=system, direction=direction), root_rec,
@@ -2565,7 +2801,8 @@ class _Field:
                                                           met="_Fields.append_record")
         return value.append_record(root_rec=root_rec, root_idx=root_idx)
 
-    def clear_leafs(self, system='', direction='', flex_sys_dir=True, reset_lists=True):
+    def clear_leafs(self, system: AspectKeyType = '', direction: AspectKeyType = '', flex_sys_dir: bool = True,
+                    reset_lists: bool = True) -> '_Field':
         """ clear/reset field values and if reset_lists == True also Records/Values lists to one item.
 
         :param system:          system of the field value to clear, pass None for to clear all field values.
@@ -2601,7 +2838,7 @@ class _Field:
 
         return self
 
-    def copy(self, deepness=0, root_rec=None, root_idx=(), **kwargs):
+    def copy(self, deepness=0, root_rec: Record = None, root_idx: IdxPathType = (), **kwargs) -> '_Field':
         """ copy the aspects (names, indexes, values, ...) of this field.
 
         :param deepness:        deep copy level: <0==see deeper(), 0==only copy current instance, >0==deep copy
@@ -2609,7 +2846,7 @@ class _Field:
         :param root_rec:        destination root record.
         :param root_idx:        destination index path (tuple of field names and/or list/Records/Values indexes).
         :param kwargs:          additional arguments (will be passed on - most of them used by Record.copy).
-        :return:                new/extended record instance.
+        :return:                new/copied :class:`_Field` instance.
         """
         aspects = self._aspects
         if deepness:
@@ -2624,7 +2861,33 @@ class _Field:
             aspects = copied
         return _Field(root_rec=root_rec, root_idx=root_idx, allow_values=True, **aspects)
 
-    def pull(self, from_system, root_rec, root_idx):
+    def parent(self, system: AspectKeyType = '', direction: AspectKeyType = '',
+               value_types: Optional[Tuple[ValueType]] = None) -> Optional[ValueType]:
+        """ determine parent structure above of this field (like parent record or parent-parent-records, ...).
+
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param value_types:     pass tuple of :data:`ValueTypes` for to restrict search to one of the passed types.
+        :return:                parent instance or None if not already set or if is not of passed `value_types`.
+        """
+        root_rec = self.root_rec(system=system, direction=direction)
+        root_idx = self.root_idx(system=system, direction=direction)
+        while root_rec and root_idx:
+            root_idx = root_idx[:-1]
+            if root_idx:
+                item = root_rec.value(*root_idx, system=system, direction=direction)
+                if not value_types or isinstance(item, value_types):
+                    return item
+        return root_rec if not value_types or isinstance(root_rec, value_types) else None
+
+    def pull(self, from_system: AspectKeyType, root_rec: Record, root_idx: IdxPathType) -> '_Field':
+        """ pull the system-specific value (specified by `from_system`) into the main value of this field.
+
+        :param from_system:     system id of the system to pull from.
+        :param root_rec:        root Record instance of this field, system and direction.
+        :param root_idx:        root index to this node/:class:`_Field` instance.
+        :return:                self (this _Field instance).
+        """
         assert from_system, "_Field.pull() with empty value in from_system is not allowed"
         direction = FAD_FROM
 
@@ -2638,7 +2901,14 @@ class _Field:
 
         return self
 
-    def push(self, onto_system, root_rec, root_idx):
+    def push(self, onto_system: AspectKeyType, root_rec: Record, root_idx: IdxPathType) -> '_Field':
+        """ push the main value of this field onto the system-specific value (specified by `onto_system`).
+
+        :param onto_system:     system id of the system to pull from.
+        :param root_rec:        root Record instance of this field, system and direction.
+        :param root_idx:        root index to this node/:class:`_Field` instance.
+        :return:                self (this _Field instance).
+        """
         assert onto_system, "_Field.push() with empty value in onto_system is not allowed"
         direction = FAD_ONTO
 
@@ -2651,14 +2921,35 @@ class _Field:
 
         return self
 
-    def string_to_records(self, str_val, field_names, rec_sep=',', fld_sep='=', system='', direction=''):
+    def string_to_records(self, str_val: str, field_names: Sequence, rec_sep: str = ',', fld_sep: str = '=',
+                          system: AspectKeyType = '', direction: AspectKeyType = '') -> 'Records':
+        """ convert formatted string into a :class:`Records` instance containing several :class:`Record` instances.
+
+        :param str_val:         formatted string to convert.
+        :param field_names:     list/tuple of field names of each record
+        :param rec_sep:         character(s) used in `str_val` for to separate the records.
+        :param fld_sep:         character(s) used in `str_val` for to separate the field values of each record.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                converted :class:`Records` instance.
+        """
         fld_root_rec = self.root_rec(system=system, direction=direction)
         fld_root_idx = self.root_idx(system=system, direction=direction)
 
         return string_to_records(str_val, field_names, rec_sep=rec_sep, fld_sep=fld_sep,
                                  root_rec=fld_root_rec, root_idx=fld_root_idx)
 
-    def record_field_val(self, *idx_path, system='', direction=''):
+    def record_field_val(self, *idx_path: IdxItemType, system: AspectKeyType = '', direction: AspectKeyType = ''
+                         ) -> Any:
+        """ get/determine the value of any field specified via `idx_path` within this data structure.
+
+        :param idx_path:        index path of the field.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                the field value if found else None.
+
+        This method has an alias named rfv.
+        """
         root_rec = self.root_rec(system=system, direction=direction)
         assert root_rec and idx_path, "rfv() expects non-empty root_rec {} and idx_path {}".format(root_rec, idx_path)
         val = root_rec.val(*idx_path, system=system, direction=direction)
@@ -2666,7 +2957,18 @@ class _Field:
 
     rfv = record_field_val
 
-    def system_record_val(self, *idx_path, system='', direction='', use_curr_idx=None):
+    def system_record_val(self, *idx_path: IdxItemType, system: AspectKeyType = '', direction: AspectKeyType = '',
+                          use_curr_idx: Optional[list] = None) -> Any:
+        """ get/determine the current value of a/this field within this data structure.
+
+        :param idx_path:        index path of the field.
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
+        :return:                the currently selected field value if found else None.
+
+        This method has an alias named srv.
+        """
         root_rec = self.root_rec(system=system, direction=direction)
         assert root_rec, "srv() expects existing root_rec for system {} and direction {}".format(system, direction)
         if idx_path:
@@ -2678,25 +2980,31 @@ class _Field:
 
     srv = system_record_val
 
-    def in_actions(self, *actions, system='', direction=''):
+    def in_actions(self, *actions: str, system: AspectKeyType = '', direction: AspectKeyType = '') -> bool:
+        """ determine if current data structure is in one of the passed `actions`.
+
+        :param actions:         tuple of actions (see :data:`ACTION_` constants).
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                True if the data structure has set one of the passed `actions` else False.
+
+        This method has an alias named ina.
+        """
         root_rec = self.root_rec(system=system, direction=direction)
         is_in = root_rec and root_rec.action in actions
         return is_in
 
     ina = in_actions
 
-    def parent(self, system='', direction='', value_types=None):
-        root_rec = self.root_rec(system=system, direction=direction)
-        root_idx = self.root_idx(system=system, direction=direction)
-        while root_rec and root_idx:
-            root_idx = root_idx[:-1]
-            if root_idx:
-                item = root_rec.value(*root_idx, system=system, direction=direction)
-                if not value_types or isinstance(item, value_types):
-                    return item
-        return root_rec if not value_types or isinstance(root_rec, value_types) else None
+    def current_records_idx(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> IdxItemType:
+        """ determine current index of :class:`Records` instance, situated above of this field in this data structure.
 
-    def current_records_idx(self, system='', direction=''):
+        :param system:          system id (def='' stands for the main/system-independent value).
+        :param direction:       direction id (def='' stands for the main/system-independent value).
+        :return:                full index path.
+
+        This method has an alias named crx.
+        """
         item = self.parent(system=system, direction=direction, value_types=(Records,))
         if item:
             return current_index(item)
