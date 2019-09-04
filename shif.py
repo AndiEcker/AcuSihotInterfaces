@@ -1223,7 +1223,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 field = fld
                 idx_path = idx if isinstance(idx, (tuple, list)) else (field_name_idx_path(idx) or (idx, ))
                 val = rec.val(*idx_path, system=SDI_SH, direction=FAD_ONTO, use_curr_idx=Value((1, )))
-                filter_fields = field.filter(system=SDI_SH, direction=FAD_ONTO)
+                filter_fields = field.filterer(system=SDI_SH, direction=FAD_ONTO)
                 ''' finally not needed if clear_leafs() are called with reset_lists=False
                 if not filter_fields and len(idx_path) >= 3 and isinstance(idx_path[1], int) and idx_path[1] > 0:
                     fld = rec.node_child(idx)  # use template field's filter if not in sub-records 2..n

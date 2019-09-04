@@ -7,6 +7,7 @@
       <w>automodule</w>
       <w>autosummary</w>
       <w>bysource</w>
+      <w>callables</w>
       <w>ecker</w>
       <w>genindex</w>
       <w>graphviz</w>
@@ -17,6 +18,7 @@
       <w>penwidth</w>
       <w>pluggy</w>
       <w>quickstart</w>
+      <w>regedit</w>
       <w>toctree</w>
       <w>typehints</w>
       <w>undoc</w>

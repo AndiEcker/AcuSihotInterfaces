@@ -153,7 +153,7 @@ class TcpClient:
 
         except Exception as ex:
             if 10054 in ex.args:
-                # [Errno|WinError 10054] An existing connection was forcibly closed by the remote host
+                # [ErrNo|WinError 10054] An existing connection was forcibly closed by the remote host
                 _handle_err_gracefully(" ErrNo=10054 (data loss is possible)")
             else:
                 self.error_message = "TcpClient._receive_response() err: " + str(ex) \

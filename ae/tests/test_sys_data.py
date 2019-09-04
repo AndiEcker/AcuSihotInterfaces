@@ -196,6 +196,7 @@ class TestHelperMethods:
         assert use_current_index(r, ('fnB', 0, 'fnBA'), Value((1, ))) == ('fnB', 0, 'fnBA')
 
         with pytest.raises(AssertionError):
+            # noinspection PyTypeChecker
             use_current_index(None, ('fnB', 0, 'fnBA'), Value((1,)))
 
     def test_set_current_index(self):
@@ -288,6 +289,7 @@ class TestValue:
         v[-1] = 'tvC'
         assert v.val() == 'tvC'
         with pytest.raises(IndexError):
+            # noinspection PyTypeChecker
             v['test'] = 'tvD'
         assert v.val() == 'tvC'
 
@@ -339,14 +341,20 @@ class TestValues:
         assert u.node_child(('test',)) is None
         with pytest.raises(AssertionError):
             u.node_child(('test',), moan=True)
+        # noinspection PyTypeChecker
         assert u.node_child('test') is None
         with pytest.raises(AssertionError):
+            # noinspection PyTypeChecker
             u.node_child('test', moan=True)
+        # noinspection PyTypeChecker
         assert u.node_child(0) is None
         with pytest.raises(AssertionError):
+            # noinspection PyTypeChecker
             u.node_child(0, moan=True)
+        # noinspection PyTypeChecker
         assert u.node_child(None) is None
         with pytest.raises(AssertionError):
+            # noinspection PyTypeChecker
             u.node_child(None, moan=True)
 
     def test_set_value(self):
@@ -503,11 +511,11 @@ class TestField:
 
         filtered = True
         f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
-        assert f.set_filter(filter_callable) is f
-        assert f.filter() is filter_callable
-        assert f.filter()(f)
+        assert f.set_filterer(filter_callable) is f
+        assert f.filterer() is filter_callable
+        assert f.filterer()(f)
         filtered = False
-        assert not f.filter()(f)
+        assert not f.filterer()(f)
 
     def test_sql_expression(self):
         f = _Field(**{FAT_REC: Record(), FAT_RCX: ('test',)})
@@ -1105,7 +1113,7 @@ class TestRecord:
         sys_r.clear_leafs()
         for k in data_r.leaf_indexes():
             if k[0] in sys_r:
-                sys_r.set_val(data_r.val(k), *k, root_rec=data_r)
+                sys_r.set_val(data_r.val(*k), *k, root_rec=data_r)
         sys_r.push(SS)
         assert sys_r.val('Cnt') == 2
         assert data_r.val('fn', 0, 'PersSurname') is None

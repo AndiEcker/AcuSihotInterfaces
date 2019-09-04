@@ -112,7 +112,7 @@ ListType = TypeVar('ListType', 'Values', 'Records')             #: Union['Values
 ValueType = TypeVar('ValueType',
                     'Value', 'Values', 'Record', 'Records')     #: Union['Value', 'Values', 'Record', 'Records']
 NodeChildType = TypeVar('NodeChildType', '_Field', 'Record')    #: Union['_Field', 'Record']
-FieldCallable = Callable[['_Field'], bool]
+FieldCallable = Callable[['_Field'], Any]
 FieldValCallable = Callable[['_Field', Any], Any]
 
 
@@ -264,7 +264,8 @@ def idx_path_field_name(idx_path: IdxPathType, add_sep: bool = False) -> str:
     return field_name
 
 
-def compose_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: List) -> IdxPathType:
+def compose_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: Optional[List]
+                          ) -> IdxPathType:
     """ determine tuple with the current indexes.
 
     :param node:            root node/list (Record or Records/Values instance) to process.
@@ -299,7 +300,8 @@ def current_index(node: Union[ListType, NodeType]) -> IdxItemType:
     return node.current_idx
 
 
-def init_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: List) -> IdxPathType:
+def init_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: Optional[List]
+                       ) -> IdxPathType:
     """ determine current index of `node` and if not set the initialize to the first index path item.
 
     :param node:            root node/list (Record or Records/Values instance) to process.
@@ -344,7 +346,7 @@ def set_current_index(node: Union[ListType, NodeType], idx: Optional[IdxItemType
     return idx
 
 
-def use_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: List,
+def use_current_index(node: Union[ListType, NodeType], idx_path: IdxPathType, use_curr_idx: Optional[List],
                       check_idx_type: bool = False, delta: int = 1) -> IdxPathType:
     """ determine index path of `node` by using current index of `node` if exists and is enabled by `use_curr_idx` arg.
 
@@ -595,8 +597,8 @@ class Values(list):                     # type: List[Union[Value, Record]]
     def __str__(self) -> str:
         return ("Records" if isinstance(self, Records) else "Values") + "([" + ",".join(str(v) for v in self) + "])"
 
-    def node_child(self, idx_path: IdxPathType, use_curr_idx: list = None, moan: bool = False,
-                   selected_sys_dir: Optional[dict] = None) -> Optional[Union[Value, 'Record']]:
+    def node_child(self, idx_path: IdxPathType, use_curr_idx: Optional[list] = None, moan: bool = False,
+                   selected_sys_dir: Optional[dict] = None) -> Optional[ValueType]:
         """ determine and return node instance specified by `idx_path` if exists in this instance or underneath.
 
         :param idx_path:            index path to the node, relative to this instance.
@@ -781,7 +783,7 @@ class Record(OrderedDict):
     cannot be used as super class because instance as kwarg will then not work: see the Groxx's answer in stackoverflow
     question at https://stackoverflow.com/questions/3387691/how-to-perfectly-override-a-dict/47361653#47361653.
     """
-    def __init__(self, template: Optional['Records'] = None, fields: Optional[dict] = None,
+    def __init__(self, template: Optional['Records'] = None, fields: Optional[Iterable] = None,
                  system: AspectKeyType = '', direction: AspectKeyType = '', action: str = '',
                  root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
                  field_items: bool = False):
@@ -822,8 +824,11 @@ class Record(OrderedDict):
         self.collected_system_fields = list()   # system fields found by collect_system_fields()
 
     def __repr__(self) -> str:
-        return "Record(fields={}".format(", ".join(repr(idx_path_field_name(k)) + ": " + repr(self._fields.val(*k))
-                                         for k in self.leaf_indexes()))
+        ret = "Record("
+        if self._fields:
+            ret += "fields=" + ", ".join(repr(idx_path_field_name(k)) + ": " + repr(self._fields.val(*k))
+                                         for k in self.leaf_indexes())
+        return ret + ")"
 
     def __str__(self) -> str:
         return "Record({})".format(", ".join(k for k in self.keys()))
@@ -1345,7 +1350,7 @@ class Record(OrderedDict):
 
     def copy(self, deepness: int = 0, root_rec: Optional['Record'] = None, root_idx: IdxPathType = (),
              onto_rec: Optional['Record'] = None, filter_fields: Optional[FieldCallable] = None,
-             fields_patches: Optional[Dict[str, Dict[str, Union[str, FieldCallable]]]] = None) -> 'Record':
+             fields_patches: Optional[Dict[str, Dict[str, Union[str, ValueType, FieldCallable]]]] = None) -> 'Record':
         """ copy the fields of this record.
 
         :param deepness:        deep copy level: <0==see deeper(), 0==only copy this record instance, >0==deep copy
@@ -1354,12 +1359,14 @@ class Record(OrderedDict):
         :param root_idx:        destination root index (tuple/list with index path items: field names, list indexes).
         :param onto_rec:        destination record; pass None to create new Record instance.
         :param filter_fields:   method called for each copied field (return True to filter/hide/not-include into copy).
-        :param fields_patches:  dict[field_name_or_ALL_FIELDS:dict[aspect_key:val_or_callable]] for to overwrite
+        :param fields_patches:  dict[field_name_or_ALL_FIELDS:dict[aspect_key:val_or_callable]] for to set/overwrite
                                 aspect values in each copied _Field instance). The keys of the outer dict are either
                                 field names or the ALL_FIELDS value; aspect keys ending with the CALLABLE_SUFFIX
                                 have a callable in the dict item that will be called for each field with the field
                                 instance as argument; the return value of the callable will then be used as the (new)
                                 aspect value.
+                                Set the aspect value that stores the field value (aspect key == :data:`FAT_VAL`)
+                                by passing a data structure instance (of type :data:`ValueType`).
         :return:                new/extended record instance.
         """
         new_rec = onto_rec is None
@@ -1607,7 +1614,7 @@ class Record(OrderedDict):
         return self
 
     def set_current_system_index(self, sys_fld_name_prefix: str, path_sep: str, idx_val: Optional[int] = None,
-                                 idx_add: int = 1) -> Optional['Record']:
+                                 idx_add: Optional[int] = 1) -> Optional['Record']:
         """ check and if possible set the current system index of this :class:`Record` instance.
 
         :param sys_fld_name_prefix: user/system field name prefix.
@@ -2034,7 +2041,7 @@ class _Field:
     """
     def __init__(self, root_rec: Optional[Record] = None, root_idx: IdxPathType = (), allow_values: bool = False,
                  **aspects):
-        self._aspects = dict()
+        self._aspects: Dict[str, Any] = dict()
         self.add_aspects(allow_values=allow_values, **aspects)
         if root_rec is not None:
             self.set_root_rec(root_rec)
@@ -2701,7 +2708,7 @@ class _Field:
             val = converter(self, val)
         return val
 
-    def filter(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Optional[FieldCallable]:
+    def filterer(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Optional[FieldCallable]:
         """ return the filter callable for this field, `system` and `direction`.
 
         :param system:          system id (def='' stands for the main/system-independent value).
@@ -2710,18 +2717,18 @@ class _Field:
         """
         return self.aspect_value(FAT_FLT, system=system, direction=direction)
 
-    def set_filter(self, filter: FieldCallable,
-                   system: AspectKeyType = '', direction: AspectKeyType = '', protect: bool = False
-                   ) -> '_Field':
-        """ set/change the filter callable of this field, system and direction.
+    def set_filterer(self, filterer: FieldCallable,
+                     system: AspectKeyType = '', direction: AspectKeyType = '', protect: bool = False
+                     ) -> '_Field':
+        """ set/change the filterer callable of this field, system and direction.
 
-        :param filter:          new callable used for to filter this field or the parent record.
+        :param filterer:        new callable used for to filter this field or the parent record.
         :param system:          system id (def='' stands for the main/system-independent value).
         :param direction:       direction id (def='' stands for the main/system-independent value).
         :param protect:         pass True to prevent overwrite of already set/existing filter callable.
         :return:                self (this :class:`_Field` instance).
         """
-        return self.set_aspect(filter, FAT_FLT, system=system, direction=direction, protect=protect)
+        return self.set_aspect(filterer, FAT_FLT, system=system, direction=direction, protect=protect)
 
     def sql_expression(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> Optional[str]:
         """ return the sql column expression for this field, `system` and `direction`.
@@ -2862,13 +2869,13 @@ class _Field:
         return _Field(root_rec=root_rec, root_idx=root_idx, allow_values=True, **aspects)
 
     def parent(self, system: AspectKeyType = '', direction: AspectKeyType = '',
-               value_types: Optional[Tuple[ValueType]] = None) -> Optional[ValueType]:
-        """ determine parent structure above of this field (like parent record or parent-parent-records, ...).
+               value_types: Optional[Tuple[Type[ValueType], ...]] = None) -> Optional[ValueType]:
+        """ determine one of the parent ValueType instances in this data structure above of this field.
 
         :param system:          system id (def='' stands for the main/system-independent value).
         :param direction:       direction id (def='' stands for the main/system-independent value).
-        :param value_types:     pass tuple of :data:`ValueTypes` for to restrict search to one of the passed types.
-        :return:                parent instance or None if not already set or if is not of passed `value_types`.
+        :param value_types:     pass tuple of :data:`ValueType` for to restrict search to one of the passed types.
+        :return:                found parent instance or None if not set or if type is not of passed `value_types`.
         """
         root_rec = self.root_rec(system=system, direction=direction)
         root_idx = self.root_idx(system=system, direction=direction)
@@ -3005,7 +3012,7 @@ class _Field:
 
         This method has an alias named crx.
         """
-        item = self.parent(system=system, direction=direction, value_types=(Records,))
+        item = self.parent(system=system, direction=direction, value_types=(Records, ))
         if item:
             return current_index(item)
 

@@ -216,7 +216,7 @@ class ConsoleApp:
     def __init__(self, app_version: str, app_desc: str, debug_level_def: int = DEBUG_LEVEL_DISABLED,
                  config_eval_vars: Optional[dict] = None, additional_cfg_files: Iterable = (),
                  option_value_stripper: Optional[Callable] = None, multi_threading: bool = False,
-                 suppress_stdout: bool = False, formatter_class: Optional[HelpFormatter] = None, epilog: str = "",
+                 suppress_stdout: bool = False, formatter_class: Optional[Type[HelpFormatter]] = None, epilog: str = "",
                  sys_env_id: str = '', logging_config: Optional[Dict[str, Any]] = None):
         """ initialize new instance.
 
