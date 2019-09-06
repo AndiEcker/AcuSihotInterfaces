@@ -1,25 +1,31 @@
-.. python application environment documentation master file.
+.. application environment for python - documentation master file.
 
-Welcome to python application environment's documentation!
-==========================================================
+Documentation of *application environment for python*
+=====================================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
 
-
 Indices and tables
-==================
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
 
-ae
-==
+ae modules
+----------
 
-.. toctree::
-   :maxdepth: 4
+.. autosummary::
+    :toctree: _autosummary
 
-   ae
+    ae.core
+    ae.architecture
+    ae.console_app
+    ae.lockname
+    ae.progress
+    ae.setting
+    ae.sys_data
+    ae.systems

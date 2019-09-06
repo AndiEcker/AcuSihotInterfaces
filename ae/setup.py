@@ -3,6 +3,16 @@ import setuptools
 with open("README.md") as fh:
     long_description = fh.read()
 
+docs_require = [
+    'sphinx',
+    'sphinx-autodoc-typehints',
+    # typehints extension does that already so no need to also include 'sphinx-autodoc-annotation',
+    ]
+tests_require = ['pytest']
+""" additional debian/ubuntu OS installations:
+- sudo apt-get install graphviz
+"""
+
 setuptools.setup(
     name="aepy",
     version="0.0.1",
@@ -14,6 +24,11 @@ setuptools.setup(
     url="https://github.com/AndiEcker/aepy",
     # packages=setuptools.find_packages(),
     packages=setuptools.find_namespace_packages(include=['ae.*']),  # find all namespace packages
+    extras_require={
+        'docs': docs_require,
+        'tests': tests_require,
+        'dev': docs_require + tests_require,
+    },
     classifiers=[
         "Development Status :: 1 - Planning",
         "Natural Language :: English",
@@ -26,12 +41,3 @@ setuptools.setup(
         "Topic :: Software Development :: Libraries :: Application Frameworks",
     ],
 )
-
-""" additional installations:
-- pip install pytest
-- pip install sphinx
-- pip install sphinx-autodoc-typehints
-- pip install sphinx-autodoc-annotation
-- sudo apt-get install graphviz
-
-"""

@@ -8,9 +8,11 @@
       <w>autosummary</w>
       <w>bysource</w>
       <w>callables</w>
+      <w>debian</w>
       <w>ecker</w>
       <w>genindex</w>
       <w>graphviz</w>
+      <w>intersphinx</w>
       <w>lockname</w>
       <w>meth</w>
       <w>minlen</w>
@@ -19,9 +21,11 @@
       <w>pluggy</w>
       <w>quickstart</w>
       <w>regedit</w>
+      <w>searchbox</w>
       <w>toctree</w>
       <w>typehints</w>
       <w>undoc</w>
+      <w>viewcode</w>
       <w>weakref</w>
     </words>
   </dictionary>

@@ -9,11 +9,11 @@ class System:
                  features: Sequence = None):
         """ create new :class:`System` instance.
 
-        :param sys_id:              unique str for to identify a system (also used as prefix/suffix).
-        :param credentials:         dict for to access system, containing e.g. user name, password, token, dsn
-        :param debug_level_disabled disable debug level.
-        :param debug_level_verbose  verbose debug level.
-        :param features:            optional list with special features for this system (see SDF_* constants).
+        :param sys_id:                  unique str for to identify a system (also used as prefix/suffix).
+        :param credentials:             dict for to access system, containing e.g. user name, password, token, dsn
+        :param debug_level_disabled:    disable debug level.
+        :param debug_level_verbose:     verbose debug level.
+        :param features:                optional list with special features for this system (see SDF_* constants).
         """
         self.sys_id = sys_id
         self.credentials = credentials
@@ -147,15 +147,14 @@ class UsedSystems(OrderedDict):
                 self.debug_messages.append("System fully initialized")
 
     def _add_system(self, sys_id: str, credentials: Dict, debug_level_disabled: int, debug_level_verbose: int,
-                    features: Sequence = None) -> None:
+                    features: Sequence = None):
         """ add new :class:`System` instance to this :class:`UsedSystems` instance.
 
-        :param sys_id:              system id.
-        :param credentials:         credentials of the new system to add.
-        :param debug_level_disabled:disabled debug level.
-        :param debug_level_verbose: verbose debug level.
-        :param features:            optional list with special features for this system (see SDF_* constants).
-        :return:
+        :param sys_id:                  system id.
+        :param credentials:             credentials of the new system to add.
+        :param debug_level_disabled:    disabled debug level.
+        :param debug_level_verbose:     verbose debug level.
+        :param features:                optional list with special features for this system (see SDF_* constants).
         """
         assert sys_id in self._available_systems, "UsedSystems._add_system(): unsupported system id {}".format(sys_id)
         assert sys_id not in self._systems, "UsedSystems._add_system(): system id {} already specified".format(sys_id)

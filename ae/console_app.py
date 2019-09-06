@@ -1,15 +1,27 @@
+"""
+console application environment
+===============================
+
+Features:
+
+* provides application configuration options by bundling :class:`ConfigParser` and :class:`ArgumentParser`.
+* highly configurable logging with optional log file rotation.
+* resulting in much less code to write and maintain.
+
+"""
 import sys
 import os
 import datetime
 
-import logging
-import logging.config
 import threading
 from typing import Any, AnyStr, Callable, Dict, Iterable, Optional, TextIO, Type, Sequence
 import weakref
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter, Namespace
+
+import logging
+import logging.config
 
 from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, \
     DEBUG_LEVELS, LOGGING_LEVELS, DATE_TIME_ISO, DATE_ISO, calling_module, force_encoding, sys_env_text, to_ascii
@@ -99,7 +111,14 @@ class _DuplicateSysOut:
         return getattr(self.sys_out_obj, attr)
 
 
-_logger = logging.getLogger(__name__)       #: default logger for this module
+_logger = None       #: python logger for this module gets lazy/late initialized and only if requested by caller
+
+
+def logger_late_init():
+    """ check if logging modules got initialized already and if not then do it now. """
+    global _logger
+    if not _logger:
+        _logger = logging.getLogger(__name__)
 
 
 def uprint(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = None, flush: bool = False,
@@ -155,6 +174,7 @@ def uprint(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = N
     use_logger = not processing and debug_level in LOGGING_LEVELS \
         and getattr(cae_instance, 'logging_conf_dict', False)
     if use_logger and logger is None:
+        logger_late_init()
         module = calling_module()
         logger = logging.getLogger(module) if module else _logger
 
@@ -288,6 +308,7 @@ class ConsoleApp:
         # check if app is using python logging module
         lcd = logging_config.get('py_logging_config_dict', self.get_config('py_logging_config_dict'))
         if lcd:
+            logger_late_init()
             # logging.basicConfig(level=logging.DEBUG, style='{')
             logging.config.dictConfig(lcd)     # configure logging module
         else:
