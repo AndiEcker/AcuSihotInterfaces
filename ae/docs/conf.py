@@ -29,22 +29,46 @@ author = 'Andi Ecker'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.viewcode',
+    # 'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
     # typehints extension does that already so no need to also include 'sphinx_autodoc_annotation',
     'sphinx_autodoc_typehints',
-    'sphinx.ext.coverage',
+    # 'sphinx.ext.coverage',
     'sphinx.ext.graphviz',
     'sphinx.ext.autosummary',
 ]
 
+
+# -- autodoc/automodule settings
+autodoc_default_options = {
+    'members': True,
+    'member-order': 'bysource',
+    'private-members': True,
+    'special-members': True,
+    'undoc-members': True,
+    'show-inheritance': True,
+    'exclude-members': '__weakref__, __dict__, __module__',
+    'autosummary_generate': True,
+}
+
+autosummary_generate = True
+add_module_names = False
+add_function_parentheses = True
+
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+# templates_path = ['_templates', '_templates/autosummary']
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+# exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+
+# Example configuration for intersphinx: refer to the Python standard library
+# - found at https://www.mankier.com/1/sphinx-all and https://github.com/traverseda/pycraft/blob/master/docs/conf.py.
+# intersphinx_mapping = {'https://docs.python.org/3.6': None}
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/' + '.'.join(map(str, sys.version_info[0:2])), None)
+}
 
 
 # -- Options for HTML output -------------------------------------------------º
@@ -54,7 +78,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 #
 html_theme = 'alabaster'
 
-# NEXT THREE VARIABLES COPIED FROM https://github.com/romanvm/sphinx_tutorial/blob/master/docs/conf.py
+# NEXT TWO VARIABLES COPIED FROM https://github.com/romanvm/sphinx_tutorial/blob/master/docs/conf.py
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
@@ -77,30 +101,7 @@ html_sidebars = {
     ]
 }
 
-# Example configuration for intersphinx: refer to the Python standard library.
-# Add Python version number to the default address to correctly reference
-# the Python standard library
-intersphinx_mapping = {'https://docs.python.org/3.6': None}
-
-
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ['_static']
-
-
-# -- autodoc/automodule settings
-autodoc_default_options = {
-    'members': True,
-    'member-order': 'bysource',
-    'private-members': True,
-    'special-members': True,
-    'undoc-members': True,
-    'show-inheritance': True,
-    'exclude-members': '__weakref__, __dict__, __module__',
-    'autosummary_generate': True,
-}
-
-autosummary_generate = True
-add_module_names = False
-add_function_parentheses = True

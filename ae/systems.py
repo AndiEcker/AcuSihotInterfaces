@@ -1,3 +1,5 @@
+""" manage external systems (servers, databases, cloud stores, ...)
+"""
 from collections import OrderedDict
 from typing import Callable, Tuple, Sequence, Dict, Any
 

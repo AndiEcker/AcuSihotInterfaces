@@ -1,3 +1,8 @@
+"""
+simple usable threading locks
+=============================
+
+"""
 import threading
 from typing import Dict, Union
 

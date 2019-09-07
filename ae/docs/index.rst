@@ -20,6 +20,7 @@ ae modules
 
 .. autosummary::
     :toctree: _autosummary
+    :nosignatures:
 
     ae.core
     ae.architecture

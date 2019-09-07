@@ -1,3 +1,7 @@
+"""
+operating system architecture helper functions
+==============================================
+"""
 import os
 import struct
 from typing import Optional

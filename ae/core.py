@@ -1,3 +1,8 @@
+"""
+package constants and core helper functions
+===========================================
+
+"""
 import inspect
 import logging
 import os

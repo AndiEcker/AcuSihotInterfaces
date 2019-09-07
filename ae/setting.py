@@ -1,3 +1,8 @@
+"""
+typed configuration options
+===========================
+
+"""
 import datetime
 from typing import Any, Optional, Type
 
