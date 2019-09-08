@@ -4,9 +4,10 @@ console application environment
 
 Features:
 
-* provides application configuration options by bundling :class:`ConfigParser` and :class:`ArgumentParser`.
+* provides application configuration options by bundling :class:`configparser.ConfigParser` and
+  :class:`argparse.ArgumentParser`.
 * highly configurable logging with optional log file rotation.
-* resulting in much less code to write and maintain.
+* resulting in much less code for your console application to write and maintain.
 
 """
 import sys
@@ -215,20 +216,20 @@ def uprint(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = N
 class ConsoleApp:
     """ encapsulating ConfigParser and ArgumentParser for python console applications.
 
-    :ivar startup_beg:          datetime of app instantiation/startup.
-    :ivar config_options:       pre-/user-defined options (dict of Setting instances).
-    :ivar config_choices:       valid choices for pre-/user-defined options.
-    :ivar _app_path:            file path of executable.
-    :ivar _app_name:            basename (without the file name extension) of the executable.
-    :ivar _app_version:         application version.
-    :ivar _config_parser:       instance of used ConfigParser.
-    :ivar _config_files:        iterable of config file names that are getting loaded and parsed.
-    :ivar _log_file_obj:        file handle of currently opened log file (opened in self._parse_args()).
-    :ivar _log_file_max_size:   maximum size in MBytes of a log file.
-    :ivar _log_file_name:       path and file name of the log file.
-    :ivar _log_file_index:      index of the current rotation log file backup.
-    :ivar _main_cfg_fnam:       main config file name.
-    :ivar _parsed_args:         ArgumentParser.parse_args() return - used for to retrieve command line args and
+    :attr startup_beg:          datetime of app instantiation/startup.
+    :attr config_options:       pre-/user-defined options (dict of Setting instances).
+    :attr config_choices:       valid choices for pre-/user-defined options.
+    :attr _app_path:            file path of executable.
+    :attr _app_name:            basename (without the file name extension) of the executable.
+    :attr _app_version:         application version.
+    :attr _config_parser:       instance of used ConfigParser.
+    :attr _config_files:        iterable of config file names that are getting loaded and parsed.
+    :attr _log_file_obj:        file handle of currently opened log file (opened in self._parse_args()).
+    :attr _log_file_max_size:   maximum size in MBytes of a log file.
+    :attr _log_file_name:       path and file name of the log file.
+    :attr _log_file_index:      index of the current rotation log file backup.
+    :attr _main_cfg_fnam:       main config file name.
+    :attr _parsed_args:         ArgumentParser.parse_args() return - used for to retrieve command line args and
                                 as flag to ensure that the command line arguments get re-parsed if add_option()
                                 get called after a first call to methods which are initiating the re-fetch of
                                 the args and INI/cfg vars (like e.g. get_option() or dprint()).
@@ -275,7 +276,7 @@ class ConsoleApp:
         self.multi_threading: bool = multi_threading
         self.suppress_stdout: bool = True     # block initially until app-config/-logging is fully initialized
 
-        self.startup_beg: datetime.datetime = datetime.datetime.now()
+        self.startup_beg: datetime.datetime = datetime.datetime.now()       #: app startup datetime
         self.config_options: Dict[str, Setting] = dict()
         self.config_choices: Dict[str, Sequence] = dict()
 

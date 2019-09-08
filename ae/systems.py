@@ -1,4 +1,4 @@
-""" manage external systems (servers, databases, cloud stores, ...)
+""" manage user credentials and other configuration options for external systems (servers, databases, cloud stores, ...)
 """
 from collections import OrderedDict
 from typing import Callable, Tuple, Sequence, Dict, Any
