@@ -142,30 +142,33 @@ class ConsoleApp:
         cfg.optionxform = str   # for case-sensitive config vars
         cfg.read(['../.console_app_env.cfg', '../.sys_envTEST.cfg'])
 
-        self._options = dict(acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('Settings', 'acuPassword'),
-                             acuDSN=cfg.get('Settings', 'acuDSN', fallback='SP.TEST'),
-                             debugLevel=cfg.getint('Settings', 'debugLevel', fallback=2),  # 2==DEBUG_LEVEL_VERBOSE
-                             emailValidatorBaseUrl=cfg.get('Settings', 'emailValidatorBaseUrl'),
-                             emailValidatorApiKey=cfg.get('Settings', 'emailValidatorApiKey'),
-                             phoneValidatorBaseUrl=cfg.get('Settings', 'phoneValidatorBaseUrl'),
-                             phoneValidatorApiKey=cfg.get('Settings', 'phoneValidatorApiKey'),
-                             assUser=cfg.get('Settings', 'assUser'), assPassword=cfg.get('Settings', 'assPassword'),
-                             assRootUsr=cfg.get('Settings', 'assRootUsr'), assRootPwd=cfg.get('Settings', 'assRootPwd'),
-                             assDSN=cfg.get('Settings', 'assDSN', fallback='test'),
-                             sfUser=cfg.get('Settings', 'sfUser'), sfPassword=cfg.get('Settings', 'sfPassword'),
-                             sfToken=cfg.get('Settings', 'sfToken'),
-                             sfIsSandbox=cfg.get('Settings', SDF_SF_SANDBOX, fallback=True),
-                             shClientPort=cfg.get('Settings', SDF_SH_CLIENT_PORT, fallback=12000),
-                             shServerIP=cfg.get('Settings', 'shServerIP', fallback='10.103.222.70'),
-                             shServerPort=cfg.get('Settings', SDF_SH_WEB_PORT, fallback=14777),
-                             shServerKernelPort=cfg.get('Settings', SDF_SH_KERNEL_PORT, fallback=14772),
+        self._options = dict(acuUser='SIHOT_INTERFACE', acuPassword=cfg.get('aeOptions', 'acuPassword'),
+                             acuDSN=cfg.get('aeOptions', 'acuDSN', fallback='SP.TEST'),
+                             debugLevel=cfg.getint('aeOptions', 'debugLevel', fallback=2),  # 2==DEBUG_LEVEL_VERBOSE
+                             emailValidatorBaseUrl=cfg.get('aeOptions', 'emailValidatorBaseUrl'),
+                             emailValidatorApiKey=cfg.get('aeOptions', 'emailValidatorApiKey'),
+                             phoneValidatorBaseUrl=cfg.get('aeOptions', 'phoneValidatorBaseUrl'),
+                             phoneValidatorApiKey=cfg.get('aeOptions', 'phoneValidatorApiKey'),
+                             assUser=cfg.get('aeOptions', 'assUser'),
+                             assPassword=cfg.get('aeOptions', 'assPassword'),
+                             assRootUsr=cfg.get('aeOptions', 'assRootUsr'),
+                             assRootPwd=cfg.get('aeOptions', 'assRootPwd'),
+                             assDSN=cfg.get('aeOptions', 'assDSN', fallback='test'),
+                             sfUser=cfg.get('aeOptions', 'sfUser'),
+                             sfPassword=cfg.get('aeOptions', 'sfPassword'),
+                             sfToken=cfg.get('aeOptions', 'sfToken'),
+                             sfIsSandbox=cfg.get('aeOptions', SDF_SF_SANDBOX, fallback=True),
+                             shClientPort=cfg.get('aeOptions', SDF_SH_CLIENT_PORT, fallback=12000),
+                             shServerIP=cfg.get('aeOptions', 'shServerIP', fallback='10.103.222.70'),
+                             shServerPort=cfg.get('aeOptions', SDF_SH_WEB_PORT, fallback=14777),
+                             shServerKernelPort=cfg.get('aeOptions', SDF_SH_KERNEL_PORT, fallback=14772),
                              shTimeout=369.0, shXmlEncoding='utf8',
                              shUseKernelForClient=USE_KERNEL_FOR_CLIENTS_DEF, shMapClient=SH_CLIENT_MAP,
                              shUseKernelForRes=USE_KERNEL_FOR_RES_DEF, shMapRes=SH_RES_MAP,
                              warningFragments='',
                              )
         for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):
-            val = cfg.get('Settings', cfg_key)
+            val = cfg.get('aeOptions', cfg_key)
             if val:
                 self._options[cfg_key] = eval(val)
 
@@ -178,11 +181,11 @@ class ConsoleApp:
             ret = 'CMM'     # quick fix for tests (for full fix need to include SihotMktSegExceptions.cfg)
         elif name in self._options:
             ret = self._options[name]
-        elif section is None or section != 'Settings':
+        elif section is None or section != 'aeOptions':
             # does not convert config value into list/dict:
-            # .. ret = self._env_cfg.get(section or 'Settings', name, fallback=default_value)
+            # .. ret = self._env_cfg.get(section or 'aeOptions', name, fallback=default_value)
             s = Setting(name=name, value=default_value, value_type=type(default_value))  # used only for conversion/eval
-            s.value = self._env_cfg.get(section or 'Settings', name, fallback=s.value)
+            s.value = self._env_cfg.get(section or 'aeOptions', name, fallback=s.value)
             ret = s.value
         else:
             ret = default_value

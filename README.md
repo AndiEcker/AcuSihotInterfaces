@@ -1252,25 +1252,25 @@ configuration file):
             
 | Section Name | Key/Option Name | Description |
 | --- | --- | --- |
-| Settings | addressValidatorBaseUrl | Base URL for address validation web service |
-| Settings | addressValidatorSearchUrl | Search URL for address validation web service |
-| Settings | addressValidatorFetchUrl | Fetch URL for address validation web service |
-| Settings | addressValidatorApiKey | address validation web service API key |
-| Settings | apCats | Room category overloads for single hotel rooms |
-| Settings | assRootUsr | Root user account name for AssCache database |
-| Settings | assRootPwd | Root user account name for AssCache database |
-| Settings | emailValidatorBaseUrl | Base URL for email validation web service |
-| Settings | emailValidatorApiKey | email validation web service API key |
-| Settings | hotelIds | Mapping of Sihot/Acumen hotel ids |
-| Settings | phoneValidatorBaseUrl | Base URL for phone number validation web service |
-| Settings | phoneValidatorApiKey | phone number validation web service API key |
-| Settings | resortCats | Room category defaults and apartment feature overloads for all hotels/resorts |
-| Settings | roAgencies | Agency Sihot/Acumen object Ids and market segment groupings |
-| Settings | roomChangeMaxDaysDiff | Number of days a check-in/-out/room-move can differ from the expected arrival/departure date |
-| Settings | SfIdResetResendFragments | Text fragments of ignorable errors where BssServer will try to resend the reservation data without the currently cached Salesforce Reservation Opportunity Id |
-| Settings | shAdultPersTypes | List of Sihot adult person type categories, e.g. ['1A', '5A'] |
-| Settings | shChildPersTypes | List of Sihot children person type categories, e.g. ['2A', '2B', '2C', '6A', '6B', '6C'] |
-| Settings | WarningFragments | List of text fragments of complete error messages which will be re-classified as warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr` or `smtpTo`).
+| aeOptions | addressValidatorBaseUrl | Base URL for address validation web service |
+| aeOptions | addressValidatorSearchUrl | Search URL for address validation web service |
+| aeOptions | addressValidatorFetchUrl | Fetch URL for address validation web service |
+| aeOptions | addressValidatorApiKey | address validation web service API key |
+| aeOptions | apCats | Room category overloads for single hotel rooms |
+| aeOptions | assRootUsr | Root user account name for AssCache database |
+| aeOptions | assRootPwd | Root user account name for AssCache database |
+| aeOptions | emailValidatorBaseUrl | Base URL for email validation web service |
+| aeOptions | emailValidatorApiKey | email validation web service API key |
+| aeOptions | hotelIds | Mapping of Sihot/Acumen hotel ids |
+| aeOptions | phoneValidatorBaseUrl | Base URL for phone number validation web service |
+| aeOptions | phoneValidatorApiKey | phone number validation web service API key |
+| aeOptions | resortCats | Room category defaults and apartment feature overloads for all hotels/resorts |
+| aeOptions | roAgencies | Agency Sihot/Acumen object Ids and market segment groupings |
+| aeOptions | roomChangeMaxDaysDiff | Number of days a check-in/-out/room-move can differ from the expected arrival/departure date |
+| aeOptions | SfIdResetResendFragments | Text fragments of ignorable errors where BssServer will try to resend the reservation data without the currently cached Salesforce Reservation Opportunity Id |
+| aeOptions | shAdultPersTypes | List of Sihot adult person type categories, e.g. ['1A', '5A'] |
+| aeOptions | shChildPersTypes | List of Sihot children person type categories, e.g. ['2A', '2B', '2C', '6A', '6B', '6C'] |
+| aeOptions | WarningFragments | List of text fragments of complete error messages which will be re-classified as warnings and send separately to the notification receiver (specified in configuration key/option `warningsMailToAddr` or `smtpTo`).
 | SihotAllotments | <marketSegmentCode>[_<hotel_id>] | Allotment/contract number for each market segment (and hotel id) |
 | SihotPaymentInstructions | <marketSegmentCode> | Sihot Payment Instruction code for each market segment | 
 | SihotRateSegments | <marketSegmentCode> | Sihot Rate Segment code for each market segment |

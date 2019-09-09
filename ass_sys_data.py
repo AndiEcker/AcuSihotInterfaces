@@ -146,7 +146,7 @@ def add_ass_options(cae, client_port=None, add_kernel_port=False, break_on_error
 def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_systems_msg_prefix=""):
     """ initialize system data/environment/configuration and print to stdout
 
-    :param cae:                     application environment including command line options and config settings.
+    :param cae:                     application environment including command line arguments and config options.
     :param ass_options:             ass options dict (returned by add_ass_options()).
     :param err_logger:              error logger method
     :param warn_logger:             warning logger method
@@ -269,7 +269,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         """
         initialize and possibly connect all available systems.
 
-        :param cae:             app environment - mainly used for command line args and config file settings.
+        :param cae:             app environment - mainly used for command line args and config file options.
         :param err_logger:      method for to display or log error notifications.
         :param warn_logger:     method for to log warnings.
         :param ctx_no_file:     str prefix for to mark contexts with no file involved.

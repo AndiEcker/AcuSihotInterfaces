@@ -18,7 +18,7 @@ Version History:
 DISTRIBUTE:
 
 Salesforce check/prepare:
-- Add host URL in Salesforce/Setup/Remote Site Settings for to authorize endpoint addresses:
+- Add host URL in Salesforce/Setup/Remote Site settings for to authorize endpoint addresses:
     see https://trailhead.salesforce.com/modules/
     ./apex_integration_services/units/apex_integration_callouts#apex_integration_callouts_authorizing
 - Implement APEX code template/example: see e.g. SihotServerApex.apex

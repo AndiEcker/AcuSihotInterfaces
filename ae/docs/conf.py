@@ -36,6 +36,7 @@ extensions = [
     # 'sphinx.ext.coverage',
     'sphinx.ext.graphviz',
     'sphinx.ext.autosummary',
+    'sphinx_rtd_theme',
 ]
 
 
@@ -83,25 +84,34 @@ html_theme = 'sphinx_rtd_theme'     # 'alabaster'
 # further.  For a list of options available for each theme, see the
 # documentation.
 # alabaster theme options - DON'T WORK WITH sphinx_rtd_theme!!!
-'''
-html_theme_options = {
-    'github_button': True,
-    'github_type': 'star&v=2',      # use v2 button
-    'github_user': 'AndiEcker',
-    'github_repo': 'aepy',
-    'github_banner': True,
-}
+if html_theme == 'alabaster':
+    html_theme_options = {
+        'github_button': True,
+        'github_type': 'star&v=2',      # use v2 button
+        'github_user': 'AndiEcker',
+        'github_repo': 'aepy',
+        'github_banner': True,
+    }
 
-# Custom sidebar templates, maps document names to template names.
-# Sidebars configuration for alabaster theme
-html_sidebars = {
-    '**': [
-        'about.html',
-        'navigation.html',
-        'searchbox.html',
-    ]
-}
-'''
+    # Custom sidebar templates, maps document names to template names.
+    # Sidebars configuration for alabaster theme
+    html_sidebars = {
+        '**': [
+            'about.html',
+            'navigation.html',
+            'searchbox.html',
+        ]
+    }
+
+elif html_theme == 'sphinx_rtd_theme':
+    html_theme = "sphinx_rtd_theme"
+    html_theme_path = ["_themes", ]
+    html_theme_options = {
+        'collapse_navigation': False,
+        'prev_next_buttons_location': 'both',
+        'style_external_links': True,
+    }
+
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

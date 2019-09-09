@@ -24,7 +24,7 @@ def config_fna_vna_vva(request):
         if os.path.sep not in file_name:
             file_name = os.path.join(os.getcwd(), file_name)
         with open(file_name, 'w') as f:
-            f.write("[Settings]\n{} = {}".format(var_name, var_value))
+            f.write("[aeOptions]\n{} = {}".format(var_name, var_value))
 
         def _tear_down():       # using yield instead of finalizer does not execute the teardown part
             os.remove(file_name)
@@ -273,16 +273,16 @@ class TestConsoleAppBasics:
         cae.add_option('test_opt', 'test_opt_description', 'test_init_value')
         cae.set_option('test_opt', 'test_val', save_to_config=False)
 
-    def test_add_parameter(self):
-        cae = ConsoleApp('0.0', 'test_add_parameter')
-        cae.add_parameter('test_arg')
+    def test_add_argument(self):
+        cae = ConsoleApp('0.0', 'test_add_argument')
+        cae.add_argument('test_arg')
 
-    def test_get_parameter(self, sys_argv_restore):
-        cae = ConsoleApp('0.0', 'test_get_parameter')
-        cae.add_parameter('test_arg')
+    def test_get_argument(self, sys_argv_restore):
+        cae = ConsoleApp('0.0', 'test_get_argument')
+        cae.add_argument('test_arg')
         arg_val = 'test_arg_val'
         sys.argv = ['test_app', arg_val]
-        assert cae.get_parameter('test_arg') == arg_val
+        assert cae.get_argument('test_arg') == arg_val
 
     def test_show_help(self):
         cae = ConsoleApp('0.0', 'test_show_help')

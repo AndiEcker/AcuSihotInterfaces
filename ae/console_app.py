@@ -3,11 +3,47 @@ console application environment
 ===============================
 
 Features:
+---------
 
 * provides application configuration options by bundling :class:`configparser.ConfigParser` and
   :class:`argparse.ArgumentParser`.
 * highly configurable logging with optional log file rotation.
 * resulting in much less code for your console application to write and maintain.
+
+Basic Usage:
+------------
+
+First create an instance of the class :class:`ConsoleApp` in your main application module::
+
+    cae = ConsoleApp('1.2.3', "My Application Title")
+
+Then define the arguments and options of your application with the methods :meth:`~ConsoleApp.add_argument`
+and :meth:`~ConsoleApp.add_option` of your :class:`ConsoleApp` instance::
+
+    cae.add_argument('argument_id', help="Help text for this command line argument")
+    cae.add_option('option_id', "help text fot his command line option", "default_value")
+    ...
+
+Command Line Options:
+---------------------
+
+The value of a command line option defined with :meth:`ConsoleApp.add_option` can be set on the command line
+by adding it after two leading hyphen characters, then the name or option_id and an equal character::
+
+    $ my_application --option_id=option_value
+
+If a command line option is not specified on the command line then :class:`ConsoleApp` is searching if an
+option default value got specified either a configuration file or in the call of :meth:`ConsoleApp.add_option`.
+The order of this default value search is documented :meth:`here <ConsoleApp.get_option>`.
+
+For to get the resulting value of an option call the :meth:`ConsoleApp.get_option`::
+
+    option_value = cae.get_option('option_id')
+
+
+Enable Logging:
+---------------
+
 
 """
 import sys
@@ -30,7 +66,7 @@ from ae.setting import Setting
 
 INI_EXT: str = '.ini'                   #: INI file extension
 
-MAIN_SECTION_DEF: str = 'Settings'      #: default name of main config section
+MAIN_SECTION_DEF: str = 'aeOptions'      #: default name of main config section
 
 MAX_NUM_LOG_FILES: int = 69             #: maximum number of log files
 
@@ -334,13 +370,21 @@ class ConsoleApp:
         if main_app_instance() is self and not self._shut_down:
             self.shutdown()
 
+    def add_argument(self, *args, **kwargs):
+        """ define new command line argument.
+
+        Original/underlying args/kwargs of :class:`argparse.ArgumentParser` are used - please see the
+        description/definition of :meth:`~argparse.ArgumentParser.add_argument`.
+        """
+        self._arg_parser.add_argument(*args, **kwargs)
+
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
         """ defining and adding an new option for this app as INI/CFG var and as command line argument.
 
         For string expressions that need to evaluated for to determine their value you either can pass
         True for the evaluate parameter or you enclose the string expression with triple high commas.
 
-        :param name:        string specifying the name and short description of this new option.
+        :param name:        string specifying the option id and short description of this new option.
                             The name value will also be available as long command line argument option (case-sens.).
         :param desc:        description string of this new option.
         :param value:       default value and the type of the option. The value will be used only if the config values
@@ -375,14 +419,6 @@ class ConsoleApp:
         self._arg_parser.add_argument(*args, **kwargs)
 
         self.config_options[name] = setting
-
-    def add_parameter(self, *args, **kwargs):
-        """ define new command line arg.
-
-        Original/underlying args/kwargs are used - please see description/definition of
-        :meth:`~argparse.ArgumentParser.add_argument` of :class:`argparse.ArgumentParser`.
-        """
-        self._arg_parser.add_argument(*args, **kwargs)
 
     def show_help(self):
         """ show help message on console output/stream.
@@ -433,6 +469,16 @@ class ConsoleApp:
                         logger=_logger)
         self.uprint("####  Startup finished....  ####", logger=_logger)
 
+    def get_argument(self, name: str) -> Any:
+        """ determine the command line parameter value.
+
+        :param name:    Argument id of the parameter.
+        :return:        Value of the parameter.
+        """
+        if not self._parsed_args:
+            self._parse_args()
+        return getattr(self._parsed_args, name)
+
     def get_option(self, name: str, default_value: Optional[Any] = None) -> Any:
         """ get the value of the option specified by it's name.
 
@@ -450,7 +496,7 @@ class ConsoleApp:
         * value argument passed into the add_option() method call (defining the option)
         * default_value argument passed into this method (should actually not happen-add_option() didn't get called)
 
-        :param name:            name of the option/setting.
+        :param name:            id of the option/setting.
         :param default_value:   default value of the option (if not specified in any INI/CFG file).
 
         :return:                value of the option.
@@ -462,25 +508,15 @@ class ConsoleApp:
     def set_option(self, name: str, val: Any, cfg_fnam: Optional[str] = None, save_to_config: bool = True) -> str:
         """ set the value of an option.
 
-        :param name:            name of the option to set.
+        :param name:            id of the option to set.
         :param val:             value to assign to the option, specified by the `name` arg.
         :param cfg_fnam:        if the args `save_to_config` is True this file will be used to save to new option value.
         :param save_to_config:  save new option value also to a config file specified by the `cfg_fnam` arg or (if not
-                                specified) then use the main config file (ivar _main_cfg_fnam).
+                                specified) then use the main config file (:attr:`ConsoleApp._main_cfg_fnam`).
         :return:                ''/empty string on success else error message text.
         """
         self.config_options[name].value = val
         return self.set_config(name, val, cfg_fnam) if save_to_config else ''
-
-    def get_parameter(self, name: str) -> Any:
-        """ determine the command line parameter value.
-
-        :param name:    Name of the parameter.
-        :return:        Value of the parameter.
-        """
-        if not self._parsed_args:
-            self._parse_args()
-        return getattr(self._parsed_args, name)
 
     def config_file_add(self, fnam: str) -> bool:
         """ add config file name to internal list of processed config files.
@@ -529,8 +565,8 @@ class ConsoleApp:
                         cfg_parser: Optional[ConfigParser] = None) -> Any:
         """ determine config value.
 
-        :param name:            name of the config setting.
-        :param section:         name of the config section (def='Settings').
+        :param name:            name/option_id of the config setting.
+        :param section:         name of the config section (def='aeOptions').
         :param default_value:   default value to return if config value is not specified in any config file.
         :param cfg_parser:      ConfigParser instance to use (def=self._config_parser).
         :return:                value of the config setting.
@@ -568,7 +604,7 @@ class ConsoleApp:
         """ get the value of a config setting.
 
         :param name:            name of the config setting.
-        :param section:         name of the config section (def='Settings').
+        :param section:         name of the config section (def='aeOptions').
         :param default_value:   default value to return if config value is not specified in any config file.
         :param cfg_parser:      ConfigParser instance to use (def=self._config_parser).
         :param value_type:      type of the config value.
@@ -585,10 +621,10 @@ class ConsoleApp:
     def set_config(self, name: str, val: Any, cfg_fnam: Optional[str] = None, section: Optional[str] = None) -> str:
         """ set or change the value of an config setting.
 
-        :param name:            name of the config value to set.
+        :param name:            name/option_id of the config value to set.
         :param val:             value to assign to the config value, specified by the `name` arg.
         :param cfg_fnam:        file name to be used to save to new option value (def=main config file name).
-        :param section:         name of the config section (def='Settings').
+        :param section:         name of the config section (def='aeOptions').
         :return:                ''/empty string on success else error message text.
         """
         global config_lock
