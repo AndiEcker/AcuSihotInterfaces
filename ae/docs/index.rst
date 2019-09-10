@@ -1,19 +1,20 @@
 .. application environment for python - documentation master file.
 
-Documentation of *application environment for python*
-=====================================================
+application environment for python |version|
+============================================
 
-.. toctree::
-   :maxdepth: 3
-   :caption: Contents:
+* pure python (no external dependencies)
+* fully typed (:pep:`526`)
+* fully :ref:`documented <ae-modules>`
+* 100 % test coverage
+* multi thread save
+* flexible configuration options (by bundling :class:`~configparser.ConfigParser` and
+  :class:`~argparse.ArgumentParser`)
+* highly configurable logging (optionally with log file rotation)
+* resulting in much less code (for your console application to write and maintain)
 
 
-Indices and tables
-------------------
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. _ae-modules:
 
 ae modules
 ----------
@@ -30,3 +31,13 @@ ae modules
     ae.setting
     ae.sys_data
     ae.systems
+
+
+
+Indices and tables
+------------------
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

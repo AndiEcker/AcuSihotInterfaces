@@ -30,6 +30,29 @@ class Setting:
         """ property representing the value of this Setting instance.
 
         :return:    the current value of this Setting instance.
+
+        If the getter of this property is recognizing the current value as a special formatted strings
+        then this strings gets automatically evaluated and the evaluation result gets returned. These
+        special formatted strings starting and ending with special characters like so:
+
+        +-------------+------------+----------------------------------------------------------+
+        | starts with | ends with  | evaluation value type                                    |
+        +=============+============+==========================================================+
+        |     (       |     )      | tuple literal                                            |
+        +-------------+------------+----------------------------------------------------------+
+        |     [       |     ]      | list literal                                             |
+        +-------------+------------+----------------------------------------------------------+
+        |     {       |     }      | dict literal                                             |
+        +-------------+------------+----------------------------------------------------------+
+        |     '       |     '      | string literal                                           |
+        +-------------+------------+----------------------------------------------------------+
+        |     \"       |     \"      | string literal                                           |
+        +-------------+------------+----------------------------------------------------------+
+        |    '''      |    '''     | code block                                               |
+        +-------------+------------+----------------------------------------------------------+
+        |    \"\"\"      |    \"\"\"     | code block                                               |
+        +-------------+------------+----------------------------------------------------------+
+
         """
         value = self._value
         try:
@@ -86,18 +109,19 @@ class Setting:
     def _eval_str(str_val: str) -> str:
         """ check `str_val` if needs to be evaluated and return non-empty-and-stripped-eval-string if yes else ''
 
-        :param str_val:     string to evaluate.
-        :return:            stripped value (removed triple high-commas) if need to be evaluated, else empty string.
+        :param str_val:     string to be checked if it can be evaluated and if it need to be stripped.
+        :return:            stripped value (removed triple high-commas) of code block or list/dict/tuple/str literal
+                            if need to be evaluated, else empty string.
         """
         if (str_val.startswith("'''") and str_val.endswith("'''")) \
                 or (str_val.startswith('"""') and str_val.endswith('"""')):
-            ret = str_val[3:-3]
+            ret = str_val[3:-3]     # code block
         elif (str_val.startswith("[") and str_val.endswith("]")) \
                 or (str_val.startswith("{") and str_val.endswith("}")) \
                 or (str_val.startswith("(") and str_val.endswith(")")) \
                 or (str_val.startswith("'") and str_val.endswith("'")) \
                 or (str_val.startswith('"') and str_val.endswith('"')):
-            ret = str_val
+            ret = str_val           # list/dict/tuple/str literal
         else:
             ret = ''
         return ret

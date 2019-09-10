@@ -2,48 +2,68 @@
 console application environment
 ===============================
 
-Features:
----------
+Basic Usage
+-----------
 
-* provides application configuration options by bundling :class:`configparser.ConfigParser` and
-  :class:`argparse.ArgumentParser`.
-* highly configurable logging with optional log file rotation.
-* resulting in much less code for your console application to write and maintain.
+First create an instance of the class :class:`ConsoleApp` in your main application module, specifying
+at least the version string and the title of your application::
 
-Basic Usage:
-------------
+    from ae.console_app import ConsoleApp
 
-First create an instance of the class :class:`ConsoleApp` in your main application module::
+    cae = ConsoleApp('0.1.2dev', "My Application Title")
 
-    cae = ConsoleApp('1.2.3', "My Application Title")
+Then define the command line arguments and the configuration options of your application with the methods
+:meth:`~ConsoleApp.add_argument` and :meth:`~ConsoleApp.add_option` of your just created
+:class:`ConsoleApp` instance::
 
-Then define the arguments and options of your application with the methods :meth:`~ConsoleApp.add_argument`
-and :meth:`~ConsoleApp.add_option` of your :class:`ConsoleApp` instance::
-
-    cae.add_argument('argument_id', help="Help text for this command line argument")
-    cae.add_option('option_id', "help text fot his command line option", "default_value")
+    cae.add_argument('argument_name_or_id', help="Help text for this command line argument")
+    cae.add_option('option_name_or_id', "help text for this command line option", "default_value")
     ...
 
-Command Line Options:
+After all arguments and options are defined your application can gather their values with the methods
+:meth:`~ConsoleApp.get_argument` and :meth:`~ConsoleApp.get_option` of your :class:`ConsoleApp` instance.
+
+
+
+Configuration Options
 ---------------------
 
-The value of a command line option defined with :meth:`ConsoleApp.add_option` can be set on the command line
-by adding it after two leading hyphen characters, then the name or option_id and an equal character::
+The value of a configuration option (defined with :meth:`~ConsoleApp.add_option`) can be either set
+directly on the command line like so (by adding the option name or id with two leading hyphen characters,
+followed by an equal character and the option value)::
 
     $ my_application --option_id=option_value
 
 If a command line option is not specified on the command line then :class:`ConsoleApp` is searching if an
-option default value got specified either a configuration file or in the call of :meth:`ConsoleApp.add_option`.
+option default value got specified either in a configuration file or in the call of :meth:`ConsoleApp.add_option`.
 The order of this default value search is documented :meth:`here <ConsoleApp.get_option>`.
 
-For to get the resulting value of an option call the :meth:`ConsoleApp.get_option`::
+For to query the resulting value of an option, simply call the :meth:`ConsoleApp.get_option`::
 
     option_value = cae.get_option('option_id')
 
+For to read the default values of a configuration option directly from the configuration files use the
+:meth:`ConsoleApp.get_config` method. This value can also be set/changed directly from within your application by
+calling the :meth:`ConsoleApp.set_config` method (which will store the new default value into your
+main configuration file).
 
-Enable Logging:
----------------
 
+Pre-defined Configuration Options
+.................................
+
+For a more verbose output you can specify on the command line or in one of your configuration files
+the `ConsoleApp.debugLevel` option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
+with timestamp). The supported option values are documented :data:`here <ae.core.DEBUG_LEVELS>`.
+
+The value of the second pre-defined option :data:`ConsoleApp.logFile` specifies the log file name.
+
+
+Enable Logging
+--------------
+
+
+Enable Multi-Thread-Safety
+--------------------------
 
 """
 import sys
@@ -64,11 +84,11 @@ from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBO
     DEBUG_LEVELS, LOGGING_LEVELS, DATE_TIME_ISO, DATE_ISO, calling_module, force_encoding, sys_env_text, to_ascii
 from ae.setting import Setting
 
-INI_EXT: str = '.ini'                   #: INI file extension
+INI_EXT: str = '.ini'                       #: INI file extension
 
-MAIN_SECTION_DEF: str = 'aeOptions'      #: default name of main config section
+MAIN_SECTION_DEF: str = 'aeOptions'         #: default name of main config section
 
-MAX_NUM_LOG_FILES: int = 69             #: maximum number of log files
+MAX_NUM_LOG_FILES: int = 69                 #: maximum number of log files
 
 # global Locks for to prevent errors in log file rotation, config reloads and config reads
 log_file_rotation_lock = threading.Lock()
@@ -250,7 +270,12 @@ def uprint(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = N
 
 
 class ConsoleApp:
-    """ encapsulating ConfigParser and ArgumentParser for python console applications.
+    """ easy console arguments and options, configuration options, logging and debugging for your application
+
+    Most applications only need a single instance of this class. Each instance is encapsulating a ConfigParser and
+    a ArgumentParser instance.
+
+    Instance Attributes:
 
     :attr startup_beg:          datetime of app instantiation/startup.
     :attr config_options:       pre-/user-defined options (dict of Setting instances).
@@ -326,7 +351,7 @@ class ConsoleApp:
         self._app_name: str = os.path.splitext(app_fnam)[0]
         self._app_version: str = app_version
 
-        # prepare load of config files (done in config_load()) where last existing INI/CFG file is default config file
+        # prepare config files, including determine default config file (last existing INI/CFG file) for
         # .. to write to and if there is no INI file at all then create on demand a <APP_NAME>.INI file in the cwd
         self._config_parser: Optional[ConfigParser] = None
         self._config_files: list = list()
@@ -360,6 +385,9 @@ class ConsoleApp:
         # prepare argument parser
         formatter_class = formatter_class or HelpFormatter
         self._arg_parser = ArgumentParser(description=app_desc, epilog=epilog, formatter_class=formatter_class)
+        self.add_argument = self._arg_parser.add_argument       #: redirect this method to our ArgumentParser instance
+
+        # create pre-defined config options
         self.add_option('debugLevel', "Display additional debugging info on console output", debug_level_def, 'D',
                         choices=DEBUG_LEVELS.keys())
         self.add_option('logFile', "Copy stdout and stderr into log file", logging_config.get('file_name_def', ''), 'L')
@@ -376,18 +404,21 @@ class ConsoleApp:
         Original/underlying args/kwargs of :class:`argparse.ArgumentParser` are used - please see the
         description/definition of :meth:`~argparse.ArgumentParser.add_argument`.
         """
+        # THIS METHOD DEF IS USED ONLY FOR DOCUMENTATION BUILD ###
+        # .. this method get never called because gets overwritten with self._arg_parser.add_argument in __init__().
         self._arg_parser.add_argument(*args, **kwargs)
 
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
-        """ defining and adding an new option for this app as INI/CFG var and as command line argument.
+        """ defining and adding a new configuration option for this app.
 
-        For string expressions that need to evaluated for to determine their value you either can pass
-        True for the evaluate parameter or you enclose the string expression with triple high commas.
+        The value of a configuration option can be of any type and is internally represented by an instance of the
+        :class:`~ae.setting.Setting` class. Supported value types and literals are documented
+        :attr:`here <ae.setting.Setting.value>`.
 
         :param name:        string specifying the option id and short description of this new option.
                             The name value will also be available as long command line argument option (case-sens.).
-        :param desc:        description string of this new option.
-        :param value:       default value and the type of the option. The value will be used only if the config values
+        :param desc:        description and command line help string of this new option.
+        :param value:       default value and the type of the option. This value will be used only if the config values
                             are not specified in any config file. The command line argument option value
                             will always overwrite this value (and any value in any config file).
         :param short_opt:   short option character. If not passed or passed as '' then the first character of the name
