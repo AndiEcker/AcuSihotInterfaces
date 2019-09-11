@@ -12,12 +12,15 @@
       <w>debian</w>
       <w>ecker</w>
       <w>genindex</w>
+      <w>getcwd</w>
       <w>graphviz</w>
       <w>intersphinx</w>
       <w>lockname</w>
       <w>meth</w>
       <w>minlen</w>
       <w>modindex</w>
+      <w>paramlinks</w>
+      <w>paramref</w>
       <w>penwidth</w>
       <w>pluggy</w>
       <w>quickstart</w>

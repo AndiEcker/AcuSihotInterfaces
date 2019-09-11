@@ -37,6 +37,7 @@ extensions = [
     'sphinx.ext.graphviz',
     'sphinx.ext.autosummary',
     'sphinx_rtd_theme',
+    'sphinx_paramlinks',
 ]
 
 
@@ -109,7 +110,7 @@ elif html_theme == 'sphinx_rtd_theme':
     html_theme_options = {
         'collapse_navigation': False,
         'prev_next_buttons_location': 'both',
-        'style_external_links': True,
+        'style_external_links': False,
     }
 
 
