@@ -59,7 +59,7 @@ SELECT audit.audit_table('client_products');
 
 
 
----- HOTEL AND ROOM CONFIGURATION - currently defined/configured in .console_app_env.cfg
+---- HOTEL AND ROOM CONFIGURATION - currently defined/configured in .app_env.cfg
 -- hotels
 CREATE TABLE hotels
 (

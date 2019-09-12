@@ -2,7 +2,7 @@
 --- VERSION 01: post-roll-out fixes (never used, only for to prepare roll-out of other CPA resorts)
 
 -- Other system configuration changes for to add a new resort:
--- * .console_app_env.cfg: configure new resort in INI vars hotelIds, resortCats
+-- * .app_env.cfg: configure new resort in INI vars hotelIds, resortCats
 --  and in section RcResortIds.
 -- * add new hotel and room categories to Salesforce.
 

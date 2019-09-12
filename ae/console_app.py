@@ -12,50 +12,149 @@ at least the version string and the title of your application::
 
     cae = ConsoleApp('0.1.2dev', "My Application Title")
 
-Then define the command line arguments and the configuration options of your application with the methods
-:meth:`~ConsoleApp.add_argument` and :meth:`~ConsoleApp.add_option` of your just created
-:class:`ConsoleApp` instance::
+The :class:`ConsoleApp` instance will store the application version and title and will initialize the
+application environment like e.g. the application startup folder path and the current working directory path.
+
+.. _app-name:
+
+:class:`ConsoleApp` determines automatically the name/id of your application from the base-name (without extension)
+of the application startup module (e.g. <app_name>.py or main.py).
+
+With the methods :meth:`~ConsoleApp.add_argument` and :meth:`~ConsoleApp.add_option` of your just created
+:class:`ConsoleApp` instance you can then define the command line arguments and
+the :ref:`config options <config-options>` of your application::
 
     cae.add_argument('argument_name_or_id', help="Help text for this command line argument")
     cae.add_option('option_name_or_id', "help text for this command line option", "default_value")
     ...
 
-After all arguments and options are defined your application can gather their values with the methods
+After all arguments and config options are defined your application can gather their values with the methods
 :meth:`~ConsoleApp.get_argument` and :meth:`~ConsoleApp.get_option` of your :class:`ConsoleApp` instance.
 
 
+Configuration Files, Sections, Variables And Options
+----------------------------------------------------
 
-Configuration Options
----------------------
+.. _config-files:
 
-The value of a configuration option (defined with :meth:`~ConsoleApp.add_option`) can be either set
-directly on the command line like so (by adding the option name or id with two leading hyphen characters,
-followed by an equal character and the option value)::
+Config Files
+............
 
-    $ my_application --option_id=option_value
+You can create and use separate config files for each of your applications, used system environments and data domains.
+A config file consists of config sections, each section provides config variables and config options
+for to parametrize your application at run-time.
 
-If a command line option is not specified on the command line then :class:`ConsoleApp` is searching if an
-option default value got specified either in a configuration file or in the call of :meth:`ConsoleApp.add_option`.
+While the config file names and extensions for data domains can be freely chosen (like any_name.txt), there
+are also some hard-coded file names that are recognized:
+
++----------------------------+---------------------------------------------------+
+|  config file               |  used for .... config variables and options       |
++============================+===================================================+
+| <any_path_name_and_ext>    |  domain specific                                  |
++----------------------------+---------------------------------------------------+
+| <app_name>.ini             |  application specific (read-/write-able)          |
++----------------------------+---------------------------------------------------+
+| <app_name>.cfg             |  application specific (read-only)                 |
++----------------------------+---------------------------------------------------+
+| .app_env.cfg               |  application/suite specific (read-only)           |
++----------------------------+---------------------------------------------------+
+| .sys_env.cfg               |  general system (read-only)                       |
++----------------------------+---------------------------------------------------+
+| .sys_env<SYS_ENV_ID>.cfg   |  the system with SYS_ID (read-only)               |
++----------------------------+---------------------------------------------------+
+
+The config files in the above table are ordered by their preference, so domain specific
+config variables/options will always precede/overwrite any application and system
+specific config values. Additionally only domain-specific config files can have any
+file extension and can be placed into any accessible folder. In contrary all
+non-domain-specific config files get only loaded if they are either in the application
+installation folder, in the current working directory or up to two levels above
+the current working directly.
+
+.. _config-sections:
+
+Config sections
+...............
+
+This module is supporting not only the `config file format <https://en.wikipedia.org/wiki/INI_file>`_ of
+Pythons built-in :class:`~configparser.ConfigParser` class, but also extends it with
+:ref:`complex config value types <config-value-types>`.
+
+The following examples shows a config file with two config sections containing one config option (named
+`logFile`) and two config variables (named `configVar1` and `configVar2`)::
+
+    [aeOptions]
+    logFile = './logs/my_log_file.log'
+
+    [SectionName]
+    configVar1 = ['list-element1', ('list-element2-1', 'list-element2-2', ), dict()]
+    configVar2 = {'key1': 'value 1', 'key2': 2222, 'key3': datetime.datetime.now()}
+
+
+.. _config-variables:
+
+Config Variables
+................
+
+Config variables can be defined in any config section and can hold any data type. In the example
+config file above the config variable `configVar1` has a list with 3 elements: the first element
+is a string the second element is a tuple and the third element is an empty dict.
+
+The complex data type support of this module allows to specify a config value as a string that can be
+evaluated with the built-in :func:`eval` function. The value of the evaluated string is taken as the
+resulting config value of this config variable.
+
+From within your application simply call the :meth:`~ConsoleApp.get_config` method with the
+name and section names of the config variable for to fetch their config value.
+
+The default value of a config variable can also be set/changed directly from within your application
+by calling the :meth:`~ConsoleApp.set_config` method.
+
+
+.. _config-options:
+
+Config Options
+..............
+
+Config options are config variables that are defined exclusively in the hard-coded section
+:data:`aeOptions <MAIN_CFG_SECTION>`. The value of a config option can optionally be given/overwritten
+on the command line by adding the option name or id with two leading hyphen characters, followed by an equal
+character and the option value)::
+
+    $ my_application --logFile='my_new_log_file.log'
+
+If a command line option is not specified on the command line then :class:`ConsoleApp` is searching if a default value
+for this config option got specified either in a config file or in the call of :meth:`~ConsoleApp.add_option`.
 The order of this default value search is documented :meth:`here <ConsoleApp.get_option>`.
 
-For to query the resulting value of an option, simply call the :meth:`ConsoleApp.get_option`::
+For to query the resulting value of a config option, simply call the :meth:`~ConsoleApp.get_option` method
+of your :class:`ConsoleApp` instance::
 
     option_value = cae.get_option('option_id')
 
-For to read the default values of a configuration option directly from the configuration files use the
-:meth:`ConsoleApp.get_config` method. This value can also be set/changed directly from within your application by
-calling the :meth:`ConsoleApp.set_config` method (which will store the new default value into your
-main configuration file).
+For to read the default value of a config option or variable directly from the available configuration files use the
+:meth:`ConsoleApp.get_config` method instead. The default value of a config option or variable can also be
+set/changed directly from within your application by calling the :meth:`ConsoleApp.set_config` method.
+
+.. _config-value-types:
+
+Config Value Types
+..................
+
+With the :paramref:`~ConsoleApp.add_option.value` argument and
+:attr:`special encapsulated strings <ae.setting.Setting.value>` you're able to specify any type
+for your config options and variables (like dict/list/tuple/datetime/... or any other object type).
 
 
 Pre-defined Configuration Options
 .................................
 
 For a more verbose output you can specify on the command line or in one of your configuration files
-the `ConsoleApp.debugLevel` option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
-with timestamp). The supported option values are documented :data:`here <ae.core.DEBUG_LEVELS>`.
+the pre-defined config option `debugLevel` (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
+with timestamp). The supported config option values are documented :data:`here <ae.core.DEBUG_LEVELS>`.
 
-The value of the second pre-defined option :data:`ConsoleApp.logFile` specifies the log file name.
+The value of the second pre-defined config option `logFile` specifies the log file path/file_name, which can
+be abbreviated on the command line with the short option -L.
 
 
 Enable Logging
@@ -103,7 +202,7 @@ app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDiction
 
 The first created :class:`ConsoleApp` instance is called the main app instance and has an empty string as the dict key.
 This weak dict gets automatically initialized in :func:`ConsoleApp.__init__` for to allow log file split/rotation
-and debugLevel access at module level.
+and debugLevel access at application thread or module level.
 """
 
 
@@ -270,10 +369,10 @@ def uprint(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = N
 
 
 class ConsoleApp:
-    """ provides easy console arguments and options, configuration options, logging and debugging for your application.
+    """ provides easy console arguments and options, config options, logging and debugging for your application.
 
     Most applications only need a single instance of this class. Each instance is encapsulating a ConfigParser and
-    a ArgumentParser instance. So only apps with threads and different sets of configuration options for each
+    a ArgumentParser instance. So only apps with threads and different sets of config options for each
     thread have to create a separate instance of this class.
 
     Instance Attributes (ordered alphabetically - ignoring underscore characters):
@@ -287,8 +386,8 @@ class ConsoleApp:
       (set via the :paramref:`~.__init__.config_eval_vars` argument of the method :meth:`ConsoleApp.__init__`).
     * :attr:`_config_files`         iterable of config file names that are getting loaded and parsed (specify
       additional configuration/INI files via :paramref:`.__init__.additional_cfg_files`).
-    * :attr:`config_options`        pre-/user-defined options (dict of Setting instances defined via
-      :meth:`~ConsoleApp.add_option`).
+    * :attr:`config_options`        pre-/user-defined options (dict of :class:`~ae.setting.Setting` instances defined
+      via :meth:`~ConsoleApp.add_option`).
     * :attr:`_config_parser`        internal instance of used ConfigParser.
     * :attr:`_log_file_index`       index of the current rotation log file backup.
     * :attr:`_log_file_max_size`    maximum size in MBytes of a log file.
@@ -319,7 +418,7 @@ class ConsoleApp:
         :param config_eval_vars:        dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
         :param additional_cfg_files:    iterable of additional CFG/INI file names (opt. incl. abs/rel. path).
-        :param option_value_stripper:   callable/function for to strip/reformat Setting option value for validation.
+        :param option_value_stripper:   callable for to strip/reformat/normalize the option choices values.
         :param multi_threading:         pass True if instance is used in multi-threading app.
         :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
         :param formatter_class:         alternative formatter class passed onto ArgumentParser instantiation.
@@ -356,8 +455,8 @@ class ConsoleApp:
         self.suppress_stdout: bool = True     # block initially until app-config/-logging is fully initialized
 
         self.startup_beg: datetime.datetime = datetime.datetime.now()       #: app startup datetime
-        self.config_options: Dict[str, Setting] = dict()                    #: all configuration options
-        self.config_choices: Dict[str, Sequence] = dict()                   #: all valid configuration option choices
+        self.config_options: Dict[str, Setting] = dict()                    #: all config options
+        self.config_choices: Dict[str, Sequence] = dict()                   #: all valid config option choices
 
         self.config_eval_vars: dict = config_eval_vars or dict()            #: additional application specific data
 
@@ -376,10 +475,11 @@ class ConsoleApp:
         self._main_cfg_fnam: Optional[str] = None                           #: main config file name
         self._main_cfg_mod_time: Optional[int] = None                       #: main config file modification datetime
         self.config_init(app_path_fnam_ext, additional_cfg_files)
-        self._option_value_stripper: Optional[Callable] = option_value_stripper     #: callable to strip option values
+        self._option_value_stripper: Optional[Callable] = option_value_stripper
+        #: callable to strip or normalize option choice values
         self.config_load()
 
-        # prepare logging: most values will be initialized in self._parse_args() indirectly via logFile setting
+        # prepare logging: most values will be initialized in self._parse_args() indirectly via logFile config option
         if logging_config is None:
             logging_config = dict()
         self._log_file_obj: Optional[TextIO] = None                         #: log file stream instance
@@ -431,9 +531,9 @@ class ConsoleApp:
         self._arg_parser.add_argument(*args, **kwargs)
 
     def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
-        """ defining and adding a new configuration option for this app.
+        """ defining and adding a new config option for this app.
 
-        The value of a configuration option can be of any type and is internally represented by an instance of the
+        The value of a config option can be of any type and is internally represented by an instance of the
         :class:`~ae.setting.Setting` class. Supported value types and literals are documented
         :attr:`here <ae.setting.Setting.value>`.
 
@@ -533,47 +633,47 @@ class ConsoleApp:
         return getattr(self._parsed_args, name)
 
     def get_option(self, name: str, default_value: Optional[Any] = None) -> Any:
-        """ get the value of a configuration option specified by it's name (option id).
+        """ get the value of a config option specified by it's name (option id).
 
         The returned value has the same type as the value specified in the :meth:`add_option` call and
         gets taken either from the command line, the default section (:data:`MAIN_SECTION_DEF`) of any found
-        config setting file (with file extension INI or CFG) or from the default values specified in your python code.
+        config variable file (with file extension INI or CFG) or from the default values specified in your python code.
 
         Underneath you find the order of the value search - the first specified/found value will be returned:
 
         #. command line arguments option value
-        #. INI/CFG file(s) added in your app code via one of the methods :meth:`~.config_file_add` or
-          :meth:`config_init`. which will be searched for the configuration option value in reversed order - so
-          the last added config file will be the first one where the configuration option will be searched.
-        #. INI/CFG file(s) added via :paramref:`~ConsoleApp.additional_cfg_files` argument of
-           :meth:`ConsoleApp.__init__` searched in the reversed order of the list.
+        #. :ref:`config files <config-files>` added in your app code via one of the methods :meth:`.config_file_add` or
+           :meth:`config_init` (these files will be searched for the config option value in reversed order - so the
+           last added :ref:`config file <config-files>` will be the first one where the config option will be searched)
+        #. :ref:`config files <config-files>` added via :paramref:`~ConsoleApp.additional_cfg_files` argument of
+           :meth:`ConsoleApp.__init__` (searched in the reversed order)
         #. <app_name>.INI file in the <cwd>
         #. <app_name>.CFG file in the <cwd>
         #. <app_name>.INI file in the <app_dir>
         #. <app_name>.CFG file in the <app_dir>
         #. .sys_env.cfg in the <cwd>
         #. .sys_env<sys_env_id>.cfg in the <cwd>
-        #. .console_app_env.cfg in the <cwd>
+        #. .app_env.cfg in the <cwd>
         #. .sys_env.cfg in the parent folder of the <cwd>
         #. .sys_env<sys_env_id>.cfg in the parent folder of the <cwd>
-        #. .console_app_env.cfg in the parent folder of the <cwd>
+        #. .app_env.cfg in the parent folder of the <cwd>
         #. .sys_env.cfg in the <app_dir>
         #. .sys_env<sys_env_id>.cfg in the <app_dir>
-        #. .console_app_env.cfg in the <app_dir>
+        #. .app_env.cfg in the <app_dir>
         #. .sys_env.cfg in the parent folder of the parent folder of the <cwd>
         #. .sys_env<sys_env_id>.cfg in the parent folder of the parent folder of the <cwd>
-        #. .console_app_env.cfg in the parent folder of the parent folder of the <cwd>
+        #. .app_env.cfg in the parent folder of the parent folder of the <cwd>
         #. value argument passed into the add_option() method call (defining the option)
         #. default_value argument passed into this method (only if :class:`~ConsoleApp.add_option` didn't get called)
 
-        Placeholders in the above search order lists are:
+        **Placeholders in the above search order lists are**:
 
-        * <cwd> is the current working directory of your application (determined with :func:`os.getcwd`)
-        * <app_name> is the base name without extension of your main python code file.
-        * <app_dir> is the application directory (where your <app_name>.py or the exe file of your app is situated)
-        * <sys_env_id> is specified as argument of :meth:`ConsoleApp.__init__`
+        * *<cwd>* is the current working directory of your application (determined with :func:`os.getcwd`)
+        * *<app_name>* is the base name without extension of your main python code file.
+        * *<app_dir>* is the application directory (where your <app_name>.py or the exe file of your app is situated)
+        * *<sys_env_id>* is specified as argument of :meth:`ConsoleApp.__init__`
 
-        :param name:            id of the option/setting.
+        :param name:            id of the config option.
         :param default_value:   default value of the option (if not defined with :class:`~ConsoleApp.add_option`).
 
         :return:                first found value of the option identified by :paramref:`~ConsoleApp.get_option.name`.
@@ -583,14 +683,14 @@ class ConsoleApp:
         return self.config_options[name].value if name in self.config_options else default_value
 
     def set_option(self, name: str, val: Any, cfg_fnam: Optional[str] = None, save_to_config: bool = True) -> str:
-        """ set or change the value of a configuration option.
+        """ set or change the value of a config option.
 
-        :param name:            id of the configuration option to set.
+        :param name:            id of the config option to set.
         :param val:             value to assign to the option, identified by :paramref:`~.set_option.name`.
         :param cfg_fnam:        config file name to save new option value. If not specified then the
                                 default file name of :meth:`~ConsoleApp.set_config` will be used.
         :param save_to_config:  pass False to prevent to save the new option value also to a config file.
-                                The value of the configuration option will be changed in any case.
+                                The value of the config option will be changed in any case.
         :return:                ''/empty string on success else error message text.
         """
         self.config_options[name].value = val
@@ -622,7 +722,7 @@ class ConsoleApp:
         self._main_cfg_fnam = cwd_path_fnam + INI_EXT  # default will be overwritten by config_load()
         sys_env_id = self.sys_env_id or 'TEST'
         for cfg_path in (os.path.join(cwd_path, '..', '..'), app_path, os.path.join(cwd_path, '..'), cwd_path, ):
-            for cfg_file in ('.console_app_env.cfg', '.sys_env' + sys_env_id + '.cfg', '.sys_env.cfg', ):
+            for cfg_file in ('.app_env.cfg', '.sys_env' + sys_env_id + '.cfg', '.sys_env.cfg', ):
                 self.config_file_add(os.path.join(cfg_path, cfg_file))
 
         app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
@@ -641,13 +741,13 @@ class ConsoleApp:
 
     def _get_config_val(self, name: str, section: Optional[str] = None, default_value: Optional[Any] = None,
                         cfg_parser: Optional[ConfigParser] = None) -> Any:
-        """ determine thread-safe the value of a config setting from the config file.
+        """ determine thread-safe the value of a config variable from the config file.
 
-        :param name:            name/option_id of the config setting.
+        :param name:            name/option_id of the config variable.
         :param section:         name of the config section (def= :paramRef:`MAIN_SECTION_DEF` also if passed as None/'')
         :param default_value:   default value to return if config value is not specified in any config file.
         :param cfg_parser:      ConfigParser instance to use (def=self._config_parser).
-        :return:                value of the config setting.
+        :return:                value of the config variable.
         """
         global config_lock
         with config_lock:
@@ -679,16 +779,17 @@ class ConsoleApp:
 
     def get_config(self, name: str, section: Optional[str] = None, default_value: Optional[Any] = None,
                    cfg_parser: Optional[ConfigParser] = None, value_type: Optional[Type] = None) -> Any:
-        """ get the value of a config setting.
+        """ get the value of a config variable.
 
-        :param name:            name of the config setting or id of configuration option.
-        :param section:         name of the config section (def= :data:`MAIN_SECTION_DEF`).
+        :param name:            name of the :ref:`config variable <config-variables>`
+                                or id of :ref:`config option <config-options>`.
+        :param section:         name of the :ref:`config section <config-sections>` (def= :data:`MAIN_SECTION_DEF`).
         :param default_value:   default value to return if config value is not specified in any config file.
         :param cfg_parser:      ConfigParser instance to use (def= :attr:`~ConsoleApp._config_parser`).
         :param value_type:      type of the config value.
-        :return:                value of the config setting or of the configuration option (the latter only
+        :return:                value of the config variable or of the config option (the latter only
                                 if the passed string in :paramref:`~.get_config.name` is the id of a defined
-                                configuration option and the :paramref:`.section` is either empty or
+                                config option and the :paramref:`.section` is either empty or
                                 equal to the value of :data:`MAIN_SECTION_DEF`.
         """
         if name in self.config_options and section in (MAIN_SECTION_DEF, '', None):
@@ -700,16 +801,16 @@ class ConsoleApp:
         return val
 
     def set_config(self, name: str, val: Any, cfg_fnam: Optional[str] = None, section: Optional[str] = None) -> str:
-        """ set or change the value of a config setting and if exists the related configuration option.
+        """ set/change the value of a :ref:`config variable <config-variables>` and if exists the related config option.
 
         If the passed string in :paramref:`~.set_config.name` is the id of a defined
-        configuration option and :paramref:`~.set_config.section` is either empty or
+        :ref:`config option <config-options>` and :paramref:`~.set_config.section` is either empty or
         equal to the value of :data:`MAIN_SECTION_DEF` then the value of this
-        configuration option will be changed too.
+        config option will be changed too.
 
         :param name:            name/option_id of the config value to set.
         :param val:             value to assign to the config value, specified by the
-                                :paramref:`.set_config.name` argument.
+                                :paramref:`~.set_config.name` argument.
         :param cfg_fnam:        file name (def= :attr:`~ConsoleApp._main_cfg_fnam`) to save the new option value to.
         :param section:         name of the config section (def= :data:`MAIN_SECTION_DEF`).
         :return:                ''/empty string on success else error message text.

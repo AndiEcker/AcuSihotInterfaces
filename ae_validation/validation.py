@@ -267,7 +267,7 @@ def init_validation(cae):
     if filter_sf_rec_types:
         cae.uprint(prefix + "Filter clients with record types:", filter_sf_rec_types)
 
-    # determine config settings for extra filters and other preferences
+    # determine config variables for extra filters and other preferences
     filter_email = cae.get_config('filterEmail', default_value='')
     if filter_email:
         cae.uprint(prefix + "Filter email addresses that are:", filter_email)

@@ -630,30 +630,30 @@ defined will be exported/included in the CSV file.
 
 The location IDs provided are 535055 for the BHC hotel and 288275 for the PBC hotel.
 
-#### columnSeparator INI/config setting
+#### columnSeparator INI/config variable
 
 Allows to specify the character used for to separate the columns of the CSV file. The default value is the comma (`,`).
 
-#### maxLengthOfStay INI/config setting
+#### maxLengthOfStay INI/config variable
 
 Because the Sihot WEB interface is only allowing to search for arrival dates a maximum length of a stay can be
 specified for to include them into the exported CSV file. The default value is 42 days.
 
-#### resSearchFlags INI/config setting
+#### resSearchFlags INI/config variable
 
 Allows to specify the flags provided by the Sihot WEB interface `RES-SEARCH` command. The default value is `ALL-HOTELS`.
 
-#### resSearchScope INI/config setting
+#### resSearchScope INI/config variable
 
 Allows to specify the scope flags provided by the Sihot WEB interface `RES-SEARCH` command. The default value is 
 `NOORDERER;NORATES;NOPERSTYPES`.
 
-#### fileCaption INI/config setting
+#### fileCaption INI/config variable
 
 Allows to specify/change the header/caption of the exported CSV file. The default value is 
 `UNIQUEID,CHECKIN,CHECKOUT,FIRSTNAME,LASTNAME,EMAIL,CITY,COUNTRY,RESORT,LOCATIONID,STAYMONTH,STAYYEAR,LANGUAGE`.
 
-#### fileColumns INI/config setting
+#### fileColumns INI/config variable
 
 Allows to specify/change the content of the data row columns exported CSV file. The default value is
 `['<unique_id>', 'ARR', 'DEP',
@@ -710,25 +710,25 @@ In the last example the short options got used (see the Short Option column in t
 pass the `debugLevel` command line option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
 with timestamp).
 
-#### maxDaysDiff INI/config setting
+#### maxDaysDiff INI/config variable
 
 Allows to specify the maximum number of days of difference between the expected and the real check-in/-out day. The
 default value is 2 days. FYI: the Oracle procedure P_SIHOT_ALLOC() that is used by AcuServer to pass occupation
 changes to Acumen is using 4 days of difference (see constant SihotRoomChangeMaxDaysDiff declared in the K package).
 
-#### daysCheckInBefore INI/config setting
+#### daysCheckInBefore INI/config variable
 
 This config variable allows this tool to search also for Acumen reservations that got checked-in the given number
 of days before the expected arrival date.
  
-Please note that the value of this setting is restricted by the value of the maxDaysDiff INI/config setting (see above).
+Please note that the value of this setting is restricted by the value of the maxDaysDiff INI/config variable (see above).
 
-#### daysCheckOutAfter INI/config setting
+#### daysCheckOutAfter INI/config variable
 
 This config variable allows this tool to search also for Acumen reservations that got checked-out the given number
 of days after the expected departure date.
 
-Please note that the value of this setting is restricted by the value of the maxDaysDiff INI/config setting (see above).
+Please note that the value of this setting is restricted by the value of the maxDaysDiff INI/config variable (see above).
 
 
 ### SihotResImport Application
@@ -782,7 +782,7 @@ section [Available Reservation Fields](#available-reservation-fields) above.
 SihotServer is providing several https web services, which are implemented and distributed as pure python package
 scripts. These python scripts are prepared to by used on top of a Apache Linux web server as a WSGI web service
 extension. For to access one of these services you first have to enter the correct user name and password
-(see .console_app_env.cfg).
+(see .app_env.cfg).
 
 #### Setup Web Server
 

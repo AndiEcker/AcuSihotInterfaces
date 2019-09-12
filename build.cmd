@@ -27,7 +27,7 @@ rem switch back to project source folder
 cd ..\..\AcuSihotInterfaces
 
 rem copy hidden configuration files to dist folder
-copy .console_app_env.cfg ..\_build_dist\AcuSihotInterfaces\dist\
+copy .app_env.cfg ..\_build_dist\AcuSihotInterfaces\dist\
 copy .sys_envLIVE.cfg ..\_build_dist\AcuSihotInterfaces\dist\
 copy .sys_envTEST.cfg ..\_build_dist\AcuSihotInterfaces\dist\
 

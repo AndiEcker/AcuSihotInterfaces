@@ -1,5 +1,5 @@
 """
-typed configuration options
+typed config options
 ===========================
 
 """

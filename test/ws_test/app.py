@@ -1,5 +1,5 @@
 """
-After setting up mod_wsgi using embedded mode (instead of daemon mode) the apache/linux server settings are used.
+After setting up mod_wsgi using embedded mode (instead of daemon mode) the apache/linux server configs are used.
 
 For to change the encoding charsets in embedded mode you could change the environment variables
 LANG and LC_ALL of apache in /etc/apache2/envvars. Following the recommendations of the main developer of mod_wsgi

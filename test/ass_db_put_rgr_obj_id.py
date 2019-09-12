@@ -5,7 +5,7 @@ from shif import add_sh_options, print_sh_options, res_no_to_obj_id
 
 __version__ = '0.1'
 
-cae = ConsoleApp(__version__, "Fix rgr_obj_id in ASS_DB", additional_cfg_files=['../.console_app_env.cfg'])
+cae = ConsoleApp(__version__, "Fix rgr_obj_id in ASS_DB", additional_cfg_files=['../.app_env.cfg'])
 cae.add_option('assUser', "User account name for the AssCache/Postgres database", '', 'U')  # ass_interfaces
 cae.add_option('assPassword', "User account password for the AssCache/Postgres database", '', 'P')
 cae.add_option('assDSN', "Name of the AssCache/Postgres database", '', 'N')

@@ -2,7 +2,7 @@ rem reservation interface
 md ..\_build_dist\AcuSihotInterfaces\ws_res
 md ..\_build_dist\AcuSihotInterfaces\ws_res\ae
 
-copy .console_app_env.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
+copy .app_env.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy .sys_envLIVE.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy .sys_envTEST.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 

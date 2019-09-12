@@ -13,7 +13,7 @@ test_path_prefix = '/test'
 
 cfg = ConfigParser()
 cfg.optionxform = str  # for case-sensitive config vars
-cfg.read(['../.console_app_env.cfg', '../.sys_envTEST.cfg'])
+cfg.read(['../.app_env.cfg', '../.sys_envTEST.cfg'])
 # simple cfg.get() call does not convert config value into list/dict without using ae.console_app.Setting()
 ws_host = cfg.get('aeOptions', 'wsHost')
 assert ws_host

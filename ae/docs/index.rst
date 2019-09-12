@@ -8,7 +8,7 @@ application environment for python |version|
 * fully :ref:`documented <ae-modules>`
 * 100 % test coverage
 * multi thread save
-* flexible configuration options (by bundling :class:`~configparser.ConfigParser` and
+* flexible config options (by bundling :class:`~configparser.ConfigParser` and
   :class:`~argparse.ArgumentParser`)
 * highly configurable logging (optionally with log file rotation)
 * resulting in much less code (for your console application to write and maintain)
@@ -23,9 +23,9 @@ ae modules
     :toctree: _autosummary
     :nosignatures:
 
-    ae.core
     ae.architecture
     ae.console_app
+    ae.core
     ae.lockname
     ae.progress
     ae.setting
