@@ -56,7 +56,7 @@ import keyword
 from collections import OrderedDict
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, TypeVar, Union, Generator, Type
 
-from ae_validation.validation import correct_email, correct_phone
+from ae.core import correct_email, correct_phone
 
 ACTION_INSERT = 'INSERT'        #: insert action
 ACTION_UPDATE = 'UPDATE'        #: update action

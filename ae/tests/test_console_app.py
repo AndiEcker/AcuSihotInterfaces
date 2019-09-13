@@ -13,26 +13,10 @@ import threading
 
 from argparse import ArgumentError
 
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO
-from ae.console_app import (
-    uprint, app_instances, main_app_instance, ConsoleApp, _DuplicateSysOut, MAX_NUM_LOG_FILES, INI_EXT)
-
-
-@pytest.fixture
-def config_fna_vna_vva(request):
-    def _setup_and_teardown(file_name='test_config.cfg', var_name='test_config_var', var_value='test_value'):
-        if os.path.sep not in file_name:
-            file_name = os.path.join(os.getcwd(), file_name)
-        with open(file_name, 'w') as f:
-            f.write("[aeOptions]\n{} = {}".format(var_name, var_value))
-
-        def _tear_down():       # using yield instead of finalizer does not execute the teardown part
-            os.remove(file_name)
-        request.addfinalizer(_tear_down)
-
-        return file_name, var_name, var_value
-
-    return _setup_and_teardown
+from ae.core import (
+    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO, INI_EXT, MAX_NUM_LOG_FILES,
+    app_instances, main_app_instance, uprint, _DuplicateSysOut)
+from ae.console_app import ConsoleApp
 
 
 main_cae_instance = None
@@ -213,10 +197,12 @@ class TestPythonLogging:
             os.remove(lf)     # remove log files from last test run
         assert len(file_contents) >= 15     # in (15, 17) # +2 '  **  Additional instance' entries, but meanwhile 21
         for fc in file_contents:
-            if fc.startswith(' <'):
-                fc = fc[fc.index('> ') + 2:]
+            if fc.startswith(" <"):
+                fc = fc[fc.index("> ") + 2:]  # remove thread id prefix
+            if fc.startswith("{TST}"):
+                fc = fc[6:]  # remove sys_env_id prefix
             assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(entry_prefix) \
-                or fc.startswith('TesT  V 0.0') or fc.startswith('  **  Additional instance') or fc == ''
+                or fc.lower().startswith('test  v 0.0') or fc.startswith('  **  Additional instance') or fc == ''
 
 
 class TestHelpers:
@@ -226,8 +212,6 @@ class TestHelpers:
         assert (out == '\n' or out == '') and err == ''
 
         cae = ConsoleApp('0.0', 'test_python_logging_config_dict_basic_from_ini', multi_threading=True)
-        (main_app_instance() or cae).debug_level = DEBUG_LEVEL_TIMESTAMPED
-        (main_app_instance() or cae).multi_threading = True
         uprint(invalid_kwarg='ika')
         out, err = capsys.readouterr()
         assert ('ika' in out or out == '') and err == ''
@@ -237,7 +221,7 @@ class TestHelpers:
         out, err = capsys.readouterr()
         assert (us in out or out == '') and err == ''
 
-        uprint(us, cae_instance=cae)
+        uprint(us, app_instance=cae)
         uprint(us, file=sys.stdout)
         uprint(us, file=sys.stderr)
         fna = 'uprint.txt'

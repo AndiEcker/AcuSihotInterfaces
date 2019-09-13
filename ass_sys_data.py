@@ -8,10 +8,10 @@ from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
                           SDF_SF_SANDBOX, ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS, SYS_CRED_ITEMS,
                           SYS_CRED_NEEDED, SYS_FEAT_ITEMS)
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_ISO
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_ISO, correct_email, \
+    correct_phone, uprint
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.systems import UsedSystems
-from ae_validation.validation import correct_email, correct_phone
 from ae_db.db import OraDB, PostgresDB
 from ae_notification.notification import add_notification_options, init_notification
 from acif import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient
@@ -239,7 +239,6 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
 
 
 def _dummy_stub(msg, *args, **kwargs):
-    from ae.console_app import uprint
     uprint("******  Fallback call of ass_sys_data._dummy_stub() with:\n        msg='{}', args={}, kwargs={}"
            .format(msg, args, kwargs))
 

@@ -3,7 +3,8 @@
 application environment for python |version|
 ============================================
 
-* pure python (no external dependencies)
+* pure python
+* no external dependencies
 * fully typed (:pep:`526`)
 * fully :ref:`documented <ae-modules>`
 * 100 % test coverage
@@ -23,7 +24,6 @@ ae modules
     :toctree: _autosummary
     :nosignatures:
 
-    ae.architecture
     ae.console_app
     ae.core
     ae.lockname

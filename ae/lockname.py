@@ -6,7 +6,7 @@ simple usable threading locks
 import threading
 from typing import Dict, Union
 
-from ae.console_app import main_app_instance, uprint, _logger
+from ae.core import main_app_instance, _logger, uprint
 
 
 class NamedLocks:

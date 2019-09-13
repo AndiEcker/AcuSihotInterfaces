@@ -2,7 +2,7 @@ import pytest
 import os
 import struct
 
-from ae.architecture import executable_architecture
+from ae_osa.architecture import executable_architecture
 
 
 def test_executable_architecture_invalid_file():

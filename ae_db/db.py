@@ -10,8 +10,7 @@ import cx_Oracle
 import psycopg2
 # from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
-from ae.console_app import uprint
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, uprint
 from ae.lockname import NamedLocks
 
 NAMED_BIND_VAR_PREFIX = ':'

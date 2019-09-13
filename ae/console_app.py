@@ -133,8 +133,8 @@ of your :class:`ConsoleApp` instance::
     option_value = cae.get_option('option_id')
 
 For to read the default value of a config option or variable directly from the available configuration files use the
-:meth:`ConsoleApp.get_config` method instead. The default value of a config option or variable can also be
-set/changed directly from within your application by calling the :meth:`ConsoleApp.set_config` method.
+:meth:`~ConsoleApp.get_config` method instead. The default value of a config option or variable can also be
+set/changed directly from within your application by calling the :meth:`~ConsoleApp.set_config` method.
 
 .. _config-value-types:
 
@@ -157,229 +157,37 @@ The value of the second pre-defined config option `logFile` specifies the log fi
 be abbreviated on the command line with the short option -L.
 
 
-Enable Logging
---------------
-
-
-Enable Multi-Thread-Safety
---------------------------
-
 """
-import sys
 import os
 import datetime
 
 import threading
-from typing import Any, AnyStr, Callable, Dict, Iterable, Optional, TextIO, Type, Sequence
-import weakref
+from typing import Any, Callable, Dict, Iterable, Optional, TextIO, Type, Sequence
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter, Namespace
 
-import logging
-import logging.config
-
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, \
-    DEBUG_LEVELS, LOGGING_LEVELS, DATE_TIME_ISO, DATE_ISO, calling_module, force_encoding, sys_env_text, to_ascii
+from ae.core import (
+    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVELS,
+    DATE_TIME_ISO, DATE_ISO, INI_EXT, MAIN_SECTION_DEF,
+    app_std_out, _logger, main_app_instance, sys_env_text, AppBase)
 from ae.setting import Setting
 
-INI_EXT: str = '.ini'                       #: INI file extension
-
-MAIN_SECTION_DEF: str = 'aeOptions'         #: default name of main config section
-
-MAX_NUM_LOG_FILES: int = 69                 #: maximum number of log files
 
 # global Locks for to prevent errors in log file rotation, config reloads and config reads
-log_file_rotation_lock = threading.Lock()
 config_lock = threading.Lock()
 config_read_lock = threading.Lock()
 
 
-# The following line is throwing an error in the Sphinx docs make:
-# app_instances: weakref.WeakValueDictionary[str, "ConsoleApp"] = weakref.WeakValueDictionary() #: dict of app instances
-app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, ConsoleApp]
-""" `app_instances` is holding the references for all :class:`ConsoleApp` instances created at run time.
-
-The first created :class:`ConsoleApp` instance is called the main app instance and has an empty string as the dict key.
-This weak dict gets automatically initialized in :func:`ConsoleApp.__init__` for to allow log file split/rotation
-and debugLevel access at application thread or module level.
-"""
-
-
-def main_app_instance() -> Optional["ConsoleApp"]:
-    """ determine the main instance of the :class:`ConsoleApp` in the current running application.
-
-    :return:    main :class:`~ae.console_app.ConsoleApp` instance or None (if app is not fully initialized yet).
-    """
-    return app_instances.get('')
-
-
-def _get_debug_level() -> int:
-    """ determining the debug level of the main :class:`ConsoleApp` instance of the currently running app.
-
-    :return: current debug level.
-    """
-    main_instance = main_app_instance()
-    if main_instance and 'debugLevel' in main_instance.config_options:
-        return main_instance.config_options['debugLevel'].value
-    return DEBUG_LEVEL_DISABLED
-
-
-# save original stdout/stderr
-ori_std_out = sys.stdout
-ori_std_err = sys.stderr
-app_std_out = ori_std_out
-app_std_err = ori_std_err
-
-
-class _DuplicateSysOut:
-    """ private helper class used by :class:`ConsoleApp` for to duplicate the standard output stream to an log file.
-    """
-    def __init__(self, log_file_obj: TextIO, sys_out_obj: TextIO = ori_std_out) -> None:
-        """ initialise a new T-stream-object
-
-        :param log_file_obj:    log file stream.
-        :param sys_out_obj:     standard output stream (def=sys.stdout)
-        """
-        self.log_file_obj = log_file_obj
-        self.sys_out_obj = sys_out_obj
-
-    def write(self, message: AnyStr) -> None:
-        """ write string to log and standard output streams.
-
-        :param message:     string to output.
-        """
-        if self.log_file_obj and not self.log_file_obj.closed:
-            try:
-                self.log_file_obj.write(message)
-            except UnicodeEncodeError:
-                # log file has different encoding than console, so simply replace with backslash
-                self.log_file_obj.write(force_encoding(message, encoding=self.log_file_obj.encoding))
-        if not self.sys_out_obj.closed:
-            self.sys_out_obj.write(message)
-
-    def __getattr__(self, attr: str) -> object:
-        """ get attribute value from standard output stream.
-
-        :param attr:    name of the attribute to retrieve/return.
-        :return:        value of the attribute.
-        """
-        return getattr(self.sys_out_obj, attr)
-
-
-_logger = None       #: python logger for this module gets lazy/late initialized and only if requested by caller
-
-
-def logger_late_init():
-    """ check if logging modules got initialized already and if not then do it now. """
-    global _logger
-    if not _logger:
-        _logger = logging.getLogger(__name__)
-
-
-def uprint(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = None, flush: bool = False,
-           encode_errors_def: str = 'backslashreplace', debug_level: Optional[int] = None,
-           logger: Optional['logging.Logger'] = None, cae_instance: Optional['ConsoleApp'] = None,
-           **kwargs) -> None:
-    """ universal/unbreakable print function - replacement for the python print() built-in.
-
-    This method is silently handling and auto-correcting string encode errors for output streams which are
-    not supporting unicode. Any instance of :class:`ConsoleApp` is providing this function as a method with the
-    :func:`same name <ConsoleApp.uprint>`). It is recommended to call/use the instance method instead of this function.
-
-    :param objects:             tuple of objects to be printed.
-    :param sep:                 separator character between each printed object/string (def=" ").
-    :param end:                 finalizing character added to the end of this print (def="\\\\n").
-    :param file:                output stream object to be printed to (def=None which will use standard output streams).
-    :param flush:               flush stream after printing (def=False).
-    :param encode_errors_def:   default error handling for to encode (def='backslashreplace').
-    :param debug_level:         current debug level (def=None).
-    :param logger:              used logger for to output `objects` (def=None).
-    :param cae_instance:        used instance of :class:`ConsoleApp` (def=None which trying to use the main instance).
-    :param kwargs:              additional kwargs dict (items will be printed to the output stream).
-    """
-    processing = end == "\r"
-    if not file:
-        # app_std_out cannot be specified as file argument default because get initialized after import of this module
-        # .. within ConsoleApp._open_log_file(). Use ori_std_out for animation prints (see tcp.py/TcpServer.run()).
-        file = ori_std_out if processing else app_std_out
-    enc = file.encoding
-
-    if cae_instance is None:
-        cae_instance = main_app_instance()
-    if cae_instance is not None:
-        if getattr(cae_instance, 'multi_threading', False):            # add thread ident
-            objects = (" <{: >6}>".format(threading.get_ident()),) + objects
-        if getattr(cae_instance, '_log_file_obj', False):
-            # creating new log file and backup of current one if the current one has more than 20 MB in size
-            cae_instance.log_file_check_rotation()
-
-    # even with enc == 'UTF-8' and because of _DuplicateSysOut is also writing to file it raises the exception:
-    # ..UnicodeEncodeError: 'charmap' codec can't encode character '\x9f' in position 191: character maps to <undefined>
-    # if enc == 'UTF-8':
-    #     print(*objects, sep=sep, end=end, file=file, flush=flush)
-    # else:
-    #     print(*map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects),
-    #           sep=sep, end=end, file=file, flush=flush)
-    if _get_debug_level() >= DEBUG_LEVEL_TIMESTAMPED:
-        objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + objects
-
-    if kwargs:
-        objects += ("\n   *  EXTRA KWARGS={}".format(kwargs),)
-
-    use_logger = not processing and debug_level in LOGGING_LEVELS \
-        and getattr(cae_instance, 'logging_conf_dict', False)
-    if use_logger and logger is None:
-        logger_late_init()
-        module = calling_module()
-        logger = logging.getLogger(module) if module else _logger
-
-    retries = 2
-    while retries:
-        try:
-            print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects)
-            if use_logger or getattr(cae_instance, 'multi_threading', False):
-                # prevent fluttered log file content by concatenating objects and adding end value
-                # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
-                # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
-                print_one_str = sep.join(print_strings)
-                sep = ""
-                if end and not use_logger:
-                    print_one_str += end
-                    end = ""
-                print_strings = (print_one_str,)
-
-            if use_logger:
-                logger.log(level=LOGGING_LEVELS[debug_level], msg=print_strings[0])
-            else:
-                print(*print_strings, sep=sep, end=end, file=file, flush=flush)
-            break
-        except UnicodeEncodeError:
-            fixed_objects = list()
-            for obj in objects:
-                if not isinstance(obj, str) and not isinstance(obj, bytes):
-                    obj = str(obj)
-                if retries == 2:
-                    obj = force_encoding(obj, encoding=enc)
-                else:
-                    obj = to_ascii(obj)
-                fixed_objects.append(obj)
-            objects = fixed_objects
-            retries -= 1
-
-
-class ConsoleApp:
+class ConsoleApp(AppBase):
     """ provides easy console arguments and options, config options, logging and debugging for your application.
 
     Most applications only need a single instance of this class. Each instance is encapsulating a ConfigParser and
     a ArgumentParser instance. So only apps with threads and different sets of config options for each
-    thread have to create a separate instance of this class.
+    thread could create a separate instance of this class.
 
     Instance Attributes (ordered alphabetically - ignoring underscore characters):
 
-    * :attr:`_app_name`             basename (without the file name extension) of the executable.
-    * :attr:`_app_path`             file path of executable.
-    * :attr:`_app_version`          application version (set via the :paramref:`ConsoleApp.__init__.app_version` arg).
     * :attr:`_arg_parser`           internal ArgumentParser instance.
     * :attr:`config_choices`        valid choices for pre-/user-defined options.
     * :attr:`config_eval_vars`      additional values used for the evaluation of special formatted config option values
@@ -389,21 +197,10 @@ class ConsoleApp:
     * :attr:`config_options`        pre-/user-defined options (dict of :class:`~ae.setting.Setting` instances defined
       via :meth:`~ConsoleApp.add_option`).
     * :attr:`_config_parser`        internal instance of used ConfigParser.
-    * :attr:`_log_file_index`       index of the current rotation log file backup.
-    * :attr:`_log_file_max_size`    maximum size in MBytes of a log file.
-    * :attr:`_log_file_name`        path and file name of the log file.
-    * :attr:`_log_file_obj`         file handle of currently opened log file (opened in :meth:~ConsoleApp._parse_args`).
-    * :attr:`logging_conf_dict`     python logging config dict.
     * :attr:`_main_cfg_fnam`        main config file name.
     * :attr:`_main_cfg_mod_time`    last modification datetime of main config file.
-    * :attr:`multi_threading`       set to True if your application uses threads.
-    * :attr:`_nul_std_out`          null stream used for to prevent printouts on stdout of the console/shell.
     * :attr:`_option_value_stripper` callable to strip option values.
     * :attr:`_parsed_args`          ArgumentParser.parse_args() return.
-    * :attr:`_shut_down`            flag set to True if application shutdown was already processed.
-    * :attr:`startup_beg`           datetime of app instantiation/startup.
-    * :attr:`suppress_stdout`       flag set to True if application does not print to stdout/console.
-    * :attr:`sys_env_id`            system environment id of this instance.
     """
     def __init__(self, app_version: str, app_desc: str, debug_level_def: int = DEBUG_LEVEL_DISABLED,
                  config_eval_vars: Optional[dict] = None, additional_cfg_files: Iterable = (),
@@ -435,84 +232,53 @@ class ConsoleApp:
                                         * `file_name_def`: default log file name for internal logging (def='').
                                         * `file_size_max`: max. size in MBytes of internal log file (def=20).
         """
-        global app_instances
-        main_instance = main_app_instance()
-        if main_instance is None:
-            app_instances[''] = main_instance = self
-        self.sys_env_id: str = sys_env_id                                   #: system environment id of this instance
-        if sys_env_id not in app_instances:
-            app_instances[sys_env_id] = self
+        super().__init__(app_version, app_desc, debug_level_def=debug_level_def, multi_threading=multi_threading,
+                         sys_env_id=sys_env_id)
 
-        self._parsed_args: Optional[Namespace] = None
-        """ used for to retrieve command line args and also as a flag for to ensure that the command line arguments
-        get re-parsed if :meth:`~ConsoleApp.add_option` get called after a first call to methods which are initiating
-        the re-fetch of the args and INI/cfg vars (like e.g. :meth:`~ConsoleApp.get_option` or
-        :meth:`ConsoleApp.dprint`). """
+        with config_lock:
+            self._config_parser: ConfigParser = ConfigParser()              #: ConfigParser instance
+            self.config_options: Dict[str, Setting] = dict()                #: all config options
+            self.config_choices: Dict[str, Sequence] = dict()               #: all valid config option choices
+            self.config_eval_vars: dict = config_eval_vars or dict()        #: additional application specific data
 
-        self._nul_std_out: Optional[TextIO] = None                          #: logging null stream
-        self._shut_down: bool = False                                       #: True if app got shut down
-        self.multi_threading: bool = multi_threading                        #: True if app uses multiple threads
-        self.suppress_stdout: bool = True     # block initially until app-config/-logging is fully initialized
+            # prepare config files, including determine default config file (last existing INI/CFG file) for
+            # .. to write to and if there is no INI file at all then create on demand a <APP_NAME>.INI file in the cwd
+            self._config_files: list = list()                               #: list of all found INI/CFG files
+            self._main_cfg_fnam: Optional[str] = None                       #: main config file name
+            self._main_cfg_mod_time: Optional[int] = None                   #: main config file modification datetime
+            self.config_files_add(additional_cfg_files)
+            self._option_value_stripper: Optional[Callable] = option_value_stripper
+            #: callable to strip or normalize option choice values
 
-        self.startup_beg: datetime.datetime = datetime.datetime.now()       #: app startup datetime
-        self.config_options: Dict[str, Setting] = dict()                    #: all config options
-        self.config_choices: Dict[str, Sequence] = dict()                   #: all valid config option choices
-
-        self.config_eval_vars: dict = config_eval_vars or dict()            #: additional application specific data
-
-        if not sys.argv:    # prevent unit tests to fail on sys.argv == list()
-            sys.argv.append(os.path.join(os.getcwd(), 'TesT.exe'))
-        app_path_fnam_ext = sys.argv[0]
-        app_fnam = os.path.basename(app_path_fnam_ext)
-        self._app_path: str = os.path.dirname(app_path_fnam_ext)            #: path to folder of your main app code file
-        self._app_name: str = os.path.splitext(app_fnam)[0]                 #: main app code file's base name (w/o ext)
-        self._app_version: str = app_version                                #: version of your app
-
-        # prepare config files, including determine default config file (last existing INI/CFG file) for
-        # .. to write to and if there is no INI file at all then create on demand a <APP_NAME>.INI file in the cwd
-        self._config_parser: Optional[ConfigParser] = None                  #: ConfigParser instance
-        self._config_files: list = list()                                   #: list of all found INI/CFG files
-        self._main_cfg_fnam: Optional[str] = None                           #: main config file name
-        self._main_cfg_mod_time: Optional[int] = None                       #: main config file modification datetime
-        self.config_init(app_path_fnam_ext, additional_cfg_files)
-        self._option_value_stripper: Optional[Callable] = option_value_stripper
-        #: callable to strip or normalize option choice values
+            self._parsed_args: Optional[Namespace] = None
+            """ used for to retrieve command line args and also as a flag for to ensure that the command line arguments
+            get re-parsed if :meth:`~ConsoleApp.add_option` get called after a first method call which is initiating
+            the re-fetch of the args and INI/cfg vars (like e.g. :meth:`~ConsoleApp.get_option` or
+            :meth:`ConsoleApp.dprint`). """
         self.config_load()
 
-        # prepare logging: most values will be initialized in self._parse_args() indirectly via logFile config option
-        if logging_config is None:
-            logging_config = dict()
-        self._log_file_obj: Optional[TextIO] = None                         #: log file stream instance
-        self._log_file_max_size: int = logging_config.get('file_size_max', 20)  #: maximum log file size (rotating logs)
-        self._log_file_name: str = ""                                       #: log file name
-        self._log_file_index: int = 0                                       #: log file index (for rotating logs)
-        # check if app is using python logging module
-        lcd = logging_config.get('py_logging_config_dict', self.get_config('py_logging_config_dict'))
-        if lcd:
-            logger_late_init()
-            # logging.basicConfig(level=logging.DEBUG, style='{')
-            logging.config.dictConfig(lcd)     # configure logging module
-        else:
-            lcd = dict()
-        self.logging_conf_dict = lcd                                        #: python logging config dict
-        if not main_instance.logging_conf_dict:
-            main_instance.logging_conf_dict = lcd
+        logging_config = logging_config or dict()
+        log_file_name = logging_config.get('file_name_def', '')
+        if 'py_logging_config_dict' not in logging_config:
+            lcd = self.get_config('py_logging_config_dict')
+            if lcd:
+                logging_config['py_logging_config_dict'] = lcd
+        super().logging_init(logging_config=logging_config, suppress_stdout=suppress_stdout)
 
-        self.suppress_stdout: bool = suppress_stdout                        #: flag to suppress prints to stdout
         if not self.suppress_stdout:    # no log file ready after defining all options (with add_option())
-            self.uprint(self._app_name, " V", app_version, "  Startup", self.startup_beg, app_desc, logger=_logger)
+            self.uprint(self._app_name, " V", app_version, " Startup", self.startup_beg, self._app_desc, logger=_logger)
             self.uprint("####  Initialization......  ####", logger=_logger)
 
         # prepare argument parser
         formatter_class = formatter_class or HelpFormatter
         self._arg_parser = ArgumentParser(
-            description=app_desc, epilog=epilog, formatter_class=formatter_class)   #: ArgumentParser instance
+            description=self._app_desc, epilog=epilog, formatter_class=formatter_class)   #: ArgumentParser instance
         self.add_argument = self._arg_parser.add_argument       #: redirect this method to our ArgumentParser instance
 
         # create pre-defined config options
         self.add_option('debugLevel', "Verbosity of debug messages send to console and log files", debug_level_def, 'D',
                         choices=DEBUG_LEVELS.keys())
-        self.add_option('logFile', "Log file path", logging_config.get('file_name_def', ''), 'L')
+        self.add_option('logFile', "Log file path", log_file_name, 'L')
 
     def __del__(self):
         """ deallocate this instance and call :func:`ConsoleApp.shutdown` if it is the main app instance.
@@ -694,10 +460,12 @@ class ConsoleApp:
         :return:                ''/empty string on success else error message text.
         """
         self.config_options[name].value = val
+        if name == 'debugLevel':
+            self.debug_level = val
         return self.set_config(name, val, cfg_fnam) if save_to_config else ''
 
     def config_file_add(self, fnam: str) -> bool:
-        """ add config file name to internal list of processed config files.
+        """ add config file name to :attr:`internal list of processed config files <ConsoleApp.config_files>`.
 
         :param fnam:    new config file name to add.
         :return:        True, if passed config file exists and was not in the list before, else False.
@@ -707,25 +475,25 @@ class ConsoleApp:
             return True
         return False
 
-    def config_init(self, app_path_fnam_ext: str, additional_cfg_files: Iterable = ()) -> str:
+    def config_files_add(self, additional_cfg_files: Iterable = ()) -> str:
         """ extend list of found config files (in :attr:`~ConsoleApp.config_files`).
 
-        :param app_path_fnam_ext:       file path of executable (normally taken from sys.argv[0].
         :param additional_cfg_files:    additional/user-defined config files.
         :return:                        ""/empty string on success else error message text.
         """
         cwd_path = os.getcwd()
         app_path = self._app_path
+        app_name = self._app_name
 
         # prepare config env, first compile cfg/ini files - the last one overwrites previously loaded values
-        cwd_path_fnam = os.path.join(cwd_path, self._app_name)
+        cwd_path_fnam = os.path.join(cwd_path, app_name)
         self._main_cfg_fnam = cwd_path_fnam + INI_EXT  # default will be overwritten by config_load()
         sys_env_id = self.sys_env_id or 'TEST'
         for cfg_path in (os.path.join(cwd_path, '..', '..'), app_path, os.path.join(cwd_path, '..'), cwd_path, ):
             for cfg_file in ('.app_env.cfg', '.sys_env' + sys_env_id + '.cfg', '.sys_env.cfg', ):
                 self.config_file_add(os.path.join(cfg_path, cfg_file))
 
-        app_path_fnam = os.path.splitext(app_path_fnam_ext)[0]
+        app_path_fnam = os.path.join(app_path, app_name)
         for cfg_file in (app_path_fnam + '.cfg', app_path_fnam + INI_EXT,
                          cwd_path_fnam + '.cfg', cwd_path_fnam + INI_EXT):
             self.config_file_add(cfg_file)
@@ -758,15 +526,14 @@ class ConsoleApp:
     def config_load(self):
         """ load and parse all config files.
         """
-        global config_lock
-        for cfg_fnam in reversed(self._config_files):
-            if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
-                self._main_cfg_fnam = cfg_fnam
-                self._main_cfg_mod_time = os.path.getmtime(self._main_cfg_fnam)
-                break
-
+        # global config_lock
         with config_lock:
-            self._config_parser = ConfigParser()
+            for cfg_fnam in reversed(self._config_files):
+                if cfg_fnam.endswith(INI_EXT) and os.path.isfile(cfg_fnam):
+                    self._main_cfg_fnam = cfg_fnam
+                    self._main_cfg_mod_time = os.path.getmtime(self._main_cfg_fnam)
+                    break
+
             self._config_parser.optionxform = str      # or use 'lambda option: option' to have case sensitive var names
             self._config_parser.read(self._config_files, encoding='utf-8')
 
@@ -857,160 +624,9 @@ class ConsoleApp:
         """ special debug version of builtin print() function.
 
         This method will print out only if the current debug level is higher than minimum_debug_level. All other
-        args of this method are documented :func:`in the uprint() function of this module <.uprint>`.
+        args of this method are documented :func:`in the uprint() function of the ae.core module <.core.uprint>`.
 
         :param minimum_debug_level:     minimum debug level for to print the passed objects.
         """
         if self.get_option('debugLevel') >= minimum_debug_level:
             self.uprint(*objects, sep=sep, end=end, file=file, debug_level=minimum_debug_level, **kwargs)
-
-    def uprint(self, *objects, sep: str = ' ', end: str = '\n', file: Optional[TextIO] = None,
-               debug_level: int = DEBUG_LEVEL_DISABLED, **kwargs):
-        """ special version of builtin print() function.
-
-        This method has the same args as :func:`in the uprint() function of this module <ae.console_app.uprint>`.
-        """
-        if self.sys_env_id:
-            objects = ('{' + self.sys_env_id + '}', ) + objects
-        uprint(*objects, sep=sep, end=end, file=file, debug_level=debug_level, **kwargs)
-
-    def app_name(self) -> str:
-        """ determine the name of the application.
-
-        :return:    application name.
-        """
-        return self._app_name
-
-    def _append_eof_and_flush_file(self, stream_file: TextIO, stream_name: str):
-        """ add special end-of-file marker and flush the internal buffers to the file stream.
-
-        :param stream_file:     file stream.
-        :param stream_name:     name of the file stream.
-        """
-        try:
-            try:
-                # ALWAYS add \nEoF\n to the end
-                # .. we cannot use uprint here because of recursions on log file rotation, so use built-in print()
-                # .. self.uprint()
-                # .. self.uprint('EoF')
-                print(file=stream_file)
-                print('EoF', file=stream_file)
-            except Exception as ex:
-                self.dprint("Ignorable {} end-of-file marker exception={}".format(stream_name, ex), logger=_logger)
-
-            stream_file.flush()
-
-        except Exception as ex:
-            self.dprint("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
-
-    def activate_internal_logging(self, log_file: str):
-        """ activate internal logging (not using the python logging module).
-
-        :param log_file:    file name of the log file to use.
-        """
-        if log_file:
-            try:  # enable logging
-                self._close_log_file()
-                self._open_log_file(log_file)
-                self.uprint(" ###  Activated log file", log_file, logger=_logger)
-                self._log_file_name = log_file
-            except Exception as ex:
-                self.uprint(" ***  ConsoleApp._parse_args(): exception while enabling logging:", ex, logger=_logger)
-
-    def _open_log_file(self, log_file: str):
-        """ open the internal log file.
-
-        :param log_file:    file name of the log file.
-        """
-        global app_std_out, app_std_err
-        self._log_file_obj = open(log_file, "w")
-        if app_std_out == ori_std_out:      # first call/open-of-log-file?
-            if self.suppress_stdout:
-                std_out = self._nul_std_out = open(os.devnull, 'w')
-            else:
-                std_out = ori_std_out
-            app_std_out = sys.stdout = _DuplicateSysOut(self._log_file_obj, sys_out_obj=std_out)
-            app_std_err = sys.stderr = _DuplicateSysOut(self._log_file_obj, sys_out_obj=ori_std_err)
-        else:
-            app_std_out.log_file_obj = self._log_file_obj
-            app_std_err.log_file_obj = self._log_file_obj
-
-    def _rename_log_file(self):
-        """ rename the log file (on rotating of the internal log file).
-        """
-        self._log_file_index = 0 if self._log_file_index >= MAX_NUM_LOG_FILES else self._log_file_index + 1
-        index_width = len(str(MAX_NUM_LOG_FILES))
-        file_path, file_ext = os.path.splitext(self._log_file_name)
-        dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=index_width) + file_ext
-        if os.path.exists(dfn):
-            os.remove(dfn)
-        if os.path.exists(self._log_file_name):     # prevent errors after unit test cleanup
-            os.rename(self._log_file_name, dfn)
-
-    def _close_log_file(self, full_reset: bool = False):
-        """ close the internal log file.
-
-        :param full_reset:  pass True to reset the standard output streams (stdout/stderr) to the defaults.
-        """
-        global app_std_out, app_std_err
-
-        if self._log_file_obj:
-            self._append_eof_and_flush_file(self._log_file_obj, "log file")
-            app_std_err.log_file_obj = None     # prevent exception/calls of _DuplicateSysOut.log_file_obj.write()
-            app_std_out.log_file_obj = None
-            sys.stderr = ori_std_err            # set back for to prevent stack overflow/recursion with kivy logger
-            sys.stdout = ori_std_out            # .. "Fatal Python error: Cannot recover from stack overflow"
-            self._log_file_obj.close()
-            self._log_file_obj = None
-        elif self.logging_conf_dict:
-            logging.shutdown()
-
-        if full_reset:
-            app_std_err = ori_std_err   # set back for allow full reset of log for unit tests
-            app_std_out = ori_std_out
-
-    def log_file_check_rotation(self):
-        """ check if the internal log file is big enough and if yes then do a file rotation.
-        """
-        if self._log_file_obj is not None:
-            if self.multi_threading:
-                global log_file_rotation_lock
-                log_file_rotation_lock.acquire()
-            self._log_file_obj.seek(0, 2)  # due to non-posix-compliant Windows feature
-            if self._log_file_obj.tell() >= self._log_file_max_size * 1024 * 1024:
-                self._close_log_file()
-                self._rename_log_file()
-                self._open_log_file(self._log_file_name)
-            if self.multi_threading:
-                log_file_rotation_lock.release()
-
-    def shutdown(self, exit_code: Optional[int] = 0, timeout: Optional[float] = None):
-        """ shutdown console app environment
-
-        :param exit_code:   application OS exit code (def=0). Pass None for to not call sys.exit(exit_code).
-        :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
-                            Pass None for to block shutdown until all other threads have joined/finished.
-        """
-        self.uprint("####  Shutdown............  ", exit_code, timeout, logger=_logger)
-        if self.multi_threading:
-            with config_lock:
-                main_thread = threading.current_thread()
-                for t in threading.enumerate():
-                    if t is not main_thread:
-                        self.uprint("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
-                                    logger=_logger)
-                        t.join(timeout)
-
-        self._close_log_file()
-        if self._log_file_index:
-            self._rename_log_file()
-
-        if self._nul_std_out and not self._nul_std_out.closed:
-            self._append_eof_and_flush_file(self._nul_std_out, "NUL stdout")
-            self._nul_std_out.close()
-            self._nul_std_out = None
-
-        if main_app_instance() is self:
-            self._shut_down = True
-            if exit_code is not None:
-                sys.exit(exit_code)
