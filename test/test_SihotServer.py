@@ -135,8 +135,8 @@ class ProxyNotWorkingTestRequestsConnection:
         url = 'https://api.github.com/events'
         with_proxy = True
         if with_proxy:
-            user = console_app_env.get_config('wsUser')
-            password = console_app_env.get_config('wsPassword')
+            user = console_app_env.get_var('wsUser')
+            password = console_app_env.get_var('wsPassword')
             proxy_string = 'http://10.103.1.10:8080'
             # proxy_string = 'http://{}:{}@proxy.acumen.es:8080'.format(user, password)
             # proxy_string = 'http://{}:{}@10.103.1.10:8080'.format(user, password)

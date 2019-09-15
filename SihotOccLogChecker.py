@@ -18,28 +18,28 @@ USER_DATE_FORMAT = '%d-%m-%y %H:%M:%S'
 
 startup_date = datetime.datetime.now()
 
-cae = ConsoleApp(__version__, "Sihot SXML interface log file checks and Acumen/AssCache occupation status fixes")
+cae = ConsoleApp("Sihot SXML interface log file checks and Acumen/AssCache occupation status fixes")
 
 cae.add_argument('sxml_log_file_name', help="SXML Logfile name (and path, e.g. SXML_ACUMEN.log or SXML_ASSCACHE.log)")
 
-cae.add_option('dateFrom', "Date/time of first checked occupation", startup_date - datetime.timedelta(days=1), 'F')
-cae.add_option('dateTill', "Date/time of last checked occupation", startup_date, 'T')
-cae.add_option('correctSystem', "Correct room occupation status (check-in/-out) in (Acu=Acumen, Ass=AssCache)", '', 'A')
+cae.add_opt('dateFrom', "Date/time of first checked occupation", startup_date - datetime.timedelta(days=1), 'F')
+cae.add_opt('dateTill', "Date/time of last checked occupation", startup_date, 'T')
+cae.add_opt('correctSystem', "Correct room occupation status (check-in/-out) in (Acu=Acumen, Ass=AssCache)", '', 'A')
 
 ass_options = add_ass_options(cae)
 
 
-debug_level = cae.get_option('debugLevel')
+debug_level = cae.get_opt('debugLevel')
 
 sxml_log_file_name = cae.get_argument('sxml_log_file_name')
-cae.uprint("SXML log file:", sxml_log_file_name)
-date_from = cae.get_option('dateFrom')
-date_till = cae.get_option('dateTill')
-cae.uprint("Date range including check-ins from", date_from.strftime(USER_DATE_FORMAT),
+cae.po("SXML log file:", sxml_log_file_name)
+date_from = cae.get_opt('dateFrom')
+date_till = cae.get_opt('dateTill')
+cae.po("Date range including check-ins from", date_from.strftime(USER_DATE_FORMAT),
            "and till/before", date_till.strftime(USER_DATE_FORMAT))
-correct_system = cae.get_option('correctSystem')
+correct_system = cae.get_opt('correctSystem')
 if correct_system:
-    cae.uprint("!!!!  Correcting {} Room Occupation Status".format(correct_system))
+    cae.po("!!!!  Correcting {} Room Occupation Status".format(correct_system))
 
 
 def convert_to_date_options_type(datetime_value):
@@ -47,36 +47,36 @@ def convert_to_date_options_type(datetime_value):
 
 
 if date_from > date_till:
-    cae.uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
-               .format(date_from, date_till))
+    cae.po("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
+           .format(date_from, date_till))
     cae.shutdown(18)
 elif date_till > convert_to_date_options_type(startup_date):
-    cae.uprint("Future arrivals cannot be checked - corrected dateTill({}) will to {}."
-               .format(date_till, convert_to_date_options_type(startup_date)))
+    cae.po("Future arrivals cannot be checked - corrected dateTill({}) will to {}."
+           .format(date_till, convert_to_date_options_type(startup_date)))
     date_till = convert_to_date_options_type(startup_date)
 
-max_days_diff = cae.get_config('maxDaysDiff', default_value=3.0)
+max_days_diff = cae.get_var('maxDaysDiff', default_value=3.0)
 if max_days_diff:
-    cae.uprint("Maximum number of days after/before expected arrival/departure:", max_days_diff)
-days_check_in_before = min(cae.get_config('daysCheckInBefore', default_value=0.0), max_days_diff)
+    cae.po("Maximum number of days after/before expected arrival/departure:", max_days_diff)
+days_check_in_before = min(cae.get_var('daysCheckInBefore', default_value=0.0), max_days_diff)
 if days_check_in_before:
-    cae.uprint("Searching for check-ins done maximum {} days before the expected arrival date"
-               .format(days_check_in_before))
-days_check_out_after = min(cae.get_config('daysCheckOutAfter', default_value=0.5), max_days_diff)   # 0.5 days == 12 hrs
+    cae.po("Searching for check-ins done maximum {} days before the expected arrival date"
+           .format(days_check_in_before))
+days_check_out_after = min(cae.get_var('daysCheckOutAfter', default_value=0.5), max_days_diff)   # 0.5 days == 12 hrs
 if days_check_out_after:
-    cae.uprint("Searching check-outs done maximum {} days after the expected departure".format(days_check_out_after))
+    cae.po("Searching check-outs done maximum {} days after the expected departure".format(days_check_out_after))
 
 
 '''
 # fetch given date range in chunks for to prevent timeouts and Sihot server blocking issues
-sh_fetch_max_days = min(max(1, cae.get_config('shFetchMaxDays', default_value=7)), 31)
-sh_fetch_pause_seconds = cae.get_config('shFetchPauseSeconds', default_value=1)
-uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", sh_fetch_max_days,
+sh_fetch_max_days = min(max(1, cae.get_var('shFetchMaxDays', default_value=7)), 31)
+sh_fetch_pause_seconds = cae.get_var('shFetchPauseSeconds', default_value=1)
+po("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", sh_fetch_max_days,
        " and -pause in seconds between fetches", sh_fetch_pause_seconds)
-search_flags = cae.get_config('ResSearchFlags', default_value='ALL-HOTELS')
-uprint("Search flags:", search_flags)
-search_scope = cae.get_config('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
-uprint("Search scope:", search_scope)
+search_flags = cae.get_var('ResSearchFlags', default_value='ALL-HOTELS')
+po("Search flags:", search_flags)
+search_scope = cae.get_var('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
+po("Search scope:", search_scope)
 '''
 
 ass_data = init_ass_data(cae, ass_options)
@@ -132,7 +132,7 @@ def add_log_msg(msg, is_error=False, importance=2):
         log_errors.append(msg)
     msg = " " * (4 - importance) + ("*" if is_error else "#") * importance + "  " + msg
     log_items.append(msg)
-    cae.uprint(msg)
+    cae.po(msg)
 
 
 def notification_add_line(msg, is_error=False):
@@ -320,9 +320,9 @@ def fix_ass_discrepancies(od):
 add_log_msg("Fetching reservation/occupation data from {} system".format(correct_system), importance=4)
 try:
     if correct_system == 'Acu':
-        sys_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
-                            DSN=cae.get_option('acuDSN')),
-                       app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
+        sys_db = OraDB(dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
+                            DSN=cae.get_opt('acuDSN')),
+                       app_name=cae.app_name, debug_level=cae.get_opt('debugLevel'))
         err_msg = sys_db.connect()
         if not err_msg:
             err_msg = sys_db.select('T_ARO',
@@ -343,10 +343,10 @@ try:
                                     " order by ARO_EXP_ARRIVE desc",  # order to have old room last for RM
                                     bind_vars=dict(beg=date_from, till=date_till, days=max_days_diff))
     else:
-        sys_db = PostgresDB(dict(User=cae.get_option('assUser'), Password=cae.get_option('assPassword'),
-                                 DSN=cae.get_option('assDSN'), SslArgs=cae.get_config('assSslArgs')),
-                            app_name=cae.app_name(),
-                            debug_level=cae.get_option('debugLevel'))
+        sys_db = PostgresDB(dict(User=cae.get_opt('assUser'), Password=cae.get_opt('assPassword'),
+                                 DSN=cae.get_opt('assDSN'), SslArgs=cae.get_var('assSslArgs')),
+                            app_name=cae.app_name,
+                            debug_level=cae.get_opt('debugLevel'))
         err_msg = sys_db.connect()
         if not err_msg:
             err_msg = sys_db.select('res_groups LEFT OUTER JOIN clients ON rgr_order_cl_fk = cl_pk',
@@ -414,7 +414,7 @@ try:
                 elif last_line:
                     line_str = last_line + line_str
                     line_no -= added_lines
-                cae.dprint("\nParse Log Entry:", ts, oc, line_str)
+                cae.dpo("\nParse Log Entry:", ts, oc, line_str)
                 check_occ_change(ts, 'RI' if oc == 'RM' else oc, room, line_str[2:], line_no)
                 room = get_xml_element(line_str, 'ORN')
                 if room:
@@ -425,7 +425,7 @@ try:
 
             ts = get_log_time_stamp(line_str)
             if not ts:
-                cae.dprint("Empty timestamp in log line, OC={}, line={}".format(oc, line_str))
+                cae.dpo("Empty timestamp in log line, OC={}, line={}".format(oc, line_str))
                 continue
             if not first_log_date:
                 first_log_date = ts
@@ -440,10 +440,10 @@ try:
             elif ': onReceive: ' in line_str and line_str[-2:] in ('CI', 'CO', 'RM'):
                 oc = line_str[-2:]
         if convert_to_date_options_type(first_log_date) > date_from:
-            cae.dprint("Log file gap between specified begin date {} and {}".format(date_from, first_log_date))
+            cae.dpo("Log file gap between specified begin date {} and {}".format(date_from, first_log_date))
         if convert_to_date_options_type(last_ts) < date_till:
-            cae.dprint("Log file gap/cut from end of log file {} till specified end date {}".format(last_ts, date_till))
-        cae.dprint("Biggest gap between log entries in specified log file:", biggest_gap)
+            cae.dpo("Log file gap/cut from end of log file {} till specified end date {}".format(last_ts, date_till))
+        cae.dpo("Biggest gap between log entries in specified log file:", biggest_gap)
 
     add_log_msg("Running " + str(len(room_status)) + " discrepancy checks"
                 + (" and {} data fixes".format(correct_system) if correct_system else ""), importance=4)

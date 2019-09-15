@@ -120,8 +120,8 @@ class UsedSystems(OrderedDict):
                 if sys_cred_item in sys_credentials:
                     found_cred = sys_credentials[sys_cred_item]
                 else:
-                    for get_conf_func in config_getters:
-                        found_cred = get_conf_func(cfg_cred_item)
+                    for config_var_getter in config_getters:
+                        found_cred = config_var_getter(cfg_cred_item)
                         if found_cred:
                             break
                 if found_cred is not None:
@@ -137,8 +137,8 @@ class UsedSystems(OrderedDict):
                 features = list()
                 for feat_item in sys_feat_items:
                     if feat_item.startswith(sys_id.lower()):
-                        for get_conf_func in config_getters:
-                            found_feat = get_conf_func(feat_item)
+                        for config_var_getter in config_getters:
+                            found_feat = config_var_getter(feat_item)
                             if found_feat:
                                 feat_item += '=' + str(found_feat)
                                 break

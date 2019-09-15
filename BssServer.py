@@ -41,20 +41,20 @@ from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '2.3'
 
-cae = ConsoleApp(__version__, "Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
+cae = ConsoleApp("Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)
-cae.add_option('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 369, 'l')
+cae.add_opt('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 369, 'l')
 ass_options = add_ass_options(cae, client_port=12000, add_kernel_port=True)
 
-debug_level = cae.get_option('debugLevel')
+debug_level = cae.get_opt('debugLevel')
 ass_data = init_ass_data(cae, ass_options)
 
-interval = cae.get_option('cmdInterval')
-cae.uprint("Sync to SF interval: {} seconds".format(interval))
+interval = cae.get_opt('cmdInterval')
+cae.po("Sync to SF interval: {} seconds".format(interval))
 
 sys_conns = ass_data['assSysData']
 if sys_conns.error_message:
-    cae.uprint("BssServer startup error initializing AssSysData: ", sys_conns.error_message)
+    cae.po("BssServer startup error initializing AssSysData: ", sys_conns.error_message)
     cae.shutdown(exit_code=9)
 
 notification = ass_data['notification']
@@ -79,7 +79,7 @@ def log_msg(msg, *args, **kwargs):
             msg = seps + ' ' * (4 - importance) + ('*' if is_error else '#') * importance + '  ' + msg
             if args:
                 msg += " (args={})".format(ppf(args))
-            cae.uprint(msg)
+            cae.po(msg)
             if notification and (is_error or notify):
                 notification.send_notification(msg_body=msg, subject='BssServer notification', body_style='plain')
 
@@ -229,7 +229,7 @@ def room_change_to_sf(asd, ass_res):
                       .format(asd.error_message, ppf(ass_res))
 
     # optionally send occupants data if roomChangeWithOccupants config var is set (hot reloaded w/o server restart)
-    with_occ = asd.cae.get_config('roomChangeWithOccupants')
+    with_occ = asd.cae.get_var('roomChangeWithOccupants')
     if with_occ:
         occ_msg = asd.sf_res_occupants_upsert(sf_res_id, ho_id, res_id, sub_id, with_occ)   # ignore any errors
         if occ_msg:
@@ -466,12 +466,12 @@ def reload_oc_config():
     _ = (Request, ResChange, RoomChange)    # added for to hide PyCharm warnings (Unused import)
 
     # always reload on server startup, else first check if main config file has changed since server startup
-    if SUPPORTED_OCS and not cae.config_main_file_modified():
+    if SUPPORTED_OCS and not cae.is_main_cfg_file_modified():
         return ""
 
     # main config file has changed - so reload the changed configuration settings
-    cae.config_load()
-    SUPPORTED_OCS = cae.get_config('SUPPORTED_OCS')
+    cae.load_cfg_files()
+    SUPPORTED_OCS = cae.get_var('SUPPORTED_OCS')
     if not SUPPORTED_OCS or not isinstance(SUPPORTED_OCS, dict):
         return "SUPPORTED_OCS is not or wrongly defined in main CFG/INI file"   # cae._main_cfg_fnam
     module_declarations = globals()
@@ -496,7 +496,7 @@ def reload_oc_config():
                 mod_decs.append(module_declarations[proc])
             slot['ocProcessors'] = mod_decs
 
-    IGNORED_OCS = cae.get_config('IGNORED_OCS')
+    IGNORED_OCS = cae.get_var('IGNORED_OCS')
     if not isinstance(IGNORED_OCS, list):
         return "IGNORED_OCS is not or wrongly defined in main CFG/INI file - invalid value {}".format(IGNORED_OCS)
 
@@ -553,7 +553,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
-        xml_enc = cae.get_option(SDF_SH_XML_ENCODING)
+        xml_enc = cae.get_opt(SDF_SH_XML_ENCODING)
         xml_request = str(xml_from_client, encoding=xml_enc)
         log_msg("BssServer.handle_xml(): req='{}'".format(xml_request), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
@@ -636,10 +636,10 @@ try:
 
     # ?!?!?: if sihot is connecting as client then our listening server ip has to be either localhost or 127.0.0.1
     # .. and for connect to the Sihot WEB/KERNEL interfaces only the external IP address of the Sihot server is working
-    ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
-    cae.uprint("Sihot client IP/port:", ip_addr, cae.get_option(SDF_SH_CLIENT_PORT))
-    server = TcpServer(ip_addr, cae.get_option(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
-    server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
+    ip_addr = cae.get_var('shClientIP', default_value=cae.get_opt('shServerIP'))
+    cae.po("Sihot client IP/port:", ip_addr, cae.get_opt(SDF_SH_CLIENT_PORT))
+    server = TcpServer(ip_addr, cae.get_opt(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
+    server.run(display_animation=cae.get_var('displayAnimation', default_value=False))
 except (OSError, Exception) as tcp_ex:
     log_msg("TCP server could not be started. Exception: {}".format(tcp_ex), is_error=True)
     cae.shutdown(369)

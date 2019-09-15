@@ -8,7 +8,7 @@ from typing import Tuple, Dict, Any
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
 from sys_data_ids import SDF_SF_SANDBOX
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, uprint
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
 from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
 
@@ -147,10 +147,10 @@ ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
 def add_sf_options(cae):
-    cae.add_option('sfUser', "Salesforce account user name", '', 'y')
-    cae.add_option('sfPassword', "Salesforce account user password", '', 'a')
-    cae.add_option('sfToken', "Salesforce account token string", '', 'o')
-    cae.add_option(SDF_SF_SANDBOX, "Use Salesforce sandbox (instead of production)", True, 's')
+    cae.add_opt('sfUser', "Salesforce account user name", '', 'y')
+    cae.add_opt('sfPassword', "Salesforce account user password", '', 'a')
+    cae.add_opt('sfToken', "Salesforce account token string", '', 'o')
+    cae.add_opt(SDF_SF_SANDBOX, "Use Salesforce sandbox (instead of production)", True, 's')
 
 
 # date/datetime formats used for calling interface and SOQL queries (SOQL queries are using different format!!!)
@@ -349,7 +349,7 @@ class SfInterface:
             self._conn = Salesforce(username=self._user, password=self._pw, security_token=self._tok,
                                     sandbox=self._sb, client_id=self._client)
             if self._debug_level >= DEBUG_LEVEL_ENABLED:
-                uprint("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
+                po("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
         except SalesforceAuthenticationFailed as sf_ex:
             self.error_msg = "SfInterface._connect(): Salesforce {} authentication failed with exception: {}" \
                 .format('Sandbox' if self._sb else 'Production', sf_ex)
@@ -368,7 +368,7 @@ class SfInterface:
             msg = "preventing lock of user account {}".format(self._user)
             if msg not in self.error_msg:
                 self.error_msg = "Invalid Salesforce login - {}; last error={}".format(msg, self.error_msg)
-            uprint(self.error_msg)
+            po(self.error_msg)
             return False
         self.error_msg = ""
 
@@ -377,20 +377,20 @@ class SfInterface:
             self._connect()
             if self.error_msg:
                 if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint("  **  _ensure_lazy_connect() err={}".format(self.error_msg))
+                    po("  **  _ensure_lazy_connect() err={}".format(self.error_msg))
                 return None
 
         if self._conn:
             try:
                 return self._conn.query_all(soql_query)
             except SalesforceExpiredSession:
-                uprint("  ##  SfInterface._ensure_lazy_connect(): Trying re-connecting expired Salesforce session...")
+                po("  ##  SfInterface._ensure_lazy_connect(): Trying re-connecting expired Salesforce session...")
                 self._conn = None
                 return self._ensure_lazy_connect(soql_query)
 
         if not self.error_msg:
             self.error_msg = "SfInterface._ensure_lazy_connect(): Reconnection to Salesforce failed"
-            uprint(" ***  " + self.error_msg)
+            po(" ***  " + self.error_msg)
 
         return None
 
@@ -437,7 +437,7 @@ class SfInterface:
                 .format(soql_query)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("soql_query_all({}) response={}".format(soql_query, response))
+            po("soql_query_all({}) response={}".format(soql_query, response))
 
         return response
 
@@ -468,7 +468,7 @@ class SfInterface:
         result = self.apex_call('clientsearch', function_args=service_args)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint("find_client({}, {}, {}, {}) result={}".format(email, phone, first_name, last_name, ppf(result)))
+            po("find_client({}, {}, {}, {}) result={}".format(email, phone, first_name, last_name, ppf(result)))
 
         if self.error_msg or 'Id' not in result or 'type' not in result:
             return '', DEF_CLIENT_OBJ
@@ -562,7 +562,7 @@ class SfInterface:
         er_list = self.cl_ext_refs(sf_client_id, er_type, er_id, return_obj_id=True, sf_obj=sf_obj)
         if er_list:     # update?
             if self._debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
-                uprint("cl_ext_ref_upsert({}): duplicate external refs found:\n{}".format(sf_client_id, ppf(er_list)))
+                po("cl_ext_ref_upsert({}): duplicate external refs found:\n{}".format(sf_client_id, ppf(er_list)))
             sf_er_id = er_list[0]
             if upd_rec:
                 new_id = upd_rec.val('Id') or sf_dict['Name'].split(EXT_REF_TYPE_ID_SEP)[1]
@@ -585,7 +585,7 @@ class SfInterface:
 
         if err:
             if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("  **  cl_ext_ref_upsert({}) err={}".format(sf_client_id, err))
+                po("  **  cl_ext_ref_upsert({}) err={}".format(sf_client_id, err))
             self.error_msg = err
 
         return sf_er_id, err, msg
@@ -874,7 +874,7 @@ class SfInterface:
         result = self.apex_call('reservation_upsert', function_args=sf_args)
 
         if dbg:
-            uprint("... sfif.res_upsert() err?={}; sent=\n{}, result=\n{}"
+            po("... sfif.res_upsert() err?={}; sent=\n{}, result=\n{}"
                    .format(self.error_msg, ppf(sf_args), ppf(result)))
 
         if result.get('ErrorMessage'):
@@ -886,7 +886,7 @@ class SfInterface:
             elif cl_res_rec.val('ResSfId') != result.get('ReservationOpportunityId'):
                 msg = "sfif.res_upsert() ResSfId discrepancy; sent={} received={}; cl_res_rec=\n{}"\
                        .format(cl_res_rec.val('ResSfId'), result.get('ReservationOpportunityId'), ppf(cl_res_rec))
-                uprint(msg)
+                po(msg)
                 if dbg:
                     self.error_msg += "\n      " + msg
 
@@ -903,7 +903,7 @@ class SfInterface:
         if self.error_msg or result.get('ErrorMessage'):
             self.error_msg += "err=\n{} from SF in {}".format(ppf(result) if dbg else result.get('ErrorMessage'), msg)
         elif dbg:
-            uprint(msg + " result=\n{}'".format(ppf(result)))
+            po(msg + " result=\n{}'".format(ppf(result)))
 
         return self.error_msg
 
@@ -965,6 +965,6 @@ class SfInterface:
         if self.error_msg or result.get('ErrorMessage'):
             self.error_msg += "SF err=\n{} in {}".format(ppf(result) if dbg else result.get('ErrorMessage'), msg)
         elif dbg:
-            uprint(msg + " send-data=\n{}; result=\n{}'".format(ppf(sf_data), ppf(result)))
+            po(msg + " send-data=\n{}; result=\n{}'".format(ppf(sf_data), ppf(result)))
 
         return self.error_msg

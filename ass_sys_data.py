@@ -9,7 +9,7 @@ from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           SDF_SF_SANDBOX, ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS, SYS_CRED_ITEMS,
                           SYS_CRED_NEEDED, SYS_FEAT_ITEMS)
 from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DATE_ISO, correct_email, \
-    correct_phone, uprint
+    correct_phone, po
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.systems import UsedSystems
 from ae_db.db import OraDB, PostgresDB
@@ -124,9 +124,9 @@ ppf = pprint.PrettyPrinter(indent=9, width=96, depth=9).pformat
 
 
 def add_ass_options(cae, client_port=None, add_kernel_port=False, break_on_error=False, bulk_fetcher=None):
-    cae.add_option('assUser', "AssCache/Postgres user account name", '', 'U')
-    cae.add_option('assPassword', "AssCache/Postgres user account password", '', 'P')
-    cae.add_option('assDSN', "AssCache/Postgres database (and host) name (dbName[@host])", 'ass_cache', 'N')
+    cae.add_opt('assUser', "AssCache/Postgres user account name", '', 'U')
+    cae.add_opt('assPassword', "AssCache/Postgres user account password", '', 'P')
+    cae.add_opt('assDSN', "AssCache/Postgres database (and host) name (dbName[@host])", 'ass_cache', 'N')
     add_ac_options(cae)
     add_sf_options(cae)
     ass_options = dict()
@@ -136,7 +136,7 @@ def add_ass_options(cae, client_port=None, add_kernel_port=False, break_on_error
     else:
         add_sh_options(cae, client_port=client_port, add_kernel_port=add_kernel_port)
     if break_on_error:
-        cae.add_option('breakOnError', "Abort processing if error occurs (0=No, 1=Yes)", 0, 'b', choices=(0, 1))
+        cae.add_opt('breakOnError', "Abort processing if error occurs (0=No, 1=Yes)", 0, 'b', choices=(0, 1))
         ass_options['breakOnError'] = None
     add_notification_options(cae, add_warnings=True)
 
@@ -160,19 +160,19 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
     err_msg = asd.error_message     # save init error message (for to check used system - ignoring missing credentials)
     sys_ids = list()
     if asd.connection(SDI_ASS, raise_if_error=False):
-        cae.uprint('AssCache database name and user:', cae.get_option('assDSN'), cae.get_option('assUser'))
-        sys_ids.append(cae.get_option('assDSN'))
+        cae.po('AssCache database name and user:', cae.get_opt('assDSN'), cae.get_opt('assUser'))
+        sys_ids.append(cae.get_opt('assDSN'))
     if asd.connection(SDI_ACU, raise_if_error=False):
-        cae.uprint('Acumen database TNS and user:', cae.get_option('acuDSN'), cae.get_option('acuUser'))
-        sys_ids.append(cae.get_option('acuDSN'))
+        cae.po('Acumen database TNS and user:', cae.get_opt('acuDSN'), cae.get_opt('acuUser'))
+        sys_ids.append(cae.get_opt('acuDSN'))
     if asd.connection(SDI_SF, raise_if_error=False):
         sf_sandbox = SDF_SF_SANDBOX + '=True' in asd.used_systems[SDI_SF].features
-        cae.uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:",
-                   cae.get_option('sfUser'))
+        cae.po("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:",
+               cae.get_opt('sfUser'))
         sys_ids.append("SBox" if sf_sandbox else "Prod")
     if asd.connection(SDI_SH, raise_if_error=False):
         print_sh_options(cae)
-        sys_ids.append(cae.get_option('shServerIP'))
+        sys_ids.append(cae.get_opt('shServerIP'))
     ret_dict['sysIds'] = sys_ids
     asd.error_message = err_msg     # restore AssSysData.init error message (ignoring used system check errors)
 
@@ -183,8 +183,8 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
         ass_options['resBulkFetcher'].print_options()
 
     if 'breakOnError' in ass_options:
-        break_on_error = cae.get_option('breakOnError')
-        cae.uprint('Break on error:', 'Yes' if break_on_error else 'No')
+        break_on_error = cae.get_opt('breakOnError')
+        cae.po('Break on error:', 'Yes' if break_on_error else 'No')
         ret_dict['breakOnError'] = break_on_error
 
     return ret_dict
@@ -239,8 +239,8 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
 
 
 def _dummy_stub(msg, *args, **kwargs):
-    uprint("******  Fallback call of ass_sys_data._dummy_stub() with:\n        msg='{}', args={}, kwargs={}"
-           .format(msg, args, kwargs))
+    po("******  Fallback call of ass_sys_data._dummy_stub() with:\n        msg='{}', args={}, kwargs={}"
+       .format(msg, args, kwargs))
 
 
 '''
@@ -280,25 +280,25 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self._warn = warn_logger or _dummy_stub
         self._ctx_no_file = ctx_no_file
 
-        self.debug_level = cae.get_option('debugLevel')
+        self.debug_level = cae.get_opt('debugLevel')
 
         self.used_systems = UsedSystems(
             DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
-            config_getters=(cae.get_option, cae.get_config),
+            config_getters=(cae.get_opt, cae.get_var),
             sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS,
             **sys_credentials)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             for msg in self.used_systems.debug_messages:
                 self._warn(msg)
         self._crs = {SDI_ASS: PostgresDB, SDI_ACU: OraDB, SDI_SF: SfInterface, SDI_SH: ShInterface}
-        self.error_message = self.used_systems.connect(self._crs, app_name=cae.app_name(), debug_level=self.debug_level)
+        self.error_message = self.used_systems.connect(self._crs, app_name=cae.app_name, debug_level=self.debug_level)
         if self.error_message:
             self._err(self.error_message, self._ctx_no_file + 'ConnFailed')
 
         '''
         # if user credentials are specified then prepare Salesforce connection (non-permanent)
         self.sf_conn, self.sf_sandbox = None, True
-        if cae.get_option('sfUser') and cae.get_option('sfPassword') and cae.get_option('sfToken'):
+        if cae.get_opt('sfUser') and cae.get_opt('sfPassword') and cae.get_opt('sfToken'):
             self.used_systems.append(USED_SYS_SF_ID)
             self.sf_conn = prepare_connection(cae, verbose=False)
             if not self.sf_conn:
@@ -315,21 +315,21 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # Sihot does also not provide permanent connection; at least prepare ClientSearch instance
         sh_features = dict()
-        if cae.get_option('shServerIP') and cae.get_option(SDF_SH_WEB_PORT):
+        if cae.get_opt('shServerIP') and cae.get_opt(SDF_SH_WEB_PORT):
             sh_features[]
             self.used_systems.append(USED_SYS_SHWEB_ID)
-        if cae.get_option('shServerIP') and cae.get_option(SDF_SH_KERNEL_PORT):
+        if cae.get_opt('shServerIP') and cae.get_opt(SDF_SH_KERNEL_PORT):
             self.used_systems.append(USED_SYS_SHKERNEL_ID)
         self.sh_conn = True
         self._guest_search = ClientSearch(cae)
         '''
         # load configuration settings (either from INI file or from Acumen)
-        self.hotel_ids = cae.get_config('hotelIds')
+        self.hotel_ids = cae.get_var('hotelIds')
         if self.hotel_ids:      # fetch config data from INI/CFG
-            self.resort_cats = cae.get_config('resortCats')
-            self.ap_cats = cae.get_config('apCats')
-            self.ro_agencies = cae.get_config('roAgencies')
-            self.room_change_max_days_diff = cae.get_config('roomChangeMaxDaysDiff', default_value=3)
+            self.resort_cats = cae.get_var('resortCats')
+            self.ap_cats = cae.get_var('apCats')
+            self.ro_agencies = cae.get_var('roAgencies')
+            self.room_change_max_days_diff = cae.get_var('roomChangeMaxDaysDiff', default_value=3)
         else:                   # fetch config data from Acumen
             db = self.connection(SDI_ACU, raise_if_error=False)
             if not db:      # logon/connect error
@@ -362,16 +362,16 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
             db.close()
 
-        self.client_refs_add_exclude = cae.get_config('ClientRefsAddExclude', default_value='').split(',')
+        self.client_refs_add_exclude = cae.get_var('ClientRefsAddExclude', default_value='').split(',')
 
         # load invalid email fragments (ClientHasNoEmail and OTA pseudo email fragments)
-        self.invalid_email_fragments = cae.get_config('invalidEmailFragments', default_value=list())
+        self.invalid_email_fragments = cae.get_var('invalidEmailFragments', default_value=list())
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            cae.uprint("Text fragments for to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
+            cae.po("Text fragments for to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
 
-        self.sf_id_reset_fragments = cae.get_config('SfIdResetResendFragments') or list()
+        self.sf_id_reset_fragments = cae.get_var('SfIdResetResendFragments') or list()
         if self.sf_id_reset_fragments and self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            cae.uprint('Error fragments to re-sync res change with reset ResSfId:', self.sf_id_reset_fragments)
+            cae.po('Error fragments to re-sync res change with reset ResSfId:', self.sf_id_reset_fragments)
 
         self.mail_re = re.compile(r'[a-zA-Z0-9._%-]+@[a-zA-Z0-9._%-]+.[a-zA-Z]{2,4}$')
 
@@ -387,7 +387,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # summary display of used systems
         if sys_msg_prefix or self.debug_level >= DEBUG_LEVEL_ENABLED:
-            cae.uprint((sys_msg_prefix or "Used systems") + ":", self.used_systems)
+            cae.po((sys_msg_prefix or "Used systems") + ":", self.used_systems)
 
     def __del__(self):
         self.close_dbs()
@@ -400,10 +400,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         sh_conn = self.connection(SDI_SH, raise_if_error=raise_if_error)
         self.error_message = err_msg    # restore old error message (most likely empty string)
 
-        return (ass_db and 'sihot3v' in self.cae.get_option('assDSN', default_value='')
-                or acu_db and '.TEST' in self.cae.get_option('acuDSN', default_value='')
+        return (ass_db and 'sihot3v' in self.cae.get_opt('assDSN', default_value='')
+                or acu_db and '.TEST' in self.cae.get_opt('acuDSN', default_value='')
                 or sf_conn and SDF_SF_SANDBOX + '=True' in self.used_systems[SDI_SF].features
-                or sh_conn and 'sihot3v' in self.cae.get_option('shServerIP', default_value='')
+                or sh_conn and 'sihot3v' in self.cae.get_opt('shServerIP', default_value='')
                 )
 
     def close_dbs(self):
@@ -432,7 +432,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if sys_id in self.used_systems:
             self.error_message = self.used_systems[sys_id].connect(
                 self._crs[sys_id],
-                app_name=self.cae.app_name(),
+                app_name=self.cae.app_name,
                 debug_level=self.debug_level,
                 force_reconnect=True,
                 )
@@ -669,7 +669,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     ''' migrate check of ClientRefsAddExclude against ClientRefsResortCodes to config_test 
         .. and check of duplicates too
     
-        resort_codes = self.cae.get_config('ClientRefsResortCodes', default_value='').split(',')
+        resort_codes = self.cae.get_var('ClientRefsResortCodes', default_value='').split(',')
         found_ids = dict()
         for rec in self.clients:
             if rec.val('ExtRefs'):
@@ -1299,10 +1299,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     # =================  RCI data conversion  ==================================================
 
     def rci_to_sihot_hotel_id(self, rc_resort_id):
-        return self.cae.get_config(rc_resort_id, 'RcResortIds', default_value=-369)     # pass default for int type ret
+        return self.cae.get_var(rc_resort_id, 'RcResortIds', default_value=-369)     # pass default for int type ret
 
     def rci_first_week_of_year(self, year):
-        rci_wk_01 = self.cae.get_config(str(year), 'RcWeeks')
+        rci_wk_01 = self.cae.get_var(str(year), 'RcWeeks')
         if rci_wk_01:
             ret = datetime.datetime.strptime(rci_wk_01, '%Y-%m-%d').date()
         else:
@@ -1333,12 +1333,12 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         else:  # not an owner/internal, so will be either Guest or External
             # changed by Esther/Nitesh - now Guest and RL are External: key = 'Guest' if is_guest else 'External'
             key = 'External'
-        seg, desc, grp = self.cae.get_config(key, 'RcMktSegments').split(',')
+        seg, desc, grp = self.cae.get_var(key, 'RcMktSegments').split(',')
         if file_name[:3].upper() == 'RL_':
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                 self._warn("Reclassified booking from " + seg + "/" + grp + " into RL/RCI External",
                            file_name, line_num, importance=1)
-            seg, desc, grp = self.cae.get_config('Leads', 'RcMktSegments').split(',')
+            seg, desc, grp = self.cae.get_var('Leads', 'RcMktSegments').split(',')
         return seg, grp
 
     # ##########################  market segment helpers  #####################################################
@@ -1378,14 +1378,14 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         sf_rec.merge_leafs(ass_res_data)
         sf_rec.merge_leafs(sh_cl_data)
         if sf_rec.val('ResSfId') and sf_rec['ResSfId'] != sf_res_id:
-            self.cae.dprint("Overwriting ResSfId {}".format(sf_rec['ResSfId']) + msg_sfx)
+            self.cae.dpo("Overwriting ResSfId {}".format(sf_rec['ResSfId']) + msg_sfx)
         sf_rec['ResSfId'] = sf_res_id
         ass_id = ass_res_data.val('AssId')
         if ass_id:
             sf_cl_id = self.cl_sf_id_by_ass_id(ass_id)
             if sf_cl_id:
                 if sf_rec.val('SfId') and sf_rec['SfId'] != sf_cl_id:
-                    self.cae.dprint("Overwriting SfId {}".format(sf_rec['SfId']) + msg_sfx)
+                    self.cae.dpo("Overwriting SfId {}".format(sf_rec['SfId']) + msg_sfx)
                 sf_rec['SfId'] = sf_cl_id
         if not sf_rec.val('ResRoomNo') and ass_res_data.val('ResPersons', 0, 'RoomNo'):
             sf_rec['ResRoomNo'] = ass_res_data.val('ResPersons', 0, 'RoomNo')
@@ -1804,7 +1804,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 if err_msg or self.error_message:
                     self.error_message += err_msg
                     msg = "acu_clients_push() error: '{}'".format(self.error_message)
-                    if self.cae.get_option('breakOnError'):
+                    if self.cae.get_opt('breakOnError'):
                         self._err(msg)
                         break
                     ignored_errors += 1
@@ -1864,7 +1864,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 if not self.cl_save(rec, field_names=field_names, match_fields=match_fields, commit=True) \
                         or self.error_message:
                     msg = "ass_clients_push() error: '{}'".format(self.error_message)
-                    if self.cae.get_option('breakOnError'):
+                    if self.cae.get_opt('breakOnError'):
                         self._err(msg)
                         break
                     ignored_errors += 1
@@ -1979,7 +1979,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                              col_names=rec.sys_name_field_map.keys(), name_type='f')
                 if not self.res_save(rec, field_names=field_names, match_fields=match_fields, commit=True):
                     msg = "ass_reservations_push() error: '{}'".format(self.error_message)
-                    if self.cae.get_option('breakOnError'):
+                    if self.cae.get_opt('breakOnError'):
                         self._err(msg)
                         break
                     ignored_errors += 1
@@ -2123,7 +2123,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                                                     sf_obj='Account')
                 if err:
                     err = "sf_clients_push() error: '{}'".format(err)
-                    if self.cae.get_option('breakOnError'):
+                    if self.cae.get_opt('breakOnError'):
                         self.error_message = err
                         self._err(err)
                         break
@@ -2248,7 +2248,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 cl_id, res_id, err = sf_conn.res_upsert(rec, filter_fields=lambda f: f.name() not in field_names)
                 if err:
                     err = "sf_reservations_push() error: '{}'".format(err)
-                    if self.cae.get_option('breakOnError'):
+                    if self.cae.get_opt('breakOnError'):
                         self.error_message = err
                         self._err(err)
                         break
@@ -2320,7 +2320,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 err = ClientToSihot(self.cae).send_client_to_sihot(rec)
                 if err:
                     err = "sh_clients_push() error: '{}'".format(err)
-                    if self.cae.get_option('breakOnError'):
+                    if self.cae.get_opt('breakOnError'):
                         self.error_message = err
                         self._err(err)
                         break
@@ -2439,7 +2439,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 err = rts.send_res_to_sihot(rec)
                 if err:
                     err = "sh_reservations_push() error: '{}'; WARNINGS='{}'".format(err, rts.get_warnings())
-                    if self.cae.get_option('breakOnError'):
+                    if self.cae.get_opt('breakOnError'):
                         break
                     ignored_errors.append(err)
                     self._warn("Ignoring/Skipping " + err, importance=3)

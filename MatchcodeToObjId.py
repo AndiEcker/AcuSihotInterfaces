@@ -4,18 +4,18 @@ from shif import ClientSearch
 
 __version__ = '0.1'
 
-cae = ConsoleApp(__version__, "Get guest OBJID from passed matchcode", debug_level_def=DEBUG_LEVEL_VERBOSE)
+cae = ConsoleApp("Get guest OBJID from passed matchcode", debug_level_def=DEBUG_LEVEL_VERBOSE)
 
-cae.add_option('matchcode', "Guest Matchcode", 'TCRENT')   # tk=TCAG, TK=TCRENT
+cae.add_opt('matchcode', "Guest Matchcode", 'TCRENT')   # tk=TCAG, TK=TCRENT
 
-cae.uprint('####  Preparing .........  ####')
+cae.po('####  Preparing .........  ####')
 
 cs = ClientSearch(cae)
 
-oi = cs.client_id_by_matchcode(cae.get_option('matchcode'))
+oi = cs.client_id_by_matchcode(cae.get_opt('matchcode'))
 
-cae.uprint('####  Result ............  ####')
+cae.po('####  Result ............  ####')
 
-cae.uprint(oi)
+cae.po(oi)
 
-cae.uprint('####  Finished ..........  ####')
+cae.po('####  Finished ..........  ####')

@@ -24,15 +24,15 @@ from shif import add_sh_options, ClientFromSihot
 __version__ = '0.7'
 
 
-cae = ConsoleApp(__version__, "Sync client and reservation data from SIHOT to Acumen/Oracle", multi_threading=True)
+cae = ConsoleApp("Sync client and reservation data from SIHOT to Acumen/Oracle", multi_threading=True)
 add_ac_options(cae)
 add_sh_options(cae, client_port=11000)
 add_notification_options(cae)
 
-debug_level = cae.get_option('debugLevel')
-cae.uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
-cae.uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
-notification, _ = init_notification(cae, cae.get_option('acuDSN') + '/' + cae.get_option('shServerIP'))
+debug_level = cae.get_opt('debugLevel')
+cae.po("Acumen Usr/DSN:", cae.get_opt('acuUser'), cae.get_opt('acuDSN'))
+cae.po("TCP Timeout/XML Encoding:", cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
+notification, _ = init_notification(cae, cae.get_opt('acuDSN') + '/' + cae.get_opt('shServerIP'))
 
 
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
@@ -40,7 +40,7 @@ def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
         if notification:
             notification.send_notification(msg_body=msg, subject='AcuServer notification', body_style='plain')
         else:
-            cae.uprint(msg)
+            cae.po(msg)
 
 
 def oc_client_to_acu(req):
@@ -65,9 +65,9 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
     if old_room_no:
         old_room_no = old_room_no.lstrip('0')
     # move/check in/out guest from/into room_no
-    ora_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
-                        DSN=cae.get_option('acuDSN')),
-                   app_name=cae.app_name(), debug_level=debug_level)
+    ora_db = OraDB(dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
+                        DSN=cae.get_opt('acuDSN')),
+                   app_name=cae.app_name, debug_level=debug_level)
     err_msg = ora_db.connect()
     extra_info = ''
     if not err_msg:
@@ -93,12 +93,12 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
                            commit=True)              # COMMIT
     if db_err:
         err_msg += "AcuServer.alloc_trigger() db insert error: " + db_err
-        cae.uprint(err_msg)
+        cae.po(err_msg)
 
     db_err = ora_db.close()      # commit and close
     if db_err:
         err_msg += "AcuServer.alloc_trigger() db close error: " + db_err
-        cae.uprint(err_msg)
+        cae.po(err_msg)
 
     return err_msg
 
@@ -165,22 +165,22 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             if notification:
                 notification.send_notification(msg_body=self.error_message, subject="AcuServer handler notification")
             else:
-                cae.uprint("**** " + self.error_message)
+                cae.po("**** " + self.error_message)
 
     def handle_xml(self, xml_from_client):
         """ types of parameter xml_from_client and return value are bytes """
-        xml_request = str(xml_from_client, encoding=cae.get_option(SDF_SH_XML_ENCODING))
+        xml_request = str(xml_from_client, encoding=cae.get_opt(SDF_SH_XML_ENCODING))
         notify("SihotRequestXmlHandler.handle_xml() request: '" + xml_request + "'",
                minimum_debug_level=DEBUG_LEVEL_VERBOSE)
         req = Request(cae)
         req.parse_xml(xml_request)
-        cae.dprint("OC: ", getattr(req, 'oc', '?'))
-        cae.dprint("TN: ", getattr(req, 'tn', '?'))
-        cae.dprint("ID: ", getattr(req, 'id', '?'))
-        cae.dprint("RC: ", getattr(req, 'rc', '?'))
-        cae.dprint("MSG: ", getattr(req, 'msg', ''))
-        cae.dprint("ORG: ", getattr(req, 'org', ''))
-        cae.dprint("VER: ", getattr(req, 'ver', '?'))
+        cae.dpo("OC: ", getattr(req, 'oc', '?'))
+        cae.dpo("TN: ", getattr(req, 'tn', '?'))
+        cae.dpo("ID: ", getattr(req, 'id', '?'))
+        cae.dpo("RC: ", getattr(req, 'rc', '?'))
+        cae.dpo("MSG: ", getattr(req, 'msg', ''))
+        cae.dpo("ORG: ", getattr(req, 'org', ''))
+        cae.dpo("VER: ", getattr(req, 'ver', '?'))
 
         oc = req.get_operation_code()
         if not oc or oc not in SUPPORTED_OCS:
@@ -194,21 +194,21 @@ class SihotRequestXmlHandler(RequestXmlHandler):
             try:
                 req = SUPPORTED_OCS[oc]['reqClass'](cae)
                 req.parse_xml(xml_request)
-                cae.dprint("Before call of", SUPPORTED_OCS[oc]['ocProcessor'], "xml:", xml_request)
+                cae.dpo("Before call of", SUPPORTED_OCS[oc]['ocProcessor'], "xml:", xml_request)
                 xml_response = SUPPORTED_OCS[oc]['ocProcessor'](req)
-                cae.dprint("After call of", SUPPORTED_OCS[oc]['ocProcessor'], "xml:", xml_response)
+                cae.dpo("After call of", SUPPORTED_OCS[oc]['ocProcessor'], "xml:", xml_response)
             except Exception as ex:
                 msg = "SihotRequestXmlHandler.handle_xml() exception: '" + str(ex) + "'\n" + str(format_exc())
                 notify(msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
                 xml_response = create_ack_response(req, '969', msg)
 
-        return bytes(xml_response, cae.get_option(SDF_SH_XML_ENCODING))
+        return bytes(xml_response, cae.get_opt(SDF_SH_XML_ENCODING))
 
 
 if __name__ == '__main__':
-    ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
-    cae.uprint("Sihot client IP/port:", ip_addr, cae.get_option(SDF_SH_CLIENT_PORT))
-    server = TcpServer(ip_addr, cae.get_option(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
-    server.run(display_animation=cae.get_config('displayAnimation', default_value=False))
+    ip_addr = cae.get_var('shClientIP', default_value=cae.get_opt('shServerIP'))
+    cae.po("Sihot client IP/port:", ip_addr, cae.get_opt(SDF_SH_CLIENT_PORT))
+    server = TcpServer(ip_addr, cae.get_opt(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
+    server.run(display_animation=cae.get_var('displayAnimation', default_value=False))
 
     cae.shutdown()

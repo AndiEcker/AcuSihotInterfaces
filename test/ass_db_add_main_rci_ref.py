@@ -6,24 +6,24 @@ from ass_sys_data import AssSysData, EXT_REF_TYPE_RCI
 
 __version__ = '0.1'
 
-cae = ConsoleApp(__version__, "Extend ASS_DB with main Acumen RCI member ID")
+cae = ConsoleApp("Extend ASS_DB with main Acumen RCI member ID")
 add_ac_options(cae)
 
-cae.add_option('assUser', "User account name for the AssCache/Postgres database", '', 'U')
-cae.add_option('assPassword', "User account password for the AssCache/Postgres database", '', 'P')
-cae.add_option('assDSN', "Name of the AssCache/Postgres database", 'ass_cache', 'N')
+cae.add_opt('assUser', "User account name for the AssCache/Postgres database", '', 'U')
+cae.add_opt('assPassword', "User account password for the AssCache/Postgres database", '', 'P')
+cae.add_opt('assDSN', "Name of the AssCache/Postgres database", 'ass_cache', 'N')
 
-debug_level = cae.get_option('debugLevel')
+debug_level = cae.get_opt('debugLevel')
 
-acu_user = cae.get_option('acuUser')
-acu_password = cae.get_option('acuPassword')
-acu_dsn = cae.get_option('acuDSN')
-cae.uprint("Acumen user/DSN:", acu_user, acu_dsn)
+acu_user = cae.get_opt('acuUser')
+acu_password = cae.get_opt('acuPassword')
+acu_dsn = cae.get_opt('acuDSN')
+cae.po("Acumen user/DSN:", acu_user, acu_dsn)
 
-pg_user = cae.get_option('assUser')
-pg_pw = cae.get_option('assPassword')
-pg_dsn = cae.get_option('assDSN')
-cae.uprint("AssCache DB user@dbname:", pg_user, '@', pg_dsn)
+pg_user = cae.get_opt('assUser')
+pg_pw = cae.get_opt('assPassword')
+pg_dsn = cae.get_opt('assDSN')
+cae.po("AssCache DB user@dbname:", pg_user, '@', pg_dsn)
 
 
 # LOGGING HELPERS
@@ -35,7 +35,7 @@ def log_error(msg, ctx, importance=2, exit_code=0):
     msg = " " * (4 - importance) + "*" * importance + "  " + ctx + "   " + msg
     error_log.append(msg)
     import_log.append(msg)
-    cae.uprint(msg)
+    cae.po(msg)
     if exit_code:
         cae.shutdown(exit_code)
 
@@ -44,7 +44,7 @@ def log_warning(msg, ctx, importance=2):
     seps = '\n' * (importance - 2)
     msg = seps + " " * (4 - importance) + "#" * importance + "  " + ctx + "   " + msg
     import_log.append(msg)
-    cae.uprint(msg)
+    cae.po(msg)
 
 
 # logon to and prepare Acumen, Salesforce, Sihot and config data env
@@ -54,8 +54,8 @@ if asd.error_message:
     cae.shutdown(exit_code=33)
 
 # logon to and prepare ass_cache database
-ass_db = PostgresDB(dict(User=pg_user, Password=pg_pw, DSN=pg_dsn, SslArgs=cae.get_config('assSslArgs')),
-                    app_name=cae.app_name(), debug_level=debug_level)
+ass_db = PostgresDB(dict(User=pg_user, Password=pg_pw, DSN=pg_dsn, SslArgs=cae.get_var('assSslArgs')),
+                    app_name=cae.app_name, debug_level=debug_level)
 if ass_db.connect():
     log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
     cae.shutdown(exit_code=66)

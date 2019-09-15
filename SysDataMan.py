@@ -26,8 +26,8 @@ __version__ = '0.3'
 PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
 
-cae = ConsoleApp(__version__, "Initialize, pull, compare or push AssCache data against Acumen, Sihot and/or Salesforce",
-                 option_value_stripper=strip_system_rec_type,
+cae = ConsoleApp("Initialize, pull, compare or push AssCache data against Acumen, Sihot and/or Salesforce",
+                 cfg_opt_val_stripper=strip_system_rec_type,
                  formatter_class=argparse.RawDescriptionHelpFormatter,
                  epilog="A dictionary holding additional key-word-arguments can be appended"
                         " directly after the system and record type ids"
@@ -41,30 +41,30 @@ cae = ConsoleApp(__version__, "Initialize, pull, compare or push AssCache data a
                         "\n\tfilter_records: callable for record filtering (default=all records)"
                         "\n\tmatch_fields: list of field names used for to lookup and merge in record sets")
 
-cae.add_option('init', "Initialize/Wipe/Recreate ass_cache database (0=No, 1=Yes)", 0, 'I')
+cae.add_opt('init', "Initialize/Wipe/Recreate ass_cache database (0=No, 1=Yes)", 0, 'I')
 
 opt_choices = tuple([s + rt for s in ALL_AVAILABLE_SYSTEMS.keys() for rt in ALL_AVAILABLE_RECORD_TYPES.keys()])
-cae.add_option('pull', "Pull record type (e.g. {}) from system (e.g. {}, e.g. shC is pulling Client data from Sihot"
-               .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
-               [], 'S', choices=opt_choices, multiple=True)
-cae.add_option('push', "Push data of type (e.g. {}) from system (e.g. {}, e.g. sfR pushes Reservations to Salesforce"
-               .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
-               [], 'W', choices=opt_choices, multiple=True)
-cae.add_option('compare', "Compare/Check pulled data ({}) against {}, e.g. asP checks pulled Products against AssCache"
-               .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
-               [], 'V', choices=opt_choices, multiple=True)
+cae.add_opt('pull', "Pull record type (e.g. {}) from system (e.g. {}, e.g. shC is pulling Client data from Sihot"
+            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+            [], 'S', choices=opt_choices, multiple=True)
+cae.add_opt('push', "Push data of type (e.g. {}) from system (e.g. {}, e.g. sfR pushes Reservations to Salesforce"
+            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+            [], 'W', choices=opt_choices, multiple=True)
+cae.add_opt('compare', "Compare/Check pulled data ({}) against {}, e.g. asP checks pulled Products against AssCache"
+            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+            [], 'V', choices=opt_choices, multiple=True)
 
 '''
-cae.add_option('filterRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) source records,"
+cae.add_opt('filterRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) source records,"
                                 " e.g. {'C':\\\"cl_ac_id='E123456'\\\"} pushes only the client with Acu ID E123456",
                {}, 'X')
-cae.add_option('filterFields', "Restrict processed (dict keys: C=client, P=product, R=reservation) data fields,"
+cae.add_opt('filterFields', "Restrict processed (dict keys: C=client, P=product, R=reservation) data fields,"
                                " e.g. {'C':['Phone']} processes (pull/compare/push) only the client field Phone",
                {}, 'Y')
-cae.add_option('matchRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) destination records,"
+cae.add_opt('matchRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) destination records,"
                                " e.g. {'C':'cl_phone is NULL'} pulls only client data with empty phone",
                {}, 'M')
-cae.add_option('matchFields', "Specify (dict keys: C=client, P=product, R=reservation) fields for to match/lookup the "
+cae.add_opt('matchFields', "Specify (dict keys: C=client, P=product, R=reservation) fields for to match/lookup the "
                               "associated record e.g. {'C':['Phone']} is using Phone for to associate client records",
                {}, 'Z')
 '''
@@ -75,7 +75,7 @@ ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True, bu
 # NOTIFICATION, LOGGING AND COMMAND LINE OPTION PARSING HELPERS
 # declare notification early/here to ensure proper shutdown and display of startup errors on console
 notification = notification_warning_emails = None
-_debug_level = cae.get_option('debugLevel')
+_debug_level = cae.get_opt('debugLevel')
 
 error_log = list()
 warn_log = list()
@@ -86,25 +86,25 @@ def send_notification(exit_code=0):
     all_warnings = all_errors = ""
     if warn_log:
         all_warnings = "WARNINGS:\n\n{}".format("\n\n".join(warn_log))
-        cae.uprint(all_warnings)
+        cae.po(all_warnings)
         warn_log = list()
     if error_log:
         all_errors = "ERRORS:\n\n{}".format("\n\n".join(error_log))
-        cae.uprint(all_errors)
+        cae.po(all_errors)
         error_log = list()
 
     if notification and all_warnings:
         subject = "SysDataMan Warnings"
         send_err = notification.send_notification(all_warnings, subject=subject, mail_to=notification_warning_emails)
         if send_err:
-            cae.uprint("****  {} send error: {}. warnings='{}'.".format(subject, send_err, all_warnings))
+            cae.po("****  {} send error: {}. warnings='{}'.".format(subject, send_err, all_warnings))
             if not exit_code:
                 exit_code = 36
     if notification and all_errors:
         subject = "SysDataMan Errors"
         send_err = notification.send_notification(all_errors, subject=subject)
         if send_err:
-            cae.uprint("****  {} send error: {}. errors='{}'.".format(subject, send_err, all_errors))
+            cae.po("****  {} send error: {}. errors='{}'.".format(subject, send_err, all_errors))
             if not exit_code:
                 exit_code = 39
 
@@ -121,7 +121,7 @@ def log_error(msg, *args, importance=2, exit_code=0, **kwargs):
         msg += "; extra log_error kwargs={}".format(kwargs)
     error_log.append(msg)
     warn_log.append(msg)
-    cae.uprint(msg)
+    cae.po(msg)
     if exit_code or importance > 2:
         exit_code = send_notification(exit_code)
         if ass_data['breakOnErrors']:
@@ -139,7 +139,7 @@ def log_warning(msg, *args, importance=2, **kwargs):
     if kwargs and _debug_level >= DEBUG_LEVEL_VERBOSE:
         msg += "; extra log_warning kwargs={}".format(kwargs)
     warn_log.append(msg)
-    cae.uprint(msg)
+    cae.po(msg)
 
 
 def parse_action_args(args_str, eval_kwargs=False):
@@ -154,58 +154,58 @@ def parse_action_args(args_str, eval_kwargs=False):
 
 # parse action command line options
 actions = list()
-act_init = cae.get_option('init')
+act_init = cae.get_opt('init')
 if act_init:
     actions.append("Initialize/Clear all record type data within the AssCache system")
-act_pulls = cae.get_option('pull')
+act_pulls = cae.get_opt('pull')
 for act_pull in act_pulls:
     sid, rty = parse_action_args(act_pull)
     actions.append("Pull/Load {} from {}".format(ALL_AVAILABLE_RECORD_TYPES.get(rty), ALL_AVAILABLE_SYSTEMS.get(sid)))
-act_pushes = cae.get_option('push')
+act_pushes = cae.get_opt('push')
 for act_push in act_pushes:
     sid, rty = parse_action_args(act_push)
     actions.append("Push/Fix {} onto {}".format(ALL_AVAILABLE_RECORD_TYPES.get(rty), ALL_AVAILABLE_SYSTEMS.get(sid)))
-act_compares = cae.get_option('compare')
+act_compares = cae.get_opt('compare')
 for act_compare in act_compares:
     sid, rty = parse_action_args(act_compare)
     actions.append("Compare {} with {}".format(ALL_AVAILABLE_RECORD_TYPES.get(rty), ALL_AVAILABLE_SYSTEMS.get(sid)))
 if not actions:
-    cae.uprint("\nNo Action option specified (using command line options init, pull, push and/or compare)\n")
+    cae.po("\nNo Action option specified (using command line options init, pull, push and/or compare)\n")
     cae.show_help()
     cae.shutdown()
-cae.uprint("Actions: " + "\n         ".join(actions))
+cae.po("Actions: " + "\n         ".join(actions))
 '''
-act_record_filters = cae.get_option('filterRecords')
+act_record_filters = cae.get_opt('filterRecords')
 if not isinstance(act_record_filters, dict) or not act_record_filters:
     act_record_filters = {k: act_record_filters or "" for (k, v) in ALL_AVAILABLE_RECORD_TYPES.items()}
-uprint("Source record filtering:", act_record_filters)
-act_field_filters = cae.get_option('filterFields')
+po("Source record filtering:", act_record_filters)
+act_field_filters = cae.get_opt('filterFields')
 if not isinstance(act_field_filters, dict) or not act_field_filters:
     act_field_filters = {k: act_field_filters or "" for (k, v) in ALL_AVAILABLE_RECORD_TYPES.items()}
-uprint("Filtered/Used data fields:", act_field_filters)
-act_record_matches = cae.get_option('matchRecords')
+po("Filtered/Used data fields:", act_field_filters)
+act_record_matches = cae.get_opt('matchRecords')
 if not isinstance(act_record_matches, dict) or not act_record_matches:
     act_record_matches = {k: act_record_matches or "" for (k, v) in ALL_AVAILABLE_RECORD_TYPES.items()}
-uprint("Destination record filtering:", act_record_matches)
-act_match_fields = cae.get_option('matchFields')
+po("Destination record filtering:", act_record_matches)
+act_match_fields = cae.get_opt('matchFields')
 if not isinstance(act_match_fields, dict) or not act_match_fields:
     act_match_fields = {k: act_match_fields or "" for (k, v) in ALL_AVAILABLE_RECORD_TYPES.items()}
-uprint("User-defined/Processed match fields:", act_match_fields)
+po("User-defined/Processed match fields:", act_match_fields)
 '''
 
 # check for to (re-)create and initialize PG database - HAS TO BE DONE BEFORE AssSysData init because pg user not exists
 if act_init:
-    ass_user = cae.get_option('assUser')
-    ass_pw = cae.get_option('assPassword')
-    ass_dsn = cae.get_option('assDSN')
-    ass_ssl = cae.get_config('assSslArgs')
+    ass_user = cae.get_opt('assUser')
+    ass_pw = cae.get_opt('assPassword')
+    ass_dsn = cae.get_opt('assDSN')
+    ass_ssl = cae.get_var('assSslArgs')
     pg_dbname, pg_host = ass_dsn.split('@') if '@' in ass_dsn else (ass_dsn, '')
-    pg_root_usr = cae.get_config('assRootUsr', default_value='postgres')
-    pg_root_pw = cae.get_config('assRootPwd')
+    pg_root_usr = cae.get_var('assRootUsr', default_value='postgres')
+    pg_root_pw = cae.get_var('assRootPwd')
     pg_root_dsn = pg_root_usr + ('@' + pg_host if '@' in ass_dsn else '')
     log_warning("creating database {} and user {}".format(ass_dsn, ass_user), 'initCreateDBandUser')
     pg_db = PostgresDB(dict(User=pg_root_usr, Password=pg_root_pw, DSN=pg_root_dsn, SslArgs=ass_ssl),
-                       app_name=cae.app_name() + "-CreateDb", debug_level=_debug_level)
+                       app_name=cae.app_name + "-CreateDb", debug_level=_debug_level)
     if pg_db.execute_sql("CREATE DATABASE {};".format(pg_dbname), auto_commit=True):  # " LC_COLLATE 'C'"):
         log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72)
 
@@ -221,7 +221,7 @@ if act_init:
 
     log_warning("creating tables and audit trigger schema/extension", 'initCreateTableAndAudit')
     pg_db = PostgresDB(dict(User=pg_root_usr, Password=pg_root_pw, DSN=ass_dsn, SslArgs=ass_ssl),
-                       app_name=cae.app_name() + "-InitTables", debug_level=_debug_level)
+                       app_name=cae.app_name + "-InitTables", debug_level=_debug_level)
     if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO {};"
                          .format(ass_user)):
         log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=90)

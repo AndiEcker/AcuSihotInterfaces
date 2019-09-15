@@ -30,9 +30,9 @@ def avail_cats(console_app_env):
 # noinspection PyShadowingNames
 @pytest.fixture()
 def db_connected(console_app_env):
-    ora_db = OraDB(dict(User=console_app_env.get_option('acuUser'), Password=console_app_env.get_option('acuPassword'),
-                        DSN=console_app_env.get_option('acuDSN')),
-                   app_name='conftest', debug_level=console_app_env.get_option('debugLevel'))
+    ora_db = OraDB(dict(User=console_app_env.get_opt('acuUser'), Password=console_app_env.get_opt('acuPassword'),
+                        DSN=console_app_env.get_opt('acuDSN')),
+                   app_name='conftest', debug_level=console_app_env.get_opt('debugLevel'))
     ora_db.connect()
     return ora_db
 
@@ -101,17 +101,17 @@ def create_test_client(console_app_env):
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
     cae = console_app_env
-    debug_level = cae.get_option('debugLevel')
-    sf_user = cae.get_option('sfUser')
+    debug_level = cae.get_opt('debugLevel')
+    sf_user = cae.get_opt('sfUser')
     if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
-        cae.uprint("conftest.salesforce_connection(): skipped because of unspecified credentials")
+        cae.po("conftest.salesforce_connection(): skipped because of unspecified credentials")
         return None
-    sf_pw = cae.get_option('sfPassword')
-    sf_token = cae.get_option('sfToken')
-    sf_sandbox = cae.get_option(SDF_SF_SANDBOX, default_value='test' in sf_user.lower() or 'dbx' in sf_user.lower())
-    sf_client = cae.app_name()
+    sf_pw = cae.get_opt('sfPassword')
+    sf_token = cae.get_opt('sfToken')
+    sf_sandbox = cae.get_opt(SDF_SF_SANDBOX, default_value='test' in sf_user.lower() or 'dbx' in sf_user.lower())
+    sf_client = cae.app_name
 
-    cae.uprint("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
+    cae.po("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
     sf_conn = SfInterface(dict(User=sf_user, Password=sf_pw, Token=sf_token),
                           features=[SDF_SF_SANDBOX + '=True'] if sf_sandbox else None,
@@ -124,7 +124,7 @@ def salesforce_connection(console_app_env):
 # mock-ups and stubs
 
 
-def uprint(*objects, sep=' ', end='\n', file=sys.stdout, encode_errors_def='backslashreplace'):
+def print_out(*objects, sep=' ', end='\n', file=sys.stdout, encode_errors_def='backslashreplace'):
     enc = file.encoding
     if enc == 'UTF-8':
         print(*objects, sep=sep, end=end, file=file)
@@ -133,11 +133,14 @@ def uprint(*objects, sep=' ', end='\n', file=sys.stdout, encode_errors_def='back
               sep=sep, end=end, file=file)
 
 
+po = print_out
+
+
 class ConsoleApp:
     def __init__(self, *args):
-        self.uprint = uprint
-        self.uprint("####  TEST Initialization.. ####")
-        self.uprint('ConsoleAppMock.__init__', args)
+        self.po = self.print_out = print_out
+        self.po("####  TEST Initialization.. ####")
+        self.po('ConsoleAppMock.__init__', args)
         cfg = ConfigParser()
         cfg.optionxform = str   # for case-sensitive config vars
         cfg.read(['../.app_env.cfg', '../.sys_envTEST.cfg'])
@@ -173,10 +176,11 @@ class ConsoleApp:
                 self._options[cfg_key] = eval(val)
 
         self._env_cfg = cfg
+        self.app_name = 'conftest.ConsoleApp.mock'
         self.startup_beg = self.startup_end = datetime.datetime.now()
         self.sys_env_id = 'MOCK'
 
-    def get_config(self, name, section=None, default_value=None):
+    def get_var(self, name, section=None, default_value=None):
         if section == 'SihotRateSegments':
             ret = 'CMM'     # quick fix for tests (for full fix need to include SihotMktSegExceptions.cfg)
         elif name in self._options:
@@ -189,29 +193,27 @@ class ConsoleApp:
             ret = s.value
         else:
             ret = default_value
-        self.uprint('ConsoleAppMock.get_config', name, '=', ret, 'section=' + str(section))
+        self.po('ConsoleAppMock.get_var', name, '=', ret, 'section=' + str(section))
         return ret
 
-    def get_option(self, name, default_value=None):
+    def get_opt(self, name, default_value=None):
         ret = self._options[name] if name in self._options else default_value
         if name not in ('debugLevel', ):
-            self.uprint('ConsoleAppMock.get_option', name, '=', ret)
+            self.po('ConsoleAppMock.get_opt', name, '=', ret)
         return ret
 
-    def set_option(self, name, val, cfg_fnam=None, save_to_config=True):
-        self.uprint('ConsoleAppMock.set_option', name, val, cfg_fnam, save_to_config)
+    def set_opt(self, name, val, cfg_fnam=None, save_to_config=True):
+        self.po('ConsoleAppMock.set_opt', name, val, cfg_fnam, save_to_config)
         self._options[name]['val'] = val
         return ''
 
-    @staticmethod
-    def app_name():
-        return "conftest.ConsoleApp.mock"
+    def debug_out(self, *objects, sep=' ', end='\n', file=sys.stdout, minimum_debug_level=1):  # 1==DEBUG_LEVEL_ENABLED
+        if self.get_opt('debugLevel') >= minimum_debug_level:
+            self.po(*objects, sep=sep, end=end, file=file)
 
-    def dprint(self, *objects, sep=' ', end='\n', file=sys.stdout, minimum_debug_level=1):  # 1==DEBUG_LEVEL_ENABLED
-        if self.get_option('debugLevel') >= minimum_debug_level:
-            self.uprint(*objects, sep=sep, end=end, file=file)
+    dpo = debug_out
 
     def shutdown(self, exit_code=0):
         if exit_code:
-            self.uprint("****  Non-zero exit code:", exit_code)
-        self.uprint('####  Shutdown............  ####')
+            self.po("****  Non-zero exit code:", exit_code)
+        self.po('####  Shutdown............  ####')

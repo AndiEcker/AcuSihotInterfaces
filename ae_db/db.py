@@ -10,7 +10,7 @@ import cx_Oracle
 import psycopg2
 # from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, uprint
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.lockname import NamedLocks
 
 NAMED_BIND_VAR_PREFIX = ':'
@@ -49,7 +49,7 @@ class GenericDB:
         assert dsn and isinstance(dsn, str), "db.py/GenericDB() has invalid dsn argument {}".format(dsn)
         self.dsn = dsn
         self._features = features
-        self._app_name = app_name
+        self.app_name = app_name
         self.debug_level = debug_level
 
         self.conn = None
@@ -69,7 +69,7 @@ class GenericDB:
         try:
             self.curs = self.conn.cursor()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ": database cursor created.")
+                po(self.dsn + ": database cursor created.")
         except Exception as ex:
             self.last_err_msg = self.dsn + "._create_cursor() error: " + str(ex)
 
@@ -138,11 +138,11 @@ class GenericDB:
                     self.curs.close()
                     self.curs = None
                     if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                        uprint(self.dsn + " cursor closed")
+                        po(self.dsn + " cursor closed")
                 self.conn.close()
                 self.conn = None
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint(self.dsn + " connection closed")
+                    po(self.dsn + " connection closed")
             except Exception as ex:
                 self.last_err_msg += self.dsn + " close error: " + str(ex)
         return self.last_err_msg
@@ -158,10 +158,10 @@ class GenericDB:
         try:
             rows = self.curs.fetchall()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".fetch_all(), 1st of", len(rows), "recs:", rows[:1])
+                po(self.dsn + ".fetch_all(), 1st of", len(rows), "recs:", rows[:1])
         except Exception as ex:
             self.last_err_msg = self.dsn + ".fetch_all() exception: " + str(ex)
-            uprint(self.last_err_msg)
+            po(self.last_err_msg)
             rows = None
         return rows or list()
 
@@ -173,11 +173,11 @@ class GenericDB:
             if values:
                 val = values[col_idx]
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".fetch_value() retrieved values: {}[{}]".format(values, col_idx))
+                po(self.dsn + ".fetch_value() retrieved values: {}[{}]".format(values, col_idx))
         except Exception as ex:
             self.last_err_msg = self.dsn + ".fetch_value()[{}] exception: {}; status message={}"\
                 .format(col_idx, ex, self.curs.statusmessage)
-            uprint(self.last_err_msg)
+            po(self.last_err_msg)
         return val
 
     def execute_sql(self, sql, commit=False, auto_commit=False, bind_vars=None):
@@ -204,14 +204,14 @@ class GenericDB:
                 if commit:
                     self.conn.commit()
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint(self.dsn + ".execute_sql({}, {}) {}".format(sql, bind_vars, action))
-                    uprint(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
+                    po(self.dsn + ".execute_sql({}, {}) {}".format(sql, bind_vars, action))
+                    po(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
 
             except Exception as ex:
                 self.last_err_msg += self.dsn + ".execute_sql() {} error={}; {}, {}".format(action, ex, sql, bind_vars)
 
         if self.debug_level >= DEBUG_LEVEL_ENABLED and self.last_err_msg:
-            uprint(self.last_err_msg)
+            po(self.last_err_msg)
 
         return self.last_err_msg
 
@@ -305,7 +305,7 @@ class GenericDB:
         try:
             self.conn.commit()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".commit()")
+                po(self.dsn + ".commit()")
         except Exception as ex:
             self.last_err_msg = self.dsn + " commit error: " + str(ex)
         return self.last_err_msg
@@ -316,7 +316,7 @@ class GenericDB:
 
         try:
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint(self.dsn + ".rollback()")
+                po(self.dsn + ".rollback()")
             self.conn.rollback()
         except Exception as ex:
             self.last_err_msg = self.dsn + " rollback error: " + str(ex)
@@ -379,15 +379,15 @@ class OraDB(GenericDB):
                 # sys context was using clientinfo kwarg in/up-to cx_Oracle V5 - with V6 kwarg renamed to appcontext and
                 # .. now it is using a list of 3-tuples. So since V6 need to replace clientinfo with appcontext=app_ctx
                 NAMESPACE = "CLIENTCONTEXT"  # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
-                app_ctx = [(NAMESPACE, "APP", self._app_name), (NAMESPACE, "LANG", "Python"),
+                app_ctx = [(NAMESPACE, "APP", self.app_name), (NAMESPACE, "LANG", "Python"),
                            (NAMESPACE, "MOD", "ae.db")]
                 self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, appcontext=app_ctx)
             else:
                 # sys context old style (until V5 using clientinfo):
-                self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, clientinfo=self._app_name)
+                self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, clientinfo=self.app_name)
             # self.conn.outputtypehandler = output_type_handler       # see also comment in OraDB.__init__()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("OraDB: connected to Oracle database {} via client version {}/{} with n-/encoding {}/{}"
+                po("OraDB: connected to Oracle database {} via client version {}/{} with n-/encoding {}/{}"
                        .format(self.dsn, cx_Oracle.clientversion(), cx_Oracle.apilevel,
                                self.conn.nencoding, self.conn.encoding))
         except Exception as ex:
@@ -442,14 +442,14 @@ class PostgresDB(GenericDB):
                 connection_params['dbname'], connection_params['host'] = self.dsn.split('@')
             else:
                 connection_params['dbname'] = self.dsn
-            if self._app_name:
-                connection_params['application_name'] = self._app_name
+            if self.app_name:
+                connection_params['application_name'] = self.app_name
             if self._ssl_args:
                 connection_params.update(self._ssl_args)
 
             self.conn = psycopg2.connect(**connection_params)
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                uprint("PostgresDB: connected to postgres database {} via api/server {}/{} with encoding {}"
+                po("PostgresDB: connected to postgres database {} via api/server {}/{} with encoding {}"
                        .format(self.dsn, psycopg2.apilevel, self.conn.server_version, self.conn.encoding))
         except Exception as ex:
             self.last_err_msg = "PostgresDB-connect " + self.usr + " on " + self.dsn + " error: " + str(ex)
@@ -479,6 +479,6 @@ class PostgresDB(GenericDB):
             super().execute_sql(sql, commit=commit, auto_commit=auto_commit, bind_vars=bind_vars)
             if self.last_err_msg and not auto_commit:
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    uprint("PostgresDB.execute_sql(): automatic rollback after error; for connection recycling")
+                    po("PostgresDB.execute_sql(): automatic rollback after error; for connection recycling")
                 self.conn.rollback()
         return self.last_err_msg

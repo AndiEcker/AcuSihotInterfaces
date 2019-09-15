@@ -406,7 +406,7 @@ class TestSihotXmlBuilder:
         test_date = xml_builder.convert_value_to_xml_string(datetime.datetime.now())
         xml_builder.add_tag('DATE', test_date)
         xml_builder.end_xml()
-        console_app_env.dprint('####  New XML created: ', xml_builder.xml)
+        console_app_env.dpo('####  New XML created: ', xml_builder.xml)
         assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n' + \
             '<OC>TEST_OC</OC><TN>2</TN><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
             '<DATE>' + test_date + '</DATE>\n</SIHOT-Document>'
@@ -419,7 +419,7 @@ class TestSihotXmlBuilder:
         test_date = xml_builder.convert_value_to_xml_string(datetime.datetime.now())
         xml_builder.add_tag('DATE', test_date)
         xml_builder.end_xml()
-        console_app_env.dprint('####  New XML created: ', xml_builder.xml)
+        console_app_env.dpo('####  New XML created: ', xml_builder.xml)
         assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n<SIHOT-XML-REQUEST>' + \
             '\n<REQUEST-TYPE>TEST_OC</REQUEST-TYPE><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
             '<DATE>' + test_date + '</DATE>\n</SIHOT-XML-REQUEST>\n</SIHOT-Document>'

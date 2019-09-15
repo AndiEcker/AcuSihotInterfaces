@@ -164,9 +164,9 @@ for idx in range(1, RES_MAX_CHILDREN + 1):
 
 
 def add_ac_options(cae):
-    cae.add_option('acuUser', "Acumen/Oracle user account name", ACU_DEF_USR, 'u')
-    cae.add_option('acuPassword', "Acumen/Oracle user account password", '', 'p')
-    cae.add_option('acuDSN', "Acumen/Oracle data source name", ACU_DEF_DSN, 'd')
+    cae.add_opt('acuUser', "Acumen/Oracle user account name", ACU_DEF_USR, 'u')
+    cae.add_opt('acuPassword', "Acumen/Oracle user account password", '', 'p')
+    cae.add_opt('acuDSN', "Acumen/Oracle data source name", ACU_DEF_DSN, 'd')
 
 
 ''' migrate to ae.sys_data methods: 
@@ -192,12 +192,12 @@ class AcuDbRows:
 
         self._opened = not bool(ora_db)
         if self._opened:
-            self.ora_db = OraDB(dict(User=cae.get_option('acuUser'), Password=cae.get_option('acuPassword'),
-                                     DSN=cae.get_option('acuDSN')),
-                                app_name=cae.app_name(), debug_level=cae.get_option('debugLevel'))
+            self.ora_db = OraDB(dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
+                                     DSN=cae.get_opt('acuDSN')),
+                                app_name=cae.app_name, debug_level=cae.get_opt('debugLevel'))
             err_msg = self.ora_db.connect()
             if err_msg:
-                cae.uprint("AcuDbRows.__init__() db connect error: {}".format(err_msg))
+                cae.po("AcuDbRows.__init__() db connect error: {}".format(err_msg))
         else:
             self.ora_db = ora_db
 
@@ -207,7 +207,7 @@ class AcuDbRows:
         self.cae = cae
         elem_col_map = deepcopy(elem_col_map)
         self.elem_col_map = elem_col_map
-        self.use_kernel_interface = cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) if use_kernel is None else use_kernel
+        self.use_kernel_interface = cae.get_opt(SDF_SH_USE_KERNEL_FOR_RES) if use_kernel is None else use_kernel
 
         self.fix_fld_vals = dict()
         self.acu_col_names = list()  # acu_col_names and acu_col_expres need to be in sync
@@ -235,7 +235,7 @@ class AcuDbRows:
             self.ora_db = None
 
     def add_to_acumen_sync_log(self, table, primary, action, status, message, logref):
-        self.cae.dprint('AcuDbRows.add_to_acumen_sync_log() fetched/now:', self._last_fetch, datetime.datetime.now())
+        self.cae.dpo('AcuDbRows.add_to_acumen_sync_log() fetched/now:', self._last_fetch, datetime.datetime.now())
         return self.ora_db.insert('T_SRSL',
                                   {'SRSL_TABLE': table[:6],
                                    'SRSL_PRIMARY': str(primary)[:12],
@@ -262,13 +262,13 @@ class AcuDbRows:
         plain_rows = self.ora_db.fetch_all()
         err_msg = self.ora_db.last_err_msg
         if err_msg:
-            self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} had error {}"
-                            .format(self._last_fetch, err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo("AcuDbRows.fetch_all_from_acu() at {} had error {}"
+                         .format(self._last_fetch, err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
             for row in plain_rows:
                 ret_rows.append(dict(zip(col_names, row)))
-            self.cae.dprint("AcuDbRows.fetch_all_from_acu() at {} got {}, 1st row: {}"
-                            .format(self._last_fetch, len(ret_rows), ret_rows))
+            self.cae.dpo("AcuDbRows.fetch_all_from_acu() at {} got {}, 1st row: {}"
+                         .format(self._last_fetch, len(ret_rows), ret_rows))
         return ret_rows
 
     def client_row_save(self, col_values, commit=False):
@@ -447,11 +447,11 @@ class AcuClientToSihot(AcumenClient, ClientToSihot):
             err_msg += "\n      LogErr=" + log_err
 
         if err_msg:
-            self.cae.dprint("AcuClientToSihot.send_client_to_sihot() error: rec={} action-p1/2={} err={}"
-                            .format(rec, action, err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo("AcuClientToSihot.send_client_to_sihot() error: rec={} action-p1/2={} err={}"
+                         .format(rec, action, err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
-            self.cae.dprint("AcuClientToSihot.send_client_to_sihot() with client={} RESPONDED OBJID={}/MATCHCODE={}"
-                            .format(rec['AcuId'], self.response.objid, self.response.matchcode))
+            self.cae.dpo("AcuClientToSihot.send_client_to_sihot() with client={} RESPONDED OBJID={}/MATCHCODE={}"
+                         .format(rec['AcuId'], self.response.objid, self.response.matchcode))
 
         return err_msg
 
@@ -623,11 +623,11 @@ class AcuResToSihot(AcumenRes, ResToSihot):
         err_msg = super().send_res_to_sihot(rec, ensure_client_mode=ensure_client_mode)
         warn_msg = self.get_warnings()
         if err_msg:
-            self.cae.dprint("AcuResToSihot.send_res_to_sihot() error: {}; warning={}".format(err_msg, warn_msg),
-                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo("AcuResToSihot.send_res_to_sihot() error: {}; warning={}".format(err_msg, warn_msg),
+                         minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
-            self.cae.dprint("AcuResToSihot.send_res_to_sihot() RESPONDED OBJID={} MATCHCODE={}, warning={}, rec={}"
-                            .format(self.response.objid, self.response.matchcode, warn_msg, rec))
+            self.cae.dpo("AcuResToSihot.send_res_to_sihot() RESPONDED OBJID={} MATCHCODE={}, warning={}, rec={}"
+                         .format(self.response.objid, self.response.matchcode, warn_msg, rec))
 
         return err_msg
 

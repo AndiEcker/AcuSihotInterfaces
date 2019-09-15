@@ -1,7 +1,7 @@
 .. application environment for python - documentation master file.
 
-application environment for python |version|
-============================================
+application environment taking care of your python application |version|
+========================================================================
 
 * pure python
 * no external dependencies

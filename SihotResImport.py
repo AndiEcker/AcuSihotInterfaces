@@ -42,36 +42,36 @@ from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYP
 
 __version__ = '1.2'
 
-cae = ConsoleApp(__version__, "Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
+cae = ConsoleApp("Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
-# cae.add_option('tciPath', "Import path and file mask for Thomas Cook R*.TXT files", 'C:/TC_Import/R*.txt', 'j')
-# cae.add_option('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
-cae.add_option('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'Y')
-cae.add_option('jsonPath', "Import path and file mask for OTA JSON files", 'C:/JSON_Import/*.json', 'j')
+# cae.add_opt('tciPath', "Import path and file mask for Thomas Cook R*.TXT files", 'C:/TC_Import/R*.txt', 'j')
+# cae.add_opt('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
+cae.add_opt('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'Y')
+cae.add_opt('jsonPath', "Import path and file mask for OTA JSON files", 'C:/JSON_Import/*.json', 'j')
 add_notification_options(cae, add_warnings=True)
 add_ac_options(cae)
 add_sf_options(cae)
 add_sh_options(cae, add_kernel_port=True, add_maps_and_kernel_usage=True)
-cae.add_option('breakOnError', "Abort importation if an error occurs (0=No, 1=Yes)", 0, 'b')
+cae.add_opt('breakOnError', "Abort importation if an error occurs (0=No, 1=Yes)", 0, 'b')
 
-debug_level = cae.get_option('debugLevel')
+debug_level = cae.get_opt('debugLevel')
 
-cae.uprint("Import path/file-mask for OTA-JSON/RCI:", cae.get_option('jsonPath'), cae.get_option('rciPath'))
-notification, warning_notification_emails = init_notification(cae, cae.get_option('acuDSN')
-                                                              + '/' + cae.get_option('shServerIP'))
+cae.po("Import path/file-mask for OTA-JSON/RCI:", cae.get_opt('jsonPath'), cae.get_opt('rciPath'))
+notification, warning_notification_emails = init_notification(cae, cae.get_opt('acuDSN')
+                                                              + '/' + cae.get_opt('shServerIP'))
 
-cae.uprint("Acumen DSN:", cae.get_option('acuDSN'))
-cae.uprint("Server IP/WEB-port/Kernel-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT),
-           cae.get_option(SDF_SH_KERNEL_PORT))
-cae.uprint("TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
-cae.uprint("Use Kernel for clients:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT) else "No (WEB)")
-cae.uprint("Use Kernel for reservations:", "Yes" if cae.get_option(SDF_SH_USE_KERNEL_FOR_RES) else "No (WEB)")
-cae.uprint("Break on error:", "Yes" if cae.get_option('breakOnError') else "No")
-if cae.get_config('warningFragments'):
-    cae.uprint('Warning Fragments:', cae.get_config('warningFragments'))
+cae.po("Acumen DSN:", cae.get_opt('acuDSN'))
+cae.po("Server IP/WEB-port/Kernel-port:", cae.get_opt('shServerIP'), cae.get_opt(SDF_SH_WEB_PORT),
+       cae.get_opt(SDF_SH_KERNEL_PORT))
+cae.po("TCP Timeout/XML Encoding:", cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
+cae.po("Use Kernel for clients:", "Yes" if cae.get_opt(SDF_SH_USE_KERNEL_FOR_CLIENT) else "No (WEB)")
+cae.po("Use Kernel for reservations:", "Yes" if cae.get_opt(SDF_SH_USE_KERNEL_FOR_RES) else "No (WEB)")
+cae.po("Break on error:", "Yes" if cae.get_opt('breakOnError') else "No")
+if cae.get_var('warningFragments'):
+    cae.po('Warning Fragments:', cae.get_var('warningFragments'))
 
 # max. length of label text shown in UI/screen log
-MAX_SCREEN_LOG_LEN = cae.get_config('max_text_len', default_value=69999)
+MAX_SCREEN_LOG_LEN = cae.get_var('max_text_len', default_value=69999)
 
 # file collection - lists of files to be imported
 tci_files = list()
@@ -83,15 +83,15 @@ imp_files = list()
 
 def collect_files():
     global tci_files, bkc_files, rci_files, jso_files, imp_files
-    # tci_files = glob.glob(cae.get_option('tciPath')) if cae.get_option('tciPath') else list()
+    # tci_files = glob.glob(cae.get_opt('tciPath')) if cae.get_opt('tciPath') else list()
     # tci_files.sort(key=lambda f: os.path.basename(f)[1], reverse=True)
     # tci_files.sort(key=lambda f: os.path.basename(f)[3:13])
     tci_files = list()
-    # bkc_files = glob.glob(cae.get_option('bkcPath')) if cae.get_option('bkcPath') else list()
+    # bkc_files = glob.glob(cae.get_opt('bkcPath')) if cae.get_opt('bkcPath') else list()
     # bkc_files.sort(key=lambda f: os.path.basename(f))
     bkc_files = list()
-    rci_files = glob.glob(cae.get_option('rciPath')) if cae.get_option('rciPath') else list()
-    jso_files = glob.glob(cae.get_option('jsonPath')) if cae.get_option('jsonPath') else list()
+    rci_files = glob.glob(cae.get_opt('rciPath')) if cae.get_opt('rciPath') else list()
+    jso_files = glob.glob(cae.get_opt('jsonPath')) if cae.get_opt('jsonPath') else list()
     jso_files.sort(key=lambda f: os.path.basename(f))
     imp_files = tci_files + bkc_files + rci_files + jso_files
 
@@ -110,7 +110,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             return False
 
     #  prepare logging env
-    lf = cae.get_option('logFile')
+    lf = cae.get_opt('logFile')
     log_file_prefix = os.path.splitext(os.path.basename(lf))[0]
     log_file_path = os.path.dirname(lf)
 
@@ -122,7 +122,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         error_log.append(dict(message=msg, context=ctx, line=line + 1))
         import_log.append(dict(message=msg, context=ctx, line=line + 1))
         msg = ' ' * (4 - importance) + '*' * importance + '  ' + msg
-        cae.uprint(msg)
+        cae.po(msg)
         if amend_screen_log:
             amend_screen_log(msg, True)
 
@@ -130,7 +130,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         seps = '\n' * (importance - 2)
         import_log.append(dict(message=seps + msg, context=ctx, line=line + 1))
         msg = seps + ' ' * (4 - importance) + '#' * importance + '  ' + msg
-        cae.uprint(msg)
+        cae.po(msg)
         if amend_screen_log:
             amend_screen_log(msg)
 
@@ -536,7 +536,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
     def rc_country_to_iso2(rci_country):
         """ convert RCI country names into Sihot ISO2 country codes """
-        iso_code = cae.get_config(rci_country.lower(), section='RcCountryToSihot')
+        iso_code = cae.get_var(rci_country.lower(), section='RcCountryToSihot')
         if not iso_code:
             iso_code = rci_country[:2]      # use first two letters if country is not defined in cfg file
         return iso_code
@@ -977,7 +977,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     res_rows = list()
     error_msg = ''
 
-    if False and cae.get_option('tciPath') and tci_files and not got_cancelled():
+    if False and cae.get_opt('tciPath') and tci_files and not got_cancelled():
         log_import("Starting Thomas Cook import", NO_FILE_PREFIX_CHAR + 'TciImportStart', importance=4)
         ''' sort TCI files 1.ASCENDING by actualization date and 2.DESCENDING by file type (R5 first, then R3, then R1)
             .. for to process cancellation/re-bookings in the correct order.
@@ -1009,13 +1009,13 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_import("Parsed import line: " + str(res_rows[-1]), fn, idx)
                 if error_msg:
                     log_error(error_msg, fn, idx)
-                    if cae.get_option('breakOnError'):
+                    if cae.get_opt('breakOnError'):
                         break
                 last_ln = ln
-            if error_log and cae.get_option('breakOnError'):
+            if error_log and cae.get_opt('breakOnError'):
                 break
 
-    if False and cae.get_option('bkcPath') and bkc_files and (not error_log or not cae.get_option('breakOnError')) \
+    if False and cae.get_opt('bkcPath') and bkc_files and (not error_log or not cae.get_opt('breakOnError')) \
             and not got_cancelled():
         log_import("Starting Booking.com import", NO_FILE_PREFIX_CHAR + 'BkcImportStart', importance=4)
         if debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -1055,10 +1055,10 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_import("Normalized import line: " + str(imp_rows[-1]), fn, idx)
                 if error_msg:
                     log_error(error_msg, fn, idx)
-                    if cae.get_option('breakOnError'):
+                    if cae.get_opt('breakOnError'):
                         break
 
-            if got_cancelled() or (error_log and cae.get_option('breakOnError')):
+            if got_cancelled() or (error_log and cae.get_opt('breakOnError')):
                 break
 
             # sort by ext book ref, room info, adults and arrival date for to allow to join date ranges
@@ -1077,20 +1077,20 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_import("Parsed import line: " + str(res_rows[-1]), fn, int(ln[BKC_LINE_NUM]))
                 if error_msg:
                     log_error(error_msg, fn, int(ln[BKC_LINE_NUM]))
-                    if cae.get_option('breakOnError'):
+                    if cae.get_opt('breakOnError'):
                         break
 
-            if error_log and cae.get_option('breakOnError'):
+            if error_log and cae.get_opt('breakOnError'):
                 break
 
-    if cae.get_option('rciPath') and rci_files and (not error_log or not cae.get_option('breakOnError')) \
+    if cae.get_opt('rciPath') and rci_files and (not error_log or not cae.get_opt('breakOnError')) \
             and not got_cancelled():
         log_import("Starting RCI import", NO_FILE_PREFIX_CHAR + 'RciImportStart', importance=4)
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import("RCI files: " + str(rci_files), NO_FILE_PREFIX_CHAR + 'RciFileCollect', importance=1)
 
         # re-create resort match codes config value from Acumen data if empty
-        if not cae.get_config('ClientRefsResortCodes'):
+        if not cae.get_var('ClientRefsResortCodes'):
             m1 = asd.load_view(None, 'T_CD', ["AcuId"], "RciId in (:rci_refs)",
                                      {bind_var_prefix + 'rci_refs': asd.client_refs_add_exclude})
             m2 = asd.load_view(None, 'T_CR', ["CR_CDREF"], "CR_TYPE like 'RCI%' and CR_REF in (:rci_refs)",
@@ -1100,7 +1100,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciResortCodesDataFetch', importance=3)
                 return
             match_codes = sorted(list(set([_[0] for _ in m1 + m2])))
-            cae.set_config('ClientRefsResortCodes', EXT_REFS_SEP.join(match_codes))
+            cae.set_var('ClientRefsResortCodes', EXT_REFS_SEP.join(match_codes))
 
         error_msg = asd.ass_clients_pull()      # load clients data
         if error_msg:
@@ -1153,14 +1153,14 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                         imp_rows.append(imp_cols)
                 if error_msg:
                     log_error("RCI{} import line error: {}".format('P' if points_import else '', error_msg), fn, idx)
-                    if cae.get_option('breakOnError'):
+                    if cae.get_opt('breakOnError'):
                         break
             progress.finished(error_msg=error_msg)
             error_msg = ""
-            if error_log and cae.get_option('breakOnError'):
+            if error_log and cae.get_opt('breakOnError'):
                 break
 
-        if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
+        if not got_cancelled() and (not error_log or not cae.get_opt('breakOnError')):
             log_import("Processing clients", NO_FILE_PREFIX_CHAR + 'RciProcessClients', importance=4)
             progress = Progress(cae, start_counter=len(imp_rows),
                                 start_msg=" ###  Sending {run_counter} clients to Sihot",
@@ -1213,7 +1213,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
                 if error_msg:
                     log_error(error_msg, fn, idx)
-                    if cae.get_option('breakOnError'):
+                    if cae.get_opt('breakOnError'):
                         break
 
             progress.finished(error_msg=error_msg)
@@ -1224,7 +1224,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             asd.cl_flush()
 
         # now parse RCI reservations
-        if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
+        if not got_cancelled() and (not error_log or not cae.get_opt('breakOnError')):
             log_import("Parsing reservations", NO_FILE_PREFIX_CHAR + 'RciParseRes', importance=4)
             progress = Progress(cae, start_counter=len(imp_rows),
                                 start_msg=" ###  Parsing {run_counter} reservations",
@@ -1247,13 +1247,13 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                     error_msg = "res line parse exception: {}".format(ex)
                 if error_msg:
                     log_error("Parse reservation error: {}".format(error_msg), fn, idx)
-                    if cae.get_option('breakOnError'):
+                    if cae.get_opt('breakOnError'):
                         break
 
             progress.finished(error_msg=error_msg)
             error_msg = ""
 
-    if cae.get_option('jsonPath') and jso_files and (not error_log or not cae.get_option('breakOnError')) \
+    if cae.get_opt('jsonPath') and jso_files and (not error_log or not cae.get_opt('breakOnError')) \
             and not got_cancelled():
         log_import("Starting OTA JSON import", NO_FILE_PREFIX_CHAR + 'JsonImportStart', importance=4)
         if debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -1261,7 +1261,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         progress = Progress(cae, start_counter=len(jso_files),
                             start_msg=" ###  Loading and parsing JSON import files",
-                            nothing_to_do_msg="No JSON files found in import folder " + cae.get_option('jsonPath'))
+                            nothing_to_do_msg="No JSON files found in import folder " + cae.get_opt('jsonPath'))
         for fn in jso_files:
             if got_cancelled():
                 log_error("User cancelled loading of JSON import files", fn, importance=4)
@@ -1285,11 +1285,11 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 progress.next(processed_id="import file {} reservation {}".format(fn, idx + 1), error_msg=error_msg)
                 if error_msg:
                     log_error("OTA/JSON reservation import error: {}".format(error_msg), fn, idx)
-                    if cae.get_option('breakOnError'):
+                    if cae.get_opt('breakOnError'):
                         break
             if error_msg:
                 log_error("OTA/JSON file import error: {}".format(error_msg), fn)
-                if cae.get_option('breakOnError'):
+                if cae.get_opt('breakOnError'):
                     break
 
         progress.finished(error_msg=error_msg)
@@ -1299,7 +1299,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     #  SEND imported reservation bookings of all supported booking channels (RCI, JSON)
     # #######################################################################################
 
-    if not got_cancelled() and (not error_log or not cae.get_option('breakOnError')):
+    if not got_cancelled() and (not error_log or not cae.get_opt('breakOnError')):
         log_import("Sending reservations to Sihot", NO_FILE_PREFIX_CHAR + 'SendResStart', importance=4)
         progress = Progress(cae, start_counter=len(res_rows),
                             start_msg=" ###  Prepare sending of {run_counter} reservation request changes to Sihot",
@@ -1321,7 +1321,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
                 log_import(warning_msg, fn, idx)
             if error_msg:
                 log_error(error_msg, fn, idx)
-                if cae.get_option('breakOnError'):
+                if cae.get_opt('breakOnError'):
                     break
 
         warnings = res_sender.get_warnings()
@@ -1380,7 +1380,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             if notification_err:
                 error_text += "Notification send error: " + notification_err
                 log_import("Notification send error: " + notification_err, NO_FILE_PREFIX_CHAR + 'SendNotification')
-        cae.uprint('****  Error Log:\n', error_text)
+        cae.po('****  Error Log:\n', error_text)
         with open(os.path.join(log_file_path, log_file_prefix + '_errors.log'), 'a') as fh:
             fh.write(force_encoding(error_text, encoding=fh.encoding))
 
@@ -1396,17 +1396,17 @@ def quit_app(err_log=None):
     cae.shutdown(12 if err_log else 0)
 
 
-if cae.get_option('acuPassword'):
+if cae.get_opt('acuPassword'):
     # running without ui in console
 
     # (added next line for to remove inspection warning on "too broad exception clause")
     # noinspection PyBroadException
     try:
-        run_import(cae.get_option('acuUser'), cae.get_option('acuPassword'))
+        run_import(cae.get_opt('acuUser'), cae.get_opt('acuPassword'))
     except KeyboardInterrupt:
-        cae.uprint("\n****  SihotResImport run cancelled by user\n")
+        cae.po("\n****  SihotResImport run cancelled by user\n")
     except Exception as ri_ex:
-        cae.uprint("\n****  SihotResImport exception:\n", format_exc())
+        cae.po("\n****  SihotResImport exception:\n", format_exc())
 
 else:
     # no password given, then we need the kivy UI for to logon the user
@@ -1434,21 +1434,21 @@ else:
     class SihotResImportApp(App):
         file_count = NumericProperty()
         file_names = StringProperty()
-        user_name = StringProperty(cae.get_option('acuUser'))
-        user_password = StringProperty(cae.get_option('acuPassword'))
+        user_name = StringProperty(cae.get_opt('acuUser'))
+        user_password = StringProperty(cae.get_opt('acuPassword'))
 
         cancel_import = threading.Event()
         _thread = None
 
         def build(self):
-            cae.dprint("App.build()")
+            cae.dpo("App.build()")
             self.display_files()
-            self.title = "Sihot Reservation Import  V " + __version__ + " [" + cae.get_option('acuDSN') + "]"
+            self.title = "Sihot Reservation Import  V " + __version__ + " [" + cae.get_opt('acuDSN') + "]"
             self.root = Factory.MainWindow()
             return self.root
 
         def display_files(self):
-            cae.dprint("App.display_files()")
+            cae.dpo("App.display_files()")
             collect_files()  # collect files for showing them in the user interface
             self.file_count = len(imp_files)
             self.file_names = ''
@@ -1457,9 +1457,9 @@ else:
                 self.file_names += '\n' + fn
 
         def key_down_callback(self, keyboard, key_code, scan_code, text, modifiers, *args, **kwargs):
-            if True:   # change to True for debugging - leave dprint for hiding Pycharm inspection "Parameter not used"
-                cae.dprint("App.kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}"
-                           .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs))
+            if True:   # change to True for debugging - leave dpo for hiding Pycharm inspection "Parameter not used"
+                cae.dpo("App.kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}"
+                        .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs))
             if self._thread and self._thread.is_alive():                        # block kbd while import is running
                 return True
             elif key_code == 27:                                                # escape key
@@ -1471,11 +1471,11 @@ else:
             return False
 
         def on_start(self):
-            cae.dprint("App.on_start()")
+            cae.dpo("App.on_start()")
             Window.bind(on_key_down=self.key_down_callback)
 
         def on_stop(self):
-            cae.dprint("App.on_stop()")
+            cae.dpo("App.on_stop()")
             self.cancel_import.set()
             self.exit_app()
 
@@ -1496,9 +1496,9 @@ else:
             self.root.ids.scroll_view.scroll_y = 0
 
         def start_import(self):
-            cae.dprint("App.start_import()")
+            cae.dpo("App.start_import()")
             usr = self.root.ids.user_name.text
-            cae.set_config('acuUser', usr.upper())
+            cae.set_var('acuUser', usr.upper())
             self.prepare_ui_for_import()
 
             self._thread = threading.Thread(target=self.exec_import,
@@ -1507,7 +1507,7 @@ else:
             self._thread.start()
 
         def prepare_ui_for_import(self):
-            cae.dprint("App.prepare_ui_for_import()")
+            cae.dpo("App.prepare_ui_for_import()")
             ids = self.root.ids
             ids.user_name.disabled = True
             ids.user_password.disabled = True
@@ -1515,19 +1515,19 @@ else:
             ids.exit_or_cancel_button.text = "Cancel Import"
 
         def exec_import(self, usr, pw, event_is_set_func, amend_screen_log_func):
-            cae.dprint("App.exec_import()")
+            cae.dpo("App.exec_import()")
             # (added next line for to remove inspection warning on "too broad exception clause")
             # noinspection PyBroadException
             try:
                 run_import(usr, pw, event_is_set_func, amend_screen_log_func)
             except Exception:
                 exc_and_tb = format_exc()
-                cae.dprint(exc_and_tb)
+                cae.dpo(exc_and_tb)
                 self.amend_screen_log(exc_and_tb, is_error=True)
             self.finalize_import()
 
         def finalize_import(self):
-            cae.dprint("App.finalize_import()")
+            cae.dpo("App.finalize_import()")
             ids = self.root.ids
             self.user_password = ""         # reset pw - user need to enter again for new import run
             ids.user_password.text = ""     # .. should be set by app.user_password kv expression but isn't
@@ -1539,8 +1539,8 @@ else:
             self._thread = None
 
         def exit_app_or_cancel_import(self):
-            cae.dprint("App.exit_app_or_cancel_import(), thread-alive={}, is_set={}"
-                       .format(self._thread.is_alive() if self._thread else 'finished', self.cancel_import.is_set()))
+            cae.dpo("App.exit_app_or_cancel_import(), thread-alive={}, is_set={}"
+                    .format(self._thread.is_alive() if self._thread else 'finished', self.cancel_import.is_set()))
             if self._thread and self._thread.is_alive():
                 self.cancel_import.set()
                 self._thread.join()
@@ -1551,12 +1551,12 @@ else:
                 self.exit_app()
 
         def exit_app(self):
-            cae.dprint("App.exit_app()")
+            cae.dpo("App.exit_app()")
             if self._thread and self._thread.is_alive():
                 self.cancel_import.set()
-                cae.dprint("  ....  waiting for to join/finish worker thread")
+                cae.dpo("  ....  waiting for to join/finish worker thread")
                 self._thread.join()
-                cae.dprint("  ....  worker thread successfully joined/finished")
+                cae.dpo("  ....  worker thread successfully joined/finished")
             quit_app()
 
     SihotResImportApp().run()

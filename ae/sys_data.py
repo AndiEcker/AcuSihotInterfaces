@@ -2955,14 +2955,14 @@ class _Field:
         :param direction:       direction id (def='' stands for the main/system-independent value).
         :return:                the field value if found else None.
 
-        This method has an alias named rfv.
+        This method has an alias named :meth:`.rfv`.
         """
         root_rec = self.root_rec(system=system, direction=direction)
         assert root_rec and idx_path, "rfv() expects non-empty root_rec {} and idx_path {}".format(root_rec, idx_path)
         val = root_rec.val(*idx_path, system=system, direction=direction)
         return val
 
-    rfv = record_field_val
+    rfv = record_field_val      #: alias of method :meth:`.record_field_val`
 
     def system_record_val(self, *idx_path: IdxItemType, system: AspectKeyType = '', direction: AspectKeyType = '',
                           use_curr_idx: Optional[list] = None) -> Any:
@@ -2974,7 +2974,7 @@ class _Field:
         :param use_curr_idx:    list of counters for to specify if and which current indexes have to be used.
         :return:                the currently selected field value if found else None.
 
-        This method has an alias named srv.
+        This method has an alias named :meth:`.srv`.
         """
         root_rec = self.root_rec(system=system, direction=direction)
         assert root_rec, "srv() expects existing root_rec for system {} and direction {}".format(system, direction)
@@ -2985,7 +2985,7 @@ class _Field:
         val = field.val(system=root_rec.system, direction=root_rec.direction) if field else None
         return val
 
-    srv = system_record_val
+    srv = system_record_val     #: alias of method :meth:`.system_record_val`
 
     def in_actions(self, *actions: str, system: AspectKeyType = '', direction: AspectKeyType = '') -> bool:
         """ determine if current data structure is in one of the passed `actions`.
@@ -2995,13 +2995,13 @@ class _Field:
         :param direction:       direction id (def='' stands for the main/system-independent value).
         :return:                True if the data structure has set one of the passed `actions` else False.
 
-        This method has an alias named ina.
+        This method has an alias named :meth:`.ina`.
         """
         root_rec = self.root_rec(system=system, direction=direction)
         is_in = root_rec and root_rec.action in actions
         return is_in
 
-    ina = in_actions
+    ina = in_actions            #: alias of method :meth:`.in_actions`
 
     def current_records_idx(self, system: AspectKeyType = '', direction: AspectKeyType = '') -> IdxItemType:
         """ determine current index of :class:`Records` instance, situated above of this field in this data structure.
@@ -3010,18 +3010,17 @@ class _Field:
         :param direction:       direction id (def='' stands for the main/system-independent value).
         :return:                full index path.
 
-        This method has an alias named crx.
+        This method has an alias named :meth:`.crx`.
         """
         item = self.parent(system=system, direction=direction, value_types=(Records, ))
         if item:
             return current_index(item)
 
-    crx = current_records_idx
+    crx = current_records_idx   #: alias of method :meth:`.current_records_idx`
 
 
-# type tuples
-VALUE_TYPES = (Value, Values, Record, Records)
-NODE_TYPES = (Record, Records)
-NODE_CHILD_TYPES = (_Field, Record)
-LIST_TYPES = (Values, Records)
-IDX_TYPES = (int, str)
+VALUE_TYPES = (Value, Values, Record, Records)      #: tuple of classes/types used for system data values
+NODE_TYPES = (Record, Records)                      #: tuple of classes/types used for system data nodes
+NODE_CHILD_TYPES = (_Field, Record)                 #: tuple of classes/types used for system data node children
+LIST_TYPES = (Values, Records)                      #: tuple of classes/types used for system data lists
+IDX_TYPES = (int, str)                              #: tuple of classes/types used for system data index path items

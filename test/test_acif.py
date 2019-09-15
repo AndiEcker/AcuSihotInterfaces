@@ -429,7 +429,7 @@ class TestClientFromSihot:
         assert rec['City'] == 'city'
         assert rec['CITY'] == 'city'
 
-        # cae.dprint("--COUNTRY-fldValToAcu/acu_fld_vals: ",
+        # cae.dpo("--COUNTRY-fldValToAcu/acu_fld_vals: ",
         # xml_guest.elem_fld_map['COUNTRY']['fldValToAcu'],
         # xml_guest.acu_fld_vals[xml_guest.elem_fld_map['COUNTRY']['fldName']])
 

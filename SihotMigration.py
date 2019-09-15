@@ -14,14 +14,14 @@ from shif import add_sh_options, print_sh_options
 
 __version__ = '0.3'
 
-cae = ConsoleApp(__version__, "Migrate all guest/reservation data from Acumen/Oracle system to the SiHOT-PMS")
+cae = ConsoleApp("Migrate all guest/reservation data from Acumen/Oracle system to the SiHOT-PMS")
 add_sh_options(cae, add_kernel_port=True)
 
 add_ac_options(cae)
 
-cae.add_option('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
-               0, 'q', choices=(0, 1, 2))
-cae.add_option('breakOnError', "Abort migration if error occurs (0=No, 1=Yes)", 1, 'b', choices=(0, 1))
+cae.add_opt('clientsFirst', "Migrate first the clients then the reservations (0=No, 1=Yes)",
+            0, 'q', choices=(0, 1, 2))
+cae.add_opt('breakOnError', "Abort migration if error occurs (0=No, 1=Yes)", 1, 'b', choices=(0, 1))
 
 sync_date_ranges = dict(H='historical', M='present and 1 month in future', P='present and all future', F='future only',
                         Y='present, 1 month in future and all for hotels 1, 4 and 999',
@@ -29,33 +29,33 @@ sync_date_ranges = dict(H='historical', M='present and 1 month in future', P='pr
                         Y180='like Y plus the 180 oldest records in the sync queue',
                         Y360='like Y plus the 360 oldest records in the sync queue',
                         Y720='like Y plus the 720 oldest records in the sync queue')
-cae.add_option('syncDateRange', "Restrict sync. of res. to: "
-               + ", ".join([k + '=' + v for k, v in sync_date_ranges.items()]), '', 'R',
-               choices=sync_date_ranges.keys())
-cae.add_option('includeCxlRes', "Include also cancelled reservations (0=No, 1=Yes)", 1, 'I', choices=(0, 1))
+cae.add_opt('syncDateRange', "Restrict sync. of res. to: "
+            + ", ".join([k + '=' + v for k, v in sync_date_ranges.items()]), '', 'R',
+            choices=sync_date_ranges.keys())
+cae.add_opt('includeCxlRes', "Include also cancelled reservations (0=No, 1=Yes)", 1, 'I', choices=(0, 1))
 
 print_sh_options(cae)
-cae.uprint("Acumen Usr/DSN:", cae.get_option('acuUser'), cae.get_option('acuDSN'))
-cae.uprint("Migrate Clients First/Separate:",
-           ['No', 'Yes', 'Yes with client reservations'][int(cae.get_option('clientsFirst'))])
-break_on_error = cae.get_option('breakOnError')
-cae.uprint("Break on error:", 'Yes' if break_on_error else 'No')
-sync_date_range = cae.get_option('syncDateRange')
+cae.po("Acumen Usr/DSN:", cae.get_opt('acuUser'), cae.get_opt('acuDSN'))
+cae.po("Migrate Clients First/Separate:",
+       ['No', 'Yes', 'Yes with client reservations'][int(cae.get_opt('clientsFirst'))])
+break_on_error = cae.get_opt('breakOnError')
+cae.po("Break on error:", 'Yes' if break_on_error else 'No')
+sync_date_range = cae.get_opt('syncDateRange')
 future_only = sync_date_range == 'F'
-cae.uprint("Migrate Reservation History:", 'No' if future_only else 'Yes')
+cae.po("Migrate Reservation History:", 'No' if future_only else 'Yes')
 if sync_date_range and not future_only:
-    cae.uprint("!!!!  Synchronizing only reservations in date range: " + sync_date_ranges[sync_date_range])
-include_cxl_res = cae.get_option('includeCxlRes')
+    cae.po("!!!!  Synchronizing only reservations in date range: " + sync_date_ranges[sync_date_range])
+include_cxl_res = cae.get_opt('includeCxlRes')
 if include_cxl_res:
-    cae.uprint("Include also cancelled reservations: Yes")
+    cae.po("Include also cancelled reservations: Yes")
 
 
 error_msg = ""
-cae.uprint("####  Migration of .......  ####")
+cae.po("####  Migration of .......  ####")
 
-if cae.get_option('clientsFirst'):
-    cae.uprint('####  ... Clients' + ('+Res' if cae.get_option('clientsFirst') == 2 else '....')
-               + ('.....' if future_only else 'Hist.') + '  ####')
+if cae.get_opt('clientsFirst'):
+    cae.po('####  ... Clients' + ('+Res' if cae.get_opt('clientsFirst') == 2 else '....')
+           + ('.....' if future_only else 'Hist.') + '  ####')
     acumen_cd = AcuClientToSihot(cae)
     acu_res_hist = AcuResToSihot(cae)
 
@@ -72,7 +72,7 @@ if cae.get_option('clientsFirst'):
             else:
                 error_msg = acumen_cd.ora_db.commit()
 
-            if not error_msg and cae.get_option('clientsFirst') == 2:
+            if not error_msg and cae.get_opt('clientsFirst') == 2:
                 # NOT FULLY FUNCTIONAL / TESTED
                 # DB SELECT very slow - better fetch/import all unsynced reservations with one select - see down
                 # using fetch_from_acu_by_cd() would also pass reservations for currently not existing hotels
@@ -92,7 +92,7 @@ if cae.get_option('clientsFirst'):
                     else:
                         acu_res_hist.ora_db.commit()
             if error_msg:
-                cae.uprint('****  Error sending new guest ' + rec['AcuId'] + ' to Sihot: ' + error_msg)
+                cae.po('****  Error sending new guest ' + rec['AcuId'] + ' to Sihot: ' + error_msg)
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     continue  # currently not used/returned-by-send_client_to_sihot()
                 elif break_on_error:
@@ -103,7 +103,7 @@ if cae.get_option('clientsFirst'):
         cae.shutdown(11)
 
 
-cae.uprint("####  ... " + ("future Res......" if future_only else "Reservations....") + "  ####")
+cae.po("####  ... " + ("future Res......" if future_only else "Reservations....") + "  ####")
 
 try:
     acumen_res = AcuResToSihot(cae)
@@ -137,12 +137,12 @@ try:
             if error_msg:
                 if error_msg.startswith(ERR_MESSAGE_PREFIX_CONTINUE):
                     continue
-                elif cae.get_option('breakOnError'):
+                elif cae.get_opt('breakOnError'):
                     break
 
         progress.finished(error_msg=error_msg)
 
 except Exception as ex:
-    cae.uprint("\n\nMigration Req/ARU Changes exception: " + full_stack_trace(ex))
+    cae.po("\n\nMigration Req/ARU Changes exception: " + full_stack_trace(ex))
 
 cae.shutdown(12 if error_msg else 0)

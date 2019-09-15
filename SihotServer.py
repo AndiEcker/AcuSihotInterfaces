@@ -47,7 +47,7 @@ sys.path.append(os.path.dirname(__file__))
 from bottle import default_app, request, response, static_file, template, run, makelist
 
 from sys_data_ids import SDI_SF, SDI_SH
-from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, uprint
+from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE, field_name_idx_path
 from ae.console_app import ConsoleApp
 from sfif import field_from_converters
@@ -61,7 +61,7 @@ app = application = default_app()
 
 # initialize multiple, separate system environments for TEST and LIVE
 def init_env(sys_env_id):
-    cae = ConsoleApp(__version__, "Web Service {} Server".format(sys_env_id),
+    cae = ConsoleApp("Web Service {} Server".format(sys_env_id),
                      additional_cfg_files=['SihotMktSegExceptions.cfg'],
                      multi_threading=True, suppress_stdout=True, sys_env_id=sys_env_id)
     ass_options = add_ass_options(cae, add_kernel_port=True)
@@ -94,9 +94,9 @@ def route_also_test_sys_env(route_path, method='GET', **route_kwargs):
             cae, asd, notification = \
                 (cae_test, asd_test, notification_test) if path.startswith(test_path_prefix) else \
                 (cae_live, asd_live, notification_live)
-            cae.dprint("  ##  Client requested {} with args={} and kwargs={}".format(path, args, kwargs))
+            cae.dpo("  ##  Client requested {} with args={} and kwargs={}".format(path, args, kwargs))
             ret = func(cae, asd, notification, *args, **kwargs)
-            cae.dprint("  ##  Sihot Server response=\n{}".format(ret))
+            cae.dpo("  ##  Sihot Server response=\n{}".format(ret))
             return ret
         return wrapper
     return decorator
@@ -163,7 +163,7 @@ def add_log_entry(warning_msg="", error_msg="", importance=2, cae=None, notifica
         if error_msg:
             msg += '\n' + '.' * 6
         msg += warning_msg
-    _print_method = cae.dprint if cae else uprint
+    _print_method = cae.dpo if cae else po
     _print_method(msg)
     if error_msg and notification:
         notification_err = notification.send_notification(msg, subject="SihotServer error notification",
@@ -180,7 +180,7 @@ def sh_res_action(cae, notification, action, res_id=None, method='POST'):
     err = msg = ""
     ret = dict(ErrorMessage=err, WarningMessage=msg)
     res_json = dict()
-    debug_level = cae.get_option('debugLevel')
+    debug_level = cae.get_opt('debugLevel')
 
     res_send = ResSender(cae)
     rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)

@@ -18,7 +18,7 @@ from ass_sys_data import AssSysData
 
 __version__ = '0.2'
 
-cae = ConsoleApp(__version__, "Salesforce Client Data Validator")
+cae = ConsoleApp("Salesforce Client Data Validator")
 
 add_validation_options(cae, email_def=EMAIL_NOT_VALIDATED, phone_def=PHONE_NOT_VALIDATED)
 add_sf_options(cae)
@@ -34,7 +34,7 @@ email_validation, email_validator, \
 
 asd = AssSysData(cae)
 if asd.error_message:
-    cae.uprint("AssSysData initialization error: " + asd.error_message)
+    cae.po("AssSysData initialization error: " + asd.error_message)
     cae.shutdown(20)
 sf_conn = asd.connection(SDI_SF)
 
@@ -52,7 +52,7 @@ def add_log_msg(msg, is_error=False, importance=2):
         log_errors.append(msg)
     msg = " " * (4 - importance) + ("*" if is_error else "#") * importance + "  " + msg
     log_items.append(msg)
-    cae.uprint(msg)
+    cae.po(msg)
 
 
 # fetch rental clients migrated with ShSfClientMigration app for to validate email address and phone numbers
@@ -66,7 +66,7 @@ add_log_msg("Validating {} clients".format(len(clients)), importance=4)
 emails_validated = phones_validated = addresses_validated = clients_updated = 0
 skipped_email_ids = dict()
 for rec in clients:
-    cae.dprint("Checking Client for needed validation", rec)
+    cae.dpo("Checking Client for needed validation", rec)
     update_in_sf = False
     if email_validator and 'Email' in rec and rec['Email'] \
             and eval("rec['CD_email_valid__c'] in (" + email_validation.replace('NULL', 'None') + ",)"):
@@ -234,14 +234,14 @@ if notification:
     mail_body = "\n\n".join(log_items)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
-        cae.uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
+        cae.po("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
         cae.shutdown(36)
     if warning_notification_emails and log_errors:
         mail_body = "\n\n".join(log_errors)
         subject = "Salesforce Client Validation errors/discrepancies" + (" (sandbox)" if sf_conn.is_sandbox() else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
-            cae.uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
+            cae.po("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
             cae.shutdown(39)
 
 cae.shutdown(42 if log_errors else 0)

@@ -8,14 +8,14 @@ from sfif import add_sf_options
 
 __version__ = '0.2'
 
-cae = ConsoleApp(__version__, "Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE,
+cae = ConsoleApp("Salesforce Playground", debug_level_def=DEBUG_LEVEL_VERBOSE,
                  additional_cfg_files=['../.app_env.cfg', '../.sys_envTEST.cfg'])
 
 add_sf_options(cae)
 
-sf_user = cae.get_option('sfUser')
-sf_pw = cae.get_option('sfPassword')
-sf_token = cae.get_option('sfToken')
+sf_user = cae.get_opt('sfUser')
+sf_pw = cae.get_opt('sfPassword')
+sf_token = cae.get_opt('sfToken')
 
 sb = Salesforce(username=sf_user, password=sf_pw, security_token=sf_token, sandbox=True, client_id='ResImport')
 print('Salesforce object:', sb)

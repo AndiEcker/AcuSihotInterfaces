@@ -437,35 +437,35 @@ class ShInterface:
 
 
 def add_sh_options(cae, client_port=None, add_kernel_port=False, add_maps_and_kernel_usage=False):
-    cae.add_option('shServerIP', "IP address of the Sihot WEB/KERNEL server", 'localhost', 'i')
-    cae.add_option(SDF_SH_WEB_PORT, "IP port of the Sihot WEB interface", 14777, 'w')
+    cae.add_opt('shServerIP', "IP address of the Sihot WEB/KERNEL server", 'localhost', 'i')
+    cae.add_opt(SDF_SH_WEB_PORT, "IP port of the Sihot WEB interface", 14777, 'w')
     if client_port:
         # default is 14773 for Acumen and 14774 for the Sihot side (always the next higher port number)
-        cae.add_option(SDF_SH_CLIENT_PORT, "IP port of SXML interface of this server for Sihot", client_port, 'm')
+        cae.add_opt(SDF_SH_CLIENT_PORT, "IP port of SXML interface of this server for Sihot", client_port, 'm')
     if add_kernel_port:
         # e.g. for GuestBulkFetcher we need also the kernel interface server port of Sihot
-        cae.add_option(SDF_SH_KERNEL_PORT, "IP port of the KERNEL interface of the Sihot server", 14772, 'k')
-    cae.add_option(SDF_SH_TIMEOUT, "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
-    cae.add_option(SDF_SH_XML_ENCODING, "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
+        cae.add_opt(SDF_SH_KERNEL_PORT, "IP port of the KERNEL interface of the Sihot server", 14772, 'k')
+    cae.add_opt(SDF_SH_TIMEOUT, "Timeout value for TCP/IP connections to Sihot", 1869.6, 't')
+    cae.add_opt(SDF_SH_XML_ENCODING, "Charset used for the Sihot xml data", SXML_DEF_ENCODING, 'e')
     if add_maps_and_kernel_usage:
-        cae.add_option(SDF_SH_USE_KERNEL_FOR_CLIENT, "Used interface for clients (0=web, 1=kernel)",
-                       USE_KERNEL_FOR_CLIENTS_DEF, 'g', choices=(0, 1))
-        cae.add_option(SDF_SH_CLIENT_MAP, "Guest/Client mapping of xml to db items", SH_CLIENT_MAP, 'm')
-        cae.add_option(SDF_SH_USE_KERNEL_FOR_RES, "Used interface for reservations (0=web, 1=kernel)",
-                       USE_KERNEL_FOR_RES_DEF, 'z', choices=(0, 1))
-        cae.add_option(SDF_SH_RES_MAP, "Reservation mapping of xml to db items", SH_RES_MAP, 'n')
+        cae.add_opt(SDF_SH_USE_KERNEL_FOR_CLIENT, "Used interface for clients (0=web, 1=kernel)",
+                    USE_KERNEL_FOR_CLIENTS_DEF, 'g', choices=(0, 1))
+        cae.add_opt(SDF_SH_CLIENT_MAP, "Guest/Client mapping of xml to db items", SH_CLIENT_MAP, 'm')
+        cae.add_opt(SDF_SH_USE_KERNEL_FOR_RES, "Used interface for reservations (0=web, 1=kernel)",
+                    USE_KERNEL_FOR_RES_DEF, 'z', choices=(0, 1))
+        cae.add_opt(SDF_SH_RES_MAP, "Reservation mapping of xml to db items", SH_RES_MAP, 'n')
 
 
 def print_sh_options(cae):
-    cae.uprint("Sihot server IP/WEB-interface-port:", cae.get_option('shServerIP'), cae.get_option(SDF_SH_WEB_PORT))
-    client_port = cae.get_option(SDF_SH_CLIENT_PORT)
+    cae.po("Sihot server IP/WEB-interface-port:", cae.get_opt('shServerIP'), cae.get_opt(SDF_SH_WEB_PORT))
+    client_port = cae.get_opt(SDF_SH_CLIENT_PORT)
     if client_port:
-        ip_addr = cae.get_config('shClientIP', default_value=cae.get_option('shServerIP'))
-        cae.uprint("Sihot client IP/port for listening:", ip_addr, client_port)
-    kernel_port = cae.get_option(SDF_SH_KERNEL_PORT)
+        ip_addr = cae.get_var('shClientIP', default_value=cae.get_opt('shServerIP'))
+        cae.po("Sihot client IP/port for listening:", ip_addr, client_port)
+    kernel_port = cae.get_opt(SDF_SH_KERNEL_PORT)
     if kernel_port:
-        cae.uprint("Sihot server KERNEL-interface-port:", kernel_port)
-    cae.uprint("Sihot TCP Timeout/XML Encoding:", cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+        cae.po("Sihot server KERNEL-interface-port:", kernel_port)
+    cae.po("Sihot TCP Timeout/XML Encoding:", cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
 
 
 def client_data(cae, obj_id):
@@ -674,9 +674,9 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
             elif not chunk_recs or not isinstance(chunk_recs, list):
                 err_msg = "Unspecified Sihot.PMS reservation search error"
                 break
-            cae.dprint(" ###  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
-                       .format(len(chunk_recs), chunk_beg, chunk_end, search_flags, search_scope),
-                       minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            cae.dpo(" ###  Fetched {} reservations from Sihot with arrivals between {} and {} - flags={}, scope={}"
+                    .format(len(chunk_recs), chunk_beg, chunk_end, search_flags, search_scope),
+                    minimum_debug_level=DEBUG_LEVEL_ENABLED)
             valid_recs = Records()
             for res_rec in chunk_recs:
                 reasons = list()
@@ -693,7 +693,7 @@ def res_search(cae, date_from, date_till=None, mkt_sources=None, mkt_groups=None
                 if mkt_groups and mkt_group not in mkt_groups:
                     reasons.append("disallowed market group/channel {}".format(mkt_group))
                 if reasons:
-                    cae.dprint("  ##  Skipped Sihot reservation:", res_rec, " reason(s):", reasons)
+                    cae.dpo("  ##  Skipped Sihot reservation:", res_rec, " reason(s):", reasons)
                     continue
                 valid_recs.append(res_rec)
 
@@ -866,9 +866,9 @@ class FldMapXmlParser(SihotXmlParser):
                 val = self._current_data
                 # fix Sihot bug sending sometimes a value of 1 (greater 0) within ROOM-SEQ|ResPersons.<N>.RoomSeq
                 if len(curr_idx) == 3 and curr_idx[2] == 'PERSON.ROOM-SEQ' and val != '0':
-                    self.cae.dprint(msg + "auto-correction of {} RoomSeq value {!r} to '0'".format(curr_idx, val))
+                    self.cae.dpo(msg + "auto-correction of {} RoomSeq value {!r} to '0'".format(curr_idx, val))
                     val = '0'
-                self.cae.dprint(msg + "setting field {} to {!r}".format(curr_idx, val))
+                self.cae.dpo(msg + "setting field {} to {!r}".format(curr_idx, val))
                 self._rec.set_val(val, *curr_idx, system=SDI_SH, direction=FAD_FROM)
         self._collected_fields = list()
 
@@ -1000,8 +1000,8 @@ class ClientFetch(SihotXmlBuilder):
         elif self.response.client_list:
             recs = self.response.client_list
             if len(recs) > 1:
-                self.cae.dprint("fetch_client({}): multiple clients found: {}".format(obj_id, recs),
-                                minimum_debug_level=DEBUG_LEVEL_ENABLED)
+                self.cae.dpo("fetch_client({}): multiple clients found: {}".format(obj_id, recs),
+                             minimum_debug_level=DEBUG_LEVEL_ENABLED)
             rec = recs[0].copy(deepness=2, filter_fields=lambda f: f.name() not in field_names if field_names else None)
 
         return err_msg or rec
@@ -1078,9 +1078,9 @@ class ClientSearch(SihotXmlBuilder):
         err_msg = self.send_to_server(response_parser=rp)
         if not err_msg and self.response:
             ret = self.response.ret_elem_values
-            self.cae.dprint(msg + " xml='{}'; result={}".format(self.xml, ret))
+            self.cae.dpo(msg + " xml='{}'; result={}".format(self.xml, ret))
         else:
-            uprint(msg + " error: {}".format(err_msg))
+            po(msg + " error: {}".format(err_msg))
             ret = None
         return ret
     '''
@@ -1092,8 +1092,8 @@ class ClientSearch(SihotXmlBuilder):
 
         cnt = len(ids_or_err)
         if cnt > 1:
-            self.cae.dprint("client_id_by_matchcode({}): multiple clients found".format(matchcode),
-                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo("client_id_by_matchcode({}): multiple clients found".format(matchcode),
+                         minimum_debug_level=DEBUG_LEVEL_ENABLED)
         if cnt:
             return ids_or_err[0]        # else RETURN None
 
@@ -1118,8 +1118,8 @@ class ResFetch(SihotXmlBuilder):
         if err_msg or not self.response:
             err_msg = "fetch_res({}) error='{}'".format(self._xml, err_msg or "response is empty")
         elif len(self.response.res_list) > 1:
-            self.cae.dprint("fetch_res({}): multiple reservations found".format(self._xml),
-                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo("fetch_res({}): multiple reservations found".format(self._xml),
+                         minimum_debug_level=DEBUG_LEVEL_ENABLED)
 
         return err_msg or self.response.res_list[0]
 
@@ -1175,10 +1175,10 @@ class ResSearch(SihotXmlBuilder):
 class FldMapXmlBuilder(SihotXmlBuilder):
     def __init__(self, cae, use_kernel=None, elem_map=None):
         super().__init__(cae, use_kernel=use_kernel)
-        self.elem_map = deepcopy(elem_map or cae.get_option(SDF_SH_RES_MAP))
+        self.elem_map = deepcopy(elem_map or cae.get_opt(SDF_SH_RES_MAP))
 
         self.action = ''
-        self._warning_frags = self.cae.get_config('warningFragments') or list()  # list of warning text fragments
+        self._warning_frags = self.cae.get_var('warningFragments') or list()  # list of warning text fragments
         self._warning_msgs = list()
 
     def get_warnings(self):
@@ -1280,8 +1280,8 @@ class FldMapXmlBuilder(SihotXmlBuilder):
 class ClientToSihot(FldMapXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae,
-                         use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_CLIENT),
-                         elem_map=cae.get_option(SDF_SH_CLIENT_MAP) or SH_CLIENT_MAP)
+                         use_kernel=cae.get_opt(SDF_SH_USE_KERNEL_FOR_CLIENT),
+                         elem_map=cae.get_opt(SDF_SH_CLIENT_MAP) or SH_CLIENT_MAP)
 
     @staticmethod
     def _complete_client_data(rec):
@@ -1298,7 +1298,7 @@ class ClientToSihot(FldMapXmlBuilder):
         self.beg_xml(operation_code='GUEST-CHANGE' if self.action == ACTION_UPDATE else 'GUEST-CREATE')
         self.add_tag('GUEST-PROFILE', self.prepare_map_xml(rec))
         self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_xml() action={} rec={}".format(self.action, rec))
+        self.cae.dpo("ClientToSihot._prepare_guest_xml() action={} rec={}".format(self.action, rec))
 
     def _prepare_guest_link_xml(self, mc1, mc2):
         mct1 = self.new_tag('MATCHCODE-GUEST', self.convert_value_to_xml_string(mc1))
@@ -1308,7 +1308,7 @@ class ClientToSihot(FldMapXmlBuilder):
         self.beg_xml(operation_code='GUEST-CONTACT')
         self.add_tag('CONTACTLIST', mct1 + mct2)
         self.end_xml()
-        self.cae.dprint("ClientToSihot._prepare_guest_link_xml(): mc1={} mc2={}".format(mc1, mc2))
+        self.cae.dpo("ClientToSihot._prepare_guest_link_xml(): mc1={} mc2={}".format(mc1, mc2))
 
     def _send_link_to_sihot(self, pk1, pk2):
         self._prepare_guest_link_xml(pk1, pk2)
@@ -1329,10 +1329,10 @@ class ClientToSihot(FldMapXmlBuilder):
         msg = "ClientToSihot.send_client_to_sihot({}): action={}".format(rec, self.action)
         err_msg = self._send_person_to_sihot(rec)
         if err_msg:
-            self.cae.dprint(msg + "; err='{}'".format(err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo(msg + "; err='{}'".format(err_msg), minimum_debug_level=DEBUG_LEVEL_ENABLED)
         else:
-            self.cae.dprint(msg + "; client={} RESPONDED OBJID={} MATCHCODE={}"
-                            .format(rec.val('AcuId'), self.response.objid, self.response.matchcode))
+            self.cae.dpo(msg + "; client={} RESPONDED OBJID={} MATCHCODE={}"
+                         .format(rec.val('AcuId'), self.response.objid, self.response.matchcode))
 
         return err_msg
 
@@ -1340,8 +1340,8 @@ class ClientToSihot(FldMapXmlBuilder):
 class ResToSihot(FldMapXmlBuilder):
     def __init__(self, cae):
         super().__init__(cae,
-                         use_kernel=cae.get_option(SDF_SH_USE_KERNEL_FOR_RES),
-                         elem_map=cae.get_config(SDF_SH_RES_MAP) or SH_RES_MAP)
+                         use_kernel=cae.get_opt(SDF_SH_USE_KERNEL_FOR_RES),
+                         elem_map=cae.get_var(SDF_SH_RES_MAP) or SH_RES_MAP)
         self._gds_errors = dict()
         self._in_error_handling = False
 
@@ -1350,7 +1350,7 @@ class ResToSihot(FldMapXmlBuilder):
         hotel_id = rec.val('ResHotelId', system='', direction='')
         arr_date = rec.val('ResArrival', system='', direction='')   # system/direction needed for to get date type
         today = datetime.datetime.today()
-        cf = self.cae.get_config
+        cf = self.cae.get_var
         extra_comments = list()
 
         if self.action != ACTION_DELETE and rec.val('ResStatus', system='', direction='') != 'S':
@@ -1403,7 +1403,7 @@ class ResToSihot(FldMapXmlBuilder):
         else:
             self.beg_xml(operation_code='RES', add_inner_xml=inner_xml)
         self.end_xml()
-        self.cae.dprint("ResToSihot._prepare_res_xml(): action={}; rec=\n{}".format(self.action, ppf(rec)))
+        self.cae.dpo("ResToSihot._prepare_res_xml(): action={}; rec=\n{}".format(self.action, ppf(rec)))
 
     def _sending_res_to_sihot(self, rec):
         self._prepare_res_xml(rec)
@@ -1444,15 +1444,15 @@ class ResToSihot(FldMapXmlBuilder):
             err_msg = ""
 
         elif "Could not find a key identifier" in err_msg and (rec.val('ShId') or rec.val('ShId_P')):
-            self.cae.dprint(msg.format("ignoring client obj-id {}/{}".format(rec.val('ShId'), rec.val('ShId_P'))),
-                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo(msg.format("ignoring client obj-id {}/{}".format(rec.val('ShId'), rec.val('ShId_P'))),
+                         minimum_debug_level=DEBUG_LEVEL_ENABLED)
             rec.set_val('ShId', '')             # use AcId/MATCHCODE instead
             rec.set_val('ShId_P', '')
             err_msg = self._sending_res_to_sihot(rec)
 
         elif ("A database error has occurred." in err_msg or 'Room not available!' in err_msg) and obj_id:
-            self.cae.dprint(msg.format("resetting reservation with obj-id={}".format(obj_id)),
-                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo(msg.format("resetting reservation with obj-id={}".format(obj_id)),
+                         minimum_debug_level=DEBUG_LEVEL_ENABLED)
             try:
                 self._in_error_handling = True      # prevent recursion in handling follow-up errors
                 del_rec = rec.copy(deepness=-1)
@@ -1463,8 +1463,8 @@ class ResToSihot(FldMapXmlBuilder):
                 err_msg = msg.format("Exception {} occurred in deletion of orphan res".format(ex))
             finally:
                 self._in_error_handling = False
-            self.cae.dprint("    .. orphan res deletion; obj-id={}; ignorable err?={}".format(obj_id, err_msg),
-                            minimum_debug_level=DEBUG_LEVEL_ENABLED)
+            self.cae.dpo("    .. orphan res deletion; obj-id={}; ignorable err?={}".format(obj_id, err_msg),
+                         minimum_debug_level=DEBUG_LEVEL_ENABLED)
             rec['ResObjId'] = ''        # resend with wiped orphan/invalid obj_id, using ResHotelId+ResGdsNo instead
             err_msg = self._sending_res_to_sihot(rec)
 
@@ -1535,10 +1535,10 @@ class ResToSihot(FldMapXmlBuilder):
 
         warn_msg = self.get_warnings()
         if err_msg:
-            self.cae.uprint("ResToSihot.send_res_to_sihot() error={}; warnings={}".format(err_msg, warn_msg))
+            self.cae.po("ResToSihot.send_res_to_sihot() error={}; warnings={}".format(err_msg, warn_msg))
         else:
-            self.cae.dprint("ResToSihot.send_res_to_sihot() GDSNO={} RESPONDED OBJID={} MATCHCODE={} warnings={}"
-                            .format(gds_no, self.response.objid, self.response.matchcode, warn_msg))
+            self.cae.dpo("ResToSihot.send_res_to_sihot() GDSNO={} RESPONDED OBJID={} MATCHCODE={} warnings={}"
+                         .format(gds_no, self.response.objid, self.response.matchcode, warn_msg))
 
         return err_msg
 
@@ -1596,7 +1596,7 @@ class BulkFetcherBase:
         add_sh_options(self.cae, add_kernel_port=self.add_kernel_port)
 
     def load_options(self):
-        self.debug_level = self.cae.get_option('debugLevel')
+        self.debug_level = self.cae.get_opt('debugLevel')
 
     def print_options(self):
         print_sh_options(self.cae)
@@ -1615,7 +1615,7 @@ class GuestBulkFetcher(BulkFetcherBase):
             # MATCH-SM (holding the Salesforce/SF client ID) is not available in Kernel GUEST-SEARCH (only GUEST-GET)
             self.all_recs = ClientSearch(cae).search_clients(order_by='GUEST-NR', limit=600000)
         except Exception as ex:
-            cae.uprint(" ***  Sihot interface guest bulk fetch exception: {}".format(ex))
+            cae.po(" ***  Sihot interface guest bulk fetch exception: {}".format(ex))
             print_exc()
             cae.shutdown(2130)
 
@@ -1641,48 +1641,48 @@ class ResBulkFetcher(BulkFetcherBase):
 
     def add_options(self):
         super(ResBulkFetcher, self).add_options()
-        self.cae.add_option('dateFrom', "Date of first arrival", self.startup_date - datetime.timedelta(days=1), 'F')
-        self.cae.add_option('dateTill', "Date of last arrival", self.startup_date - datetime.timedelta(days=1), 'T')
+        self.cae.add_opt('dateFrom', "Date of first arrival", self.startup_date - datetime.timedelta(days=1), 'F')
+        self.cae.add_opt('dateTill', "Date of last arrival", self.startup_date - datetime.timedelta(days=1), 'T')
 
     def load_options(self):
         super(ResBulkFetcher, self).load_options()
 
         cae = self.cae
-        self.date_from = cae.get_option('dateFrom')
-        self.date_till = cae.get_option('dateTill')
+        self.date_from = cae.get_opt('dateFrom')
+        self.date_till = cae.get_opt('dateTill')
         if self.date_from > self.date_till:
-            cae.uprint("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
-                       .format(self.date_from, self.date_till))
+            cae.po("Specified date range is invalid - dateFrom({}) has to be before dateTill({})."
+                   .format(self.date_from, self.date_till))
             cae.shutdown(3318)
         elif not self.allow_future_arrivals and self.date_till > self.startup_date:
-            cae.uprint("Future arrivals cannot be migrated - dateTill({}) has to be before {}."
-                       .format(self.date_till, self.startup_date))
+            cae.po("Future arrivals cannot be migrated - dateTill({}) has to be before {}."
+                   .format(self.date_till, self.startup_date))
             cae.shutdown(3319)
 
         # fetch given date range in chunks for to prevent timeouts and Sihot server blocking issues
-        self.max_length_of_stay = min(max(1, cae.get_config('shFetchMaxDays', default_value=7)), 31)
-        self.fetch_chunk_pause_seconds = cae.get_config('shFetchPauseSeconds', default_value=1)
+        self.max_length_of_stay = min(max(1, cae.get_var('shFetchMaxDays', default_value=7)), 31)
+        self.fetch_chunk_pause_seconds = cae.get_var('shFetchPauseSeconds', default_value=1)
 
-        self.search_flags = cae.get_config('ResSearchFlags', default_value='ALL-HOTELS')
-        self.search_scope = cae.get_config('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
+        self.search_flags = cae.get_var('ResSearchFlags', default_value='ALL-HOTELS')
+        self.search_scope = cae.get_var('ResSearchScope', default_value='NOORDERER;NORATES;NOPERSTYPES')
 
-        self.allowed_mkt_src = cae.get_config('MarketSources', default_value=list())
-        self.allowed_mkt_grp = cae.get_config('MarketGroups', default_value=list())
+        self.allowed_mkt_src = cae.get_var('MarketSources', default_value=list())
+        self.allowed_mkt_grp = cae.get_var('MarketGroups', default_value=list())
 
-        self.adult_pers_types = cae.get_config('shAdultPersTypes')
+        self.adult_pers_types = cae.get_var('shAdultPersTypes')
 
     def print_options(self):
         super(ResBulkFetcher, self).print_options()
 
         cae = self.cae
-        cae.uprint("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
+        cae.po("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
                    "and till/before", self.date_till.strftime(SH_DATE_FORMAT))
-        cae.uprint("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.max_length_of_stay,
+        cae.po("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.max_length_of_stay,
                    " and -pause in seconds between fetches", self.fetch_chunk_pause_seconds)
-        cae.uprint("Search flags:", self.search_flags)
-        cae.uprint("Search scope:", self.search_scope)
-        cae.uprint("Allowed Market Sources:", self.allowed_mkt_src or "ALL")
-        cae.uprint("Allowed Market Groups/Channels:", self.allowed_mkt_grp or "ALL")
+        cae.po("Search flags:", self.search_flags)
+        cae.po("Search scope:", self.search_scope)
+        cae.po("Allowed Market Sources:", self.allowed_mkt_src or "ALL")
+        cae.po("Allowed Market Groups/Channels:", self.allowed_mkt_grp or "ALL")
 
     def date_range_str(self):
         from_date = self.date_from.strftime(SH_DATE_FORMAT)

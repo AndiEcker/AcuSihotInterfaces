@@ -1,7 +1,7 @@
 from smtplib import SMTP, SMTP_SSL
 from email.mime.text import MIMEText
 
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, uprint
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 
 DEF_ENC_PORT = 25
 DEF_ENC_SERVICE_NAME = 'smtp'
@@ -14,27 +14,27 @@ MAX_LEN_BODY_IN_LOG = 159       # max number of characters of the send mail body
 
 
 def add_notification_options(cae, add_warnings=False):
-    cae.add_option('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
-    cae.add_option('smtpFrom', "SMTP sender/from address", '', 'f')
-    cae.add_option('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
+    cae.add_opt('smtpServerUri', "SMTP notification server account URI [user[:pw]@]host[:port]", '', 'c')
+    cae.add_opt('smtpFrom', "SMTP sender/from address", '', 'f')
+    cae.add_opt('smtpTo', "List/Expression of SMTP receiver/to addresses", list(), 'r')
     if add_warnings:
         # separate warnings email is optional for some applications (e.g. AcuServer)
-        cae.add_option('warningsMailToAddr', "Warnings SMTP receiver addresses (if differs from smtpTo)", list(), 'v')
+        cae.add_opt('warningsMailToAddr', "Warnings SMTP receiver addresses (if differs from smtpTo)", list(), 'v')
 
 
 def init_notification(cae, system_name=''):
     notification = warning_notification_emails = None
-    if cae.get_option('smtpServerUri') and cae.get_option('smtpFrom') and cae.get_option('smtpTo'):
-        notification = Notification(smtp_server_uri=cae.get_option('smtpServerUri'),
-                                    mail_from=cae.get_option('smtpFrom'),
-                                    mail_to=cae.get_option('smtpTo'),
-                                    used_system=system_name or cae.app_name(),
-                                    debug_level=cae.get_option('debugLevel'))
-        uprint("SMTP Uri/From/To:", cae.get_option('smtpServerUri'), cae.get_option('smtpFrom'),
-               cae.get_option('smtpTo'))
-        warning_notification_emails = cae.get_option('warningsMailToAddr')
+    if cae.get_opt('smtpServerUri') and cae.get_opt('smtpFrom') and cae.get_opt('smtpTo'):
+        notification = Notification(smtp_server_uri=cae.get_opt('smtpServerUri'),
+                                    mail_from=cae.get_opt('smtpFrom'),
+                                    mail_to=cae.get_opt('smtpTo'),
+                                    used_system=system_name or cae.app_name,
+                                    debug_level=cae.get_opt('debugLevel'))
+        po("SMTP Uri/From/To:", cae.get_opt('smtpServerUri'), cae.get_opt('smtpFrom'),
+               cae.get_opt('smtpTo'))
+        warning_notification_emails = cae.get_opt('warningsMailToAddr')
         if warning_notification_emails:
-            uprint("Warnings SMTP receiver address(es):", warning_notification_emails)
+            po("Warnings SMTP receiver address(es):", warning_notification_emails)
     return notification, warning_notification_emails
 
 
@@ -42,7 +42,7 @@ class Notification:
     def __init__(self, smtp_server_uri, mail_from, mail_to, local_mail_host='', used_system='', mail_body_footer='',
                  debug_level=DEBUG_LEVEL_DISABLED):
         if debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint(' ###  New Notification({}, {}, {}, {}, {}, {}).'
+            po(' ###  New Notification({}, {}, {}, {}, {}, {}).'
                    .format(smtp_server_uri, mail_from, mail_to, local_mail_host, used_system, mail_body_footer))
         # split smtp server URI into service, host, user, pw and port (all apart host are optional)
         if '://' in smtp_server_uri:
@@ -107,11 +107,11 @@ class Notification:
             try:
                 mail_to = eval(mail_to_expr)  # data_dict for to check data, subject/msg_body for to mail content
             except Exception as ex:
-                uprint(" **** Notification.send_notification() exception '" + str(ex) +
+                po(" **** Notification.send_notification() exception '" + str(ex) +
                        "' on evaluating of expression '" + str(mail_to_expr) +
                        "'" + title_ext)
         if not isinstance(mail_to, list):
-            uprint(" **** Notification.send_notification(): invalid email-to address list or expression '" +
+            po(" **** Notification.send_notification(): invalid email-to address list or expression '" +
                    str(mail_to) + "' - using ITDevmen fallback!")
             mail_to = ['ITDevmen@signallia.com']
         body_style = body_style or 'html' if '</' in msg_body else 'plain'
@@ -124,7 +124,7 @@ class Notification:
 
         # log error message and try to send it per email
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            uprint(" #### Notification.send_notification(): BODY{" + msg_body[:MAX_LEN_BODY_IN_LOG] + "..}" + title_ext)
+            po(" #### Notification.send_notification(): BODY{" + msg_body[:MAX_LEN_BODY_IN_LOG] + "..}" + title_ext)
         err_msg = ''
         try:
             message = MIMEText(msg_body, _subtype=body_style)
@@ -151,6 +151,6 @@ class Notification:
             err_msg = 'mail send exception: {}'.format(mex)
 
         if err_msg and self.debug_level >= DEBUG_LEVEL_ENABLED:
-            uprint(' **** Notification.send_notification() error: {}.'.format(err_msg))
+            po(' **** Notification.send_notification() error: {}.'.format(err_msg))
 
         return err_msg

@@ -54,27 +54,27 @@ DEF_TC_AG_ID = '20'
 DEF_TC_AG_MC = 'TCAG'
 
 
-cae = ConsoleApp(__version__, "Periodically execute and supervise command")
+cae = ConsoleApp("Periodically execute and supervise command")
 
-cae.add_option('cmdLine', "command [line] to execute", '', 'x')
-cae.add_option('cmdInterval', "command interval in seconds (pass 0 for always running servers)", 3600, 'l')  # ==1 hour
-cae.add_option('envChecks', "Number of environment checks per command interval", 3, 'n')
-cae.add_option('sendOutput',
+cae.add_opt('cmdLine', "command [line] to execute", '', 'x')
+cae.add_opt('cmdInterval', "command interval in seconds (pass 0 for always running servers)", 3600, 'l')  # ==1 hour
+cae.add_opt('envChecks', "Number of environment checks per command interval", 3, 'n')
+cae.add_opt('sendOutput',
                "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
 
 ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True)
 
-cmd_line = cae.get_option('cmdLine')
+cmd_line = cae.get_opt('cmdLine')
 if not cmd_line:
-    cae.dprint("Empty command line - Nothing to do.", minimum_debug_level=DEBUG_LEVEL_DISABLED)
+    cae.dpo("Empty command line - Nothing to do.", minimum_debug_level=DEBUG_LEVEL_DISABLED)
     cae.shutdown()
-cae.dprint("Command line:", cmd_line, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+cae.dpo("Command line:", cmd_line, minimum_debug_level=DEBUG_LEVEL_DISABLED)
 command_line_args = cmd_line.split(' ')
 exe_name = command_line_args[0]
 
-command_interval = cae.get_option('cmdInterval')  # in seconds
-env_checks_per_interval = cae.get_option('envChecks')
-cae.dprint("Interval/checks:", command_interval, env_checks_per_interval, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+command_interval = cae.get_opt('cmdInterval')  # in seconds
+env_checks_per_interval = cae.get_opt('envChecks')
+cae.dpo("Interval/checks:", command_interval, env_checks_per_interval, minimum_debug_level=DEBUG_LEVEL_DISABLED)
 if command_interval:
     # init timeout to command_interval-5% (if 1 hour than to 57 minutes, ensure minimum 1 minute for error recovering)
     timeout = max(command_interval - max(command_interval // 20, 60), 60)
@@ -84,13 +84,13 @@ check_interval = command_interval // env_checks_per_interval
 last_timer = last_run = last_check = None
 
 last_sync = datetime.datetime.now()
-last_rt_prefix = cae.get_option('acuDSN')[-4:]
+last_rt_prefix = cae.get_opt('acuDSN')[-4:]
 
 
 ass_data = init_ass_data(cae, ass_options, used_systems_msg_prefix="Active Sys Env Checks")
 asd = ass_data['assSysData']
 if asd.error_message:
-    cae.dprint("WatchPupPy startup error: ", asd.error_message, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+    cae.dpo("WatchPupPy startup error: ", asd.error_message, minimum_debug_level=DEBUG_LEVEL_DISABLED)
     asd.close_dbs()
     cae.shutdown(exit_code=9)
 
@@ -98,17 +98,17 @@ if asd.error_message:
 break_on_error = ass_data['breakOnError']
 notification = ass_data['notification']
 
-send_output = 1 if notification and cae.get_option('sendOutput') else 0
-cae.dprint("Send Output (subprocess call method: =check_output, 0=check_call)", send_output,
-           minimum_debug_level=DEBUG_LEVEL_ENABLED)
+send_output = 1 if notification and cae.get_opt('sendOutput') else 0
+cae.dpo("Send Output (subprocess call method: =check_output, 0=check_call)", send_output,
+        minimum_debug_level=DEBUG_LEVEL_ENABLED)
 
 # wait minimum 10 minutes after each error, wait longer if command_interval is greater than 1 hour
 sleep_after_err = max(600, command_interval / 6)
-cae.dprint("Waiting time after error notification: {} (seconds)".format(sleep_after_err),
-           minimum_debug_level=DEBUG_LEVEL_DISABLED)
+cae.dpo("Waiting time after error notification: {} (seconds)".format(sleep_after_err),
+        minimum_debug_level=DEBUG_LEVEL_DISABLED)
 
 is_test = asd.is_test_system()
-debug_level = cae.get_option('debugLevel')
+debug_level = cae.get_opt('debugLevel')
 max_sync_outage_delta = exe_name.startswith(('AcuServer', 'SihotResSync')) and debug_level > DEBUG_LEVEL_DISABLED \
                         and datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS * (9 if is_test else 1))
 
@@ -122,10 +122,10 @@ def user_notification(subject, body):
     if notification:
         err_message = notification.send_notification(body, subject=subject, body_style='plain')
         if err_message:
-            cae.dprint("****  WatchPupPy user notification error: {}. Unsent notification body:\n{}."
-                       .format(err_message, body), minimum_debug_level=DEBUG_LEVEL_DISABLED)
+            cae.dpo("****  WatchPupPy user notification error: {}. Unsent notification body:\n{}."
+                    .format(err_message, body), minimum_debug_level=DEBUG_LEVEL_DISABLED)
     else:
-        cae.dprint("****  " + subject + "\n" + body, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+        cae.dpo("****  " + subject + "\n" + body, minimum_debug_level=DEBUG_LEVEL_DISABLED)
 
 
 def get_timer_corrected():
@@ -172,14 +172,14 @@ def reset_last_run_time(force=False):
     except Exception as x:
         msg += " exception: " + str(x)
     if msg:
-        cae.dprint("WatchPupPy.reset_last_run_time()", msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+        cae.dpo("WatchPupPy.reset_last_run_time()", msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
         user_notification('WatchPupPy reset last run time warning', msg)
 
 
 startup = get_timer_corrected()     # initialize timer and last check/run values
-cae.dprint(" ###  Startup {} timer value={}, last check={}, check interval={}, last run={}, run interval={}"
-           .format("" if is_test else "production", startup, last_check, check_interval, last_run, command_interval),
-           minimum_debug_level=DEBUG_LEVEL_DISABLED if is_test else DEBUG_LEVEL_VERBOSE)
+cae.dpo(" ###  Startup {} timer value={}, last check={}, check interval={}, last run={}, run interval={}"
+        .format("" if is_test else "production", startup, last_check, check_interval, last_run, command_interval),
+        minimum_debug_level=DEBUG_LEVEL_DISABLED if is_test else DEBUG_LEVEL_VERBOSE)
 progress = Progress(cae, total_count=1, start_msg='Preparing environment checks and first run of {}'.format(exe_name))
 
 errors = list()
@@ -197,7 +197,7 @@ while True:
             status_msg = "checks={}; errors={}; run starts={}; run ends={}; at {}; sys=\n{}\n....last err=\n{}" \
                 .format(check_count, err_count, run_starts, run_ends, datetime.datetime.now(),
                         sys_env_text(file=__file__), err_msg)
-            cae.dprint("####  " + status_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
+            cae.dpo("####  " + status_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)
             user_notification("WatchPupPy error notification", status_msg)
             if break_on_error or BREAK_PREFIX in err_msg:
                 break
@@ -208,8 +208,8 @@ while True:
         curr_time = datetime.datetime.now()
         curr_timer = get_timer_corrected()
         if curr_timer < next_check:
-            cae.dprint(" ###  Waiting for next check in {} seconds (timer={}, last={}, interval={}, at {})"
-                       .format(next_check - curr_timer, curr_timer, last_check, check_interval, curr_time))
+            cae.dpo(" ###  Waiting for next check in {} seconds (timer={}, last={}, interval={}, at {})"
+                    .format(next_check - curr_timer, curr_timer, last_check, check_interval, curr_time))
         try:
             while get_timer_corrected() < next_check:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
@@ -217,8 +217,8 @@ while True:
             errors.append(BREAK_PREFIX + " while waiting for next check in {} seconds"
                           .format(next_check - get_timer_corrected()))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
-        cae.dprint(" ###  Running checks (timer={}, last={}, interval={}) at={}"
-                   .format(get_timer_corrected(), last_check, check_interval, datetime.datetime.now()))
+        cae.dpo(" ###  Running checks (timer={}, last={}, interval={}) at={}"
+                .format(get_timer_corrected(), last_check, check_interval, datetime.datetime.now()))
 
         check_count += 1
 
@@ -332,15 +332,15 @@ while True:
         curr_time = datetime.datetime.now()
 
         if next_check < next_run:
-            cae.dprint(" ###  Timer={}, next chk {}s (last={} interval={}), next run {}s (last={} interval={}) (at {})"
-                       .format(last_check, next_check - last_check, last_check, check_interval,
+            cae.dpo(" ###  Timer={}, next chk {}s (last={} interval={}), next run {}s (last={} interval={}) (at {})"
+                    .format(last_check, next_check - last_check, last_check, check_interval,
                                next_run - last_check, last_run, command_interval, curr_time))
             continue  # wait for next check
 
         # wait for next command_interval, only directly after startup checks on first run
         if last_check < next_run:
-            cae.dprint(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={}) (at {})"
-                       .format(next_run - last_check, last_check, last_run, command_interval, curr_time))
+            cae.dpo(" ###  Waiting for next run in {} seconds (timer={}, last={}, interval={}) (at {})"
+                    .format(next_run - last_check, last_check, last_run, command_interval, curr_time))
         try:
             while get_timer_corrected() < next_run:
                 time.sleep(1)  # allow to process/raise KeyboardInterrupt within 1 second
@@ -350,8 +350,8 @@ while True:
                           .format(next_run - get_timer_corrected(), curr_time))
             continue  # first notify, then break in next loop because auf BREAK_PREFIX
         curr_time = datetime.datetime.now()
-        cae.dprint(" ###  Run command (timer={}, last={}, interval={}) (at {})"
-                   .format(get_timer_corrected(), last_run, command_interval, curr_time))
+        cae.dpo(" ###  Run command (timer={}, last={}, interval={}) (at {})"
+                .format(get_timer_corrected(), last_run, command_interval, curr_time))
 
         # then run the command
         run_starts += 1
@@ -401,7 +401,7 @@ progress.finished(error_msg=err_msg)
 if asd:
     asd.close_dbs()
 curr_time = datetime.datetime.now()
-cae.dprint("####  WatchPupPy run {} of {} times at {}; command={}".format(run_ends, run_starts, curr_time, exe_name),
-           minimum_debug_level=DEBUG_LEVEL_DISABLED)
+cae.dpo("####  WatchPupPy run {} of {} times at {}; command={}".format(run_ends, run_starts, curr_time, exe_name),
+        minimum_debug_level=DEBUG_LEVEL_DISABLED)
 if err_count:
-    cae.dprint("****  {} runs failed at {}".format(err_count, curr_time), minimum_debug_level=DEBUG_LEVEL_DISABLED)
+    cae.dpo("****  {} runs failed at {}".format(err_count, curr_time), minimum_debug_level=DEBUG_LEVEL_DISABLED)

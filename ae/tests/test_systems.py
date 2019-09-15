@@ -15,7 +15,7 @@ SYS_CRED_NEEDED = {SS: SYS_CRED_ITEMS, SX: SYS_CRED_ITEMS, SY: SYS_CRED_ITEMS}
 FEATURE1 = 'ss_extra_feature'
 SYS_FEAT_ITEMS = (FEATURE1,)
 SYS_FEATURES = [FEATURE1]
-APP_NAME = 'test_app_name'
+APP_NAME = 'test_sys_app_name'
 DBG_LEVEL_DISABLED = -1
 DBG_LEVEL_VERBOSE = 99
 
@@ -51,7 +51,7 @@ def check_connector_args(cre, fea, ana, dlv):
     assert cre == SYS_CREDENTIALS or CREDENTIAL1 in cre and cre[CREDENTIAL1] == USER_NAME1, \
         "check_connect_args() SYS_CREDENTIALS failure"
     assert fea == SYS_FEATURES or fea == list(), "check_connect_args() SYS_FEATURES failure"
-    assert ana == APP_NAME, "check_connect_args() APP_NAME failure"
+    assert ana == APP_NAME, "check_connect_args() application name failure"
     assert dlv == DBG_LEVEL_DISABLED or dlv == DBG_LEVEL_VERBOSE, "check_connect_args() DBG_LEVEL_VERBOSE failure"
 
 

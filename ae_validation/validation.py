@@ -50,101 +50,101 @@ def validate_flag_info(validate_flag):
 
 def add_validation_options(cae, email_def=EMAIL_DO_NOT_VALIDATE, phone_def=PHONE_DO_NOT_VALIDATE,
                            addr_def=ADDR_DO_NOT_VALIDATE):
-    cae.add_option('filterSfClients', "Additional WHERE filter clause for Salesforce SOQL client fetch query", "", 'W')
-    cae.add_option('filterSfRecTypes', "Salesforce client record type(s) to be processed", list(), 'R')
+    cae.add_opt('filterSfClients', "Additional WHERE filter clause for Salesforce SOQL client fetch query", "", 'W')
+    cae.add_opt('filterSfRecTypes', "Salesforce client record type(s) to be processed", list(), 'R')
 
-    cae.add_option('emailsToValidate', "Emails to be validated", email_def, 'E',
-                   choices=(EMAIL_DO_NOT_VALIDATE, EMAIL_NOT_VALIDATED, EMAIL_INVALIDATED, EMAIL_INVALID, EMAIL_VALID,
+    cae.add_opt('emailsToValidate', "Emails to be validated", email_def, 'E',
+                choices=(EMAIL_DO_NOT_VALIDATE, EMAIL_NOT_VALIDATED, EMAIL_INVALIDATED, EMAIL_INVALID, EMAIL_VALID,
                             EMAIL_ALL))
-    cae.add_option('phonesToValidate', "Phones to be validated", phone_def, 'P',
-                   choices=(PHONE_DO_NOT_VALIDATE, PHONE_NOT_VALIDATED, PHONE_INVALIDATED, PHONE_INVALID, PHONE_VALID,
+    cae.add_opt('phonesToValidate', "Phones to be validated", phone_def, 'P',
+                choices=(PHONE_DO_NOT_VALIDATE, PHONE_NOT_VALIDATED, PHONE_INVALIDATED, PHONE_INVALID, PHONE_VALID,
                             PHONE_ALL))
-    cae.add_option('addressesToValidate', "Post addresses to be validated", addr_def, 'A',
-                   choices=(ADDR_DO_NOT_VALIDATE, ADDR_NOT_VALIDATED, ADDR_INVALIDATED, ADDR_INVALID, ADDR_VALID,
+    cae.add_opt('addressesToValidate', "Post addresses to be validated", addr_def, 'A',
+                choices=(ADDR_DO_NOT_VALIDATE, ADDR_NOT_VALIDATED, ADDR_INVALIDATED, ADDR_INVALID, ADDR_VALID,
                             ADDR_ALL))
 
 
 def init_validation(cae):
-    cae.uprint("####  Initializing validation options and configuration settings")
+    cae.po("####  Initializing validation options and configuration settings")
     prefix = "      "
     email_validator = phone_validator = addr_validator = None
 
-    email_validation = cae.get_option('emailsToValidate')
+    email_validation = cae.get_opt('emailsToValidate')
     if email_validation != EMAIL_DO_NOT_VALIDATE:
-        cae.uprint(prefix + "Email validation:", validate_flag_info(email_validation))
-        api_key = cae.get_config('emailValidatorApiKey')
+        cae.po(prefix + "Email validation:", validate_flag_info(email_validation))
+        api_key = cae.get_var('emailValidatorApiKey')
         assert api_key, "init_validation() email configuration error: api key emailValidatorApiKey is missing"
         args = dict()
-        pause_seconds = cae.get_config('emailValidatorPauseSeconds', value_type=float)
+        pause_seconds = cae.get_var('emailValidatorPauseSeconds', value_type=float)
         if pause_seconds:
             args['pause_seconds'] = pause_seconds
-        max_retries = cae.get_config('emailValidatorMaxRetries', value_type=int)
+        max_retries = cae.get_var('emailValidatorMaxRetries', value_type=int)
         if max_retries:
             args['max_retries'] = max_retries
-        email_validator = EmailValidator(cae.get_config('emailValidatorBaseUrl'), api_key, **args)
+        email_validator = EmailValidator(cae.get_var('emailValidatorBaseUrl'), api_key, **args)
 
-    phone_validation = cae.get_option('phonesToValidate')
+    phone_validation = cae.get_opt('phonesToValidate')
     if phone_validation != PHONE_DO_NOT_VALIDATE:
-        cae.uprint(prefix + "Phone validation:", validate_flag_info(phone_validation))
-        api_key = cae.get_config('phoneValidatorApiKey')
+        cae.po(prefix + "Phone validation:", validate_flag_info(phone_validation))
+        api_key = cae.get_var('phoneValidatorApiKey')
         assert api_key, "init_validation() phone configuration error: api key phoneValidatorApiKey is missing"
         args = dict()
-        pause_seconds = cae.get_config('phoneValidatorPauseSeconds', value_type=float)
+        pause_seconds = cae.get_var('phoneValidatorPauseSeconds', value_type=float)
         if pause_seconds:
             args['pause_seconds'] = pause_seconds
-        max_retries = cae.get_config('phoneValidatorMaxRetries', value_type=int)
+        max_retries = cae.get_var('phoneValidatorMaxRetries', value_type=int)
         if max_retries:
             args['max_retries'] = max_retries
-        alternative_country = cae.get_config('phoneValidatorAlternativeCountry')
+        alternative_country = cae.get_var('phoneValidatorAlternativeCountry')
         if alternative_country:
             args['alternative_country'] = alternative_country
-        phone_validator = PhoneValidator(cae.get_config('phoneValidatorBaseUrl'), api_key, **args)
+        phone_validator = PhoneValidator(cae.get_var('phoneValidatorBaseUrl'), api_key, **args)
 
-    addr_validation = cae.get_option('addressesToValidate')
+    addr_validation = cae.get_opt('addressesToValidate')
     if addr_validation != ADDR_DO_NOT_VALIDATE:
-        cae.uprint(prefix + "Address validation:", validate_flag_info(addr_validation))
-        api_key = cae.get_config('addressValidatorApiKey')
+        cae.po(prefix + "Address validation:", validate_flag_info(addr_validation))
+        api_key = cae.get_var('addressValidatorApiKey')
         assert api_key, "init_validation() address configuration error: api key addressValidatorApiKey is missing"
         args = dict()
-        pause_seconds = cae.get_config('addressValidatorPauseSeconds', value_type=float)
+        pause_seconds = cae.get_var('addressValidatorPauseSeconds', value_type=float)
         if pause_seconds:
             args['pause_seconds'] = pause_seconds
-        max_retries = cae.get_config('addressValidatorMaxRetries', value_type=int)
+        max_retries = cae.get_var('addressValidatorMaxRetries', value_type=int)
         if max_retries:
             args['max_retries'] = max_retries
-        search_url = cae.get_config('addressValidatorSearchUrl')
+        search_url = cae.get_var('addressValidatorSearchUrl')
         if search_url:
             args['auto_complete_search_url'] = search_url
-        fetch_url = cae.get_config('addressValidatorFetchUrl')
+        fetch_url = cae.get_var('addressValidatorFetchUrl')
         if fetch_url:
             args['auto_complete_fetch_url'] = fetch_url
-        addr_validator = AddressValidator(cae.get_config('addressValidatorBaseUrl'), api_key, **args)
+        addr_validator = AddressValidator(cae.get_var('addressValidatorBaseUrl'), api_key, **args)
 
     # determine filter options
-    filter_sf_clients = cae.get_option('filterSfClients')
+    filter_sf_clients = cae.get_opt('filterSfClients')
     if filter_sf_clients:
-        cae.uprint(prefix + "Filter clients matching SOQL where clause:", filter_sf_clients)
-    filter_sf_rec_types = cae.get_option('filterSfRecTypes')
+        cae.po(prefix + "Filter clients matching SOQL where clause:", filter_sf_clients)
+    filter_sf_rec_types = cae.get_opt('filterSfRecTypes')
     if filter_sf_rec_types:
-        cae.uprint(prefix + "Filter clients with record types:", filter_sf_rec_types)
+        cae.po(prefix + "Filter clients with record types:", filter_sf_rec_types)
 
     # determine config variables for extra filters and other preferences
-    filter_email = cae.get_config('filterEmail', default_value='')
+    filter_email = cae.get_var('filterEmail', default_value='')
     if filter_email:
-        cae.uprint(prefix + "Filter email addresses that are:", filter_email)
-    default_email_address = cae.get_config('defaultEmailAddress', default_value='')
+        cae.po(prefix + "Filter email addresses that are:", filter_email)
+    default_email_address = cae.get_var('defaultEmailAddress', default_value='')
     if default_email_address:
-        cae.uprint(prefix + "Default email address:", default_email_address)
-    invalid_email_fragments = cae.get_config('invalidEmailFragments', default_value=list())
+        cae.po(prefix + "Default email address:", default_email_address)
+    invalid_email_fragments = cae.get_var('invalidEmailFragments', default_value=list())
     if invalid_email_fragments:
-        cae.uprint(prefix + "Invalid email fragments:", invalid_email_fragments)
+        cae.po(prefix + "Invalid email fragments:", invalid_email_fragments)
 
-    ignore_case_fields = cae.get_config('ignoreCaseFields', default_value=list())
+    ignore_case_fields = cae.get_var('ignoreCaseFields', default_value=list())
     if ignore_case_fields:
-        cae.uprint(prefix + "Case ignored in Salesforce fields:", ignore_case_fields)
-    changeable_fields = cae.get_config('changeableFields', default_value=list())
+        cae.po(prefix + "Case ignored in Salesforce fields:", ignore_case_fields)
+    changeable_fields = cae.get_var('changeableFields', default_value=list())
     if changeable_fields:
-        cae.uprint(prefix + "Salesforce fields that can be updated/changed:", changeable_fields)
+        cae.po(prefix + "Salesforce fields that can be updated/changed:", changeable_fields)
 
     return email_validation, email_validator, phone_validation, phone_validator, addr_validation, addr_validator, \
         filter_sf_clients, filter_sf_rec_types, filter_email, \

@@ -29,7 +29,7 @@ PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
 
 
-cae = ConsoleApp(__version__, "Migrate guests and reservation bookings from Sihot to Salesforce")
+cae = ConsoleApp("Migrate guests and reservation bookings from Sihot to Salesforce")
 
 rbf = ResBulkFetcher(cae, allow_future_arrivals=False)
 rbf.add_options()
@@ -39,7 +39,7 @@ add_sf_options(cae)
 add_notification_options(cae, add_warnings=True)
 
 
-_debug_level = cae.get_option('debugLevel')
+_debug_level = cae.get_opt('debugLevel')
 
 rbf.load_options()
 rbf.print_options()
@@ -52,16 +52,16 @@ email_validation, email_validator, \
 
 asd = AssSysData(cae)
 if asd.error_message:
-    cae.uprint("AssSysData initialization error: " + asd.error_message)
+    cae.po("AssSysData initialization error: " + asd.error_message)
     cae.shutdown(20)
 sf_conn = asd.connection(SDI_SF)
 
-notification, warning_notification_emails = init_notification(cae, cae.get_option('shServerIP') + '/Salesforce '
+notification, warning_notification_emails = init_notification(cae, cae.get_opt('shServerIP') + '/Salesforce '
                                                               + ("sandbox" if sf_conn.is_sandbox() else "production"))
 
 # html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>
-msf_beg = cae.get_config('monoSpacedFontBegin', default_value='<pre>')
-msf_end = cae.get_config('monoSpacedFontEnd', default_value='</pre>')
+msf_beg = cae.get_var('monoSpacedFontBegin', default_value='<pre>')
+msf_end = cae.get_var('monoSpacedFontEnd', default_value='</pre>')
 
 
 ADD_INFO_PREFIX = '+'
@@ -84,7 +84,7 @@ def add_log_msg(msg, is_error=False):
         log_errors.append(msg)
     msg = ("  **  " if is_error else "  ##  ") + msg
     log_items.append(msg)
-    cae.uprint(msg)
+    cae.po(msg)
 
 
 def notification_add_line(msg, is_error=False):
@@ -119,8 +119,8 @@ def strip_add_info_from_sf_data(sfd, check_data=False, record_type_id=None, obj_
             sh_val = sfd.get(key, "")
             sf_val = sfc[key]
             if sh_val != sf_val:
-                cae.dprint("{} {}: prevented change of field {} to '{}' (from '{}')"
-                           .format(obj_type, sid, key, sh_val, sf_val))
+                cae.dpo("{} {}: prevented change of field {} to '{}' (from '{}')"
+                        .format(obj_type, sid, key, sh_val, sf_val))
             if key in ignore_case_fields:
                 sh_val = sh_val.lower()
                 sf_val = sf_val.lower()
@@ -198,7 +198,7 @@ def prepare_mig_data(shd, arri, sh_res_id, email_addr, phone_no, snam, fnam, src
     sfd['Birthdate'] = shd.val(arri, 'DOB')
     # Language__c (Picklist) or Spoken_Languages__c (Picklist, multi-select) ?!?!?
     lc_iso2 = shd.val(arri, 'Language')
-    sfd['Language'] = cae.get_config(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
+    sfd['Language'] = cae.get_var(lc_iso2, 'LanguageCodes', default_value=lc_iso2)
     # Market_Source__c or Description (Long Text Area, 32000) or Client_Comments__c (Long Text Area, 4000)
     # .. or LeadSource (Picklist) or Source__c (Picklist) or HERE_HOW__c (Picklist) or Marketing_Source__c (Lead) ?!?!?
     sfd['MarketSource'] = str(src)
@@ -215,7 +215,7 @@ def prepare_mig_data(shd, arri, sh_res_id, email_addr, phone_no, snam, fnam, src
     # .. and remap, e.g. Great Britain need to be UK not GB (ISO2).
     # .. Also remove extra characters, because ES has sometimes suffix w/ two numbers
     cc_iso2 = shd.val(arri, 'Country')[:2]
-    sfd['Country'] = cae.get_config(cc_iso2, 'CountryCodes', default_value=cc_iso2)
+    sfd['Country'] = cae.get_var(cc_iso2, 'CountryCodes', default_value=cc_iso2)
     # Booking__c (Long Text Area, 32768) or use field Previous_Arrival_Info__c (Text, 100) ?!?!?
     sfd['ArrivalInfo'] = (""
                           + " Arr=" + str(shd.val(arri, 'ResArrival'))
@@ -257,11 +257,11 @@ def layout_message(sfd, cols):
     return txt + "-" * 108
 
 
-cae.uprint("####  Fetching from Sihot")
+cae.po("####  Fetching from Sihot")
 all_recs = rbf.fetch_all()
 
 # collect all the emails found in this export run (for to skip duplicates)
-cae.uprint("####  Evaluate reservations fetched from Sihot")
+cae.po("####  Evaluate reservations fetched from Sihot")
 found_emails = list()
 found_phones = list()
 valid_clients = list()
@@ -332,10 +332,10 @@ try:
                 score_match_name_to_email(sf_dict)
                 valid_clients.append(sf_dict)
 
-    cae.uprint("####  Ordering filtered clients")
+    cae.po("####  Ordering filtered clients")
     valid_clients.sort(key=lambda d: d[AI_SH_RES_ID] + '{:06.3}'.format(d[AI_SCORE]),
                        reverse=True)
-    cae.uprint("####  Detecting reservation-id/email duplicates and fetch current Salesforce client data, if available")
+    cae.po("####  Detecting reservation-id/email duplicates and fetch current Salesforce client data, if available")
     notification_lines.append("####  Validate and compare Sihot and Salesforce client data")
     dup_res = dup_emails = dup_phones = 0
     rooming_list_ids = list()
@@ -371,7 +371,7 @@ try:
 
         clients_to_mig.append(sf_dict)
 
-    cae.uprint("####  Migrating clients to Salesforce")
+    cae.po("####  Migrating clients to Salesforce")
     notification_lines.append("####  Migrating Sihot guest data to Salesforce")
     clients_migrated = list()
     send_errors = 0
@@ -384,8 +384,8 @@ try:
         removed = list()
         email, changed = correct_email(email, changed=changed, removed=removed)
         if changed and _debug_level >= DEBUG_LEVEL_VERBOSE:
-            cae.uprint("SfInterface.find_client(): email address changed to {}. Removed chars: {}"
-                       .format(email, removed))
+            cae.po("SfInterface.find_client(): email address changed to {}. Removed chars: {}"
+                   .format(email, removed))
         sf_dict['Email'] = email
 
         phone = sf_dict['Phone']
@@ -393,8 +393,8 @@ try:
         removed = list()
         phone, changed = correct_phone(phone, changed=changed, removed=removed)
         if changed and _debug_level >= DEBUG_LEVEL_VERBOSE:
-            cae.uprint("SfInterface.find_client(): phone number corrected to {}. Removed chars: {}"
-                       .format(phone, removed))
+            cae.po("SfInterface.find_client(): phone number corrected to {}. Removed chars: {}"
+                   .format(phone, removed))
         sf_dict['Phone'] = phone
 
         sf_id, sf_obj = sf_conn.find_client(email, phone, sf_dict['FirstName'], sf_dict['LastName'])
@@ -433,32 +433,32 @@ try:
                                           sf_dict[AI_SCORE], sh_pp_data, log_msg))
 
     if ups_warnings:
-        cae.uprint(" ###  Sihot-Salesforce data mismatches (not updated in Salesforce) - UPSERT warnings:")
+        cae.po(" ###  Sihot-Salesforce data mismatches (not updated in Salesforce) - UPSERT warnings:")
         for upsert_msg in ups_warnings:
-            cae.uprint("   #  ", upsert_msg)
+            cae.po("   #  ", upsert_msg)
 
-    cae.uprint()
-    cae.uprint("####  Migration Summary")
-    cae.uprint()
+    cae.po()
+    cae.po("####  Migration Summary")
+    cae.po()
     valid_client_count = len(valid_clients)
     mig_client_count = valid_client_count - dup_res - dup_emails - dup_phones - send_errors
     assert len(clients_migrated) == mig_client_count
     notification_add_line("Duplicate {}/{}/{} res-ids/emails/phones and {} upload errors out of {} Sihot guests/clients"
                           .format(dup_res, dup_emails, dup_phones, send_errors, valid_client_count))
-    cae.uprint("Found {} unique emails: {}".format(len(found_emails), found_emails))
-    cae.uprint("Found {} unique phone numbers: {}".format(len(found_phones), found_phones))
-    cae.uprint("Skipped {} duplicates of loaded reservation-rooming-ids: {}".format(dup_res, rooming_list_ids))
-    cae.uprint()
-    cae.uprint(" ###  Comparision of {} existing Sf clients".format(len(existing_client_ids)))
+    cae.po("Found {} unique emails: {}".format(len(found_emails), found_emails))
+    cae.po("Found {} unique phone numbers: {}".format(len(found_phones), found_phones))
+    cae.po("Skipped {} duplicates of loaded reservation-rooming-ids: {}".format(dup_res, rooming_list_ids))
+    cae.po()
+    cae.po(" ###  Comparision of {} existing Sf clients".format(len(existing_client_ids)))
     for sf_dict in existing_client_ids:
         ec = deepcopy(sf_dict)
-        cae.uprint("  ##  Sf-Id", ec[AI_SF_ID])
-        cae.uprint("      SF:", pprint.pformat(ec[AI_SF_CURR_DATA], indent=9, width=PP_DEF_WIDTH))
+        cae.po("  ##  Sf-Id", ec[AI_SF_ID])
+        cae.po("      SF:", pprint.pformat(ec[AI_SF_CURR_DATA], indent=9, width=PP_DEF_WIDTH))
         ec.pop(AI_SF_CURR_DATA)
-        cae.uprint("      SH:", pprint.pformat(ec, indent=9, width=PP_DEF_WIDTH))
+        cae.po("      SH:", pprint.pformat(ec, indent=9, width=PP_DEF_WIDTH))
 
-    cae.uprint()
-    cae.uprint("####  ", mig_client_count, "Clients migrated:")
+    cae.po()
+    cae.po("####  ", mig_client_count, "Clients migrated:")
     clients_notifications = list()
     clients_notifications.append("####  {} MIGRATED CLIENTS ARRIVED {}:\n\n"
                                  .format(mig_client_count, rbf.date_range_str()))
@@ -466,7 +466,7 @@ try:
                      'Street', 'City', 'Country', 'Language', 'MarketSource', 'ArrivalInfo']
     for sf_dict in clients_migrated:
         client_layout = layout_message(sf_dict, layout_fields)
-        cae.uprint(client_layout)
+        cae.po(client_layout)
         # add as one monospaced font block with including \n to prevent double \n\n
         clients_notifications.append(msf_beg + client_layout + msf_end)
     notification_lines = clients_notifications + ["\n\n####  FULL PROTOCOL:\n"] + notification_lines
@@ -480,7 +480,7 @@ if notification:
     mail_body = "\n\n".join(notification_lines)
     send_err = notification.send_notification(mail_body, subject=subject)
     if send_err:
-        cae.uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
+        cae.po("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
         cae.shutdown(36)
     if warning_notification_emails and (ups_warnings or log_errors):
         mail_body = "MIGRATION WARNINGS:\n\n" + ("\n\n".join(ups_warnings) if ups_warnings else "NONE") \
@@ -488,7 +488,7 @@ if notification:
         subject = "Sihot-SF Client Migration errors/discrepancies" + (" (sandbox)" if sf_conn.is_sandbox() else "")
         send_err = notification.send_notification(mail_body, subject=subject, mail_to=warning_notification_emails)
         if send_err:
-            cae.uprint("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
+            cae.po("****  " + subject + " send error: {}. mail-body='{}'.".format(send_err, mail_body))
             cae.shutdown(39)
 
 if log_errors:
@@ -496,7 +496,7 @@ if log_errors:
 
 # CURRENTLY DISABLED because this is running daily and the command line args defaults
 # if date_till == startup_date - datetime.timedelta(days=1):
-#    cae.set_config('dateFrom', date_till)
-#    uprint("  ##  Changed next runs From Date to", date_till)
+#    cae.set_var('dateFrom', date_till)
+#    po("  ##  Changed next runs From Date to", date_till)
 
 cae.shutdown()

@@ -8,23 +8,23 @@ from shif import add_sh_options
 
 __version__ = '0.1'
 
-cae = ConsoleApp(__version__, "Test SIHOT Kernel guest interface", debug_level_def=DEBUG_LEVEL_VERBOSE)
+cae = ConsoleApp("Test SIHOT Kernel guest interface", debug_level_def=DEBUG_LEVEL_VERBOSE)
 add_sh_options(cae, add_kernel_port=True)
 
 add_ac_options(cae)
 
-cae.add_option('client', 'Send unsynced client identified with this matchcode', '')  # C605765')
+cae.add_opt('client', 'Send unsynced client identified with this matchcode', '')  # C605765')
 
 
-cae.uprint('Server IP/Web-/Kernel-port:', cae.get_option('shServerIP'), cae.get_option(SDF_SH_KERNEL_PORT))
-cae.uprint('TCP Timeout/XML Encoding:', cae.get_option(SDF_SH_TIMEOUT), cae.get_option(SDF_SH_XML_ENCODING))
+cae.po('Server IP/Web-/Kernel-port:', cae.get_opt('shServerIP'), cae.get_opt(SDF_SH_KERNEL_PORT))
+cae.po('TCP Timeout/XML Encoding:', cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
 
 err_msg = ''
-client_code = cae.get_option('client')
+client_code = cae.get_opt('client')
 if client_code:
     client_msg = ' of client {client} to Sihot'.format(client=client_code)
 
-    cae.uprint('####  Fetching client res  ####')
+    cae.po('####  Fetching client res  ####')
 
     acumen_client = AcuClientToSihot(cae)
     err_msg = acumen_client.fetch_from_acu_by_acu(client_code)
@@ -34,7 +34,7 @@ if client_code:
                         start_msg=' ###  Prepare sending of {total_count} reservation requests' + client_msg,
                         nothing_to_do_msg='SihotMigration: acumen_client fetch returning no recs')
 
-    cae.uprint('####  Sending ...........  ####')
+    cae.po('####  Sending ...........  ####')
 
     for rec in acumen_client.recs:
         err_msg = acumen_client.send_client_to_sihot(rec)
@@ -43,21 +43,21 @@ if client_code:
     progress.finished(error_msg=err_msg)
 
 else:
-    cae.uprint('####  Preparing XML .....  ####')
+    cae.po('####  Preparing XML .....  ####')
 
     with open('test/KernelGuestTester.req') as f:
         xml = f.read()
 
-    cae.uprint(xml)
+    cae.po(xml)
 
-    cae.uprint('####  Sending ...........  ####')
+    cae.po('####  Sending ...........  ####')
 
     sxb = SihotXmlBuilder(cae, use_kernel=True)
     sxb.xml = xml
     err_msg = sxb.send_to_server()
 
-    cae.uprint('####  Response ..........  ####')
+    cae.po('####  Response ..........  ####')
 
-    cae.uprint(err_msg)
+    cae.po(err_msg)
 
-    cae.uprint('####  Finished ..........  ####')
+    cae.po('####  Finished ..........  ####')

@@ -3,7 +3,7 @@ simplify display of progress for long running operations
 ========================================================
 
 """
-from ae.core import DEBUG_LEVEL_VERBOSE, AppBase, _logger
+from ae.core import AppBase, _logger
 
 
 class Progress:
@@ -27,7 +27,7 @@ class Progress:
         :param err_msg:
         :param nothing_to_do_msg:
         """
-        self.app_base: AppBase = app_base   #: internal reference to the used :class:`core.AppBase` instance
+        self.app_base: AppBase = app_base   #: reference to the used :class:`core.AppBase` instance
         if next_msg == "":
             next_msg = "Processing '{processed_id}': " + \
                        ("left" if start_counter > 0 and total_count == 0 else "item") + \
@@ -50,12 +50,12 @@ class Progress:
             self._delta = 1
         elif start_counter <= 0:
             if nothing_to_do_msg:
-                self.app_base.uprint(_complete_msg_prefix(nothing_to_do_msg), logger=_logger)
+                self.app_base.po(_complete_msg_prefix(nothing_to_do_msg), logger=_logger)
             return  # RETURN -- empty set - nothing to process
 
         if start_msg:
-            self.app_base.uprint(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
-                                                                        total_count=self._total_count), logger=_logger)
+            self.app_base.po(_complete_msg_prefix(start_msg).format(run_counter=self._run_counter + self._delta,
+                                                                    total_count=self._total_count), logger=_logger)
 
     def next(self, processed_id: str = '', error_msg: str = '', next_msg: str = ''):
         """ log the processing of the next item of this long-running task.
@@ -69,21 +69,21 @@ class Progress:
             self._err_counter += 1
 
         if error_msg and self._err_msg:
-            self.app_base.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                      err_counter=self._err_counter, err_msg=error_msg,
-                                                      processed_id=processed_id), logger=_logger)
+            self.app_base.po(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
+                                                  err_counter=self._err_counter, err_msg=error_msg,
+                                                  processed_id=processed_id), logger=_logger)
 
         if not next_msg:
             next_msg = self._next_msg
         if next_msg:
-            # using uprint with end parameter instead of leading \r will NOT GET DISPLAYED within PyCharm,
+            # using print_out()/po() with end parameter instead of leading \r will NOT GET DISPLAYED within PyCharm,
             # .. also not with flush - see http://stackoverflow.com/questions/34751441/
             # when-writing-carriage-return-to-a-pycharm-console-the-whole-line-is-deleted
-            # .. uprint('   ', pend, end='\r', flush=True)
+            # .. po('   ', pend, end='\r', flush=True)
             next_msg = '\r' + next_msg
-            self.app_base.uprint(next_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                 err_counter=self._err_counter, err_msg=error_msg,
-                                                 processed_id=processed_id), logger=_logger)
+            self.app_base.po(next_msg.format(run_counter=self._run_counter, total_count=self._total_count,
+                                             err_counter=self._err_counter, err_msg=error_msg,
+                                             processed_id=processed_id), logger=_logger)
 
     def finished(self, error_msg: str = ''):
         """ display end of processing for the current item.
@@ -91,9 +91,9 @@ class Progress:
         :param error_msg:   optional error message to display if current items produced any error.
         """
         if error_msg and self._err_msg:
-            self.app_base.uprint(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                      err_counter=self._err_counter, err_msg=error_msg), logger=_logger)
-        self.app_base.uprint(self.get_end_message(error_msg=error_msg), logger=_logger)
+            self.app_base.po(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
+                                                  err_counter=self._err_counter, err_msg=error_msg), logger=_logger)
+        self.app_base.po(self.get_end_message(error_msg=error_msg), logger=_logger)
 
     def get_end_message(self, error_msg: str = '') -> str:
         """ determine message text for finishing the currently processed item.

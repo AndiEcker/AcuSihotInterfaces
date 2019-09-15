@@ -44,8 +44,8 @@ FILTER_CRITERIA_SEP = '::'
 
 COLUMN_ATTRIBUTE_SEP = '__'
 
-cae = ConsoleApp(__version__, "Monitor the Acumen and Sihot interfaces and servers",
-                 config_eval_vars=dict(date_format=DATE_DISPLAY_FORMAT))
+cae = ConsoleApp("Monitor the Acumen and Sihot interfaces and servers",
+                 cfg_opt_eval_vars=dict(date_format=DATE_DISPLAY_FORMAT))
 
 ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True)
 
@@ -111,10 +111,10 @@ def run_check(check_name, data_dict, app_inst):
 
 def _ass_test_method(method):
     global cae
-    old_val = cae.get_option(SDF_SH_CLIENT_PORT)
-    cae.set_option(SDF_SH_CLIENT_PORT, 11000, save_to_config=False)
+    old_val = cae.get_opt(SDF_SH_CLIENT_PORT)
+    cae.set_opt(SDF_SH_CLIENT_PORT, 11000, save_to_config=False)
     ret = method()
-    cae.set_option(SDF_SH_CLIENT_PORT, old_val, save_to_config=False)
+    cae.set_opt(SDF_SH_CLIENT_PORT, old_val, save_to_config=False)
     return ret
 
 
@@ -151,7 +151,7 @@ def sih_reservation_discrepancies(data_dict):
                                    ('(' + ','.join([(rd[n]['_RES-HOTEL'].val() or '') + '='
                                                     + str(rd[n]['ARR'].val()) + '...'
                                                     + str(rd[n]['DEP'].val()) for n in range(len(rd))]) + ')'
-                                    if cae.get_option('debugLevel') >= DEBUG_LEVEL_VERBOSE else '')
+                                    if cae.get_opt('debugLevel') >= DEBUG_LEVEL_VERBOSE else '')
                     row_err = _sih_check_all_res(rec, rd, row_err, err_sep)
                 elif rd:
                     row_err += err_sep + 'Unexpected search result=' + str(rd)
@@ -319,7 +319,7 @@ def db_fetch(data_dict, from_join_name='from_join'):
     err_msg = acu_db.select(from_join=data_dict[from_join_name], cols=data_dict['cols'],
                             where_group_order=data_dict.get('where_group_order'), bind_vars=bind_vars)
     if err_msg:
-        cae.dprint('AcuSihotMonitor.db_fetch() select error:', err_msg)
+        cae.dpo('AcuSihotMonitor.db_fetch() select error:', err_msg)
         results = (err_msg,)
     else:
         results = (acu_db.fetch_all(), acu_db.selected_column_names())
@@ -399,18 +399,19 @@ class CapitalInput(TextInput):
 class AcuSihotMonitorApp(App):
     landscape = BooleanProperty()
     list_header_height = NumericProperty()
-    user_name = StringProperty(cae.get_option('acuUser'))
-    user_password = StringProperty(cae.get_option('acuPassword'))
+    user_name = StringProperty(cae.get_opt('acuUser'))
+    user_password = StringProperty(cae.get_opt('acuPassword'))
 
     def __init__(self, **kwargs):
         super(AcuSihotMonitorApp, self).__init__(**kwargs)
 
+        self.title = "Acumen Sihot Monitor V " + __version__
         self.config_dict = ConfigDict(cae)
         self.post_message = PostMessage(cae)
         self.cat_rooms = CatRooms(cae)
 
-        self.check_list = cae.get_config('checks', default_value=cae.get_config('checks_template'))
-        cae.dprint("AcuSihotMonitorApp.__init__() check_list", self.check_list)
+        self.check_list = cae.get_var('checks', default_value=cae.get_var('checks_template'))
+        cae.dpo("AcuSihotMonitorApp.__init__() check_list", self.check_list)
         # self.boards = {k:v for ci in self.checks}
         self.board_history = list()
 
@@ -423,13 +424,12 @@ class AcuSihotMonitorApp(App):
         self.logon_win = None
 
     def build(self):
-        cae.dprint('AcuSihotMonitorApp.build()')
-        self.title = "Acumen Sihot Monitor V " + __version__
+        cae.dpo('AcuSihotMonitorApp.build()')
         self.root = FloatLayout()
         self.main_win = MainWindow()
         self.logon_win = Factory.LogonWindow()
-        usr = cae.get_option('acuUser')
-        pwd = cae.get_option('acuPassword')
+        usr = cae.get_opt('acuUser')
+        pwd = cae.get_opt('acuPassword')
         if usr and pwd and self.init_config_data(usr, pwd):
             self.root.add_widget(self.main_win)
             self.go_to_board(ROOT_BOARD_NAME)
@@ -451,21 +451,21 @@ class AcuSihotMonitorApp(App):
         user_name = self.logon_win.ids.user_name.text
         user_pass = self.logon_win.ids.user_password.text
         if self.init_config_data(user_name, user_pass):
-            cae.set_option('acuUser', user_name)
-            cae.set_option('acuPassword', user_pass, save_to_config=False)
+            cae.set_opt('acuUser', user_name)
+            cae.set_opt('acuPassword', user_pass, save_to_config=False)
             self.root.clear_widgets()
             self.root.add_widget(self.main_win)
             self.go_to_board(ROOT_BOARD_NAME)
 
     def on_start(self):
-        cae.dprint("App.on_start()")
+        cae.dpo("App.on_start()")
         Window.bind(on_key_down=self.key_down_callback)
         self.app_started = True
 
     def key_down_callback(self, keyboard, key_code, scan_code, text, modifiers, *args, **kwargs):
-        if True:  # change to True for debugging - leave dprint for hiding Pycharm inspection "Parameter not used"
-            cae.dprint("App.kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}"
-                       .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs))
+        if True:  # change to True for debugging - leave dpo for hiding Pycharm inspection "Parameter not used"
+            cae.dpo("App.kbd {!r} key {} pressed, scan code={!r}, text={!r}, modifiers={!r}, args={}, kwargs={}"
+                    .format(keyboard, key_code, scan_code, text, modifiers, args, kwargs))
         if key_code == 27:  # escape key
             self.exit_app()
             return True
@@ -511,7 +511,7 @@ class AcuSihotMonitorApp(App):
         return check_item['background_color']
 
     def go_to_board(self, board_name):
-        cae.dprint('AcuSihotMonitorApp.go_to_board()', board_name, 'Stack=', self.board_history)
+        cae.dpo('AcuSihotMonitorApp.go_to_board()', board_name, 'Stack=', self.board_history)
         if board_name != BACK_BOARD_NAME:
             self.board_history.append(board_name)
         elif len(self.board_history) >= 2:
@@ -524,7 +524,7 @@ class AcuSihotMonitorApp(App):
         Clock.schedule_once(cb)
 
     def display_board(self, board_name, *_):
-        cae.dprint('AcuSihotMonitorApp.display_board()', board_name, _, 'Stack=', self.board_history)
+        cae.dpo('AcuSihotMonitorApp.display_board()', board_name, _, 'Stack=', self.board_history)
         mw = self.main_win
         av = mw.ids.action_view
 
@@ -654,7 +654,7 @@ class AcuSihotMonitorApp(App):
                                                 where_group_order=filter_selection.get('where_group_order'),
                                                 bind_vars=filter_selection.get('bind_vars', dict()))
                         if err_msg:
-                            cae.dprint('AcuSihotMonitor._add_filters_to_actionview() select error:', err_msg)
+                            cae.dpo('AcuSihotMonitor._add_filters_to_actionview() select error:', err_msg)
                             continue
                         results = [r[0] for r in acu_db.fetch_all()]
                         acu_db.close()
@@ -678,7 +678,7 @@ class AcuSihotMonitorApp(App):
                     fw.show_group()
 
     def change_filter(self, old_value, criteria_name, criteria_type, *_):
-        cae.dprint('AcuSihotMonitorApp.change_filter():', old_value, criteria_name, criteria_type, _)
+        cae.dpo('AcuSihotMonitorApp.change_filter():', old_value, criteria_name, criteria_type, _)
         old_value = old_value.split(FILTER_CRITERIA_SEP)[0]
         if criteria_type is datetime.date:
             dc = DateChangeScreen(selected_date=datetime.datetime.strptime(old_value, DATE_DISPLAY_FORMAT).date())
@@ -691,25 +691,25 @@ class AcuSihotMonitorApp(App):
         self.filter_change_criteria = criteria_name
 
     def date_changed(self, new_date, *_):
-        cae.dprint('AcuSihotMonitorApp.date_changed():', new_date, _)
+        cae.dpo('AcuSihotMonitorApp.date_changed():', new_date, _)
         if self.filter_change_popup:
             self.filter_change_popup.dismiss()
             self.filter_change_popup = None
         self.filter_changed(new_date)
 
     def char_changed(self, *_):
-        cae.dprint('AcuSihotMonitorApp.char_changed():', self.filter_change_popup.content.text, _)
+        cae.dpo('AcuSihotMonitorApp.char_changed():', self.filter_change_popup.content.text, _)
         self.filter_changed(self.filter_change_popup.content.text)
 
     def filter_selected(self, new_value, criteria_name, criteria_type, *_):
-        cae.dprint('AcuSihotMonitorApp.filter_selected():', new_value, criteria_name, criteria_type, _)
+        cae.dpo('AcuSihotMonitorApp.filter_selected():', new_value, criteria_name, criteria_type, _)
         self.filter_change_criteria = criteria_name
         if criteria_type is datetime.date:
             new_value = new_value.strftime(DATE_DISPLAY_FORMAT)
         self.filter_changed(new_value)
 
     def filter_changed(self, new_value):
-        cae.dprint('AcuSihotMonitorApp.filter_changed():', new_value)
+        cae.dpo('AcuSihotMonitorApp.filter_changed():', new_value)
         # will be done by display_board() anyway: self.filter_widgets.text = new_date.strftime(DATE_DISPLAY_FORMAT)
         title_obj = self.main_win.ids.action_previous
         curr_check = title_obj.title
@@ -726,7 +726,7 @@ class AcuSihotMonitorApp(App):
         Clock.schedule_once(cb)
 
     def do_checks(self, check_name):
-        cae.dprint('AcuSihotMonitorApp.do_checks():', check_name)
+        cae.dpo('AcuSihotMonitorApp.do_checks():', check_name)
         title_obj = self.main_win.ids.action_previous
         curr_board = title_obj.title
         if check_name.startswith(REFRESH_BOARD_PREFIX):
@@ -744,7 +744,7 @@ class AcuSihotMonitorApp(App):
         self.display_board(curr_check)
 
     def run_checks(self, check_name, curr_board, *args, run_at=None):
-        cae.dprint('AcuSihotMonitorApp.run_checks():', check_name, curr_board, args, run_at)
+        cae.dpo('AcuSihotMonitorApp.run_checks():', check_name, curr_board, args, run_at)
         # root_check = False
         if not run_at:
             run_at = datetime.datetime.now().strftime('%d-%m-%y %H:%M:%S')
@@ -772,18 +772,18 @@ class AcuSihotMonitorApp(App):
 
     def update_check_result(self, check_name, results, run_at):
         check_index = self.check_index(check_name)
-        cae.dprint("AcuSihotMonitorApp.update_check_result(): dict={} results={}"
-                   .format(self.check_list[check_index], results))
+        cae.dpo("AcuSihotMonitorApp.update_check_result(): dict={} results={}"
+                .format(self.check_list[check_index], results))
         self.check_list[check_index]['check_result'] = results[0]
         if len(results) > 1:
             self.check_list[check_index]['column_attributes'] = self.column_attributes(results[1])
         self.check_list[check_index]['last_check'] = run_at
 
         # save updated CHECKS to config/INI file
-        err_msg = cae.set_config('checks', self.check_list)
+        err_msg = cae.set_var('checks', self.check_list)
         if err_msg:
-            cae.uprint("AcuSihotMonitorApp.update_check_result() error={} checks_list={}"
-                       .format(err_msg, self.check_list))
+            cae.po("AcuSihotMonitorApp.update_check_result() error={} checks_list={}"
+                   .format(err_msg, self.check_list))
 
     @staticmethod
     def column_attributes(column_names):

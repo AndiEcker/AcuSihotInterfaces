@@ -13,10 +13,10 @@ test_table = None
 class TestOraDB:
     def test_prepare_connect(self):
         global test_db
-        cae = ConsoleApp('0.0', 'test ae db ora')
-        test_db = OraDB(dict(User=cae.get_config('acuUser'), Password=cae.get_config('acuPassword'),
-                             DSN=cae.get_config('acuDSN')),
-                        app_name='test_db-ora', debug_level=cae.get_option('debugLevel'))
+        cae = ConsoleApp('test ae db ora')
+        test_db = OraDB(dict(User=cae.get_var('acuUser'), Password=cae.get_var('acuPassword'),
+                             DSN=cae.get_var('acuDSN')),
+                        app_name='test_db-ora', debug_level=cae.get_opt('debugLevel'))
         assert not test_db.last_err_msg
 
     def test_create_table(self):
@@ -68,10 +68,10 @@ class TestOraDB:
 class TestPostgresDB:
     def test_connect(self):    # test_connect
         global test_db
-        cae = ConsoleApp('0.0', 'test ae db pg')
-        test_db = PostgresDB(dict(User=cae.get_config('assRootUsr'), Password=cae.get_config('assRootPwd'), DSN='test',
-                                  SslArgs=cae.get_config('assSslArgs')),
-                             app_name='test_db-pg', debug_level=cae.get_option('debugLevel'))
+        cae = ConsoleApp('test ae db pg')
+        test_db = PostgresDB(dict(User=cae.get_var('assRootUsr'), Password=cae.get_var('assRootPwd'), DSN='test',
+                                  SslArgs=cae.get_var('assSslArgs')),
+                             app_name='test_db-pg', debug_level=cae.get_opt('debugLevel'))
         assert not test_db.connect()
         assert not test_db.last_err_msg
 
