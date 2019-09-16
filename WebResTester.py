@@ -14,7 +14,7 @@ RES_REQ_FILE = 'test/WebResTester.req'
 RES_SS_RESP = 'test/OC_SS_Response.xml'
 RES_RES_SEARCH_RESP = 'test/OC_RES-SEARCH_Response.xml'
 
-cae = ConsoleApp("Test Sihot WEB interface (send, receive, compare)", debug_level_def=DEBUG_LEVEL_VERBOSE,
+cae = ConsoleApp("Test Sihot WEB interface (send, receive, compare)", debug_level=DEBUG_LEVEL_VERBOSE,
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])
 add_ac_options(cae)
 add_sh_options(cae, add_kernel_port=True)

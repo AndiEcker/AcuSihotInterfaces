@@ -155,7 +155,7 @@ if not error_msg:
                     error_msg = acumen_req.send_res_to_sihot(rec, ensure_client_mode=ECM_TRY_AND_IGNORE_ERRORS)
                     progress.next(processed_id='RoomSwap:' + acumen_req.res_id_values(rec), error_msg=error_msg)
                     if error_msg and notification:
-                        error_msg = acumen_req.res_id_values(rec) + '\n\nERRORS=' + error_msg \
+                        error_msg = acumen_req.res_id_values(rec) + '\n\nERR=' + error_msg \
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
                         notification.send_notification(error_msg, subject='SihotResSync admin room-swap notification',
                                                        mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')
@@ -183,7 +183,7 @@ if not error_msg:
 
                     progress.next(processed_id='HotMove:' + acumen_req.res_id_values(rec), error_msg=error_msg)
                     if error_msg and notification:
-                        error_msg = acumen_req.res_id_values(rec) + '\n\nERRORS=' + error_msg \
+                        error_msg = acumen_req.res_id_values(rec) + '\n\nERR=' + error_msg \
                                     + '\n\nWARNINGS=' + acumen_req.get_warnings()
                         notification.send_notification(error_msg, subject='SihotResSync admin HOTMOVE notification',
                                                        mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')

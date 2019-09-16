@@ -194,7 +194,7 @@ while True:
         if err_msg:
             errors = list()
             err_count += 1
-            status_msg = "checks={}; errors={}; run starts={}; run ends={}; at {}; sys=\n{}\n....last err=\n{}" \
+            status_msg = "checks={}; ERR={}; run starts={}; run ends={}; at {}; sys=\n{}\n....last err=\n{}" \
                 .format(check_count, err_count, run_starts, run_ends, datetime.datetime.now(),
                         sys_env_text(file=__file__), err_msg)
             cae.dpo("####  " + status_msg, minimum_debug_level=DEBUG_LEVEL_DISABLED)

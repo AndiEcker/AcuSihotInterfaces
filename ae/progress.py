@@ -31,7 +31,7 @@ class Progress:
         if next_msg == "":
             next_msg = "Processing '{processed_id}': " + \
                        ("left" if start_counter > 0 and total_count == 0 else "item") + \
-                       " {run_counter} of {total_count}. {err_counter} errors={err_msg}"
+                       " {run_counter} of {total_count}. {err_counter} errors:{err_msg}"
 
         def _complete_msg_prefix(msg, pch='#'):
             return (pch in msg and msg) or msg and " " + pch * 3 + "  " + msg or ""

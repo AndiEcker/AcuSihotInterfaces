@@ -104,7 +104,7 @@ def send_notification(exit_code=0):
         subject = "SysDataMan Errors"
         send_err = notification.send_notification(all_errors, subject=subject)
         if send_err:
-            cae.po("****  {} send error: {}. errors='{}'.".format(subject, send_err, all_errors))
+            cae.po("****  {} send error: {}. ERR='{}'.".format(subject, send_err, all_errors))
             if not exit_code:
                 exit_code = 39
 

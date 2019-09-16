@@ -6,7 +6,7 @@ from traceback import format_exc
 
 from abc import ABCMeta, abstractmethod
 
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, po
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, DEF_ENCODE_ERRORS, po
 
 # import time         # needed only for testing
 
@@ -120,11 +120,11 @@ class TcpClient:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
                     po("TcpClient connecting to server ", self.serverIP, " on port ", self.serverPort,
-                           " with encoding", self.encoding, " and timeout", self.timeout)
+                       " with encoding", self.encoding, " and timeout", self.timeout)
                 # adding sock.setblocking(0) is resulting in a BlockingIOError exception
                 sock.settimeout(self.timeout)
                 sock.connect((self.serverIP, self.serverPort))
-                bs = bytes(xml, encoding=self.encoding, errors='backslashreplace' if self.debug_level else 'ignore')
+                bs = bytes(xml, encoding=self.encoding, errors=DEF_ENCODE_ERRORS)
                 sock.sendall(bs + TCP_END_OF_MSG_CHAR)
                 self.received_xml = self._receive_response(sock)
         except Exception as ex:

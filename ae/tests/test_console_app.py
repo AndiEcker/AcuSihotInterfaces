@@ -14,7 +14,7 @@ import threading
 from argparse import ArgumentError
 
 from ae.core import (
-    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO, INI_EXT, MAX_NUM_LOG_FILES, app_instances)
+    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO, INI_EXT, MAX_NUM_LOG_FILES, _app_instances)
 from ae.console_app import ConsoleApp
 
 
@@ -79,8 +79,8 @@ class TestAeLogging:
 
     def test_exception_log_file_flush(self):
         cae = ConsoleApp('test_exception_log_file_flush')
-        # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-file object
-        cae._append_eof_and_flush_file(cast('TextIO', None), 'invalid stream file object')
+        # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-stream object
+        cae._append_eof_and_flush_file(cast('TextIO', None), 'invalid stream')
 
 
 class TestPythonLogging:
@@ -96,7 +96,7 @@ class TestPythonLogging:
         cfg_val = cae.get_var(var_name)
         assert cfg_val == var_val
 
-        assert cae.logging_params == var_val
+        assert cae.py_log_params == var_val
 
         logging.shutdown()
 
@@ -110,7 +110,7 @@ class TestPythonLogging:
         cae = ConsoleApp('test_python_logging_params_dict_console',
                          logging_params=dict(py_logging_params=var_val))
 
-        assert cae.logging_params == var_val
+        assert cae.py_log_params == var_val
         logging.shutdown()
 
     def test_logging_params_dict_complex(self, caplog, sys_argv_restore):
@@ -133,7 +133,7 @@ class TestPythonLogging:
         cae = ConsoleApp('test_python_logging_params_dict_file',
                          logging_params=dict(py_logging_params=var_val))
 
-        assert cae.logging_params == var_val
+        assert cae.py_log_params == var_val
 
         root_logger = logging.getLogger()
         ae_logger = logging.getLogger('ae')
@@ -248,7 +248,7 @@ class TestConsoleAppBasics:
         assert sei in out or out == ''
 
         # special case for error code path coverage
-        app_instances[''] = ConsoleApp('test_sys_env_id_COPY')
+        _app_instances[''] = ConsoleApp('test_sys_env_id_COPY')
         cae.sys_env_id = ''
         assert cae.get_opt('debugLevel') == DEBUG_LEVEL_DISABLED
 
@@ -623,7 +623,7 @@ class TestConfigOptions:
         assert cae.get_opt('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
 
     def test_debug_level_add_opt_default(self, sys_argv_restore):
-        cae = ConsoleApp('test_add_opt_default', debug_level_def=DEBUG_LEVEL_TIMESTAMPED)
+        cae = ConsoleApp('test_add_opt_default', debug_level=DEBUG_LEVEL_TIMESTAMPED)
         sys.argv = list()
         assert cae.get_opt('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
 

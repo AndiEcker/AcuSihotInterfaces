@@ -4,7 +4,7 @@ from shif import ClientSearch
 
 __version__ = '0.1'
 
-cae = ConsoleApp("Get guest OBJID from passed matchcode", debug_level_def=DEBUG_LEVEL_VERBOSE)
+cae = ConsoleApp("Get guest OBJID from passed matchcode", debug_level=DEBUG_LEVEL_VERBOSE)
 
 cae.add_opt('matchcode', "Guest Matchcode", 'TCRENT')   # tk=TCAG, TK=TCRENT
 

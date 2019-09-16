@@ -11,7 +11,7 @@ from typing import cast
 
 from ae.core import (
     MAX_NUM_LOG_FILES, stack_frames, stack_module, stack_var, correct_email, correct_phone, force_encoding,
-    full_stack_trace, round_traditional, sys_env_dict, sys_env_text, to_ascii, po, _DuplicateSysOut, AppBase)
+    full_stack_trace, round_traditional, sys_env_dict, sys_env_text, to_ascii, po, AppPrintingReplicator, AppBase)
 
 
 main_app_instance = None        # used for to keep and recycle AppBase instance
@@ -149,6 +149,8 @@ class TestCoreHelpers:
 
         assert force_encoding(s, encoding='utf-8', errors='strict') == s
         assert force_encoding(s, encoding='utf-8', errors='replace') == s
+        assert force_encoding(s, encoding='utf-8', errors='backslashreplace') == s
+        assert force_encoding(s, encoding='utf-8', errors='xmlcharrefreplace') == s
         assert force_encoding(s, encoding='utf-8', errors='ignore') == s
         assert force_encoding(s, encoding='utf-8', errors='') == s
 
@@ -202,6 +204,101 @@ class TestCoreHelpers:
 
     def test_to_ascii(self):
         assert to_ascii('äöü') == 'aou'
+
+    def test_print_out(self, capsys, sys_argv_restore):
+        po()
+        out, err = capsys.readouterr()
+        assert out == '\n' and err == ''
+
+        app = AppBase('test_python_logging_params_dict_basic_from_ini', multi_threading=True)
+        po(invalid_kwarg='ika')
+        out, err = capsys.readouterr()
+        assert 'ika' in out and err == ''
+
+        us = chr(40960) + chr(1972) + chr(2013) + 'äöü'
+        po(us, encode_errors_def='strict')
+        out, err = capsys.readouterr()
+        assert us in out and err == ''
+
+        po(us, app_instance=app)
+        po(us, file=sys.stdout)
+        po(us, file=sys.stderr)
+        fna = 'print_out.txt'
+        fhd = open(fna, 'w', encoding='ascii', errors='strict')
+        po(us, file=fhd)
+        fhd.close()
+        os.remove(fna)
+        po(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
+        out, err = capsys.readouterr()
+        print(out)
+        assert us in out
+        assert us in err
+
+        # print invalid/surrogate code point/char for to force UnicodeEncodeError exception in po() (testing coverage)
+        us = chr(0xD801)
+        po(us, encode_errors_def='strict')
+
+        # multi_threading has to be reset for to prevent debug test run freeze (added multi_threading for coverage)
+        app.multi_threading = False
+
+
+class TestAppPrintingReplicator:
+    def test_init(self):
+        dso = AppPrintingReplicator()
+        assert dso.sys_out_obj is sys.stdout
+
+        dso = AppPrintingReplicator(sys_out_obj=sys.stdout)
+        assert dso.sys_out_obj is sys.stdout
+
+        dso = AppPrintingReplicator(sys_out_obj=sys.stderr)
+        assert dso.sys_out_obj is sys.stderr
+
+    def test_flush_method_exists(self):
+        dso = AppPrintingReplicator()
+        assert hasattr(dso, 'flush')
+        assert callable(dso.flush)
+
+    def test_write(self):
+        lfn = 'ca_dup_sys_write_test.txt'
+        try:
+            lfo = open(lfn, 'w')
+            dso = AppPrintingReplicator(lfo)
+            msg = 'test_ascii_message'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn) as f:
+                assert f.read() == msg
+
+            lfo = open(lfn, 'w', encoding='utf-8')
+            dso = AppPrintingReplicator(lfo)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn, encoding='utf-8') as f:
+                assert f.read() == msg
+
+            lfo = open(lfn, 'w', encoding='ascii')
+            dso = AppPrintingReplicator(lfo)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn, encoding='ascii') as f:
+                assert f.read() == '\\ua000\\u07b4'
+
+            lfo = open(lfn, 'w')
+            dso = AppPrintingReplicator(lfo)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn) as f:
+                if f.encoding == 'ascii':
+                    assert f.read() == '\\ua000\\u07b4'
+                else:
+                    assert f.read() == msg      # msg == '\ua000\u07b4'
+
+        finally:
+            if os.path.exists(lfn):
+                os.remove(lfn)
 
 
 class TestOfflineContactValidation:
@@ -372,7 +469,7 @@ class TestAeLogging:
         log_file = 'test_ae_base_log.log'
         try:
             app = AppBase('test_base_log_file_rotation', multi_threading=True)
-            app.init_logging(logging_params=dict(file_name_def=log_file, file_size_max=.001))
+            app.init_logging(file_name_def=log_file, file_size_max=.001)
             app.activate_ae_logging()
             main_app_instance = app     # keep reference to prevent garbage collection
             # no longer needed since added sys_argv_restore:
@@ -412,7 +509,7 @@ class TestAeLogging:
     def test_invalid_log_file_name(self):
         log_file = ':/:invalid:/:'
         app = AppBase('test_invalid_log_file_name')
-        app.init_logging(logging_params=dict(file_name_def=log_file))
+        app.init_logging(file_name_def=log_file)
         app.activate_ae_logging()     # only for coverage of exception
         assert not os.path.exists(log_file)
 
@@ -420,7 +517,7 @@ class TestAeLogging:
         log_file = 'test_ae_base_log_flush.log'
         try:
             app = AppBase('test_base_log_file_flush')
-            app.init_logging(logging_params=dict(file_name_def=log_file))
+            app.init_logging(file_name_def=log_file)
             app.activate_ae_logging()
             sys.argv = []
             assert os.path.exists(log_file)
@@ -430,14 +527,14 @@ class TestAeLogging:
 
     def test_exception_log_file_flush(self):
         app = AppBase('test_exception_base_log_file_flush')
-        # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-file object
-        app._append_eof_and_flush_file(cast('TextIO', None), 'invalid stream file object')
+        # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-stream object
+        app._append_eof_and_flush_file(cast('TextIO', None), 'invalid stream')
 
 
 class TestPythonLogging:
     """ test python logging module support
     """
-    def test_logging_params_dict_console_from_init(self):
+    def test_logging_params_dict_console_from_init(self, sys_argv_restore):
         var_val = dict(version=1,
                        disable_existing_loggers=False,
                        handlers=dict(console={'class': 'logging.StreamHandler',
@@ -445,9 +542,9 @@ class TestPythonLogging:
         print(str(var_val))
 
         app = AppBase('test_python_base_logging_params_dict_console')
-        app.init_logging(logging_params=dict(py_logging_params=var_val))
+        app.init_logging(py_logging_params=var_val)
 
-        assert app.logging_params == var_val
+        assert app.py_log_params == var_val
         logging.shutdown()
 
     def test_logging_params_dict_complex(self, caplog, sys_argv_restore):
@@ -468,9 +565,9 @@ class TestPythonLogging:
         print(str(var_val))
 
         app = AppBase('test_python_base_logging_params_dict_file')
-        app.init_logging(logging_params=dict(py_logging_params=var_val))
+        app.init_logging(py_logging_params=var_val)
 
-        assert app.logging_params == var_val
+        assert app.py_log_params == var_val
 
         root_logger = logging.getLogger()
         ae_core_logger = logging.getLogger('ae.core')
@@ -535,7 +632,7 @@ class TestPythonLogging:
                 fc = fd.read()
             file_contents.append(fc)
             os.remove(lf)     # remove log files from last test run
-        assert len(file_contents) >= 5
+        assert len(file_contents) >= 4
         for fc in file_contents:
             if fc.startswith(" <"):
                 fc = fc[fc.index("> ") + 2:]    # remove thread id prefix
@@ -545,118 +642,6 @@ class TestPythonLogging:
                 or fc.lower().startswith('test  v 0.0') or fc.startswith('  **  Additional instance') or fc == ''
 
 
-class TestHelpers:
-    def test_print_out(self, capsys):
-        po()
-        out, err = capsys.readouterr()
-        assert (out == '\n' or out == '') and err == ''
-
-        app = AppBase('test_python_logging_params_dict_basic_from_ini', multi_threading=True)
-        po(invalid_kwarg='ika')
-        out, err = capsys.readouterr()
-        assert ('ika' in out or out == '') and err == ''
-
-        us = chr(40960) + chr(1972) + chr(2013) + 'äöü'
-        po(us, encode_errors_def='strict')
-        out, err = capsys.readouterr()
-        assert (us in out or out == '') and err == ''
-
-        po(us, app_instance=app)
-        po(us, file=sys.stdout)
-        po(us, file=sys.stderr)
-        fna = 'print_out.txt'
-        fhd = open(fna, 'w', encoding='ascii', errors='strict')
-        po(us, file=fhd)
-        fhd.close()
-        os.remove(fna)
-        po(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
-        out, err = capsys.readouterr()
-        print(out)
-        assert us in out or out == ''
-        assert us in err
-
-        # print invalid/surrogate code point/char for to force UnicodeEncodeError exception in po() (testing coverage)
-        us = chr(0xD801)
-        po(us, encode_errors_def='strict')
-
-        # multi_threading has to be reset for to prevent debug test run freeze (added multi_threading for coverage)
-        app.multi_threading = False
-
-
-class TestDuplicateSysOut:
-    def test_init(self):
-        lfn = 'log_file.log'
-        lfo = open(lfn, 'w')
-        dso = _DuplicateSysOut(lfo)
-        assert dso.log_file_obj == lfo
-        assert dso.sys_out_obj is sys.stdout
-
-        dso = _DuplicateSysOut(lfo, sys_out_obj=sys.stdout)
-        assert dso.log_file_obj == lfo
-        assert dso.sys_out_obj is sys.stdout
-
-        dso = _DuplicateSysOut(lfo, sys_out_obj=sys.stderr)
-        assert dso.log_file_obj == lfo
-        assert dso.sys_out_obj is sys.stderr
-
-        lfo.close()
-        assert os.path.exists(lfn)
-        os.remove(lfn)
-
-    def test_flush_method_exists(self):
-        lfn = 'ca_dub_sys_flush_test.txt'
-        lfo = open(lfn, 'w')
-        dso = _DuplicateSysOut(lfo)
-        assert hasattr(dso, 'flush')
-        assert callable(dso.flush)
-
-        lfo.close()
-        assert os.path.exists(lfn)
-        os.remove(lfn)
-
-    def test_write(self):
-        lfn = 'ca_dup_sys_write_test.txt'
-        try:
-            lfo = open(lfn, 'w')
-            dso = _DuplicateSysOut(lfo)
-            msg = 'test_ascii_message'
-            dso.write(msg)
-            lfo.close()
-            with open(lfn) as f:
-                assert f.read() == msg
-
-            lfo = open(lfn, 'w', encoding='utf-8')
-            dso = _DuplicateSysOut(lfo)
-            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
-            dso.write(msg)
-            lfo.close()
-            with open(lfn, encoding='utf-8') as f:
-                assert f.read() == msg
-
-            lfo = open(lfn, 'w', encoding='ascii')
-            dso = _DuplicateSysOut(lfo)
-            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
-            dso.write(msg)
-            lfo.close()
-            with open(lfn, encoding='ascii') as f:
-                assert f.read() == '\\ua000\\u07b4'
-
-            lfo = open(lfn, 'w')
-            dso = _DuplicateSysOut(lfo)
-            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
-            dso.write(msg)
-            lfo.close()
-            with open(lfn) as f:
-                if f.encoding == 'ascii':
-                    assert f.read() == '\\ua000\\u07b4'
-                else:
-                    assert f.read() == msg      # msg == '\ua000\u07b4'
-
-        finally:
-            if os.path.exists(lfn):
-                os.remove(lfn)
-
-
 class TestAppBase:      # only some basic tests - test coverage is done by :class:`~console_app.ConsoleApp` tests
     def test_app_name(self, sys_argv_restore):
         name = 'tan_app_name'
@@ -664,18 +649,18 @@ class TestAppBase:      # only some basic tests - test coverage is done by :clas
         app = AppBase()
         assert app.app_name == name
 
-    def test_app_attributes(self):
+    def test_app_attributes(self, sys_argv_restore):
         ver = '0.0'
         title = 'test_app_name'
-        app = AppBase(title, ver)
+        app = AppBase(title, app_version=ver)
         assert app.app_title == title
         assert app.app_version == ver
         assert app._app_path == os.path.dirname(sys.argv[0])
 
-    def test_app_find_version(self):
+    def test_app_find_version(self, sys_argv_restore):
         app = AppBase()
         assert app.app_version == __version__
 
-    def test_app_find_title(self):
+    def test_app_find_title(self, sys_argv_restore):
         app = AppBase()
         assert app.app_title == __doc__

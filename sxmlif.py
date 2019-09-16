@@ -25,7 +25,7 @@ from ae_tcp.tcp import TcpClient
 # For to fix showing umlaut character correctly tried cp1252 (windows charset)
 # .. and finally this worked for all characters (because it has less undefined code points_import)
 # SXML_DEF_ENCODING = 'cp1252'
-# But with the added errors='backslashreplace' argument for the bytes() new/call used in the TcpClient.send_to_server()
+# But with the added errors=DEF_ENCODE_ERRORS argument for the bytes() new/call used in the TcpClient.send_to_server()
 # .. method we try sihot interface encoding again
 # but SXML_DEF_ENCODING = 'ISO-8859-1' failed again with umlaut characters
 # .. Y203585/HUN - Name decoded wrongly with ISO

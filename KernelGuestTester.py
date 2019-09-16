@@ -8,7 +8,7 @@ from shif import add_sh_options
 
 __version__ = '0.1'
 
-cae = ConsoleApp("Test SIHOT Kernel guest interface", debug_level_def=DEBUG_LEVEL_VERBOSE)
+cae = ConsoleApp("Test SIHOT Kernel guest interface", debug_level=DEBUG_LEVEL_VERBOSE)
 add_sh_options(cae, add_kernel_port=True)
 
 add_ac_options(cae)

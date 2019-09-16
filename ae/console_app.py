@@ -173,7 +173,7 @@ import os
 import datetime
 
 import threading
-from typing import Any, Callable, Dict, Iterable, Optional, TextIO, Type, Sequence
+from typing import Any, Callable, Dict, Iterable, Optional, Type, Sequence
 
 from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter, Namespace
@@ -212,39 +212,36 @@ class ConsoleApp(AppBase):
     * :attr:`_cfg_opt_val_stripper` callable to strip option values.
     * :attr:`_parsed_args`          ArgumentParser.parse_args() return.
     """
-    def __init__(self, app_title: str = '', app_version: str = '', debug_level_def: int = DEBUG_LEVEL_DISABLED,
+    def __init__(self, app_title: str = '', app_version: str = '', sys_env_id: str = '',
+                 debug_level: int = DEBUG_LEVEL_DISABLED, multi_threading: bool = False, suppress_stdout: bool = False,
                  cfg_opt_eval_vars: Optional[dict] = None, additional_cfg_files: Iterable = (),
-                 cfg_opt_val_stripper: Optional[Callable] = None, multi_threading: bool = False,
-                 suppress_stdout: bool = False, formatter_class: Optional[Type[HelpFormatter]] = None, epilog: str = "",
-                 sys_env_id: str = '', logging_params: Optional[Dict[str, Any]] = None):
+                 cfg_opt_val_stripper: Optional[Callable] = None,
+                 formatter_class: Optional[Type[HelpFormatter]] = None, epilog: str = "",
+                 **logging_params: Optional[Dict[str, Any]]):
         """ initialize a new :class:`ConsoleApp` instance.
 
         :param app_title:               application title/description (def=value of main module docstring
                                         - :ref:`example <app-title>`).
         :param app_version:             application version (def=value of global __version__ in call stack).
-        :param debug_level_def:         default debug level (DEBUG_LEVEL_DISABLED).
+        :param sys_env_id:              system environment id used as file name suffix for to load all
+                                        the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
+                                        for to init second ConsoleApp instance with values from sys_envLIVE.cfg).
+        :param debug_level:             default debug level (def=DEBUG_LEVEL_DISABLED).
+        :param multi_threading:         pass True if instance is used in multi-threading app.
+        :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
         :param cfg_opt_eval_vars:       dict of additional application specific data values that are used in eval
                                         expressions (e.g. AcuSihotMonitor.ini).
         :param additional_cfg_files:    iterable of additional CFG/INI file names (opt. incl. abs/rel. path).
         :param cfg_opt_val_stripper:   callable for to strip/reformat/normalize the option choices values.
-        :param multi_threading:         pass True if instance is used in multi-threading app.
-        :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
         :param formatter_class:         alternative formatter class passed onto ArgumentParser instantiation.
         :param epilog:                  optional epilog text for command line arguments/options help text (passed
                                         onto ArgumentParser instantiation).
-        :param sys_env_id:              system environment id used as file name suffix for to load all
-                                        the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
-                                        for to init second ConsoleApp instance with values from sys_envLIVE.cfg).
-        :param logging_params:          dict with logging configuration values - supported dict keys are:
-
-                                        * `py_logging_params`: config dict for python logging configuration.
-                                          If this inner dict is not empty then python logging is configured with the
-                                          given options and all the other keys underneath are ignored.
-                                        * `file_name_def`: default log file name for ae logging (def='').
-                                        * `file_size_max`: max. size in MBytes of ae log file (def=20).
+        :param logging_params:          all other kwargs are interpreted as logging configuration values - the
+                                        supported kwarg dict keys are documented at the method
+                                        :meth:`~core.AppBase.init_logging`.
         """
-        super().__init__(app_title=app_title, app_version=app_version,
-                         debug_level_def=debug_level_def, multi_threading=multi_threading, sys_env_id=sys_env_id)
+        super().__init__(app_title=app_title, app_version=app_version, sys_env_id=sys_env_id,
+                         debug_level=debug_level, multi_threading=multi_threading, suppress_stdout=suppress_stdout)
 
         with config_lock:
             self._cfg_parser: ConfigParser = ConfigParser()                 #: ConfigParser instance
@@ -268,17 +265,15 @@ class ConsoleApp(AppBase):
             :meth:`ConsoleApp.dpo`). """
         self.load_cfg_files()
 
-        logging_params = logging_params or dict()
-        log_file_name = logging_params.get('file_name_def', '')
-        if 'py_logging_params' not in logging_params:
-            lcd = self.get_var('py_logging_params')
-            if lcd:
-                logging_params['py_logging_params'] = lcd
-        super().init_logging(logging_params=logging_params, suppress_stdout=suppress_stdout)
+        log_file_name = self.get_var('logFile', default_value=logging_params.get('file_name_def', ''))
+        logging_params['file_name_def'] = log_file_name
+        lcd = self.get_var('py_logging_params')
+        if lcd:
+            logging_params['py_logging_params'] = lcd
+        super().init_logging(**logging_params)
 
-        if not self.suppress_stdout:    # no log file ready after defining all options (with add_opt())
-            self.po(self.app_name, " V", app_version, " Startup", self.startup_beg, self.app_title, logger=_logger)
-            self.po("####  Initialization......  ####", logger=_logger)
+        self.po(self.app_name, " V", app_version, " Startup", self.startup_beg, self.app_title, logger=_logger)
+        self.po("####  Initialization......  ####", logger=_logger)
 
         # prepare argument parser
         formatter_class = formatter_class or HelpFormatter
@@ -287,7 +282,7 @@ class ConsoleApp(AppBase):
         self.add_argument = self._arg_parser.add_argument       #: redirect this method to our ArgumentParser instance
 
         # create pre-defined config options
-        self.add_opt('debugLevel', "Verbosity of debug messages send to console and log files", debug_level_def, 'D',
+        self.add_opt('debugLevel', "Verbosity of debug messages send to console and log files", debug_level, 'D',
                      choices=DEBUG_LEVELS.keys())
         self.add_opt('logFile', "Log file path", log_file_name, 'L')
 
@@ -388,7 +383,7 @@ class ConsoleApp(AppBase):
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
                                             .format(name, given_value, allowed_values))
 
-        if main_app_instance() is self and not self.logging_params:
+        if main_app_instance() is self and not self.py_log_params:
             self._log_file_name = self.cfg_options['logFile'].value
             if self._log_file_name:
                 self.activate_ae_logging()
@@ -629,19 +624,17 @@ class ConsoleApp(AppBase):
         return err_msg
 
     # noinspection PyIncorrectDocstring
-    # .. not noinspection PyMissingOrEmptyDocstring
-    def debug_out(self, *objects, sep: str = ' ', end: str = '\n', file: Optional[TextIO] = None,
-                  minimum_debug_level: int = DEBUG_LEVEL_VERBOSE, **kwargs):
+    def debug_out(self, *objects, minimum_debug_level: int = DEBUG_LEVEL_VERBOSE, **kwargs):
         """ special debug version of builtin print() function.
 
         This method will print out only if the current debug level is higher than minimum_debug_level. All other
-        args of this method are documented :func:`in the print_out() function of the ae.core module <.core.print_out>`.
+        args of this method are documented :func:`in the print_out() function of this module <.print_out>`.
 
         :param minimum_debug_level:     minimum debug level for to print the passed objects.
 
         This method has an alias named :meth:`.dpo`.
         """
-        if self.get_opt('debugLevel') >= minimum_debug_level:
-            self.po(*objects, sep=sep, end=end, file=file, debug_level=minimum_debug_level, **kwargs)
+        if self.debug_level >= minimum_debug_level:
+            self.po(*objects, **kwargs)
 
     dpo = debug_out         #: alias of method :meth:`.debug_out`

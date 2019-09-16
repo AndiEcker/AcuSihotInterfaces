@@ -2,6 +2,8 @@ import os
 import sys
 import pytest
 
+from ae.core import _app_instances
+
 
 @pytest.fixture
 def config_fna_vna_vva(request):
@@ -23,5 +25,8 @@ def config_fna_vna_vva(request):
 @pytest.fixture()
 def sys_argv_restore():
     old_argv = sys.argv
+    app_key = 'pyTstSysArgv0Mock'
+    sys.argv = [app_key, ]    # pytest has empty command line args
     yield old_argv
+    _ = _app_instances.pop(app_key, None)
     sys.argv = old_argv
