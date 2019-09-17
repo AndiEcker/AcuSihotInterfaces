@@ -90,11 +90,11 @@ class UsedSystems(OrderedDict):
         :param debug_level_disabled:    disable debug level.
         :param debug_level_verbose:     verbose debug level.
         :param available_systems:       iterable of id string of all available systems.
-        :param config_getters:          iterable of callable configuration getters (called with setting name as arg).
-        :param sys_cred_items:          iterable of all supported credential setting names.
-        :param sys_cred_needed:         dict having system ids as keys and a iterable of needed credential setting names
+        :param config_getters:          iterable of callable config getters (called with literal/option name as arg).
+        :param sys_cred_items:          iterable of all supported credential config option names.
+        :param sys_cred_needed:         dict having system ids as keys and a iterable of needed credential option names
                                         for each system.
-        :param sys_feat_items:          iterable of other/feature system setting names.
+        :param sys_feat_items:          iterable of other/feature system option names.
         :param sys_credentials:         dict of all available/loaded system credential values.
         """
         super().__init__()

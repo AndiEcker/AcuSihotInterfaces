@@ -65,7 +65,7 @@ def add_validation_options(cae, email_def=EMAIL_DO_NOT_VALIDATE, phone_def=PHONE
 
 
 def init_validation(cae):
-    cae.po("####  Initializing validation options and configuration settings")
+    cae.po("####  Initializing configuration and validation vars/options")
     prefix = "      "
     email_validator = phone_validator = addr_validator = None
 

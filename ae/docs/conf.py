@@ -41,7 +41,7 @@ extensions = [
 ]
 
 
-# -- autodoc/automodule settings
+# -- autodoc/automodule config
 autodoc_default_options = {
     'members': True,
     'member-order': 'bysource',
@@ -90,7 +90,7 @@ if html_theme == 'alabaster':
         'github_button': True,
         'github_type': 'star&v=2',      # use v2 button
         'github_user': 'AndiEcker',
-        'github_repo': 'aepy',
+        'github_repo': 'ae',
         'github_banner': True,
     }
 

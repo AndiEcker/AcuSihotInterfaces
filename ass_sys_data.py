@@ -323,7 +323,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.sh_conn = True
         self._guest_search = ClientSearch(cae)
         '''
-        # load configuration settings (either from INI file or from Acumen)
+        # load configuration vars/options (either from INI file or from Acumen)
         self.hotel_ids = cae.get_var('hotelIds')
         if self.hotel_ids:      # fetch config data from INI/CFG
             self.resort_cats = cae.get_var('resortCats')

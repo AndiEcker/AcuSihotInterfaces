@@ -17,14 +17,14 @@ tests_require = ['pytest']
 
 if __name__ == "__main__":
     setuptools.setup(
-        name="aepy",
+        name="ae",
         version="0.0.1",
         author="Andreas Ecker",
         author_email="aecker2@gmail.com",
         description="core modules of application environment for python",
         long_description=long_description,
         long_description_content_type="text/markdown",
-        url="https://github.com/AndiEcker/aepy",
+        url="https://github.com/AndiEcker/ae",
         # packages=setuptools.find_packages(),
         packages=setuptools.find_namespace_packages(include=['ae.*']),  # find all namespace packages
         python_requires=">=3.6",
@@ -44,4 +44,11 @@ if __name__ == "__main__":
             "Operating System :: OS Independent",
             "Topic :: Software Development :: Libraries :: Application Frameworks",
         ],
+        keywords=[
+            'productivity',
+            'application',
+            'environment',
+            'configuration',
+            'development',
+        ]
     )

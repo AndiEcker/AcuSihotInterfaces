@@ -9,27 +9,27 @@ from typing import Any, Optional, Type
 from ae.core import DATE_TIME_ISO, DATE_ISO
 
 
-class Setting:
-    """ each instance of this class is representing a single setting/option value. """
-    def __init__(self, name: str = 'Unnamed', value: Optional[Any] = None, value_type: Optional[Type] = None):
-        """ create new Setting instance
+class Literal:
+    """ literal representing a value used e.g. as configuration option. """
+    def __init__(self, name: str = 'Unnamed', literal: Optional[Any] = None, value_type: Optional[Type] = None):
+        """ create new Literal instance
 
-        :param name:        optional name of the setting (only used for debugging/error-message).
-        :param value:       optional initial value or evaluable string expression.
-        :param value_type:  optional value type. cannot be changed later. will be determined latest in value getter.
+        :param name:        name of the literal (only used for debugging/error-message).
+        :param literal:     initial literal (evaluable string expression) or value.
+        :param value_type:  value type. cannot be changed later. will be determined latest in value getter.
         """
         super().__init__()
         self._name = name
         self._value = None
         self._type = None if value_type is type(None) else value_type
-        if value is not None:
-            self.value = value
+        if literal is not None:
+            self.value = literal
 
     @property
     def value(self) -> Any:
-        """ property representing the value of this Setting instance.
+        """ property representing the value of this Literal instance.
 
-        :return:    the current value of this Setting instance.
+        :return:    the current value of this Literal instance.
 
         If the getter of this property is recognizing the current value as a special formatted strings
         then this strings gets automatically evaluated and the evaluation result gets returned. These
@@ -77,7 +77,7 @@ class Setting:
             if not self._type and self._value is not None:
                 self._type = type(self._value)
         except Exception as ex:
-            raise ValueError("Setting.value exception '{}' on evaluating the setting {} with value: {!r}"
+            raise ValueError("Literal.value exception '{}' on evaluating the literal {} with value: {!r}"
                              .format(ex, self._name, value))
         return self._value
 
@@ -88,19 +88,19 @@ class Setting:
         self._value = value
 
     def append_value(self, item_value: Any) -> Any:
-        """ add new item to the list value of this Setting instance (only works if the value is of type list).
+        """ add new item to the list value of this Literal instance (only works if the value is of type list).
 
-        :param item_value:  value of the item to be appended to the value of this Setting instance.
-        :return:            the value (==list) of this Setting instance.
+        :param item_value:  value of the item to be appended to the value of this Literal instance.
+        :return:            the value (==list) of this Literal instance.
         """
         self.value.append(item_value)
         return self.value
 
     def convert_value(self, value: Any) -> Any:
-        """ set/change the value (and possibly also the type) of this Setting instance
+        """ set/change the value (and possibly also the type) of this Literal instance
 
         :param value:       the new value to be set.
-        :return:            the final/converted value of this Setting instance.
+        :return:            the final/converted value of this Literal instance.
         """
         self.value = value
         return self.value       # using self.value instead of value to call getter for evaluation/type-correction

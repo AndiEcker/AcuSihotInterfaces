@@ -6,7 +6,7 @@ import pytest
 from configparser import ConfigParser
 
 from ae.sys_data import Record, FAD_ONTO
-from ae.setting import Setting
+from ae.literal import Literal
 from ae_db.db import OraDB
 from ass_sys_data import AssSysData
 from sxmlif import PostMessage, ConfigDict, CatRooms, AvailCatInfo
@@ -188,7 +188,7 @@ class ConsoleApp:
         elif section is None or section != 'aeOptions':
             # does not convert config value into list/dict:
             # .. ret = self._env_cfg.get(section or 'aeOptions', name, fallback=default_value)
-            s = Setting(name=name, value=default_value, value_type=type(default_value))  # used only for conversion/eval
+            s = Literal(name=name, literal=default_value, value_type=type(default_value))  # used only for conversion/eval
             s.value = self._env_cfg.get(section or 'aeOptions', name, fallback=s.value)
             ret = s.value
         else:

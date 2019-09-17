@@ -27,7 +27,7 @@ to the instantiation call of :class:`ConsoleApp`.
 
 :class:`ConsoleApp` also determines automatically the name/id of your application from the file base name
 of your application main/startup module (e.g. <app_name>.py or main.py). Also other application environment
-settings (like e.g. the application startup folder path and the current working directory path) will be
+vars/options (like e.g. the application startup folder path and the current working directory path) will be
 automatically initialized for your application.
 
 
@@ -153,7 +153,7 @@ Config Value Types
 ..................
 
 With the :paramref:`~ConsoleApp.add_opt.value` argument and
-:attr:`special encapsulated strings <ae.setting.Setting.value>` you're able to specify any type
+:attr:`special encapsulated strings <ae.literal.Literal.value>` you're able to specify any type
 for your config options and variables (like dict/list/tuple/datetime/... or any other object type).
 
 
@@ -182,7 +182,7 @@ from ae.core import (
     DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVELS,
     DATE_TIME_ISO, DATE_ISO, INI_EXT, MAIN_SECTION_DEF,
     app_std_out, _logger, main_app_instance, sys_env_text, AppBase)
-from ae.setting import Setting
+from ae.literal import Literal
 
 
 # Lock for to prevent errors in config var value changes and reloads/reads
@@ -204,7 +204,7 @@ class ConsoleApp(AppBase):
       (set via the :paramref:`~.__init__.cfg_opt_eval_vars` argument of the method :meth:`ConsoleApp.__init__`).
     * :attr:`_cfg_files`            iterable of config file names that are getting loaded and parsed (specify
       additional configuration/INI files via :paramref:`.__init__.additional_cfg_files`).
-    * :attr:`cfg_options`           pre-/user-defined options (dict of :class:`~ae.setting.Setting` instances defined
+    * :attr:`cfg_options`           pre-/user-defined options (dict of :class:`~ae.literal.Literal` instances defined
       via :meth:`~ConsoleApp.add_opt`).
     * :attr:`_cfg_parser`           ConfigParser instance.
     * :attr:`_main_cfg_fnam`        main config file name.
@@ -245,7 +245,7 @@ class ConsoleApp(AppBase):
 
         with config_lock:
             self._cfg_parser: ConfigParser = ConfigParser()                 #: ConfigParser instance
-            self.cfg_options: Dict[str, Setting] = dict()                   #: all config options
+            self.cfg_options: Dict[str, Literal] = dict()                   #: all config options
             self.cfg_opt_choices: Dict[str, Sequence] = dict()              #: all valid config option choices
             self.cfg_opt_eval_vars: dict = cfg_opt_eval_vars or dict()      #: app-specific vars for init of cfg options
 
@@ -316,8 +316,8 @@ class ConsoleApp(AppBase):
         """ defining and adding a new config option for this app.
 
         The value of a config option can be of any type and gets represented by an instance of the
-        :class:`~ae.setting.Setting` class. Supported value types and literals are documented
-        :attr:`here <ae.setting.Setting.value>`.
+        :class:`~ae.literal.Literal` class. Supported value types and literals are documented
+        :attr:`here <ae.literal.Literal.value>`.
 
         :param name:        string specifying the option id and short description of this new option.
                             The name value will also be available as long command line argument option (case-sens.).
@@ -341,19 +341,19 @@ class ConsoleApp(AppBase):
         args.append('--' + name)
 
         # determine config value for to use as default for command line arg
-        setting = Setting(name=name, value=value)
+        option = Literal(name=name, literal=value)
         cfg_val = self._get_cfg_parser_val(name, default_value=value)
-        setting.value = cfg_val
-        kwargs = dict(help=desc, default=cfg_val, type=setting.convert_value, choices=choices, metavar=name)
+        option.value = cfg_val
+        kwargs = dict(help=desc, default=cfg_val, type=option.convert_value, choices=choices, metavar=name)
         if multiple:
-            kwargs['type'] = setting.append_value
+            kwargs['type'] = option.append_value
             if choices:
                 kwargs['choices'] = None    # for multiple options this instance need to check the choices
                 self.cfg_opt_choices[name] = choices
 
         self._arg_parser.add_argument(*args, **kwargs)
 
-        self.cfg_options[name] = setting
+        self.cfg_options[name] = option
 
     def show_help(self):
         """ show help message on console output/stream.
@@ -568,7 +568,7 @@ class ConsoleApp(AppBase):
         if name in self.cfg_options and section in (MAIN_SECTION_DEF, '', None):
             val = self.cfg_options[name].value
         else:
-            s = Setting(name=name, value=default_value, value_type=value_type)  # used only for conversion/eval
+            s = Literal(name=name, literal=default_value, value_type=value_type)  # used only for conversion/eval
             s.value = self._get_cfg_parser_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
             val = s.value
         return val

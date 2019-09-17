@@ -26,9 +26,9 @@ ae modules
 
     ae.console_app
     ae.core
+    ae.literal
     ae.lockname
     ae.progress
-    ae.setting
     ae.sys_data
     ae.systems
 

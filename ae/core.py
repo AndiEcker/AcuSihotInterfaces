@@ -54,7 +54,7 @@ MAIN_SECTION_DEF: str = 'aeOptions'         #: default name of main config secti
 MAX_NUM_LOG_FILES: int = 69                 #: maximum number of log files
 LOG_FILE_MAX_SIZE: int = 20                 #: maximum size in MB of a rotating log file
 
-log_file_rotation_lock = threading.Lock()   #: log file rotation lock
+log_file_lock = threading.Lock()   #: log file rotation lock
 
 
 ori_std_out = sys.stdout        #: original sys.stdout on app startup
@@ -490,7 +490,7 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
             logger = logging.getLogger(module) if module else _logger
         if getattr(app_instance, 'log_file_stream', False):
             # creating new log file and backup of current one if the current has more than LOG_FILE_MAX_SIZE MB in size
-            app_instance.log_file_check_rotation()
+            app_instance.log_file_check()
 
     if getattr(app_instance, 'multi_threading', False):            # add thread ident
         objects = (" <{: >6}>".format(threading.get_ident()),) + objects
@@ -665,12 +665,34 @@ class AppBase:
     def activate_ae_logging(self):
         """ activate ae logging (not using the python logging module).
         """
-        try:  # enable logging
-            self._close_log_file()
-            self._open_log_file()
-            self.po(" ###  Activated log file", self._log_file_name, logger=_logger)
-        except Exception as ex:
-            self.po(" ***  AppBase._parse_args(): exception while enabling logging:", ex, logger=_logger)
+        with log_file_lock:
+            try:  # enable logging
+                self._close_log_file()
+                self._open_log_file()
+                self.po(" ###  Activated log file", self._log_file_name, logger=_logger)
+            except Exception as ex:
+                self.po(" ***  AppBase._parse_args(): exception while enabling logging:", ex, logger=_logger)
+
+    def log_file_check(self):
+        """ check and possibly correct log file status.
+
+        For already opened log files check if the ae log file is big enough and if yes then do a file rotation.
+        If log file is not opened but log file name got already set, then check if log startup buffer is active
+        and if yes then pass log buffer content to log file and then close the log buffer.
+        """
+        with log_file_lock:
+            if self.log_file_stream is not None:
+                self.log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
+                if self.log_file_stream.tell() >= self._log_file_max_size * 1024 * 1024:
+                    self._close_log_file()
+                    self._rename_log_file()
+                    self._open_log_file()
+            elif self.log_buf_stream and self._log_file_name:
+                buf = self.log_buf_stream.getvalue()
+                self.log_buf_stream.close()
+                self._open_log_file()
+                if self.log_file_stream:
+                    self.log_buf_stream.write(buf)
 
     def _open_log_file(self):
         """ open the ae log file.
@@ -720,20 +742,6 @@ class AppBase:
             app_std_err = ori_std_err  # set back for allow full reset of log for unit tests
             app_std_out = ori_std_out
 
-    def log_file_check_rotation(self):
-        """ check if the ae log file is big enough and if yes then do a file rotation.
-        """
-        if self.log_file_stream is not None:
-            if self.multi_threading:
-                log_file_rotation_lock.acquire()
-            self.log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
-            if self.log_file_stream.tell() >= self._log_file_max_size * 1024 * 1024:
-                self._close_log_file()
-                self._rename_log_file()
-                self._open_log_file()
-            if self.multi_threading:
-                log_file_rotation_lock.release()
-
     # noinspection PyIncorrectDocstring
     def print_out(self, *objects, **kwargs):
         """ special version of builtin print() function.
@@ -756,8 +764,8 @@ class AppBase:
                             Pass None for to block shutdown until all other threads have joined/finished.
         """
         self.po("####  Shutdown............  ", exit_code, timeout, logger=_logger)
-        if self.multi_threading:
-            with log_file_rotation_lock:
+        with log_file_lock:
+            if self.multi_threading:
                 main_thread = threading.current_thread()
                 for t in threading.enumerate():
                     if t is not main_thread:
@@ -765,14 +773,14 @@ class AppBase:
                                 logger=_logger)
                         t.join(timeout)
 
-        self._close_log_file()
-        if self._log_file_index:
-            self._rename_log_file()
+            self._close_log_file()
+            if self._log_file_index:
+                self._rename_log_file()
 
-        if self._nul_std_out and not self._nul_std_out.closed:
-            self._append_eof_and_flush_file(self._nul_std_out, "NUL stdout")
-            self._nul_std_out.close()
-            self._nul_std_out = None
+            if self._nul_std_out and not self._nul_std_out.closed:
+                self._append_eof_and_flush_file(self._nul_std_out, "NUL stdout")
+                self._nul_std_out.close()
+                self._nul_std_out = None
 
         if main_app_instance() is self:
             self._shut_down = True

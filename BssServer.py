@@ -469,7 +469,7 @@ def reload_oc_config():
     if SUPPORTED_OCS and not cae.is_main_cfg_file_modified():
         return ""
 
-    # main config file has changed - so reload the changed configuration settings
+    # main config file has changed - so reload the changed configuration vars/options
     cae.load_cfg_files()
     SUPPORTED_OCS = cae.get_var('SUPPORTED_OCS')
     if not SUPPORTED_OCS or not isinstance(SUPPORTED_OCS, dict):
