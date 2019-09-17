@@ -13,7 +13,7 @@ def config_fna_vna_vva(request):
         with open(file_name, 'w') as f:
             f.write("[aeOptions]\n{} = {}".format(var_name, var_value))
 
-        def _tear_down():       # using yield instead of finalizer does not execute the teardown part
+        def _tear_down():               # using yield instead of finalizer does not execute the teardown part
             os.remove(file_name)
         request.addfinalizer(_tear_down)
 
@@ -22,11 +22,16 @@ def config_fna_vna_vva(request):
     return _setup_and_teardown
 
 
-@pytest.fixture()
-def sys_argv_restore():
+@pytest.fixture
+def tst_app_key():
+    return 'pyTstSysArgv0Mock'
+
+
+@pytest.fixture
+def sys_argv_restore(tst_app_key):      # needed for tests using AppBase/ConsoleApp
     old_argv = sys.argv
-    app_key = 'pyTstSysArgv0Mock'
-    sys.argv = [app_key, ]    # pytest has empty command line args
+    # if not sys.argv:                  # ensure proper command line args
+    sys.argv = [tst_app_key, ]          # sys.argv is sometimes empty, sometimes showing _jb_pytest_runner
     yield old_argv
-    _ = _app_instances.pop(app_key, None)
+    _ = _app_instances.pop(tst_app_key, None)
     sys.argv = old_argv

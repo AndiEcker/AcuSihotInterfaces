@@ -14,9 +14,8 @@ import threading
 from argparse import ArgumentError
 
 from ae.core import (
-    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO, INI_EXT, MAX_NUM_LOG_FILES, _app_instances)
-from ae.console_app import ConsoleApp
-
+    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO, MAX_NUM_LOG_FILES, _app_instances)
+from ae.console_app import ConsoleApp, INI_EXT
 
 main_cae_instance = None
 
@@ -29,7 +28,7 @@ class TestAeLogging:
         log_file = 'test_ae_log.log'
         cae = ConsoleApp('test_log_file_rotation',
                          multi_threading=True,
-                         logging_params=dict(file_name_def=log_file, file_size_max=.001))
+                         file_name_def=log_file, file_size_max=.001)
         main_cae_instance = cae     # keep reference to prevent garbage collection
         # no longer needed since added sys_argv_restore:
         # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
@@ -56,8 +55,8 @@ class TestAeLogging:
         try:
             cae.suppress_stdout = True
             sys.argv = []
-            cae._parsed_args = False
-            cae._close_log_file(full_reset=True)
+            cae._parsed_args = None
+            cae._close_log_file()
             _ = cae.get_opt('debugLevel')   # get_opt() has to be called at least once for to create log file
             cae._close_log_file()
             assert os.path.exists(cae._log_file_name)
@@ -65,19 +64,21 @@ class TestAeLogging:
             if os.path.exists(cae._log_file_name):
                 os.remove(cae._log_file_name)
 
-    def test_invalid_log_file_name(self):
+    def test_invalid_log_file_name(self, sys_argv_restore):
         log_file = ':/:invalid:/:'
-        cae = ConsoleApp('test_invalid_log_file_name', logging_params=dict(file_name_def=log_file))
-        cae.activate_ae_logging()     # only for coverage of exception
+        cae = ConsoleApp('test_invalid_log_file_name', file_name_def=log_file)
+        with pytest.raises(FileNotFoundError):
+            cae.log_file_check()     # only for coverage of exception
+        assert not os.path.exists(log_file)
 
     def test_log_file_flush(self, sys_argv_restore):
         log_file = 'test_ae_log_flush.log'
-        cae = ConsoleApp('test_log_file_flush', logging_params=dict(file_name_def=log_file))
+        cae = ConsoleApp('test_log_file_flush', file_name_def=log_file)
         sys.argv = []
         file_name_chk = cae.get_opt('logFile')   # get_opt() has to be called at least once for to create log file
         assert file_name_chk == log_file
 
-    def test_exception_log_file_flush(self):
+    def test_exception_log_file_flush(self, sys_argv_restore):
         cae = ConsoleApp('test_exception_log_file_flush')
         # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-stream object
         cae._append_eof_and_flush_file(cast('TextIO', None), 'invalid stream')
@@ -86,7 +87,7 @@ class TestAeLogging:
 class TestPythonLogging:
     """ test python logging module support
     """
-    def test_logging_params_dict_basic_from_ini(self, config_fna_vna_vva):
+    def test_logging_params_dict_basic_from_ini(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, var_val = config_fna_vna_vva(var_name='py_logging_params',
                                                           var_value=dict(version=1,
                                                                          disable_existing_loggers=False))
@@ -100,20 +101,19 @@ class TestPythonLogging:
 
         logging.shutdown()
 
-    def test_logging_params_dict_console_from_init(self):
+    def test_logging_params_dict_console_from_init(self, sys_argv_restore):
         var_val = dict(version=1,
                        disable_existing_loggers=False,
                        handlers=dict(console={'class': 'logging.StreamHandler',
                                               'level': logging.INFO}))
         print(str(var_val))
 
-        cae = ConsoleApp('test_python_logging_params_dict_console',
-                         logging_params=dict(py_logging_params=var_val))
+        cae = ConsoleApp('test_python_logging_params_dict_console', py_logging_params=var_val)
 
         assert cae.py_log_params == var_val
         logging.shutdown()
 
-    def test_logging_params_dict_complex(self, caplog, sys_argv_restore):
+    def test_logging_params_dict_complex(self, caplog, sys_argv_restore, tst_app_key):
         log_file = 'test_rot_file.log'
         entry_prefix = "TEST LOG ENTRY "
 
@@ -130,8 +130,7 @@ class TestPythonLogging:
                        )
         print(str(var_val))
 
-        cae = ConsoleApp('test_python_logging_params_dict_file',
-                         logging_params=dict(py_logging_params=var_val))
+        cae = ConsoleApp('test_python_logging_params_dict_file', py_logging_params=var_val)
 
         assert cae.py_log_params == var_val
 
@@ -198,13 +197,14 @@ class TestPythonLogging:
                 fc = fd.read()
             file_contents.append(fc)
             os.remove(lf)     # remove log files from last test run
-        assert len(file_contents) >= 15     # in (15, 17) # +2 '  **  Additional instance' entries, but meanwhile 21
+        assert len(file_contents) >= 13
         for fc in file_contents:
             if fc.startswith(" <"):
                 fc = fc[fc.index("> ") + 2:]  # remove thread id prefix
             if fc.startswith("{TST}"):
                 fc = fc[6:]  # remove sys_env_id prefix
-            assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(entry_prefix) \
+            assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(tst_app_key) \
+                or fc.startswith(entry_prefix) \
                 or fc.lower().startswith('test  v 0.0') or fc.startswith('  **  Additional instance') or fc == ''
 
 
@@ -215,16 +215,16 @@ class TestConsoleAppBasics:
         cae = ConsoleApp()
         assert cae.app_name == name
 
-    def test_add_opt(self):
+    def test_add_opt(self, sys_argv_restore):
         cae = ConsoleApp('test_add_opt')
         cae.add_opt('test_opt', 'test_opt_description', 'test_opt_value', short_opt='')
 
-    def test_set_opt(self):
+    def test_set_opt(self, sys_argv_restore):
         cae = ConsoleApp('test_set_opt')
         cae.add_opt('test_opt', 'test_opt_description', 'test_init_value')
         cae.set_opt('test_opt', 'test_val', save_to_config=False)
 
-    def test_add_argument(self):
+    def test_add_argument(self, sys_argv_restore):
         cae = ConsoleApp('test_add_argument')
         cae.add_argument('test_arg')
 
@@ -235,11 +235,11 @@ class TestConsoleAppBasics:
         sys.argv = ['test_app', arg_val]
         assert cae.get_argument('test_arg') == arg_val
 
-    def test_show_help(self):
+    def test_show_help(self, sys_argv_restore):
         cae = ConsoleApp('test_show_help')
         cae.show_help()
 
-    def test_sys_env_id(self, capsys):
+    def test_sys_env_id(self, capsys, sys_argv_restore):
         sei = 'TST'
         cae = ConsoleApp('test_sys_env_id', sys_env_id=sei)
         assert cae.sys_env_id == sei
@@ -252,7 +252,7 @@ class TestConsoleAppBasics:
         cae.sys_env_id = ''
         assert cae.get_opt('debugLevel') == DEBUG_LEVEL_DISABLED
 
-    def test_shutdown_basics(self):
+    def test_shutdown_basics(self, sys_argv_restore):
         def thr():
             while running:
                 pass
@@ -268,7 +268,7 @@ class TestConsoleAppBasics:
         cae.shutdown(exit_code=None, timeout=0.6)
         running = False
 
-    def test_shutdown_coverage(self):
+    def test_shutdown_coverage(self, sys_argv_restore):
         cae = ConsoleApp('shutdown_coverage')
         cae.shutdown(exit_code=None, timeout=0.9)
 
@@ -330,7 +330,7 @@ class TestConfigOptions:
         assert cae.set_var(var_name, val)  # will be set, but returning error because test.ini does not exist
         assert cae.get_var(var_name) == val.strftime(DATE_ISO)
 
-    def test_set_var_file_error(self, config_fna_vna_vva):
+    def test_set_var_file_error(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva()
         cae = ConsoleApp('test_set_var_file_error', additional_cfg_files=[file_name])
         val = 'test_value'
@@ -344,7 +344,7 @@ class TestConfigOptions:
         cae = ConsoleApp('test_set_var_with_reload', additional_cfg_files=[file_name])
         assert not [f for f in cae._cfg_files if f.endswith(file_name)]
 
-    def test_set_var_with_reload(self, config_fna_vna_vva):
+    def test_set_var_with_reload(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva()
         cae = ConsoleApp('test_set_var_with_reload', additional_cfg_files=[file_name])
         val = 'test_value'
@@ -395,7 +395,7 @@ class TestConfigOptions:
         with pytest.raises(ArgumentError):
             cae.get_opt('testAppOptChoices')     # == ['x', '9'] but choices is ['a', '1']
 
-    def test_config_default_bool(self):
+    def test_config_default_bool(self, sys_argv_restore):
         cae = ConsoleApp('test_config_defaults')
         cfg_val = cae.get_var('not_existing_config_var', default_value=False)
         assert cfg_val is False
@@ -529,75 +529,75 @@ class TestConfigOptions:
         cae = ConsoleApp('test_config_str_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == opt_val
 
-    def test_config_str_eval_double_quote(self, config_fna_vna_vva):
+    def test_config_str_eval_double_quote(self, config_fna_vna_vva, sys_argv_restore):
         opt_val = 'testString'
         file_name, var_name, _ = config_fna_vna_vva(var_value='""""' + opt_val + '""""')
         cae = ConsoleApp('test_config_str_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == opt_val
 
-    def test_config_bool_str(self, config_fna_vna_vva):
+    def test_config_bool_str(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='True')
         cae = ConsoleApp('test_config_bool_str', additional_cfg_files=[file_name])
         assert cae.get_var(var_name, value_type=bool) is True
 
-    def test_config_bool_eval(self, config_fna_vna_vva):
+    def test_config_bool_eval(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='"""1 == 0"""')
         cae = ConsoleApp('test_config_bool_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) is False
 
-    def test_config_bool_eval_true(self, config_fna_vna_vva):
+    def test_config_bool_eval_true(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='"""6 == 6"""')
         cae = ConsoleApp('test_config_bool_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) is True
 
-    def test_config_date_str(self, config_fna_vna_vva):
+    def test_config_date_str(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='2012-12-24')
         cae = ConsoleApp('test_config_date_str', additional_cfg_files=[file_name])
         assert cae.get_var(var_name, value_type=datetime.date) == datetime.date(year=2012, month=12, day=24)
 
-    def test_config_date_eval(self, config_fna_vna_vva):
+    def test_config_date_eval(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='"""datetime.date(year=2012, month=12, day=24)"""')
         cae = ConsoleApp('test_config_date_str', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == datetime.date(year=2012, month=12, day=24)
 
-    def test_config_datetime_str(self, config_fna_vna_vva):
+    def test_config_datetime_str(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='2012-12-24 7:8:0.0')
         cae = ConsoleApp('test_config_date_str', additional_cfg_files=[file_name])
         assert cae.get_var(var_name, value_type=datetime.datetime) \
             == datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)
 
-    def test_config_datetime_eval(self, config_fna_vna_vva):
+    def test_config_datetime_eval(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(
             var_value='"""datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)"""')
         cae = ConsoleApp('test_config_datetime_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == datetime.datetime(year=2012, month=12, day=24, hour=7, minute=8)
 
-    def test_config_list_str(self, config_fna_vna_vva):
+    def test_config_list_str(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='[1, 2, 3]')
         cae = ConsoleApp('test_config_list_str', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == [1, 2, 3]
 
-    def test_config_list_eval(self, config_fna_vna_vva):
+    def test_config_list_eval(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='"""[1, 2, 3]"""')
         cae = ConsoleApp('test_config_list_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == [1, 2, 3]
 
-    def test_config_dict_str(self, config_fna_vna_vva):
+    def test_config_dict_str(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value="{'a': 1, 'b': 2, 'c': 3}")
         cae = ConsoleApp('test_config_dict_str', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == {'a': 1, 'b': 2, 'c': 3}
 
-    def test_config_dict_eval(self, config_fna_vna_vva):
+    def test_config_dict_eval(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='"""{"a": 1, "b": 2, "c": 3}"""')
         cae = ConsoleApp('test_config_dict_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == {'a': 1, 'b': 2, 'c': 3}
 
-    def test_config_tuple_str(self, config_fna_vna_vva):
+    def test_config_tuple_str(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value="('a', 'b', 'c')")
         cae = ConsoleApp('test_config_tuple_str', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == ('a', 'b', 'c')
 
-    def test_config_tuple_eval(self, config_fna_vna_vva):
+    def test_config_tuple_eval(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, _ = config_fna_vna_vva(var_value='"""("a", "b", "c")"""')
         cae = ConsoleApp('test_config_tuple_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == ('a', 'b', 'c')
@@ -652,13 +652,13 @@ class TestConfigOptions:
         sys.argv = ['test', '-D=' + str(DEBUG_LEVEL_TIMESTAMPED)]
         assert cae.get_opt('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
 
-    def test_config_main_file_not_modified(self, config_fna_vna_vva):
+    def test_config_main_file_not_modified(self, config_fna_vna_vva, sys_argv_restore):
         config_fna_vna_vva(
             file_name=os.path.join(os.getcwd(), os.path.splitext(os.path.basename(sys.argv[0]))[0] + INI_EXT))
         cae = ConsoleApp('test_config_modified_after_startup')
         assert not cae.is_main_cfg_file_modified()
 
-    def test_is_main_cfg_file_modified(self, config_fna_vna_vva):
+    def test_is_main_cfg_file_modified(self, config_fna_vna_vva, sys_argv_restore):
         file_name, var_name, old_var_val = config_fna_vna_vva(
             file_name=os.path.join(os.getcwd(), os.path.splitext(os.path.basename(sys.argv[0]))[0] + INI_EXT))
         cae = ConsoleApp('test_set_var_with_reload')

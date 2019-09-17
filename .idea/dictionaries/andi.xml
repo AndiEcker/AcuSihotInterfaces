@@ -18,6 +18,7 @@
       <w>getcwd</w>
       <w>graphviz</w>
       <w>intersphinx</w>
+      <w>literalinclude</w>
       <w>lockname</w>
       <w>meth</w>
       <w>minlen</w>

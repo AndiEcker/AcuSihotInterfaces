@@ -10,83 +10,110 @@ import sys
 from typing import cast
 
 from ae.core import (
-    MAX_NUM_LOG_FILES, stack_frames, stack_module, stack_var, correct_email, correct_phone, force_encoding,
-    full_stack_trace, round_traditional, sys_env_dict, sys_env_text, to_ascii, po, AppPrintingReplicator, AppBase)
+    MAX_NUM_LOG_FILES, try_call, try_eval, stack_frames, module_name, stack_var, correct_email, correct_phone,
+    force_encoding, full_stack_trace, round_traditional, sys_env_dict, sys_env_text, to_ascii, po,
+    AppPrintingReplicator, AppBase)
 
 
-main_app_instance = None        # used for to keep and recycle AppBase instance
+main_base_instance = None       # used for to keep and recycle AppBase instance
 
 module_var = 'module_var_val'   # used for stack_var() tests
 
 __version__ = '3.6.9dev-test'   # used for automatic app version find tests
 
 
+def test(sys_argv_restore):  # REMOVING fixture is showing error ?!?!?
+    print(sys.argv, 'b4 test')
+    app = AppBase()
+    assert app.app_name
+    print(sys.argv, "after test")
+
+
 class TestCoreHelpers:
+    def test_try_call(self):
+        assert try_call(str, 123) == "123"
+        assert try_call(bytes, '123', encoding='ascii') == b"123"
+        assert try_call(int, '123') == 123
+        with pytest.raises(ValueError):
+            assert try_call(int, 'no-number')
+        assert try_call(int, 'no-number', ignored_exceptions=(ValueError, )) is None
+
+    def test_try_eval(self):
+        assert try_eval("str(123)") == "123"
+        assert try_eval("str(bytes(b'123'), encoding='ascii')") == "123"
+        assert try_eval("int('123')") == 123
+        with pytest.raises(ValueError):
+            assert try_eval("int('no-number')")
+        assert try_eval("int('no-number')", ignored_exceptions=(ValueError, )) is None
+        with pytest.raises(TypeError):      # list with ignored exceptions is not accepted
+            assert try_eval("int('no-number')", ignored_exceptions=cast(tuple, [ValueError, ])) is None
+
     def test_stack_frames(self):
+        print(sys.argv, "next test")
         for frame in stack_frames():
             assert frame
             assert getattr(frame, 'f_globals')
             assert getattr(frame, 'f_locals')
 
-    def test_stack_module(self):
-        assert stack_module(cast(str, None)) == 'ae.core'
-        assert stack_module(__name__) == 'ae.core'
-        assert stack_module(__name__, depth=0) == 'ae.core'
-        assert stack_module(__name__, depth=-1) == 'ae.core'
-        assert stack_module(__name__, depth=-2) == 'ae.core'
-        assert stack_module('') == 'ae.core'
-        assert stack_module('xxx_test') == 'ae.core'
+    def test_module_name(self):
+        assert module_name(cast(str, None)) == 'ae.core'
+        assert module_name(__name__) == 'ae.core'
+        assert module_name(__name__, depth=0) == 'ae.core'
+        assert module_name(__name__, depth=-1) == 'ae.core'
+        assert module_name(__name__, depth=-2) == 'ae.core'
+        assert module_name('') == 'ae.core'
+        assert module_name('xxx_test') == 'ae.core'
 
-        assert stack_module() == 'test_core'
-        assert stack_module(depth=-1) == 'test_core'
-        assert stack_module('ae.core') == 'test_core'
-        assert stack_module(depth=2) == 'test_core'
-        assert stack_module(depth=3) == 'test_core'
+        assert module_name() == 'test_core'
+        assert module_name(depth=-1) == 'test_core'
+        assert module_name('ae.core') == 'test_core'
+        assert module_name(depth=2) == 'test_core'
+        assert module_name(depth=3) == 'test_core'
 
-        assert stack_module('ae.core', 'test_core') == '_pytest.python'
-        assert stack_module('ae.core', __name__) == '_pytest.python'
-        assert stack_module(__name__, depth=3) == '_pytest.python'
-        assert stack_module(depth=4) == '_pytest.python'
+        assert module_name('ae.core', 'test_core') == '_pytest.python'
+        assert module_name('ae.core', __name__) == '_pytest.python'
+        assert module_name(__name__, depth=3) == '_pytest.python'
+        assert module_name(depth=4) == '_pytest.python'
 
-        assert stack_module('ae.core', __name__, '_pytest.python') == 'pluggy.callers'
-        assert stack_module('ae.core', __name__, '_pytest.python', depth=4) == 'pluggy.callers'
-        assert stack_module(depth=5) == 'pluggy.callers'
+        assert module_name('ae.core', __name__, '_pytest.python') == 'pluggy.callers'
+        assert module_name('ae.core', __name__, '_pytest.python', depth=4) == 'pluggy.callers'
+        assert module_name(depth=5) == 'pluggy.callers'
 
-        assert stack_module('ae.core', __name__, '_pytest.python', 'pluggy.callers') == 'pluggy.manager'
-        assert stack_module(depth=6) == 'pluggy.manager'
-        assert stack_module(depth=7) == 'pluggy.manager'
+        assert module_name('ae.core', __name__, '_pytest.python', 'pluggy.callers') == 'pluggy.manager'
+        assert module_name(depth=6) == 'pluggy.manager'
+        assert module_name(depth=7) == 'pluggy.manager'
 
-        assert stack_module(
+        assert module_name(
             'ae.core', __name__, '_pytest.python', 'pluggy.callers', 'pluggy.manager') == 'pluggy.hooks'
-        assert stack_module(depth=8) == 'pluggy.hooks'
+        assert module_name(depth=8) == 'pluggy.hooks'
 
-        assert stack_module(depth=9) == '_pytest.python'
+        assert module_name(depth=9) == '_pytest.python'
 
-        assert stack_module(depth=10) == '_pytest.runner'
+        assert module_name(depth=10) == '_pytest.runner'
 
-        assert stack_module(depth=11) == 'pluggy.callers'
+        assert module_name(depth=11) == 'pluggy.callers'
 
-        assert stack_module(depth=12) == 'pluggy.manager'
-        assert stack_module(depth=13) == 'pluggy.manager'
+        assert module_name(depth=12) == 'pluggy.manager'
+        assert module_name(depth=13) == 'pluggy.manager'
 
-        assert stack_module(depth=14) == 'pluggy.hooks'
+        assert module_name(depth=14) == 'pluggy.hooks'
 
-        assert stack_module(depth=15) == '_pytest.runner'
-        assert stack_module(depth=16) == '_pytest.runner'
-        assert stack_module(depth=17) == '_pytest.runner'
-        assert stack_module(depth=18) == '_pytest.runner'
+        assert module_name(depth=15) == '_pytest.runner'
+        assert module_name(depth=16) == '_pytest.runner'
+        assert module_name(depth=17) == '_pytest.runner'
+        assert module_name(depth=18) == '_pytest.runner'
 
-        assert stack_module(depth=36) == 'pluggy.hooks'
+        assert module_name(depth=36) == 'pluggy.hooks'
 
-        assert stack_module(depth=37) == '_pytest.config'
+        assert module_name(depth=37) == '_pytest.config'
 
-        assert stack_module(depth=38) == '__main__'
+        assert module_name(depth=38) == '__main__'
 
-        assert stack_module(depth=cast(int, None)) is None
-        assert stack_module(depth=39) is None
-        assert stack_module(depth=54) is None
-        assert stack_module(depth=69) is None
-        assert stack_module(depth=369) is None
+        assert module_name(depth=cast(int, None)) is None
+        assert module_name(depth=39) is None
+        assert module_name(depth=54) is None
+        assert module_name(depth=69) is None
+        assert module_name(depth=369) is None
 
     def test_stack_var(self):
         def _inner_func():
@@ -429,8 +456,8 @@ class TestOfflineContactValidation:
         assert correct_email("A@e@x@ample.com", removed=r) == ("A@example.com", True)
         assert r == ["3:@", "5:@"]
         r = list()
-        assert correct_email('this\ is\"not\\allowed@example.com', removed=r) == ('thisisnotallowed@example.com', True)
-        assert r == ["4:\\", "5: ", '8:"', '12:\\']
+        assert correct_email('this is "not" \\allowed@example.com', removed=r) == ('thisisnotallowed@example.com', True)
+        assert r == ['4: ', '7: ', '8:"', '12:"', '13: ', '14:\\']
 
     def test_correct_phone(self):
         assert correct_phone(None) == ('', False)
@@ -465,13 +492,13 @@ class TestAeLogging:
     def test_log_file_rotation(self, sys_argv_restore):
         """ this test has to run first because only the 1st AppBase instance can create an ae log file
         """
-        global main_app_instance
+        global main_base_instance
         log_file = 'test_ae_base_log.log'
         try:
             app = AppBase('test_base_log_file_rotation', multi_threading=True)
             app.init_logging(file_name_def=log_file, file_size_max=.001)
-            app.activate_ae_logging()
-            main_app_instance = app     # keep reference to prevent garbage collection
+            app.log_file_check()
+            main_base_instance = app     # keep reference to prevent garbage collection
             # no longer needed since added sys_argv_restore:
             # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
             sys.argv = []
@@ -484,7 +511,7 @@ class TestAeLogging:
             # clean up
             if os.path.exists(log_file):
                 os.remove(log_file)
-            for idx in range(MAX_NUM_LOG_FILES + 9):
+            for idx in range(MAX_NUM_LOG_FILES + 99):
                 fn, ext = os.path.splitext(log_file)
                 rot_log_file = fn + "-{:0>{index_width}}".format(idx, index_width=len(str(MAX_NUM_LOG_FILES))) + ext
                 if os.path.exists(rot_log_file):
@@ -493,24 +520,25 @@ class TestAeLogging:
     def test_open_log_file_with_suppressed_stdout(self, sys_argv_restore):
         """ another test that need to work with the first instance
         """
-        app = main_app_instance
+        app = main_base_instance
         try:
             app.suppress_stdout = True
             sys.argv = []
             app._parsed_args = False
-            app._close_log_file(full_reset=True)
-            app.activate_ae_logging()
+            app._close_log_file()
+            app.log_file_check()
             app._close_log_file()
             assert os.path.exists(app._log_file_name)
         finally:
             if os.path.exists(app._log_file_name):
                 os.remove(app._log_file_name)
 
-    def test_invalid_log_file_name(self):
+    def test_invalid_log_file_name(self, sys_argv_restore):
         log_file = ':/:invalid:/:'
         app = AppBase('test_invalid_log_file_name')
         app.init_logging(file_name_def=log_file)
-        app.activate_ae_logging()     # only for coverage of exception
+        with pytest.raises(FileNotFoundError):
+            app.log_file_check()     # only for coverage of exception
         assert not os.path.exists(log_file)
 
     def test_log_file_flush(self, sys_argv_restore):
@@ -518,14 +546,14 @@ class TestAeLogging:
         try:
             app = AppBase('test_base_log_file_flush')
             app.init_logging(file_name_def=log_file)
-            app.activate_ae_logging()
+            app.log_file_check()
             sys.argv = []
             assert os.path.exists(log_file)
         finally:
             if os.path.exists(log_file):
                 os.remove(log_file)
 
-    def test_exception_log_file_flush(self):
+    def test_exception_log_file_flush(self, sys_argv_restore):
         app = AppBase('test_exception_base_log_file_flush')
         # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-stream object
         app._append_eof_and_flush_file(cast('TextIO', None), 'invalid stream')
@@ -547,7 +575,7 @@ class TestPythonLogging:
         assert app.py_log_params == var_val
         logging.shutdown()
 
-    def test_logging_params_dict_complex(self, caplog, sys_argv_restore):
+    def test_logging_params_dict_complex(self, caplog, sys_argv_restore, tst_app_key):
         log_file = 'test_base_rot_file.log'
         entry_prefix = "TEST LOG ENTRY "
 
@@ -638,7 +666,8 @@ class TestPythonLogging:
                 fc = fc[fc.index("> ") + 2:]    # remove thread id prefix
             if fc.startswith("{TST}"):
                 fc = fc[6:]                     # remove sys_env_id prefix
-            assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(entry_prefix) \
+            assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(tst_app_key) \
+                or fc.startswith(entry_prefix) \
                 or fc.lower().startswith('test  v 0.0') or fc.startswith('  **  Additional instance') or fc == ''
 
 

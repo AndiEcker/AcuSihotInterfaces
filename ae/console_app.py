@@ -87,8 +87,8 @@ the current working.
 Config sections
 ...............
 
-This module is supporting not only the `config file format <https://en.wikipedia.org/wiki/INI_file>`_ of
-Pythons built-in :class:`~configparser.ConfigParser` class, but also extends it with
+This module is supporting the `config file format <https://en.wikipedia.org/wiki/INI_file>`_ of
+Pythons built-in :class:`~configparser.ConfigParser` class, and also extends it with
 :ref:`complex config value types <config-value-types>`.
 
 The following examples shows a config file with two config sections containing one config option (named
@@ -101,6 +101,11 @@ The following examples shows a config file with two config sections containing o
     configVar1 = ['list-element1', ('list-element2-1', 'list-element2-2', ), dict()]
     configVar2 = {'key1': 'value 1', 'key2': 2222, 'key3': datetime.datetime.now()}
 
+.. _config-main-section:
+
+The ae modules are using the main config section `aeOptions` (defined by :data:`MAIN_SECTION_DEF`)
+for to store the values of any pre-defined :ref:`config option <config-options>` and
+:ref:`config variables <config-variables>`.
 
 .. _config-variables:
 
@@ -120,6 +125,15 @@ name and section names of the config variable for to fetch their config value.
 
 The default value of a config variable can also be set/changed directly from within your application
 by calling the :meth:`~ConsoleApp.set_var` method.
+
+The following pre-defined config variables in the :ref:`main config section <config-main-section>` are recognized
+by :mod:`this module <ae.console_app>` as well as by :mod:`ae.core`.
+
+* `logging_params` : general logging configuration parameters (py and ae logging)
+  - :meth:`documented here <core.AppBase.init_logging>`.
+* ``py_logging_params`` : configuration parameters for to activate python logging
+  - :meth:`documented here <logging.conf.dictConfig>`.
+* `logFile` : log file name for ae logging (this is also a config option - set-able as command line arg).
 
 
 .. _config-options:
@@ -180,10 +194,12 @@ from argparse import ArgumentParser, ArgumentError, HelpFormatter, Namespace
 
 from ae.core import (
     DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVELS,
-    DATE_TIME_ISO, DATE_ISO, INI_EXT, MAIN_SECTION_DEF,
-    app_std_out, _logger, main_app_instance, sys_env_text, AppBase)
+    DATE_TIME_ISO, DATE_ISO, ori_std_out, _logger, main_app_instance, sys_env_text, AppBase)
 from ae.literal import Literal
 
+
+INI_EXT: str = '.ini'                   #: INI file extension
+MAIN_SECTION_DEF: str = 'aeOptions'     #: default name of main config section
 
 # Lock for to prevent errors in config var value changes and reloads/reads
 config_lock = threading.Lock()
@@ -217,7 +233,7 @@ class ConsoleApp(AppBase):
                  cfg_opt_eval_vars: Optional[dict] = None, additional_cfg_files: Iterable = (),
                  cfg_opt_val_stripper: Optional[Callable] = None,
                  formatter_class: Optional[Type[HelpFormatter]] = None, epilog: str = "",
-                 **logging_params: Optional[Dict[str, Any]]):
+                 **logging_params):
         """ initialize a new :class:`ConsoleApp` instance.
 
         :param app_title:               application title/description (def=value of main module docstring
@@ -237,7 +253,7 @@ class ConsoleApp(AppBase):
         :param epilog:                  optional epilog text for command line arguments/options help text (passed
                                         onto ArgumentParser instantiation).
         :param logging_params:          all other kwargs are interpreted as logging configuration values - the
-                                        supported kwarg dict keys are documented at the method
+                                        supported kwargs are all the method kwargs of
                                         :meth:`~core.AppBase.init_logging`.
         """
         super().__init__(app_title=app_title, app_version=app_version, sys_env_id=sys_env_id,
@@ -259,18 +275,14 @@ class ConsoleApp(AppBase):
             #: callable to strip or normalize config option choice values
 
             self._parsed_args: Optional[Namespace] = None
-            """ used for to retrieve command line args and also as a flag for to ensure that the command line arguments
-            get re-parsed if :meth:`~ConsoleApp.add_opt` get called after a first method call which is initiating
-            the re-fetch of the args and INI/cfg vars (like e.g. :meth:`~ConsoleApp.get_opt` or
-            :meth:`ConsoleApp.dpo`). """
+            """ used for to retrieve command line args and also as a flag (if is not None) for to ensure that
+            the command line arguments get re-parsed if :meth:`~ConsoleApp.add_opt` get called after a first
+            method call which is initiating the re-fetch of the args and INI/cfg vars 
+            (like e.g. :meth:`~ConsoleApp.get_opt` or :meth:`ConsoleApp.dpo`). 
+            """
         self.load_cfg_files()
 
-        log_file_name = self.get_var('logFile', default_value=logging_params.get('file_name_def', ''))
-        logging_params['file_name_def'] = log_file_name
-        lcd = self.get_var('py_logging_params')
-        if lcd:
-            logging_params['py_logging_params'] = lcd
-        super().init_logging(**logging_params)
+        log_file_name = self._init_logging(logging_params)
 
         self.po(self.app_name, " V", app_version, " Startup", self.startup_beg, self.app_title, logger=_logger)
         self.po("####  Initialization......  ####", logger=_logger)
@@ -284,7 +296,35 @@ class ConsoleApp(AppBase):
         # create pre-defined config options
         self.add_opt('debugLevel', "Verbosity of debug messages send to console and log files", debug_level, 'D',
                      choices=DEBUG_LEVELS.keys())
-        self.add_opt('logFile', "Log file path", log_file_name, 'L')
+        if log_file_name is not None:
+            self.add_opt('logFile', "Log file path", log_file_name, 'L')
+
+    def _init_logging(self, logging_params: Dict[str, Any]) -> Optional[str]:
+        """ determine and init logging config.
+
+         The CFG/INI values having preference before method args. The highest preference has the logFile config option
+         which gets init much later (after init of this instance) and only if no py logging is active.
+
+        :param logging_params:      logging config dict passed as args by user that will be amended with cfg values.
+        :return:                    None if py logging is active, log file name if ae logging is set in cfg or args
+                                    or empty string if no logging got configured in cfg/args.
+        """
+        log_file_name = ""
+        cfg_logging_params = self.get_var('logging_params')                     # cfg logging_params first
+        if cfg_logging_params:
+            logging_params = cfg_logging_params
+            if 'py_logging_params' not in logging_params:                       # .. there then cfg py_logging params
+                log_file_name = logging_params.get('file_name_def', '')         # .. then cfg logging_params log file
+        if 'py_logging_params' not in logging_params and not log_file_name:
+            lcd = self.get_var('py_logging_params')
+            if lcd:
+                logging_params['py_logging_params'] = lcd                       # .. then cfg py_logging params directly
+            else:
+                log_file_name = self.get_var('logFile', default_value=logging_params.get('file_name_def', ''))
+                logging_params['file_name_def'] = log_file_name                 # .. finally cfg logFile or log file arg
+        super().init_logging(**logging_params)
+
+        return None if 'py_logging_params' in logging_params else log_file_name
 
     def __del__(self):
         """ deallocate this instance and call :func:`ConsoleApp.shutdown` if it is the main app instance.
@@ -341,7 +381,7 @@ class ConsoleApp(AppBase):
         args.append('--' + name)
 
         # determine config value for to use as default for command line arg
-        option = Literal(name=name, literal=value)
+        option = Literal(name=name, literal_or_value=value)
         cfg_val = self._get_cfg_parser_val(name, default_value=value)
         option.value = cfg_val
         kwargs = dict(help=desc, default=cfg_val, type=option.convert_value, choices=choices, metavar=name)
@@ -361,7 +401,7 @@ class ConsoleApp(AppBase):
         Original/underlying args/kwargs are used - please see description/definition of
         :meth:`~argparse.ArgumentParser.print_help` of :class:`~argparse.ArgumentParser`.
         """
-        self._arg_parser.print_help(file=app_std_out)
+        self._arg_parser.print_help(file=ori_std_out)
 
     def _parse_args(self):
         """ parse all command line args.
@@ -386,7 +426,7 @@ class ConsoleApp(AppBase):
         if main_app_instance() is self and not self.py_log_params:
             self._log_file_name = self.cfg_options['logFile'].value
             if self._log_file_name:
-                self.activate_ae_logging()
+                self.log_file_check()
 
         # finished argument parsing - now print chosen option values to the console
         _debug_level = self.cfg_options['debugLevel'].value
@@ -520,7 +560,7 @@ class ConsoleApp(AppBase):
         """ determine thread-safe the value of a config variable from the config file.
 
         :param name:            name/option_id of the config variable.
-        :param section:         name of the config section (def= :paramRef:`MAIN_SECTION_DEF` also if passed as None/'')
+        :param section:         name of the config section (def= :data:`MAIN_SECTION_DEF` also if passed as None/'')
         :param default_value:   default value to return if config value is not specified in any config file.
         :param cfg_parser:      ConfigParser instance to use (def=self._cfg_parser).
         :return:                value of the config variable.
@@ -568,7 +608,7 @@ class ConsoleApp(AppBase):
         if name in self.cfg_options and section in (MAIN_SECTION_DEF, '', None):
             val = self.cfg_options[name].value
         else:
-            s = Literal(name=name, literal=default_value, value_type=value_type)  # used only for conversion/eval
+            s = Literal(name=name, literal_or_value=default_value, value_type=value_type)  # used for conversion/eval
             s.value = self._get_cfg_parser_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
             val = s.value
         return val

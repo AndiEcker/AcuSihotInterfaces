@@ -27,7 +27,8 @@ import unicodedata
 import weakref
 from io import StringIO
 from string import ascii_letters, digits
-from typing import Any, AnyStr, Dict, Optional, TextIO, Generator
+from typing import Any, AnyStr, Callable, Generator, Dict, Optional, TextIO
+
 
 DEBUG_LEVEL_DISABLED: int = 0       #: lowest debug level - only display logging levels ERROR/CRITICAL.
 DEBUG_LEVEL_ENABLED: int = 1        #: minimum debugging info - display logging levels WARNING or higher.
@@ -47,23 +48,17 @@ DEF_ENCODE_ERRORS = 'backslashreplace'      #: default encode error handling for
 DEF_ENCODING: str = 'ascii'
 """ core encoding that will always work independent from destination (console, file system, XMLParser, ...)."""
 
-INI_EXT: str = '.ini'                       #: INI file extension
-
-MAIN_SECTION_DEF: str = 'aeOptions'         #: default name of main config section
-
 MAX_NUM_LOG_FILES: int = 69                 #: maximum number of log files
 LOG_FILE_MAX_SIZE: int = 20                 #: maximum size in MB of a rotating log file
+LOG_FILE_IDX_WIDTH: int = len(str(MAX_NUM_LOG_FILES)) + 3
+""" width of rotating log file index within log file name; adding +3 to ensure index range up to factor 10^3. """
 
-log_file_lock = threading.Lock()   #: log file rotation lock
+ori_std_out = sys.stdout                    #: original sys.stdout on app startup
+ori_std_err = sys.stderr                    #: original sys.stderr on app startup
 
+log_file_lock = threading.Lock()            #: log file rotation lock
 
-ori_std_out = sys.stdout        #: original sys.stdout on app startup
-ori_std_err = sys.stderr        #: original sys.stderr on app startup
-app_std_out = ori_std_out       #: application std-out (may duplicated to :ref:`ae log file <ae-log-file>`
-app_std_err = ori_std_err       #: application std-out (may duplicated to :ref:`ae log file <ae-log-file>`
-
-
-# The following line is throwing an error in the Sphinx docs make:
+# Had to use type comment because the following line is throwing an error in the Sphinx docs make:
 # _app_instances: weakref.WeakValueDictionary[str, "AppBase"] = weakref.WeakValueDictionary()
 _app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, AppBase]
 """ dict that is weakly holding references to all :class:`AppBase` instances created at run time.
@@ -275,6 +270,20 @@ def full_stack_trace(ex: Exception) -> str:
     return ret
 
 
+def module_name(*skip_modules: str, depth: int = 1) -> Optional[str]:
+    """ find the first module in the call stack that is *not* in :paramref:`module_name.skip_modules`.
+
+    :param skip_modules:    module names to skip (def=this ae.core module).
+    :param depth:           the calling level from which on to search (def=1 which refers the next deeper frame).
+                            Pass 2 or a even higher value if you want to get the module name from a deeper level
+                            in the call stack.
+    :return:                The module name of a deeper level within the call stack.
+    """
+    if not skip_modules:
+        skip_modules = (__name__,)
+    return stack_var('__name__', *skip_modules, depth=depth)
+
+
 def round_traditional(num_value: float, num_digits: int = 0) -> float:
     """ round numeric value traditional.
 
@@ -345,20 +354,6 @@ def stack_frames(depth: int = 1) -> Generator:  # Generator[frame, None, None]
         pass
 
 
-def stack_module(*skip_modules: str, depth: int = 1) -> Optional[str]:
-    """ find the first module in the call stack that is *not* in :paramref:`stack_module.skip_modules`.
-
-    :param skip_modules:    module names to skip (def=this ae.core module).
-    :param depth:           the calling level from which on to search (def=1 which refers the next deeper frame).
-                            Pass 2 or a even higher value if you want to get the module name from a deeper level
-                            in the call stack.
-    :return:                The module name of a deeper level within the call stack.
-    """
-    if not skip_modules:
-        skip_modules = (__name__,)
-    return stack_var('__name__', *skip_modules, depth=depth)
-
-
 def stack_var(name: str, *skip_modules: str, depth: int = 1, locals_only: bool = False) -> Optional[Any]:
     """ determine variable value in calling stack/frames.
 
@@ -393,6 +388,38 @@ def to_ascii(unicode_str: str) -> str:
     """
     nfkd_form = unicodedata.normalize('NFKD', unicode_str)
     return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
+
+
+def try_call(func: Callable, *args, ignored_exceptions: Optional[tuple] = (), **kwargs) -> Any:
+    """ call function ignoring specified exceptions and return function return value.
+
+    :param func:                function to be called.
+    :param args:                function arguments tuple.
+    :param ignored_exceptions:  sequence of ignored exceptions.
+    :param kwargs:              function keyword arguments dict.
+    :return:                    function return value or None if a ignored exception got thrown.
+    """
+    ret = None
+    try:  # catch type conversion errors, e.g. for datetime.date(None) while bool(None) works (->False)
+        ret = func(*args, **kwargs)
+    except ignored_exceptions:
+        pass
+    return ret
+
+
+def try_eval(expr: str, ignored_exceptions: Optional[tuple] = ()) -> Any:
+    """ evaluate expression string ignoring specified exceptions and return evaluated value.
+
+    :param expr:                expression to evaluate.
+    :param ignored_exceptions:  sequence of ignored exceptions.
+    :return:                    function return value or None if a ignored exception got thrown.
+    """
+    ret = None
+    try:  # catch type conversion errors, e.g. for datetime.date(None) while bool(None) works (->False)
+        ret = eval(expr)
+    except ignored_exceptions:
+        pass
+    return ret
 
 
 class AppPrintingReplicator:
@@ -473,7 +500,7 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
     This function has an alias named :meth:`.po`.
     """
     processing = end == "\r"
-    enc = (file or ori_std_out if processing else app_std_out).encoding
+    enc = (file or ori_std_out if processing else sys.stdout).encoding
     if processing:
         file = ori_std_out
 
@@ -486,7 +513,7 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
         use_py_logger = getattr(app_instance, 'py_log_params', False) and debug_level in LOGGING_LEVELS
         if use_py_logger and logger is None:
             logger_late_init()
-            module = stack_module()
+            module = module_name()
             logger = logging.getLogger(module) if module else _logger
         if getattr(app_instance, 'log_file_stream', False):
             # creating new log file and backup of current one if the current has more than LOG_FILE_MAX_SIZE MB in size
@@ -662,23 +689,12 @@ class AppBase:
         except Exception as ex:
             self.po("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
 
-    def activate_ae_logging(self):
-        """ activate ae logging (not using the python logging module).
-        """
-        with log_file_lock:
-            try:  # enable logging
-                self._close_log_file()
-                self._open_log_file()
-                self.po(" ###  Activated log file", self._log_file_name, logger=_logger)
-            except Exception as ex:
-                self.po(" ***  AppBase._parse_args(): exception while enabling logging:", ex, logger=_logger)
-
     def log_file_check(self):
         """ check and possibly correct log file status.
 
         For already opened log files check if the ae log file is big enough and if yes then do a file rotation.
         If log file is not opened but log file name got already set, then check if log startup buffer is active
-        and if yes then pass log buffer content to log file and then close the log buffer.
+        and if yes then create log file, pass log buffer content to log file and close the log buffer.
         """
         with log_file_lock:
             if self.log_file_stream is not None:
@@ -687,60 +703,53 @@ class AppBase:
                     self._close_log_file()
                     self._rename_log_file()
                     self._open_log_file()
-            elif self.log_buf_stream and self._log_file_name:
-                buf = self.log_buf_stream.getvalue()
-                self.log_buf_stream.close()
+            elif self._log_file_name:
                 self._open_log_file()
-                if self.log_file_stream:
-                    self.log_buf_stream.write(buf)
+                if self.log_file_stream and self.log_buf_stream:
+                    buf = self.log_buf_stream.getvalue()
+                    self.log_file_stream.write(buf)
+                    self.log_buf_stream.close()
+                    self.log_buf_stream = None
 
     def _open_log_file(self):
         """ open the ae log file.
         """
-        global app_std_out, app_std_err
         self.log_file_stream = open(self._log_file_name, "w", errors=DEF_ENCODE_ERRORS)
-        if app_std_out == ori_std_out:      # first call/open-of-log-file?
+        if sys.stdout == ori_std_out:      # first call/open-of-log-file?
             if self.suppress_stdout:
                 std_out = self._nul_std_out = open(os.devnull, 'w')
             else:
                 std_out = ori_std_out
-            app_std_out = sys.stdout = AppPrintingReplicator(sys_out_obj=std_out)
-            app_std_err = sys.stderr = AppPrintingReplicator(sys_out_obj=ori_std_err)
-        else:
-            app_std_out.log_file_stream = self.log_file_stream
-            app_std_err.log_file_stream = self.log_file_stream
+            sys.stdout = AppPrintingReplicator(sys_out_obj=std_out)
+            sys.stderr = AppPrintingReplicator(sys_out_obj=ori_std_err)
 
     def _rename_log_file(self):
-        """ rename the log file (on rotating of the ae log file).
+        """ rename rotating log file while keeping first/startup log and log file count below :data:`MAX_NUM_LOG_FILE`.
         """
-        self._log_file_index = 0 if self._log_file_index >= MAX_NUM_LOG_FILES else self._log_file_index + 1
-        index_width = len(str(MAX_NUM_LOG_FILES))
         file_path, file_ext = os.path.splitext(self._log_file_name)
-        dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=index_width) + file_ext
+        dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=LOG_FILE_IDX_WIDTH) + file_ext
         if os.path.exists(dfn):
-            os.remove(dfn)
-        if os.path.exists(self._log_file_name):     # prevent errors after unit test cleanup
+            os.remove(dfn)                              # remove old log file from previous app run
+        if os.path.exists(self._log_file_name):         # prevent errors after log file error or unit test cleanup
             os.rename(self._log_file_name, dfn)
 
-    def _close_log_file(self, full_reset: bool = False):
-        """ close the ae log file.
+        self._log_file_index += 1
+        if self._log_file_index > MAX_NUM_LOG_FILES:    # use > instead of >= for to always keep first/startup log file
+            first_idx = self._log_file_index - MAX_NUM_LOG_FILES
+            dfn = file_path + "-{:0>{index_width}}".format(first_idx, index_width=LOG_FILE_IDX_WIDTH) + file_ext
+            if os.path.exists(dfn):
+                os.remove(dfn)
 
-        :param full_reset:  pass True to reset the standard output streams (stdout/stderr) to the defaults.
+    def _close_log_file(self):
+        """ close the ae log file.
         """
-        global app_std_out, app_std_err
         if self.log_file_stream:
             stream = self.log_file_stream
-            self._append_eof_and_flush_file(stream, "log file")
-            self.log_file_stream = None     # prevent exception/calls of AppPrintingReplicator.log_file_stream.write()
-            sys.stderr = ori_std_err        # set back for to prevent stack overflow/recursion with kivy logger
-            sys.stdout = ori_std_out        # .. "Fatal Python error: Cannot recover from stack overflow"
+            self._append_eof_and_flush_file(stream, "ae log file")
+            self.log_file_stream = None
+            sys.stderr = ori_std_err
+            sys.stdout = ori_std_out
             stream.close()
-        elif self.py_log_params:
-            logging.shutdown()
-
-        if full_reset:
-            app_std_err = ori_std_err  # set back for allow full reset of log for unit tests
-            app_std_out = ori_std_out
 
     # noinspection PyIncorrectDocstring
     def print_out(self, *objects, **kwargs):
@@ -763,26 +772,32 @@ class AppBase:
         :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
                             Pass None for to block shutdown until all other threads have joined/finished.
         """
-        self.po("####  Shutdown............  ", exit_code, timeout, logger=_logger)
-        with log_file_lock:
-            if self.multi_threading:
-                main_thread = threading.current_thread()
-                for t in threading.enumerate():
-                    if t is not main_thread:
-                        self.po("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
-                                logger=_logger)
-                        t.join(timeout)
+        main_instance = main_app_instance() is self
+        if timeout:
+            blocked = log_file_lock.acquire(timeout=timeout)
+        else:
+            blocked = log_file_lock.acquire(blocking=False)
+        if blocked and (timeout or main_instance and exit_code is not None):
+            log_file_lock.release()
+        self.po("####  Shutdown............  ", exit_code, timeout, "BLOCKED" if blocked else "", logger=_logger)
+        if self.multi_threading:
+            main_thread = threading.current_thread()
+            for t in threading.enumerate():
+                if t is not main_thread:
+                    self.po("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
+                            logger=_logger)
+                    t.join(timeout)
 
-            self._close_log_file()
-            if self._log_file_index:
-                self._rename_log_file()
+        self._close_log_file()
+        if self._log_file_index:
+            self._rename_log_file()
 
-            if self._nul_std_out and not self._nul_std_out.closed:
-                self._append_eof_and_flush_file(self._nul_std_out, "NUL stdout")
-                self._nul_std_out.close()
-                self._nul_std_out = None
+        if self._nul_std_out and not self._nul_std_out.closed:
+            self._append_eof_and_flush_file(self._nul_std_out, "NUL stdout")
+            self._nul_std_out.close()
+            self._nul_std_out = None
 
-        if main_app_instance() is self:
+        if main_instance:
             self._shut_down = True
             if exit_code is not None:
                 sys.exit(exit_code)

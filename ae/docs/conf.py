@@ -29,7 +29,7 @@ author = 'Andi Ecker'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    # 'sphinx.ext.viewcode',
+    'sphinx.ext.viewcode',      # include package module source code
     'sphinx.ext.intersphinx',
     # typehints extension does that already so no need to also include 'sphinx_autodoc_annotation',
     'sphinx_autodoc_typehints',

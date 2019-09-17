@@ -188,7 +188,7 @@ class ConsoleApp:
         elif section is None or section != 'aeOptions':
             # does not convert config value into list/dict:
             # .. ret = self._env_cfg.get(section or 'aeOptions', name, fallback=default_value)
-            s = Literal(name=name, literal=default_value, value_type=type(default_value))  # used only for conversion/eval
+            s = Literal(name=name, literal_or_value=default_value, value_type=type(default_value))  # used only for conversion/eval
             s.value = self._env_cfg.get(section or 'aeOptions', name, fallback=s.value)
             ret = s.value
         else:
