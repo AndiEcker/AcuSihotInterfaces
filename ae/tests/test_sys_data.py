@@ -625,7 +625,7 @@ class TestRecord:
 
     def test_field_lookup_standard(self):
         r = Record(fields=dict(test='xxx'))
-        print(r)
+        print(repr(r))                          # repr for coverage
 
         assert r['test'] == 'xxx'
         assert r.val('test') == 'xxx'
