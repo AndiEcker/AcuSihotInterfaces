@@ -337,22 +337,30 @@ class ConsoleApp(AppBase):
 
         Original/underlying args/kwargs of :class:`argparse.ArgumentParser` are used - please see the
         description/definition of :meth:`~argparse.ArgumentParser.add_argument`.
+
+        This method has an alias named :meth:`add_arg`.
         """
         # ### THIS METHOD DEF GOT CODED HERE ONLY FOR SPHINX DOCUMENTATION BUILD PURPOSES ###
         # .. this method get never called because gets overwritten with self._arg_parser.add_argument in __init__().
         self._arg_parser.add_argument(*args, **kwargs)
+
+    add_arg = add_argument
 
     def get_argument(self, name: str) -> Any:
         """ determine the command line parameter value.
 
         :param name:    Argument id of the parameter.
         :return:        Value of the parameter.
+
+        This method has an alias named :meth:`get_arg`.
         """
         if not self._parsed_args:
             self._parse_args()
         return getattr(self._parsed_args, name)
 
-    def add_opt(self, name, desc, value, short_opt=None, choices=None, multiple=False):
+    get_arg = get_argument
+
+    def add_option(self, name, desc, value, short_opt=None, choices=None, multiple=False):
         """ defining and adding a new config option for this app.
 
         The value of a config option can be of any type and gets represented by an instance of the
@@ -370,6 +378,8 @@ class ConsoleApp(AppBase):
                             by :class:`ConsoleApp` (recommending using lower-case options for your application).
         :param choices:     list of valid option values (optional, default=allow all values).
         :param multiple:    True if option can be added multiple times to command line (optional, default=False).
+
+        This method has an alias named :meth:`add_opt`.
         """
         self._parsed_args = None        # request (re-)parsing of command line args
         if short_opt == '':
@@ -394,6 +404,62 @@ class ConsoleApp(AppBase):
         self._arg_parser.add_argument(*args, **kwargs)
 
         self.cfg_options[name] = option
+
+    add_opt = add_option
+
+    def get_option(self, name: str, default_value: Optional[Any] = None) -> Any:
+        """ get the value of a config option specified by it's name (option id).
+
+        The returned value has the same type as the value specified in the :meth:`add_opt` call and
+        gets taken either from the command line, the default section (:data:`MAIN_SECTION_DEF`) of any found
+        config variable file (with file extension INI or CFG) or from the default values specified in your python code.
+
+        Underneath you find the order of the value search - the first specified/found value will be returned:
+
+        #. command line arguments option value
+        #. :ref:`config files <config-files>` added in your app code via one of the methods :meth:`.add_cfg_file` or
+           :meth:`add_cfg_files` (these files will be searched for the config option value in reversed order - so the
+           last added :ref:`config file <config-files>` will be the first one where the config option will be searched)
+        #. :ref:`config files <config-files>` added via :paramref:`~ConsoleApp.additional_cfg_files` argument of
+           :meth:`ConsoleApp.__init__` (searched in the reversed order)
+        #. <app_name>.INI file in the <cwd>
+        #. <app_name>.CFG file in the <cwd>
+        #. <app_name>.INI file in the <app_dir>
+        #. <app_name>.CFG file in the <app_dir>
+        #. .sys_env.cfg in the <cwd>
+        #. .sys_env<sys_env_id>.cfg in the <cwd>
+        #. .app_env.cfg in the <cwd>
+        #. .sys_env.cfg in the parent folder of the <cwd>
+        #. .sys_env<sys_env_id>.cfg in the parent folder of the <cwd>
+        #. .app_env.cfg in the parent folder of the <cwd>
+        #. .sys_env.cfg in the <app_dir>
+        #. .sys_env<sys_env_id>.cfg in the <app_dir>
+        #. .app_env.cfg in the <app_dir>
+        #. .sys_env.cfg in the parent folder of the parent folder of the <cwd>
+        #. .sys_env<sys_env_id>.cfg in the parent folder of the parent folder of the <cwd>
+        #. .app_env.cfg in the parent folder of the parent folder of the <cwd>
+        #. value argument passed into the add_opt() method call (defining the option)
+        #. default_value argument passed into this method (only if :class:`~ConsoleApp.add_opt` didn't get called)
+
+        **Placeholders in the above search order lists are**:
+
+        * *<cwd>* is the current working directory of your application (determined with :func:`os.getcwd`)
+        * *<app_name>* is the base name without extension of your main python code file.
+        * *<app_dir>* is the application directory (where your <app_name>.py or the exe file of your app is situated)
+        * *<sys_env_id>* is specified as argument of :meth:`ConsoleApp.__init__`
+
+        :param name:            id of the config option.
+        :param default_value:   default value of the option (if not defined with :class:`~ConsoleApp.add_opt`).
+
+        :return:                first found value of the option identified by :paramref:`~ConsoleApp.get_opt.name`.
+
+        This method has an alias named :meth:`get_opt`.
+        """
+        if not self._parsed_args:
+            self._parse_args()
+        return self.cfg_options[name].value if name in self.cfg_options else default_value
+
+    get_opt = get_option
 
     def show_help(self):
         """ show help message on console output/stream.
@@ -446,57 +512,7 @@ class ConsoleApp(AppBase):
                     logger=_logger)
         self.po("####  Startup finished....  ####", logger=_logger)
 
-    def get_opt(self, name: str, default_value: Optional[Any] = None) -> Any:
-        """ get the value of a config option specified by it's name (option id).
-
-        The returned value has the same type as the value specified in the :meth:`add_opt` call and
-        gets taken either from the command line, the default section (:data:`MAIN_SECTION_DEF`) of any found
-        config variable file (with file extension INI or CFG) or from the default values specified in your python code.
-
-        Underneath you find the order of the value search - the first specified/found value will be returned:
-
-        #. command line arguments option value
-        #. :ref:`config files <config-files>` added in your app code via one of the methods :meth:`.add_cfg_file` or
-           :meth:`add_cfg_files` (these files will be searched for the config option value in reversed order - so the
-           last added :ref:`config file <config-files>` will be the first one where the config option will be searched)
-        #. :ref:`config files <config-files>` added via :paramref:`~ConsoleApp.additional_cfg_files` argument of
-           :meth:`ConsoleApp.__init__` (searched in the reversed order)
-        #. <app_name>.INI file in the <cwd>
-        #. <app_name>.CFG file in the <cwd>
-        #. <app_name>.INI file in the <app_dir>
-        #. <app_name>.CFG file in the <app_dir>
-        #. .sys_env.cfg in the <cwd>
-        #. .sys_env<sys_env_id>.cfg in the <cwd>
-        #. .app_env.cfg in the <cwd>
-        #. .sys_env.cfg in the parent folder of the <cwd>
-        #. .sys_env<sys_env_id>.cfg in the parent folder of the <cwd>
-        #. .app_env.cfg in the parent folder of the <cwd>
-        #. .sys_env.cfg in the <app_dir>
-        #. .sys_env<sys_env_id>.cfg in the <app_dir>
-        #. .app_env.cfg in the <app_dir>
-        #. .sys_env.cfg in the parent folder of the parent folder of the <cwd>
-        #. .sys_env<sys_env_id>.cfg in the parent folder of the parent folder of the <cwd>
-        #. .app_env.cfg in the parent folder of the parent folder of the <cwd>
-        #. value argument passed into the add_opt() method call (defining the option)
-        #. default_value argument passed into this method (only if :class:`~ConsoleApp.add_opt` didn't get called)
-
-        **Placeholders in the above search order lists are**:
-
-        * *<cwd>* is the current working directory of your application (determined with :func:`os.getcwd`)
-        * *<app_name>* is the base name without extension of your main python code file.
-        * *<app_dir>* is the application directory (where your <app_name>.py or the exe file of your app is situated)
-        * *<sys_env_id>* is specified as argument of :meth:`ConsoleApp.__init__`
-
-        :param name:            id of the config option.
-        :param default_value:   default value of the option (if not defined with :class:`~ConsoleApp.add_opt`).
-
-        :return:                first found value of the option identified by :paramref:`~ConsoleApp.get_opt.name`.
-        """
-        if not self._parsed_args:
-            self._parse_args()
-        return self.cfg_options[name].value if name in self.cfg_options else default_value
-
-    def set_opt(self, name: str, val: Any, cfg_fnam: Optional[str] = None, save_to_config: bool = True) -> str:
+    def set_option(self, name: str, val: Any, cfg_fnam: Optional[str] = None, save_to_config: bool = True) -> str:
         """ set or change the value of a config option.
 
         :param name:            id of the config option to set.
@@ -506,11 +522,15 @@ class ConsoleApp(AppBase):
         :param save_to_config:  pass False to prevent to save the new option value also to a config file.
                                 The value of the config option will be changed in any case.
         :return:                ''/empty string on success else error message text.
+
+        This method has an alias named :meth:`set_opt`.
         """
         self.cfg_options[name].value = val
         if name == 'debugLevel':
             self.debug_level = val
         return self.set_var(name, val, cfg_fnam) if save_to_config else ''
+
+    set_opt = set_option
 
     def add_cfg_file(self, fnam: str) -> bool:
         """ add config file name in :paramref:`add_cfg_file.fnam` to :attr:`config files <ConsoleApp._cfg_files>`.

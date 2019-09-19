@@ -18,6 +18,7 @@
       <w>appcontext</w>
       <w>apref</w>
       <w>apts</w>
+      <w>aptsowner</w>
       <w>areslist</w>
       <w>arol</w>
       <w>arolref</w>
@@ -32,6 +33,7 @@
       <w>basicdataonly</w>
       <w>beve</w>
       <w>birthdate</w>
+      <w>bkup</w>
       <w>boxlayout</w>
       <w>breakfastincl</w>
       <w>byteplant</w>
@@ -80,6 +82,7 @@
       <w>elif</w>
       <w>elpp</w>
       <w>envvars</w>
+      <w>eventlog</w>
       <w>exch</w>
       <w>exportextendedcomment</w>
       <w>expres</w>
@@ -150,6 +153,7 @@
       <w>maxbuflen</w>
       <w>mealplan</w>
       <w>meipass</w>
+      <w>mfee</w>
       <w>mlref</w>
       <w>modifydate</w>
       <w>monospace</w>
