@@ -17,6 +17,7 @@ import re
 from traceback import print_exc
 
 from ae.console_app import ConsoleApp
+from ae.core import try_eval
 from shif import ResSearch, SH_DATE_FORMAT
 from shif import add_sh_options, print_sh_options
 
@@ -167,7 +168,7 @@ try:
                         if c_nam.startswith('<') and c_nam.endswith('>'):
                             c_nam = c_nam[1:-1]
                             try:
-                                c_val = eval(c_nam)
+                                c_val = try_eval(c_nam, glo_vars=globals(), loc_vars=locals())
                             except Exception as ex:
                                 c_val = ex
                                 cae.dpo(" ###  Invalid column expression", c_nam, "; exception:", str(ex))

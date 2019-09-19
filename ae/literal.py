@@ -4,9 +4,9 @@ string literal type detection and evaluation
 
 """
 import datetime
-from typing import Any, Optional, Type
+from typing import Any, Optional, Tuple, Type
 
-from ae.core import DATE_TIME_ISO, DATE_ISO, DEF_ENCODE_ERRORS, try_call, try_eval
+from ae.core import DATE_TIME_ISO, DATE_ISO, DEF_ENCODE_ERRORS, try_call, try_eval, try_exec
 
 
 class Literal:
@@ -49,9 +49,9 @@ class Literal:
         +-------------+------------+------------------------------+
         |     \"       |     \"      | string literal               |
         +-------------+------------+------------------------------+
-        |    '''      |    '''     | code block                   |
+        |    '''      |    '''     | code block with return       |
         +-------------+------------+------------------------------+
-        |    \"\"\"      |    \"\"\"     | code block                   |
+        |    \"\"\"      |    \"\"\"     | code block with return       |
         +-------------+------------+------------------------------+
 
         """
@@ -61,10 +61,10 @@ class Literal:
                 if isinstance(value, bytes):  # convert bytes to string
                     value = value.decode('utf-8', DEF_ENCODE_ERRORS)
                 if isinstance(value, str):
-                    eval_expr = self._evaluable_literal(value)
-                    self._value = eval(eval_expr) if eval_expr else self._literal_value(value)
+                    func, eval_expr = self._evaluable_literal(value)
+                    self._value = func(eval_expr) if func else self._literal_value(value)
                 elif self._type:
-                    val = try_call(self._type, value, ignored_exceptions=(TypeError, ))
+                    val = try_call(self._type, value, ignored_exceptions=(TypeError, ))     # ignore int/bool/...(None)
                     if val is not None:
                         self._value = val
             # the value type gets only once initialized, but after _eval_str() for to auto-detect complex types
@@ -106,25 +106,27 @@ class Literal:
         return self.value  # using self.value instead of value to call getter for evaluation/type-correction
 
     @staticmethod
-    def _evaluable_literal(literal: str) -> str:
-        """ check if `str_val` has the format to be evaluated; return non-empty-and-stripped-eval-string if yes else ''
+    def _evaluable_literal(literal: str) -> Tuple[Optional[callable], Optional[str]]:
+        """ check evaluable format of literal and possibly return appropriate evaluation function and stripped literal.
 
         :param literal:     string to be checked if it can be evaluated and if it need to be stripped.
-        :return:            stripped value (removed triple high-commas) of code block or list/dict/tuple/str literal
-                            if need to be evaluated, else empty string.
+        :return:            tuple of - evaluation/execution function and stripped value (removed triple high-commas)
+                            of expression/code-block - if literal has correct format - else (None, <empty string>).
         """
+        func = None
+        ret = ''
         if (literal.startswith("'''") and literal.endswith("'''")) \
                 or (literal.startswith('"""') and literal.endswith('"""')):
+            func = try_exec
             ret = literal[3:-3]                                             # code block
         elif (literal.startswith("[") and literal.endswith("]")) \
                 or (literal.startswith("{") and literal.endswith("}")) \
                 or (literal.startswith("(") and literal.endswith(")")) \
                 or (literal.startswith("'") and literal.endswith("'")) \
                 or (literal.startswith('"') and literal.endswith('"')):
+            func = try_eval
             ret = literal                                                   # list/dict/tuple/str literal
-        else:
-            ret = ''
-        return ret
+        return func, ret
 
     def _literal_value(self, literal: str) -> Any:
         """ convert string literal into value

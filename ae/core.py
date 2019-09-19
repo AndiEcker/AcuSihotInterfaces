@@ -16,6 +16,8 @@ Enable Multi-Thread-Safety
 
 
 """
+import ast
+import copy
 import datetime
 import inspect
 import logging
@@ -25,6 +27,7 @@ import sys
 import threading
 import unicodedata
 import weakref
+
 from io import StringIO
 from string import ascii_letters, digits
 from typing import Any, AnyStr, Callable, Generator, Dict, Optional, TextIO
@@ -77,7 +80,7 @@ def _register_app_instance(app: 'AppBase'):
 
     :param app:         :class:`AppBase` instance to register
     """
-    global _main_app_inst_key
+    global _app_instances, _main_app_inst_key
     msg = f"register_app_instance({app}) expects "
     assert app not in _app_instances.values(), msg + "new instance"
 
@@ -87,6 +90,21 @@ def _register_app_instance(app: 'AppBase'):
     if not _main_app_inst_key:
         _main_app_inst_key = key
     _app_instances[key] = app
+
+
+def _unregister_app_instance(app_key: str) -> 'AppBase':
+    """ unregister/remove :class:`AppBase` instance from within :data:`_app_instances`.
+
+    :param app_key:     app key of the instance to remove.
+    :return:            removed :class:`AppBase` instance.
+    """
+    global _app_instances, _main_app_inst_key
+    app = _app_instances.pop(app_key, None)
+    if app_key == _main_app_inst_key:
+        _main_app_inst_key = ''
+        cnt = len(_app_instances)
+        assert cnt == 0, f"unregistered/removed main app while still having {cnt} sub-apps registered/running"
+    return app
 
 
 def main_app_instance() -> Optional['AppBase']:
@@ -232,6 +250,45 @@ def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
             changed = True
 
     return corr_phone, changed
+
+
+def exec_with_return(code_block, glo_vars: Optional[dict] = None, loc_vars: Optional[dict] = None):
+    """ execute python code block and return the resulting value of its last code line.
+
+    Copied from this OS answer
+    https://stackoverflow.com/questions/33409207/how-to-return-value-from-exec-in-function/52361938#52361938.
+
+    :param code_block:      python code block to execute.
+    :param glo_vars:        optional globals() available in the code execution.
+    :param loc_vars:        optional locals() available in the code execution.
+    :return:                value of the expression at the last code line or None if last code line is no expression.
+    """
+    def convert_expr(expr):
+        expr.lineno = 0
+        expr.col_offset = 0
+        result = ast.Expression(expr.value, lineno=0, col_offset=0)
+
+        return result
+
+    if glo_vars is None:
+        glo_vars = globals()
+    if loc_vars is None:
+        loc_vars = locals()
+
+    code_ast = ast.parse(code_block)
+
+    init_ast = copy.deepcopy(code_ast)
+    init_ast.body = code_ast.body[:-1]
+
+    last_ast = copy.deepcopy(code_ast)
+    last_ast.body = code_ast.body[-1:]
+
+    exec(compile(init_ast, "<ast>", "exec"), glo_vars, loc_vars)
+    last_line = last_ast.body[0]
+    if type(last_line) != ast.Expr:
+        exec(compile(last_ast, "<ast>", "exec"), glo_vars, loc_vars)
+    else:
+        return eval(compile(convert_expr(last_line), "<ast>", "eval"), glo_vars, loc_vars)
 
 
 def force_encoding(text: AnyStr, encoding: str = DEF_ENCODING, errors: str = DEF_ENCODE_ERRORS) -> str:
@@ -395,7 +452,7 @@ def try_call(func: Callable, *args, ignored_exceptions: Optional[tuple] = (), **
 
     :param func:                function to be called.
     :param args:                function arguments tuple.
-    :param ignored_exceptions:  sequence of ignored exceptions.
+    :param ignored_exceptions:  tuple of ignored exceptions.
     :param kwargs:              function keyword arguments dict.
     :return:                    function return value or None if a ignored exception got thrown.
     """
@@ -407,16 +464,49 @@ def try_call(func: Callable, *args, ignored_exceptions: Optional[tuple] = (), **
     return ret
 
 
-def try_eval(expr: str, ignored_exceptions: Optional[tuple] = ()) -> Any:
+def try_eval(expr: str, ignored_exceptions: Optional[tuple] = (),
+             glo_vars: Optional[dict] = None, loc_vars: Optional[dict] = None) -> Any:
     """ evaluate expression string ignoring specified exceptions and return evaluated value.
 
     :param expr:                expression to evaluate.
-    :param ignored_exceptions:  sequence of ignored exceptions.
+    :param ignored_exceptions:  tuple of ignored exceptions.
+    :param glo_vars:            optional globals() available in the expression evaluation.
+    :param loc_vars:            optional locals() available in the expression evaluation.
     :return:                    function return value or None if a ignored exception got thrown.
     """
     ret = None
+
+    if glo_vars is None:
+        glo_vars = globals()
+    if loc_vars is None:
+        loc_vars = locals()
+
     try:  # catch type conversion errors, e.g. for datetime.date(None) while bool(None) works (->False)
-        ret = eval(expr)
+        ret = eval(expr, glo_vars, loc_vars)
+    except ignored_exceptions:
+        pass
+    return ret
+
+
+def try_exec(code_block: str, ignored_exceptions: Optional[tuple] = (),
+             glo_vars: Optional[dict] = None, loc_vars: Optional[dict] = None) -> Any:
+    """ execute python code block string ignoring specified exceptions and return value of last code line in block.
+
+    :param code_block:          python code block to be executed.
+    :param ignored_exceptions:  tuple of ignored exceptions.
+    :param glo_vars:            optional globals() available in the code execution.
+    :param loc_vars:            optional locals() available in the code execution.
+    :return:                    function return value or None if a ignored exception got thrown.
+    """
+    ret = None
+
+    if glo_vars is None:
+        glo_vars = globals()
+    if loc_vars is None:
+        loc_vars = locals()
+
+    try:
+        ret = exec_with_return(code_block, glo_vars=glo_vars, loc_vars=loc_vars)
     except ignored_exceptions:
         pass
     return ret
@@ -723,6 +813,17 @@ class AppBase:
             sys.stdout = AppPrintingReplicator(sys_out_obj=std_out)
             sys.stderr = AppPrintingReplicator(sys_out_obj=ori_std_err)
 
+    def _close_log_file(self):
+        """ close the ae log file.
+        """
+        if self.log_file_stream:
+            stream = self.log_file_stream
+            self._append_eof_and_flush_file(stream, "ae log file")
+            self.log_file_stream = None
+            sys.stderr = ori_std_err
+            sys.stdout = ori_std_out
+            stream.close()
+
     def _rename_log_file(self):
         """ rename rotating log file while keeping first/startup log and log file count below :data:`MAX_NUM_LOG_FILE`.
         """
@@ -739,17 +840,6 @@ class AppBase:
             dfn = file_path + "-{:0>{index_width}}".format(first_idx, index_width=LOG_FILE_IDX_WIDTH) + file_ext
             if os.path.exists(dfn):
                 os.remove(dfn)
-
-    def _close_log_file(self):
-        """ close the ae log file.
-        """
-        if self.log_file_stream:
-            stream = self.log_file_stream
-            self._append_eof_and_flush_file(stream, "ae log file")
-            self.log_file_stream = None
-            sys.stderr = ori_std_err
-            sys.stdout = ori_std_out
-            stream.close()
 
     # noinspection PyIncorrectDocstring
     def print_out(self, *objects, **kwargs):
@@ -779,6 +869,7 @@ class AppBase:
             blocked = log_file_lock.acquire(blocking=False)
         if blocked and (timeout or main_instance and exit_code is not None):
             log_file_lock.release()
+            blocked = False
         self.po("####  Shutdown............  ", exit_code, timeout, "BLOCKED" if blocked else "", logger=_logger)
         if self.multi_threading:
             main_thread = threading.current_thread()
@@ -797,6 +888,8 @@ class AppBase:
             self._nul_std_out.close()
             self._nul_std_out = None
 
+        if blocked:
+            log_file_lock.release()
         if main_instance:
             self._shut_down = True
             if exit_code is not None:

@@ -15,7 +15,7 @@ from traceback import format_exc
 
 from sys_data_ids import (ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES,
                           parse_system_option_args, strip_system_rec_type)
-from ae.core import DEBUG_LEVEL_VERBOSE
+from ae.core import DEBUG_LEVEL_VERBOSE, try_eval
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console_app import ConsoleApp
 from ae_db.db import PostgresDB
@@ -146,7 +146,7 @@ def parse_action_args(args_str, eval_kwargs=False):
     system, rec_type, arg_dict_str = parse_system_option_args(args_str)
     if eval_kwargs:
         # eval args after system and rec_type variables are set, also available are: ass_data, asd, action, ...
-        kwargs = eval(arg_dict_str) if arg_dict_str else dict()
+        kwargs = try_eval(arg_dict_str, glo_vars=globals(), loc_vars=locals()) if arg_dict_str else dict()
         return system, rec_type, kwargs
 
     return system, rec_type

@@ -10,7 +10,7 @@ import pprint
 from sys_data_ids import SDI_SF
 from ae_validation.validation import EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED, \
     add_validation_options, init_validation, clients_to_validate
-from ae.core import correct_email, correct_phone
+from ae.core import correct_email, correct_phone, try_eval
 from ae.console_app import ConsoleApp
 from ae_notification.notification import add_notification_options, init_notification
 from sfif import add_sf_options
@@ -69,7 +69,7 @@ for rec in clients:
     cae.dpo("Checking Client for needed validation", rec)
     update_in_sf = False
     if email_validator and 'Email' in rec and rec['Email'] \
-            and eval("rec['CD_email_valid__c'] in (" + email_validation.replace('NULL', 'None') + ",)"):
+            and try_eval("rec['CD_email_valid__c'] in (" + email_validation.replace('NULL', 'None') + ",)"):
         for frag in invalid_email_fragments:
             if frag in rec['Email']:
                 if frag not in skipped_email_ids:
@@ -98,7 +98,7 @@ for rec in clients:
             rec['CD_email_valid__c'] = validation_flag
         emails_validated += 1
     if phone_validator and 'Phone' in rec and rec['Phone'] \
-            and eval("rec['CD_Htel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
+            and try_eval("rec['CD_Htel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
         phone_changes = list()
         rec['Phone'], phone_changed = correct_phone(rec['Phone'], removed=phone_changes)
         if phone_changed:
@@ -134,7 +134,7 @@ for rec in clients:
         rec['CD_Htel_valid__c'] = validation_flag
         phones_validated += 1
     if phone_validator and 'MobilePhone' in rec and rec['MobilePhone'] \
-            and eval("rec['CD_mtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
+            and try_eval("rec['CD_mtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
         phone_changes = list()
         rec['MobilePhone'], phone_changed = correct_phone(rec['MobilePhone'], removed=phone_changes)
         if phone_changed:
@@ -171,7 +171,7 @@ for rec in clients:
         rec['CD_mtel_valid__c'] = validation_flag
         phones_validated += 1
     if phone_validator and 'Work_Phone__c' in rec and rec['Work_Phone__c'] \
-            and eval("rec['CD_wtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
+            and try_eval("rec['CD_wtel_valid__c'] in (" + phone_validation.replace('NULL', 'None') + ",)"):
         phone_changes = list()
         rec['Work_Phone__c'], phone_changed = correct_phone(rec['Work_Phone__c'], removed=phone_changes)
         if phone_changed:

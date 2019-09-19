@@ -1,7 +1,7 @@
 from smtplib import SMTP, SMTP_SSL
 from email.mime.text import MIMEText
 
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po, try_eval
 
 DEF_ENC_PORT = 25
 DEF_ENC_SERVICE_NAME = 'smtp'
@@ -30,8 +30,7 @@ def init_notification(cae, system_name=''):
                                     mail_to=cae.get_opt('smtpTo'),
                                     used_system=system_name or cae.app_name,
                                     debug_level=cae.get_opt('debugLevel'))
-        po("SMTP Uri/From/To:", cae.get_opt('smtpServerUri'), cae.get_opt('smtpFrom'),
-               cae.get_opt('smtpTo'))
+        po("SMTP Uri/From/To:", cae.get_opt('smtpServerUri'), cae.get_opt('smtpFrom'), cae.get_opt('smtpTo'))
         warning_notification_emails = cae.get_opt('warningsMailToAddr')
         if warning_notification_emails:
             po("Warnings SMTP receiver address(es):", warning_notification_emails)
@@ -43,7 +42,7 @@ class Notification:
                  debug_level=DEBUG_LEVEL_DISABLED):
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             po(' ###  New Notification({}, {}, {}, {}, {}, {}).'
-                   .format(smtp_server_uri, mail_from, mail_to, local_mail_host, used_system, mail_body_footer))
+               .format(smtp_server_uri, mail_from, mail_to, local_mail_host, used_system, mail_body_footer))
         # split smtp server URI into service, host, user, pw and port (all apart host are optional)
         if '://' in smtp_server_uri:
             self._mail_service, smtp_server_uri = smtp_server_uri.split('://')
@@ -105,14 +104,14 @@ class Notification:
         if isinstance(mail_to, str):
             mail_to_expr = mail_to
             try:
-                mail_to = eval(mail_to_expr)  # data_dict for to check data, subject/msg_body for to mail content
+                mail_to = try_eval(mail_to_expr)  # data_dict for to check data, subject/msg_body for to mail content
             except Exception as ex:
                 po(" **** Notification.send_notification() exception '" + str(ex) +
-                       "' on evaluating of expression '" + str(mail_to_expr) +
-                       "'" + title_ext)
+                   "' on evaluating of expression '" + str(mail_to_expr) +
+                   "'" + title_ext)
         if not isinstance(mail_to, list):
             po(" **** Notification.send_notification(): invalid email-to address list or expression '" +
-                   str(mail_to) + "' - using ITDevmen fallback!")
+               str(mail_to) + "' - using ITDevmen fallback!")
             mail_to = ['ITDevmen@signallia.com']
         body_style = body_style or 'html' if '</' in msg_body else 'plain'
         if body_style == 'html':

@@ -10,14 +10,16 @@ import sys
 from typing import cast
 
 from ae.core import (
-    MAX_NUM_LOG_FILES, try_call, try_eval, stack_frames, module_name, stack_var, correct_email, correct_phone,
-    force_encoding, full_stack_trace, round_traditional, sys_env_dict, sys_env_text, to_ascii, po,
-    AppPrintingReplicator, AppBase)
+    MAX_NUM_LOG_FILES, correct_email, correct_phone, exec_with_return, force_encoding, full_stack_trace, module_name,
+    po, round_traditional, stack_frames, stack_var, sys_env_dict, sys_env_text, to_ascii, try_call, try_eval, try_exec,
+    AppPrintingReplicator, AppBase, DATE_ISO)
+
+import datetime as test_dt
 
 
 main_base_instance = None       # used for to keep and recycle AppBase instance
 
-module_var = 'module_var_val'   # used for stack_var() tests
+module_var = 'module_var_val'   # used for stack_var()/try_exec() tests
 
 __version__ = '3.6.9dev-test'   # used for automatic app version find tests
 
@@ -30,30 +32,51 @@ def test(sys_argv_restore):  # REMOVING fixture is showing error ?!?!?
 
 
 class TestCoreHelpers:
-    def test_try_call(self):
-        assert try_call(str, 123) == "123"
-        assert try_call(bytes, '123', encoding='ascii') == b"123"
-        assert try_call(int, '123') == 123
-        with pytest.raises(ValueError):
-            assert try_call(int, 'no-number')
-        assert try_call(int, 'no-number', ignored_exceptions=(ValueError, )) is None
+    def test_exec_with_return(self):
+        assert exec_with_return('a = 1 + 2; a') == 3
+        assert exec_with_return('a = 1 + 2; a + 3') == 6
 
-    def test_try_eval(self):
-        assert try_eval("str(123)") == "123"
-        assert try_eval("str(bytes(b'123'), encoding='ascii')") == "123"
-        assert try_eval("int('123')") == 123
-        with pytest.raises(ValueError):
-            assert try_eval("int('no-number')")
-        assert try_eval("int('no-number')", ignored_exceptions=(ValueError, )) is None
-        with pytest.raises(TypeError):      # list with ignored exceptions is not accepted
-            assert try_eval("int('no-number')", ignored_exceptions=cast(tuple, [ValueError, ])) is None
+        assert exec_with_return('a = b + 6; a', glo_vars=dict(b=3)) == 9
+        assert exec_with_return('a = b + 6; a', loc_vars=dict(b=3)) == 9
+        assert exec_with_return('a = b + 6; a', glo_vars=dict(b=69), loc_vars=dict(b=3)) == 9
 
-    def test_stack_frames(self):
-        print(sys.argv, "next test")
-        for frame in stack_frames():
-            assert frame
-            assert getattr(frame, 'f_globals')
-            assert getattr(frame, 'f_locals')
+    def test_force_encoding_bytes(self):
+        s = 'äöü'
+
+        assert s.encode('ascii', errors='replace') == b'???'
+        ba = s.encode('ascii', errors='backslashreplace')   # == b'\\xe4\\xf6\\xfc'
+        assert force_encoding(ba, encoding='ascii') == str(ba, encoding='ascii')
+        assert force_encoding(ba) == str(ba, encoding='ascii')
+
+        bw = s.encode('cp1252')                             # == b'\xe4\xf6\xfc'
+        assert force_encoding(bw, encoding='cp1252') == s
+        with pytest.raises(UnicodeDecodeError):
+            force_encoding(bw)
+
+    def test_force_encoding_umlaut(self):
+        s = 'äöü'
+        assert force_encoding(s) == '\\xe4\\xf6\\xfc'
+
+        assert force_encoding(s, encoding='utf-8') == s
+        assert force_encoding(s, encoding='utf-16') == s
+        assert force_encoding(s, encoding='cp1252') == s
+
+        assert force_encoding(s, encoding='utf-8', errors='strict') == s
+        assert force_encoding(s, encoding='utf-8', errors='replace') == s
+        assert force_encoding(s, encoding='utf-8', errors='backslashreplace') == s
+        assert force_encoding(s, encoding='utf-8', errors='xmlcharrefreplace') == s
+        assert force_encoding(s, encoding='utf-8', errors='ignore') == s
+        assert force_encoding(s, encoding='utf-8', errors='') == s
+
+        with pytest.raises(TypeError):
+            assert force_encoding(s, encoding=cast(str, None)) == '\\xe4\\xf6\\xfc'
+
+    def test_full_stack_trace(self):
+        try:
+            raise ValueError
+        except ValueError as ex:
+            # print(full_stack_trace(ex))
+            assert full_stack_trace(ex)
 
     def test_module_name(self):
         assert module_name(cast(str, None)) == 'ae.core'
@@ -115,6 +138,54 @@ class TestCoreHelpers:
         assert module_name(depth=69) is None
         assert module_name(depth=369) is None
 
+    def test_print_out(self, capsys, sys_argv_restore):
+        po()
+        out, err = capsys.readouterr()
+        assert out == '\n' and err == ''
+
+        po(invalid_kwarg='ika')
+        out, err = capsys.readouterr()
+        assert 'ika' in out and err == ''
+
+        us = chr(40960) + chr(1972) + chr(2013) + 'äöü'
+        po(us, encode_errors_def='strict')
+        out, err = capsys.readouterr()
+        assert us in out and err == ''
+
+        po(us, file=sys.stdout)
+        po(us, file=sys.stderr)
+        fna = 'print_out.txt'
+        fhd = open(fna, 'w', encoding='ascii', errors='strict')
+        po(us, file=fhd)
+        fhd.close()
+        os.remove(fna)
+        po(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
+        out, err = capsys.readouterr()
+        print(out)
+        assert us in out
+        assert us in err
+
+        # print invalid/surrogate code point/char for to force UnicodeEncodeError exception in po() (testing coverage)
+        us = chr(0xD801)
+        po(us, encode_errors_def='strict')
+
+    def test_round_traditional(self):
+        assert round_traditional(1.01) == 1
+        assert round_traditional(10.1, -1) == 10
+        assert round_traditional(1.123, 1) == 1.1
+        assert round_traditional(0.5) == 1
+        assert round_traditional(0.5001, 1) == 0.5
+
+        assert round_traditional(0.075, 2) == 0.08
+        assert round(0.075, 2) == 0.07
+
+    def test_stack_frames(self):
+        print(sys.argv, "next test")
+        for frame in stack_frames():
+            assert frame
+            assert getattr(frame, 'f_globals')
+            assert getattr(frame, 'f_locals')
+
     def test_stack_var(self):
         def _inner_func():
             _inner_var = 'inner_var_val'
@@ -166,54 +237,6 @@ class TestCoreHelpers:
         assert stack_var('module_var', 'ae.core', 'test_core') is None
         assert stack_var('module_var', depth=3) is None
 
-    def test_force_encoding_umlaut(self):
-        s = 'äöü'
-        assert force_encoding(s) == '\\xe4\\xf6\\xfc'
-
-        assert force_encoding(s, encoding='utf-8') == s
-        assert force_encoding(s, encoding='utf-16') == s
-        assert force_encoding(s, encoding='cp1252') == s
-
-        assert force_encoding(s, encoding='utf-8', errors='strict') == s
-        assert force_encoding(s, encoding='utf-8', errors='replace') == s
-        assert force_encoding(s, encoding='utf-8', errors='backslashreplace') == s
-        assert force_encoding(s, encoding='utf-8', errors='xmlcharrefreplace') == s
-        assert force_encoding(s, encoding='utf-8', errors='ignore') == s
-        assert force_encoding(s, encoding='utf-8', errors='') == s
-
-        with pytest.raises(TypeError):
-            assert force_encoding(s, encoding=cast(str, None)) == '\\xe4\\xf6\\xfc'
-
-    def test_force_encoding_bytes(self):
-        s = 'äöü'
-
-        assert s.encode('ascii', errors='replace') == b'???'
-        ba = s.encode('ascii', errors='backslashreplace')   # == b'\\xe4\\xf6\\xfc'
-        assert force_encoding(ba, encoding='ascii') == str(ba, encoding='ascii')
-        assert force_encoding(ba) == str(ba, encoding='ascii')
-
-        bw = s.encode('cp1252')                             # == b'\xe4\xf6\xfc'
-        assert force_encoding(bw, encoding='cp1252') == s
-        with pytest.raises(UnicodeDecodeError):
-            force_encoding(bw)
-
-    def test_full_stack_trace(self):
-        try:
-            raise ValueError
-        except ValueError as ex:
-            # print(full_stack_trace(ex))
-            assert full_stack_trace(ex)
-
-    def test_round_traditional(self):
-        assert round_traditional(1.01) == 1
-        assert round_traditional(10.1, -1) == 10
-        assert round_traditional(1.123, 1) == 1.1
-        assert round_traditional(0.5) == 1
-        assert round_traditional(0.5001, 1) == 0.5
-
-        assert round_traditional(0.075, 2) == 0.08
-        assert round(0.075, 2) == 0.07
-
     def test_sys_env_dict(self):
         assert sys_env_dict().get('python_ver')
         assert sys_env_dict().get('cwd')
@@ -232,41 +255,48 @@ class TestCoreHelpers:
     def test_to_ascii(self):
         assert to_ascii('äöü') == 'aou'
 
-    def test_print_out(self, capsys, sys_argv_restore):
-        po()
-        out, err = capsys.readouterr()
-        assert out == '\n' and err == ''
+    def test_try_call(self):
+        assert try_call(str, 123) == "123"
+        assert try_call(bytes, '123', encoding='ascii') == b"123"
+        assert try_call(int, '123') == 123
 
-        app = AppBase('test_python_logging_params_dict_basic_from_ini', multi_threading=True)
-        po(invalid_kwarg='ika')
-        out, err = capsys.readouterr()
-        assert 'ika' in out and err == ''
+        call_arg = "no-number"
+        with pytest.raises(ValueError):
+            assert try_call(int, call_arg)
+        assert try_call(int, call_arg, ignored_exceptions=(ValueError, )) is None
 
-        us = chr(40960) + chr(1972) + chr(2013) + 'äöü'
-        po(us, encode_errors_def='strict')
-        out, err = capsys.readouterr()
-        assert us in out and err == ''
+    def test_try_eval(self):
+        assert try_eval("str(123)") == "123"
+        assert try_eval("str(bytes(b'123'), encoding='ascii')") == "123"
+        assert try_eval("int('123')") == 123
 
-        po(us, app_instance=app)
-        po(us, file=sys.stdout)
-        po(us, file=sys.stderr)
-        fna = 'print_out.txt'
-        fhd = open(fna, 'w', encoding='ascii', errors='strict')
-        po(us, file=fhd)
-        fhd.close()
-        os.remove(fna)
-        po(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
-        out, err = capsys.readouterr()
-        print(out)
-        assert us in out
-        assert us in err
+        eval_str = "int('no-number')"
+        with pytest.raises(ValueError):
+            assert try_eval(eval_str)
+        assert try_eval(eval_str, ignored_exceptions=(ValueError, )) is None
+        with pytest.raises(TypeError):      # list with ignored exceptions is not accepted
+            assert try_eval(eval_str, ignored_exceptions=cast(tuple, [ValueError, ])) is None
 
-        # print invalid/surrogate code point/char for to force UnicodeEncodeError exception in po() (testing coverage)
-        us = chr(0xD801)
-        po(us, encode_errors_def='strict')
+        assert try_eval('b + 6', glo_vars=dict(b=3)) == 9
+        assert try_eval('b + 6', loc_vars=dict(b=3)) == 9
+        assert try_eval('b + 6', glo_vars=dict(b=33), loc_vars=dict(b=3)) == 9
 
-        # multi_threading has to be reset for to prevent debug test run freeze (added multi_threading for coverage)
-        app.multi_threading = False
+    def test_try_exec(self):
+        assert try_exec('a = 1 + 2; a') == 3
+        assert try_exec('a = 1 + 2; a + 3') == 6
+        assert try_exec('a = b + 6; a', glo_vars=dict(b=3)) == 9
+        assert try_exec('a = b + 6; a', loc_vars=dict(b=3)) == 9
+        assert try_exec('a = b + 6; a', glo_vars=dict(b=69), loc_vars=dict(b=3)) == 9
+
+        code_block = "a=1+2; module_var"
+        with pytest.raises(NameError):
+            assert try_exec(code_block) == module_var
+        assert try_exec(code_block, glo_vars=globals()) == module_var
+
+        # check ae.core datetime/DATE_ISO context (globals)
+        dt_val = test_dt.datetime.now()
+        dt_str = test_dt.datetime.strftime(dt_val, DATE_ISO)
+        assert try_exec("dt = _; datetime.datetime.strftime(dt, DATE_ISO)", loc_vars={'_': dt_val}) == dt_str
 
 
 class TestAppPrintingReplicator:
@@ -693,3 +723,39 @@ class TestAppBase:      # only some basic tests - test coverage is done by :clas
     def test_app_find_title(self, sys_argv_restore):
         app = AppBase()
         assert app.app_title == __doc__
+
+    def test_print_out(self, capsys, sys_argv_restore):
+        app = AppBase('test_python_logging_params_dict_basic_from_ini', multi_threading=True)
+        app.po()
+        out, err = capsys.readouterr()
+        assert out.endswith('\n') and err == ''
+
+        app.po(invalid_kwarg='ika')
+        out, err = capsys.readouterr()
+        assert 'ika' in out and err == ''
+
+        us = chr(40960) + chr(1972) + chr(2013) + 'äöü'
+        app.po(us, encode_errors_def='strict')
+        out, err = capsys.readouterr()
+        assert us in out and err == ''
+
+        app.po(us, app_instance=app)
+        app.po(us, file=sys.stdout)
+        app.po(us, file=sys.stderr)
+        fna = 'print_out.txt'
+        fhd = open(fna, 'w', encoding='ascii', errors='strict')
+        app.po(us, file=fhd)
+        fhd.close()
+        os.remove(fna)
+        app.po(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
+        out, err = capsys.readouterr()
+        print(out)
+        assert us in out
+        assert us in err
+
+        # print invalid/surrogate code point/char for to force UnicodeEncodeError exception in po() (testing coverage)
+        us = chr(0xD801)
+        app.po(us, encode_errors_def='strict')
+
+        # multi_threading has to be reset for to prevent debug test run freeze (added multi_threading for coverage)
+        app.multi_threading = False
