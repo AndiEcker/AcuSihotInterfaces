@@ -65,7 +65,7 @@ for table_row in owner_tables:
         cae.po("SKIPPING TABLE", table_name)
         continue
 
-    err_msg = ora_db.select(table_name, ['*'])  # ['count(*)' if CHK_RUN else '*'])
+    err_msg = ora_db.select(table_name, ['*'])
     if err_msg:
         cae.po(err_msg)
         if not CHK_RUN:
@@ -74,18 +74,17 @@ for table_row in owner_tables:
     col_names = ora_db.selected_column_names()
     rows = ora_db.fetch_all()
 
+    num_rows = len(rows)
+    cae.po("===  TABLE", table_name, num_rows, "ROWS", len(col_names), "COLS: ", col_names)
+    tot_rows += num_rows
+    if num_rows > max_rows:
+        max_rows = num_rows
+    if num_rows > BIG_TABLE_MIN:
+        big_tables.append(table_name + "=" + str(num_rows))
+
     if CHK_RUN:
-        # r = ora_db.fetch_value()
-        num_rows = len(rows)
-        cae.po("===  TABLE", table_name, num_rows, "ROWS", len(col_names), "COLS: ", col_names)
-        tot_rows += num_rows
-        if num_rows > max_rows:
-            max_rows = num_rows
-        if num_rows > BIG_TABLE_MIN:
-            big_tables.append(table_name + "=" + str(num_rows))
         continue
 
-    cae.po("===  TABLE", table_name, len(col_names), "COLS: ", col_names)
     with open(out_path + table_name + ".csv", "w", encoding='utf-8', errors=DEF_ENCODE_ERRORS) as fo:
         fo.write(COL_SEP.join(col_names) + LINE_SEP)
 
