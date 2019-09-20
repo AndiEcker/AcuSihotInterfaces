@@ -51,69 +51,6 @@ DEF_ENCODE_ERRORS = 'backslashreplace'      #: default encode error handling for
 DEF_ENCODING: str = 'ascii'
 """ core encoding that will always work independent from destination (console, file system, XMLParser, ...)."""
 
-MAX_NUM_LOG_FILES: int = 69                 #: maximum number of log files
-LOG_FILE_MAX_SIZE: int = 20                 #: maximum size in MB of a rotating log file
-LOG_FILE_IDX_WIDTH: int = len(str(MAX_NUM_LOG_FILES)) + 3
-""" width of rotating log file index within log file name; adding +3 to ensure index range up to factor 10^3. """
-
-ori_std_out = sys.stdout                    #: original sys.stdout on app startup
-ori_std_err = sys.stderr                    #: original sys.stderr on app startup
-
-log_file_lock = threading.Lock()            #: log file rotation lock
-
-# Had to use type comment because the following line is throwing an error in the Sphinx docs make:
-# _app_instances: weakref.WeakValueDictionary[str, "AppBase"] = weakref.WeakValueDictionary()
-_app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, AppBase]
-""" dict that is weakly holding references to all :class:`AppBase` instances created at run time.
-
-Gets automatically initialized in :meth:`AppBase.__init__` for to allow log file split/rotation
-and debugLevel access at application thread or module level.
-
-The first created :class:`AppBase` instance is called the main app instance. :data:`_main_app_inst_key`
-stores the dict key of the main instance.
-"""
-_main_app_inst_key: str = ''    #: key in :data:`_app_instances` of main :class:`AppBase` instance
-
-
-def _register_app_instance(app: 'AppBase'):
-    """ register new :class:`AppBase` instance in :data:`_app_instances`.
-
-    :param app:         :class:`AppBase` instance to register
-    """
-    global _app_instances, _main_app_inst_key
-    msg = f"register_app_instance({app}) expects "
-    assert app not in _app_instances.values(), msg + "new instance"
-
-    key = app.app_name + app.sys_env_id
-    assert key and key not in _app_instances, msg + f"non-empty, unique app key (app_name+sys_env_id=={key}"
-
-    if not _main_app_inst_key:
-        _main_app_inst_key = key
-    _app_instances[key] = app
-
-
-def _unregister_app_instance(app_key: str) -> 'AppBase':
-    """ unregister/remove :class:`AppBase` instance from within :data:`_app_instances`.
-
-    :param app_key:     app key of the instance to remove.
-    :return:            removed :class:`AppBase` instance.
-    """
-    global _app_instances, _main_app_inst_key
-    app = _app_instances.pop(app_key, None)
-    if app_key == _main_app_inst_key:
-        _main_app_inst_key = ''
-        cnt = len(_app_instances)
-        assert cnt == 0, f"unregistered/removed main app while still having {cnt} sub-apps registered/running"
-    return app
-
-
-def main_app_instance() -> Optional['AppBase']:
-    """ determine the main instance of the :class:`AppBase` in the current running application.
-
-    :return:    main :class:`AppBase` instance or None (if app is not fully initialized yet).
-    """
-    return _app_instances.get(_main_app_inst_key)
-
 
 def correct_email(email, changed=False, removed=None):
     """ check and correct email address from a user input (removing all comments)
@@ -327,6 +264,20 @@ def full_stack_trace(ex: Exception) -> str:
     return ret
 
 
+def hide_dup_line_prefix(line1: str, line2: str) -> str:
+    """ replace duplicate characters at the begin of two strings with spaces.
+
+    :param line1:   first string (line of text file).
+    :param line2:   second string.
+    :return:        second string but duplicate characters at the begin are replaced by space characters.
+    """
+    idx = 0
+    min_len = min(len(line1), len(line2))
+    while idx < min_len and line1[idx] == line2[idx]:
+        idx += 1
+    return " " * idx + line2[idx:]
+
+
 def module_name(*skip_modules: str, depth: int = 1) -> Optional[str]:
     """ find the first module in the call stack that is *not* in :paramref:`module_name.skip_modules`.
 
@@ -512,46 +463,15 @@ def try_exec(code_block: str, ignored_exceptions: Optional[tuple] = (),
     return ret
 
 
-class AppPrintingReplicator:
-    """ replace standard output/error stream for to replicate prints to all active logging streams (log files/buffers).
-    """
-    def __init__(self, sys_out_obj: TextIO = ori_std_out) -> None:
-        """ initialise a new T-stream-object
+MAX_NUM_LOG_FILES: int = 69                 #: maximum number of log files
+LOG_FILE_MAX_SIZE: int = 20                 #: maximum size in MB of a rotating log file
+LOG_FILE_IDX_WIDTH: int = len(str(MAX_NUM_LOG_FILES)) + 3
+""" width of rotating log file index within log file name; adding +3 to ensure index range up to factor 10^3. """
 
-        :param sys_out_obj:     standard output/error stream to be replicated (def=sys.stdout)
-        """
-        self.sys_out_obj = sys_out_obj
+ori_std_out = sys.stdout                    #: original sys.stdout on app startup
+ori_std_err = sys.stderr                    #: original sys.stderr on app startup
 
-    def write(self, message: AnyStr) -> None:
-        """ write string to logs and standard output streams.
-
-        Automatically suppressing UnicodeEncodeErrors if console/shell or log file has different encoding
-        by forcing re-encoding with DEF_ENCODE_ERRORS.
-
-        :param message:     string to output.
-        """
-        streams = list()
-        for app in _app_instances.values():
-            if app.log_buf_stream and not app.log_buf_stream.closed:
-                streams.append(app.log_buf_stream)
-            elif app.log_file_stream and not app.log_file_stream.closed:
-                streams.append(app.log_file_stream)
-        if not self.sys_out_obj.closed:
-            streams.append(self.sys_out_obj)
-
-        for stream in streams:
-            try:
-                stream.write(message)
-            except UnicodeEncodeError:
-                stream.write(force_encoding(message, encoding=stream.encoding))
-
-    def __getattr__(self, attr: str) -> Any:
-        """ get attribute value from standard output stream.
-
-        :param attr:    name of the attribute to retrieve/return.
-        :return:        value of the attribute.
-        """
-        return getattr(self.sys_out_obj, attr)
+log_file_lock = threading.Lock()            #: log file rotation lock
 
 
 _logger = None       #: python logger for this module gets lazy/late initialized and only if requested by caller
@@ -564,9 +484,47 @@ def logger_late_init():
         _logger = logging.getLogger(__name__)
 
 
+_multi_threading_activated: bool = False            #: flag if threading is used
+
+
+def activate_multi_threading():
+    """ activate multi-threading for all app instances (normally done at main app startup).
+    """
+    global _multi_threading_activated
+    _multi_threading_activated = True
+
+
+def _deactivate_multi_threading():
+    global _multi_threading_activated
+    _multi_threading_activated = False
+
+
+_app_threads = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[int, threading.Thread]
+
+
+def _register_app_thread():
+    global _app_threads
+    tid = threading.get_ident()
+    if tid not in _app_threads:
+        _app_threads[tid] = threading.current_thread()
+
+
+def _join_app_threads(timeout: Optional[float] = None):
+    """ deactivate multi-threading.
+
+    :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
+    """
+    global _app_threads
+    main_thread = threading.current_thread()
+    for t in _app_threads.values():     # threading.enumerate() also includes PyCharm/pytest threads
+        if t is not main_thread:
+            po("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()), logger=_logger)
+            t.join(timeout)
+            _app_threads.pop(t.ident)
+
+
 def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = None, flush: bool = False,
-              encode_errors_def: str = DEF_ENCODE_ERRORS, logger: Optional['logging.Logger'] = None,
-              app_instance: Optional['AppBase'] = None, **kwargs) -> None:
+              encode_errors_def: str = DEF_ENCODE_ERRORS, logger: Optional['logging.Logger'] = None, **kwargs) -> None:
     """ universal/unbreakable print function - replacement for the python print() built-in.
 
     This function is silently handling and auto-correcting string encode errors for output streams which are
@@ -583,36 +541,22 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
     :param flush:               flush stream after printing (def=False).
     :param encode_errors_def:   default error handling for to encode (def=:data:`DEF_ENCODE_ERRORS`).
     :param logger:              used logger for to output `objects` (def=None).
-    :param app_instance:        used app environment of the passed :class:`AppBase` or :class:`~console_app.ConsoleApp`
-                                instance (def=None -> use the main app instance).
     :param kwargs:              catch unsupported kwargs for debugging (all items will be printed to the output stream).
 
     This function has an alias named :meth:`.po`.
     """
     processing = end == "\r"
     enc = (file or ori_std_out if processing else sys.stdout).encoding
+    use_py_logger = False
     if processing:
         file = ori_std_out
+    elif logger is not None:
+        use_py_logger = True
+        logger_late_init()
+    app = main_app_instance()
+    if app:
+        app.log_file_check()  # check suppress_stdout/log file status and rotation
 
-    if app_instance is None:
-        app_instance = main_app_instance()
-    debug_level = app_instance.debug_level if app_instance else DEBUG_LEVEL_VERBOSE
-
-    use_py_logger = False
-    if app_instance and not processing:
-        use_py_logger = getattr(app_instance, 'py_log_params', False) and debug_level in LOGGING_LEVELS
-        if use_py_logger and logger is None:
-            logger_late_init()
-            module = module_name()
-            logger = logging.getLogger(module) if module else _logger
-        if getattr(app_instance, 'log_file_stream', False):
-            # creating new log file and backup of current one if the current has more than LOG_FILE_MAX_SIZE MB in size
-            app_instance.log_file_check()
-
-    if getattr(app_instance, 'multi_threading', False):            # add thread ident
-        objects = (" <{: >6}>".format(threading.get_ident()),) + objects
-    if debug_level >= DEBUG_LEVEL_TIMESTAMPED:
-        objects = (datetime.datetime.now().strftime(DATE_TIME_ISO),) + objects
     if kwargs:
         objects += ("\n   *  EXTRA KWARGS={}".format(kwargs),)
 
@@ -620,7 +564,7 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
     while retries:
         try:
             print_strings = map(lambda _: str(_).encode(enc, errors=encode_errors_def).decode(enc), objects)
-            if use_py_logger or getattr(app_instance, 'multi_threading', False):
+            if use_py_logger or _multi_threading_activated:
                 # concatenating objects also prevents fluttered log file content in multi-threading apps
                 # .. see https://stackoverflow.com/questions/3029816/how-do-i-get-a-thread-safe-print-in-python-2-6
                 # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
@@ -632,6 +576,8 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
                 print_strings = (print_one_str,)
 
             if use_py_logger:
+                key = _main_app_inst_key
+                debug_level = _app_instances[key].debug_level if key else DEBUG_LEVEL_VERBOSE
                 logger.log(level=LOGGING_LEVELS[debug_level], msg=print_strings[0])
             else:
                 print(*print_strings, sep=sep, end=end, file=file, flush=flush)
@@ -651,6 +597,125 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
 
 
 po = print_out              #: alias of function :func:`.print_out`
+
+
+class AppPrintingReplicator:
+    """ replace standard output/error stream for to replicate prints to all active logging streams (log files/buffers).
+    """
+    def __init__(self, sys_out_obj: TextIO = ori_std_out) -> None:
+        """ initialise a new T-stream-object
+
+        :param sys_out_obj:     standard output/error stream to be replicated (def=sys.stdout)
+        """
+        self.sys_out_obj = sys_out_obj
+
+    def write(self, message: AnyStr) -> None:
+        """ write string to logs and standard output streams.
+
+        Automatically suppressing UnicodeEncodeErrors if console/shell or log file has different encoding
+        by forcing re-encoding with DEF_ENCODE_ERRORS.
+
+        :param message:     string to output.
+        """
+        app_streams = list()
+        for app in _app_instances.values():
+            if app.log_buf_stream and not app.log_buf_stream.closed:
+                app_streams.append((app, app.log_buf_stream))
+            elif app.log_file_stream and not app.log_file_stream.closed:
+                app.log_file_check()  # check log file rotation (if yes then switch to new app.log_file_stream)
+                app_streams.append((app, app.log_file_stream))
+        if not self.sys_out_obj.closed:
+            app_streams.append((_app_instances.get(_main_app_inst_key), self.sys_out_obj))
+
+        log_lines = message.split('\n')
+        for app, stream in app_streams:
+            line_prefix = '\n' + (app.log_line_prefix() if app else '')
+            app_msg = line_prefix.join(log_lines)
+            try:
+                stream.write(app_msg)
+            except UnicodeEncodeError:
+                stream.write(force_encoding(app_msg, encoding=stream.encoding))
+
+    def __getattr__(self, attr: str) -> Any:
+        """ get attribute value from standard output stream.
+
+        :param attr:    name of the attribute to retrieve/return.
+        :return:        value of the attribute.
+        """
+        return getattr(self.sys_out_obj, attr)
+
+
+# Had to use type comment because the following line is throwing an error in the Sphinx docs make:
+# _app_instances: weakref.WeakValueDictionary[str, "AppBase"] = weakref.WeakValueDictionary()
+_app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, AppBase]
+""" dict that is weakly holding references to all :class:`AppBase` instances created at run time.
+
+Gets automatically initialized in :meth:`AppBase.__init__` for to allow log file split/rotation
+and debugLevel access at application thread or module level.
+
+The first created :class:`AppBase` instance is called the main app instance. :data:`_main_app_inst_key`
+stores the dict key of the main instance.
+"""
+_main_app_inst_key: str = ''    #: key in :data:`_app_instances` of main :class:`AppBase` instance
+
+
+def main_app_instance() -> Optional['AppBase']:
+    """ determine the main instance of the :class:`AppBase` in the current running application.
+
+    :return:    main :class:`AppBase` instance or None (if app is not fully initialized yet).
+    """
+    return _app_instances.get(_main_app_inst_key)
+
+
+def _register_app_instance(app: 'AppBase'):
+    """ register new :class:`AppBase` instance in :data:`_app_instances`.
+
+    :param app:         :class:`AppBase` instance to register
+    """
+    global _app_instances, _main_app_inst_key
+    msg = f"register_app_instance({app}) expects "
+    assert app not in _app_instances.values(), msg + "new instance - this app got already registered"
+
+    key = app.app_name + app.sys_env_id
+    assert key and key not in _app_instances, \
+        msg + f"non-empty, unique app key (app_name+sys_env_id=={key} keys={list(_app_instances.keys())})"
+
+    cnt = len(_app_instances)
+    if _main_app_inst_key:
+        assert cnt > 0, f"No app instances registered but main app key is set to {_main_app_inst_key}"
+    else:
+        assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app remove"
+        _main_app_inst_key = key
+    _app_instances[key] = app
+
+
+def _unregister_app_instance(app_key: str) -> 'AppBase':
+    """ unregister/remove :class:`AppBase` instance from within :data:`_app_instances`.
+
+    :param app_key:     app key of the instance to remove.
+    :return:            removed :class:`AppBase` instance.
+    """
+    global _app_instances, _main_app_inst_key
+    app = _app_instances.pop(app_key, None)
+    cnt = len(_app_instances)
+    if app_key == _main_app_inst_key:
+        _main_app_inst_key = ''
+        assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app {app_key}{app} remove"
+    else:
+        assert cnt > 0, f"Unregistered last app {app_key} but was not the main app {_main_app_inst_key}"
+    return app
+
+
+def shut_down_sub_app_instances(timeout: Optional[float] = None):
+    """ shut down all sub-app instances.
+
+    :param timeout:     timeout float value in seconds for thread joining
+                        sub-app shutdowns and for log file lock acquire.
+    """
+    main_app = _app_instances.get(_main_app_inst_key)
+    for app in list(_app_instances.values()):   # list is needed because weak ref dict get changed in loop
+        if app is not main_app:
+            app.shutdown(timeout=timeout)
 
 
 class AppBase:
@@ -673,7 +738,6 @@ class AppBase:
     * :attr:`_log_file_name`        path and file name of the log file.
     * :attr:`log_file_stream`       log file stream (opened in :meth:~AppBase._open_log_file`, could be closed).
     * :attr:`py_log_params`         python logging config dict.
-    * :attr:`multi_threading`       set to True if your application uses threads.
     * :attr:`_nul_std_out`          null stream used for to prevent printouts on stdout of the console/shell.
     * :attr:`_shut_down`            flag set to True if application shutdown was already processed.
     * :attr:`startup_beg`           datetime of begin of app instantiation/startup.
@@ -682,7 +746,7 @@ class AppBase:
     * :attr:`sys_env_id`            system environment id of this instance.
     """
     def __init__(self, app_title: str = '', app_name: str = '', app_version: str = '', sys_env_id: str = '',
-                 debug_level: int = DEBUG_LEVEL_DISABLED, multi_threading: bool = False, suppress_stdout: bool = False):
+                 debug_level: int = DEBUG_LEVEL_DISABLED, suppress_stdout: bool = False):
         """ initialize a new :class:`AppBase` instance.
 
         :param app_title:               application instance title/description (def=value of main module docstring).
@@ -692,7 +756,6 @@ class AppBase:
                                         the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
                                         for to init second :class:`AppBase` instance with values from sys_envLIVE.cfg).
         :param debug_level:             default debug level (def=DEBUG_LEVEL_DISABLED).
-        :param multi_threading:         pass True if instance is used in multi-threading app.
         :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
        """
         self.startup_beg: datetime.datetime = datetime.datetime.now()   #: begin of app startup datetime
@@ -714,7 +777,7 @@ class AppBase:
         self.app_version: str = app_version                     #: version of your app
         self.sys_env_id: str = sys_env_id                       #: system environment id of this instance
         self.debug_level: int = debug_level                     #: app default debug level
-        self.multi_threading: bool = multi_threading            #: True if app uses multiple threads
+
         self.suppress_stdout: bool = suppress_stdout            #: flag to suppress prints to stdout
 
         self._nul_std_out: Optional[TextIO] = None              #: logging null stream
@@ -725,13 +788,20 @@ class AppBase:
         self._log_file_max_size: int = LOG_FILE_MAX_SIZE        #: maximum log file size in MBytes (rotating log files)
         self._log_file_index: int = 0                           #: log file index (for rotating logs)
         self._log_file_name: str = ""                           #: log file name
+        self._last_log_line_prefix: str = ""                    #: prefix of the last printed log line
         self.log_buf_stream: Optional[StringIO] = None          #: log file buffer stream instance
         self.log_file_stream: Optional[TextIO] = None           #: log file stream instance
 
+        _register_app_thread()
         _register_app_instance(self)
 
-    def init_logging(self, py_logging_params: Optional[Dict[str, Any]] = None, file_name_def: Optional[str] = "",
-                     file_size_max: Optional[float] = LOG_FILE_MAX_SIZE, disable_buffering: Optional[bool] = False):
+    def __del__(self):
+        """ deallocate this app instance by calling :func:`AppBase.shutdown`.
+        """
+        self.shutdown(exit_code=None)
+
+    def init_logging(self, py_logging_params: Optional[Dict[str, Any]] = None, file_name_def: str = "",
+                     file_size_max: float = LOG_FILE_MAX_SIZE, disable_buffering: bool = False):
         """ prepare logging: most values will be initialized in self._parse_args() indirectly via logFile config option
 
         :param py_logging_params:       config dict for python logging configuration.
@@ -741,21 +811,63 @@ class AppBase:
         :param file_size_max:           max. size in MB of ae log file (def=LOG_FILE_MAX_SIZE).
         :param disable_buffering:       pass True to disable ae log buffering at app startup.
         """
-        if py_logging_params:                     # init python logging - app is using python logging module
+        if py_logging_params:                   # init python logging - app is using python logging module
             logger_late_init()
             # logging.basicConfig(level=logging.DEBUG, style='{')
-            logging.config.dictConfig(py_logging_params)     # configure py logging module
+            logging.config.dictConfig(py_logging_params)     # re-configure py logging module
             main_instance = main_app_instance()
             if not main_instance.py_log_params:
                 main_instance.py_log_params = py_logging_params
             self.py_log_params = py_logging_params
-        else:                       # init ae logging
+        else:                                   # (re-)init ae logging
+            if self.log_file_stream:
+                self._close_log_file()
             self._log_file_name = file_name_def
             self._log_file_max_size = file_size_max
             if not disable_buffering:
                 self.log_buf_stream = StringIO(initial_value="####  Log Buffer\n")
 
-        self.startup_end = datetime.datetime.now()
+        if self.startup_end is not None:
+            self.startup_end = datetime.datetime.now()
+
+    def log_line_prefix(self) -> str:
+        parts = list()
+        if self.sys_env_id:
+            parts.append(f"{{{self.sys_env_id: <4}}}")
+        if _multi_threading_activated:
+            parts.append(f"<{threading.get_ident(): >6}>")
+        if self.debug_level >= DEBUG_LEVEL_TIMESTAMPED:
+            parts.append(datetime.datetime.now().strftime(DATE_TIME_ISO))
+
+        prefix = "".join(parts)
+        last_pre = self._last_log_line_prefix
+        self._last_log_line_prefix = prefix
+
+        return hide_dup_line_prefix(last_pre, prefix) + " "
+
+    def log_file_check(self):
+        """ check and possibly correct log file status.
+
+        For already opened log files check if the ae log file is big enough and if yes then do a file rotation.
+        If log file is not opened but log file name got already set, then check if log startup buffer is active
+        and if yes then create log file, pass log buffer content to log file and close the log buffer.
+        """
+        with log_file_lock:
+            if self.log_file_stream is not None:
+                self.log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
+                if self.log_file_stream.tell() >= self._log_file_max_size * 1024 * 1024:
+                    self._close_log_file()
+                    self._rename_log_file()
+                    self._open_log_file()
+            elif self._log_file_name:
+                self._open_log_file()
+                if self.log_file_stream and self.log_buf_stream:
+                    buf = self.log_buf_stream.getvalue()
+                    self.log_file_stream.write(buf)
+                    self.log_buf_stream.close()
+                    self.log_buf_stream = None
+            elif self.suppress_stdout and not self._nul_std_out:
+                sys.stdout = self._nul_std_out = open(os.devnull, 'w')
 
     def _append_eof_and_flush_file(self, stream_file: TextIO, stream_name: str):
         """ add special end-of-file marker and flush the internal buffers to the file stream.
@@ -779,37 +891,22 @@ class AppBase:
         except Exception as ex:
             self.po("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
 
-    def log_file_check(self):
-        """ check and possibly correct log file status.
-
-        For already opened log files check if the ae log file is big enough and if yes then do a file rotation.
-        If log file is not opened but log file name got already set, then check if log startup buffer is active
-        and if yes then create log file, pass log buffer content to log file and close the log buffer.
-        """
-        with log_file_lock:
-            if self.log_file_stream is not None:
-                self.log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
-                if self.log_file_stream.tell() >= self._log_file_max_size * 1024 * 1024:
-                    self._close_log_file()
-                    self._rename_log_file()
-                    self._open_log_file()
-            elif self._log_file_name:
-                self._open_log_file()
-                if self.log_file_stream and self.log_buf_stream:
-                    buf = self.log_buf_stream.getvalue()
-                    self.log_file_stream.write(buf)
-                    self.log_buf_stream.close()
-                    self.log_buf_stream = None
-
     def _open_log_file(self):
         """ open the ae log file.
         """
+        global ori_std_out, ori_std_err
         self.log_file_stream = open(self._log_file_name, "w", errors=DEF_ENCODE_ERRORS)
-        if sys.stdout == ori_std_out:      # first call/open-of-log-file?
-            if self.suppress_stdout:
-                std_out = self._nul_std_out = open(os.devnull, 'w')
-            else:
+        if not isinstance(sys.stdout, AppPrintingReplicator):  # sys.stdout == ori_std_out not working in pytest capsys
+            # if sys.stdout != ori_std_out:                   # only True in pytest run with capsys fixture
+            #   ori_std_out = sys.stdout                    # .. then set ori_* to capsys (for to be reset in log close)
+            #   ori_std_err = sys.stderr
+            # first call/open-of-log-file
+            if not self.suppress_stdout:
                 std_out = ori_std_out
+            elif self._nul_std_out and not self._nul_std_out.closed:
+                std_out = self._nul_std_out
+            else:
+                std_out = self._nul_std_out = open(os.devnull, 'w')
             sys.stdout = AppPrintingReplicator(sys_out_obj=std_out)
             sys.stderr = AppPrintingReplicator(sys_out_obj=ori_std_err)
 
@@ -842,42 +939,46 @@ class AppBase:
                 os.remove(dfn)
 
     # noinspection PyIncorrectDocstring
-    def print_out(self, *objects, **kwargs):
+    @staticmethod
+    def print_out(*objects, **kwargs):
         """ special version of builtin print() function.
 
         This method has the same args as :func:`in the print_out() function of this module <.print_out>`.
 
         This method has an alias named :meth:`.po`
         """
-        if self.sys_env_id:
-            objects = ('{' + self.sys_env_id + '}', ) + objects
-        po(*objects, **kwargs)
+        print_out(*objects, **kwargs)
 
     po = print_out          #: alias of method :meth:`.print_out`
 
     def shutdown(self, exit_code: Optional[int] = 0, timeout: Optional[float] = None):
-        """ shutdown app environment
+        """ shutdown this app instance and if self is the main app instance then also all sub-app-instances.
 
-        :param exit_code:   application OS exit code (def=0). Pass None for to not call sys.exit(exit_code).
-        :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
-                            Pass None for to block shutdown until all other threads have joined/finished.
+        :param exit_code:   set application OS exit code - ignored if this is NOT the main app instance (def=0).
+                            Pass None for to prevent call of sys.exit(exit_code).
+        :param timeout:     timeout float value in seconds for thread joining
+                            sub-app shutdowns and for log file lock.
         """
-        main_instance = main_app_instance() is self
-        if timeout:
-            blocked = log_file_lock.acquire(timeout=timeout)
-        else:
+        if self._shut_down:
+            return
+
+        if exit_code is not None:
+            self.po("####  Shutdown............  ", exit_code, timeout, logger=_logger)
+
+        is_main_instance = main_app_instance() is self
+        if is_main_instance:
+            shut_down_sub_app_instances(timeout=timeout)
+
+        if is_main_instance and _multi_threading_activated:
+            _join_app_threads(timeout=timeout)
+
+        if timeout is None:
             blocked = log_file_lock.acquire(blocking=False)
-        if blocked and (timeout or main_instance and exit_code is not None):
-            log_file_lock.release()
+        else:
+            blocked = log_file_lock.acquire(timeout=timeout)
+        if blocked and is_main_instance and exit_code is not None:
+            log_file_lock.release()     # prevent deadlock on app error exit/shutdown
             blocked = False
-        self.po("####  Shutdown............  ", exit_code, timeout, "BLOCKED" if blocked else "", logger=_logger)
-        if self.multi_threading:
-            main_thread = threading.current_thread()
-            for t in threading.enumerate():
-                if t is not main_thread:
-                    self.po("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()),
-                            logger=_logger)
-                    t.join(timeout)
 
         self._close_log_file()
         if self._log_file_index:
@@ -888,9 +989,14 @@ class AppBase:
             self._nul_std_out.close()
             self._nul_std_out = None
 
+        if self.py_log_params:
+            logging.shutdown()
+
         if blocked:
             log_file_lock.release()
-        if main_instance:
-            self._shut_down = True
-            if exit_code is not None:
-                sys.exit(exit_code)
+
+        _unregister_app_instance(self.app_name + self.sys_env_id)
+        if is_main_instance and exit_code is not None:
+            sys.exit(exit_code)
+
+        self._shut_down = True

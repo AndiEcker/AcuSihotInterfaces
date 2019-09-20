@@ -10,25 +10,18 @@ import sys
 from typing import cast
 
 from ae.core import (
-    MAX_NUM_LOG_FILES, correct_email, correct_phone, exec_with_return, force_encoding, full_stack_trace, module_name,
+    MAX_NUM_LOG_FILES, DATE_ISO,
+    activate_multi_threading, _deactivate_multi_threading, main_app_instance,
+    correct_email, correct_phone, exec_with_return, force_encoding, full_stack_trace, hide_dup_line_prefix, module_name,
     po, round_traditional, stack_frames, stack_var, sys_env_dict, sys_env_text, to_ascii, try_call, try_eval, try_exec,
-    AppPrintingReplicator, AppBase, DATE_ISO)
+    AppPrintingReplicator, AppBase)
 
 import datetime as test_dt
-
-
-main_base_instance = None       # used for to keep and recycle AppBase instance
-
-module_var = 'module_var_val'   # used for stack_var()/try_exec() tests
 
 __version__ = '3.6.9dev-test'   # used for automatic app version find tests
 
 
-def test(sys_argv_restore):  # REMOVING fixture is showing error ?!?!?
-    print(sys.argv, 'b4 test')
-    app = AppBase()
-    assert app.app_name
-    print(sys.argv, "after test")
+module_var = 'module_var_val'   # used for stack_var()/try_exec() tests
 
 
 class TestCoreHelpers:
@@ -77,6 +70,16 @@ class TestCoreHelpers:
         except ValueError as ex:
             # print(full_stack_trace(ex))
             assert full_stack_trace(ex)
+
+    def test_hide_dup_line_prefix(self):
+        l1 = "<t_s_t>"
+        l2 = l1
+        assert hide_dup_line_prefix(l1, l2) == " " * len(l2)
+        l2 = l1 + l1
+        assert hide_dup_line_prefix(l1, l2) == " " * len(l1) + l1
+        assert hide_dup_line_prefix(l2, l1) == " " * len(l1)
+        l2 = l1[:3] + l1
+        assert hide_dup_line_prefix(l1, l2) == " " * 3 + l1
 
     def test_module_name(self):
         assert module_name(cast(str, None)) == 'ae.core'
@@ -133,12 +136,12 @@ class TestCoreHelpers:
         assert module_name(depth=38) == '__main__'
 
         assert module_name(depth=cast(int, None)) is None
-        assert module_name(depth=39) is None
+        assert module_name(depth=39) in (None, '_pydev_imps._pydev_execfile')   # PyCharm: differs in (run, debug) mode
         assert module_name(depth=54) is None
         assert module_name(depth=69) is None
         assert module_name(depth=369) is None
 
-    def test_print_out(self, capsys, sys_argv_restore):
+    def test_print_out(self, capsys, restore_app_env):
         po()
         out, err = capsys.readouterr()
         assert out == '\n' and err == ''
@@ -519,80 +522,89 @@ class TestOfflineContactValidation:
 
 
 class TestAeLogging:
-    def test_log_file_rotation(self, sys_argv_restore):
-        """ this test has to run first because only the 1st AppBase instance can create an ae log file
-        """
-        global main_base_instance
+    def test_log_file_rotation(self, restore_app_env):
         log_file = 'test_ae_base_log.log'
         try:
-            app = AppBase('test_base_log_file_rotation', multi_threading=True)
+            app = AppBase('test_base_log_file_rotation')
             app.init_logging(file_name_def=log_file, file_size_max=.001)
             app.log_file_check()
-            main_base_instance = app     # keep reference to prevent garbage collection
-            # no longer needed since added sys_argv_restore:
-            # .. old_args = sys.argv     # temporary remove pytest command line arguments (test_file.py)
-            sys.argv = []
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
             app._close_log_file()
             assert os.path.exists(log_file)
         finally:
-            # clean up
-            if os.path.exists(log_file):
-                os.remove(log_file)
-            for idx in range(MAX_NUM_LOG_FILES + 99):
-                fn, ext = os.path.splitext(log_file)
-                rot_log_file = fn + "-{:0>{index_width}}".format(idx, index_width=len(str(MAX_NUM_LOG_FILES))) + ext
-                if os.path.exists(rot_log_file):
-                    os.remove(rot_log_file)
+            lp, le = os.path.splitext(log_file)
+            for lf in glob.glob(lp + '*' + le):
+                if os.path.exists(lf):
+                    os.remove(lf)
 
-    def test_open_log_file_with_suppressed_stdout(self, sys_argv_restore):
-        """ another test that need to work with the first instance
-        """
-        app = main_base_instance
+    def test_app_instances_reset1(self):
+        assert main_app_instance() is None
+
+    def test_log_file_rotation_multi_threading(self, restore_app_env):
+        log_file = 'test_ae_multi_log.log'
         try:
-            app.suppress_stdout = True
-            sys.argv = []
-            app._parsed_args = False
-            app._close_log_file()
+            app = AppBase('test_base_log_file_rotation')
+            activate_multi_threading()
+            app.init_logging(file_name_def=log_file, file_size_max=.001)
             app.log_file_check()
+            for idx in range(MAX_NUM_LOG_FILES + 9):
+                for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                    app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
             app._close_log_file()
-            assert os.path.exists(app._log_file_name)
+            assert os.path.exists(log_file)
         finally:
-            if os.path.exists(app._log_file_name):
-                os.remove(app._log_file_name)
+            lp, le = os.path.splitext(log_file)
+            for lf in glob.glob(lp + '*' + le):
+                if os.path.exists(lf):
+                    os.remove(lf)
 
-    def test_invalid_log_file_name(self, sys_argv_restore):
-        log_file = ':/:invalid:/:'
-        app = AppBase('test_invalid_log_file_name')
-        app.init_logging(file_name_def=log_file)
-        with pytest.raises(FileNotFoundError):
-            app.log_file_check()     # only for coverage of exception
-        assert not os.path.exists(log_file)
-
-    def test_log_file_flush(self, sys_argv_restore):
-        log_file = 'test_ae_base_log_flush.log'
+    def test_open_log_file_with_suppressed_stdout(self, capsys, restore_app_env):
+        log_file = 'test_ae_no_stdout.log'
         try:
-            app = AppBase('test_base_log_file_flush')
+            app = AppBase('test_open_log_file_with_suppressed_stdout', suppress_stdout=True)
+            assert app.suppress_stdout is True
             app.init_logging(file_name_def=log_file)
             app.log_file_check()
-            sys.argv = []
+            app.init_logging()      # close log file
             assert os.path.exists(log_file)
         finally:
             if os.path.exists(log_file):
                 os.remove(log_file)
 
-    def test_exception_log_file_flush(self, sys_argv_restore):
+    def test_invalid_log_file_name(self, restore_app_env):
+        log_file = ':/:invalid:/:'
+        app = AppBase('test_invalid_log_file_name')
+        app.init_logging(file_name_def=log_file)
+        with pytest.raises(FileNotFoundError):
+            app.log_file_check()     # coverage of callee exception
+        assert not os.path.exists(log_file)
+
+    def test_log_file_flush(self, restore_app_env):
+        log_file = 'test_ae_base_log_flush.log'
+        try:
+            app = AppBase('test_base_log_file_flush')
+            app.init_logging(file_name_def=log_file)
+            app.log_file_check()
+            assert os.path.exists(log_file)
+        finally:
+            if os.path.exists(log_file):
+                os.remove(log_file)
+
+    def test_exception_log_file_flush(self, restore_app_env):
         app = AppBase('test_exception_base_log_file_flush')
         # cause/provoke _append_eof_and_flush_file() exceptions for coverage by passing any other non-stream object
         app._append_eof_and_flush_file(cast('TextIO', None), 'invalid stream')
+
+    def test_app_instances_reset2(self):
+        assert main_app_instance() is None
 
 
 class TestPythonLogging:
     """ test python logging module support
     """
-    def test_logging_params_dict_console_from_init(self, sys_argv_restore):
+    def test_logging_params_dict_console_from_init(self, restore_app_env):
         var_val = dict(version=1,
                        disable_existing_loggers=False,
                        handlers=dict(console={'class': 'logging.StreamHandler',
@@ -605,7 +617,10 @@ class TestPythonLogging:
         assert app.py_log_params == var_val
         logging.shutdown()
 
-    def test_logging_params_dict_complex(self, caplog, sys_argv_restore, tst_app_key):
+    def test_app_instances_reset1(self):
+        assert main_app_instance() is None
+
+    def test_logging_params_dict_complex(self, caplog, restore_app_env, tst_app_key):
         log_file = 'test_base_rot_file.log'
         entry_prefix = "TEST LOG ENTRY "
 
@@ -634,7 +649,7 @@ class TestPythonLogging:
         # AppBase print_out()/po()
         log_text = entry_prefix + "0 print_out"
         app.po(log_text)
-        assert caplog.text.endswith(log_text + "\n")
+        assert caplog.text == ""
 
         log_text = entry_prefix + "0 print_out root"
         app.po(log_text, logger=root_logger)
@@ -676,11 +691,11 @@ class TestPythonLogging:
         ae_app_logger.error(log_text)
         assert caplog.text.endswith(log_text + "\n")
 
-        # AppBase print_out()/po()
-        sys.argv = ['test']     # sys.argv has to be reset for to allow get_opt('debugLevel') calls, done by dpo()
-        log_text = entry_prefix + "5 dpo"
-        app.po(log_text)
-        assert caplog.text.endswith(log_text + "\n")
+        new_log_text = entry_prefix + "5 dpo"
+        app.po(new_log_text)
+        assert caplog.text.endswith(log_text + "\n")    # NO LOGGER OUTPUT without po logger arg - caplog unchanged
+        app.po(new_log_text, logger=ae_app_logger)
+        assert caplog.text.endswith(new_log_text + "\n")
 
         # final checks of log file contents
         app._close_log_file()       # does also logging.shutdown()
@@ -700,15 +715,21 @@ class TestPythonLogging:
                 or fc.startswith(entry_prefix) \
                 or fc.lower().startswith('test  v 0.0') or fc.startswith('  **  Additional instance') or fc == ''
 
+    def test_app_instances_reset2(self):
+        assert main_app_instance() is None
+
 
 class TestAppBase:      # only some basic tests - test coverage is done by :class:`~console_app.ConsoleApp` tests
-    def test_app_name(self, sys_argv_restore):
+    def test_app_name(self, restore_app_env, sys_argv_app_key_restore):
         name = 'tan_app_name'
         sys.argv = [name]
         app = AppBase()
         assert app.app_name == name
 
-    def test_app_attributes(self, sys_argv_restore):
+    def test_app_instances_reset1(self):
+        assert main_app_instance() is None
+
+    def test_app_attributes(self, restore_app_env):
         ver = '0.0'
         title = 'test_app_name'
         app = AppBase(title, app_version=ver)
@@ -716,16 +737,17 @@ class TestAppBase:      # only some basic tests - test coverage is done by :clas
         assert app.app_version == ver
         assert app._app_path == os.path.dirname(sys.argv[0])
 
-    def test_app_find_version(self, sys_argv_restore):
+    def test_app_find_version(self, restore_app_env):
         app = AppBase()
         assert app.app_version == __version__
 
-    def test_app_find_title(self, sys_argv_restore):
+    def test_app_find_title(self, restore_app_env):
         app = AppBase()
         assert app.app_title == __doc__
 
-    def test_print_out(self, capsys, sys_argv_restore):
-        app = AppBase('test_python_logging_params_dict_basic_from_ini', multi_threading=True)
+    def test_print_out(self, capsys, restore_app_env):
+        app = AppBase('test_python_logging_params_dict_basic_from_ini')
+        activate_multi_threading()
         app.po()
         out, err = capsys.readouterr()
         assert out.endswith('\n') and err == ''
@@ -758,4 +780,7 @@ class TestAppBase:      # only some basic tests - test coverage is done by :clas
         app.po(us, encode_errors_def='strict')
 
         # multi_threading has to be reset for to prevent debug test run freeze (added multi_threading for coverage)
-        app.multi_threading = False
+        _deactivate_multi_threading()
+
+    def test_app_instances_reset2(self):
+        assert main_app_instance() is None

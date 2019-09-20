@@ -25,7 +25,7 @@ class TestCloudContactValidation:
         assert validate_flag_info(EMAIL_VALID)
         assert validate_flag_info(EMAIL_ALL)
 
-    def test_add_validation_options(self, sys_argv_restore):
+    def test_add_validation_options(self, restore_app_env):
         cae = ConsoleApp('test_add_validation_options')
         assert 'filterSfClients' not in cae.cfg_options
         add_validation_options(cae)
@@ -33,7 +33,7 @@ class TestCloudContactValidation:
         sys.argv = []
         assert cae.get_opt('filterSfClients') == ""
 
-    def test_init_validation_all(self, sys_argv_restore):
+    def test_init_validation_all(self, restore_app_env):
         fn = 'test_valid.ini'
         with open(fn, 'w') as fp:
             fp.write('[aeOptions]\n')
@@ -58,7 +58,7 @@ class TestCloudContactValidation:
         assert len(ret_tuple) == 13
         os.remove(fn)
 
-    def test_init_validation_error(self, sys_argv_restore):
+    def test_init_validation_error(self, restore_app_env):
         fn = 'test_valid_err.ini'
         with open(fn, 'w') as fp:
             fp.write('[aeOptions]\n')

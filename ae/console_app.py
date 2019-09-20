@@ -194,7 +194,7 @@ from argparse import ArgumentParser, ArgumentError, HelpFormatter, Namespace
 
 from ae.core import (
     DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVELS,
-    DATE_TIME_ISO, DATE_ISO, ori_std_out, _logger, main_app_instance, sys_env_text, AppBase)
+    DATE_TIME_ISO, DATE_ISO, ori_std_out, _logger, main_app_instance, sys_env_text, AppBase, activate_multi_threading)
 from ae.literal import Literal
 
 
@@ -257,7 +257,10 @@ class ConsoleApp(AppBase):
                                         :meth:`~core.AppBase.init_logging`.
         """
         super().__init__(app_title=app_title, app_version=app_version, sys_env_id=sys_env_id,
-                         debug_level=debug_level, multi_threading=multi_threading, suppress_stdout=suppress_stdout)
+                         debug_level=debug_level, suppress_stdout=suppress_stdout)
+
+        if multi_threading:
+            activate_multi_threading()
 
         with config_lock:
             self._cfg_parser: ConfigParser = ConfigParser()                 #: ConfigParser instance
@@ -327,10 +330,9 @@ class ConsoleApp(AppBase):
         return None if 'py_logging_params' in logging_params else log_file_name
 
     def __del__(self):
-        """ deallocate this instance and call :func:`ConsoleApp.shutdown` if it is the main app instance.
+        """ deallocate this app instance by calling :func:`AppBase.shutdown`.
         """
-        if main_app_instance() is self and not self._shut_down:
-            self.shutdown()
+        self.shutdown(exit_code=None)
 
     def add_argument(self, *args, **kwargs):
         """ define new command line argument.
@@ -511,6 +513,7 @@ class ConsoleApp(AppBase):
             self.po("  **  Additional instance of ConsoleApp requested with empty system environment ID",
                     logger=_logger)
         self.po("####  Startup finished....  ####", logger=_logger)
+        self.startup_end = datetime.datetime.now()
 
     def set_option(self, name: str, val: Any, cfg_fnam: Optional[str] = None, save_to_config: bool = True) -> str:
         """ set or change the value of a config option.

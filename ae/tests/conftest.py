@@ -2,7 +2,7 @@ import os
 import sys
 import pytest
 
-from ae.core import _unregister_app_instance
+from ae.core import _app_instances, _unregister_app_instance
 
 
 @pytest.fixture
@@ -28,10 +28,17 @@ def tst_app_key():
 
 
 @pytest.fixture
-def sys_argv_restore(tst_app_key):          # needed for tests using AppBase/ConsoleApp
+def sys_argv_app_key_restore(tst_app_key):          # needed for tests using AppBase/ConsoleApp
     old_argv = sys.argv
-    # if not sys.argv:                      # ensure proper command line args
-    sys.argv = [tst_app_key, ]              # sys.argv is sometimes empty, sometimes showing _jb_pytest_runner
-    yield old_argv
-    _unregister_app_instance(tst_app_key)   # remove app from ae.core app register/dict
+    sys.argv = [tst_app_key, ]
+    yield tst_app_key
     sys.argv = old_argv
+
+
+@pytest.fixture
+def restore_app_env():                  # needed for tests using AppBase/ConsoleApp
+    yield "a,n,y"
+    # added list because unregister does _app_instances.pop() calls
+    app_keys = list(reversed(list(_app_instances.keys())))
+    for key in app_keys:
+        _unregister_app_instance(key)   # remove app from ae.core app register/dict
