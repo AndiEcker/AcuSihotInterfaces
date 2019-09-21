@@ -2,8 +2,84 @@
 ae package core constants, helper functions and base classes
 ============================================================
 
-AppBase
--------
+This module declares practical constants, base classes as well as tiny helper functions
+making the code of your application (and other modules of this package) much cleaner.
+
+Constants
+---------
+
+For to set the debug level of your application run-time you can use one of the constants
+:data:`DEBUG_LEVEL_DISABLED`, :data:`DEBUG_LEVEL_ENABLED`, :data:`DEBUG_LEVEL_VERBOSE`
+or :data:`DEBUG_LEVEL_TIMESTAMPED`. The debug level of your application can be either
+hard-coded in your code or optionally also externally (using the :ref:`config-files`
+or :ref:`config-options` of the module :mod:`ae.console_app`).
+
+Short names for all debug level constants are provided by the dict :data:`DEBUG_LEVELS`.
+
+For to use the :mod:`python logging module <logging>` in conjunction with this module
+the constant :data:`LOGGING_LEVELS` is providing a mapping between the debug levels
+and the python logging levels.
+
+Standard ISO format strings for date and datetime values are provided by the constants
+:data:`DATE_ISO` and :data:`DATE_TIME_ISO`.
+
+The encoding of strings into byte-strings (for to output them to the console/stdout or
+to file contents) can be tricky sometimes. For to not lose any logging output because
+of invalid characters this module will automatically handle any :exc:`UnicodeEncodeError`
+exception for you. Invalid characters will in case of this error be converted
+to the default encoding (specified by :data:`DEF_ENCODING`) with the default error
+handling method specified by :data:`DEF_ENCODE_ERRORS`.
+
+
+Helper Functions
+----------------
+
+Although most of the helper functions provided by this module are tiny with only few lines
+of code, they are a great help in making your application code more clear and readable.
+
+Two of the bigger helper functions are :func:`correct_email` and :func:`correct_phone`,
+which are useful for to check if a string is a valid email address or phone number. They
+also allow you to automatically correct email address and phone numbers to a valid format.
+More sophisticated helpers for the validation of email addresses, phone numbers and
+post addresses are available in the :mod:`ae.validation` module.
+
+For the easy execution and evaluation of functions, code blocks and python expressions
+the helper functions :func:`try_call`, :func:`try_exec`, :func:`exec_with_return` and
+:func:`try_eval` are provided.
+
+The functions :data:`module_name`, :func:`stack_frames` and :func:`stack_var` are very
+helpful for to inspect the callers of your functions/methods. The class
+:class:`ae.console_app.ConsoleApp` is using them e.g. for to determine the
+:ref:`version <app-version>` and :ref:`title <app-title>` of your application.
+
+Other helper functions for the inspection and debugging of your application are
+:func:`full_stack_trace`, :func:`sys_env_dict` and :func:`sys_env_text`.
+
+For to encode unicode strings to other codecs the functions :func:`force_encoding` and
+:func:`to_ascii` can be used. The :func:`print_out` function, which is fully compatible to pythons
+:func:`print`, is using these encode helpers for to auto-correct invalid characters.
+
+:func:`hide_dup_line_prefix` is very practical if you
+you want to make your log files better readable. Finally the :func:`round_traditional`
+get declared in this module for traditional rounding of float values.
+
+
+Base Classes
+------------
+
+The base class :class:`AppBase` is providing sophisticated logging features with the help of the
+function :func:`print_out` and the class :class:`AppPrintingReplicator`.
+
+The class :class:`~ae.console_app.ConsoleApp` inherits from :class:`AppBase` and is adding
+configuration options and variables. So in your console application it is recommended to directly
+use :class:`~ae.console_app.ConsoleApp` instead of :class:`AppBase`. For applications
+with an GUI you can use instead one of the classes :class:`~ae.kivy_app.KivyApp`, :class:`~ae.enaml_app.EnamlApp`
+or :class:`~ae.dabo_app.DaboApp`.
+
+
+Sophisticated Logging
+---------------------
+
 
 Enable Logging
 ..............
@@ -264,18 +340,18 @@ def full_stack_trace(ex: Exception) -> str:
     return ret
 
 
-def hide_dup_line_prefix(line1: str, line2: str) -> str:
+def hide_dup_line_prefix(last_line: str, current_line: str) -> str:
     """ replace duplicate characters at the begin of two strings with spaces.
 
-    :param line1:   first string (line of text file).
-    :param line2:   second string.
-    :return:        second string but duplicate characters at the begin are replaced by space characters.
+    :param last_line:       last line string (e.g. the last line of text/log file).
+    :param current_line:    current line string.
+    :return:                current line string but duplicate characters at the begin are replaced by space characters.
     """
     idx = 0
-    min_len = min(len(line1), len(line2))
-    while idx < min_len and line1[idx] == line2[idx]:
+    min_len = min(len(last_line), len(current_line))
+    while idx < min_len and last_line[idx] == current_line[idx]:
         idx += 1
-    return " " * idx + line2[idx:]
+    return " " * idx + current_line[idx:]
 
 
 def module_name(*skip_modules: str, depth: int = 1) -> Optional[str]:
@@ -570,14 +646,13 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
                 # .. and https://stackoverflow.com/questions/50551637/end-key-in-print-not-thread-safe
                 print_one_str = sep.join(print_strings)
                 sep = ""
-                if end and not use_py_logger:
+                if end and (not use_py_logger or end != '\n'):
                     print_one_str += end
                     end = ""
                 print_strings = (print_one_str,)
 
             if use_py_logger:
-                key = _main_app_inst_key
-                debug_level = _app_instances[key].debug_level if key else DEBUG_LEVEL_VERBOSE
+                debug_level = app.debug_level if app else DEBUG_LEVEL_VERBOSE
                 logger.log(level=LOGGING_LEVELS[debug_level], msg=print_strings[0])
             else:
                 print(*print_strings, sep=sep, end=end, file=file, flush=flush)
@@ -618,14 +693,17 @@ class AppPrintingReplicator:
         :param message:     string to output.
         """
         app_streams = list()
-        for app in _app_instances.values():
-            if app.log_buf_stream and not app.log_buf_stream.closed:
-                app_streams.append((app, app.log_buf_stream))
-            elif app.log_file_stream and not app.log_file_stream.closed:
-                app.log_file_check()  # check log file rotation (if yes then switch to new app.log_file_stream)
-                app_streams.append((app, app.log_file_stream))
+        for app in list(_app_instances.values()):
+            # noinspection PyProtectedMember
+            if app._log_buf_stream and not app._log_buf_stream.closed:
+                # noinspection PyProtectedMember
+                app_streams.append((app, app._log_buf_stream))
+            elif app._log_file_stream and not app._log_file_stream.closed:
+                app.log_file_check()  # check log file rotation (if yes then switch to new app._log_file_stream)
+                # noinspection PyProtectedMember
+                app_streams.append((app, app._log_file_stream))
         if not self.sys_out_obj.closed:
-            app_streams.append((_app_instances.get(_main_app_inst_key), self.sys_out_obj))
+            app_streams.append((main_app_instance(), self.sys_out_obj))
 
         log_lines = message.split('\n')
         for app, stream in app_streams:
@@ -712,7 +790,7 @@ def shut_down_sub_app_instances(timeout: Optional[float] = None):
     :param timeout:     timeout float value in seconds for thread joining
                         sub-app shutdowns and for log file lock acquire.
     """
-    main_app = _app_instances.get(_main_app_inst_key)
+    main_app = main_app_instance()
     for app in list(_app_instances.values()):   # list is needed because weak ref dict get changed in loop
         if app is not main_app:
             app.shutdown(timeout=timeout)
@@ -732,11 +810,11 @@ class AppBase:
     * :attr:`app_title`             application title/description.
     * :attr:`app_version`           application version (set via the :paramref:`AppBase.__init__.app_version` arg).
     * :attr:`debug_level`           debug level of this instance.
-    * :attr:`log_buf_stream`        log file buffer stream.
+    * :attr:`_log_buf_stream`       log file buffer stream.
     * :attr:`_log_file_index`       index of the current rotation log file backup.
     * :attr:`_log_file_max_size`    maximum size in MBytes of a log file.
     * :attr:`_log_file_name`        path and file name of the log file.
-    * :attr:`log_file_stream`       log file stream (opened in :meth:~AppBase._open_log_file`, could be closed).
+    * :attr:`_log_file_stream`      log file stream (opened in :meth:~AppBase._open_log_file`, could be closed).
     * :attr:`py_log_params`         python logging config dict.
     * :attr:`_nul_std_out`          null stream used for to prevent printouts on stdout of the console/shell.
     * :attr:`_shut_down`            flag set to True if application shutdown was already processed.
@@ -780,17 +858,18 @@ class AppBase:
 
         self.suppress_stdout: bool = suppress_stdout            #: flag to suppress prints to stdout
 
-        self._nul_std_out: Optional[TextIO] = None              #: logging null stream
-        self._shut_down: bool = False                           #: True if app got shut down already
-        self.py_log_params: Dict[str, Any] = dict()             #: dict of config parameters for py logging
-        self.startup_end: Optional[datetime.datetime] = None    #: end of app startup datetime
+        with log_file_lock:
+            self._log_file_max_size: int = LOG_FILE_MAX_SIZE    #: maximum log file size in MBytes (rotating log files)
+            self._log_file_index: int = 0                       #: log file index (for rotating logs)
+            self._log_file_name: str = ""                       #: log file name
+            self._last_log_line_prefix: str = ""                #: prefix of the last printed log line
+            self._log_buf_stream: Optional[StringIO] = None     #: log file buffer stream instance
+            self._log_file_stream: Optional[TextIO] = None      #: log file stream instance
+            self._nul_std_out: Optional[TextIO] = None          #: logging null stream
+            self.py_log_params: Dict[str, Any] = dict()         #: dict of config parameters for py logging
 
-        self._log_file_max_size: int = LOG_FILE_MAX_SIZE        #: maximum log file size in MBytes (rotating log files)
-        self._log_file_index: int = 0                           #: log file index (for rotating logs)
-        self._log_file_name: str = ""                           #: log file name
-        self._last_log_line_prefix: str = ""                    #: prefix of the last printed log line
-        self.log_buf_stream: Optional[StringIO] = None          #: log file buffer stream instance
-        self.log_file_stream: Optional[TextIO] = None           #: log file stream instance
+        self._shut_down: bool = False                           #: True if app got shut down already
+        self.startup_end: Optional[datetime.datetime] = None    #: end of app startup datetime
 
         _register_app_thread()
         _register_app_instance(self)
@@ -811,24 +890,22 @@ class AppBase:
         :param file_size_max:           max. size in MB of ae log file (def=LOG_FILE_MAX_SIZE).
         :param disable_buffering:       pass True to disable ae log buffering at app startup.
         """
-        if py_logging_params:                   # init python logging - app is using python logging module
-            logger_late_init()
-            # logging.basicConfig(level=logging.DEBUG, style='{')
-            logging.config.dictConfig(py_logging_params)     # re-configure py logging module
-            main_instance = main_app_instance()
-            if not main_instance.py_log_params:
-                main_instance.py_log_params = py_logging_params
-            self.py_log_params = py_logging_params
-        else:                                   # (re-)init ae logging
-            if self.log_file_stream:
-                self._close_log_file()
-            self._log_file_name = file_name_def
-            self._log_file_max_size = file_size_max
-            if not disable_buffering:
-                self.log_buf_stream = StringIO(initial_value="####  Log Buffer\n")
-
-        if self.startup_end is not None:
-            self.startup_end = datetime.datetime.now()
+        with log_file_lock:
+            if py_logging_params:                   # init python logging - app is using python logging module
+                logger_late_init()
+                # logging.basicConfig(level=logging.DEBUG, style='{')
+                logging.config.dictConfig(py_logging_params)     # re-configure py logging module
+                main_instance = main_app_instance()
+                if not main_instance.py_log_params:
+                    main_instance.py_log_params = py_logging_params
+                self.py_log_params = py_logging_params
+            else:                                   # (re-)init ae logging
+                if self._log_file_stream:
+                    self._close_log_file()
+                self._log_file_name = file_name_def
+                self._log_file_max_size = file_size_max
+                if not disable_buffering:
+                    self._log_buf_stream = StringIO(initial_value="####  Log Buffer\n")
 
     def log_line_prefix(self) -> str:
         parts = list()
@@ -840,8 +917,9 @@ class AppBase:
             parts.append(datetime.datetime.now().strftime(DATE_TIME_ISO))
 
         prefix = "".join(parts)
-        last_pre = self._last_log_line_prefix
-        self._last_log_line_prefix = prefix
+        with log_file_lock:
+            last_pre = self._last_log_line_prefix
+            self._last_log_line_prefix = prefix
 
         return hide_dup_line_prefix(last_pre, prefix) + " "
 
@@ -853,19 +931,19 @@ class AppBase:
         and if yes then create log file, pass log buffer content to log file and close the log buffer.
         """
         with log_file_lock:
-            if self.log_file_stream is not None:
-                self.log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
-                if self.log_file_stream.tell() >= self._log_file_max_size * 1024 * 1024:
+            if self._log_file_stream is not None:
+                self._log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
+                if self._log_file_stream.tell() >= self._log_file_max_size * 1024 * 1024:
                     self._close_log_file()
                     self._rename_log_file()
                     self._open_log_file()
             elif self._log_file_name:
                 self._open_log_file()
-                if self.log_file_stream and self.log_buf_stream:
-                    buf = self.log_buf_stream.getvalue()
-                    self.log_file_stream.write(buf)
-                    self.log_buf_stream.close()
-                    self.log_buf_stream = None
+                if self._log_file_stream and self._log_buf_stream:
+                    buf = self._log_buf_stream.getvalue()
+                    self._log_file_stream.write(buf)
+                    self._log_buf_stream.close()
+                    self._log_buf_stream = None
             elif self.suppress_stdout and not self._nul_std_out:
                 sys.stdout = self._nul_std_out = open(os.devnull, 'w')
 
@@ -895,7 +973,7 @@ class AppBase:
         """ open the ae log file.
         """
         global ori_std_out, ori_std_err
-        self.log_file_stream = open(self._log_file_name, "w", errors=DEF_ENCODE_ERRORS)
+        self._log_file_stream = open(self._log_file_name, "w", errors=DEF_ENCODE_ERRORS)
         if not isinstance(sys.stdout, AppPrintingReplicator):  # sys.stdout == ori_std_out not working in pytest capsys
             # if sys.stdout != ori_std_out:                   # only True in pytest run with capsys fixture
             #   ori_std_out = sys.stdout                    # .. then set ori_* to capsys (for to be reset in log close)
@@ -913,10 +991,10 @@ class AppBase:
     def _close_log_file(self):
         """ close the ae log file.
         """
-        if self.log_file_stream:
-            stream = self.log_file_stream
+        if self._log_file_stream:
+            stream = self._log_file_stream
             self._append_eof_and_flush_file(stream, "ae log file")
-            self.log_file_stream = None
+            self._log_file_stream = None
             sys.stderr = ori_std_err
             sys.stdout = ori_std_out
             stream.close()

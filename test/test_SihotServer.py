@@ -7,6 +7,7 @@ import datetime
 import requests
 from configparser import ConfigParser
 
+from ae.console_app import MAIN_SECTION_DEF
 from shif import ResFetch
 
 test_path_prefix = '/test'
@@ -15,7 +16,7 @@ cfg = ConfigParser()
 cfg.optionxform = str  # for case-sensitive config vars
 cfg.read(['../.app_env.cfg', '../.sys_envTEST.cfg'])
 # simple cfg.get() call does not convert config value into list/dict without using ae.literal.Literal()
-ws_host = cfg.get('aeOptions', 'wsHost')
+ws_host = cfg.get(MAIN_SECTION_DEF, 'wsHost')
 assert ws_host
 
 

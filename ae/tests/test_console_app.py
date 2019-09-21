@@ -1,9 +1,9 @@
 from typing import cast
 
 import pytest
+from ae.tests.conftest import delete_files
 
 import datetime
-import glob
 import logging
 import os
 import sys
@@ -38,14 +38,13 @@ class TestAeLogging:
             assert os.path.exists(log_file)
             assert capsys.readouterr()[0] == ""
         finally:
-            if os.path.exists(log_file):
-                os.remove(log_file)
+            assert delete_files(log_file) == 1
 
-    def test_cae_log_file_rotation(self, restore_app_env, sys_argv_app_key_restore, tst_app_key):
+    def test_cae_log_file_rotation(self, restore_app_env, sys_argv_app_key_restore):
         log_file = 'test_cae_rot_log.log'
         cae = ConsoleApp('test_cae_log_file_rotation', multi_threading=True, file_name_def=log_file, file_size_max=.001)
         try:
-            sys.argv = [tst_app_key, ]
+            sys.argv = [sys_argv_app_key_restore, ]
             file_name_chk = cae.get_opt('logFile')   # get_opt() has to be called at least once for to create log file
             assert file_name_chk == log_file
             for idx in range(MAX_NUM_LOG_FILES + 9):
@@ -55,10 +54,7 @@ class TestAeLogging:
             cae.init_logging()      # close log file
             assert os.path.exists(log_file)
         finally:
-            lp, le = os.path.splitext(log_file)
-            for lf in glob.glob(lp + '*' + le):
-                if os.path.exists(lf):
-                    os.remove(lf)
+            assert delete_files(log_file, keep_ext=True) >= MAX_NUM_LOG_FILES
 
     def test_app_instances_reset1(self):
         assert main_app_instance() is None
@@ -79,8 +75,7 @@ class TestAeLogging:
             cae.log_file_check()
             assert os.path.exists(log_file)
         finally:
-            if os.path.exists(log_file):
-                os.remove(log_file)
+            assert delete_files(log_file) == 1
 
     def test_exception_log_file_flush(self, restore_app_env):
         cae = ConsoleApp('test_exception_log_file_flush')
@@ -123,7 +118,7 @@ class TestPythonLogging:
         assert cae.py_log_params == var_val
         logging.shutdown()
 
-    def test_logging_params_dict_complex(self, caplog, restore_app_env, tst_app_key, sys_argv_app_key_restore):
+    def test_logging_params_dict_complex(self, caplog, restore_app_env, sys_argv_app_key_restore):
         log_file = 'test_py_log_complex.log'
         entry_prefix = "TEST LOG ENTRY "
 
@@ -173,7 +168,7 @@ class TestPythonLogging:
         assert caplog.text.endswith(log_text + "\n")
 
         log_text = entry_prefix + "3 warning"
-        logging.warning(log_text)
+        logging.warning(log_text)                   # NOT logged
         assert caplog.text.endswith(log_text + "\n")
 
         log_text = entry_prefix + "4 error logging"
@@ -194,7 +189,7 @@ class TestPythonLogging:
         assert caplog.text.endswith(log_text + "\n")
 
         # ConsoleAppEnv dpo
-        sys.argv = ['tl_cdc']   # sys.argv has to be reset for to allow get_opt('debugLevel') calls, done by dpo()
+        sys.argv = ['tl_cdc']   # sys.argv has to be set for to allow get_option('debugLevel') calls done by debug_out()
         new_log_text = entry_prefix + "5 dpo"
         cae.dpo(new_log_text, minimum_debug_level=DEBUG_LEVEL_DISABLED)
         assert caplog.text.endswith(log_text + "\n")
@@ -203,21 +198,29 @@ class TestPythonLogging:
 
         # final checks of log file contents
         logging.shutdown()
-        file_contents = list()
-        for lf in glob.glob(log_file + '*'):
-            with open(lf) as fd:
-                fc = fd.read()
-            file_contents.append(fc)
-            os.remove(lf)     # remove log files from this test run
+        '''
+        # .. logging.shutdown seems to do no flushing when run in combination with pytest within PyCharm
+        if False and root_logger.handlers:
+            root_logger.handlers[0].flush()
+        else:
+            [h_weak_ref().flush() for h_weak_ref in logging._handlerList]
+            # or easier but less secure: [h.flush() for h in root_logger.handlerList]
+        # .. even time.sleep(3..390) doesn't help
+        # .. also tried:
+        #         caplog.clear()
+        #         caplog.handler.close()
+        '''
+        file_contents = delete_files(log_file, ret_type='contents')
         assert len(file_contents) >= 8
         for fc in file_contents:
             if fc.startswith("{TST}"):
                 fc = fc[6:]  # remove sys_env_id prefix
             if fc.startswith("<"):
                 fc = fc[fc.index("> ") + 2:]  # remove thread id prefix
-            assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(tst_app_key) \
-                or fc.startswith(entry_prefix) or fc.startswith('Ignorable ') \
-                or fc.lower().startswith('test  v 0.0') or fc.startswith('  **  Additional instance') or fc == ''
+            assert fc.startswith(entry_prefix) or fc.startswith('####  ') or fc.startswith('Ignorable ') or fc == ''
+            #    or fc.startswith('_jb_pytest_runner ') or fc.startswith(tst_app_key) \
+            #    or fc.lower().startswith('test  v 0.0') or fc.startswith('  **  Additional instance')
+            assert "1 info" not in fc and "2 debug" not in fc and "3 warning" not in fc
 
     def test_app_instances_reset2(self):
         assert main_app_instance() is None

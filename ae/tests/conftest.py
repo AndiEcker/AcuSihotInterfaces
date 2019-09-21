@@ -1,8 +1,10 @@
 import os
 import sys
+import glob
 import pytest
 
 from ae.core import _app_instances, _unregister_app_instance
+from ae.console_app import MAIN_SECTION_DEF
 
 
 @pytest.fixture
@@ -11,7 +13,7 @@ def config_fna_vna_vva(request):
         if os.path.sep not in file_name:
             file_name = os.path.join(os.getcwd(), file_name)
         with open(file_name, 'w') as f:
-            f.write("[aeOptions]\n{} = {}".format(var_name, var_value))
+            f.write(f"[{MAIN_SECTION_DEF}]\n{var_name} = {var_value}")
 
         def _tear_down():               # using yield instead of finalizer does not execute the teardown part
             os.remove(file_name)
@@ -28,7 +30,7 @@ def tst_app_key():
 
 
 @pytest.fixture
-def sys_argv_app_key_restore(tst_app_key):          # needed for tests using AppBase/ConsoleApp
+def sys_argv_app_key_restore(tst_app_key):          # needed for tests using sys.argv/get_opt() of ConsoleApp
     old_argv = sys.argv
     sys.argv = [tst_app_key, ]
     yield tst_app_key
@@ -36,9 +38,30 @@ def sys_argv_app_key_restore(tst_app_key):          # needed for tests using App
 
 
 @pytest.fixture
-def restore_app_env():                  # needed for tests using AppBase/ConsoleApp
+def restore_app_env():                              # needed for tests instantiating AppBase/ConsoleApp
     yield "a,n,y"
-    # added list because unregister does _app_instances.pop() calls
+    # added outer list() because unregister does _app_instances.pop() calls
+    # and added inner list() because the .keys() 'generator' object is not reversible
     app_keys = list(reversed(list(_app_instances.keys())))
     for key in app_keys:
         _unregister_app_instance(key)   # remove app from ae.core app register/dict
+
+
+def delete_files(file_name, keep_ext=False, ret_type='count'):
+    if keep_ext:
+        fp, fe = os.path.splitext(file_name)
+        file_mask = fp + '*' + fe
+    else:
+        file_mask = file_name + '*'
+    cnt = 0
+    ret = list()
+    for fn in glob.glob(file_mask):
+        if ret_type == 'contents':
+            with open(fn) as fd:
+                fc = fd.read()
+            ret.append(fc)
+        elif ret_type == 'names':
+            ret.append(fn)
+        os.remove(fn)
+        cnt += 1
+    return cnt if ret_type == 'count' else ret

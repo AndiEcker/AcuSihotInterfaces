@@ -85,7 +85,7 @@ class Literal:
         """ add new item to the list value of this Literal instance (lazy/late self.value getter call function pointer).
 
         This method gets e.g. used by the :class:`~.console_app.ConsoleApp` method
-        :meth:`~.console_app.ConsoleApp.add_opt` for to have a function pointer to this
+        :meth:`~.console_app.ConsoleApp.add_option` for to have a function pointer to this
         literal value with lazy/late execution of the value getter (value.append cannot be used in this case
         because the list value can change be later again and before it get finally read/used).
         (only works if the value is of type list).

@@ -1,8 +1,8 @@
 """ test doc string for AppBase.app_title tests
 """
 import pytest
+from ae.tests.conftest import delete_files
 
-import glob
 import logging
 import os
 import sys
@@ -161,16 +161,17 @@ class TestCoreHelpers:
         fhd = open(fna, 'w', encoding='ascii', errors='strict')
         po(us, file=fhd)
         fhd.close()
-        os.remove(fna)
+        assert delete_files(fna) == 1
         po(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
         out, err = capsys.readouterr()
-        print(out)
         assert us in out
         assert us in err
 
         # print invalid/surrogate code point/char for to force UnicodeEncodeError exception in po() (testing coverage)
         us = chr(0xD801)
         po(us, encode_errors_def='strict')
+        out, err = capsys.readouterr()
+        assert force_encoding(us) in out and err == ''
 
     def test_round_traditional(self):
         assert round_traditional(1.01) == 1
@@ -183,7 +184,6 @@ class TestCoreHelpers:
         assert round(0.075, 2) == 0.07
 
     def test_stack_frames(self):
-        print(sys.argv, "next test")
         for frame in stack_frames():
             assert frame
             assert getattr(frame, 'f_globals')
@@ -357,8 +357,7 @@ class TestAppPrintingReplicator:
                     assert f.read() == msg      # msg == '\ua000\u07b4'
 
         finally:
-            if os.path.exists(lfn):
-                os.remove(lfn)
+            assert delete_files(lfn) == 1
 
 
 class TestOfflineContactValidation:
@@ -531,13 +530,9 @@ class TestAeLogging:
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
-            app._close_log_file()
             assert os.path.exists(log_file)
         finally:
-            lp, le = os.path.splitext(log_file)
-            for lf in glob.glob(lp + '*' + le):
-                if os.path.exists(lf):
-                    os.remove(lf)
+            assert delete_files(log_file, keep_ext=True) >= MAX_NUM_LOG_FILES
 
     def test_app_instances_reset1(self):
         assert main_app_instance() is None
@@ -552,13 +547,9 @@ class TestAeLogging:
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
-            app._close_log_file()
             assert os.path.exists(log_file)
         finally:
-            lp, le = os.path.splitext(log_file)
-            for lf in glob.glob(lp + '*' + le):
-                if os.path.exists(lf):
-                    os.remove(lf)
+            assert delete_files(log_file, keep_ext=True) >= MAX_NUM_LOG_FILES
 
     def test_open_log_file_with_suppressed_stdout(self, capsys, restore_app_env):
         log_file = 'test_ae_no_stdout.log'
@@ -570,8 +561,7 @@ class TestAeLogging:
             app.init_logging()      # close log file
             assert os.path.exists(log_file)
         finally:
-            if os.path.exists(log_file):
-                os.remove(log_file)
+            assert delete_files(log_file) == 1
 
     def test_invalid_log_file_name(self, restore_app_env):
         log_file = ':/:invalid:/:'
@@ -589,8 +579,7 @@ class TestAeLogging:
             app.log_file_check()
             assert os.path.exists(log_file)
         finally:
-            if os.path.exists(log_file):
-                os.remove(log_file)
+            assert delete_files(log_file) == 1
 
     def test_exception_log_file_flush(self, restore_app_env):
         app = AppBase('test_exception_base_log_file_flush')
@@ -671,7 +660,7 @@ class TestPythonLogging:
         assert caplog.text.endswith(log_text + "\n")
 
         log_text = entry_prefix + "3 warning"
-        logging.warning(log_text)
+        logging.warning(log_text)                   # NOT logged
         assert caplog.text.endswith(log_text + "\n")
 
         log_text = entry_prefix + "4 error logging"
@@ -698,22 +687,16 @@ class TestPythonLogging:
         assert caplog.text.endswith(new_log_text + "\n")
 
         # final checks of log file contents
-        app._close_log_file()       # does also logging.shutdown()
-        file_contents = list()
-        for lf in glob.glob(log_file + '*'):
-            with open(lf) as fd:
-                fc = fd.read()
-            file_contents.append(fc)
-            os.remove(lf)     # remove log files from last test run
-        assert len(file_contents) >= 4
+        logging.shutdown()
+        file_contents = delete_files(log_file, ret_type='contents')
+        assert len(file_contents) >= 5
         for fc in file_contents:
             if fc.startswith(" <"):
                 fc = fc[fc.index("> ") + 2:]    # remove thread id prefix
             if fc.startswith("{TST}"):
                 fc = fc[6:]                     # remove sys_env_id prefix
-            assert fc.startswith('####  ') or fc.startswith('_jb_pytest_runner ') or fc.startswith(tst_app_key) \
-                or fc.startswith(entry_prefix) \
-                or fc.lower().startswith('test  v 0.0') or fc.startswith('  **  Additional instance') or fc == ''
+            assert fc.startswith(entry_prefix)
+            assert "1 info" not in fc and "2 debug" not in fc and "3 warning" not in fc
 
     def test_app_instances_reset2(self):
         assert main_app_instance() is None
@@ -722,7 +705,7 @@ class TestPythonLogging:
 class TestAppBase:      # only some basic tests - test coverage is done by :class:`~console_app.ConsoleApp` tests
     def test_app_name(self, restore_app_env, sys_argv_app_key_restore):
         name = 'tan_app_name'
-        sys.argv = [name]
+        sys.argv = [name, ]
         app = AppBase()
         assert app.app_name == name
 
@@ -768,7 +751,7 @@ class TestAppBase:      # only some basic tests - test coverage is done by :clas
         fhd = open(fna, 'w', encoding='ascii', errors='strict')
         app.po(us, file=fhd)
         fhd.close()
-        os.remove(fna)
+        assert delete_files(fna) == 1
         app.po(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
         out, err = capsys.readouterr()
         print(out)

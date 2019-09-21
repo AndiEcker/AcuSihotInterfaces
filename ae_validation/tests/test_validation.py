@@ -2,7 +2,7 @@ import pytest
 import os
 import sys
 
-from ae.console_app import ConsoleApp
+from ae.console_app import MAIN_SECTION_DEF, ConsoleApp
 from ae_validation.validation import (
     validate_flag_info, add_validation_options, init_validation, clients_to_validate,
     EmailValidator, PhoneValidator,
@@ -25,21 +25,21 @@ class TestCloudContactValidation:
         assert validate_flag_info(EMAIL_VALID)
         assert validate_flag_info(EMAIL_ALL)
 
-    def test_add_validation_options(self, restore_app_env):
+    def test_add_validation_options(self, restore_app_env, sys_argv_app_key_restore):
         cae = ConsoleApp('test_add_validation_options')
         assert 'filterSfClients' not in cae.cfg_options
         add_validation_options(cae)
         assert 'filterSfClients' in cae.cfg_options
-        sys.argv = []
+        sys.argv = [sys_argv_app_key_restore, ]
         assert cae.get_opt('filterSfClients') == ""
 
-    def test_init_validation_all(self, restore_app_env):
+    def test_init_validation_all(self, restore_app_env, sys_argv_app_key_restore):
         fn = 'test_valid.ini'
         with open(fn, 'w') as fp:
-            fp.write('[aeOptions]\n')
+            fp.write(f'[{MAIN_SECTION_DEF}]\n')
         cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])
         add_validation_options(cae, email_def=EMAIL_ALL, phone_def=PHONE_ALL, addr_def=ADDR_ALL)
-        sys.argv = []
+        sys.argv = [sys_argv_app_key_restore, ]
         cae.get_opt('debugLevel')     # for to parse args before cae.set_opt() calls (resetting config option)
 
         assert cae.set_var('emailValidatorPauseSeconds', 1.0) == ''
@@ -58,13 +58,13 @@ class TestCloudContactValidation:
         assert len(ret_tuple) == 13
         os.remove(fn)
 
-    def test_init_validation_error(self, restore_app_env):
+    def test_init_validation_error(self, restore_app_env, sys_argv_app_key_restore):
         fn = 'test_valid_err.ini'
         with open(fn, 'w') as fp:
-            fp.write('[aeOptions]\n')
+            fp.write(f'[{MAIN_SECTION_DEF}]\n')
         cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])
         add_validation_options(cae, email_def=EMAIL_ALL, phone_def=PHONE_ALL, addr_def=ADDR_ALL)
-        sys.argv = []
+        sys.argv = [sys_argv_app_key_restore, ]
 
         assert cae.set_var('addressValidatorApiKey', '') == ''
         cae.load_cfg_files()
