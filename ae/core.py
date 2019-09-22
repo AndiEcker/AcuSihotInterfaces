@@ -38,18 +38,21 @@ Although most of the helper functions provided by this module are tiny with only
 of code, they are a great help in making your application code more clear and readable.
 
 Two of the bigger helper functions are :func:`correct_email` and :func:`correct_phone`,
-which are useful for to check if a string is a valid email address or phone number. They
-also allow you to automatically correct email address and phone numbers to a valid format.
+which are useful for to check if a string contains a valid email address or phone number. They
+also allow you to automatically correct an email address or a phone number to a valid format.
 More sophisticated helpers for the validation of email addresses, phone numbers and
 post addresses are available in the :mod:`ae.validation` module.
 
-For the easy execution and evaluation of functions, code blocks and python expressions
-the helper functions :func:`try_call`, :func:`try_exec`, :func:`exec_with_return` and
-:func:`try_eval` are provided.
+For the dynamic execution of functions and code blocks the helper functions :func:`try_call`,
+:func:`try_exec` and :func:`exec_with_return` are provided. And :func:`try_eval` is making
+the evaluation of dynamic python expressions much easier. These functions are e.g. used
+by the :class:`~ae.literal.Literal` class for the implementation of dynamically
+determined literal values.
 
 The functions :data:`module_name`, :func:`stack_frames` and :func:`stack_var` are very
-helpful for to inspect the callers of your functions/methods. The class
-:class:`ae.console_app.ConsoleApp` is using them e.g. for to determine the
+helpful for to inspect the call stack. With them you can easily access the stack frame
+and read e.g. variable values of the callers of your functions/methods. The class
+:class:`~ae.console_app.ConsoleApp` is using them e.g. for to determine the
 :ref:`version <app-version>` and :ref:`title <app-title>` of your application.
 
 Other helper functions for the inspection and debugging of your application are
@@ -59,37 +62,106 @@ For to encode unicode strings to other codecs the functions :func:`force_encodin
 :func:`to_ascii` can be used. The :func:`print_out` function, which is fully compatible to pythons
 :func:`print`, is using these encode helpers for to auto-correct invalid characters.
 
-:func:`hide_dup_line_prefix` is very practical if you
-you want to make your log files better readable. Finally the :func:`round_traditional`
-get declared in this module for traditional rounding of float values.
+:func:`hide_dup_line_prefix` is very practical if you want to remove or hide redundant
+line prefixes in your log files, to make them better readable.
+
+Finally the :func:`round_traditional` get declared in this module fully compatible to
+Python's :func:`round` function, to be used for traditional rounding of float values.
 
 
-Base Classes
-------------
+Application Classes Base
+------------------------
 
 The base class :class:`AppBase` is providing sophisticated logging features with the help of the
-function :func:`print_out` and the class :class:`AppPrintingReplicator`.
+function :func:`print_out` and their sub-class :class:`_PrintingReplicator`. The first created
+instance of :class:`AppBase` in your application is representing the main app and any further
+created instances are representing the sub-apps of your application.
+
+:class:`AppBase` also ensures proper exception and error handling: if any critical exception
+cannot be handled then the :meth:`~AppBase.shutdown` will make sure that all sub-apps and
+threads get terminated and joined. Additionally it will flush all print out buffers for to
+include all the info of the critical error (the last debug and error messages) into the
+standard error/output and any active log files.
 
 The class :class:`~ae.console_app.ConsoleApp` inherits from :class:`AppBase` and is adding
 configuration options and variables. So in your console application it is recommended to directly
-use :class:`~ae.console_app.ConsoleApp` instead of :class:`AppBase`. For applications
-with an GUI you can use instead one of the classes :class:`~ae.kivy_app.KivyApp`, :class:`~ae.enaml_app.EnamlApp`
-or :class:`~ae.dabo_app.DaboApp`.
+use instances of :class:`~ae.console_app.ConsoleApp` instead of :class:`AppBase`.
+
+For applications with an GUI use instead one of the classes :class:`~ae.kivy_app.KivyApp`,
+:class:`~ae.enaml_app.EnamlApp` or :class:`~ae.dabo_app.DaboApp`. These app GUI classes
+inherit all functionality from :class:`ConsoleApp` and :class:`AppBase`.
 
 
-Sophisticated Logging
----------------------
+Application Logging
+-------------------
+
+Print-outs are an essential tool for the debugging and logging of your application at run-time. In python
+the print-outs are done with the :func:`print` function or the python :mod:`logging` module. These
+print-outs get per default send to the standard output and error streams of your OS and so displayed on
+your system console/shell. The :func:`print_out` function and the :meth:`~AppBase.print_out` method of
+this :mod:`.core` module are adding two more sophisticated ways for print-outs to the console/log-files.
+
+Using :class:`AppBase` is making the logging much easier and also ensures that print-outs of any
+imported library or package will be included into your log files. This is done by redirecting the
+standard output and error streams to your log files with the help of the :class:`_PrintingReplicator`
+class.
+
+Head-less server applications like web servers are mostly not allowed to use the standard output streams.
+For these applications you could redirect the standard output and error streams to a log file::
+
+    python your_application.py >log_std_out.log 2>log_std_err.log
+
+But because most web servers doesn't allow you to use this redirection, you can alternatively specify
+the :paramref:`~AppBase.suppress_stdout` parameter as True in the instantiation of an :class:`AppBase`
+instance. Additionally you can call the :meth:`~AppBase.init_logging` method for to activate a log file.
+After that all print-outs of your application and libraries will only appear in your log file.
+
+Also in complex applications, where huge print-outs to the console can get lost easily, you want to use
+a log file instead. But even a single log file can get messy to read, especially for multi-threaded
+server applications. For that :mod:`.core` is allowing you to create for each thread a separate
+sub-application :class:`AppBase` instance with its own log file.
 
 
-Enable Logging
-..............
+Enable Log File
+...............
 
 .. _ae-log-file:
 
+Log files are text files using by default the encoding of your OS console/shell. To activate the
+redirection of your applications print-outs into a log file for a :class:`AppBase` instance you
+simply specify the file name of the log file in the :meth:`AppBase.init_logging` method call::
 
-Enable Multi-Thread-Safety
-..........................
+    app = AppBase()
+    app.init_logging(file_name='my_log_file.log')
 
+
+Enable Logging Features
+.......................
+
+For multi-threaded applications you can include the thread-id of the printing thread automatically
+into your log files. For that you have to pass a True value to the
+:paramref:`~AppBase.multi_threading` argument. For to additionally also suppress any print-outs
+to the standard output/error streams pass True to the :paramref:`~AppBase.suppress_stdout` argument::
+
+    app = AppBase(multi_threading=True, suppress_stdout=True)
+    app.init_logging(file_name='my_log_file.log')
+
+The ae log files provided by this module are automatically rotating if the size of an log file
+succeeds the value in MBytes defined in the :data:`LOG_FILE_MAX_SIZE`. For to adapt this value
+to your needs you can specify the maximum log file size in MBytes with the argument
+:paramref:`~AppBase.init_logging.file_size_max` in your call of :meth:`~AppBase.init_logging`::
+
+    app.init_logging(file_name='my_log_file.log', file_size_max=9.)
+
+
+Using Python Logging Module
+...........................
+
+If you prefer to use the python logging module for your print-outs then pass a
+:meth:`logging config dict <logging.config.dictConfig>`
+to the :meth:`AppBase.init_logging` call instead of the log file name::
+
+    app.init_logging(py_logging_params=dict(...))
 
 """
 import ast
@@ -361,7 +433,7 @@ def module_name(*skip_modules: str, depth: int = 1) -> Optional[str]:
     :param depth:           the calling level from which on to search (def=1 which refers the next deeper frame).
                             Pass 2 or a even higher value if you want to get the module name from a deeper level
                             in the call stack.
-    :return:                The module name of a deeper level within the call stack.
+    :return:                The module name of the call stack level specified in the :paramref:`depth` argument.
     """
     if not skip_modules:
         skip_modules = (__name__,)
@@ -423,7 +495,7 @@ def sys_env_text(file: str = __file__, ind_ch: str = " ", ind_len: int = 18, key
 
 
 def stack_frames(depth: int = 1) -> Generator:  # Generator[frame, None, None]
-    """ generator diving deeper into the call stack from the level given in :paramref:`stack_frames.depth`.
+    """ generator diving deeper into the call stack from the level given in :paramref:`~stack_frames.depth`.
 
     :param depth:           the calling level from which on to start (def=1 which refers the next deeper stack frame).
                             Pass 2 or a even higher value if you want to start with a deeper frame in the call stack.
@@ -539,15 +611,15 @@ def try_exec(code_block: str, ignored_exceptions: Optional[tuple] = (),
     return ret
 
 
-MAX_NUM_LOG_FILES: int = 69                 #: maximum number of log files
-LOG_FILE_MAX_SIZE: int = 20                 #: maximum size in MB of a rotating log file
+MAX_NUM_LOG_FILES: int = 69                         #: maximum number of log files
+LOG_FILE_MAX_SIZE: int = 15                         #: maximum size in MB of a rotating log file
 LOG_FILE_IDX_WIDTH: int = len(str(MAX_NUM_LOG_FILES)) + 3
 """ width of rotating log file index within log file name; adding +3 to ensure index range up to factor 10^3. """
 
-ori_std_out = sys.stdout                    #: original sys.stdout on app startup
-ori_std_err = sys.stderr                    #: original sys.stderr on app startup
+ori_std_out: TextIO = sys.stdout                    #: original sys.stdout on app startup
+ori_std_err: TextIO = sys.stderr                    #: original sys.stderr on app startup
 
-log_file_lock = threading.Lock()            #: log file rotation lock
+log_file_lock: threading.Lock = threading.Lock()    #: log file rotation lock
 
 
 _logger = None       #: python logger for this module gets lazy/late initialized and only if requested by caller
@@ -564,21 +636,24 @@ _multi_threading_activated: bool = False            #: flag if threading is used
 
 
 def activate_multi_threading():
-    """ activate multi-threading for all app instances (normally done at main app startup).
-    """
+    """ activate multi-threading for all app instances (normally done at main app startup). """
     global _multi_threading_activated
     _multi_threading_activated = True
 
 
 def _deactivate_multi_threading():
+    """ disable multi threading (needed for to reset app environment in unit testing). """
     global _multi_threading_activated
     _multi_threading_activated = False
 
 
 _app_threads = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[int, threading.Thread]
+""" weak dict for to keep the references of all application threads. Added for to prevent
+the joining of unit testing threads in the test teardown (resetting app environment). """
 
 
 def _register_app_thread():
+    """ add new app thread to _app_threads if not already added. """
     global _app_threads
     tid = threading.get_ident()
     if tid not in _app_threads:
@@ -586,17 +661,18 @@ def _register_app_thread():
 
 
 def _join_app_threads(timeout: Optional[float] = None):
-    """ deactivate multi-threading.
+    """ join/finish all app threads and finally deactivate multi-threading.
 
     :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
     """
     global _app_threads
     main_thread = threading.current_thread()
-    for t in _app_threads.values():     # threading.enumerate() also includes PyCharm/pytest threads
+    for t in list(_app_threads.values()):     # threading.enumerate() also includes PyCharm/pytest threads
         if t is not main_thread:
             po("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()), logger=_logger)
             t.join(timeout)
             _app_threads.pop(t.ident)
+    _deactivate_multi_threading()
 
 
 def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = None, flush: bool = False,
@@ -620,6 +696,10 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
     :param kwargs:              catch unsupported kwargs for debugging (all items will be printed to the output stream).
 
     This function has an alias named :meth:`.po`.
+
+    ***Examples***
+
+
     """
     processing = end == "\r"
     enc = (file or ori_std_out if processing else sys.stdout).encoding
@@ -674,8 +754,81 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
 po = print_out              #: alias of function :func:`.print_out`
 
 
-class AppPrintingReplicator:
-    """ replace standard output/error stream for to replicate prints to all active logging streams (log files/buffers).
+# Had to use type comment because the following line is throwing an error in the Sphinx docs make:
+# _app_instances: weakref.WeakValueDictionary[str, "AppBase"] = weakref.WeakValueDictionary()
+_app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, AppBase]
+""" dict that is weakly holding references to all :class:`AppBase` instances created at run time.
+
+Gets automatically initialized in :meth:`AppBase.__init__` for to allow log file split/rotation
+and debugLevel access at application thread or module level.
+
+The first created :class:`AppBase` instance is called the main app instance. :data:`_main_app_inst_key`
+stores the dict key of the main instance.
+"""
+_main_app_inst_key: str = ''    #: key in :data:`_app_instances` of main :class:`AppBase` instance
+
+
+def main_app_instance() -> Optional['AppBase']:
+    """ determine the main instance of the :class:`AppBase` in the current running application.
+
+    :return:    main/first-instantiated :class:`AppBase` instance or None (if app is not fully initialized yet).
+    """
+    return _app_instances.get(_main_app_inst_key)
+
+
+def _register_app_instance(app: 'AppBase'):
+    """ register new :class:`AppBase` instance in :data:`_app_instances`.
+
+    :param app:         :class:`AppBase` instance to register
+    """
+    global _app_instances, _main_app_inst_key
+    msg = f"register_app_instance({app}) expects "
+    assert app not in _app_instances.values(), msg + "new instance - this app got already registered"
+
+    key = app.app_name + app.sys_env_id
+    assert key and key not in _app_instances, \
+        msg + f"non-empty, unique app key (app_name+sys_env_id=={key} keys={list(_app_instances.keys())})"
+
+    cnt = len(_app_instances)
+    if _main_app_inst_key:
+        assert cnt > 0, f"No app instances registered but main app key is set to {_main_app_inst_key}"
+    else:
+        assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app remove"
+        _main_app_inst_key = key
+    _app_instances[key] = app
+
+
+def _unregister_app_instance(app_key: str) -> 'AppBase':
+    """ unregister/remove :class:`AppBase` instance from within :data:`_app_instances`.
+
+    :param app_key:     app key of the instance to remove.
+    :return:            removed :class:`AppBase` instance.
+    """
+    global _app_instances, _main_app_inst_key
+    app = _app_instances.pop(app_key, None)
+    cnt = len(_app_instances)
+    if app_key == _main_app_inst_key:
+        _main_app_inst_key = ''
+        assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app {app_key}{app} remove"
+    else:
+        assert cnt > 0, f"Unregistered last app {app_key} but was not the main app {_main_app_inst_key}"
+    return app
+
+
+def _shut_down_sub_app_instances(timeout: Optional[float] = None):
+    """ shut down all sub-app instances.
+
+    :param timeout:     timeout float value in seconds for thread joining
+                        sub-app shutdowns and for log file lock acquire.
+    """
+    main_app = main_app_instance()
+    for app in list(_app_instances.values()):   # list is needed because weak ref dict get changed in loop
+        if app is not main_app:
+            app.shutdown(timeout=timeout)
+
+
+class _PrintingReplicator:
+    """ replace standard/error stream for to replicate print-outs to all active logging streams (log files/buffers).
     """
     def __init__(self, sys_out_obj: TextIO = ori_std_out) -> None:
         """ initialise a new T-stream-object
@@ -723,79 +876,6 @@ class AppPrintingReplicator:
         return getattr(self.sys_out_obj, attr)
 
 
-# Had to use type comment because the following line is throwing an error in the Sphinx docs make:
-# _app_instances: weakref.WeakValueDictionary[str, "AppBase"] = weakref.WeakValueDictionary()
-_app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, AppBase]
-""" dict that is weakly holding references to all :class:`AppBase` instances created at run time.
-
-Gets automatically initialized in :meth:`AppBase.__init__` for to allow log file split/rotation
-and debugLevel access at application thread or module level.
-
-The first created :class:`AppBase` instance is called the main app instance. :data:`_main_app_inst_key`
-stores the dict key of the main instance.
-"""
-_main_app_inst_key: str = ''    #: key in :data:`_app_instances` of main :class:`AppBase` instance
-
-
-def main_app_instance() -> Optional['AppBase']:
-    """ determine the main instance of the :class:`AppBase` in the current running application.
-
-    :return:    main :class:`AppBase` instance or None (if app is not fully initialized yet).
-    """
-    return _app_instances.get(_main_app_inst_key)
-
-
-def _register_app_instance(app: 'AppBase'):
-    """ register new :class:`AppBase` instance in :data:`_app_instances`.
-
-    :param app:         :class:`AppBase` instance to register
-    """
-    global _app_instances, _main_app_inst_key
-    msg = f"register_app_instance({app}) expects "
-    assert app not in _app_instances.values(), msg + "new instance - this app got already registered"
-
-    key = app.app_name + app.sys_env_id
-    assert key and key not in _app_instances, \
-        msg + f"non-empty, unique app key (app_name+sys_env_id=={key} keys={list(_app_instances.keys())})"
-
-    cnt = len(_app_instances)
-    if _main_app_inst_key:
-        assert cnt > 0, f"No app instances registered but main app key is set to {_main_app_inst_key}"
-    else:
-        assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app remove"
-        _main_app_inst_key = key
-    _app_instances[key] = app
-
-
-def _unregister_app_instance(app_key: str) -> 'AppBase':
-    """ unregister/remove :class:`AppBase` instance from within :data:`_app_instances`.
-
-    :param app_key:     app key of the instance to remove.
-    :return:            removed :class:`AppBase` instance.
-    """
-    global _app_instances, _main_app_inst_key
-    app = _app_instances.pop(app_key, None)
-    cnt = len(_app_instances)
-    if app_key == _main_app_inst_key:
-        _main_app_inst_key = ''
-        assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app {app_key}{app} remove"
-    else:
-        assert cnt > 0, f"Unregistered last app {app_key} but was not the main app {_main_app_inst_key}"
-    return app
-
-
-def shut_down_sub_app_instances(timeout: Optional[float] = None):
-    """ shut down all sub-app instances.
-
-    :param timeout:     timeout float value in seconds for thread joining
-                        sub-app shutdowns and for log file lock acquire.
-    """
-    main_app = main_app_instance()
-    for app in list(_app_instances.values()):   # list is needed because weak ref dict get changed in loop
-        if app is not main_app:
-            app.shutdown(timeout=timeout)
-
-
 class AppBase:
     """ provides easy logging and debugging for your application.
 
@@ -824,7 +904,7 @@ class AppBase:
     * :attr:`sys_env_id`            system environment id of this instance.
     """
     def __init__(self, app_title: str = '', app_name: str = '', app_version: str = '', sys_env_id: str = '',
-                 debug_level: int = DEBUG_LEVEL_DISABLED, suppress_stdout: bool = False):
+                 debug_level: int = DEBUG_LEVEL_DISABLED, multi_threading: bool = False, suppress_stdout: bool = False):
         """ initialize a new :class:`AppBase` instance.
 
         :param app_title:               application instance title/description (def=value of main module docstring).
@@ -834,6 +914,7 @@ class AppBase:
                                         the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
                                         for to init second :class:`AppBase` instance with values from sys_envLIVE.cfg).
         :param debug_level:             default debug level (def=DEBUG_LEVEL_DISABLED).
+        :param multi_threading:         pass True if instance is used in multi-threading app.
         :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
        """
         self.startup_beg: datetime.datetime = datetime.datetime.now()   #: begin of app startup datetime
@@ -855,7 +936,8 @@ class AppBase:
         self.app_version: str = app_version                     #: version of your app
         self.sys_env_id: str = sys_env_id                       #: system environment id of this instance
         self.debug_level: int = debug_level                     #: app default debug level
-
+        if multi_threading:
+            activate_multi_threading()
         self.suppress_stdout: bool = suppress_stdout            #: flag to suppress prints to stdout
 
         with log_file_lock:
@@ -879,14 +961,14 @@ class AppBase:
         """
         self.shutdown(exit_code=None)
 
-    def init_logging(self, py_logging_params: Optional[Dict[str, Any]] = None, file_name_def: str = "",
+    def init_logging(self, py_logging_params: Optional[Dict[str, Any]] = None, file_name: str = "",
                      file_size_max: float = LOG_FILE_MAX_SIZE, disable_buffering: bool = False):
         """ prepare logging: most values will be initialized in self._parse_args() indirectly via logFile config option
 
         :param py_logging_params:       config dict for python logging configuration.
                                         If this dict is not empty then python logging is configured with the
                                         given options in this dict and all the other kwargs are ignored.
-        :param file_name_def:           default log file name for ae logging (def='' - ae logging disabled).
+        :param file_name:               default log file name for ae logging (def='' - ae logging disabled).
         :param file_size_max:           max. size in MB of ae log file (def=LOG_FILE_MAX_SIZE).
         :param disable_buffering:       pass True to disable ae log buffering at app startup.
         """
@@ -902,7 +984,7 @@ class AppBase:
             else:                                   # (re-)init ae logging
                 if self._log_file_stream:
                     self._close_log_file()
-                self._log_file_name = file_name_def
+                self._log_file_name = file_name
                 self._log_file_max_size = file_size_max
                 if not disable_buffering:
                     self._log_buf_stream = StringIO(initial_value="####  Log Buffer\n")
@@ -947,84 +1029,24 @@ class AppBase:
             elif self.suppress_stdout and not self._nul_std_out:
                 sys.stdout = self._nul_std_out = open(os.devnull, 'w')
 
-    def _append_eof_and_flush_file(self, stream_file: TextIO, stream_name: str):
-        """ add special end-of-file marker and flush the internal buffers to the file stream.
+    def print_out(self, *objects, file: Optional[TextIO] = None, **kwargs):
+        """ app-instance-specific print-outs.
 
-        :param stream_file:     file stream.
-        :param stream_name:     name of the file stream.
-        """
-        try:
-            try:
-                # ALWAYS add \nEoF\n to the end
-                # .. we cannot use print_out() here because of recursions on log file rotation, so use built-in print()
-                # .. self.print_out()
-                # .. self.print_out('EoF')
-                print(file=stream_file)
-                print('EoF', file=stream_file)
-            except Exception as ex:
-                self.po("Ignorable {} end-of-file marker exception={}".format(stream_name, ex), logger=_logger)
+        For the main instance this method is printing to the standard output if the :paramref:`.file`
+        is None, whereas for sub-apps with an active log file the print-out gets redirected to the log file.
 
-            stream_file.flush()
-
-        except Exception as ex:
-            self.po("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
-
-    def _open_log_file(self):
-        """ open the ae log file.
-        """
-        global ori_std_out, ori_std_err
-        self._log_file_stream = open(self._log_file_name, "w", errors=DEF_ENCODE_ERRORS)
-        if not isinstance(sys.stdout, AppPrintingReplicator):  # sys.stdout == ori_std_out not working in pytest capsys
-            # if sys.stdout != ori_std_out:                   # only True in pytest run with capsys fixture
-            #   ori_std_out = sys.stdout                    # .. then set ori_* to capsys (for to be reset in log close)
-            #   ori_std_err = sys.stderr
-            # first call/open-of-log-file
-            if not self.suppress_stdout:
-                std_out = ori_std_out
-            elif self._nul_std_out and not self._nul_std_out.closed:
-                std_out = self._nul_std_out
-            else:
-                std_out = self._nul_std_out = open(os.devnull, 'w')
-            sys.stdout = AppPrintingReplicator(sys_out_obj=std_out)
-            sys.stderr = AppPrintingReplicator(sys_out_obj=ori_std_err)
-
-    def _close_log_file(self):
-        """ close the ae log file.
-        """
-        if self._log_file_stream:
-            stream = self._log_file_stream
-            self._append_eof_and_flush_file(stream, "ae log file")
-            self._log_file_stream = None
-            sys.stderr = ori_std_err
-            sys.stdout = ori_std_out
-            stream.close()
-
-    def _rename_log_file(self):
-        """ rename rotating log file while keeping first/startup log and log file count below :data:`MAX_NUM_LOG_FILE`.
-        """
-        file_path, file_ext = os.path.splitext(self._log_file_name)
-        dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=LOG_FILE_IDX_WIDTH) + file_ext
-        if os.path.exists(dfn):
-            os.remove(dfn)                              # remove old log file from previous app run
-        if os.path.exists(self._log_file_name):         # prevent errors after log file error or unit test cleanup
-            os.rename(self._log_file_name, dfn)
-
-        self._log_file_index += 1
-        if self._log_file_index > MAX_NUM_LOG_FILES:    # use > instead of >= for to always keep first/startup log file
-            first_idx = self._log_file_index - MAX_NUM_LOG_FILES
-            dfn = file_path + "-{:0>{index_width}}".format(first_idx, index_width=LOG_FILE_IDX_WIDTH) + file_ext
-            if os.path.exists(dfn):
-                os.remove(dfn)
-
-    # noinspection PyIncorrectDocstring
-    @staticmethod
-    def print_out(*objects, **kwargs):
-        """ special version of builtin print() function.
-
-        This method has the same args as :func:`in the print_out() function of this module <.print_out>`.
+        :param objects:     objects to be printed out.
+        :param file:        output stream object to be printed to (def=None which will use log file stream
+                            of this AppBase instance or the standard output stream if no log file is active).
+        :param kwargs:      The other kwargs of this method are documented on the
+                            :func:`in the print_out() function of this module <.print_out>`.
 
         This method has an alias named :meth:`.po`
         """
+        if file is None and main_app_instance() is not self:
+            stream = self._log_buf_stream or self._log_file_stream
+            if stream:
+                kwargs['file'] = stream
         print_out(*objects, **kwargs)
 
     po = print_out          #: alias of method :meth:`.print_out`
@@ -1045,7 +1067,7 @@ class AppBase:
 
         is_main_instance = main_app_instance() is self
         if is_main_instance:
-            shut_down_sub_app_instances(timeout=timeout)
+            _shut_down_sub_app_instances(timeout=timeout)
 
         if is_main_instance and _multi_threading_activated:
             _join_app_threads(timeout=timeout)
@@ -1074,7 +1096,71 @@ class AppBase:
             log_file_lock.release()
 
         _unregister_app_instance(self.app_name + self.sys_env_id)
+        self._shut_down = True
         if is_main_instance and exit_code is not None:
             sys.exit(exit_code)
 
-        self._shut_down = True
+    def _append_eof_and_flush_file(self, stream_file: TextIO, stream_name: str):
+        """ add special end-of-file marker and flush the internal buffers to the file stream.
+
+        :param stream_file:     file stream.
+        :param stream_name:     name of the file stream.
+        """
+        try:
+            try:
+                # ALWAYS add \nEoF\n to the end
+                # .. we cannot use print_out() here because of recursions on log file rotation, so use built-in print()
+                # .. self.print_out()
+                # .. self.print_out('EoF')
+                print(file=stream_file)
+                print('EoF', file=stream_file)
+            except Exception as ex:
+                self.po("Ignorable {} end-of-file marker exception={}".format(stream_name, ex), logger=_logger)
+
+            stream_file.flush()
+
+        except Exception as ex:
+            self.po("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
+
+    def _open_log_file(self):
+        """ open the ae log file.
+        """
+        global ori_std_out, ori_std_err
+        self._log_file_stream = open(self._log_file_name, "w", errors=DEF_ENCODE_ERRORS)
+        if not isinstance(sys.stdout, _PrintingReplicator):  # sys.stdout==ori_std_out not works in pytest capsys
+            if not self.suppress_stdout:
+                std_out = ori_std_out
+            elif self._nul_std_out and not self._nul_std_out.closed:
+                std_out = self._nul_std_out
+            else:
+                std_out = self._nul_std_out = open(os.devnull, 'w')
+            sys.stdout = _PrintingReplicator(sys_out_obj=std_out)
+            sys.stderr = _PrintingReplicator(sys_out_obj=ori_std_err)
+
+    def _close_log_file(self):
+        """ close the ae log file.
+        """
+        if self._log_file_stream:
+            stream = self._log_file_stream
+            self._append_eof_and_flush_file(stream, "ae log file")
+            self._log_file_stream = None
+            sys.stderr = ori_std_err
+            sys.stdout = ori_std_out
+            stream.close()
+
+    def _rename_log_file(self):
+        """ rename rotating log file while keeping first/startup log and log file count below :data:`MAX_NUM_LOG_FILE`.
+        """
+        file_path, file_ext = os.path.splitext(self._log_file_name)
+        dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=LOG_FILE_IDX_WIDTH) + file_ext
+        if os.path.exists(dfn):
+            os.remove(dfn)                              # remove old log file from previous app run
+        if os.path.exists(self._log_file_name):         # prevent errors after log file error or unit test cleanup
+            os.rename(self._log_file_name, dfn)
+
+        self._log_file_index += 1
+        if self._log_file_index > MAX_NUM_LOG_FILES:    # use > instead of >= for to always keep first/startup log file
+            first_idx = self._log_file_index - MAX_NUM_LOG_FILES
+            dfn = file_path + "-{:0>{index_width}}".format(first_idx, index_width=LOG_FILE_IDX_WIDTH) + file_ext
+            if os.path.exists(dfn):
+                os.remove(dfn)

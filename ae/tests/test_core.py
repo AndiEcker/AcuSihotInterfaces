@@ -14,7 +14,7 @@ from ae.core import (
     activate_multi_threading, _deactivate_multi_threading, main_app_instance,
     correct_email, correct_phone, exec_with_return, force_encoding, full_stack_trace, hide_dup_line_prefix, module_name,
     po, round_traditional, stack_frames, stack_var, sys_env_dict, sys_env_text, to_ascii, try_call, try_eval, try_exec,
-    AppPrintingReplicator, AppBase)
+    AppBase, _PrintingReplicator)
 
 import datetime as test_dt
 
@@ -302,64 +302,6 @@ class TestCoreHelpers:
         assert try_exec("dt = _; datetime.datetime.strftime(dt, DATE_ISO)", loc_vars={'_': dt_val}) == dt_str
 
 
-class TestAppPrintingReplicator:
-    def test_init(self):
-        dso = AppPrintingReplicator()
-        assert dso.sys_out_obj is sys.stdout
-
-        dso = AppPrintingReplicator(sys_out_obj=sys.stdout)
-        assert dso.sys_out_obj is sys.stdout
-
-        dso = AppPrintingReplicator(sys_out_obj=sys.stderr)
-        assert dso.sys_out_obj is sys.stderr
-
-    def test_flush_method_exists(self):
-        dso = AppPrintingReplicator()
-        assert hasattr(dso, 'flush')
-        assert callable(dso.flush)
-
-    def test_write(self):
-        lfn = 'ca_dup_sys_write_test.txt'
-        try:
-            lfo = open(lfn, 'w')
-            dso = AppPrintingReplicator(lfo)
-            msg = 'test_ascii_message'
-            dso.write(msg)
-            lfo.close()
-            with open(lfn) as f:
-                assert f.read() == msg
-
-            lfo = open(lfn, 'w', encoding='utf-8')
-            dso = AppPrintingReplicator(lfo)
-            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
-            dso.write(msg)
-            lfo.close()
-            with open(lfn, encoding='utf-8') as f:
-                assert f.read() == msg
-
-            lfo = open(lfn, 'w', encoding='ascii')
-            dso = AppPrintingReplicator(lfo)
-            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
-            dso.write(msg)
-            lfo.close()
-            with open(lfn, encoding='ascii') as f:
-                assert f.read() == '\\ua000\\u07b4'
-
-            lfo = open(lfn, 'w')
-            dso = AppPrintingReplicator(lfo)
-            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
-            dso.write(msg)
-            lfo.close()
-            with open(lfn) as f:
-                if f.encoding == 'ascii':
-                    assert f.read() == '\\ua000\\u07b4'
-                else:
-                    assert f.read() == msg      # msg == '\ua000\u07b4'
-
-        finally:
-            assert delete_files(lfn) == 1
-
-
 class TestOfflineContactValidation:
     def test_correct_email(self):
         # edge cases: empty string or None as email
@@ -520,12 +462,70 @@ class TestOfflineContactValidation:
         assert r == ["0: ", "3: ", "8:/"]
 
 
+class TestAppBasePrintingReplicator:
+    def test_init(self):
+        dso = _PrintingReplicator()
+        assert dso.sys_out_obj is sys.stdout
+
+        dso = _PrintingReplicator(sys_out_obj=sys.stdout)
+        assert dso.sys_out_obj is sys.stdout
+
+        dso = _PrintingReplicator(sys_out_obj=sys.stderr)
+        assert dso.sys_out_obj is sys.stderr
+
+    def test_flush_method_exists(self):
+        dso = _PrintingReplicator()
+        assert hasattr(dso, 'flush')
+        assert callable(dso.flush)
+
+    def test_write(self):
+        lfn = 'ca_dup_sys_write_test.txt'
+        try:
+            lfo = open(lfn, 'w')
+            dso = _PrintingReplicator(lfo)
+            msg = 'test_ascii_message'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn) as f:
+                assert f.read() == msg
+
+            lfo = open(lfn, 'w', encoding='utf-8')
+            dso = _PrintingReplicator(lfo)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn, encoding='utf-8') as f:
+                assert f.read() == msg
+
+            lfo = open(lfn, 'w', encoding='ascii')
+            dso = _PrintingReplicator(lfo)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn, encoding='ascii') as f:
+                assert f.read() == '\\ua000\\u07b4'
+
+            lfo = open(lfn, 'w')
+            dso = _PrintingReplicator(lfo)
+            msg = chr(40960) + chr(1972)            # == '\ua000\u07b4'
+            dso.write(msg)
+            lfo.close()
+            with open(lfn) as f:
+                if f.encoding == 'ascii':
+                    assert f.read() == '\\ua000\\u07b4'
+                else:
+                    assert f.read() == msg      # msg == '\ua000\u07b4'
+
+        finally:
+            assert delete_files(lfn) == 1
+
+
 class TestAeLogging:
     def test_log_file_rotation(self, restore_app_env):
         log_file = 'test_ae_base_log.log'
         try:
             app = AppBase('test_base_log_file_rotation')
-            app.init_logging(file_name_def=log_file, file_size_max=.001)
+            app.init_logging(file_name=log_file, file_size_max=.001)
             app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
@@ -540,9 +540,22 @@ class TestAeLogging:
     def test_log_file_rotation_multi_threading(self, restore_app_env):
         log_file = 'test_ae_multi_log.log'
         try:
+            app = AppBase('test_base_log_file_rotation', multi_threading=True)
+            app.init_logging(file_name=log_file, file_size_max=.001)
+            app.log_file_check()
+            for idx in range(MAX_NUM_LOG_FILES + 9):
+                for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                    app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
+            assert os.path.exists(log_file)
+        finally:
+            assert delete_files(log_file, keep_ext=True) >= MAX_NUM_LOG_FILES
+
+    def test_log_file_rotation_explicit_multi_threading(self, restore_app_env):
+        log_file = 'test_ae_multi_log.log'
+        try:
             app = AppBase('test_base_log_file_rotation')
             activate_multi_threading()
-            app.init_logging(file_name_def=log_file, file_size_max=.001)
+            app.init_logging(file_name=log_file, file_size_max=.001)
             app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
@@ -556,7 +569,7 @@ class TestAeLogging:
         try:
             app = AppBase('test_open_log_file_with_suppressed_stdout', suppress_stdout=True)
             assert app.suppress_stdout is True
-            app.init_logging(file_name_def=log_file)
+            app.init_logging(file_name=log_file)
             app.log_file_check()
             app.init_logging()      # close log file
             assert os.path.exists(log_file)
@@ -566,7 +579,7 @@ class TestAeLogging:
     def test_invalid_log_file_name(self, restore_app_env):
         log_file = ':/:invalid:/:'
         app = AppBase('test_invalid_log_file_name')
-        app.init_logging(file_name_def=log_file)
+        app.init_logging(file_name=log_file)
         with pytest.raises(FileNotFoundError):
             app.log_file_check()     # coverage of callee exception
         assert not os.path.exists(log_file)
@@ -575,7 +588,7 @@ class TestAeLogging:
         log_file = 'test_ae_base_log_flush.log'
         try:
             app = AppBase('test_base_log_file_flush')
-            app.init_logging(file_name_def=log_file)
+            app.init_logging(file_name=log_file)
             app.log_file_check()
             assert os.path.exists(log_file)
         finally:
@@ -729,8 +742,7 @@ class TestAppBase:      # only some basic tests - test coverage is done by :clas
         assert app.app_title == __doc__
 
     def test_print_out(self, capsys, restore_app_env):
-        app = AppBase('test_python_logging_params_dict_basic_from_ini')
-        activate_multi_threading()
+        app = AppBase('test_python_logging_params_dict_basic_from_ini', multi_threading=True)
         app.po()
         out, err = capsys.readouterr()
         assert out.endswith('\n') and err == ''
@@ -755,8 +767,7 @@ class TestAppBase:      # only some basic tests - test coverage is done by :clas
         app.po(bytes(chr(0xef) + chr(0xbb) + chr(0xbf), encoding='utf-8'))
         out, err = capsys.readouterr()
         print(out)
-        assert us in out
-        assert us in err
+        assert us in out and err == ''
 
         # print invalid/surrogate code point/char for to force UnicodeEncodeError exception in po() (testing coverage)
         us = chr(0xD801)

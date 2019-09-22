@@ -196,8 +196,9 @@ from configparser import ConfigParser
 from argparse import ArgumentParser, ArgumentError, HelpFormatter, Namespace
 
 from ae.core import (
-    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVELS,
-    DATE_TIME_ISO, DATE_ISO, ori_std_out, _logger, main_app_instance, sys_env_text, AppBase, activate_multi_threading)
+    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVELS, DATE_TIME_ISO, DATE_ISO,
+    main_app_instance, ori_std_out, sys_env_text, _logger,
+    AppBase)
 from ae.literal import Literal
 
 
@@ -260,10 +261,7 @@ class ConsoleApp(AppBase):
                                         :meth:`~core.AppBase.init_logging`.
         """
         super().__init__(app_title=app_title, app_version=app_version, sys_env_id=sys_env_id,
-                         debug_level=debug_level, suppress_stdout=suppress_stdout)
-
-        if multi_threading:
-            activate_multi_threading()
+                         debug_level=debug_level, multi_threading=multi_threading, suppress_stdout=suppress_stdout)
 
         with config_lock:
             self._cfg_parser: ConfigParser = ConfigParser()                 #: ConfigParser instance
@@ -494,25 +492,26 @@ class ConsoleApp(AppBase):
                         raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
                                             .format(name, given_value, allowed_values))
 
-        if main_app_instance() is self and not self.py_log_params:
+        is_main_app = main_app_instance() is self
+        if is_main_app and not self.py_log_params:
             self._log_file_name = self.cfg_options['logFile'].value
             if self._log_file_name:
                 self.log_file_check()
 
         # finished argument parsing - now print chosen option values to the console
-        _debug_level = self.cfg_options['debugLevel'].value
-        if _debug_level >= DEBUG_LEVEL_ENABLED:
+        debug_level = self.cfg_options['debugLevel'].value
+        if debug_level >= DEBUG_LEVEL_ENABLED:
             self.po("  ##  Debug Level(" + ", ".join([str(k) + "=" + v for k, v in DEBUG_LEVELS.items()]) + "):",
-                    _debug_level, logger=_logger)
+                    debug_level, logger=_logger)
             # print sys env - s.a. pyinstaller docs (http://pythonhosted.org/PyInstaller/runtime-information.html)
-            if self.sys_env_id or main_app_instance() is not self:
+            if self.sys_env_id or not is_main_app:
                 self.po(" ###  Initialized ConsoleApp instance for system env id", self.sys_env_id, logger=_logger)
             self.po("  ##  System Environment:", logger=_logger)
             self.po(sys_env_text(extra_sys_env_dict={'main cfg': self._main_cfg_fnam}), logger=_logger)
 
         self.startup_end = datetime.datetime.now()
         self.po(self.app_name, " V", self.app_version, "  Args  parsed", self.startup_end, logger=_logger)
-        if main_app_instance() is not self and not self.sys_env_id:
+        if not is_main_app and not self.sys_env_id:
             self.po("  **  Additional instance of ConsoleApp requested with empty system environment ID",
                     logger=_logger)
         self.po("####  Startup finished....  ####", logger=_logger)
