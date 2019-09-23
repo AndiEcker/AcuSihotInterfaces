@@ -525,7 +525,7 @@ class TestAeLogging:
         log_file = 'test_ae_base_log.log'
         try:
             app = AppBase('test_base_log_file_rotation')
-            app.init_logging(file_name=log_file, file_size_max=.001)
+            app.init_logging(log_file_name=log_file, log_file_size_max=.001)
             app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
@@ -541,7 +541,7 @@ class TestAeLogging:
         log_file = 'test_ae_multi_log.log'
         try:
             app = AppBase('test_base_log_file_rotation', multi_threading=True)
-            app.init_logging(file_name=log_file, file_size_max=.001)
+            app.init_logging(log_file_name=log_file, log_file_size_max=.001)
             app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
@@ -555,7 +555,7 @@ class TestAeLogging:
         try:
             app = AppBase('test_base_log_file_rotation')
             activate_multi_threading()
-            app.init_logging(file_name=log_file, file_size_max=.001)
+            app.init_logging(log_file_name=log_file, log_file_size_max=.001)
             app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
@@ -569,7 +569,7 @@ class TestAeLogging:
         try:
             app = AppBase('test_open_log_file_with_suppressed_stdout', suppress_stdout=True)
             assert app.suppress_stdout is True
-            app.init_logging(file_name=log_file)
+            app.init_logging(log_file_name=log_file)
             app.log_file_check()
             app.init_logging()      # close log file
             assert os.path.exists(log_file)
@@ -579,7 +579,7 @@ class TestAeLogging:
     def test_invalid_log_file_name(self, restore_app_env):
         log_file = ':/:invalid:/:'
         app = AppBase('test_invalid_log_file_name')
-        app.init_logging(file_name=log_file)
+        app.init_logging(log_file_name=log_file)
         with pytest.raises(FileNotFoundError):
             app.log_file_check()     # coverage of callee exception
         assert not os.path.exists(log_file)
@@ -588,7 +588,7 @@ class TestAeLogging:
         log_file = 'test_ae_base_log_flush.log'
         try:
             app = AppBase('test_base_log_file_flush')
-            app.init_logging(file_name=log_file)
+            app.init_logging(log_file_name=log_file)
             app.log_file_check()
             assert os.path.exists(log_file)
         finally:

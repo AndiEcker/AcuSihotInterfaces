@@ -30,7 +30,7 @@ class TestAeLogging:
     def test_open_log_file_with_suppressed_stdout_and_log_file(self, capsys, restore_app_env):
         log_file = 'test_sup_std_out.log'
         try:
-            cae = ConsoleApp('test_log_file_rotation_with_log', suppress_stdout=True, file_name_def=log_file)
+            cae = ConsoleApp('test_log_file_rotation_with_log', suppress_stdout=True, log_file_name=log_file)
             assert cae.suppress_stdout is True
             cae.log_file_check()
             cae.po("tst_out")
@@ -42,7 +42,8 @@ class TestAeLogging:
 
     def test_cae_log_file_rotation(self, restore_app_env, sys_argv_app_key_restore):
         log_file = 'test_cae_rot_log.log'
-        cae = ConsoleApp('test_cae_log_file_rotation', multi_threading=True, file_name_def=log_file, file_size_max=.001)
+        cae = ConsoleApp('test_cae_log_file_rotation',
+                         multi_threading=True, log_file_name=log_file, log_file_size_max=.001)
         try:
             sys.argv = [sys_argv_app_key_restore, ]
             file_name_chk = cae.get_opt('logFile')   # get_opt() has to be called at least once for to create log file
@@ -62,12 +63,12 @@ class TestAeLogging:
     def test_invalid_log_file_name(self, restore_app_env):
         log_file = ':/:invalid:/:'
         with pytest.raises(FileNotFoundError):
-            ConsoleApp('test_invalid_log_file_name', file_name_def=log_file)
+            ConsoleApp('test_invalid_log_file_name', log_file_name=log_file)
         assert not os.path.exists(log_file)
 
     def test_log_file_flush(self, restore_app_env, sys_argv_app_key_restore):
         log_file = 'test_ae_log_flush.log'
-        cae = ConsoleApp('test_log_file_flush', file_name_def=log_file)
+        cae = ConsoleApp('test_log_file_flush', log_file_name=log_file)
         try:
             sys.argv = [sys_argv_app_key_restore, ]
             file_name_chk = cae.get_opt('logFile')   # get_opt() has to be called at least once for to create log file

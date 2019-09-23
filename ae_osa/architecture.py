@@ -14,7 +14,7 @@ def executable_architecture(executable_file: str) -> Optional[str]:
     Inspired by <https://github.com/tgandor/meats/blob/master/missing/arch_of.py>_ and
     <https://stackoverflow.com/questions/14799966/detect-an-executable-file-in-java?lq=1>_.
 
-    :param executable_file:     file name (and opt. file path) to investigate.
+    :param executable_file:     file name (optionally with file path) to investigate.
     :return:                    possible return values:
 
                                 * 'elf' for linux applications (executable binaries)

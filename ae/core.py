@@ -49,7 +49,7 @@ the evaluation of dynamic python expressions much easier. These functions are e.
 by the :class:`~ae.literal.Literal` class for the implementation of dynamically
 determined literal values.
 
-The functions :data:`module_name`, :func:`stack_frames` and :func:`stack_var` are very
+The functions :data:`module_name`, :func:`stack_frames` and :func:`stack_variable` are very
 helpful for to inspect the call stack. With them you can easily access the stack frame
 and read e.g. variable values of the callers of your functions/methods. The class
 :class:`~ae.console_app.ConsoleApp` is using them e.g. for to determine the
@@ -69,27 +69,41 @@ Finally the :func:`round_traditional` get declared in this module fully compatib
 Python's :func:`round` function, to be used for traditional rounding of float values.
 
 
-Application Classes Base
-------------------------
+Application Base Class
+----------------------
 
 The base class :class:`AppBase` is providing sophisticated logging features with the help of the
-function :func:`print_out` and their sub-class :class:`_PrintingReplicator`. The first created
-instance of :class:`AppBase` in your application is representing the main app and any further
-created instances are representing the sub-apps of your application.
+function :func:`print_out` and their sub-class :class:`_PrintingReplicator`.
 
-:class:`AppBase` also ensures proper exception and error handling: if any critical exception
-cannot be handled then the :meth:`~AppBase.shutdown` will make sure that all sub-apps and
-threads get terminated and joined. Additionally it will flush all print out buffers for to
-include all the info of the critical error (the last debug and error messages) into the
+The first created instance of :class:`AppBase` in your application is representing the main app
+and any further created instances are representing the sub-apps of your application.
+
+Sub-apps are not tied to any fix use-case. They can be created for example for each sub-task or
+application thread. You could also create a sub-app instance for each of your external systems,
+like a database server or for to connect your application onto different test environments
+or to your live/production system.
+
+:class:`AppBase` ensures automatically for you the proper handling of any exceptions and run-time
+errors: if any critical exception/error cannot be handled then the :meth:`~AppBase.shutdown`
+will make sure that all sub-apps and threads get terminated and joined.
+Additionally it will flush all print-out buffers for to include all the info
+of the critical error (the last debug and error messages) into the
 standard error/output and any active log files.
 
-The class :class:`~ae.console_app.ConsoleApp` inherits from :class:`AppBase` and is adding
-configuration options and variables. So in your console application it is recommended to directly
+
+Application Class Hierarchy
+...........................
+
+For most use cases you will never need to instantiate from :class:`AppBase` directly - instead you will
+instantiate one of the classes that are inherited from this base class.
+
+The class :class:`~ae.console_app.ConsoleApp` e.g. inherits from :class:`AppBase` and is adding
+configuration options and variables to it. So in your console application it is recommended to directly
 use instances of :class:`~ae.console_app.ConsoleApp` instead of :class:`AppBase`.
 
 For applications with an GUI use instead one of the classes :class:`~ae.kivy_app.KivyApp`,
 :class:`~ae.enaml_app.EnamlApp` or :class:`~ae.dabo_app.DaboApp`. These app GUI classes
-inherit all functionality from :class:`ConsoleApp` and :class:`AppBase`.
+inherit all functionality from :class:`~ae.console_app.ConsoleApp` and :class:`AppBase`.
 
 
 Application Logging
@@ -102,12 +116,13 @@ your system console/shell. The :func:`print_out` function and the :meth:`~AppBas
 this :mod:`.core` module are adding two more sophisticated ways for print-outs to the console/log-files.
 
 Using :class:`AppBase` is making the logging much easier and also ensures that print-outs of any
-imported library or package will be included into your log files. This is done by redirecting the
+imported library or package will be included within your log files. This is done by redirecting the
 standard output and error streams to your log files with the help of the :class:`_PrintingReplicator`
 class.
 
 Head-less server applications like web servers are mostly not allowed to use the standard output streams.
-For these applications you could redirect the standard output and error streams to a log file::
+For some these applications you could redirect the standard output and error streams to a log file by
+using the OS redirection character (>)::
 
     python your_application.py >log_std_out.log 2>log_std_err.log
 
@@ -122,21 +137,21 @@ server applications. For that :mod:`.core` is allowing you to create for each th
 sub-application :class:`AppBase` instance with its own log file.
 
 
-Enable Log File
-...............
+Enable Ae Log File
+..................
 
 .. _ae-log-file:
 
-Log files are text files using by default the encoding of your OS console/shell. To activate the
-redirection of your applications print-outs into a log file for a :class:`AppBase` instance you
-simply specify the file name of the log file in the :meth:`AppBase.init_logging` method call::
+Ae Log Files are text files using by default the encoding of your OS console/shell. To activate the
+redirection of your applications print-outs into a ae log file for a :class:`AppBase` instance you
+simply specify the file name of the log file in the :meth:`~AppBase.init_logging` method call::
 
     app = AppBase()
-    app.init_logging(file_name='my_log_file.log')
+    app.init_logging(log_file_name='my_log_file.log')
 
 
-Enable Logging Features
-.......................
+Enable Ae Logging Features
+..........................
 
 For multi-threaded applications you can include the thread-id of the printing thread automatically
 into your log files. For that you have to pass a True value to the
@@ -144,25 +159,36 @@ into your log files. For that you have to pass a True value to the
 to the standard output/error streams pass True to the :paramref:`~AppBase.suppress_stdout` argument::
 
     app = AppBase(multi_threading=True, suppress_stdout=True)
-    app.init_logging(file_name='my_log_file.log')
+    app.init_logging(log_file_name='my_log_file.log')
 
 The ae log files provided by this module are automatically rotating if the size of an log file
 succeeds the value in MBytes defined in the :data:`LOG_FILE_MAX_SIZE`. For to adapt this value
 to your needs you can specify the maximum log file size in MBytes with the argument
-:paramref:`~AppBase.init_logging.file_size_max` in your call of :meth:`~AppBase.init_logging`::
+:paramref:`~AppBase.init_logging.log_file_size_max` in your call of :meth:`~AppBase.init_logging`::
 
-    app.init_logging(file_name='my_log_file.log', file_size_max=9.)
+    app.init_logging(log_file_name='my_log_file.log', log_file_size_max=9.)
+
+By using the :class:`~ae.console_app.ConsoleApp` class instead of :class:`AppBase` you can
+alternatively store the logging configuration of your application within a
+:ref:`configuration variable <config-variables>` or a :ref:`configuration option <config-options>`.
+The order of precedence for to find the appropriate logging configuration of each
+app instance is documented :meth:`here <ae.console_app.ConsoleApp._init_logging>` .
 
 
 Using Python Logging Module
 ...........................
 
-If you prefer to use the python logging module for your print-outs then pass a
-:meth:`logging config dict <logging.config.dictConfig>`
-to the :meth:`AppBase.init_logging` call instead of the log file name::
+If you prefer to use instead the python logging module for your print-outs, then pass a
+:mod:`python logging configuration dictionary <logging.config>` with your individual
+configuration of used logging handlers, files and loggers to the
+:paramref:`~AppBase.init_logging.py_logging_params` argument of the
+:meth:`~AppBase.init_logging` method::
 
-    app.init_logging(py_logging_params=dict(...))
+    app.init_logging(py_logging_params=my_py_logging_config_dict)
 
+Passing the python logging configuration dictionary to one of the :class:`AppBase`
+instances of your application will automatically disable the ae log files for this
+instance and the main app instance.
 """
 import ast
 import copy
@@ -433,7 +459,8 @@ def module_name(*skip_modules: str, depth: int = 1) -> Optional[str]:
     :param depth:           the calling level from which on to search (def=1 which refers the next deeper frame).
                             Pass 2 or a even higher value if you want to get the module name from a deeper level
                             in the call stack.
-    :return:                The module name of the call stack level specified in the :paramref:`depth` argument.
+    :return:                The module name of the call stack level specified in the :paramref:`~module_name.depth`
+                            argument.
     """
     if not skip_modules:
         skip_modules = (__name__,)
@@ -510,7 +537,7 @@ def stack_frames(depth: int = 1) -> Generator:  # Generator[frame, None, None]
         pass
 
 
-def stack_var(name: str, *skip_modules: str, depth: int = 1, locals_only: bool = False) -> Optional[Any]:
+def stack_variable(name: str, *skip_modules: str, depth: int = 1, locals_only: bool = False) -> Optional[Any]:
     """ determine variable value in calling stack/frames.
 
     :param name:            variable name.
@@ -520,6 +547,8 @@ def stack_var(name: str, *skip_modules: str, depth: int = 1, locals_only: bool =
                             in the call stack.
     :param locals_only:     pass True to only check for local variables (ignoring globals).
     :return:                The variable value of a deeper level within the call stack.
+
+    This function has an alias named :func:`.stack_var`.
     """
     if not skip_modules:
         skip_modules = (__name__,)
@@ -531,6 +560,9 @@ def stack_var(name: str, *skip_modules: str, depth: int = 1, locals_only: bool =
             val = variables[name]
             break
     return val
+
+
+stack_var = stack_variable          #: alias of function :func:`.stack_variable`
 
 
 def to_ascii(unicode_str: str) -> str:
@@ -611,15 +643,15 @@ def try_exec(code_block: str, ignored_exceptions: Optional[tuple] = (),
     return ret
 
 
-MAX_NUM_LOG_FILES: int = 69                         #: maximum number of log files
-LOG_FILE_MAX_SIZE: int = 15                         #: maximum size in MB of a rotating log file
+MAX_NUM_LOG_FILES: int = 69                         #: maximum number of :ref:`ae log files <ae-log-file>`
+LOG_FILE_MAX_SIZE: int = 15                         #: max. size in MB of rotating :ref:`ae log files <ae-log-file>`
 LOG_FILE_IDX_WIDTH: int = len(str(MAX_NUM_LOG_FILES)) + 3
 """ width of rotating log file index within log file name; adding +3 to ensure index range up to factor 10^3. """
 
 ori_std_out: TextIO = sys.stdout                    #: original sys.stdout on app startup
 ori_std_err: TextIO = sys.stderr                    #: original sys.stderr on app startup
 
-log_file_lock: threading.Lock = threading.Lock()    #: log file rotation lock
+log_file_lock: threading.Lock = threading.Lock()    #: log file rotation multi-threading lock
 
 
 _logger = None       #: python logger for this module gets lazy/late initialized and only if requested by caller
@@ -632,7 +664,7 @@ def logger_late_init():
         _logger = logging.getLogger(__name__)
 
 
-_multi_threading_activated: bool = False            #: flag if threading is used
+_multi_threading_activated: bool = False            #: flag if threading is used in your application
 
 
 def activate_multi_threading():
@@ -677,36 +709,37 @@ def _join_app_threads(timeout: Optional[float] = None):
 
 def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = None, flush: bool = False,
               encode_errors_def: str = DEF_ENCODE_ERRORS, logger: Optional['logging.Logger'] = None, **kwargs) -> None:
-    """ universal/unbreakable print function - replacement for the python print() built-in.
+    """ universal/unbreakable print function - replacement for the :func:`built-in python function print() <print>`.
+
+    :param objects:             tuple of objects to be printed.
+    :param sep:                 separator character between each printed object/string (def=" ").
+    :param end:                 finalizing character added to the end of this print-out (def="\\\\n").
+                                Pass \\\\r for to suppress the print-out into :ref:`ae log file <ae-log-file>`
+                                or to any activated python logger
+                                - useful for console/shell processing animation (see :meth:`ae.tcp.TcpServer.run`).
+    :param file:                output stream object to be printed to (def=None which will use standard output streams).
+                                If given then the redirection to all active log files and python logging loggers
+                                will be disabled (even if the :paramref:`~print_out.logger` argument is specified).
+    :param flush:               flush stream after printing (def=False).
+    :param encode_errors_def:   default error handling for to encode (def=:data:`DEF_ENCODE_ERRORS`).
+    :param logger:              used logger for to output `objects` (def=None). Ignored if the
+                                :paramref:`print_out.file` argument gets specified/passed.
+    :param kwargs:              catch unsupported kwargs for debugging (all items will be printed to the output stream).
 
     This function is silently handling and auto-correcting string encode errors for output streams which are
     not supporting unicode. Any instance of :class:`AppBase` is providing this function as a method with the
     :func:`same name <AppBase.print_out>`). It is recommended to call/use the instance method instead of this function.
 
-    :param objects:             tuple of objects to be printed.
-    :param sep:                 separator character between each printed object/string (def=" ").
-    :param end:                 finalizing character added to the end of this print (def="\\\\n").
-                                Pass \\\\r for to suppress the print-out into :ref:`ae log file <ae-log-file>`
-                                or python logger
-                                - useful for console/shell processing animation (see :meth:`ae.tcp.TcpServer.run`).
-    :param file:                output stream object to be printed to (def=None which will use standard output streams).
-    :param flush:               flush stream after printing (def=False).
-    :param encode_errors_def:   default error handling for to encode (def=:data:`DEF_ENCODE_ERRORS`).
-    :param logger:              used logger for to output `objects` (def=None).
-    :param kwargs:              catch unsupported kwargs for debugging (all items will be printed to the output stream).
+    In multi-threaded applications this function prevents dismembered/fluttered print-outs from different threads.
 
-    This function has an alias named :meth:`.po`.
-
-    ***Examples***
-
-
+    This function has an alias named :func:`.po`.
     """
     processing = end == "\r"
     enc = (file or ori_std_out if processing else sys.stdout).encoding
     use_py_logger = False
     if processing:
         file = ori_std_out
-    elif logger is not None:
+    elif logger is not None and file is None:
         use_py_logger = True
         logger_late_init()
     app = main_app_instance()
@@ -828,7 +861,7 @@ def _shut_down_sub_app_instances(timeout: Optional[float] = None):
 
 
 class _PrintingReplicator:
-    """ replace standard/error stream for to replicate print-outs to all active logging streams (log files/buffers).
+    """ replacement of standard/error stream for to replicate print-outs to all active logging streams (log files/bufs).
     """
     def __init__(self, sys_out_obj: TextIO = ori_std_out) -> None:
         """ initialise a new T-stream-object
@@ -838,7 +871,7 @@ class _PrintingReplicator:
         self.sys_out_obj = sys_out_obj
 
     def write(self, message: AnyStr) -> None:
-        """ write string to logs and standard output streams.
+        """ write string to ae logging and standard output streams.
 
         Automatically suppressing UnicodeEncodeErrors if console/shell or log file has different encoding
         by forcing re-encoding with DEF_ENCODE_ERRORS.
@@ -888,12 +921,13 @@ class AppBase:
     * :attr:`app_name`              basename (without the file name extension) of the executable.
     * :attr:`_app_path`             file path of executable.
     * :attr:`app_title`             application title/description.
-    * :attr:`app_version`           application version (set via the :paramref:`AppBase.__init__.app_version` arg).
+    * :attr:`app_version`           application version (set via the :paramref:`AppBase.app_version` argument).
     * :attr:`debug_level`           debug level of this instance.
+    * :attr:`_last_log_line_prefix` last log file line prefix that got print-out to the log of this app instance.
     * :attr:`_log_buf_stream`       log file buffer stream.
     * :attr:`_log_file_index`       index of the current rotation log file backup.
-    * :attr:`_log_file_max_size`    maximum size in MBytes of a log file.
-    * :attr:`_log_file_name`        path and file name of the log file.
+    * :attr:`_log_file_name`        path and file name of the ae log file.
+    * :attr:`_log_file_size_max`    maximum size in MBytes of a ae log file.
     * :attr:`_log_file_stream`      log file stream (opened in :meth:~AppBase._open_log_file`, could be closed).
     * :attr:`py_log_params`         python logging config dict.
     * :attr:`_nul_std_out`          null stream used for to prevent printouts on stdout of the console/shell.
@@ -913,11 +947,12 @@ class AppBase:
         :param sys_env_id:              system environment id used as file name suffix for to load all
                                         the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
                                         for to init second :class:`AppBase` instance with values from sys_envLIVE.cfg).
-        :param debug_level:             default debug level (def=DEBUG_LEVEL_DISABLED).
+        :param debug_level:             default debug level (def=:data:`DEBUG_LEVEL_DISABLED`).
         :param multi_threading:         pass True if instance is used in multi-threading app.
         :param suppress_stdout:         pass True (for wsgi apps) for to prevent any python print outputs to stdout.
        """
-        self.startup_beg: datetime.datetime = datetime.datetime.now()   #: begin of app startup datetime
+        self.startup_beg: datetime.datetime = \
+            datetime.datetime.now()                             #: begin of app startup datetime
 
         self._app_args = sys.argv                               #: initial sys.args value
         path_fnam_ext = self._app_args[0]
@@ -931,27 +966,27 @@ class AppBase:
         if not app_version:
             app_version = stack_var('__version__')
 
-        self.app_title: str = app_title                         #: app title/description
-        self.app_name: str = app_name                           #: app name
-        self.app_version: str = app_version                     #: version of your app
+        self.app_title: str = app_title                         #: title/description of this app instance
+        self.app_name: str = app_name                           #: name of this app instance
+        self.app_version: str = app_version                     #: version of your app instance
         self.sys_env_id: str = sys_env_id                       #: system environment id of this instance
-        self.debug_level: int = debug_level                     #: app default debug level
+        self.debug_level: int = debug_level                     #: debug level of this app instance
         if multi_threading:
             activate_multi_threading()
         self.suppress_stdout: bool = suppress_stdout            #: flag to suppress prints to stdout
 
         with log_file_lock:
-            self._log_file_max_size: int = LOG_FILE_MAX_SIZE    #: maximum log file size in MBytes (rotating log files)
-            self._log_file_index: int = 0                       #: log file index (for rotating logs)
-            self._log_file_name: str = ""                       #: log file name
             self._last_log_line_prefix: str = ""                #: prefix of the last printed log line
             self._log_buf_stream: Optional[StringIO] = None     #: log file buffer stream instance
             self._log_file_stream: Optional[TextIO] = None      #: log file stream instance
+            self._log_file_index: int = 0                       #: log file index (for rotating logs)
+            self._log_file_size_max: int = LOG_FILE_MAX_SIZE    #: maximum log file size in MBytes (rotating log files)
+            self._log_file_name: str = ""                       #: log file name
             self._nul_std_out: Optional[TextIO] = None          #: logging null stream
             self.py_log_params: Dict[str, Any] = dict()         #: dict of config parameters for py logging
 
-        self._shut_down: bool = False                           #: True if app got shut down already
-        self.startup_end: Optional[datetime.datetime] = None    #: end of app startup datetime
+        self._shut_down: bool = False                           #: True if this app instance got shut down already
+        self.startup_end: Optional[datetime.datetime] = None    #: end datetime of the application startup
 
         _register_app_thread()
         _register_app_instance(self)
@@ -961,15 +996,15 @@ class AppBase:
         """
         self.shutdown(exit_code=None)
 
-    def init_logging(self, py_logging_params: Optional[Dict[str, Any]] = None, file_name: str = "",
-                     file_size_max: float = LOG_FILE_MAX_SIZE, disable_buffering: bool = False):
+    def init_logging(self, py_logging_params: Optional[Dict[str, Any]] = None, log_file_name: str = "",
+                     log_file_size_max: float = LOG_FILE_MAX_SIZE, disable_buffering: bool = False):
         """ prepare logging: most values will be initialized in self._parse_args() indirectly via logFile config option
 
         :param py_logging_params:       config dict for python logging configuration.
                                         If this dict is not empty then python logging is configured with the
                                         given options in this dict and all the other kwargs are ignored.
-        :param file_name:               default log file name for ae logging (def='' - ae logging disabled).
-        :param file_size_max:           max. size in MB of ae log file (def=LOG_FILE_MAX_SIZE).
+        :param log_file_name:           default log file name for ae logging (def='' - ae logging disabled).
+        :param log_file_size_max:       max. size in MB of ae log file (def=LOG_FILE_MAX_SIZE).
         :param disable_buffering:       pass True to disable ae log buffering at app startup.
         """
         with log_file_lock:
@@ -977,24 +1012,43 @@ class AppBase:
                 logger_late_init()
                 # logging.basicConfig(level=logging.DEBUG, style='{')
                 logging.config.dictConfig(py_logging_params)     # re-configure py logging module
+                self.py_log_params = py_logging_params
                 main_instance = main_app_instance()
                 if not main_instance.py_log_params:
                     main_instance.py_log_params = py_logging_params
-                self.py_log_params = py_logging_params
             else:                                   # (re-)init ae logging
                 if self._log_file_stream:
                     self._close_log_file()
-                self._log_file_name = file_name
-                self._log_file_max_size = file_size_max
+                self._log_file_name = log_file_name
+                self._log_file_size_max = log_file_size_max
                 if not disable_buffering:
                     self._log_buf_stream = StringIO(initial_value="####  Log Buffer\n")
 
     def log_line_prefix(self) -> str:
+        """ compile prefix of log print-out line for this :class:`AppBase` instance.
+
+        The line prefix consists of (depending on the individual values of either a module variable or of an
+        attribute this app instance):
+
+        * :data:`_multi_threading_activated`: if True then the thread ident gets printed surrounded with
+          angle brackets (< and >), right aligned and space padded to minimal 6 characters.
+        * :attr:`sys_env_id`: if not empty then printed surrounded with curly brackets ({ and }), left aligned
+          and space padded to minimal 4 characters.
+        * :attr:`debug_level`: if greater or equal to :data:`DEBUG_LEVEL_TIMESTAMPED` then the system time
+          (determined with :meth:`~datetime.datetime.now`) gets printed in the format specified by the
+          :data:`DATE_TIME_ISO` constant.
+
+        This method is using the instance attribute :attr:`_last_log_line_prefix` for to keep a copy of
+        the last printed log line prefix for to prevent the printout of duplicate characters in consecutive
+        log lines.
+
+        :return: log file line prefix string including one space as separator character at the end.
+        """
         parts = list()
-        if self.sys_env_id:
-            parts.append(f"{{{self.sys_env_id: <4}}}")
         if _multi_threading_activated:
             parts.append(f"<{threading.get_ident(): >6}>")
+        if self.sys_env_id:
+            parts.append(f"{{{self.sys_env_id: <4}}}")
         if self.debug_level >= DEBUG_LEVEL_TIMESTAMPED:
             parts.append(datetime.datetime.now().strftime(DATE_TIME_ISO))
 
@@ -1015,14 +1069,14 @@ class AppBase:
         with log_file_lock:
             if self._log_file_stream is not None:
                 self._log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
-                if self._log_file_stream.tell() >= self._log_file_max_size * 1024 * 1024:
+                if self._log_file_stream.tell() >= self._log_file_size_max * 1024 * 1024:
                     self._close_log_file()
                     self._rename_log_file()
                     self._open_log_file()
             elif self._log_file_name:
                 self._open_log_file()
                 if self._log_file_stream and self._log_buf_stream:
-                    buf = self._log_buf_stream.getvalue()
+                    buf = self._log_buf_stream.getvalue() + "\n####  End Of Startup Log Buffer"
                     self._log_file_stream.write(buf)
                     self._log_buf_stream.close()
                     self._log_buf_stream = None
@@ -1032,14 +1086,13 @@ class AppBase:
     def print_out(self, *objects, file: Optional[TextIO] = None, **kwargs):
         """ app-instance-specific print-outs.
 
-        For the main instance this method is printing to the standard output if the :paramref:`.file`
-        is None, whereas for sub-apps with an active log file the print-out gets redirected to the log file.
-
         :param objects:     objects to be printed out.
-        :param file:        output stream object to be printed to (def=None which will use log file stream
-                            of this AppBase instance or the standard output stream if no log file is active).
-        :param kwargs:      The other kwargs of this method are documented on the
-                            :func:`in the print_out() function of this module <.print_out>`.
+        :param file:        output stream object to be printed to (def=None). Passing None on a main app instance
+                            will print the objects to the standard output and any active log files, but on a sub-app
+                            instance with an active log file the print-out will get redirected exclusively/only
+                            to log file of this sub-app instance.
+        :param kwargs:      All the other supported kwargs of this method are documented
+                            :func:`at the print_out() function of this module <print_out>`.
 
         This method has an alias named :meth:`.po`
         """
@@ -1052,12 +1105,12 @@ class AppBase:
     po = print_out          #: alias of method :meth:`.print_out`
 
     def shutdown(self, exit_code: Optional[int] = 0, timeout: Optional[float] = None):
-        """ shutdown this app instance and if self is the main app instance then also all sub-app-instances.
+        """ shutdown this app instance and if it is the main app instance then also any created sub-app-instances.
 
         :param exit_code:   set application OS exit code - ignored if this is NOT the main app instance (def=0).
                             Pass None for to prevent call of sys.exit(exit_code).
-        :param timeout:     timeout float value in seconds for thread joining
-                            sub-app shutdowns and for log file lock.
+        :param timeout:     timeout float value in seconds used for the thread termination and joining, for the
+                            sub-app shutdowns and for the acquisition of the :data:`log file lock <log_file_lock>`.
         """
         if self._shut_down:
             return

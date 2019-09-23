@@ -2,6 +2,38 @@
 string literal type detection and evaluation
 ============================================
 
+Value literals entered e.g. by the users of your application or which are stored in a
+:ref:`configuration file <config-files>` representing a value that can be dynamically
+detected and evaluated at application run-time.
+
+The :class:`Literal` class provided by this module allows your application to support
+the handling of any literals that can be converted via the python functions :func:`eval`
+or :func:`exec` (respective :func:`ae.core.exec_with_return`) into a value.
+
+A value literal can be passed either on instantiation through the :paramref:`~Literal.literal_or_value` argument::
+
+    literal_1 = Literal(literal_or_value='datetime.datetime.now()')
+
+or alternatively you could also set the literal string directly via the :attr:`~Literal.value` setter::
+
+    literal_2 = Literal()
+    literal_2.value = 'datetime.date.today()'
+
+In all cases as soon as you request the literal value via the :attr:`~Literal.value`
+getter the representing/underlying value will be detected an returned::
+
+   literal_value: datetime.date = literal_2.value
+
+For to restrict a value literal to a certain/fixed type you can specify it on instantiation within
+the :paramref:`~Literal.value_type` argument::
+
+    int_literal = Literal(value_type=int)
+    str_literal = Literal(value_type=str)
+    date_literal = Literal(value_type=datetime.date)
+    list_literal = Literal(value_type=list)
+    dict_literal = Literal(value_type=dict)
+
+The supported formats of a value literal are document at the :attr:`~Literal.value` property.
 """
 import datetime
 from typing import Any, Optional, Tuple, Type
@@ -10,10 +42,10 @@ from ae.core import DATE_TIME_ISO, DATE_ISO, DEF_ENCODE_ERRORS, try_call, try_ev
 
 
 class Literal:
-    """ literal representing a value used e.g. as configuration option. """
+    """ literal representing a value used for example as configuration option. """
 
     def __init__(self, name: str = 'LiT', literal_or_value: Optional[Any] = None, value_type: Optional[Type] = None):
-        """ create new Literal instance
+        """ create new Literal instance.
 
         :param name:                name of the literal (only used for debugging/error-message).
         :param literal_or_value:    initial literal (evaluable string expression) or value.
@@ -30,11 +62,13 @@ class Literal:
     def value(self) -> Any:
         """ property representing the value of this Literal instance.
 
-        :return:    the current value of this Literal instance.
+        :getter:    return the current value of this Literal instance.
+        :setter:    to set a new value assign either a value literal string or directly
+                    the representing/resulting value.
 
-        If the getter of this property is recognizing the current value as a special formatted strings
-        then this strings gets automatically evaluated and the evaluation result gets returned. These
-        special formatted strings starting and ending with special characters like so:
+        If the string literal of this :class:`Literal` instance coincide with one of the following
+        formats then this strings gets automatically evaluated and the evaluation result gets returned.
+        These special formatted strings starting and ending with special characters like so:
 
         +-------------+------------+------------------------------+
         | starts with | ends with  | evaluation value type        |
@@ -84,23 +118,28 @@ class Literal:
     def append_value(self, item_value: Any) -> Any:
         """ add new item to the list value of this Literal instance (lazy/late self.value getter call function pointer).
 
+        :param item_value:  value of the item to be appended to the value of this Literal instance.
+        :return:            the value (==list) of this Literal instance.
+
         This method gets e.g. used by the :class:`~.console_app.ConsoleApp` method
         :meth:`~.console_app.ConsoleApp.add_option` for to have a function pointer to this
         literal value with lazy/late execution of the value getter (value.append cannot be used in this case
-        because the list value can change be later again and before it get finally read/used).
-        (only works if the value is of type list).
-
-        :param item_value:  value of the item to be appended to the value of this Literal instance.
-        :return:            the value (==list) of this Literal instance.
+        because the list could have be changed before it get finally read/used).
+        (only works if the value type is :class:`list`).
         """
         self.value.append(item_value)
         return self.value
 
     def convert_value(self, value: Any) -> Any:
-        """ set/change the value (and possibly also the type) of this Literal instance
+        """ set/change the literal/value of this :class:`Literal` instance and return the represented value.
 
         :param value:       the new value to be set.
         :return:            the final/converted value of this Literal instance.
+
+        This method gets e.g. used by the :class:`~.console_app.ConsoleApp` method
+        :meth:`~.console_app.ConsoleApp.add_option` for to have a function pointer
+        for to let the ArgumentParser convert a configuration option literal into the
+        represented value.
         """
         self.value = value
         return self.value  # using self.value instead of value to call getter for evaluation/type-correction
@@ -109,7 +148,7 @@ class Literal:
     def _evaluable_literal(literal: str) -> Tuple[Optional[callable], Optional[str]]:
         """ check evaluable format of literal and possibly return appropriate evaluation function and stripped literal.
 
-        :param literal:     string to be checked if it can be evaluated and if it need to be stripped.
+        :param literal:     string to be checked if it can be evaluated and if it has to be stripped.
         :return:            tuple of - evaluation/execution function and stripped value (removed triple high-commas)
                             of expression/code-block - if literal has correct format - else (None, <empty string>).
         """
@@ -129,10 +168,10 @@ class Literal:
         return func, ret
 
     def _literal_value(self, literal: str) -> Any:
-        """ convert string literal into value
+        """ convert a simple string literal into its represented value.
 
         :param literal:     literal of a bool/datetime/date/... value.
-        :return:            the value of the literal.
+        :return:            the bool/date/datetime/... value of the literal.
         """
         dt = datetime.datetime
         val = (bool(try_eval(literal)) if self._type == bool else

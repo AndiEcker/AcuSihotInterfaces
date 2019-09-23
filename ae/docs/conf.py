@@ -28,14 +28,14 @@ author = 'Andi Ecker'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
+    # 'sphinx.ext.autodoc',     # automatically added by autosummary
+    'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',      # include package module source code
     'sphinx.ext.intersphinx',
     # typehints extension does that already so no need to also include 'sphinx_autodoc_annotation',
     'sphinx_autodoc_typehints',
     # 'sphinx.ext.coverage',
     'sphinx.ext.graphviz',
-    'sphinx.ext.autosummary',
     'sphinx_rtd_theme',
     'sphinx_paramlinks',
 ]
