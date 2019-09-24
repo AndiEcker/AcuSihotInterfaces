@@ -8,7 +8,7 @@ from typing import Tuple, Dict, Any
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
 from sys_data_ids import SDF_SF_SANDBOX
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
+from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
 from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
 
@@ -154,7 +154,7 @@ def add_sf_options(cae):
 
 
 # date/datetime formats used for calling interface and SOQL queries (SOQL queries are using different format!!!)
-SF_DATE_FORMAT = '%Y-%m-%d'
+SF_DATE_FORMAT = DATE_ISO
 SF_DATE_TIME_FORMAT_FROM = '%Y-%m-%dT%H:%M:%S.%f%z'
 SF_DATE_TIME_FORMAT_ONTO = '%Y-%m-%d %H:%M:%S'
 ''' TODO: remove on code-clean-up

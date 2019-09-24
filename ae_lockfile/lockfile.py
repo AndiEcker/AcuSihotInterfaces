@@ -5,6 +5,9 @@ import os
 import datetime
 import socket
 
+from ae.core import DATE_TIME_ISO
+
+
 try:                                        # unix
     import fcntl as file_lock_mod
     _lock_flags = file_lock_mod.LOCK_EX | file_lock_mod.LOCK_NB
@@ -18,7 +21,6 @@ except ImportError:                         # windows
 
 
 _SEP_CHAR = '\n'
-_DATE_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 _LOCK_LEN = 1
 
 
@@ -50,7 +52,7 @@ class LockFile:
             pid, host, lock_time = fp.read().split(_SEP_CHAR)
 
             if self._auto_unlock_timeout is None or \
-                    datetime.datetime.strptime(lock_time, _DATE_FORMAT) + self._auto_unlock_timeout > self._lock_time:
+                    datetime.datetime.strptime(lock_time, DATE_TIME_ISO) + self._auto_unlock_timeout > self._lock_time:
                 fp.close()
                 return "ae.lockfile.lock(): locking error (host={host}, file={path}, pid={pid}, time={time}, ex={ex})"\
                     .format(host=host, path=self._path, pid=pid, time=lock_time, ex=ex)
@@ -63,7 +65,7 @@ class LockFile:
             # _lock_func(fp.fileno(), _lock_flags, _LOCK_LEN)
 
         fp.write(" " * lock_len + str(os.getpid()) + _SEP_CHAR + str(socket.gethostname())
-                 + _SEP_CHAR + datetime.datetime.strftime(self._lock_time, _DATE_FORMAT))
+                 + _SEP_CHAR + datetime.datetime.strftime(self._lock_time, DATE_TIME_ISO))
         fp.truncate()
         fp.flush()
         self._fp = fp

@@ -8,32 +8,51 @@ detected and evaluated at application run-time.
 
 The :class:`Literal` class provided by this module allows your application to support
 the handling of any literals that can be converted via the python functions :func:`eval`
-or :func:`exec` (respective :func:`ae.core.exec_with_return`) into a value.
+or :func:`exec` (respective :func:`~ae.core.exec_with_return`) into a value.
 
-A value literal can be passed either on instantiation through the :paramref:`~Literal.literal_or_value` argument::
+A :ref:`evaluable literal <evaluable-literal-formats>` can be passed either
+on instantiation through the first (the :paramref:`~Literal.literal_or_value`) argument
+of the :class:`Literal` class::
 
-    literal_1 = Literal(literal_or_value='datetime.datetime.now()')
+    datetime_literal = Literal('(datetime.datetime.now())')
 
-or alternatively you could also set the literal string directly via the :attr:`~Literal.value` setter::
+or alternatively you could also set the :ref:`evaluable literal string
+<evaluable-literal-formats>` after the instantiation directly via the
+:attr:`~Literal.value` property setter::
 
-    literal_2 = Literal()
-    literal_2.value = 'datetime.date.today()'
+    date_literal = Literal()
+    date_literal.value = '(datetime.date.today())'
 
-In all cases as soon as you request the literal value via the :attr:`~Literal.value`
-getter the representing/underlying value will be detected an returned::
+The value literal of the last two examples have to be enclosed in round brackets
+for to mark it as a :ref:`evaluable string literal <evaluable-literal-formats>`.
+If you instead want to specify a :ref:`simple literal string <simple-literal-formats>`
+for a date value, you also have to specify the value type like so:
 
-   literal_value: datetime.date = literal_2.value
+    date_literal = Literal('2033-12-31', value_type=datetime.date)
 
-For to restrict a value literal to a certain/fixed type you can specify it on instantiation within
-the :paramref:`~Literal.value_type` argument::
+As soon as you request the date value from the last three `date_literal` examples via
+the :attr:`~Literal.value` property getter, the representing/underlying value will be
+evaluated and returned::
+
+   literal_value: datetime.date = date_literal.value
+
+Also for to restrict a simple value literal to a certain/fixed type you can specify it
+on instantiation within the :paramref:`~Literal.value_type` argument::
 
     int_literal = Literal(value_type=int)
     str_literal = Literal(value_type=str)
     date_literal = Literal(value_type=datetime.date)
-    list_literal = Literal(value_type=list)
-    dict_literal = Literal(value_type=dict)
 
-The supported formats of a value literal are document at the :attr:`~Literal.value` property.
+The :attr:`~Literal.value` property getter of a :class:`Literal` instance with an applied
+type restricting will raise a ValueError exception if the set literal string cannot be
+converted to this type::
+
+    date_literal.value = "invalid-date-literal"
+    date_value = date_literal.value             # raises ValueError
+
+The supported formats for :ref:`evaluable string literals <evaluable-literal-formats>` are
+documented at the :attr:`~Literal.value` property, whereas the :ref:`simple types/literal-formats
+<simple-literal-formats>` are documented at the :meth:`~Literal._literal_value` method.
 """
 import datetime
 from typing import Any, Optional, Tuple, Type
@@ -42,14 +61,15 @@ from ae.core import DATE_TIME_ISO, DATE_ISO, DEF_ENCODE_ERRORS, try_call, try_ev
 
 
 class Literal:
-    """ literal representing a value used for example as configuration option. """
+    """ stores and represents any value, optionally converted from a string literal. """
 
-    def __init__(self, name: str = 'LiT', literal_or_value: Optional[Any] = None, value_type: Optional[Type] = None):
+    def __init__(self, literal_or_value: Optional[Any] = None, value_type: Optional[Type] = None, name: str = 'LiT'):
         """ create new Literal instance.
 
+        :param literal_or_value:    initial string literal (evaluable string expression) or value of this instance.
+        :param value_type:          type of the value of this instance (def=determined latest by/in the
+                                    :attr:`~Literal.value` property getter).
         :param name:                name of the literal (only used for debugging/error-message).
-        :param literal_or_value:    initial literal (evaluable string expression) or value.
-        :param value_type:          value type. cannot be changed later. will be determined latest in value getter.
         """
         super().__init__()
         self._name = name
@@ -66,9 +86,12 @@ class Literal:
         :setter:    to set a new value assign either a value literal string or directly
                     the representing/resulting value.
 
+        .. _evaluable-literal-formats:
+
         If the string literal of this :class:`Literal` instance coincide with one of the following
-        formats then this strings gets automatically evaluated and the evaluation result gets returned.
-        These special formatted strings starting and ending with special characters like so:
+        evaluable formats then the value and the type of the value gets automatically recognized.
+        An evaluable formatted literal strings has to start and end with the characters
+        shown in the following table:
 
         +-------------+------------+------------------------------+
         | starts with | ends with  | evaluation value type        |
@@ -89,24 +112,24 @@ class Literal:
         +-------------+------------+------------------------------+
 
         """
-        value = self._value
+        ori_val = new_val = self._value
         try:
-            if self._type != type(value):  # late value initialization
-                if isinstance(value, bytes):  # convert bytes to string
-                    value = value.decode('utf-8', DEF_ENCODE_ERRORS)
-                if isinstance(value, str):
-                    func, eval_expr = self._evaluable_literal(value)
-                    self._value = func(eval_expr) if func else self._literal_value(value)
+            if self._type != type(new_val):     # first or new late value initialization
+                if isinstance(new_val, bytes):  # convert bytes to string
+                    new_val = new_val.decode('utf-8', DEF_ENCODE_ERRORS)
+                if isinstance(new_val, str):
+                    func, eval_expr = self._evaluable_literal(new_val)
+                    self._value = func(eval_expr) if func else self._literal_value(new_val)
                 elif self._type:
-                    val = try_call(self._type, value, ignored_exceptions=(TypeError, ))     # ignore int/bool/...(None)
-                    if val is not None:
-                        self._value = val
-            # the value type gets only once initialized, but after _eval_str() for to auto-detect complex types
+                    new_val = try_call(self._type, new_val, ignored_exceptions=(TypeError, ))   # ignore int(None) exc
+                    if new_val is not None:
+                        self._value = new_val
+            # the value type gets only once initialized, done for to auto-detect complex types after func(eval_expr)
             if not self._type and self._value is not None:
                 self._type = type(self._value)
         except Exception as ex:
-            raise ValueError("Literal.value exception '{}' on evaluating the literal {} with value: {!r}"
-                             .format(ex, self._name, value))
+            raise ValueError("Literal.value exception ({}) on evaluating the literal {} with value: {!r}"
+                             .format(ex, self._name, ori_val))
         return self._value
 
     @value.setter
@@ -148,9 +171,14 @@ class Literal:
     def _evaluable_literal(literal: str) -> Tuple[Optional[callable], Optional[str]]:
         """ check evaluable format of literal and possibly return appropriate evaluation function and stripped literal.
 
-        :param literal:     string to be checked if it can be evaluated and if it has to be stripped.
-        :return:            tuple of - evaluation/execution function and stripped value (removed triple high-commas)
-                            of expression/code-block - if literal has correct format - else (None, <empty string>).
+        :param literal:     string to be checked if it is in the
+                            :ref:`evaluable literal format <evaluable-literal-formats>` and if
+                            it has to be stripped.
+        :return:            tuple of evaluation/execution function and the (optionally stripped) literal
+                            string (removed triple high-commas on expression/code-blocks) - if
+                            :paramref:`~._evaluable_literal.literal` is in one of the supported
+                            :ref:`evaluable literal formats <evaluable-literal-formats>` - else the tuple
+                            (None, <empty string>).
         """
         func = None
         ret = ''
@@ -164,14 +192,29 @@ class Literal:
                 or (literal.startswith("'") and literal.endswith("'")) \
                 or (literal.startswith('"') and literal.endswith('"')):
             func = try_eval
-            ret = literal                                                   # list/dict/tuple/str literal
+            ret = literal                                                   # list/dict/tuple/str/... literal
         return func, ret
 
     def _literal_value(self, literal: str) -> Any:
-        """ convert a simple string literal into its represented value.
+        """ convert string literal of a simple type into its represented value.
 
-        :param literal:     literal of a bool/datetime/date/... value.
-        :return:            the bool/date/datetime/... value of the literal.
+        :param literal:     literal string of a simplex value (not in one of the
+                            :ref:`evaluable literal formats <evaluable-literal-formats>`).
+        :return:            the represented value of the literal.
+
+        .. _simple-literal-formats:
+
+        Simple string literals of a boolean type are evaluated as python expression. This way literal strings
+        like 'True', 'False', '0' and '1' will be correctly converted into a boolean value.
+
+        Simple string literals of a :class:`~datetime.datetime` type have to use the date format specified by
+        the :mod:`~ae.core` constant :data:`~ae.core.DATE_TIME_ISO`.
+
+        Simple string literals of a :class:`~datetime.date` type have to use the date format specified by
+        the :mod:`~ae.core` constant :data:`~ae.core.DATE_ISO`.
+
+        Simple string literals of any other type will be passed to the constructor of the type class for to
+        convert them into their representing value.
         """
         dt = datetime.datetime
         val = (bool(try_eval(literal)) if self._type == bool else

@@ -10,7 +10,7 @@ from ae.core import main_app_instance, _logger, po
 
 
 class NamedLocks:
-    """ create named lock(s) within the same app.
+    """ create new named lock(s) within the same app.
 
     Migrated from https://stackoverflow.com/users/355230/martineau answer in stackoverflow on the question
     https://stackoverflow.com/questions/37624289/value-based-thread-lock.

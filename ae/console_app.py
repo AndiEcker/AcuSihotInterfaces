@@ -164,12 +164,15 @@ For to read the default value of a config option or variable directly from the a
 :meth:`~ConsoleApp.get_variable` method instead. The default value of a config option or variable can also be
 set/changed directly from within your application by calling the :meth:`~ConsoleApp.set_variable` method.
 
+Use the :meth:`~ConsoleApp.set_option` if you want to change the value of a configuration option at run-time.
+
+
 .. _config-value-types:
 
 Config Value Types
 ..................
 
-With the :paramref:`~ConsoleApp.add_option.value` argument and
+A configuration options can be of any type. With the :paramref:`~ConsoleApp.add_option.value` argument and
 :attr:`special encapsulated strings <ae.literal.Literal.value>` you're able to specify any type
 for your config options and variables (like dict/list/tuple/datetime/... or any other object type).
 
@@ -222,8 +225,9 @@ class ConsoleApp(AppBase):
 
     * :attr:`_arg_parser`           ArgumentParser instance.
     * :attr:`cfg_opt_choices`       valid choices for pre-/user-defined options.
-    * :attr:`cfg_opt_eval_vars`      additional values used for the evaluation of special formatted config option values
-      (set via the :paramref:`~.ConsoleApp.cfg_opt_eval_vars` argument of the method :meth:`ConsoleApp.__init__`).
+    * :attr:`cfg_opt_eval_vars`     additional dynamic variable values that are getting set via
+      the :paramref:`~.ConsoleApp.cfg_opt_eval_vars` argument of the method :meth:`ConsoleApp.__init__`
+      and get then used in the evaluation of :ref:`evaluable config option values <evaluable-literal-formats>`.
     * :attr:`_cfg_files`            iterable of config file names that are getting loaded and parsed (specify
       additional configuration/INI files via the :paramref:`~ConsoleApp.additional_cfg_files` argument).
     * :attr:`cfg_options`           pre-/user-defined options (dict of :class:`~ae.literal.Literal` instances defined
@@ -409,7 +413,7 @@ class ConsoleApp(AppBase):
         args.append('--' + name)
 
         # determine config value for to use as default for command line arg
-        option = Literal(name=name, literal_or_value=value)
+        option = Literal(literal_or_value=value, name=name)
         cfg_val = self._get_cfg_parser_val(name, default_value=value)
         option.value = cfg_val
         kwargs = dict(help=desc, default=cfg_val, type=option.convert_value, choices=choices, metavar=name)
@@ -650,7 +654,7 @@ class ConsoleApp(AppBase):
         if name in self.cfg_options and section in (MAIN_SECTION_DEF, '', None):
             val = self.cfg_options[name].value
         else:
-            s = Literal(name=name, literal_or_value=default_value, value_type=value_type)  # used for conversion/eval
+            s = Literal(literal_or_value=default_value, value_type=value_type, name=name)  # used for conversion/eval
             s.value = self._get_cfg_parser_val(name, section=section, default_value=s.value, cfg_parser=cfg_parser)
             val = s.value
         return val

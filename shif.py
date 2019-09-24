@@ -10,7 +10,7 @@ from typing import Union, Tuple
 from sys_data_ids import (SDI_SH, FORE_SURNAME_SEP,
                           SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, full_stack_trace
+from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, full_stack_trace
 from ae.sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
                          FAT_IDX, FAD_FROM, FAD_ONTO, LIST_TYPES, ALL_FIELDS, CALLABLE_SUFFIX,
                          Record, Records, Value, current_index, compose_current_index, set_current_index,
@@ -18,7 +18,7 @@ from ae.sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEA
 from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
                     SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
 
-SH_DATE_FORMAT = '%Y-%m-%d'
+SH_DATE_FORMAT = DATE_ISO
 
 SH_RES_SUB_SEP = '/'
 
@@ -41,11 +41,11 @@ ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
 def convert_date_from_sh(xml_string):
-    return datetime.datetime.strptime(xml_string, '%Y-%m-%d').date() if xml_string else ''
+    return datetime.datetime.strptime(xml_string, DATE_ISO).date() if xml_string else ''
 
 
 def convert_date_onto_sh(date):
-    return (date if isinstance(date, str) else datetime.date.strftime(date, '%Y-%m-%d')) if date else ''
+    return (date if isinstance(date, str) else datetime.date.strftime(date, DATE_ISO)) if date else ''
 
 
 #  ELEMENT-FIELD-MAP-TUPLE-INDEXES  #################################
@@ -1138,8 +1138,8 @@ class ResSearch(SihotXmlBuilder):
             self.add_tag('ID', hotel_id)
         elif 'ALL-HOTELS' not in flags:
             flags += (';' if flags else '') + 'ALL-HOTELS'
-        self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))  # mandatory?
-        self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
+        self.add_tag('FROM', datetime.date.strftime(from_date, DATE_ISO))  # mandatory?
+        self.add_tag('TO', datetime.date.strftime(to_date, DATE_ISO))
         if matchcode:
             self.add_tag('MATCHCODE', matchcode)
         if name:

@@ -190,7 +190,7 @@ class ConsoleApp:
         elif section is None or section != MAIN_SECTION_DEF:
             # does not convert config value into list/dict:
             # .. ret = self._env_cfg.get(section or MAIN_SECTION_DEF, name, fallback=default_value)
-            s = Literal(name=name, literal_or_value=default_value, value_type=type(default_value))  # used only for conversion/eval
+            s = Literal(literal_or_value=default_value, value_type=type(default_value), name=name)  # conversion/eval
             s.value = self._env_cfg.get(section or MAIN_SECTION_DEF, name, fallback=s.value)
             ret = s.value
         else:

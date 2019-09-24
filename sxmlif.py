@@ -7,7 +7,7 @@ import re
 from xml.etree.ElementTree import XMLParser, ParseError
 
 from sys_data_ids import (SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING)
-from ae.core import DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, round_traditional
+from ae.core import DATE_ISO, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, round_traditional
 from ae_tcp.tcp import TcpClient
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
@@ -432,8 +432,8 @@ class AvailCatInfo(SihotXmlBuilder):
         self.beg_xml(operation_code='CATINFO')
         if hotel_id:
             self.add_tag('ID', hotel_id)
-        self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))     # mandatory
-        self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
+        self.add_tag('FROM', datetime.date.strftime(from_date, DATE_ISO))     # mandatory
+        self.add_tag('TO', datetime.date.strftime(to_date, DATE_ISO))
         if room_cat:
             self.add_tag('CAT', room_cat)
         # if flags:
@@ -450,8 +450,8 @@ class CatRooms(SihotXmlBuilder):
                       scope=None):
         self.beg_xml(operation_code='ALLROOMS')
         self.add_tag('ID', hotel_id)  # mandatory
-        self.add_tag('FROM', datetime.date.strftime(from_date, '%Y-%m-%d'))  # mandatory
-        self.add_tag('TO', datetime.date.strftime(to_date, '%Y-%m-%d'))
+        self.add_tag('FROM', datetime.date.strftime(from_date, DATE_ISO))  # mandatory
+        self.add_tag('TO', datetime.date.strftime(to_date, DATE_ISO))
         if scope:
             self.add_tag('SCOPE', scope)  # pass 'DESC' for to get room description
         self.end_xml()

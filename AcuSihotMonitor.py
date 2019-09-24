@@ -20,7 +20,7 @@ from functools import partial
 from traceback import print_exc
 
 from sys_data_ids import SDF_SH_CLIENT_PORT, SDI_ACU
-from ae.core import DEBUG_LEVEL_VERBOSE
+from ae.core import DATE_ISO, DEBUG_LEVEL_VERBOSE
 from ae.console_app import ConsoleApp
 from sxmlif import PostMessage, ConfigDict, CatRooms
 from acif import AcumenRes, AcuServer
@@ -130,8 +130,8 @@ def sih_reservation_discrepancies(data_dict):
     beg_day = data_dict['first_occupancy_criteria']  # datetime.datetime.today()
     end_day = beg_day + datetime.timedelta(days=int(data_dict['days_criteria']))
     req = AcumenRes(cae)
-    results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime('%Y-%m-%d') + "'"
-                                           " and DEP_DATE > DATE'" + beg_day.strftime('%Y-%m-%d') + "'"
+    results = req.fetch_all_valid_from_acu("ARR_DATE < DATE'" + end_day.strftime(DATE_ISO) + "'"
+                                           " and DEP_DATE > DATE'" + beg_day.strftime(DATE_ISO) + "'"
                                            " order by ARR_DATE, CD_CODE")
     if results:
         # error message
@@ -179,13 +179,13 @@ def _sih_check_all_res(rec, rd, row_err, err_sep):
             row_err += err_sep + 'GDS no mismatch' + \
                        acu_sep + str(rec['ResGdsNo']) + \
                        sih_sep + str(rd[n]['GDSNO'].val())
-        if abs(datetime.datetime.strptime(rd[n]['ARR'].val(), '%Y-%m-%d') - rec['ResArrival']) > max_offset:
+        if abs(datetime.datetime.strptime(rd[n]['ARR'].val(), DATE_ISO) - rec['ResArrival']) > max_offset:
             row_err += err_sep + 'Arrival date offset more than ' + str(max_offset.days) + ' days' + \
-                       acu_sep + rec['ResArrival'].strftime('%Y-%m-%d') + \
+                       acu_sep + rec['ResArrival'].strftime(DATE_ISO) + \
                        sih_sep + str(rd[n]['ARR'].val())
-        if abs(datetime.datetime.strptime(rd[n]['DEP'].val(), '%Y-%m-%d') - rec['ResDeparture']) > max_offset:
+        if abs(datetime.datetime.strptime(rd[n]['DEP'].val(), DATE_ISO) - rec['ResDeparture']) > max_offset:
             row_err += err_sep + 'Departure date offset more than ' + str(max_offset.days) + ' days' + \
-                       acu_sep + rec['ResDeparture'].strftime('%Y-%m-%d') + \
+                       acu_sep + rec['ResDeparture'].strftime(DATE_ISO) + \
                        sih_sep + str(rd[n]['DEP'].val())
         if rd[n]['RT'].val() != rec['ResStatus']:
             row_err += err_sep + 'Res. status mismatch' + \

@@ -29,7 +29,7 @@ from sys_data_ids import (FORE_SURNAME_SEP,
                           SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES,
                           SDI_ACU)
-from ae.core import DEBUG_LEVEL_VERBOSE, force_encoding, full_stack_trace
+from ae.core import DATE_ISO, DEBUG_LEVEL_VERBOSE, force_encoding, full_stack_trace
 from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
 from ae_db.db import bind_var_prefix
 from ae.console_app import ConsoleApp
@@ -278,7 +278,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResStatus'] = 'S' if curr_cols[TCI_BOOK_TYPE] == 'CNL' else '1'
             row['ResHotelId'] = '1' if curr_cols[TCI_RESORT] == 'BEVE' else '4'  # '1'=BHC, '4'=PBC
             row['ResVoucherNo'] = curr_cols[TCI_BOOK_PREFIX] + curr_cols[TCI_BOOK_REF]
-            row['ResBooked'] = datetime.datetime.strptime(curr_cols[TCI_BOOK_DATE], '%Y-%m-%d')
+            row['ResBooked'] = datetime.datetime.strptime(curr_cols[TCI_BOOK_DATE], DATE_ISO)
             row['ResAllotmentNo'] = 11 if curr_cols[TCI_RESORT] == 'BEVE' else 12
 
             row['ResRoomCat'] = row['ResPriceCat'] = room_cat
@@ -298,7 +298,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResMktSegment'] = asd.ro_sihot_mkt_seg('TK')
             row['ResMktGroup'] = asd.ro_res_group('TK')  # =='Rental SP'
             row['ResSource'] = 'T'
-            row['ResArrival'] = datetime.datetime.strptime(curr_cols[TCI_ResArrival], '%Y-%m-%d')
+            row['ResArrival'] = datetime.datetime.strptime(curr_cols[TCI_ResArrival], DATE_ISO)
             row['ResDeparture'] = row['ResArrival'] + datetime.timedelta(int(curr_cols[TCI_STAY_DAYS]))
             row['ResFlightArrComment'] = curr_cols[TCI_FLIGHT_NO]
             row['ResAdults' if is_adult else 'ResChildren'] = 1
@@ -425,8 +425,8 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             return "bkc_line_to_res_row(): invalid channel {} instead of Booking.com".format(curr_cols[BKC_CHANNEL])
 
         room_cat, adults, children, board, comments = bkc_cat_pax_board_comments(curr_cols, resort)
-        curr_arr = datetime.datetime.strptime(curr_cols[BKC_ResArrival], '%Y-%m-%d')
-        curr_dep = datetime.datetime.strptime(curr_cols[BKC_ResDeparture], '%Y-%m-%d')
+        curr_arr = datetime.datetime.strptime(curr_cols[BKC_ResArrival], DATE_ISO)
+        curr_dep = datetime.datetime.strptime(curr_cols[BKC_ResDeparture], DATE_ISO)
 
         ext_key = curr_cols[BKC_BOOK_REF]
         row = dict()
@@ -474,7 +474,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResStatus'] = 'S' if curr_cols[BKC_CANCEL_DATE] else '1'
             row['ResHotelId'] = resort  # 1=BHC, 4=PBC
             row['ResVoucherNo'] = curr_cols[BKC_BOOK_REF]
-            row['ResBooked'] = datetime.datetime.strptime(curr_cols[BKC_BOOK_DATE], '%Y-%m-%d')
+            row['ResBooked'] = datetime.datetime.strptime(curr_cols[BKC_BOOK_DATE], DATE_ISO)
             row['ResGroupNo'] = (ext_key + ' ' if sub_res_id else '') + acu_user[:2].lower()
             # no allotment for Booking.com: row['ResAllotmentNo'] = 11 if resort == 1 else 12
 
@@ -707,9 +707,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             row['ResAction'] = ACTION_INSERT
         row['ResGdsNo'] = EXT_REF_TYPE_RCI + curr_cols[RCI_BOOK_REF]
         row['ResVoucherNo'] = 'R' + curr_cols[RCI_BOOK_REF]
-        row['ResBooked'] = datetime.datetime.strptime(curr_cols[RCI_BOOK_DATE][:10], '%Y-%m-%d')
+        row['ResBooked'] = datetime.datetime.strptime(curr_cols[RCI_BOOK_DATE][:10], DATE_ISO)
 
-        row['ResArrival'] = datetime.datetime.strptime(curr_cols[RCI_ResArrival][:10], '%Y-%m-%d')
+        row['ResArrival'] = datetime.datetime.strptime(curr_cols[RCI_ResArrival][:10], DATE_ISO)
         row['ResDeparture'] = row['ResArrival'] + datetime.timedelta(7)
 
         rno = ('0' if row['ResHotelId'] == 4 and len(curr_cols[RCI_APT_NO]) == 3
@@ -877,10 +877,10 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         row['ResGdsNo'] = EXT_REF_TYPE_RCI + curr_cols[RCIP_BOOK_REF]
         row['ResVoucherNo'] = 'RP' + curr_cols[RCIP_BOOK_REF]
-        row['ResBooked'] = datetime.datetime.strptime(curr_cols[RCIP_BOOK_DATE][:10], '%Y-%m-%d')
+        row['ResBooked'] = datetime.datetime.strptime(curr_cols[RCIP_BOOK_DATE][:10], DATE_ISO)
 
-        row['ResArrival'] = datetime.datetime.strptime(curr_cols[RCIP_ResArrival][:10], '%Y-%m-%d')
-        row['ResDeparture'] = datetime.datetime.strptime(curr_cols[RCIP_ResDeparture][:10], '%Y-%m-%d')
+        row['ResArrival'] = datetime.datetime.strptime(curr_cols[RCIP_ResArrival][:10], DATE_ISO)
+        row['ResDeparture'] = datetime.datetime.strptime(curr_cols[RCIP_ResDeparture][:10], DATE_ISO)
 
         rno = ('0' if row['ResHotelId'] == 4 and len(curr_cols[RCIP_APT_NO]) == 3
                else ('J' if row['ResHotelId'] == 2 and curr_cols[RCIP_APT_NO][0] != 'J'
@@ -933,9 +933,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
     def json_imp_to_res_row(row, file_name, res_index):
         """ convert date/int values, support old Acu-Sys-Field-Names and extend json dict with file/line context """
-        row['ResArrival'] = datetime.datetime.strptime(row.get('ResArrival', row.pop('ARR_DATE')), '%Y-%m-%d')
-        row['ResDeparture'] = datetime.datetime.strptime(row.get('ResDeparture', row.pop('DEP_DATE')), '%Y-%m-%d')
-        row['ResBooked'] = datetime.datetime.strptime(row.get('ResBooked', row.pop('RH_EXT_BOOK_DATE')), '%Y-%m-%d')
+        row['ResArrival'] = datetime.datetime.strptime(row.get('ResArrival', row.pop('ARR_DATE')), DATE_ISO)
+        row['ResDeparture'] = datetime.datetime.strptime(row.get('ResDeparture', row.pop('DEP_DATE')), DATE_ISO)
+        row['ResBooked'] = datetime.datetime.strptime(row.get('ResBooked', row.pop('RH_EXT_BOOK_DATE')), DATE_ISO)
 
         row['ResHotelId'] = str(row.get('ResHotelId', row.pop('RUL_SIHOT_HOTEL')))
 
