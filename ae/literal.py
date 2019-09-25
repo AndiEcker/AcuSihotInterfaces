@@ -25,8 +25,8 @@ or alternatively you could also set the :ref:`evaluable literal string
 
 The value literal of the last two examples have to be enclosed in round brackets
 for to mark it as a :ref:`evaluable string literal <evaluable-literal-formats>`.
-If you instead want to specify a :ref:`simple literal string <simple-literal-formats>`
-for a date value, you also have to specify the value type like so:
+If you instead want to specify a date format literal string then you also have
+to specify the value type like so:
 
     date_literal = Literal('2033-12-31', value_type=datetime.date)
 
@@ -36,23 +36,24 @@ evaluated and returned::
 
    literal_value: datetime.date = date_literal.value
 
-Also for to restrict a simple value literal to a certain/fixed type you can specify it
-on instantiation within the :paramref:`~Literal.value_type` argument::
+Also for to restrict a :class:`Literal` instance to a certain/fixed type you can specify
+this type/class on instantiation within the :paramref:`~Literal.value_type` argument::
 
     int_literal = Literal(value_type=int)
     str_literal = Literal(value_type=str)
     date_literal = Literal(value_type=datetime.date)
 
 The :attr:`~Literal.value` property getter of a :class:`Literal` instance with an applied
-type restricting will raise a ValueError exception if the set literal string cannot be
-converted to this type::
+type restricting will try to convert the value literal to this type: string literals
+will be evaluated and if the result has not the correct, then the getter tries the
+value conversion with the constructor of the type class. If this fails too then it will
+raise a ValueError exception::
 
     date_literal.value = "invalid-date-literal"
     date_value = date_literal.value             # raises ValueError
 
 The supported formats for :ref:`evaluable string literals <evaluable-literal-formats>` are
-documented at the :attr:`~Literal.value` property, whereas the :ref:`simple types/literal-formats
-<simple-literal-formats>` are documented at the :meth:`~Literal._literal_value` method.
+documented at the :attr:`~Literal.value` property.
 """
 import datetime
 from typing import Any, Optional, Tuple, Type
@@ -73,7 +74,7 @@ class Literal:
         """
         super().__init__()
         self._name = name
-        self._value = None
+        self._lit_or_val = None
         self._type = None if value_type is type(None) else value_type
         if literal_or_value is not None:
             self.value = literal_or_value
@@ -111,32 +112,43 @@ class Literal:
         |    \"\"\"      |    \"\"\"     | code block with return       |
         +-------------+------------+------------------------------+
 
-        """
-        ori_val = new_val = self._value
-        try:
-            if self._type != type(new_val):     # first or new late value initialization
-                if isinstance(new_val, bytes):  # convert bytes to string
-                    new_val = new_val.decode('utf-8', DEF_ENCODE_ERRORS)
-                if isinstance(new_val, str):
-                    func, eval_expr = self._evaluable_literal(new_val)
-                    self._value = func(eval_expr) if func else self._literal_value(new_val)
-                elif self._type:
-                    new_val = try_call(self._type, new_val, ignored_exceptions=(TypeError, ))   # ignore int(None) exc
-                    if new_val is not None:
-                        self._value = new_val
-            # the value type gets only once initialized, done for to auto-detect complex types after func(eval_expr)
-            if not self._type and self._value is not None:
-                self._type = type(self._value)
-        except Exception as ex:
-            raise ValueError("Literal.value exception ({}) on evaluating the literal {} with value: {!r}"
-                             .format(ex, self._name, ori_val))
-        return self._value
+        *Other Supported Literals And Values*:
+
+        String literals of a boolean type are evaluated as python expression. This way literal strings
+        like 'True', 'False', '0' and '1' will be correctly converted into a boolean value.
+
+        String literals of a :class:`~datetime.datetime` type have to use the date format specified by
+        the :mod:`~ae.core` constant :data:`~ae.core.DATE_TIME_ISO`.
+
+        String literals of a :class:`~datetime.date` type have to use the date format specified by
+        the :mod:`~ae.core` constant :data:`~ae.core.DATE_ISO`.
+
+        Values of any other type will be passed to the constructor of the type class for to
+        convert them into their representing value.
+       """
+        new_val = self._lit_or_val
+        msg = f"Literal {self._name} with value {new_val!r} "
+        if self._type != type(new_val):     # first or new late real value conversion/initialization
+            try:
+                new_val = self._determine_value(new_val)
+            except Exception as ex:
+                raise ValueError(msg + f"throw exception: {ex}")
+
+        self._set_type(new_val)
+        if new_val is not None:
+            if self._type and self._type != type(new_val):
+                raise ValueError(msg + f"type mismatch: {self._type} != {type(new_val)}")
+            else:
+                self._lit_or_val = new_val
+
+        return self._lit_or_val
 
     @value.setter
     def value(self, value: Any):
-        if not self._type and not isinstance(value, str) and value is not None:
-            self._type = type(value)
-        self._value = value
+        if value is not None:
+            if not self._type and not isinstance(value, (str, bytes)):
+                self._type = type(value)
+            self._lit_or_val = value        # late evaluation: real value will be checked/converted by getter
 
     def append_value(self, item_value: Any) -> Any:
         """ add new item to the list value of this Literal instance (lazy/late self.value getter call function pointer).
@@ -165,7 +177,48 @@ class Literal:
         represented value.
         """
         self.value = value
-        return self.value  # using self.value instead of value to call getter for evaluation/type-correction
+        return self.value  # using self.value instead of value to call getter for evaluation/type-
+
+    def _determine_value(self, new_val: Any) -> Any:
+        """ determine the represented value.
+
+        :param new_val:     new value or string literal.
+        :return:            determined/converted value or self._lit_or_val if value could not be recognized/converted.
+        """
+        if isinstance(new_val, bytes) and self._type != bytes:                          # if not restricted to bytes
+            self._lit_or_val = new_val = new_val.decode('utf-8', DEF_ENCODE_ERRORS)     # then convert bytes to string
+
+        if isinstance(new_val, str):
+            func, eval_expr = self._evaluable_literal(new_val)
+            if func:
+                new_val = func(eval_expr)
+                if new_val is None:
+                    new_val = self._lit_or_val  # literal evaluation failed, then reset to try with type conversion
+                else:
+                    self._set_type(new_val)
+
+        if self._type:
+            new_type = type(new_val)
+            if self._type != new_type and new_type == str:
+                if self._type == bool:
+                    new_val = bool(try_eval(new_val))
+                elif self._type == datetime.datetime and len(new_val) > 10:
+                    new_val = datetime.datetime.strptime(new_val, DATE_TIME_ISO)
+                elif self._type in (datetime.date, datetime.datetime):
+                    new_val = datetime.datetime.strptime(new_val, DATE_ISO)
+                    if self._type == datetime.date:
+                        new_val = new_val.date()
+                if new_val is None:
+                    new_val = self._lit_or_val  # literal evaluation failed, then reset to try with type conversion
+                else:
+                    self._set_type(new_val)
+
+            if self._type != type(new_val):            # finally try type conversion with type constructor
+                new_val = try_call(self._type, new_val, ignored_exceptions=(TypeError,))  # ignore int(None) exc
+                if new_val is None:
+                    new_val = self._lit_or_val
+
+        return new_val
 
     @staticmethod
     def _evaluable_literal(literal: str) -> Tuple[Optional[callable], Optional[str]]:
@@ -195,32 +248,10 @@ class Literal:
             ret = literal                                                   # list/dict/tuple/str/... literal
         return func, ret
 
-    def _literal_value(self, literal: str) -> Any:
-        """ convert string literal of a simple type into its represented value.
+    def _set_type(self, value: Any):
+        """ check if literal value type is already set and if not then determine from passed value.
 
-        :param literal:     literal string of a simplex value (not in one of the
-                            :ref:`evaluable literal formats <evaluable-literal-formats>`).
-        :return:            the represented value of the literal.
-
-        .. _simple-literal-formats:
-
-        Simple string literals of a boolean type are evaluated as python expression. This way literal strings
-        like 'True', 'False', '0' and '1' will be correctly converted into a boolean value.
-
-        Simple string literals of a :class:`~datetime.datetime` type have to use the date format specified by
-        the :mod:`~ae.core` constant :data:`~ae.core.DATE_TIME_ISO`.
-
-        Simple string literals of a :class:`~datetime.date` type have to use the date format specified by
-        the :mod:`~ae.core` constant :data:`~ae.core.DATE_ISO`.
-
-        Simple string literals of any other type will be passed to the constructor of the type class for to
-        convert them into their representing value.
+        :param value:
         """
-        dt = datetime.datetime
-        val = (bool(try_eval(literal)) if self._type == bool else
-               (dt.strptime(literal, DATE_TIME_ISO) if self._type == dt and len(literal) > 10 else
-                (dt.strptime(literal, DATE_ISO).date() if self._type in (datetime.date, dt) else
-                 (self._type(literal) if self._type else
-                  literal
-                  ))))
-        return val
+        if not self._type and value is not None:
+            self._type = type(value)

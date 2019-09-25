@@ -8,7 +8,7 @@ from typing import Tuple, Dict, Any
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
 from sys_data_ids import SDF_SF_SANDBOX
-from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
+from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, parse_date, po
 from ae.sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
 from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
 
@@ -164,12 +164,7 @@ SF_DATE_TIME_FORMAT_ONTO = '%Y-%m-%d %H:%M:%S'
 
 
 def convert_date_from_sf(str_val):
-    if str_val.find(' ') != -1:
-        str_val = str_val.split(' ')[0]
-    elif str_val.find('T') != -1:
-        str_val = str_val.split('T')[0]
-    return (datetime.datetime.strptime(str_val, SF_DATE_FORMAT)).date()
-    # no longer needed since changed company+user time zone to GMT+0: + SF_TIME_DIFF_FROM).date()
+    return parse_date(str_val, SF_DATE_FORMAT, ret_date=True)
 
 
 def convert_date_onto_sf(date):
@@ -177,17 +172,7 @@ def convert_date_onto_sf(date):
 
 
 def convert_date_time_from_sf(str_val):
-    mask = SF_DATE_TIME_FORMAT_FROM
-    if str_val.find('+') == -1:
-        mask = mask[:-2]                # no timezone specified in str_val, so remove '+%z' from mask
-    if str_val.find('.') == -1:
-        mask = mask[:mask.find('.')]    # no microseconds specified in str_val, so remove '.%f' from mask
-    if str_val.find(' ') != -1:
-        mask = mask.replace('T', ' ')   # str_val uses space char as date-time-sep, so replace T with space in mask
-    elif str_val.find('T') == -1:
-        mask = mask[:mask.find('T')]    # if no T-/space-date-time-sep found in str_val, so remove time from mask
-    return datetime.datetime.strptime(str_val, mask).replace(microsecond=0, tzinfo=None)
-    # no longer needed since changed company+user time zone to GMT+0: + SF_TIME_DIFF_FROM
+    return parse_date(str_val, SF_DATE_TIME_FORMAT_FROM, replace=dict(microsecond=0, tzinfo=None))
 
 
 def convert_date_time_onto_sf(date):

@@ -37,12 +37,6 @@ Helper Functions
 Although most of the helper functions provided by this module are tiny with only few lines
 of code, they are a great help in making your application code more clear and readable.
 
-Two of the bigger helper functions are :func:`correct_email` and :func:`correct_phone`,
-which are useful for to check if a string contains a valid email address or phone number. They
-also allow you to automatically correct an email address or a phone number to a valid format.
-More sophisticated helpers for the validation of email addresses, phone numbers and
-post addresses are available in the :mod:`ae.validation` module.
-
 For the dynamic execution of functions and code blocks the helper functions :func:`try_call`,
 :func:`try_exec` and :func:`exec_with_return` are provided. And :func:`try_eval` is making
 the evaluation of dynamic python expressions much easier. These functions are e.g. used
@@ -58,9 +52,18 @@ and read e.g. variable values of the callers of your functions/methods. The clas
 Other helper functions for the inspection and debugging of your application are
 :func:`full_stack_trace`, :func:`sys_env_dict` and :func:`sys_env_text`.
 
+Two of the bigger helper functions are :func:`correct_email` and :func:`correct_phone`,
+which are useful for to check if a string contains a valid email address or phone number. They
+also allow you to automatically correct an email address or a phone number to a valid format.
+More sophisticated helpers for the validation of email addresses, phone numbers and
+post addresses are available in the :mod:`ae.validation` module.
+
 For to encode unicode strings to other codecs the functions :func:`force_encoding` and
 :func:`to_ascii` can be used. The :func:`print_out` function, which is fully compatible to pythons
 :func:`print`, is using these encode helpers for to auto-correct invalid characters.
+
+The :func:`parse_date` function is converting date and datetime string literals into the
+built-in types :class:`datetime.datetime` and :class:`datetime.date`.
 
 :func:`hide_dup_line_prefix` is very practical if you want to remove or hide redundant
 line prefixes in your log files, to make them better readable.
@@ -213,9 +216,10 @@ import weakref
 
 from io import StringIO
 from string import ascii_letters, digits
-from typing import Any, AnyStr, Callable, Generator, Dict, Optional, TextIO
+from typing import Any, AnyStr, Callable, Generator, Dict, Optional, TextIO, Union
 
-DATE_TIME_ISO: str = '%Y-%m-%dT%H:%M:%S.%f'     #: ISO string format for datetime values in config files/variables
+
+DATE_TIME_ISO: str = '%Y-%m-%d %H:%M:%S.%f'     #: ISO string format for datetime values in config files/variables
 DATE_ISO: str = '%Y-%m-%d'                      #: ISO string format for date values in config files/variables
 
 DEF_ENCODE_ERRORS: str = 'backslashreplace'     #: default encode error handling for UnicodeEncodeErrors
@@ -479,6 +483,62 @@ def module_name(*skip_modules: str, depth: int = 1) -> Optional[str]:
     if not skip_modules:
         skip_modules = (__name__,)
     return stack_var('__name__', *skip_modules, depth=depth)
+
+
+def parse_date(literal: str, *formats: str, replace: Optional[Dict[str, Any]] = None, ret_date: bool = False,
+               ) -> Optional[Union[datetime.date, datetime.datetime]]:
+    """ parse a date literal string, returning the represented date/datetime or None if date literal is invalid.
+
+    :param literal:         date literal string in the format of :data:`DATE_ISO`, :data:`DATE_TIME_ISO` or in
+                            one of the additional formats passed into the :paramref:`parse_date.formats` argument.
+    :param formats:         additional date literal format strings.
+    :param replace:         dict of replace keyword arguments for :meth:`datetime.datetime.replace` call.
+                            Pass e.g. dict(microsecond=0, tzinfo=None) for to set the microseconds of the
+                            resulting date to zero and for to remove the timezone info.
+    :param ret_date:        pass True to return a datetime.date value (instead of datetime.datetime value).
+    :return:                represented date/datetime or None if date literal is invalid.
+    """
+    l_dt_sep = None
+    l_time_sep_cnt = 0
+    lp_tz_sep = literal.find('+')
+    lp_ms_sep = literal.find('.')
+    lp_dt_sep = max(literal.find(' '), literal.find('T'))
+    if lp_dt_sep != -1 and ret_date:
+        literal = literal[:lp_dt_sep]
+    else:
+        l_dt_sep = literal[lp_dt_sep] if lp_dt_sep != -1 else None
+        l_time_sep_cnt = literal.count(':')
+        if not (0 <= l_time_sep_cnt <= 2):
+            return None
+
+    if l_time_sep_cnt:
+        formats += (DATE_TIME_ISO, )
+    formats += (DATE_ISO, )
+
+    for mask in formats:
+        mp_dt_sep = max(mask.find(' '), mask.find('T'))
+        m_time_sep_cnt = mask.count(':')
+        if lp_dt_sep == -1 and mp_dt_sep != -1:
+            # literal contains no time-separator-chars then remove time-format-parts from form
+            mask = mask[:mp_dt_sep]             # if no date-time-sep found in literal, so remove time part from mask
+        else:
+            if lp_tz_sep == -1 and mask[-2] == '+':
+                mask = mask[:-2]                # no timezone specified in literal, so remove '+%z' from mask
+            if lp_ms_sep == -1 and mask.find('.') != -1:
+                mask = mask[:mask.find('.')]    # no microseconds specified in literal, so remove '.%f' from mask
+            if 1 <= l_time_sep_cnt < m_time_sep_cnt:
+                mask = mask[:mask.rfind(':')]   # no seconds specified in literal, so remove ':%S' from mask
+            if mp_dt_sep != -1:
+                m_dt_sep = mask[mp_dt_sep]
+                if l_dt_sep != m_dt_sep:
+                    mask = mask.replace(m_dt_sep, l_dt_sep)   # literal uses different date-time-sep, so replace in mask
+        ret_val = try_call(datetime.datetime.strptime, literal, mask, ignored_exceptions=(ValueError, ))
+        if ret_val is not None:
+            if replace:
+                ret_val = ret_val.replace(**replace)
+            if ret_date:
+                ret_val = ret_val.date()
+            return ret_val
 
 
 def round_traditional(num_value: float, num_digits: int = 0) -> float:

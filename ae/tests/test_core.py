@@ -6,6 +6,7 @@ from ae.tests.conftest import delete_files
 import logging
 import os
 import sys
+import datetime
 
 from typing import cast
 
@@ -13,7 +14,8 @@ from ae.core import (
     MAX_NUM_LOG_FILES, DATE_ISO,
     activate_multi_threading, _deactivate_multi_threading, main_app_instance,
     correct_email, correct_phone, exec_with_return, force_encoding, full_stack_trace, hide_dup_line_prefix, module_name,
-    po, round_traditional, stack_frames, stack_var, sys_env_dict, sys_env_text, to_ascii, try_call, try_eval, try_exec,
+    parse_date, po, round_traditional, stack_frames, stack_var, sys_env_dict, sys_env_text, to_ascii,
+    try_call, try_eval, try_exec,
     AppBase, _PrintingReplicator)
 
 import datetime as test_dt
@@ -172,6 +174,40 @@ class TestCoreHelpers:
         po(us, encode_errors_def='strict')
         out, err = capsys.readouterr()
         assert force_encoding(us) in out and err == ''
+
+    def test_parse_date(self):
+        assert parse_date('2033-12-24') == datetime.datetime(year=2033, month=12, day=24)
+        assert parse_date('2033-12-24', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+
+        assert parse_date('2033-12-24 12:59') == datetime.datetime(year=2033, month=12, day=24, hour=12, minute=59)
+        assert parse_date('2033-12-24 12:59', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+
+        assert parse_date('2033-12-24T12:59') == datetime.datetime(year=2033, month=12, day=24, hour=12, minute=59)
+        assert parse_date('2033-12-24T12:59', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+
+        assert parse_date('2033-12-24 12:59:12') == datetime.datetime(year=2033, month=12, day=24, hour=12, minute=59,
+                                                                      second=12)
+        assert parse_date('2033-12-24 12:59:12', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+
+        assert parse_date('2033-12-24T12:59:12') == datetime.datetime(year=2033, month=12, day=24, hour=12, minute=59,
+                                                                      second=12)
+        assert parse_date('2033-12-24T12:59:12', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+
+        assert parse_date('2033-1-2 3:4:5') == datetime.datetime(year=2033, month=1, day=2, hour=3, minute=4, second=5)
+        assert parse_date('2033-1-2 3:4:5', ret_date=True) == datetime.date(year=2033, month=1, day=2)
+
+        assert parse_date('2033-1-2 3:4:5.6') == datetime.datetime(
+            year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
+        assert parse_date('2033-1-2 3:4:5.6', ret_date=True) == datetime.date(year=2033, month=1, day=2)
+
+        alt_format = "%y.%m.%d_%H:%M:%S.%f"
+        assert parse_date('33.1.2_3:4:5.6', alt_format) == datetime.datetime(
+            year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
+        assert parse_date('33.1.2_3:4:5.6', alt_format, ret_date=True) == datetime.date(year=2033, month=1, day=2)
+
+        assert parse_date('xx-yy-zz a:b:c') is None
+        with pytest.raises(AttributeError):
+            parse_date(cast(str, None))
 
     def test_round_traditional(self):
         assert round_traditional(1.01) == 1

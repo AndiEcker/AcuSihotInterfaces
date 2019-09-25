@@ -37,6 +37,7 @@
       <w>searchbox</w>
       <w>toctree</w>
       <w>typehints</w>
+      <w>tzinfo</w>
       <w>undoc</w>
       <w>viewcode</w>
       <w>weakref</w>

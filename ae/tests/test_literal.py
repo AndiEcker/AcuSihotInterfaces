@@ -1,7 +1,7 @@
 import pytest
 import datetime
 
-from ae.core import DATE_TIME_ISO, DATE_ISO
+from ae.core import DATE_TIME_ISO, DATE_ISO, DEF_ENCODE_ERRORS
 from ae.literal import Literal
 
 
@@ -9,10 +9,23 @@ class TestLiteral:
     def test_init(self):
         lit = Literal()
         assert lit.value is None
+        assert lit._lit_or_val is None
+        assert lit._type is None
 
-        lit = Literal(literal_or_value='test_val')
+        st = 'test_val'
+        lit = Literal(literal_or_value=st)
         assert isinstance(lit.value, str)
-        assert lit.value == 'test_val'
+        assert lit.value == st
+
+        fv = 369
+        fn = 'float literal'
+        lit = Literal(str(fv), value_type=float, name=fn)
+        assert lit._lit_or_val == str(fv)
+        assert lit._type == float
+        assert lit._name == fn
+        assert isinstance(lit.value, float)
+        assert lit.value == float(fv)
+        assert lit.value == fv
 
     def test_bool_values(self):
         bs = 'True'
@@ -35,14 +48,24 @@ class TestLiteral:
         assert isinstance(lit.value, bool)
         assert lit.value is False
 
-    def test_byte_values(self):
+    def test_bytes_values(self):
         bs = b'TEST'
-        lit = Literal(literal_or_value=bs)
+        ss = bs.decode('utf-8', DEF_ENCODE_ERRORS)
+        lit = Literal(literal_or_value=bs, value_type=bytes)
         assert isinstance(lit.value, bytes)
         assert lit.value == bs
 
-        lit = Literal(literal_or_value=bs, value_type=str)
+        lit = Literal(literal_or_value=bs)
         assert isinstance(lit.value, str)
+        assert lit.value == 'TEST'
+
+        ds = b'2020-12-24'
+        lit = Literal(literal_or_value=ds, value_type=datetime.date)
+        assert isinstance(lit.value, datetime.date)
+        assert lit.value == datetime.datetime.strptime(ds.decode('utf-8', DEF_ENCODE_ERRORS), DATE_ISO).date()
+
+        lit = Literal(literal_or_value=bs, value_type=str)
+        assert isinstance(lit.value, str) and not isinstance(lit.value, bytes)
         assert lit.value == 'TEST'
 
     def test_date_values(self):
@@ -103,19 +126,60 @@ class TestLiteral:
         assert isinstance(lit.value, float)
         assert lit.value == -1.0
 
+    def test_append_value(self):
+        li = list((3, 6, 9, ))
+        lit = Literal(li)
+        lit.append_value(12)
+        assert isinstance(lit.value, list)
+        assert len(lit.value) == 4
+        assert lit.value[-1] == 12
+
     def test_convert_value(self):
+        st = "test_str"
         lit = Literal()
-        assert lit.convert_value("test_str") == "test_str"
+        assert lit.convert_value(st) == st
+        assert lit.value == st
 
         di = dict(a=1, b=3)
+        lit = Literal()
         assert lit.convert_value("(dict(a=1, b=3))") == di
         assert lit.convert_value(repr(di)) == di
 
-        #lit = Literal()
         li = list([1, "b", datetime.date.today()])
+        lit = Literal()
         assert lit.convert_value(repr(li)) == li
 
-    def test_value_exception(self):
+    def test_int_type_restriction(self):
+        fv = 3.69
+        iv = int(fv)
+
+        lit = Literal(value_type=int)
+        lit.value = fv
+        assert isinstance(lit.value, int)
+        assert lit.value == iv   # this one doesn't raise ValueError because int(3.69) == 3
+        lit.value = str(fv)
+        with pytest.raises(ValueError):
+            _ = lit.value
+        lit.value = list()
+        with pytest.raises(ValueError):
+            _ = lit.value
+        assert lit._type == int
+
+    def test_str_type_restriction(self):
+        fv = 3.69
+        iv = int(fv)
+
+        lit = Literal(value_type=str)
+        lit.value = fv
+        assert isinstance(lit.value, str)
+        assert lit.value == str(fv)
+        lit.value = iv
+        assert lit.value == str(iv)
+        lit.value = list()
+        assert lit.value == "[]"    # this one doesn't raise ValueError because list get converted to str repr
+        assert lit._type == str
+
+    def test_wrong_date_literal_exception(self):
         ds = '2020-66-99'
         lit = Literal(ds, value_type=datetime.date)
         with pytest.raises(ValueError):
