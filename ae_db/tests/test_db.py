@@ -1,5 +1,5 @@
 import datetime
-from ae.console_app import ConsoleApp
+from ae.console import ConsoleApp
 from ae_db.db import OraDB, PostgresDB, bind_var_prefix
 
 UPDATED_TEST_STRING = 'Updated Test String'

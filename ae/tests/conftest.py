@@ -3,8 +3,8 @@ import sys
 import glob
 import pytest
 
-from ae.core import _app_instances, _unregister_app_instance
-from ae.console_app import MAIN_SECTION_DEF
+from ae.core import app_inst_lock, _app_instances, _unregister_app_instance
+from ae.console import MAIN_SECTION_DEF
 
 
 @pytest.fixture
@@ -42,9 +42,10 @@ def restore_app_env():                              # needed for tests instantia
     yield "a,n,y"
     # added outer list() because unregister does _app_instances.pop() calls
     # and added inner list() because the .keys() 'generator' object is not reversible
-    app_keys = list(reversed(list(_app_instances.keys())))
-    for key in app_keys:
-        _unregister_app_instance(key)   # remove app from ae.core app register/dict
+    with app_inst_lock:
+        app_keys = list(reversed(list(_app_instances.keys())))
+        for key in app_keys:
+            _unregister_app_instance(key)   # remove app from ae.core app register/dict
 
 
 def delete_files(file_name, keep_ext=False, ret_type='count'):

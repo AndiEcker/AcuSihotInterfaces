@@ -16,7 +16,7 @@ import datetime
 import re
 from traceback import print_exc
 
-from ae.console_app import ConsoleApp
+from ae.console import ConsoleApp
 from ae.core import try_eval
 from shif import ResSearch, SH_DATE_FORMAT
 from shif import add_sh_options, print_sh_options

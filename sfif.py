@@ -126,7 +126,7 @@ MAP_RES_FROM_SF = (
 )
 '''
 
-# sf address field type/length - copied from https://developer.salesforce.com/forums/?id=906F00000008ih6IAA
+# sf address field type/length - taken from https://developer.salesforce.com/forums/?id=906F00000008ih6IAA
 """
     Address.Street      (TextArea, 255)
     Address.City        (String,    40)

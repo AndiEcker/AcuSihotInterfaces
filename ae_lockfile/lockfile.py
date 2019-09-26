@@ -1,11 +1,11 @@
 # system-wide file locking
 #
-# code snippets taken from module zc.lockfile (https://pypi.python.org/pypi/zc.lockfile)
+# code snippets inspired by module zc.lockfile (https://pypi.python.org/pypi/zc.lockfile)
 import os
 import datetime
 import socket
 
-from ae.core import DATE_TIME_ISO
+from ae.core import DATE_TIME_ISO, parse_date
 
 
 try:                                        # unix
@@ -51,8 +51,7 @@ class LockFile:
             fp.seek(_LOCK_LEN)
             pid, host, lock_time = fp.read().split(_SEP_CHAR)
 
-            if self._auto_unlock_timeout is None or \
-                    datetime.datetime.strptime(lock_time, DATE_TIME_ISO) + self._auto_unlock_timeout > self._lock_time:
+            if self._auto_unlock_timeout is None or parse_date(lock_time) + self._auto_unlock_timeout > self._lock_time:
                 fp.close()
                 return "ae.lockfile.lock(): locking error (host={host}, file={path}, pid={pid}, time={time}, ex={ex})"\
                     .format(host=host, path=self._path, pid=pid, time=lock_time, ex=ex)

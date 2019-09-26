@@ -1,4 +1,4 @@
-from ae.console_app import ConsoleApp
+from ae.console import ConsoleApp
 from ae.progress import Progress
 
 

@@ -7,7 +7,7 @@ import datetime
 import requests
 from configparser import ConfigParser
 
-from ae.console_app import MAIN_SECTION_DEF
+from ae.console import MAIN_SECTION_DEF
 from shif import ResFetch
 
 test_path_prefix = '/test'

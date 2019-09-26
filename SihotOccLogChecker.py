@@ -7,8 +7,8 @@
 import datetime
 from traceback import format_exc
 
-from ae.core import DEBUG_LEVEL_VERBOSE
-from ae.console_app import ConsoleApp
+from ae.core import DEBUG_LEVEL_VERBOSE, parse_date
+from ae.console import ConsoleApp
 from ae_db.db import OraDB, PostgresDB
 from ass_sys_data import add_ass_options, init_ass_data
 
@@ -36,7 +36,7 @@ cae.po("SXML log file:", sxml_log_file_name)
 date_from = cae.get_opt('dateFrom')
 date_till = cae.get_opt('dateTill')
 cae.po("Date range including check-ins from", date_from.strftime(USER_DATE_FORMAT),
-           "and till/before", date_till.strftime(USER_DATE_FORMAT))
+       "and till/before", date_till.strftime(USER_DATE_FORMAT))
 correct_system = cae.get_opt('correctSystem')
 if correct_system:
     cae.po("!!!!  Correcting {} Room Occupation Status".format(correct_system))
@@ -144,7 +144,7 @@ def notification_add_line(msg, is_error=False):
 def get_log_time_stamp(log_line):
     try:
         # time stamp format 'yyyymmdd hhmmss.f', e.g. '20170203 102848.677')
-        date_time = datetime.datetime.strptime(log_line[:19], '%Y%m%d %H%M%S.%f')
+        date_time = parse_date(log_line[:19], '%Y%m%d %H%M%S.%f')
     except ValueError:
         date_time = None
     return date_time

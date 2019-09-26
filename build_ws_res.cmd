@@ -6,7 +6,7 @@ copy .app_env.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy .sys_envLIVE.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 copy .sys_envTEST.cfg ..\_build_dist\AcuSihotInterfaces\ws_res\
 
-copy ae\console_app.py ..\_build_dist\AcuSihotInterfaces\ws_res\ae\
+copy ae\console.py ..\_build_dist\AcuSihotInterfaces\ws_res\ae\
 copy ae\db.py ..\_build_dist\AcuSihotInterfaces\ws_res\ae\
 copy ae\notification.py ..\_build_dist\AcuSihotInterfaces\ws_res\ae\
 copy ae\sys_data.py ..\_build_dist\AcuSihotInterfaces\ws_res\ae\

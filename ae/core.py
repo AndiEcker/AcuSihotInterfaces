@@ -12,7 +12,7 @@ For to set the debug level of your application run-time you can use one of the c
 :data:`DEBUG_LEVEL_DISABLED`, :data:`DEBUG_LEVEL_ENABLED`, :data:`DEBUG_LEVEL_VERBOSE`
 or :data:`DEBUG_LEVEL_TIMESTAMPED`. The debug level of your application can be either
 hard-coded in your code or optionally also externally (using the :ref:`config-files`
-or :ref:`config-options` of the module :mod:`ae.console_app`).
+or :ref:`config-options` of the module :mod:`ae.console`).
 
 Short names for all debug level constants are provided by the dict :data:`DEBUG_LEVELS`.
 
@@ -46,11 +46,14 @@ determined literal values.
 The functions :data:`module_name`, :func:`stack_frames` and :func:`stack_variable` are very
 helpful for to inspect the call stack. With them you can easily access the stack frame
 and read e.g. variable values of the callers of your functions/methods. The class
-:class:`~ae.console_app.ConsoleApp` is using them e.g. for to determine the
+:class:`~ae.console.ConsoleApp` is using them e.g. for to determine the
 :ref:`version <app-version>` and :ref:`title <app-title>` of your application.
 
 Other helper functions for the inspection and debugging of your application are
 :func:`full_stack_trace`, :func:`sys_env_dict` and :func:`sys_env_text`.
+
+The :func:`parse_date` helper function is converting date and datetime string literals into the
+built-in types :class:`datetime.datetime` and :class:`datetime.date`.
 
 Two of the bigger helper functions are :func:`correct_email` and :func:`correct_phone`,
 which are useful for to check if a string contains a valid email address or phone number. They
@@ -61,9 +64,6 @@ post addresses are available in the :mod:`ae.validation` module.
 For to encode unicode strings to other codecs the functions :func:`force_encoding` and
 :func:`to_ascii` can be used. The :func:`print_out` function, which is fully compatible to pythons
 :func:`print`, is using these encode helpers for to auto-correct invalid characters.
-
-The :func:`parse_date` function is converting date and datetime string literals into the
-built-in types :class:`datetime.datetime` and :class:`datetime.date`.
 
 :func:`hide_dup_line_prefix` is very practical if you want to remove or hide redundant
 line prefixes in your log files, to make them better readable.
@@ -100,13 +100,13 @@ Application Class Hierarchy
 For most use cases you will never need to instantiate from :class:`AppBase` directly - instead you will
 instantiate one of the classes that are inherited from this base class.
 
-The class :class:`~ae.console_app.ConsoleApp` e.g. inherits from :class:`AppBase` and is adding
+The class :class:`~ae.console.ConsoleApp` e.g. inherits from :class:`AppBase` and is adding
 configuration options and variables to it. So in your console application it is recommended to directly
-use instances of :class:`~ae.console_app.ConsoleApp` instead of :class:`AppBase`.
+use instances of :class:`~ae.console.ConsoleApp` instead of :class:`AppBase`.
 
 For applications with an GUI use instead one of the classes :class:`~ae.kivy_app.KivyApp`,
 :class:`~ae.enaml_app.EnamlApp` or :class:`~ae.dabo_app.DaboApp`. These app GUI classes
-inherit all functionality from :class:`~ae.console_app.ConsoleApp` and :class:`AppBase`.
+inherit all functionality from :class:`~ae.console.ConsoleApp` and :class:`AppBase`.
 
 
 Application Logging
@@ -171,11 +171,11 @@ to your needs you can specify the maximum log file size in MBytes with the argum
 
     app.init_logging(log_file_name='my_log_file.log', log_file_size_max=9.)
 
-By using the :class:`~ae.console_app.ConsoleApp` class instead of :class:`AppBase` you can
+By using the :class:`~ae.console.ConsoleApp` class instead of :class:`AppBase` you can
 alternatively store the logging configuration of your application within a
 :ref:`configuration variable <config-variables>` or a :ref:`configuration option <config-options>`.
 The order of precedence for to find the appropriate logging configuration of each
-app instance is documented :meth:`here <ae.console_app.ConsoleApp._init_logging>` .
+app instance is documented :meth:`here <ae.console.ConsoleApp._init_logging>` .
 
 
 Using Python Logging Module
@@ -216,8 +216,7 @@ import weakref
 
 from io import StringIO
 from string import ascii_letters, digits
-from typing import Any, AnyStr, Callable, Generator, Dict, Optional, TextIO, Union
-
+from typing import Any, AnyStr, Callable, Generator, Dict, Optional, TextIO, Tuple, Union
 
 DATE_TIME_ISO: str = '%Y-%m-%d %H:%M:%S.%f'     #: ISO string format for datetime values in config files/variables
 DATE_ISO: str = '%Y-%m-%d'                      #: ISO string format for date values in config files/variables
@@ -384,7 +383,7 @@ def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
 def exec_with_return(code_block, glo_vars: Optional[dict] = None, loc_vars: Optional[dict] = None):
     """ execute python code block and return the resulting value of its last code line.
 
-    Copied from this OS answer
+    Inspired by this SO answer
     https://stackoverflow.com/questions/33409207/how-to-return-value-from-exec-in-function/52361938#52361938.
 
     :param code_block:      python code block to execute.
@@ -485,58 +484,70 @@ def module_name(*skip_modules: str, depth: int = 1) -> Optional[str]:
     return stack_var('__name__', *skip_modules, depth=depth)
 
 
-def parse_date(literal: str, *formats: str, replace: Optional[Dict[str, Any]] = None, ret_date: bool = False,
+def parse_date(literal: str, *additional_formats: str, replace: Optional[Dict[str, Any]] = None,
+               ret_date: Optional[bool] = False,
+               dt_seps: Tuple[str, ...] = ('T', ' '), ti_sep: str = ':', ms_sep: str = '.', tz_sep: str = '+',
                ) -> Optional[Union[datetime.date, datetime.datetime]]:
     """ parse a date literal string, returning the represented date/datetime or None if date literal is invalid.
 
-    :param literal:         date literal string in the format of :data:`DATE_ISO`, :data:`DATE_TIME_ISO` or in
-                            one of the additional formats passed into the :paramref:`parse_date.formats` argument.
-    :param formats:         additional date literal format strings.
-    :param replace:         dict of replace keyword arguments for :meth:`datetime.datetime.replace` call.
-                            Pass e.g. dict(microsecond=0, tzinfo=None) for to set the microseconds of the
-                            resulting date to zero and for to remove the timezone info.
-    :param ret_date:        pass True to return a datetime.date value (instead of datetime.datetime value).
-    :return:                represented date/datetime or None if date literal is invalid.
+    :param literal:             date literal string in the format of :data:`DATE_ISO`, :data:`DATE_TIME_ISO` or in
+                                one of the additional formats passed into the
+                                :paramref:`parse_date.additional_formats` arguments tuple.
+    :param additional_formats:  additional date literal format string masks (supported mask characters are documented
+                                at the `format` argument of the python method :meth:`~datetime.datetime.strptime`).
+    :param replace:             dict of replace keyword arguments for :meth:`datetime.datetime.replace` call.
+                                Pass e.g. dict(microsecond=0, tzinfo=None) for to set the microseconds of the
+                                resulting date to zero and for to remove the timezone info.
+    :param ret_date:            request return value type: True=datetime.date, False=datetime.datetime (def)
+                                or None=determine type from literal (short date if dt_seps are not in literal).
+    :param dt_seps:             tuple of supported separator characters between the date and time literal parts.
+    :param ti_sep:              separator character of the time parts (hours/minutes/seconds) in literal.
+    :param ms_sep:              microseconds separator character.
+    :param tz_sep:              time-zone separator character.
+    :return:                    represented date/datetime or None if date literal is invalid.
+
+    This function can not only fully replace the python method :meth:`~datetime.datetime.strptime`. On top
+    it supports multiple date formats which are much more flexible used/interpreted.
     """
-    l_dt_sep = None
-    l_time_sep_cnt = 0
-    lp_tz_sep = literal.find('+')
-    lp_ms_sep = literal.find('.')
-    lp_dt_sep = max(literal.find(' '), literal.find('T'))
-    if lp_dt_sep != -1 and ret_date:
-        literal = literal[:lp_dt_sep]
+    lp_tz_sep = literal.rfind(tz_sep)
+    lp_ms_sep = literal.rfind(ms_sep)
+    lp_dt_sep = max((literal.find(_) for _ in dt_seps))
+    if ret_date and lp_dt_sep != -1:
+        literal = literal[:lp_dt_sep]       # cut time part if exists caller requested return of short date
+        l_dt_sep = None
+        l_time_sep_cnt = 0
     else:
         l_dt_sep = literal[lp_dt_sep] if lp_dt_sep != -1 else None
-        l_time_sep_cnt = literal.count(':')
+        l_time_sep_cnt = literal.count(ti_sep)
         if not (0 <= l_time_sep_cnt <= 2):
             return None
 
-    if l_time_sep_cnt:
-        formats += (DATE_TIME_ISO, )
-    formats += (DATE_ISO, )
+    if l_dt_sep:
+        additional_formats += (DATE_TIME_ISO,)
+    additional_formats += (DATE_ISO,)
 
-    for mask in formats:
-        mp_dt_sep = max(mask.find(' '), mask.find('T'))
-        m_time_sep_cnt = mask.count(':')
-        if lp_dt_sep == -1 and mp_dt_sep != -1:
-            # literal contains no time-separator-chars then remove time-format-parts from form
-            mask = mask[:mp_dt_sep]             # if no date-time-sep found in literal, so remove time part from mask
-        else:
-            if lp_tz_sep == -1 and mask[-2] == '+':
-                mask = mask[:-2]                # no timezone specified in literal, so remove '+%z' from mask
-            if lp_ms_sep == -1 and mask.find('.') != -1:
-                mask = mask[:mask.find('.')]    # no microseconds specified in literal, so remove '.%f' from mask
-            if 1 <= l_time_sep_cnt < m_time_sep_cnt:
-                mask = mask[:mask.rfind(':')]   # no seconds specified in literal, so remove ':%S' from mask
-            if mp_dt_sep != -1:
+    for mask in additional_formats:
+        mp_dt_sep = max((mask.find(_) for _ in dt_seps))
+        m_time_sep_cnt = mask.count(ti_sep)
+        if lp_tz_sep == -1 and mask[-3] == tz_sep:
+            mask = mask[:-3]                    # no timezone specified in literal, then remove '+%z' from mask
+        if lp_ms_sep == -1 and mask.rfind(ms_sep) != -1:
+            mask = mask[:mask.rfind(ms_sep)]    # no microseconds specified in literal, then remove '.%f' from mask
+        if 1 <= l_time_sep_cnt < m_time_sep_cnt:
+            mask = mask[:mask.rfind(ti_sep)]    # no seconds specified in literal, then remove ':%S' from mask
+        if mp_dt_sep != -1:
+            if l_dt_sep:
                 m_dt_sep = mask[mp_dt_sep]
-                if l_dt_sep != m_dt_sep:
-                    mask = mask.replace(m_dt_sep, l_dt_sep)   # literal uses different date-time-sep, so replace in mask
+                if l_dt_sep != m_dt_sep:        # if literal uses different date-time-sep
+                    mask = mask.replace(m_dt_sep, l_dt_sep)     # .. then replace in mask
+            else:
+                mask = mask[:mp_dt_sep]         # if no date-time-sep in literal, then remove time part from mask
+
         ret_val = try_call(datetime.datetime.strptime, literal, mask, ignored_exceptions=(ValueError, ))
         if ret_val is not None:
             if replace:
                 ret_val = ret_val.replace(**replace)
-            if ret_date:
+            if ret_date or ret_date is None and l_dt_sep is None:
                 ret_val = ret_val.date()
             return ret_val
 
@@ -545,7 +556,7 @@ def round_traditional(num_value: float, num_digits: int = 0) -> float:
     """ round numeric value traditional.
 
     Needed because python round() is working differently, e.g. round(0.075, 2) == 0.07 instead of 0.08
-    taken from https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer.
+    inspired by https://stackoverflow.com/questions/31818050/python-2-7-round-number-to-nearest-integer.
 
     :param num_value:   float value to be round.
     :param num_digits:  number of digits to be round (def=0 - rounds to an integer value).
@@ -642,7 +653,7 @@ stack_var = stack_variable          #: alias of function :func:`.stack_variable`
 def to_ascii(unicode_str: str) -> str:
     """ converts unicode string into ascii representation.
 
-    Useful for fuzzy string comparision; copied from MiniQuark's answer
+    Useful for fuzzy string comparision; inspired by MiniQuark's answer
     in: https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-string
 
     :param unicode_str:     string to convert.
@@ -725,7 +736,7 @@ LOG_FILE_IDX_WIDTH: int = len(str(MAX_NUM_LOG_FILES)) + 3
 ori_std_out: TextIO = sys.stdout                    #: original sys.stdout on app startup
 ori_std_err: TextIO = sys.stderr                    #: original sys.stderr on app startup
 
-log_file_lock: threading.Lock = threading.Lock()    #: log file rotation multi-threading lock
+log_file_lock: threading.RLock = threading.RLock()  #: log file rotation multi-threading lock
 
 
 _logger = None       #: python logger for this module gets lazy/late initialized and only if requested by caller
@@ -751,34 +762,6 @@ def _deactivate_multi_threading():
     """ disable multi threading (needed for to reset app environment in unit testing). """
     global _multi_threading_activated
     _multi_threading_activated = False
-
-
-_app_threads = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[int, threading.Thread]
-""" weak dict for to keep the references of all application threads. Added for to prevent
-the joining of unit testing threads in the test teardown (resetting app environment). """
-
-
-def _register_app_thread():
-    """ add new app thread to _app_threads if not already added. """
-    global _app_threads
-    tid = threading.get_ident()
-    if tid not in _app_threads:
-        _app_threads[tid] = threading.current_thread()
-
-
-def _join_app_threads(timeout: Optional[float] = None):
-    """ join/finish all app threads and finally deactivate multi-threading.
-
-    :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
-    """
-    global _app_threads
-    main_thread = threading.current_thread()
-    for t in list(_app_threads.values()):     # threading.enumerate() also includes PyCharm/pytest threads
-        if t is not main_thread:
-            po("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()), logger=_logger)
-            t.join(timeout)
-            _app_threads.pop(t.ident)
-    _deactivate_multi_threading()
 
 
 def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] = None, flush: bool = False,
@@ -869,6 +852,8 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
 po = print_out              #: alias of function :func:`.print_out`
 
 
+APP_KEY_SEP: str = '@'      #: separator character used in :attr:`~AppBase.app_key` of :class:`AppBase` instance
+
 # Had to use type comment because the following line is throwing an error in the Sphinx docs make:
 # _app_instances: weakref.WeakValueDictionary[str, "AppBase"] = weakref.WeakValueDictionary()
 _app_instances = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[str, AppBase]
@@ -882,13 +867,16 @@ stores the dict key of the main instance.
 """
 _main_app_inst_key: str = ''    #: key in :data:`_app_instances` of main :class:`AppBase` instance
 
+app_inst_lock: threading.RLock = threading.RLock()  #: app instantiation multi-threading lock
+
 
 def main_app_instance() -> Optional['AppBase']:
     """ determine the main instance of the :class:`AppBase` in the current running application.
 
     :return:    main/first-instantiated :class:`AppBase` instance or None (if app is not fully initialized yet).
     """
-    return _app_instances.get(_main_app_inst_key)
+    with app_inst_lock:
+        return _app_instances.get(_main_app_inst_key)
 
 
 def _register_app_instance(app: 'AppBase'):
@@ -896,21 +884,22 @@ def _register_app_instance(app: 'AppBase'):
 
     :param app:         :class:`AppBase` instance to register
     """
-    global _app_instances, _main_app_inst_key
-    msg = f"register_app_instance({app}) expects "
-    assert app not in _app_instances.values(), msg + "new instance - this app got already registered"
+    with app_inst_lock:
+        global _app_instances, _main_app_inst_key
+        msg = f"register_app_instance({app}) expects "
+        assert app not in _app_instances.values(), msg + "new instance - this app got already registered"
 
-    key = app.app_key
-    assert key and key not in _app_instances, \
-        msg + f"non-empty, unique app key (app_name+sys_env_id=={key} keys={list(_app_instances.keys())})"
+        key = app.app_key
+        assert key and key not in _app_instances, \
+            msg + f"non-empty, unique app key (app_name+sys_env_id=={key} keys={list(_app_instances.keys())})"
 
-    cnt = len(_app_instances)
-    if _main_app_inst_key:
-        assert cnt > 0, f"No app instances registered but main app key is set to {_main_app_inst_key}"
-    else:
-        assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app remove"
-        _main_app_inst_key = key
-    _app_instances[key] = app
+        cnt = len(_app_instances)
+        if _main_app_inst_key:
+            assert cnt > 0, f"No app instances registered but main app key is set to {_main_app_inst_key}"
+        else:
+            assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app remove"
+            _main_app_inst_key = key
+        _app_instances[key] = app
 
 
 def _unregister_app_instance(app_key: str) -> 'AppBase':
@@ -919,27 +908,32 @@ def _unregister_app_instance(app_key: str) -> 'AppBase':
     :param app_key:     app key of the instance to remove.
     :return:            removed :class:`AppBase` instance.
     """
-    global _app_instances, _main_app_inst_key
-    app = _app_instances.pop(app_key, None)
-    cnt = len(_app_instances)
-    if app_key == _main_app_inst_key:
-        _main_app_inst_key = ''
-        assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app {app_key}{app} remove"
-    else:
-        assert cnt > 0, f"Unregistered last app {app_key} but was not the main app {_main_app_inst_key}"
-    return app
+    with app_inst_lock:
+        global _app_instances, _main_app_inst_key
+        app = _app_instances.pop(app_key, None)
+        cnt = len(_app_instances)
+        if app_key == _main_app_inst_key:
+            _main_app_inst_key = ''
+            assert cnt == 0, f"{cnt} sub-apps {list(_app_instances.keys())} found after main app {app_key}{app} remove"
+        else:
+            assert cnt > 0, f"Unregistered last app {app_key} but was not the main app {_main_app_inst_key}"
+        return app
 
 
 def _shut_down_sub_app_instances(timeout: Optional[float] = None):
     """ shut down all sub-app instances.
 
-    :param timeout:     timeout float value in seconds for thread joining
-                        sub-app shutdowns and for log file lock acquire.
+    :param timeout:     timeout float value in seconds used for the sub-app shutdowns and for the acquisition of the
+                        threading locks of :data:`the ae log file <log_file_lock>` and the :data:`app instances
+                        <app_inst_lock>`.
     """
+    blocked = app_inst_lock.acquire(**(dict(blocking=False) if timeout is None else dict(timeout=timeout)))
     main_app = main_app_instance()
     for app in list(_app_instances.values()):   # list is needed because weak ref dict get changed in loop
         if app is not main_app:
             app.shutdown(timeout=timeout)
+    if blocked:
+        app_inst_lock.release()
 
 
 class _PrintingReplicator:
@@ -961,17 +955,18 @@ class _PrintingReplicator:
         :param message:     string to output.
         """
         app_streams = list()
-        for app in list(_app_instances.values()):
-            # noinspection PyProtectedMember
-            if app._log_buf_stream and not app._log_buf_stream.closed:
+        with log_file_lock, app_inst_lock:
+            for app in list(_app_instances.values()):
                 # noinspection PyProtectedMember
-                app_streams.append((app, app._log_buf_stream))
-            elif app._log_file_stream and not app._log_file_stream.closed:
-                app.log_file_check()  # check log file rotation (if yes then switch to new app._log_file_stream)
-                # noinspection PyProtectedMember
-                app_streams.append((app, app._log_file_stream))
-        if not self.sys_out_obj.closed:
-            app_streams.append((main_app_instance(), self.sys_out_obj))
+                if app._log_buf_stream and not app._log_buf_stream.closed:
+                    # noinspection PyProtectedMember
+                    app_streams.append((app, app._log_buf_stream))
+                elif app._log_file_stream and not app._log_file_stream.closed:
+                    app.log_file_check()  # check log file rotation (if yes then switch to new app._log_file_stream)
+                    # noinspection PyProtectedMember
+                    app_streams.append((app, app._log_file_stream))
+            if not self.sys_out_obj.closed:
+                app_streams.append((main_app_instance(), self.sys_out_obj))
 
         log_lines = message.split('\n')
         for app, stream in app_streams:
@@ -989,6 +984,34 @@ class _PrintingReplicator:
         :return:        value of the attribute.
         """
         return getattr(self.sys_out_obj, attr)
+
+
+_app_threads = weakref.WeakValueDictionary()   # type: weakref.WeakValueDictionary[int, threading.Thread]
+""" weak dict for to keep the references of all application threads. Added for to prevent
+the joining of unit testing threads in the test teardown (resetting app environment). """
+
+
+def _register_app_thread():
+    """ add new app thread to _app_threads if not already added. """
+    global _app_threads
+    tid = threading.get_ident()
+    if tid not in _app_threads:
+        _app_threads[tid] = threading.current_thread()
+
+
+def _join_app_threads(timeout: Optional[float] = None):
+    """ join/finish all app threads and finally deactivate multi-threading.
+
+    :param timeout:     timeout float value in seconds for thread joining (def=None - block/no-timeout).
+    """
+    global _app_threads
+    main_thread = threading.current_thread()
+    for t in list(_app_threads.values()):     # threading.enumerate() also includes PyCharm/pytest threads
+        if t is not main_thread:
+            po("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()), logger=_logger)
+            t.join(timeout)
+            _app_threads.pop(t.ident)
+    _deactivate_multi_threading()
 
 
 class AppBase:
@@ -1081,7 +1104,7 @@ class AppBase:
 
     @property
     def app_key(self):
-        return self.app_name + '@' + self.sys_env_id
+        return self.app_name + APP_KEY_SEP + self.sys_env_id
 
     def init_logging(self, py_logging_params: Optional[Dict[str, Any]] = None, log_file_name: str = "",
                      log_file_size_max: float = LOG_FILE_MAX_SIZE, disable_buffering: bool = False):
@@ -1132,10 +1155,12 @@ class AppBase:
         parts = list()
         if _multi_threading_activated:
             parts.append(f"<{threading.get_ident(): >6}>")
-        if self.sys_env_id:
-            parts.append(f"{{{self.sys_env_id: <4}}}")
+        if self.app_key[-1] != APP_KEY_SEP:
+            parts.append(f"{{{self.app_key: <6}}}")
         if self.debug_level >= DEBUG_LEVEL_TIMESTAMPED:
             parts.append(datetime.datetime.now().strftime(DATE_TIME_ISO))
+        elif self.debug_level >= DEBUG_LEVEL_ENABLED:
+            parts.append(f"[{DEBUG_LEVELS[self.debug_level][0]}]")
 
         prefix = "".join(parts)
         with log_file_lock:
@@ -1161,11 +1186,7 @@ class AppBase:
             elif self._log_file_name:
                 self._open_log_file()
                 self._std_out_err_redirection(True)
-                if self._log_file_stream and self._log_buf_stream:
-                    buf = self._log_buf_stream.getvalue() + "\n####  End Of Startup Log Buffer"
-                    self._log_file_stream.write(buf)
-                    self._log_buf_stream.close()
-                    self._log_buf_stream = None
+                self._flush_and_close_log_buf()
             elif self.suppress_stdout and not self._nul_std_out:
                 sys.stdout = self._nul_std_out = open(os.devnull, 'w')
 
@@ -1183,7 +1204,8 @@ class AppBase:
         This method has an alias named :meth:`.po`
         """
         if file is None and main_app_instance() is not self:
-            stream = self._log_buf_stream or self._log_file_stream
+            with log_file_lock:
+                stream = self._log_buf_stream or self._log_file_stream
             if stream:
                 kwargs['file'] = stream
         if 'app' not in kwargs:
@@ -1197,8 +1219,10 @@ class AppBase:
 
         :param exit_code:   set application OS exit code - ignored if this is NOT the main app instance (def=0).
                             Pass None for to prevent call of sys.exit(exit_code).
-        :param timeout:     timeout float value in seconds used for the thread termination and joining, for the
-                            sub-app shutdowns and for the acquisition of the :data:`log file lock <log_file_lock>`.
+        :param timeout:     timeout float value in seconds used for the thread termination/joining, for the
+                            sub-app shutdowns and for the acquisition of the
+                            threading locks of :data:`the ae log file <log_file_lock>` and the :data:`app instances
+                            <app_inst_lock>`.
         """
         if self._shut_down:
             return
@@ -1209,18 +1233,13 @@ class AppBase:
         is_main_instance = main_app_instance() is self
         if is_main_instance:
             _shut_down_sub_app_instances(timeout=timeout)
+            if _multi_threading_activated:
+                _join_app_threads(timeout=timeout)
 
-        if is_main_instance and _multi_threading_activated:
-            _join_app_threads(timeout=timeout)
+        blocked = (False if is_main_instance and exit_code is not None  # prevent deadlock on app error exit/shutdown
+                   else log_file_lock.acquire(**(dict(blocking=False) if timeout is None else dict(timeout=timeout))))
 
-        if timeout is None:
-            blocked = log_file_lock.acquire(blocking=False)
-        else:
-            blocked = log_file_lock.acquire(timeout=timeout)
-        if blocked and is_main_instance and exit_code is not None:
-            log_file_lock.release()     # prevent deadlock on app error exit/shutdown
-            blocked = False
-
+        self._flush_and_close_log_buf()
         self._close_log_file()
         if self._log_file_index:
             self._rename_log_file()
@@ -1286,6 +1305,16 @@ class AppBase:
 
         except Exception as ex:
             self.po("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
+
+    def _flush_and_close_log_buf(self):
+        """ flush and close ae log buffer and pass content to log stream if opened.
+        """
+        if self._log_buf_stream:
+            if self._log_file_stream:
+                buf = self._log_buf_stream.getvalue() + "\n####  End Of Startup Log Buffer"
+                self._log_file_stream.write(buf)
+            self._log_buf_stream.close()
+            self._log_buf_stream = None
 
     def _open_log_file(self):
         """ open the ae log file and ensure that standard output/error streams get redirected.

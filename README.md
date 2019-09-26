@@ -125,7 +125,7 @@ are case-sensitive. The following table is listing them ordered by the option na
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are
 hard-coded by python (like e.g. the -h switch for to show the help screen). The upper case character options -D and -L
-are hard-coded by the ae.console_app module. Some options like -m are used and interpreted differently in several
+are hard-coded by the ae.console module. Some options like -m are used and interpreted differently in several
 command line applications.
 
 The following lower case letters could be used more easily as short options than others (for to prevent
@@ -1245,7 +1245,7 @@ now specified within the new config file SihotMktSegExceptions.cfg.
 The default values of each command line argument can be set within one of the configurations files. If the values are
 not specified in the app configuration file then the option default/fallback values will be searched within the base
 config file: first in the app name section then in the default main section. More information on the several supported
-configuration files and values you find in the module/package `ae.console_app`.
+configuration files and values you find in the module/package `ae.console`.
 
 The following configuration values are not available as command line argument options (can only be specified within a
 configuration file):

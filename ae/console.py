@@ -2,6 +2,11 @@
 console application environment
 ===============================
 
+The :class:`ConsoleApp` allows your application the easy declaration of command line
+arguments and options. It will additionally extend your application with dynamically
+configurable logging and debugging features.
+
+
 Basic Usage
 -----------
 
@@ -11,7 +16,7 @@ Basic Usage
 At the top of your python application main file/module create an instance of the class :class:`ConsoleApp`::
 
     '' '' ''  docstring of your application main module  '' '' ''
-    from console_app import ConsoleApp
+    from console import ConsoleApp
 
     __version__ = '1.2.3'
 
@@ -130,7 +135,7 @@ The default value of a config variable can also be set/changed directly from wit
 by calling the :meth:`~ConsoleApp.set_variable` method.
 
 The following pre-defined config variables in the :ref:`main config section <config-main-section>` are recognized
-by :mod:`this module <ae.console_app>` as well as by :mod:`ae.core`.
+by :mod:`this module <ae.console>` as well as by :mod:`ae.core`.
 
 * `logging_params` : general logging configuration parameters (py and ae logging)
   - :meth:`documented here <core.AppBase.init_logging>`.
@@ -215,7 +220,7 @@ config_lock = threading.Lock()
 
 
 class ConsoleApp(AppBase):
-    """ provides easy console arguments and options, config options, logging and debugging for your application.
+    """ provides command line arguments and options, config options, logging and debugging for your application.
 
     Most applications only need a single instance of this class. Each instance is encapsulating a ConfigParser and
     a ArgumentParser instance. So only apps with threads and different sets of config options for each

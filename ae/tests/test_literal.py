@@ -1,7 +1,7 @@
 import pytest
 import datetime
 
-from ae.core import DATE_TIME_ISO, DATE_ISO, DEF_ENCODE_ERRORS
+from ae.core import DATE_TIME_ISO, DATE_ISO, DEF_ENCODE_ERRORS, parse_date
 from ae.literal import Literal
 
 
@@ -9,7 +9,7 @@ class TestLiteral:
     def test_init(self):
         lit = Literal()
         assert lit.value is None
-        assert lit._lit_or_val is None
+        assert lit._literal_or_value is None
         assert lit._type is None
 
         st = 'test_val'
@@ -20,7 +20,7 @@ class TestLiteral:
         fv = 369
         fn = 'float literal'
         lit = Literal(str(fv), value_type=float, name=fn)
-        assert lit._lit_or_val == str(fv)
+        assert lit._literal_or_value == str(fv)
         assert lit._type == float
         assert lit._name == fn
         assert isinstance(lit.value, float)
@@ -50,7 +50,6 @@ class TestLiteral:
 
     def test_bytes_values(self):
         bs = b'TEST'
-        ss = bs.decode('utf-8', DEF_ENCODE_ERRORS)
         lit = Literal(literal_or_value=bs, value_type=bytes)
         assert isinstance(lit.value, bytes)
         assert lit.value == bs
@@ -60,9 +59,11 @@ class TestLiteral:
         assert lit.value == 'TEST'
 
         ds = b'2020-12-24'
+        ss = ds.decode('utf-8', DEF_ENCODE_ERRORS)
         lit = Literal(literal_or_value=ds, value_type=datetime.date)
         assert isinstance(lit.value, datetime.date)
-        assert lit.value == datetime.datetime.strptime(ds.decode('utf-8', DEF_ENCODE_ERRORS), DATE_ISO).date()
+        assert lit.value == datetime.datetime.strptime(ss, DATE_ISO).date()
+        assert lit.value == parse_date(ss, ret_date=True)
 
         lit = Literal(literal_or_value=bs, value_type=str)
         assert isinstance(lit.value, str) and not isinstance(lit.value, bytes)
@@ -73,11 +74,13 @@ class TestLiteral:
         lit = Literal(literal_or_value=ds, value_type=datetime.date)
         assert isinstance(lit.value, datetime.date)
         assert lit.value == datetime.datetime.strptime(ds, DATE_ISO).date()
+        assert lit.value == parse_date(ds, ret_date=True)
 
         dts = datetime.datetime.now().strftime(DATE_TIME_ISO)
         lit = Literal(literal_or_value=dts, value_type=datetime.datetime)
         assert isinstance(lit.value, datetime.datetime)
         assert lit.value == datetime.datetime.strptime(dts, DATE_TIME_ISO)
+        assert lit.value == parse_date(dts)
 
     def test_date_expression(self):
         ex = "datetime.date.today()"

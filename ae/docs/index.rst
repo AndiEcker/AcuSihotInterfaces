@@ -24,7 +24,7 @@ ae modules
     :toctree: _autosummary
     :nosignatures:
 
-    ae.console_app
+    ae.console
     ae.core
     ae.literal
     ae.lockname

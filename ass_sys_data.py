@@ -9,7 +9,7 @@ from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
                           SDF_SF_SANDBOX, ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS, SYS_CRED_ITEMS,
                           SYS_CRED_NEEDED, SYS_FEAT_ITEMS)
 from ae.core import (DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
-                     correct_email, correct_phone, po)
+                     correct_email, correct_phone, parse_date, po)
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.systems import UsedSystems
 from ae_db.db import OraDB, PostgresDB
@@ -1304,7 +1304,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def rci_first_week_of_year(self, year):
         rci_wk_01 = self.cae.get_var(str(year), 'RcWeeks')
         if rci_wk_01:
-            ret = datetime.datetime.strptime(rci_wk_01, DATE_ISO).date()
+            ret = parse_date(rci_wk_01, ret_date=True)
         else:
             self._warn("AssSysData.rci_first_week_of_year({}): missing RcWeeks config".format(year), notify=True)
             ret = datetime.date(year=year, month=1, day=1)
@@ -1543,7 +1543,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not day:
             day = datetime.date.today()
         elif isinstance(day, str):
-            day = datetime.datetime.strptime(day, DATE_ISO).date()
+            day = parse_date(day, ret_date=True)
 
         day_str = datetime.date.strftime(day, DATE_ISO)
         cat_info = AvailCatInfo(self.cae)
@@ -1583,7 +1583,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         if not day:
             day = datetime.date.today()
         elif isinstance(day, str):
-            day = datetime.datetime.strptime(day, DATE_ISO).date()
+            day = parse_date(day, ret_date=True)
         if isinstance(res_max_days, str):
             res_max_days = int(res_max_days)
 

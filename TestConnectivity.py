@@ -1,4 +1,4 @@
-from ae.console_app import ConsoleApp
+from ae.console import ConsoleApp
 from ae_notification.notification import add_notification_options, init_notification
 from ae_db.db import OraDB
 from acif import add_ac_options

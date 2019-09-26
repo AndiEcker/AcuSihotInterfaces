@@ -20,8 +20,8 @@ from functools import partial
 from traceback import print_exc
 
 from sys_data_ids import SDF_SH_CLIENT_PORT, SDI_ACU
-from ae.core import DATE_ISO, DEBUG_LEVEL_VERBOSE
-from ae.console_app import ConsoleApp
+from ae.core import DATE_ISO, DEBUG_LEVEL_VERBOSE, parse_date
+from ae.console import ConsoleApp
 from sxmlif import PostMessage, ConfigDict, CatRooms
 from acif import AcumenRes, AcuServer
 from shif import ResSearch
@@ -179,11 +179,11 @@ def _sih_check_all_res(rec, rd, row_err, err_sep):
             row_err += err_sep + 'GDS no mismatch' + \
                        acu_sep + str(rec['ResGdsNo']) + \
                        sih_sep + str(rd[n]['GDSNO'].val())
-        if abs(datetime.datetime.strptime(rd[n]['ARR'].val(), DATE_ISO) - rec['ResArrival']) > max_offset:
+        if abs(parse_date(rd[n]['ARR'].val(), ret_date=True) - rec['ResArrival']) > max_offset:
             row_err += err_sep + 'Arrival date offset more than ' + str(max_offset.days) + ' days' + \
                        acu_sep + rec['ResArrival'].strftime(DATE_ISO) + \
                        sih_sep + str(rd[n]['ARR'].val())
-        if abs(datetime.datetime.strptime(rd[n]['DEP'].val(), DATE_ISO) - rec['ResDeparture']) > max_offset:
+        if abs(parse_date(rd[n]['DEP'].val(), ret_date=True) - rec['ResDeparture']) > max_offset:
             row_err += err_sep + 'Departure date offset more than ' + str(max_offset.days) + ' days' + \
                        acu_sep + rec['ResDeparture'].strftime(DATE_ISO) + \
                        sih_sep + str(rd[n]['DEP'].val())
@@ -681,7 +681,7 @@ class AcuSihotMonitorApp(App):
         cae.dpo('AcuSihotMonitorApp.change_filter():', old_value, criteria_name, criteria_type, _)
         old_value = old_value.split(FILTER_CRITERIA_SEP)[0]
         if criteria_type is datetime.date:
-            dc = DateChangeScreen(selected_date=datetime.datetime.strptime(old_value, DATE_DISPLAY_FORMAT).date())
+            dc = DateChangeScreen(selected_date=parse_date(old_value, DATE_DISPLAY_FORMAT, ret_date=True))
             pu = Popup(title='Change Date', content=dc, size_hint=(.9, .9))
         else:
             ti = TextInput(text=old_value)

@@ -10,7 +10,7 @@ from typing import Union, Tuple
 from sys_data_ids import (SDI_SH, FORE_SURNAME_SEP,
                           SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
-from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, full_stack_trace
+from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, full_stack_trace, parse_date
 from ae.sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
                          FAT_IDX, FAD_FROM, FAD_ONTO, LIST_TYPES, ALL_FIELDS, CALLABLE_SUFFIX,
                          Record, Records, Value, current_index, compose_current_index, set_current_index,
@@ -41,7 +41,7 @@ ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
 
 
 def convert_date_from_sh(xml_string):
-    return datetime.datetime.strptime(xml_string, DATE_ISO).date() if xml_string else ''
+    return parse_date(xml_string, ret_date=True) if xml_string else ''
 
 
 def convert_date_onto_sh(date):
@@ -1676,9 +1676,9 @@ class ResBulkFetcher(BulkFetcherBase):
 
         cae = self.cae
         cae.po("Date range including check-ins from", self.date_from.strftime(SH_DATE_FORMAT),
-                   "and till/before", self.date_till.strftime(SH_DATE_FORMAT))
+               "and till/before", self.date_till.strftime(SH_DATE_FORMAT))
         cae.po("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", self.max_length_of_stay,
-                   " and -pause in seconds between fetches", self.fetch_chunk_pause_seconds)
+               " and -pause in seconds between fetches", self.fetch_chunk_pause_seconds)
         cae.po("Search flags:", self.search_flags)
         cae.po("Search scope:", self.search_scope)
         cae.po("Allowed Market Sources:", self.allowed_mkt_src or "ALL")

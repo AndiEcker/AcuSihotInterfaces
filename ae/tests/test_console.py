@@ -12,10 +12,9 @@ import time
 
 from argparse import ArgumentError
 
-from ae.core import (
-    DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_TIME_ISO, DATE_ISO, MAX_NUM_LOG_FILES,
-    activate_multi_threading, main_app_instance)
-from ae.console_app import ConsoleApp, INI_EXT
+from ae.core import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_ISO, DATE_TIME_ISO, MAX_NUM_LOG_FILES,
+                     activate_multi_threading, main_app_instance)
+from ae.console import INI_EXT, ConsoleApp
 
 
 class TestAeLogging:
@@ -132,7 +131,7 @@ class TestPythonLogging:
                                               'backupCount': 63}),
                        loggers={'root': dict(handlers=['console']),
                                 'ae': dict(handlers=['console']),
-                                'ae.console_app': dict(handlers=['console'])}
+                                'ae.console': dict(handlers=['console'])}
                        )
         print(str(var_val))
 
@@ -142,7 +141,7 @@ class TestPythonLogging:
 
         root_logger = logging.getLogger()
         ae_logger = logging.getLogger('ae')
-        ae_cae_logger = logging.getLogger('ae.console_app')
+        ae_cae_logger = logging.getLogger('ae.console')
 
         # ConsoleApp print_out
         log_text = entry_prefix + "0 print_out"

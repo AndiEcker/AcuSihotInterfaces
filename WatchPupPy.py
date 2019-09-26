@@ -34,9 +34,9 @@ import subprocess
 from configparser import ConfigParser
 
 from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT)
-from ae.core import (DATE_TIME_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
-                     full_stack_trace, sys_env_text)
-from ae.console_app import ConsoleApp, MAIN_SECTION_DEF
+from ae.core import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
+                     full_stack_trace, parse_date, sys_env_text)
+from ae.console import ConsoleApp, MAIN_SECTION_DEF
 from ae.progress import Progress
 from sxmlif import PostMessage
 from shif import ClientSearch
@@ -59,7 +59,7 @@ cae.add_opt('cmdLine', "command [line] to execute", '', 'x')
 cae.add_opt('cmdInterval', "command interval in seconds (pass 0 for always running servers)", 3600, 'l')  # ==1 hour
 cae.add_opt('envChecks', "Number of environment checks per command interval", 3, 'n')
 cae.add_opt('sendOutput',
-               "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
+            "Include command output in the notification email (0=No, 1=Yes if notification is enabled)", 0, 'O')
 
 ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True)
 
@@ -149,7 +149,7 @@ def reset_last_run_time(force=False):
             cmd_cfg_parser.read(cmd_cfg_file_name)
             last_start = cmd_cfg_parser.get(MAIN_SECTION_DEF, last_rt_prefix + 'lastRt')
             if last_start[0] == '@':
-                last_start_dt = datetime.datetime.strptime(last_start[1:], DATE_TIME_ISO)
+                last_start_dt = parse_date(last_start[1:])
                 interval_delta = datetime.timedelta(seconds=command_interval) * 3
                 now_dt = datetime.datetime.now()
                 if force or now_dt > last_start_dt + interval_delta:
@@ -333,7 +333,7 @@ while True:
         if next_check < next_run:
             cae.dpo(" ###  Timer={}, next chk {}s (last={} interval={}), next run {}s (last={} interval={}) (at {})"
                     .format(last_check, next_check - last_check, last_check, check_interval,
-                               next_run - last_check, last_run, command_interval, curr_time))
+                            next_run - last_check, last_run, command_interval, curr_time))
             continue  # wait for next check
 
         # wait for next command_interval, only directly after startup checks on first run

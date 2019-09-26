@@ -178,32 +178,77 @@ class TestCoreHelpers:
     def test_parse_date(self):
         assert parse_date('2033-12-24') == datetime.datetime(year=2033, month=12, day=24)
         assert parse_date('2033-12-24', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+        assert parse_date('2033-12-24', ret_date=None) == datetime.date(year=2033, month=12, day=24)
 
         assert parse_date('2033-12-24 12:59') == datetime.datetime(year=2033, month=12, day=24, hour=12, minute=59)
         assert parse_date('2033-12-24 12:59', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+        assert parse_date('2033-12-24 12:59', ret_date=None) == datetime.datetime(year=2033, month=12, day=24,
+                                                                                  hour=12, minute=59)
 
         assert parse_date('2033-12-24T12:59') == datetime.datetime(year=2033, month=12, day=24, hour=12, minute=59)
         assert parse_date('2033-12-24T12:59', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+        assert parse_date('2033-12-24T12:59', ret_date=None) == datetime.datetime(year=2033, month=12, day=24,
+                                                                                  hour=12, minute=59)
 
-        assert parse_date('2033-12-24 12:59:12') == datetime.datetime(year=2033, month=12, day=24, hour=12, minute=59,
-                                                                      second=12)
+        assert parse_date('2033-12-24 12:59:12') == datetime.datetime(year=2033, month=12, day=24, hour=12,
+                                                                      minute=59, second=12)
         assert parse_date('2033-12-24 12:59:12', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+        assert parse_date('2033-12-24 12:59:12', ret_date=None) == datetime.datetime(year=2033, month=12, day=24,
+                                                                                     hour=12, minute=59, second=12)
 
-        assert parse_date('2033-12-24T12:59:12') == datetime.datetime(year=2033, month=12, day=24, hour=12, minute=59,
-                                                                      second=12)
+        assert parse_date('2033-12-24T12:59:12') == datetime.datetime(year=2033, month=12, day=24,
+                                                                      hour=12, minute=59, second=12)
         assert parse_date('2033-12-24T12:59:12', ret_date=True) == datetime.date(year=2033, month=12, day=24)
+        assert parse_date('2033-12-24T12:59:12', ret_date=None) == datetime.datetime(year=2033, month=12, day=24,
+                                                                                     hour=12, minute=59, second=12)
 
         assert parse_date('2033-1-2 3:4:5') == datetime.datetime(year=2033, month=1, day=2, hour=3, minute=4, second=5)
         assert parse_date('2033-1-2 3:4:5', ret_date=True) == datetime.date(year=2033, month=1, day=2)
+        assert parse_date('2033-1-2 3:4:5', ret_date=None) == datetime.datetime(year=2033, month=1, day=2,
+                                                                                hour=3, minute=4, second=5)
 
         assert parse_date('2033-1-2 3:4:5.6') == datetime.datetime(
             year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
         assert parse_date('2033-1-2 3:4:5.6', ret_date=True) == datetime.date(year=2033, month=1, day=2)
+        assert parse_date('2033-1-2 3:4:5.6', ret_date=None) == datetime.datetime(
+            year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
+
+        alt_format = "%d.%m.%Y %H:%M:%S.%f"
+        assert parse_date('2.1.2033 3:4:5.6', alt_format) == datetime.datetime(
+            year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
+        assert parse_date('2.1.2033 3:4:5.6', alt_format, ret_date=True) == datetime.date(year=2033, month=1, day=2)
+        assert parse_date('2.1.2033 3:4:5.6', alt_format, ret_date=None) == datetime.datetime(
+            year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
+
+        assert parse_date('2.1.2033', alt_format) == datetime.datetime(year=2033, month=1, day=2)
+        assert parse_date('2.1.2033', alt_format, ret_date=True) == datetime.date(year=2033, month=1, day=2)
+        assert parse_date('2.1.2033', alt_format, ret_date=None) == datetime.date(year=2033, month=1, day=2)
 
         alt_format = "%y.%m.%d_%H:%M:%S.%f"
+        dts = ('_', )
         assert parse_date('33.1.2_3:4:5.6', alt_format) == datetime.datetime(
             year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
         assert parse_date('33.1.2_3:4:5.6', alt_format, ret_date=True) == datetime.date(year=2033, month=1, day=2)
+        assert parse_date('33.1.2_3:4:5.6', alt_format, ret_date=None) == datetime.date(year=2033, month=1, day=2)
+        assert parse_date('33.1.2_3:4:5.6', alt_format, ret_date=None, dt_seps=dts) == datetime.datetime(
+            year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
+
+        assert parse_date('33.1.2', alt_format) is None
+        assert parse_date('33.1.2', alt_format, dt_seps=dts) == datetime.datetime(year=2033, month=1, day=2)
+        assert parse_date('33.1.2', alt_format, ret_date=True, dt_seps=dts) == datetime.date(year=2033, month=1, day=2)
+        assert parse_date('33.1.2', alt_format, ret_date=None, dt_seps=dts) == datetime.date(year=2033, month=1, day=2)
+
+        dts = ('T', ' ', 'x', '_', )
+        assert parse_date('33.1.2_3:4:5.6', alt_format, ret_date=None, dt_seps=dts) == datetime.datetime(
+            year=2033, month=1, day=2, hour=3, minute=4, second=5, microsecond=600000)
+        assert parse_date('33.1.2', alt_format) is None
+        assert parse_date('33.1.2', alt_format, dt_seps=dts) == datetime.datetime(year=2033, month=1, day=2)
+        assert parse_date('33.1.2', alt_format, ret_date=True, dt_seps=dts) == datetime.date(year=2033, month=1, day=2)
+        assert parse_date('33.1.2', alt_format, ret_date=None, dt_seps=dts) == datetime.date(year=2033, month=1, day=2)
+
+        alt_format = '%Y%m%d %H%M%S.%f'
+        assert parse_date('20330102 122748.69', alt_format) == datetime.datetime(
+            year=2033, month=1, day=2, hour=12, minute=27, second=48, microsecond=690000)
 
         assert parse_date('xx-yy-zz a:b:c') is None
         with pytest.raises(AttributeError):
@@ -671,7 +716,7 @@ class TestPythonLogging:
                                               'backupCount': 63}),
                        loggers={'root': dict(handlers=['console']),
                                 'ae.core': dict(handlers=['console']),
-                                'ae.console_app': dict(handlers=['console'])}
+                                'ae.console': dict(handlers=['console'])}
                        )
         print(str(var_val))
 
@@ -682,7 +727,7 @@ class TestPythonLogging:
 
         root_logger = logging.getLogger()
         ae_core_logger = logging.getLogger('ae.core')
-        ae_app_logger = logging.getLogger('ae.console_app')
+        ae_app_logger = logging.getLogger('ae.console')
 
         # AppBase print_out()/po()
         log_text = entry_prefix + "0 print_out"
@@ -751,7 +796,7 @@ class TestPythonLogging:
         assert main_app_instance() is None
 
 
-class TestAppBase:      # only some basic tests - test coverage is done by :class:`~console_app.ConsoleApp` tests
+class TestAppBase:      # only some basic tests - test coverage is done by :class:`~.console.ConsoleApp` tests
     def test_app_name(self, restore_app_env, sys_argv_app_key_restore):
         name = 'tan_app_name'
         sys.argv = [name, ]

@@ -6,7 +6,7 @@ import pytest
 from configparser import ConfigParser
 
 from ae.sys_data import Record, FAD_ONTO
-from ae.console_app import MAIN_SECTION_DEF
+from ae.console import MAIN_SECTION_DEF
 from ae.literal import Literal
 from ae_db.db import OraDB
 from ass_sys_data import AssSysData

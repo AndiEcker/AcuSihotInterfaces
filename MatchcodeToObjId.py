@@ -1,5 +1,5 @@
 from ae.core import DEBUG_LEVEL_VERBOSE
-from ae.console_app import ConsoleApp
+from ae.console import ConsoleApp
 from shif import ClientSearch
 
 __version__ = '0.1'

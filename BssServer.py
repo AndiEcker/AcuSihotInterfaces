@@ -33,7 +33,7 @@ from sys_data_ids import SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
     SDI_ACU
 from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import Record, FAD_ONTO
-from ae.console_app import ConsoleApp
+from ae.console import ConsoleApp
 from ae_tcp.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
 from shif import client_data, ResFetch
