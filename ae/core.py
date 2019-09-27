@@ -72,26 +72,25 @@ Finally the :func:`round_traditional` get declared in this module fully compatib
 Python's :func:`round` function, to be used for traditional rounding of float values.
 
 
-Application Base Class
-----------------------
+Application Base Classes
+------------------------
 
-The base class :class:`AppBase` is providing sophisticated logging features with the help of the
-function :func:`print_out` and their sub-class :class:`_PrintingReplicator`.
-
-The first created instance of :class:`AppBase` in your application is representing the main app
-and any further created instances are representing the sub-apps of your application.
+The classes :class:`AppBase` and :class:`SubApp` are applying logging and debugging features
+to your application. Create in your application one instance of :class:`AppBase` for to represent
+the main application task. If your application needs a separate logging/debugging configuration for
+sub-threads or sub-tasks then create an :class:`SubApp` instance for each of these sub-apps.
 
 Sub-apps are not tied to any fix use-case. They can be created for example for each sub-task or
-application thread. You could also create a sub-app instance for each of your external systems,
+application thread. You could also create a :class:`SubApp` instance for each of your external systems,
 like a database server or for to connect your application onto different test environments
-or to your live/production system.
+or to your live an your production system (e.g. for system comparison and maintenance).
 
-:class:`AppBase` ensures automatically for you the proper handling of any exceptions and run-time
-errors: if any critical exception/error cannot be handled then the :meth:`~AppBase.shutdown`
-will make sure that all sub-apps and threads get terminated and joined.
-Additionally it will flush all print-out buffers for to include all the info
+Both application classes are automatically catching and handling any exceptions and run-time
+errors: only if any critical exception/error cannot be handled then the :meth:`~AppBase.shutdown`
+method will make sure that all sub-apps and threads get terminated and joined.
+Additionally all print-out buffers will be flushed for to include all the info
 of the critical error (the last debug and error messages) into the
-standard error/output and any active log files.
+standard error/output and into any activated log files.
 
 
 Application Class Hierarchy
@@ -136,8 +135,8 @@ After that all print-outs of your application and libraries will only appear in 
 
 Also in complex applications, where huge print-outs to the console can get lost easily, you want to use
 a log file instead. But even a single log file can get messy to read, especially for multi-threaded
-server applications. For that :mod:`.core` is allowing you to create for each thread a separate
-sub-application :class:`AppBase` instance with its own log file.
+server applications. For that :class:`SubApp` is allowing you to create for each thread a separate
+sub-app instance with its own log file.
 
 
 Enable Ae Log File
@@ -198,9 +197,24 @@ Application Debugging
 ---------------------
 
 For to use the debug features of :mod:`~ae.core` you simple have to import the needed
-:ref:`debug level constants <debug-level-constants>`.
+:ref:`debug level constant <debug-level-constants>` for to pass it at instantiation of
+your :class:`AppBase` or :class:`SubApp` class to the :paramref:`~AppBase.debug_level` argument:
 
+    app = AppBase(..., debug_level=DEBUG_LEVEL_ENABLED)     # same for :class:`SubApp`
 
+By passing :data:`DEBUG_LEVEL_ENABLED` the print-outs (and log file contents) will be more detailed,
+and even more verbose if you use instead the debug level :data:`DEBUG_LEVEL_VERBOSE`.
+The highest verbosity you get with debug level :data:`DEBUG_LEVEL_TIMESTAMPED`,
+which is also adding the actual date and time to the print-outs and logs.
+
+The debug level can be changed at any time in your application code by directly assigning
+the new debug level to the :attr:`~AppBase.debug_level` attribute. If you prefer to change
+the (here hard-coded) debug levels dynamically, then use the :class:`ConsoleApp` instead
+of :class:`AppBase`, because :class:`ConsoleApp` provides the `debugLevel`
+:ref:`configuration file variable <config-variables>`
+and :ref:`commend line option <config-options>` for
+to specify :ref:`the actual debug level <pre-defined-config-options>` without the need
+to change (and re-build) your application code.
 """
 import ast
 import copy
@@ -439,16 +453,16 @@ def full_stack_trace(ex: Exception) -> str:
     :param ex:  exception instance.
     :return:    str with stack trace info.
     """
-    ret = "Exception {!r}. Traceback:\n".format(ex)
+    ret = f"Exception {ex!r}. Traceback:\n"
 
     tb = sys.exc_info()[2]
     for item in reversed(inspect.getouterframes(tb.tb_frame)[1:]):
-        ret += 'File "{1}", line {2}, in {3}\n'.format(*item)
+        ret += f'File "{item[1]}", line {item[2]}, in {item[3]}\n'
         if item[4]:
             for line in item[4]:
                 ret += ' '*4 + line.lstrip()
     for item in inspect.getinnerframes(tb):
-        ret += 'file "{1}", line {2}, in {3}\n'.format(*item)
+        ret += f'file "{item[1]}", line {item[2]}, in {item[3]}\n'
         if item[4]:
             for line in item[4]:
                 ret += ' '*4 + line.lstrip()
@@ -600,9 +614,8 @@ def sys_env_text(file: str = __file__, ind_ch: str = " ", ind_len: int = 18, key
     sed = sys_env_dict(file=file)
     if extra_sys_env_dict:
         sed.update(extra_sys_env_dict)
-    text = "\n".join(["{ind:{ind_ch}>{ind_len}}{key:{key_ch}<{key_len}}{val}"
-                     .format(ind="", ind_ch=ind_ch, ind_len=ind_len, key=k, key_ch=key_ch, key_len=key_len, val=v)
-                      for k, v in sed.items()])
+    ind = ""
+    text = "\n".join([f"{ind:{ind_ch}>{ind_len}}{key:{key_ch}<{key_len}}{val}" for key, val in sed.items()])
     return text
 
 
@@ -812,7 +825,7 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
         logger_late_init()
 
     if kwargs:
-        objects += ("\n   *  EXTRA KWARGS={}".format(kwargs),)
+        objects += (f"\n   *  EXTRA KWARGS={kwargs}", )
 
     retries = 2
     while retries:
@@ -921,10 +934,10 @@ def _unregister_app_instance(app_key: str) -> 'AppBase':
 
 
 def _shut_down_sub_app_instances(timeout: Optional[float] = None):
-    """ shut down all sub-app instances.
+    """ shut down all :class:`SubApp` instances.
 
-    :param timeout:     timeout float value in seconds used for the sub-app shutdowns and for the acquisition of the
-                        threading locks of :data:`the ae log file <log_file_lock>` and the :data:`app instances
+    :param timeout:     timeout float value in seconds used for the :class:`SubApp` shutdowns and for the acquisition
+                        of the threading locks of :data:`the ae log file <log_file_lock>` and the :data:`app instances
                         <app_inst_lock>`.
     """
     blocked = app_inst_lock.acquire(**(dict(blocking=False) if timeout is None else dict(timeout=timeout)))
@@ -1008,7 +1021,7 @@ def _join_app_threads(timeout: Optional[float] = None):
     main_thread = threading.current_thread()
     for t in list(_app_threads.values()):     # threading.enumerate() also includes PyCharm/pytest threads
         if t is not main_thread:
-            po("  **  joining thread ident <{: >6}> name={}".format(t.ident, t.getName()), logger=_logger)
+            po(f"  **  joining thread ident <{t.ident: >6}> name={t.getName()}", logger=_logger)
             t.join(timeout)
             _app_threads.pop(t.ident)
     _deactivate_multi_threading()
@@ -1130,7 +1143,7 @@ class AppBase:
                 self._log_file_name = log_file_name
                 self._log_file_size_max = log_file_size_max
                 if not disable_buffering:
-                    self._log_buf_stream = StringIO(initial_value="####  Log Buffer\n")
+                    self._log_buf_stream = StringIO(initial_value="####  Log Buffer\n" if self.debug_level else "")
 
     def log_line_prefix(self) -> str:
         """ compile prefix of log print-out line for this :class:`AppBase` instance.
@@ -1195,9 +1208,9 @@ class AppBase:
 
         :param objects:     objects to be printed out.
         :param file:        output stream object to be printed to (def=None). Passing None on a main app instance
-                            will print the objects to the standard output and any active log files, but on a sub-app
-                            instance with an active log file the print-out will get redirected exclusively/only
-                            to log file of this sub-app instance.
+                            will print the objects to the standard output and any active log files, but on a
+                            :class:`SubApp` instance with an active log file the print-out will get redirected
+                            exclusively/only to log file of this :class:`SubApp` instance.
         :param kwargs:      All the other supported kwargs of this method are documented
                             :func:`at the print_out() function of this module <print_out>`.
 
@@ -1220,24 +1233,26 @@ class AppBase:
         :param exit_code:   set application OS exit code - ignored if this is NOT the main app instance (def=0).
                             Pass None for to prevent call of sys.exit(exit_code).
         :param timeout:     timeout float value in seconds used for the thread termination/joining, for the
-                            sub-app shutdowns and for the acquisition of the
+                            :class:`SubApp` shutdowns and for the acquisition of the
                             threading locks of :data:`the ae log file <log_file_lock>` and the :data:`app instances
                             <app_inst_lock>`.
         """
         if self._shut_down:
             return
+        aqc_kwargs = dict(blocking=False) if timeout is None else dict(timeout=timeout)
+        is_main_instance = main_app_instance() is self
+        force = is_main_instance and exit_code is not None      # prevent deadlock on app error exit/shutdown
 
         if exit_code is not None:
-            self.po("####  Shutdown............  ", exit_code, timeout, logger=_logger)
+            self.po(f"####  Shutdown............  {exit_code if force else ''} {timeout}", logger=_logger)
 
-        is_main_instance = main_app_instance() is self
+        a_blocked = (False if force else app_inst_lock.acquire(**aqc_kwargs))
         if is_main_instance:
             _shut_down_sub_app_instances(timeout=timeout)
             if _multi_threading_activated:
                 _join_app_threads(timeout=timeout)
 
-        blocked = (False if is_main_instance and exit_code is not None  # prevent deadlock on app error exit/shutdown
-                   else log_file_lock.acquire(**(dict(blocking=False) if timeout is None else dict(timeout=timeout))))
+        l_blocked = (False if force else log_file_lock.acquire(**aqc_kwargs))
 
         self._flush_and_close_log_buf()
         self._close_log_file()
@@ -1255,10 +1270,12 @@ class AppBase:
 
         self._std_out_err_redirection(False)
 
-        if blocked:
+        if l_blocked:
             log_file_lock.release()
 
         _unregister_app_instance(self.app_key)
+        if a_blocked:
+            app_inst_lock.release()
         self._shut_down = True
         if is_main_instance and exit_code is not None:
             sys.exit(exit_code)
@@ -1288,30 +1305,29 @@ class AppBase:
         """ add special end-of-file marker and flush the internal buffers to the file stream.
 
         :param stream_file:     file stream.
-        :param stream_name:     name of the file stream.
+        :param stream_name:     name of the file stream (only used for debugging/error messages).
         """
         try:
             try:
-                # ALWAYS add \nEoF\n to the end
-                # .. we cannot use print_out() here because of recursions on log file rotation, so use built-in print()
-                # .. self.print_out()
-                # .. self.print_out('EoF')
+                # cannot use print_out() here because of recursions on log file rotation, so use built-in print()
                 print(file=stream_file)
-                print('EoF', file=stream_file)
+                if self.debug_level:
+                    print('EoF', file=stream_file)
             except Exception as ex:
-                self.po("Ignorable {} end-of-file marker exception={}".format(stream_name, ex), logger=_logger)
+                self.po(f"Ignorable {stream_name} end-of-file marker exception={ex}", logger=_logger)
 
             stream_file.flush()
 
         except Exception as ex:
-            self.po("Ignorable {} flush exception={}".format(stream_name, ex), logger=_logger)
+            self.po(f"Ignorable {stream_name} flush exception={ex}", logger=_logger)
 
     def _flush_and_close_log_buf(self):
         """ flush and close ae log buffer and pass content to log stream if opened.
         """
         if self._log_buf_stream:
             if self._log_file_stream:
-                buf = self._log_buf_stream.getvalue() + "\n####  End Of Startup Log Buffer"
+                self._append_eof_and_flush_file(self._log_buf_stream, "ae log buf")
+                buf = self._log_buf_stream.getvalue() + ("\n####  End Of Log Buffer" if self.debug_level else "")
                 self._log_file_stream.write(buf)
             self._log_buf_stream.close()
             self._log_buf_stream = None
@@ -1334,7 +1350,7 @@ class AppBase:
         """ rename rotating log file while keeping first/startup log and log file count below :data:`MAX_NUM_LOG_FILE`.
         """
         file_path, file_ext = os.path.splitext(self._log_file_name)
-        dfn = file_path + "-{:0>{index_width}}".format(self._log_file_index, index_width=LOG_FILE_IDX_WIDTH) + file_ext
+        dfn = file_path + f"-{self._log_file_index:0>{LOG_FILE_IDX_WIDTH}}" + file_ext
         if os.path.exists(dfn):
             os.remove(dfn)                              # remove old log file from previous app run
         if os.path.exists(self._log_file_name):         # prevent errors after log file error or unit test cleanup
@@ -1343,6 +1359,16 @@ class AppBase:
         self._log_file_index += 1
         if self._log_file_index > MAX_NUM_LOG_FILES:    # use > instead of >= for to always keep first/startup log file
             first_idx = self._log_file_index - MAX_NUM_LOG_FILES
-            dfn = file_path + "-{:0>{index_width}}".format(first_idx, index_width=LOG_FILE_IDX_WIDTH) + file_ext
+            dfn = file_path + f"-{first_idx:0>{LOG_FILE_IDX_WIDTH}}" + file_ext
             if os.path.exists(dfn):
                 os.remove(dfn)
+
+
+SubApp = AppBase
+""" separate/additional sub-app/thread/task with own/individual logging/debug configuration.
+
+Create an instance of this class for every extra thread and task where your application needs separate
+logging and/or debug configuration - additional to the main app instance.
+
+All members of this class are documented at the :class:`AppBase` class.
+"""

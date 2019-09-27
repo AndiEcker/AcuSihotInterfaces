@@ -273,7 +273,7 @@ class TestConsoleAppBasics:
         # special case for error code path coverage
         ca2 = ConsoleApp('test_sys_env_id_COPY')
         ca2.sys_env_id = ''
-        assert ca2.get_opt('debugLevel') == DEBUG_LEVEL_DISABLED
+        assert ca2.get_opt('debugLevel')
 
     def test_shutdown_basics(self, restore_app_env):
         def thr():
@@ -631,6 +631,10 @@ class TestConfigOptions:
         cae = ConsoleApp('test_config_tuple_eval', additional_cfg_files=[file_name])
         assert cae.get_var(var_name) == ('a', 'b', 'c')
 
+    def test_debug_level_add_opt_default(self, restore_app_env):
+        cae = ConsoleApp('test_add_opt_default', debug_level=DEBUG_LEVEL_TIMESTAMPED)
+        assert cae.debug_level == DEBUG_LEVEL_TIMESTAMPED
+
     def test_debug_level_short_option_value(self, restore_app_env, sys_argv_app_key_restore):
         cae = ConsoleApp('test_option_value')
         sys.argv = ['test', '-D=' + str(DEBUG_LEVEL_TIMESTAMPED)]
@@ -649,11 +653,6 @@ class TestConfigOptions:
     def test_debug_level_short_option_eval_double_quoted(self, restore_app_env, sys_argv_app_key_restore):
         cae = ConsoleApp('test_double_quoted_option_eval')
         sys.argv = ['test', '-D="""int("' + str(DEBUG_LEVEL_TIMESTAMPED) + '")"""']
-        assert cae.get_opt('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
-
-    def test_debug_level_add_opt_default(self, restore_app_env, sys_argv_app_key_restore):
-        cae = ConsoleApp('test_add_opt_default', debug_level=DEBUG_LEVEL_TIMESTAMPED)
-        sys.argv = [sys_argv_app_key_restore, ]
         assert cae.get_opt('debugLevel') == DEBUG_LEVEL_TIMESTAMPED
 
     def test_debug_level_config_default(self, restore_app_env, config_fna_vna_vva, sys_argv_app_key_restore):

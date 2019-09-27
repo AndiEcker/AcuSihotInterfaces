@@ -17,7 +17,6 @@ cfg.optionxform = str  # for case-sensitive config vars
 cfg.read(['../.app_env.cfg', '../.sys_envTEST.cfg'])
 # simple cfg.get() call does not convert config value into list/dict without using ae.literal.Literal()
 ws_host = cfg.get(MAIN_SECTION_DEF, 'wsHost')
-assert ws_host
 
 
 def add_parametrize_defaults(arg_dicts):
@@ -67,6 +66,7 @@ def add_parametrize_defaults(arg_dicts):
             params=dict(hotel_ids=['999'], room_cat_prefix='1JNR', day=datetime.date(2017, 9, 14))),
         ]))
 def test_read_only_services(path, text_fragment, params, status, json_values):
+    assert ws_host
     response = requests.get(path, params=params)
     print(response.url)
     assert text_fragment in response.text

@@ -513,8 +513,8 @@ class ConsoleApp(AppBase):
                         given_value = self._cfg_opt_val_stripper(given_value)
                     allowed_values = self.cfg_opt_choices[name]
                     if given_value not in allowed_values:
-                        raise ArgumentError(None, "Wrong {} option value {}; allowed are {}"
-                                            .format(name, given_value, allowed_values))
+                        raise ArgumentError(None,
+                                            f"Wrong {name} option value {given_value}; allowed are {allowed_values}")
 
         is_main_app = main_app_instance() is self
         if is_main_app and not self.py_log_params:
@@ -601,7 +601,7 @@ class ConsoleApp(AppBase):
             if not self.add_cfg_file(add_cfg_path_fnam):
                 add_cfg_path_fnam = os.path.join(app_path, cfg_fnam)
                 if not self.add_cfg_file(add_cfg_path_fnam):
-                    err_msg = "Additional config file {} not found!".format(cfg_fnam)
+                    err_msg = f"Additional config file {cfg_fnam} not found!"
         return err_msg
 
     def _get_cfg_parser_val(self, name: str, section: Optional[str] = None, default_value: Optional[Any] = None,
@@ -683,7 +683,7 @@ class ConsoleApp(AppBase):
 
         This method has an alias named :meth:`set_var`.
         """
-        msg = "****  ConsoleApp.set_var({}, {}) ".format(name, value)
+        msg = f"****  ConsoleApp.set_var({name!r}, {value!r}) "
         if not cfg_fnam:
             cfg_fnam = self._main_cfg_fnam
         if not section:
@@ -693,8 +693,8 @@ class ConsoleApp(AppBase):
             self.cfg_options[name].value = value
 
         if not os.path.isfile(cfg_fnam):
-            return msg + "INI/CFG file {} not found. Please set the ini/cfg variable {}/{} manually to the value " \
-                .format(cfg_fnam, section, name, value)
+            return msg + f"INI/CFG file {cfg_fnam} not found." \
+                         f" Please set the ini/cfg variable {section}/{name} manually to the value {value!r}"
 
         err_msg = ''
         with config_lock:
@@ -714,7 +714,7 @@ class ConsoleApp(AppBase):
                 with open(cfg_fnam, 'w') as configfile:
                     cfg_parser.write(configfile)
             except Exception as ex:
-                err_msg = msg + "exception: {}".format(ex)
+                err_msg = msg + f"exception: {ex}"
 
         return err_msg
 

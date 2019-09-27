@@ -543,7 +543,7 @@ class TestOfflineContactValidation:
         assert r == ["0: ", "3: ", "8:/"]
 
 
-class TestAppBasePrintingReplicator:
+class TestPrintingReplicator:
     def test_init(self):
         dso = _PrintingReplicator()
         assert dso.sys_out_obj is sys.stdout
@@ -606,14 +606,14 @@ class TestAeLogging:
         log_file = 'test_ae_base_log.log'
         try:
             app = AppBase('test_base_log_file_rotation')
-            app.init_logging(log_file_name=log_file, log_file_size_max=.001)
+            app.init_logging(log_file_name=log_file, log_file_size_max=.001)    # log file max size == 1 kB
             app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
-                for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                for line_no in range(16):                   # full loop is creating 1 kB of log entries (16 * 64 bytes)
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
             assert os.path.exists(log_file)
         finally:
-            assert delete_files(log_file, keep_ext=True) >= MAX_NUM_LOG_FILES
+            assert delete_files(log_file, keep_ext=True) == MAX_NUM_LOG_FILES + 1
 
     def test_app_instances_reset1(self):
         assert main_app_instance() is None
@@ -625,11 +625,11 @@ class TestAeLogging:
             app.init_logging(log_file_name=log_file, log_file_size_max=.001)
             app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
-                for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                for line_no in range(16):
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
             assert os.path.exists(log_file)
         finally:
-            assert delete_files(log_file, keep_ext=True) >= MAX_NUM_LOG_FILES
+            assert delete_files(log_file, keep_ext=True) == MAX_NUM_LOG_FILES + 1
 
     def test_log_file_rotation_explicit_multi_threading(self, restore_app_env):
         log_file = 'test_ae_multi_log.log'
@@ -639,23 +639,30 @@ class TestAeLogging:
             app.init_logging(log_file_name=log_file, log_file_size_max=.001)
             app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
-                for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
+                for line_no in range(16):
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
             assert os.path.exists(log_file)
         finally:
-            assert delete_files(log_file, keep_ext=True) >= MAX_NUM_LOG_FILES
+            assert delete_files(log_file, keep_ext=True) == MAX_NUM_LOG_FILES + 1
 
     def test_open_log_file_with_suppressed_stdout(self, capsys, restore_app_env):
         log_file = 'test_ae_no_stdout.log'
+        tst_out = 'only printed to log file'
         try:
             app = AppBase('test_open_log_file_with_suppressed_stdout', suppress_stdout=True)
             assert app.suppress_stdout is True
             app.init_logging(log_file_name=log_file)
-            app.log_file_check()
+            app.po(tst_out)
+            out, err = capsys.readouterr()
+            assert out == "" and err == ""
             app.init_logging()      # close log file
             assert os.path.exists(log_file)
+            out, err = capsys.readouterr()
+            assert out == "" and err == ""
         finally:
-            assert delete_files(log_file) == 1
+            contents = delete_files(log_file, ret_type='contents')
+            assert len(contents)
+            assert tst_out in contents[0]
 
     def test_invalid_log_file_name(self, restore_app_env):
         log_file = ':/:invalid:/:'
