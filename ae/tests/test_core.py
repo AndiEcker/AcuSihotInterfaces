@@ -1,5 +1,7 @@
 """ test doc string for AppBase.app_title tests
 """
+import threading
+
 import pytest
 from ae.tests.conftest import delete_files
 
@@ -16,7 +18,7 @@ from ae.core import (
     correct_email, correct_phone, exec_with_return, force_encoding, full_stack_trace, hide_dup_line_prefix, module_name,
     parse_date, po, round_traditional, stack_frames, stack_var, sys_env_dict, sys_env_text, to_ascii,
     try_call, try_eval, try_exec,
-    AppBase, _PrintingReplicator)
+    AppBase, _PrintingReplicator, SubApp)
 
 import datetime as test_dt
 
@@ -607,7 +609,7 @@ class TestAeLogging:
         try:
             app = AppBase('test_base_log_file_rotation')
             app.init_logging(log_file_name=log_file, log_file_size_max=.001)    # log file max size == 1 kB
-            app.log_file_check()
+            # not needed explicitly: app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):                   # full loop is creating 1 kB of log entries (16 * 64 bytes)
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
@@ -616,14 +618,14 @@ class TestAeLogging:
             assert delete_files(log_file, keep_ext=True) == MAX_NUM_LOG_FILES + 1
 
     def test_app_instances_reset1(self):
-        assert main_app_instance() is None
+        assert main_app_instance() is None  # check if core._app_instances/._main_app_inst_key got reset correctly
 
     def test_log_file_rotation_multi_threading(self, restore_app_env):
         log_file = 'test_ae_multi_log.log'
         try:
             app = AppBase('test_base_log_file_rotation', multi_threading=True)
             app.init_logging(log_file_name=log_file, log_file_size_max=.001)
-            app.log_file_check()
+            # not needed explicitly: app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
@@ -637,7 +639,7 @@ class TestAeLogging:
             app = AppBase('test_base_log_file_rotation')
             activate_multi_threading()
             app.init_logging(log_file_name=log_file, log_file_size_max=.001)
-            app.log_file_check()
+            # not needed explicitly: app.log_file_check()
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):
                     app.po("TestBaseLogEntry{: >26}{: >26}".format(idx, line_no))
@@ -681,6 +683,76 @@ class TestAeLogging:
             assert os.path.exists(log_file)
         finally:
             assert delete_files(log_file) == 1
+
+    def test_sub_app_logging(self, restore_app_env):
+        log_file = 'test_sub_app_logging.log'
+        tst_out = 'print-out to log file'
+        mp = "MAIN_"  # main/sub-app prefixes for log file names and print-outs
+        sp = "SUB__"
+        try:
+            app = AppBase('test_main_app')
+            app.init_logging(log_file_name=mp + log_file)
+            sub = SubApp('test_sub_app', app_name=sp)
+            sub.init_logging(log_file_name=sp + log_file)
+            po(mp + tst_out + "_1")
+            app.po(mp + tst_out + "_2")
+            sub.po(sp + tst_out)
+            sub.init_logging()
+            app.init_logging()  # close log file
+            # NOT WORKING: capsys.readouterr() returning empty strings
+            # out, err = capsys.readouterr()
+            # assert out.count(tst_out) == 3 and err == ""
+            assert os.path.exists(mp + log_file)
+            assert os.path.exists(sp + log_file)
+        finally:
+            contents = delete_files(sp + log_file, ret_type='contents')
+            assert len(contents)
+            assert mp + tst_out + "_1" in contents[0]
+            assert mp + tst_out + "_2" in contents[0]
+            assert sp + tst_out in contents[0]
+            contents = delete_files(mp + log_file, ret_type='contents')
+            assert len(contents)
+            assert mp + tst_out + "_1" in contents[0]
+            assert mp + tst_out + "_2" in contents[0]
+            assert sp + tst_out not in contents[0]
+
+    def test_threaded_sub_app_logging(self, restore_app_env):
+        def sub_app_po():
+            nonlocal sub
+            sub = SubApp('test_sub_app_thread', app_name=sp)
+            sub.init_logging(log_file_name=sp + log_file)
+            sub.po(sp + tst_out)
+
+        log_file = 'test_threaded_sub_app_logging.log'
+        tst_out = 'print-out to log file'
+        mp = "MAIN_"  # main/sub-app prefixes for log file names and print-outs
+        sp = "SUB__"
+        try:
+            app = AppBase('test_main_app_thread', app_name=mp, multi_threading=True)
+            app.init_logging(log_file_name=mp + log_file)
+            sub = None
+            sub_thread = threading.Thread(target=sub_app_po)
+            sub_thread.start()
+            while not sub or not sub._log_file_stream and not sub._log_buf_stream:
+                pass  # wait until sub-thread has called init_logging()
+            po(mp + tst_out + "_1")
+            app.po(mp + tst_out + "_2")
+            sub.init_logging()  # close sub-app log file
+            sub_thread.join()
+            app.init_logging()  # close main-app log file
+            assert os.path.exists(sp + log_file)
+            assert os.path.exists(mp + log_file)
+        finally:
+            contents = delete_files(sp + log_file, ret_type='contents')
+            assert len(contents)
+            assert mp + tst_out + "_1" in contents[0]
+            assert mp + tst_out + "_2" in contents[0]
+            assert sp + tst_out in contents[0]
+            contents = delete_files(mp + log_file, ret_type='contents')
+            assert len(contents)
+            assert mp + tst_out + "_1" in contents[0]
+            assert mp + tst_out + "_2" in contents[0]
+            assert sp + tst_out not in contents[0]
 
     def test_exception_log_file_flush(self, restore_app_env):
         app = AppBase('test_exception_base_log_file_flush')
@@ -809,6 +881,10 @@ class TestAppBase:      # only some basic tests - test coverage is done by :clas
         sys.argv = [name, ]
         app = AppBase()
         assert app.app_name == name
+
+    def test_app_key(self, restore_app_env):
+        app = AppBase(app_name='XXX', sys_env_id='YYY')
+        assert app.app_key == 'XXX@YYY'
 
     def test_app_instances_reset1(self):
         assert main_app_instance() is None

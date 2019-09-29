@@ -812,9 +812,9 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
 
     main_app = main_app_instance()
     if main_app:
-        main_app.log_file_check()       # check if late init of logging system is needed
-    if app:
-        app.log_file_check()            # check suppress_stdout/log file status and rotation
+        file = main_app.log_file_check(file)    # check if late init of logging system is needed
+    if app and app != main_app:
+        file = app.log_file_check(file)         # check sub-app suppress_stdout/log file status and rotation
     else:
         app = main_app
 
@@ -971,24 +971,26 @@ class _PrintingReplicator:
         with log_file_lock, app_inst_lock:
             for app in list(_app_instances.values()):
                 # noinspection PyProtectedMember
-                if app._log_buf_stream and not app._log_buf_stream.closed:
+                if app._log_buf_stream:
                     # noinspection PyProtectedMember
                     app_streams.append((app, app._log_buf_stream))
-                elif app._log_file_stream and not app._log_file_stream.closed:
+                elif app._log_file_stream:
                     app.log_file_check()  # check log file rotation (if yes then switch to new app._log_file_stream)
                     # noinspection PyProtectedMember
                     app_streams.append((app, app._log_file_stream))
             if not self.sys_out_obj.closed:
                 app_streams.append((main_app_instance(), self.sys_out_obj))
 
-        log_lines = message.split('\n')
-        for app, stream in app_streams:
-            line_prefix = '\n' + (app.log_line_prefix() if app else '')
-            app_msg = line_prefix.join(log_lines)
-            try:
-                stream.write(app_msg)
-            except UnicodeEncodeError:
-                stream.write(force_encoding(app_msg, encoding=stream.encoding))
+            if message and message[0] != '\n' and message[-1] == '\n':
+                message = '\n' + message[:-1]
+            log_lines = message.split('\n')
+            for app, stream in app_streams:
+                line_prefix = '\n' + (app.log_line_prefix() if app else '')
+                app_msg = line_prefix.join(log_lines)
+                try:
+                    stream.write(app_msg)
+                except UnicodeEncodeError:
+                    stream.write(force_encoding(app_msg, encoding=stream.encoding))
 
     def __getattr__(self, attr: str) -> Any:
         """ get attribute value from standard output stream.
@@ -1182,26 +1184,41 @@ class AppBase:
 
         return hide_dup_line_prefix(last_pre, prefix) + " "
 
-    def log_file_check(self):
-        """ check and possibly correct log file status.
+    def log_file_check(self, curr_stream: Optional[TextIO] = None) -> Optional[TextIO]:
+        """ check and possibly correct log file status and the passed currently used stream.
+
+        :param curr_stream:     currently used stream.
+        :return:                stream passed into :paramref:`~log_file_check.curr_stream` or
+                                new/redirected stream of :paramref:`~log_file_check.curr_stream` or
+                                None if :paramref:`~log_file_check.curr_stream` is None.
 
         For already opened log files check if the ae log file is big enough and if yes then do a file rotation.
         If log file is not opened but log file name got already set, then check if log startup buffer is active
         and if yes then create log file, pass log buffer content to log file and close the log buffer.
         """
+        old_stream = new_stream = None
         with log_file_lock:
             if self._log_file_stream is not None:
+                old_stream = self._log_file_stream
                 self._log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
                 if self._log_file_stream.tell() >= self._log_file_size_max * 1024 * 1024:
                     self._close_log_file()
                     self._rename_log_file()
                     self._open_log_file()
+                    new_stream = self._log_file_stream
             elif self._log_file_name:
+                old_stream = self._log_buf_stream
                 self._open_log_file()
                 self._std_out_err_redirection(True)
                 self._flush_and_close_log_buf()
+                new_stream = self._log_file_stream
             elif self.suppress_stdout and not self._nul_std_out:
-                sys.stdout = self._nul_std_out = open(os.devnull, 'w')
+                old_stream = sys.stdout
+                sys.stdout = self._nul_std_out = new_stream = open(os.devnull, 'w')
+
+        if curr_stream == old_stream and new_stream:
+            return new_stream
+        return curr_stream
 
     def print_out(self, *objects, file: Optional[TextIO] = None, **kwargs):
         """ app-instance-specific print-outs.
@@ -1241,7 +1258,7 @@ class AppBase:
             return
         aqc_kwargs = dict(blocking=False) if timeout is None else dict(timeout=timeout)
         is_main_instance = main_app_instance() is self
-        force = is_main_instance and exit_code is not None      # prevent deadlock on app error exit/shutdown
+        force = is_main_instance and exit_code      # prevent deadlock on app error exit/shutdown
 
         if exit_code is not None:
             self.po(f"####  Shutdown............  {exit_code if force else ''} {timeout}", logger=_logger)
@@ -1324,13 +1341,14 @@ class AppBase:
     def _flush_and_close_log_buf(self):
         """ flush and close ae log buffer and pass content to log stream if opened.
         """
-        if self._log_buf_stream:
+        stream = self._log_buf_stream
+        if stream:
             if self._log_file_stream:
-                self._append_eof_and_flush_file(self._log_buf_stream, "ae log buf")
-                buf = self._log_buf_stream.getvalue() + ("\n####  End Of Log Buffer" if self.debug_level else "")
+                self._append_eof_and_flush_file(stream, "ae log buf")
+                buf = stream.getvalue() + ("\n####  End Of Log Buffer" if self.debug_level else "")
                 self._log_file_stream.write(buf)
-            self._log_buf_stream.close()
             self._log_buf_stream = None
+            stream.close()
 
     def _open_log_file(self):
         """ open the ae log file and ensure that standard output/error streams get redirected.
@@ -1364,11 +1382,12 @@ class AppBase:
                 os.remove(dfn)
 
 
-SubApp = AppBase
-""" separate/additional sub-app/thread/task with own/individual logging/debug configuration.
+class SubApp(AppBase):
+    """ separate/additional sub-app/thread/task with own/individual logging/debug configuration.
 
-Create an instance of this class for every extra thread and task where your application needs separate
-logging and/or debug configuration - additional to the main app instance.
+    Create an instance of this class for every extra thread and task where your application needs separate
+    logging and/or debug configuration - additional to the main app instance.
 
-All members of this class are documented at the :class:`AppBase` class.
-"""
+    All members of this class are documented at the :class:`AppBase` class.
+    """
+    pass

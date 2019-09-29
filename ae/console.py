@@ -243,7 +243,7 @@ class ConsoleApp(AppBase):
     * :attr:`_cfg_opt_val_stripper` callable to strip option values.
     * :attr:`_parsed_args`          ArgumentParser.parse_args() return.
     """
-    def __init__(self, app_title: str = '', app_version: str = '', sys_env_id: str = '',
+    def __init__(self, app_title: str = '', app_name: str = '', app_version: str = '', sys_env_id: str = '',
                  debug_level: int = DEBUG_LEVEL_DISABLED, multi_threading: bool = False, suppress_stdout: bool = False,
                  cfg_opt_eval_vars: Optional[dict] = None, additional_cfg_files: Iterable = (),
                  cfg_opt_val_stripper: Optional[Callable] = None,
@@ -253,6 +253,7 @@ class ConsoleApp(AppBase):
 
         :param app_title:               application title/description (def=value of main module docstring
                                         - :ref:`example <app-title>`).
+        :param app_name:                application instance name (def=main module file's base name).
         :param app_version:             application version (def=value of global __version__ in call stack).
         :param sys_env_id:              system environment id used as file name suffix for to load all
                                         the system config variables in sys_env<suffix>.cfg (def='', pass e.g. 'LIVE'
@@ -271,7 +272,7 @@ class ConsoleApp(AppBase):
                                         supported kwargs are all the method kwargs of
                                         :meth:`~core.AppBase.init_logging`.
         """
-        super().__init__(app_title=app_title, app_version=app_version, sys_env_id=sys_env_id,
+        super().__init__(app_title=app_title, app_name=app_name, app_version=app_version, sys_env_id=sys_env_id,
                          debug_level=debug_level, multi_threading=multi_threading, suppress_stdout=suppress_stdout)
 
         with config_lock:

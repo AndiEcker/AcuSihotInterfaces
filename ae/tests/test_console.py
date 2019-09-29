@@ -13,7 +13,7 @@ import time
 from argparse import ArgumentError
 
 from ae.core import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_TIMESTAMPED, DATE_ISO, DATE_TIME_ISO, MAX_NUM_LOG_FILES,
-                     activate_multi_threading, main_app_instance)
+                     activate_multi_threading, main_app_instance, po, SubApp)
 from ae.console import INI_EXT, ConsoleApp
 
 
@@ -21,23 +21,23 @@ class TestAeLogging:
     def test_open_log_file_with_suppressed_stdout(self, capsys, restore_app_env):
         cae = ConsoleApp('test_log_file_rotation', suppress_stdout=True)
         assert cae.suppress_stdout is True
-        cae.log_file_check()
         cae.po("tst_out")
         cae.init_logging()      # close log file
         assert capsys.readouterr()[0] == ""
 
     def test_open_log_file_with_suppressed_stdout_and_log_file(self, capsys, restore_app_env):
         log_file = 'test_sup_std_out.log'
+        tst_out = "tst_out"
         try:
             cae = ConsoleApp('test_log_file_rotation_with_log', suppress_stdout=True, log_file_name=log_file)
             assert cae.suppress_stdout is True
-            cae.log_file_check()
-            cae.po("tst_out")
+            cae.po(tst_out)
             cae.init_logging()      # close log file
             assert os.path.exists(log_file)
             assert capsys.readouterr()[0] == ""
         finally:
-            assert delete_files(log_file) == 1
+            content = delete_files(log_file, ret_type="contents")
+            assert tst_out in content[0]
 
     def test_cae_log_file_rotation(self, restore_app_env, sys_argv_app_key_restore):
         log_file = 'test_cae_rot_log.log'
@@ -50,7 +50,6 @@ class TestAeLogging:
             for idx in range(MAX_NUM_LOG_FILES + 9):
                 for line_no in range(16):     # full loop is creating 1 kb of log entries (16 * 64 bytes)
                     cae.po("TestCaeLogEntry{: >26}{: >26}".format(idx, line_no))
-            cae.log_file_check()
             cae.init_logging()      # close log file
             assert os.path.exists(log_file)
         finally:
@@ -72,10 +71,79 @@ class TestAeLogging:
             sys.argv = [sys_argv_app_key_restore, ]
             file_name_chk = cae.get_opt('logFile')   # get_opt() has to be called at least once for to create log file
             assert file_name_chk == log_file
-            cae.log_file_check()
             assert os.path.exists(log_file)
         finally:
             assert delete_files(log_file) == 1
+
+    def test_sub_app_logging(self, restore_app_env):
+        log_file = 'test_sub_app_logging.log'
+        tst_out = 'print-out to log file'
+        mp = "MAIN_"  # main/sub-app prefixes for log file names and print-outs
+        sp = "SUB__"
+        try:
+            app = ConsoleApp('test_main_app')
+            app.init_logging(log_file_name=mp + log_file)
+            sub = SubApp('test_sub_app', app_name=sp)
+            sub.init_logging(log_file_name=sp + log_file)
+            po(mp + tst_out + "_1")
+            app.po(mp + tst_out + "_2")
+            sub.po(sp + tst_out)
+            sub.init_logging()
+            app.init_logging()  # close log file
+            # NOT WORKING: capsys.readouterr() returning empty strings
+            # out, err = capsys.readouterr()
+            # assert out.count(tst_out) == 3 and err == ""
+            assert os.path.exists(mp + log_file)
+            assert os.path.exists(sp + log_file)
+        finally:
+            contents = delete_files(sp + log_file, ret_type='contents')
+            assert len(contents)
+            assert mp + tst_out + "_1" in contents[0]
+            assert mp + tst_out + "_2" in contents[0]
+            assert sp + tst_out in contents[0]
+            contents = delete_files(mp + log_file, ret_type='contents')
+            assert len(contents)
+            assert mp + tst_out + "_1" in contents[0]
+            assert mp + tst_out + "_2" in contents[0]
+            assert sp + tst_out not in contents[0]
+
+    def test_threaded_sub_app_logging(self, restore_app_env):
+        def sub_app_po():
+            nonlocal sub
+            sub = SubApp('test_sub_app_thread', app_name=sp)
+            sub.init_logging(log_file_name=sp + log_file)
+            sub.po(sp + tst_out)
+
+        log_file = 'test_threaded_sub_app_logging.log'
+        tst_out = 'print-out to log file'
+        mp = "MAIN_"  # main/sub-app prefixes for log file names and print-outs
+        sp = "SUB__"
+        try:
+            app = ConsoleApp('test_main_app_thread', app_name=mp, multi_threading=True)
+            app.init_logging(log_file_name=mp + log_file)
+            sub = None
+            sub_thread = threading.Thread(target=sub_app_po)
+            sub_thread.start()
+            while not sub or not sub._log_file_stream and not sub._log_buf_stream:
+                pass  # wait until sub-thread has called init_logging()
+            po(mp + tst_out + "_1")
+            app.po(mp + tst_out + "_2")
+            sub.init_logging()  # close sub-app log file
+            sub_thread.join()
+            app.init_logging()  # close main-app log file
+            assert os.path.exists(sp + log_file)
+            assert os.path.exists(mp + log_file)
+        finally:
+            contents = delete_files(sp + log_file, ret_type='contents')
+            assert len(contents)
+            assert mp + tst_out + "_1" in contents[0]
+            assert mp + tst_out + "_2" in contents[0]
+            assert sp + tst_out in contents[0]
+            contents = delete_files(mp + log_file, ret_type='contents')
+            assert len(contents)
+            assert mp + tst_out + "_1" in contents[0]
+            assert mp + tst_out + "_2" in contents[0]
+            assert sp + tst_out not in contents[0]
 
     def test_exception_log_file_flush(self, restore_app_env):
         cae = ConsoleApp('test_exception_log_file_flush')

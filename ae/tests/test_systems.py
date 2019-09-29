@@ -112,6 +112,7 @@ class TestSystem:
         assert s.disconnect() == ''
         assert s.conn_error == ''
 
+    def test_connect_error(self):
         s = System(SX, SYS_CREDENTIALS, DBG_LEVEL_DISABLED, DBG_LEVEL_VERBOSE, features=SYS_FEATURES)
         assert s.connect(connector_failure_mock, app_name=APP_NAME, debug_level=DBG_LEVEL_VERBOSE) == 'ConnectError'
         assert s.conn_error == 'ConnectError'
