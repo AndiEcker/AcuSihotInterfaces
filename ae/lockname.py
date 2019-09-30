@@ -2,6 +2,36 @@
 simple usable threading locks
 =============================
 
+Named locks are used in multi-threaded applications and based on the python threading lock classes
+:class:`threading.Lock` and :class:`threading.RLock`. The advantage of the named locks in contrary
+to python threading locks is that a lock don't need to create and store a reference of a python
+threading lock object - the :class:`NamedLocks` does this automatically for your application and
+does keep track of all the named locks of your application in its class variables.
+
+So a named lock get exclusively identified only by an unique string. And for to create other
+blocking locks you only need a reference to the :class:`NamedLocks` class.
+
+Named locks are very useful e.g. if you want to lock a certain record of database table. For this
+you simply create a new instance of the :class:`NamedLocks` class and as unique string you can use
+the table name followed by the primary key of the record to lock::
+
+    named_lock = NamedLocks()
+    if named_lock.acquire(table_name + primary_key)
+
+        ...     # locked database transaction code goes here
+
+        named_lock.release(table_name + primary_key)
+
+If now any other process of your application want to lock the same record (same table name and primary
+key) then it will be blocked until the process that acquired this named lock first is releasing the
+table record lock.
+
+Alternatively and especially if your application want to create multiple named locks you can use the
+class :class:`NamedLocks` as a context manager, passing all the named lock strings to the constructor::
+
+    with NamedLocks(table_name1 + primary_key1, table_name2 + primary_key2, ...):
+        ...     # locked database transaction
+
 """
 import threading
 from typing import Dict, Union
@@ -24,6 +54,13 @@ class NamedLocks:
     active_lock_counters: Dict[str, int] = dict()                               #: lock counters for reentrant locks
 
     def __init__(self, *lock_names: str, reentrant_locks: bool = True, sys_lock: bool = False):
+        """ prepare new named lock(s).
+
+        :param lock_names:          unique lock strings to be prepared for to be locked by :meth:`.__enter__`.
+        :param reentrant_locks:     pass False to use non-reentrant locks (True=reentrant locks).
+        :param sys_lock:            pass True to prepare system lock (works for several independent applications).
+                                    CURRENTLY NOT IMPLEMENTED.
+        """
         self._lock_names = lock_names
         self._lock_class = threading.RLock if reentrant_locks else threading.Lock
         assert not sys_lock, "sys_lock is currently not implemented"
@@ -35,7 +72,7 @@ class NamedLocks:
         self.dpo("NamedLocks.__init__", lock_names)
 
     def __enter__(self):
-        """ context enter method. """
+        """ locking context enter method. """
         self.dpo("NamedLocks.__enter__")
         for lock_name in self._lock_names:
             self.dpo("NamedLocks.__enter__ b4 acquire ", lock_name)
@@ -43,7 +80,7 @@ class NamedLocks:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """ context exit method. """
+        """ locking context exit method. """
         self.dpo("NamedLocks __exit__", exc_type, exc_val, exc_tb)
         for lock_name in self._lock_names:
             self.dpo("NamedLocks.__exit__ b4 release ", lock_name)
@@ -59,8 +96,10 @@ class NamedLocks:
         """ acquire the named lock specified by the `lock_name` argument.
 
         :param lock_name:   name of the lock to acquire.
-        :param args:        args that will be passed to the acquire method of the underlying RLock/Lock instance.
-        :param kwargs:      kwargs that will be passed to the acquire method of the underlying RLock/Lock instance.
+        :param args:        args that will be passed to the acquire method of the underlying :class:`~threading.RLock`
+                            / :class:`~threading.Lock` classes instance.
+        :param kwargs:      kwargs that will be passed to the acquire method of the underlying :class:`~threading.RLock`
+                            / :class:`~threading.Lock` classes instance.
         :return:            True if named lock got acquired successfully, else False.
         """
         self.dpo("NamedLocks.acquire", lock_name, 'START')

@@ -245,10 +245,11 @@ class Literal:
             ret = literal                                                   # list/dict/tuple/str/... literal
         return func, ret
 
-    def _chk_val_reset_else_set_type(self, value: Any):
+    def _chk_val_reset_else_set_type(self, value: Any) -> Any:
         """ reset and return passed value if is None, else determine value type and set type (if not already set).
 
         :param value:       just converted new literal value for to be checked and if ok used to set an unset type.
+        :return:            passed value or the stored literal/value if passed value is None.
         """
         if value is None:
             value = self._literal_or_value  # literal evaluation failed, then reset to try with type conversion

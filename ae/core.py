@@ -782,7 +782,9 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
               app: Optional['AppBase'] = None, **kwargs) -> None:
     """ universal/unbreakable print function - replacement for the :func:`built-in python function print() <print>`.
 
-    :param objects:             tuple of objects to be printed.
+    :param objects:             tuple of objects to be printed. If the first object is a string that
+                                starts with a \\\\r character then the print-out will be only sent
+                                to the standard output (and will not be added to any active log files).
     :param sep:                 separator character between each printed object/string (def=" ").
     :param end:                 finalizing character added to the end of this print-out (def="\\\\n").
                                 Pass \\\\r for to suppress the print-out into :ref:`ae log file <ae-log-file>`
@@ -806,7 +808,7 @@ def print_out(*objects, sep: str = " ", end: str = "\n", file: Optional[TextIO] 
 
     This function has an alias named :func:`.po`.
     """
-    processing = end == "\r"
+    processing = end == "\r" or (objects and str(objects[0]).startswith('\r'))  # True if called by Progress.next()
     enc = (file or ori_std_out if processing else sys.stdout).encoding
     use_py_logger = False
 

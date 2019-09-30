@@ -1,6 +1,52 @@
 """
-simplify display of progress for long running operations
-========================================================
+Progress Of Long Running Processes
+==================================
+
+This module is simplifying the display of progress messages for long running processes on
+the command console/shell of your OS.
+
+
+Basic Usage
+-----------
+
+For to display the progress of a long running process at your console/shell you first have to
+create an instance of the :class:`Progress` class. The first argument that need to be specified
+in this instantiation is the instance of your application class (either :class:`~ae.core.AppBase`,
+:class:`~ae.core.SubApp` or :class:`~ae.console.ConsoleApp`). Additionally the number of items
+to be processed in the long running process could be specified with the :paramref:`~Progress.total_count`
+keyword argument::
+
+    progress = Progress(app, total_count=number_of_items_to_be_processed)
+
+Then your process has to call the :meth:`~Progress.next` method for each processed item of your
+long running process. And if the process is finished you can request to print an end-message by
+calling the :meth:`~Progress.finished` method of your :class:`Progress` instance::
+
+    while process_is_not_finished:
+        progress.next()
+    progress.finished()
+
+The above code snippets are printing a start message to your console at the instantiation of :class:`Progress`.
+Then every call of the method :meth:`~Progress.next` will print the next message and finally the method
+:meth:`~Progress.finished` will print an end message onto your console when the long running process
+is finished.
+
+
+Individual Message Templates
+----------------------------
+
+
+Message Template Placeholders
+-----------------------------
+.
+start message   : {run_counter} {total_count}
+
+
+Integrated Error Notification
+-----------------------------
+
+
+
 
 """
 from ae.core import AppBase, _logger
@@ -16,16 +62,24 @@ class Progress:
             end_msg: str = "Finished processing of {total_count} having {err_counter} failures:{err_msg}",
             err_msg: str = "{err_counter} errors on processing {total_count} items, current={run_counter}:{err_msg}",
             nothing_to_do_msg: str = ''):
-        """
+        """ prepare print-outs for a new progress (long running process with incrementing or decrementing item counter).
 
-        :param app_base:
-        :param start_counter:
-        :param total_count:
-        :param start_msg:
-        :param next_msg:            default next message, built only if next_msg is empty string and is not None.
-        :param end_msg:
-        :param err_msg:
-        :param nothing_to_do_msg:
+        :param app_base:            instance of an application class.
+        :param start_counter:       decrementing counter (until zero is reached) if :paramref:`~Progress.total_count`
+                                    got not passed or got passed with a value of zero or below zero.
+                                    start counter value of an incrementing counter if you passed the number of
+                                    items to the argument :paramref:`~Progress.total_count`.
+        :param total_count:         number of items that will be processed with an incrementing counter.
+        :param start_msg:           optional start message template with placeholders.
+        :param next_msg:            optional next message - if an empty string get passed then a default message
+                                    will be provided with placeholders - pass None if you want to suppress the
+                                    print-out of a next message.
+        :param end_msg:             end message template with placeholders, pass None if you want to suppress the
+                                    print-out of an end message (in this case only a new line will be printed).
+        :param err_msg:             error message template with placeholders.
+        :param nothing_to_do_msg:   optional message template printed-out if the values of the two arguments
+                                    :paramref:`~Progress.start_counter` and :paramref:`~Progress.total_count` are
+                                    less or equal to zero.
         """
         self.app_base: AppBase = app_base   #: reference to the used :class:`core.AppBase` instance
         if next_msg == "":
@@ -45,7 +99,7 @@ class Progress:
         self._total_count = start_counter
         self._delta = -1
         if total_count > 0:  # incrementing run_counter
-            self._run_counter = 0
+            self._run_counter = start_counter
             self._total_count = total_count
             self._delta = 1
         elif start_counter <= 0:
@@ -68,10 +122,10 @@ class Progress:
         if error_msg:
             self._err_counter += 1
 
+        params = dict(run_counter=self._run_counter, total_count=self._total_count,
+                      err_counter=self._err_counter, err_msg=error_msg, processed_id=processed_id)
         if error_msg and self._err_msg:
-            self.app_base.po(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                  err_counter=self._err_counter, err_msg=error_msg,
-                                                  processed_id=processed_id), logger=_logger)
+            self.app_base.po(self._err_msg.format(**params), logger=_logger)
 
         if not next_msg:
             next_msg = self._next_msg
@@ -81,9 +135,7 @@ class Progress:
             # when-writing-carriage-return-to-a-pycharm-console-the-whole-line-is-deleted
             # .. po('   ', pend, end='\r', flush=True)
             next_msg = '\r' + next_msg
-            self.app_base.po(next_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                             err_counter=self._err_counter, err_msg=error_msg,
-                                             processed_id=processed_id), logger=_logger)
+            self.app_base.po(next_msg.format(**params), logger=_logger)
 
     def finished(self, error_msg: str = ''):
         """ display end of processing for the current item.
