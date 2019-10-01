@@ -124,7 +124,7 @@ class TestAeLogging:
             sub = None
             sub_thread = threading.Thread(target=sub_app_po)
             sub_thread.start()
-            while not sub or not sub._log_file_stream and not sub._log_buf_stream:
+            while not sub or not sub.active_log_stream:
                 pass  # wait until sub-thread has called init_logging()
             po(mp + tst_out + "_1")
             app.po(mp + tst_out + "_2")

@@ -232,6 +232,7 @@ from io import StringIO
 from string import ascii_letters, digits
 from typing import Any, AnyStr, Callable, Generator, Dict, Optional, TextIO, Tuple, Union
 
+
 DATE_TIME_ISO: str = '%Y-%m-%d %H:%M:%S.%f'     #: ISO string format for datetime values in config files/variables
 DATE_ISO: str = '%Y-%m-%d'                      #: ISO string format for date values in config files/variables
 
@@ -1120,7 +1121,20 @@ class AppBase:
         self.shutdown(exit_code=None)
 
     @property
-    def app_key(self):
+    def active_log_stream(self) -> Optional[Union[StringIO, TextIO]]:
+        """ check if ae logging is active and if yes then return the currently used log stream.
+
+        :return:        log file or buf stream if logging is activated, else None.
+        """
+        with log_file_lock:
+            return self._log_file_stream or self._log_buf_stream
+
+    @property
+    def app_key(self) -> str:
+        """ determine the key of this application class instance.
+
+        :return:        application key string.
+        """
         return self.app_name + APP_KEY_SEP + self.sys_env_id
 
     def init_logging(self, py_logging_params: Optional[Dict[str, Any]] = None, log_file_name: str = "",
@@ -1200,7 +1214,7 @@ class AppBase:
         """
         old_stream = new_stream = None
         with log_file_lock:
-            if self._log_file_stream is not None:
+            if self._log_file_stream:
                 old_stream = self._log_file_stream
                 self._log_file_stream.seek(0, 2)  # due to non-posix-compliant Windows feature
                 if self._log_file_stream.tell() >= self._log_file_size_max * 1024 * 1024:

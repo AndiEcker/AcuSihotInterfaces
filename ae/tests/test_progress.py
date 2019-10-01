@@ -61,7 +61,7 @@ class TestProgress:
     def test_next_and_err_msg_placeholders(self, capsys, restore_app_env):
         msg = "next_msg_text"
         erm = "err_msg_text"
-        phm = "{run_counter} of {total_count} {err_counter} errs {err_msg}"
+        phm = "{processed_id}: {run_counter} of {total_count} {err_counter} errs {err_msg}"
         cae = ConsoleApp("test_progress_next_msg")
         progress = Progress(cae, next_msg=msg + phm, err_msg=erm + phm)
         progress.next(error_msg="error message init in Progress.__init__")

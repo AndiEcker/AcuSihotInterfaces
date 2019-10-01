@@ -2,15 +2,15 @@
 string literal type detection and evaluation
 ============================================
 
-Value literals entered e.g. by the users of your application or which are stored in a
-:ref:`configuration file <config-files>` representing a value that can be dynamically
-detected and evaluated at application run-time.
+String literals are e.g. entered by a user of your application at the console as command-line-argument
+or are stored in a :ref:`configuration file <config-files>`. A string literal is representing a value,
+which gets dynamically detected and evaluated at run-time by an instance of the :class:`Literal` class.
 
-The :class:`Literal` class provided by this module allows your application to support
-the handling of any literals that can be converted via the python functions :func:`eval`
-or :func:`exec` (respective :func:`~ae.core.exec_with_return`) into a value.
+The :class:`Literal` class declared in this module allows your application to support
+the handling of any string literals that can be converted into a value via the python functions
+:func:`eval` or :func:`exec` (respective :func:`~ae.core.exec_with_return`).
 
-A :ref:`evaluable literal <evaluable-literal-formats>` can be passed either
+A :ref:`evaluable string literal <evaluable-literal-formats>` can be passed either
 on instantiation through the first (the :paramref:`~Literal.literal_or_value`) argument
 of the :class:`Literal` class::
 
@@ -23,7 +23,7 @@ or alternatively you could also set the :ref:`evaluable literal string
     date_literal = Literal()
     date_literal.value = '(datetime.date.today())'
 
-The value literal of the last two examples have to be enclosed in round brackets
+The string literal of the last two examples has to be enclosed in round brackets
 for to mark it as a :ref:`evaluable string literal <evaluable-literal-formats>`.
 If you instead want to specify a date format literal string then you also have
 to specify the value type like so:
@@ -34,9 +34,9 @@ As soon as you request the date value from the last three `date_literal` example
 the :attr:`~Literal.value` property getter, the representing/underlying value will be
 evaluated and returned::
 
-   literal_value: datetime.date = date_literal.value
+   literal_value = date_literal.value
 
-Also for to restrict a :class:`Literal` instance to a certain/fixed type you can specify
+For to restrict a :class:`Literal` instance to a certain/fixed type you can specify
 this type/class on instantiation within the :paramref:`~Literal.value_type` argument::
 
     int_literal = Literal(value_type=int)
@@ -44,13 +44,14 @@ this type/class on instantiation within the :paramref:`~Literal.value_type` argu
     date_literal = Literal(value_type=datetime.date)
 
 The :attr:`~Literal.value` property getter of a :class:`Literal` instance with an applied
-type restricting will try to convert the value literal to this type: string literals
-will be evaluated and if the result has not the correct type, then the getter tries the
-value conversion with the constructor of the type class. If this fails too then it will
+type restricting will try to convert the string literal to a value of the specified type.
+If the evaluation result has not the correct type, then the getter tries the
+value conversion with the constructor of the given type class. If this fails too then it will
 raise a ValueError exception::
 
+    date_literal = Literal(value_type=datetime.date)
     date_literal.value = "invalid-date-literal"
-    date_value = date_literal.value             # raises ValueError
+    date_value = date_literal.value             # value getter raises ValueError
 
 The supported literal formats for :ref:`evaluable string literals <evaluable-literal-formats>`
 are documented at the :attr:`~Literal.value` property.

@@ -81,7 +81,7 @@ class Progress:
                                     :paramref:`~Progress.start_counter` and :paramref:`~Progress.total_count` are
                                     less or equal to zero.
         """
-        self.app_base: AppBase = app_base   #: reference to the used :class:`core.AppBase` instance
+        self.app_base: AppBase = app_base   #: reference attribute to the used :class:`core.AppBase` instance
         if next_msg == "":
             next_msg = "Processing '{processed_id}': " + \
                        ("left" if start_counter > 0 and total_count == 0 else "item") + \
@@ -122,8 +122,8 @@ class Progress:
         if error_msg:
             self._err_counter += 1
 
-        params = dict(run_counter=self._run_counter, total_count=self._total_count,
-                      err_counter=self._err_counter, err_msg=error_msg, processed_id=processed_id)
+        params = dict(run_counter=self._run_counter, total_count=self._total_count, processed_id=processed_id,
+                      err_counter=self._err_counter, err_msg=error_msg)
         if error_msg and self._err_msg:
             self.app_base.po(self._err_msg.format(**params), logger=_logger)
 
@@ -137,21 +137,26 @@ class Progress:
             next_msg = '\r' + next_msg
             self.app_base.po(next_msg.format(**params), logger=_logger)
 
-    def finished(self, error_msg: str = ''):
+    def finished(self, processed_id: str = '', error_msg: str = ''):
         """ display end of processing for the current item.
 
-        :param error_msg:   optional error message to display if current items produced any error.
+        :param processed_id:    id(s) of the next item (to be displayed on console/logging output).
+        :param error_msg:       optional error message to display if current items produced any error.
         """
         if error_msg and self._err_msg:
-            self.app_base.po(self._err_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                                  err_counter=self._err_counter, err_msg=error_msg), logger=_logger)
+            self.app_base.po(self._err_msg.format(
+                run_counter=self._run_counter, total_count=self._total_count, processed_id=processed_id,
+                err_counter=self._err_counter, err_msg=error_msg),
+                             logger=_logger)
         self.app_base.po(self.get_end_message(error_msg=error_msg), logger=_logger)
 
-    def get_end_message(self, error_msg: str = '') -> str:
+    def get_end_message(self, processed_id: str = '', error_msg: str = '') -> str:
         """ determine message text for finishing the currently processed item.
 
-        :param error_msg:   optional error message to display if current items produced any error.
-        :return:            message text for to display.
+        :param processed_id:    id(s) of the next item (to be displayed on console/logging output).
+        :param error_msg:       optional error message to display if current items produced any error.
+        :return:                message text for to display.
         """
-        return self._end_msg.format(run_counter=self._run_counter, total_count=self._total_count,
-                                    err_counter=self._err_counter, err_msg=error_msg)
+        return self._end_msg.format(
+            run_counter=self._run_counter, total_count=self._total_count, processed_id=processed_id,
+            err_counter=self._err_counter, err_msg=error_msg)
