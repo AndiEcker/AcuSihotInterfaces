@@ -6,6 +6,7 @@ application environment taking care of your python application |version|
 * pure python
 * no external dependencies
 * fully typed (:pep:`526`)
+* namespace package (:pep:`420`)
 * fully :ref:`documented <ae-modules>`
 * 100 % test coverage
 * multi thread save

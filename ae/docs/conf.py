@@ -12,15 +12,17 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../..'))
+from setup import __version__
+
+sys.path.insert(0, os.path.abspath('..'))
 
 
 # -- Project information -----------------------------------------------------
 
-project = 'application environment for python'
-copyright = '2019, Andi Ecker'
+project = 'python application environment'
+# copyright = '2019, Andi Ecker'
 author = 'Andi Ecker'
-
+version = __version__
 
 # -- General configuration ---------------------------------------------------
 
@@ -30,18 +32,17 @@ author = 'Andi Ecker'
 extensions = [
     # 'sphinx.ext.autodoc',     # automatically added by autosummary
     'sphinx.ext.autosummary',
-    'sphinx.ext.viewcode',      # include package module source code
+    'sphinx.ext.viewcode',  # include package module source code
     'sphinx.ext.intersphinx',
     # typehints extension does that already so no need to also include 'sphinx_autodoc_annotation',
     'sphinx_autodoc_typehints',
     # 'sphinx.ext.coverage',
-    'sphinx.ext.graphviz',
+    # 'sphinx.ext.graphviz',
     'sphinx_rtd_theme',
     'sphinx_paramlinks',
 ]
 
-
-# -- autodoc/automodule config
+# -- autodoc config
 autodoc_default_options = {
     'members': True,
     'member-order': 'bysource',
@@ -72,13 +73,12 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/' + '.'.join(map(str, sys.version_info[0:2])), None)
 }
 
-
 # -- Options for HTML output -------------------------------------------------º
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'     # 'alabaster'
+html_theme = 'sphinx_rtd_theme'  # 'alabaster'
 
 # NEXT TWO VARIABLES TAKEN FROM https://github.com/romanvm/sphinx_tutorial/blob/master/docs/conf.py
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -88,7 +88,7 @@ html_theme = 'sphinx_rtd_theme'     # 'alabaster'
 if html_theme == 'alabaster':
     html_theme_options = {
         'github_button': True,
-        'github_type': 'star&v=2',      # use v2 button
+        'github_type': 'star&v=2',  # use v2 button
         'github_user': 'AndiEcker',
         'github_repo': 'ae',
         'github_banner': True,
@@ -112,7 +112,6 @@ elif html_theme == 'sphinx_rtd_theme':
         'prev_next_buttons_location': 'both',
         'style_external_links': False,
     }
-
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

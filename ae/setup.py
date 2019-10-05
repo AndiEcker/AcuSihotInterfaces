@@ -1,5 +1,9 @@
 import setuptools
 
+
+__version__ = "0.0.1"
+
+
 with open("README.md") as fh:
     long_description = fh.read()
 
@@ -9,22 +13,24 @@ docs_require = [
     'sphinx_rtd_theme',     # since Sphinx 1.4 no longer integrated (like alabaster)
     'sphinx_paramlinks',
     # typehints extension does that already so no need to also include 'sphinx-autodoc-annotation',
-    ]
-tests_require = ['pytest']
-""" additional debian/ubuntu OS installations:
-- sudo apt-get install graphviz
-"""
+]
+
+tests_require = [
+    'pytest',
+    'pytest-cov',
+]
 
 if __name__ == "__main__":
     setuptools.setup(
-        name="ae",
-        version="0.0.1",
-        author="Andreas Ecker",
+        name="ae",              # pip install name (not the import package name)
+        version=__version__,
+        author="Andi Ecker",
         author_email="aecker2@gmail.com",
-        description="core modules of application environment for python",
+        description="core modules of python application environment namespace package",
         long_description=long_description,
         long_description_content_type="text/markdown",
-        url="https://github.com/AndiEcker/ae",
+        url="https://gitlab.com/ae-group/ae",
+        namespace_packages=['ae'],
         # packages=setuptools.find_packages(),
         packages=setuptools.find_namespace_packages(include=['ae.*']),  # find all namespace packages
         python_requires=">=3.6",

@@ -219,6 +219,7 @@ to change (and re-build) your application code.
 import ast
 import copy
 import datetime
+import faulthandler
 import inspect
 import logging
 import logging.config
@@ -369,7 +370,7 @@ def correct_phone(phone, changed=False, removed=None, keep_1st_hyphen=False):
     :param removed:         (optional) list declared by caller for to pass back all the removed characters including
                             the index in the format "<index>:<removed_character(s)>".
     :param keep_1st_hyphen: (optional, def=False) pass True for to keep at least the first occurring hyphen character.
-    :return:                tuple of (possibly corrected phone number, flag if phone got changed/corrected)
+    :return:                tuple of (possibly corrected phone number, flag if phone got changed/corrected).
     """
 
     if phone is None:
@@ -406,32 +407,26 @@ def exec_with_return(code_block, glo_vars: Optional[dict] = None, loc_vars: Opti
     :param loc_vars:        optional locals() available in the code execution.
     :return:                value of the expression at the last code line or None if last code line is no expression.
     """
-    def convert_expr(expr):
-        expr.lineno = 0
-        expr.col_offset = 0
-        result = ast.Expression(expr.value, lineno=0, col_offset=0)
-
-        return result
-
     if glo_vars is None:
         glo_vars = globals()
     if loc_vars is None:
         loc_vars = locals()
 
     code_ast = ast.parse(code_block)
-
     init_ast = copy.deepcopy(code_ast)
     init_ast.body = code_ast.body[:-1]
-
     last_ast = copy.deepcopy(code_ast)
     last_ast.body = code_ast.body[-1:]
 
     exec(compile(init_ast, "<ast>", "exec"), glo_vars, loc_vars)
     last_line = last_ast.body[0]
-    if type(last_line) != ast.Expr:
-        exec(compile(last_ast, "<ast>", "exec"), glo_vars, loc_vars)
-    else:
-        return eval(compile(convert_expr(last_line), "<ast>", "eval"), glo_vars, loc_vars)
+    if type(last_line) == ast.Expr:
+        last_line.lineno = 0
+        last_line.col_offset = 0
+        result = ast.Expression(last_line.value, lineno=0, col_offset=0)
+        return eval(compile(result, "<ast>", "eval"), glo_vars, loc_vars)
+
+    exec(compile(last_ast, "<ast>", "exec"), glo_vars, loc_vars)
 
 
 def force_encoding(text: AnyStr, encoding: str = DEF_ENCODING, errors: str = DEF_ENCODE_ERRORS) -> str:
@@ -953,7 +948,7 @@ def _shut_down_sub_app_instances(timeout: Optional[float] = None):
 
 
 class _PrintingReplicator:
-    """ replacement of standard/error stream for to replicate print-outs to all active logging streams (log files/bufs).
+    """ replacement of standard/error stream replicating print-outs to all active logging streams (log files/buffers).
     """
     def __init__(self, sys_out_obj: TextIO = ori_std_out) -> None:
         """ initialise a new T-stream-object
@@ -973,14 +968,9 @@ class _PrintingReplicator:
         app_streams = list()
         with log_file_lock, app_inst_lock:
             for app in list(_app_instances.values()):
-                # noinspection PyProtectedMember
-                if app._log_buf_stream:
-                    # noinspection PyProtectedMember
-                    app_streams.append((app, app._log_buf_stream))
-                elif app._log_file_stream:
-                    app.log_file_check()  # check log file rotation (if yes then switch to new app._log_file_stream)
-                    # noinspection PyProtectedMember
-                    app_streams.append((app, app._log_file_stream))
+                stream = app.log_file_check(app.active_log_stream)  # check if log rotation or buf-to-file-switch needed
+                if stream:
+                    app_streams.append((app, stream))
             if not self.sys_out_obj.closed:
                 app_streams.append((main_app_instance(), self.sys_out_obj))
 
@@ -1026,7 +1016,7 @@ def _join_app_threads(timeout: Optional[float] = None):
     main_thread = threading.current_thread()
     for t in list(_app_threads.values()):     # threading.enumerate() also includes PyCharm/pytest threads
         if t is not main_thread:
-            po(f"  **  joining thread ident <{t.ident: >6}> name={t.getName()}", logger=_logger)
+            po(f"  **  joining thread id <{t.ident: >6}> name={t.getName()}", logger=_logger)
             t.join(timeout)
             _app_threads.pop(t.ident)
     _deactivate_multi_threading()
@@ -1079,14 +1069,14 @@ class AppBase:
             datetime.datetime.now()                             #: begin of app startup datetime
 
         self._app_args = sys.argv                               #: initial sys.args value
-        path_fnam_ext = self._app_args[0]
-        app_fnam = os.path.basename(path_fnam_ext)
-        self._app_path: str = os.path.dirname(path_fnam_ext)    #: path to folder of your main app code file
+        path_name_ext = self._app_args[0]
+        app_file_name = os.path.basename(path_name_ext)
+        self._app_path: str = os.path.dirname(path_name_ext)    #: path to folder of your main app code file
 
         if not app_title:
             app_title = stack_var('__doc__')
         if not app_name:
-            app_name = os.path.splitext(app_fnam)[0]
+            app_name = os.path.splitext(app_file_name)[0]
         if not app_version:
             app_version = stack_var('__version__')
 
@@ -1169,7 +1159,7 @@ class AppBase:
         The line prefix consists of (depending on the individual values of either a module variable or of an
         attribute this app instance):
 
-        * :data:`_multi_threading_activated`: if True then the thread ident gets printed surrounded with
+        * :data:`_multi_threading_activated`: if True then the thread id gets printed surrounded with
           angle brackets (< and >), right aligned and space padded to minimal 6 characters.
         * :attr:`sys_env_id`: if not empty then printed surrounded with curly brackets ({ and }), left aligned
           and space padded to minimal 4 characters.
@@ -1273,14 +1263,14 @@ class AppBase:
         if self._shut_down:
             return
         aqc_kwargs = dict(blocking=False) if timeout is None else dict(timeout=timeout)
-        is_main_instance = main_app_instance() is self
-        force = is_main_instance and exit_code      # prevent deadlock on app error exit/shutdown
+        is_main_app_instance = main_app_instance() is self
+        force = is_main_app_instance and exit_code      # prevent deadlock on app error exit/shutdown
 
         if exit_code is not None:
             self.po(f"####  Shutdown............  {exit_code if force else ''} {timeout}", logger=_logger)
 
         a_blocked = (False if force else app_inst_lock.acquire(**aqc_kwargs))
-        if is_main_instance:
+        if is_main_app_instance:
             _shut_down_sub_app_instances(timeout=timeout)
             if _multi_threading_activated:
                 _join_app_threads(timeout=timeout)
@@ -1310,7 +1300,7 @@ class AppBase:
         if a_blocked:
             app_inst_lock.release()
         self._shut_down = True
-        if is_main_instance and exit_code is not None:
+        if is_main_app_instance and exit_code is not None:
             sys.exit(exit_code)
 
     def _std_out_err_redirection(self, redirect: bool):
@@ -1319,6 +1309,7 @@ class AppBase:
         :param redirect:    pass True to enable or False to disable the redirection.
         """
         global ori_std_out, ori_std_err
+        is_main_app_instance = main_app_instance() is self
         if redirect:
             if not isinstance(sys.stdout, _PrintingReplicator):  # sys.stdout==ori_std_out not works with pytest/capsys
                 if not self.suppress_stdout:
@@ -1330,9 +1321,14 @@ class AppBase:
                 sys.stdout = _PrintingReplicator(sys_out_obj=std_out)
                 sys.stderr = _PrintingReplicator(sys_out_obj=ori_std_err)
         else:
-            if main_app_instance() is self:
+            if is_main_app_instance:
                 sys.stderr = ori_std_err
                 sys.stdout = ori_std_out
+
+        if is_main_app_instance or redirect:
+            faulthandler.enable(file=sys.stdout)
+        elif is_main_app_instance and not redirect and faulthandler.is_enabled():
+            faulthandler.disable()
 
     def _append_eof_and_flush_file(self, stream_file: TextIO, stream_name: str):
         """ add special end-of-file marker and flush the internal buffers to the file stream.
