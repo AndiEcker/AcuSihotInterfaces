@@ -234,6 +234,9 @@ from string import ascii_letters, digits
 from typing import Any, AnyStr, Callable, Generator, Dict, Optional, TextIO, Tuple, Union
 
 
+__version__ = '0.0.1'                           #: actual version of this package/module
+
+
 DATE_TIME_ISO: str = '%Y-%m-%d %H:%M:%S.%f'     #: ISO string format for datetime values in config files/variables
 DATE_ISO: str = '%Y-%m-%d'                      #: ISO string format for date values in config files/variables
 

@@ -10,19 +10,15 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-import os
 import sys
-from setup import __version__
-
-sys.path.insert(0, os.path.abspath('..'))
-
+from ae.setup import package_name, package_version
 
 # -- Project information -----------------------------------------------------
 
 project = 'python application environment'
 # copyright = '2019, Andi Ecker'
 author = 'Andi Ecker'
-version = __version__
+version = package_version
 
 # -- General configuration ---------------------------------------------------
 
@@ -41,6 +37,8 @@ extensions = [
     'sphinx_rtd_theme',
     'sphinx_paramlinks',
 ]
+if package_name == 'ae_sys_data':
+    extensions.append('sphinx.ext.graphviz')
 
 # -- autodoc config
 autodoc_default_options = {
@@ -87,11 +85,11 @@ html_theme = 'sphinx_rtd_theme'  # 'alabaster'
 # alabaster theme options - DON'T WORK WITH sphinx_rtd_theme!!!
 if html_theme == 'alabaster':
     html_theme_options = {
-        'github_button': True,
-        'github_type': 'star&v=2',  # use v2 button
-        'github_user': 'AndiEcker',
-        'github_repo': 'ae',
-        'github_banner': True,
+        'gitlab_button': True,
+        'gitlab_type': 'star&v=2',  # use v2 button
+        'gitlab_user': 'AndiEcker',
+        'gitlab_repo': package_name,
+        'gitlab_banner': True,
     }
 
     # Custom sidebar templates, maps document names to template names.
