@@ -1,4 +1,4 @@
-from shif import *
+from ae.shif import *
 
 
 class TestResToSihot:

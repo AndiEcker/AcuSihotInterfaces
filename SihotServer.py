@@ -51,7 +51,7 @@ from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE, field_name_idx_path
 from ae.console import ConsoleApp
 from sfif import field_from_converters
-from shif import ResSender
+from ae.shif import ResSender
 from ass_sys_data import add_ass_options, init_ass_data
 
 

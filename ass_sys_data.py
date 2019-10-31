@@ -17,10 +17,10 @@ from ae_notification.notification import add_notification_options, init_notifica
 from acif import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient
 from sfif import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
                   sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal)
-from sxmlif import AvailCatInfo
-from shif import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
-                  ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ShInterface, SH_CLIENT_MAP, ClientToSihot,
-                  SH_RES_MAP, ResToSihot, ClientFetch)
+from ae.sxmlif import AvailCatInfo
+from ae.shif import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
+                     ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ShInterface, SH_CLIENT_MAP, ClientToSihot,
+                     SH_RES_MAP, ResToSihot, ClientFetch)
 
 
 '''

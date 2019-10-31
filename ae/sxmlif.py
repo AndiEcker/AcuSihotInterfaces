@@ -6,9 +6,14 @@ import re
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from sys_data_ids import (SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING)
 from ae.core import DATE_ISO, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, round_traditional
 from ae_tcp.tcp import TcpClient
+
+from sys_data_ids import (SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING)
+
+
+__version__ = '0.0.1'
+
 
 # latin1 (synonym to ISO-8859-1) doesn't have the Euro-symbol
 # .. so we use ISO-8859-15 instead ?!?!? (see

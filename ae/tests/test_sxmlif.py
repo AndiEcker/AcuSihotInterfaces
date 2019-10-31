@@ -1,7 +1,7 @@
 import datetime
 # import pytest
 
-from sxmlif import SihotXmlParser, ResResponse, SihotXmlBuilder
+from ae.sxmlif import SihotXmlParser, ResResponse, SihotXmlBuilder
 
 
 class TestAvailCats:

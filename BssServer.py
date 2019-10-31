@@ -35,8 +35,8 @@ from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import Record, FAD_ONTO
 from ae.console import ConsoleApp
 from ae_tcp.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
-from sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
-from shif import client_data, ResFetch
+from ae.sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
+from ae.shif import client_data, ResFetch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '2.3'

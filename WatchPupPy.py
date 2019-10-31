@@ -38,8 +38,8 @@ from ae.core import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERB
                      full_stack_trace, parse_date, sys_env_text)
 from ae.console import ConsoleApp, MAIN_SECTION_DEF
 from ae.progress import Progress
-from sxmlif import PostMessage
-from shif import ClientSearch
+from ae.sxmlif import PostMessage
+from ae.shif import ClientSearch
 from ass_sys_data import add_ass_options, init_ass_data
 
 

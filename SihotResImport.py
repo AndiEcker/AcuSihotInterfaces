@@ -25,22 +25,25 @@ import json
 import csv
 from traceback import format_exc
 
+from ae.core import DEBUG_LEVEL_VERBOSE, force_encoding, full_stack_trace, parse_date
+from ae.console import ConsoleApp
+from ae.progress import Progress
+from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
+from ae.shif import add_sh_options, ClientToSihot, ResSender
+
+from ae_db.db import bind_var_prefix
+from ae_notification.notification import add_notification_options, init_notification
+from acif import add_ac_options, ACU_RES_MAP, from_field_indexes
+from sfif import add_sf_options
+from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
+
 from sys_data_ids import (FORE_SURNAME_SEP,
                           SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
                           SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES,
                           SDI_ACU)
-from ae.core import DEBUG_LEVEL_VERBOSE, force_encoding, full_stack_trace, parse_date
-from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
-from ae_db.db import bind_var_prefix
-from ae.console import ConsoleApp
-from ae.progress import Progress
-from ae_notification.notification import add_notification_options, init_notification
-from acif import add_ac_options, ACU_RES_MAP, from_field_indexes
-from sfif import add_sf_options
-from shif import add_sh_options, ClientToSihot, ResSender
-from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
 __version__ = '1.2'
+
 
 cae = ConsoleApp("Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])

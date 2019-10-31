@@ -24,9 +24,9 @@ from ae.progress import Progress
 from ae_notification.notification import add_notification_options, init_notification
 from ae.sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
 
-from sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
+from ae.sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
 from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
-from shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
+from ae.shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
 from ass_sys_data import AssSysData
 
 __version__ = '1.3'

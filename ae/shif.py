@@ -7,16 +7,20 @@ from textwrap import wrap
 import pprint
 from typing import Union, Tuple
 
-from sys_data_ids import (SDI_SH, FORE_SURNAME_SEP,
-                          SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
-                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
 from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, full_stack_trace, parse_date
 from ae.sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
                          FAT_IDX, FAD_FROM, FAD_ONTO, LIST_TYPES, ALL_FIELDS, CALLABLE_SUFFIX,
-                         Record, Records, Value, current_index, compose_current_index, set_current_index,
+                         Record, Records, Value, get_current_index, compose_current_index, set_current_index,
                          field_name_idx_path)
-from sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
-                    SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
+from ae.sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
+                       SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
+
+from sys_data_ids import (SDI_SH, FORE_SURNAME_SEP,
+                          SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
+                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
+
+__version__ = '0.0.1'
+
 
 SH_DATE_FORMAT = DATE_ISO
 
@@ -1265,7 +1269,7 @@ class FldMapXmlBuilder(SihotXmlBuilder):
                 inner_xml += self.new_tag(tag[1:], opening=False) + "\n"
                 indent -= 1
                 if recs:
-                    if current_index(recs) >= len(recs) - 1:
+                    if get_current_index(recs) >= len(recs) - 1:
                         recs = None
                     else:
                         set_current_index(recs, add=1)

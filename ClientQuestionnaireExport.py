@@ -18,8 +18,8 @@ from traceback import print_exc
 
 from ae.console import ConsoleApp
 from ae.core import try_eval
-from shif import ResSearch, SH_DATE_FORMAT
-from shif import add_sh_options, print_sh_options
+from ae.shif import ResSearch, SH_DATE_FORMAT
+from ae.shif import add_sh_options, print_sh_options
 
 
 __version__ = '0.2'

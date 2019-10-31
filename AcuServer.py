@@ -18,8 +18,8 @@ from ae_notification.notification import add_notification_options, init_notifica
 from ae_db.db import OraDB
 from ae_tcp.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
 from acif import add_ac_options, AcumenClient
-from sxmlif import Request, RoomChange, SihotXmlBuilder
-from shif import add_sh_options, ClientFromSihot
+from ae.sxmlif import Request, RoomChange, SihotXmlBuilder
+from ae.shif import add_sh_options, ClientFromSihot
 
 __version__ = '0.7'
 

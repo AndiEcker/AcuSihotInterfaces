@@ -7,7 +7,7 @@ from acif import ACU_CLIENT_MAP
 from ae.sys_data import Record, FAD_ONTO, Records
 
 from sfif import SF_RES_MAP, SF_CLIENT_MAPS
-from shif import res_search, client_data, ResFetch, SH_CLIENT_MAP
+from ae.shif import res_search, client_data, ResFetch, SH_CLIENT_MAP
 from ass_sys_data import AssSysData, ASS_CLIENT_MAP
 from sys_data_ids import SDI_ASS, SDI_SF
 

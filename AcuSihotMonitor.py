@@ -22,9 +22,9 @@ from traceback import print_exc
 from sys_data_ids import SDF_SH_CLIENT_PORT, SDI_ACU
 from ae.core import DATE_ISO, DEBUG_LEVEL_VERBOSE, parse_date
 from ae.console import ConsoleApp
-from sxmlif import PostMessage, ConfigDict, CatRooms
+from ae.sxmlif import PostMessage, ConfigDict, CatRooms
 from acif import AcumenRes, AcuServer
-from shif import ResSearch
+from ae.shif import ResSearch
 from ass_sys_data import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.4'

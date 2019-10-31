@@ -8,8 +8,8 @@ from ae.core import DEBUG_LEVEL_ENABLED
 from ae_db.db import OraDB
 from ae.sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
     string_to_records
-from shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
-from sxmlif import SihotXmlBuilder
+from ae.shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
+from ae.sxmlif import SihotXmlBuilder
 from sys_data_ids import SDI_ACU
 
 ACU_DEF_USR = 'SIHOT_INTERFACE'

@@ -4,9 +4,9 @@ from sys_data_ids import SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SD
 from ae.core import DEBUG_LEVEL_VERBOSE
 from ae.console import ConsoleApp
 from ae.progress import Progress
-from sxmlif import SihotXmlBuilder, ResResponse
+from ae.sxmlif import SihotXmlBuilder, ResResponse
 from acif import add_ac_options, AcuResToSihot
-from shif import add_sh_options, ResFetch, ResSearch
+from ae.shif import add_sh_options, ResFetch, ResSearch
 
 __version__ = '0.3'
 
