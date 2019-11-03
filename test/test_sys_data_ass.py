@@ -3,14 +3,14 @@ import datetime
 # import pytest
 
 # from sys_data_ids import CLIENT_REC_TYPE_ID_OWNERS
-from acif import ACU_CLIENT_MAP
+# special client record type ids: CLIENT_REC_TYPE_ID_OWNERS = '012w0000000MSyZAAW'  # 15 digit ID == 012w0000000MSyZ
+
+from sys_data_acu import ACU_CLIENT_MAP
 from ae.sys_data import Record, FAD_ONTO, Records
 
-from sfif import SF_RES_MAP, SF_CLIENT_MAPS
-from ae.shif import res_search, client_data, ResFetch, SH_CLIENT_MAP
-from ass_sys_data import AssSysData, ASS_CLIENT_MAP
-from sys_data_ids import SDI_ASS, SDI_SF
-
+from sys_data_sf import SF_RES_MAP, SF_CLIENT_MAPS, SDI_SF
+from ae.sys_data_sh import res_search, client_data, ResFetch, SH_CLIENT_MAP
+from sys_data_ass import AssSysData, ASS_CLIENT_MAP, SDI_ASS
 
 cl_test_rec = Record(fields=dict(AssId=None, AcuId='T000369', SfId='', ShId='', RciId="1234-67890",
                                  Surname="Tester-Surname", Forename="Tester-Forename",
@@ -40,8 +40,8 @@ res_test_rec = Record(fields=dict(AssId='', AcuId='T963369', SfId='', ShId='',
                                   ResSource='', ResGroupNo='', ResMktGroupNN='',
                                   ResAdults=1, ResChildren=1,
                                   ResBoard=res_board,
-                                  ResNote="test_ass_sys_data res_test_rec ResNote",
-                                  ResLongNote="test_ass_sys_data res_test_rec ResLongNote",
+                                  ResNote="test_sys_data_ass res_test_rec ResNote",
+                                  ResLongNote="test_sys_data_ass res_test_rec ResLongNote",
                                   ResCheckIn=None, ResCheckOut=None,
                                   ResVoucherNo='',
                                   ResBooked=None,
@@ -66,15 +66,15 @@ res_test_rec = Record(fields=dict(AssId='', AcuId='T963369', SfId='', ShId='',
                                   ))
 
 
-def test_tmp(console_app_env, ass_sys_data):
-    asd = ass_sys_data
+def test_tmp(console_app_env, sys_data_ass):
+    asd = sys_data_ass
 
     print(asd)
 
 
 class TestSysDataClientActions:
-    def test_acu_clients_compare(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_acu_clients_compare(self, sys_data_ass):
+        asd = sys_data_ass
         assert not asd.clients
         # needs 3 minutes because full T_CD fetch:
         # .. asd.acu_clients_pull(filter_records=lambda r: len(r.val('ExtRefs')) < 69)
@@ -93,8 +93,8 @@ class TestSysDataClientActions:
         assert repr(acc) == repr(asd.clients)
         assert repr(acc) == repr(recs)
 
-    def test_acu_clients_push_with_ext_refs(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_acu_clients_push_with_ext_refs(self, sys_data_ass):
+        asd = sys_data_ass
         rec = cl_test_rec.copy(deepness=-1)
 
         asd.clients.append(rec)
@@ -117,8 +117,8 @@ class TestSysDataClientActions:
         # will always be False because asd.clients has more fields than in Sihot:
         # assert repr(recs) == repr(asd.clients)
 
-    def test_ass_clients_pull_count(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_ass_clients_pull_count(self, sys_data_ass):
+        asd = sys_data_ass
         assert not asd.clients
         asd.ass_clients_pull(filter_records=lambda r: r.val('AssId') > 69)
         assert not asd.error_message
@@ -139,8 +139,8 @@ class TestSysDataClientActions:
         assert not asd.error_message
         assert cnt == len(asd.clients)
 
-    def test_ass_clients_pull_field_col_names(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_ass_clients_pull_field_col_names(self, sys_data_ass):
+        asd = sys_data_ass
         assert not asd.clients
         asd.ass_clients_pull(col_names=['cl_pk', 'cl_ac_id', 'cl_sh_id', 'cl_phone', 'cl_email'],
                              filter_records=lambda r: r.val('AssId') > 69)
@@ -161,8 +161,8 @@ class TestSysDataClientActions:
             assert rec.val('AssId')
             assert not rec.val('Surname')
 
-    def test_ass_clients_push_count_equal(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_ass_clients_push_count_equal(self, sys_data_ass):
+        asd = sys_data_ass
         assert not asd.clients
         asd.ass_clients_pull(filter_records=lambda r: r.val('AssId') > 69,
                              field_names=['AssId', 'AcuId', 'ShId', 'Phone', 'Email'])
@@ -187,8 +187,8 @@ class TestSysDataClientActions:
         assert repr(acc) == repr(asd.clients)
         assert repr(acc) == repr(recs)
 
-    def test_ass_clients_push_after_pull_from_acu(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_ass_clients_push_after_pull_from_acu(self, sys_data_ass):
+        asd = sys_data_ass
         assert not asd.clients
         # needs 3 minutes because full T_CD fetch:
         # .. asd.acu_clients_pull(filter_records=lambda r: len(r.val('ExtRefs')) < 69)
@@ -229,8 +229,8 @@ class TestSysDataClientActions:
         assert ass_conn.get_row_count() == cnt
         '''
 
-    def test_ass_clients_compare_match_fields_default(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_ass_clients_compare_match_fields_default(self, sys_data_ass):
+        asd = sys_data_ass
         assert not asd.clients
         asd.ass_clients_pull(col_names=['cl_pk', 'cl_ac_id', 'cl_sh_id', 'cl_phone', 'cl_email'],
                              filter_records=lambda r: r.val('AssId') > 69)
@@ -251,8 +251,8 @@ class TestSysDataClientActions:
         assert len(recs) == cnt == len(asd.clients)
         assert not dif
 
-    def test_ass_clients_push_with_ext_refs(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_ass_clients_push_with_ext_refs(self, sys_data_ass):
+        asd = sys_data_ass
         rec = cl_test_rec.copy(deepness=-1)
 
         asd.clients.append(rec)
@@ -271,8 +271,8 @@ class TestSysDataClientActions:
         # the following assert will always fail because asd.clients has much more fields than AssCache.clients:
         # assert repr(recs) == repr(asd.clients)
 
-    def test_sf_clients_push_with_ext_refs(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_sf_clients_push_with_ext_refs(self, sys_data_ass):
+        asd = sys_data_ass
         rec = cl_test_rec.copy(deepness=-1)
 
         asd.clients.append(rec)
@@ -297,8 +297,8 @@ class TestSysDataClientActions:
         print(repr(recs))
         print(repr(asd.clients))
 
-    def test_sh_clients_push_with_ext_refs(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_sh_clients_push_with_ext_refs(self, sys_data_ass):
+        asd = sys_data_ass
         rec = cl_test_rec.copy(deepness=-1)
 
         asd.clients.append(rec)
@@ -326,8 +326,8 @@ class TestSysDataClientActions:
 class TestSysDataResActions:
     """ implementation of acu_reservation_push is missing
 
-    def test_acu_res_compare(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_acu_res_compare(self, sys_data_ass):
+        asd = sys_data_ass
 
         rec = res_test_rec.copy(deepness=-1)
         asd.reservations.append(rec)
@@ -361,8 +361,8 @@ class TestSysDataResActions:
         assert not dif
     """
 
-    def test_ass_res_compare(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_ass_res_compare(self, sys_data_ass):
+        asd = sys_data_ass
 
         # first need to be pushed/created within Sihot, because AssCache.res_groups needs non-empty ResObjId/rgr_obj_id
         r = res_test_rec.copy(deepness=-1)
@@ -417,8 +417,8 @@ class TestSysDataResActions:
         print(dif)
         assert not dif
 
-    def test_sf_res_compare(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_sf_res_compare(self, sys_data_ass):
+        asd = sys_data_ass
 
         # first need to be pushed/created within Sihot, because SF needs non-empty ResId/ResSubId
         r = res_test_rec.copy(deepness=-1)
@@ -471,8 +471,8 @@ class TestSysDataResActions:
         print(dif)
         assert not dif
 
-    def test_sh_res_compare(self, ass_sys_data):
-        asd = ass_sys_data
+    def test_sh_res_compare(self, sys_data_ass):
+        asd = sys_data_ass
 
         rec = res_test_rec.copy(deepness=-1)
         asd.reservations.append(rec)
@@ -622,145 +622,145 @@ class TestAssSysDataSh:
 
 
 class TestAssSysDataAvailRoomsSep14:
-    def test_avail_rooms_for_all_hotels_and_cats(self, ass_sys_data):    # SLOW (22 s)
-        assert ass_sys_data.sh_avail_rooms(day=datetime.date(2017, 9, 14)) == 164  # 165 before Feb2018, 164 after PMA
+    def test_avail_rooms_for_all_hotels_and_cats(self, sys_data_ass):    # SLOW (22 s)
+        assert sys_data_ass.sh_avail_rooms(day=datetime.date(2017, 9, 14)) == 164  # 165 before Feb2018, 164 after PMA
 
-    def test_avail_rooms_for_bhc_and_all_cats(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], day=datetime.date(2017, 9, 14)) == 20
+    def test_avail_rooms_for_bhc_and_all_cats(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], day=datetime.date(2017, 9, 14)) == 20
 
-    def test_avail_rooms_for_pbc_and_all_cats(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['4'], day=datetime.date(2017, 9, 14)) == 53
+    def test_avail_rooms_for_pbc_and_all_cats(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['4'], day=datetime.date(2017, 9, 14)) == 53
 
-    def test_avail_rooms_for_bhc_pbc_and_all_cats(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1', '4'], day=datetime.date(2017, 9, 14)) == 73
+    def test_avail_rooms_for_bhc_pbc_and_all_cats(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1', '4'], day=datetime.date(2017, 9, 14)) == 73
 
-    def test_avail_studios_for_all_hotels(self, ass_sys_data):   # SLOW (22 s)
-        assert ass_sys_data.sh_avail_rooms(room_cat_prefix="S", day=datetime.date(2017, 9, 14)) == 17
+    def test_avail_studios_for_all_hotels(self, sys_data_ass):   # SLOW (22 s)
+        assert sys_data_ass.sh_avail_rooms(room_cat_prefix="S", day=datetime.date(2017, 9, 14)) == 17
 
-    def test_avail_studios_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="S", day=datetime.date(2017, 9, 14)) == 8
+    def test_avail_studios_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="S", day=datetime.date(2017, 9, 14)) == 8
 
-    def test_avail_1bed_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="1", day=datetime.date(2017, 9, 14)) == 4
+    def test_avail_1bed_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="1", day=datetime.date(2017, 9, 14)) == 4
 
-    def test_avail_1bed_junior_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="1J", day=datetime.date(2017, 9, 14)) == 3
+    def test_avail_1bed_junior_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="1J", day=datetime.date(2017, 9, 14)) == 3
 
-    def test_avail_2bed_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="2", day=datetime.date(2017, 9, 14)) == 7
+    def test_avail_2bed_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="2", day=datetime.date(2017, 9, 14)) == 7
 
-    def test_avail_3bed_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="3", day=datetime.date(2017, 9, 14)) == 1
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="3BPS", day=datetime.date(2017, 9, 14)) == 1
+    def test_avail_3bed_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="3", day=datetime.date(2017, 9, 14)) == 1
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="3BPS", day=datetime.date(2017, 9, 14)) == 1
 
 
 class TestAssSysDataAvailRoomsSep15:
-    def test_avail_rooms_for_all_hotels_and_cats(self, ass_sys_data):    # SLOW (22 s)
-        assert ass_sys_data.sh_avail_rooms(day=datetime.date(2017, 9, 15)) == 99  # 99 before Feb2018, 100/99 after PMA
+    def test_avail_rooms_for_all_hotels_and_cats(self, sys_data_ass):    # SLOW (22 s)
+        assert sys_data_ass.sh_avail_rooms(day=datetime.date(2017, 9, 15)) == 99  # 99 before Feb2018, 100/99 after PMA
 
-    def test_avail_rooms_for_bhc_and_all_cats(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], day=datetime.date(2017, 9, 15)) == 20
+    def test_avail_rooms_for_bhc_and_all_cats(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], day=datetime.date(2017, 9, 15)) == 20
 
-    def test_avail_rooms_for_pbc_and_all_cats(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['4'], day=datetime.date(2017, 9, 15)) == 34
+    def test_avail_rooms_for_pbc_and_all_cats(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['4'], day=datetime.date(2017, 9, 15)) == 34
 
-    def test_avail_rooms_for_bhc_pbc_and_all_cats(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1', '4'], day=datetime.date(2017, 9, 15)) == 54
+    def test_avail_rooms_for_bhc_pbc_and_all_cats(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1', '4'], day=datetime.date(2017, 9, 15)) == 54
 
-    def test_avail_studios_for_all_hotels(self, ass_sys_data):   # SLOW (24 s)
-        assert ass_sys_data.sh_avail_rooms(room_cat_prefix="S", day=datetime.date(2017, 9, 15)) == 23
+    def test_avail_studios_for_all_hotels(self, sys_data_ass):   # SLOW (24 s)
+        assert sys_data_ass.sh_avail_rooms(room_cat_prefix="S", day=datetime.date(2017, 9, 15)) == 23
 
-    def test_avail_studios_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="S", day=datetime.date(2017, 9, 15)) == 11
+    def test_avail_studios_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="S", day=datetime.date(2017, 9, 15)) == 11
 
-    def test_avail_1bed_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="1", day=datetime.date(2017, 9, 15)) == 2
+    def test_avail_1bed_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="1", day=datetime.date(2017, 9, 15)) == 2
 
-    def test_avail_1bed_junior_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="1J", day=datetime.date(2017, 9, 15)) == 1
+    def test_avail_1bed_junior_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="1J", day=datetime.date(2017, 9, 15)) == 1
 
-    def test_avail_2bed_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="2", day=datetime.date(2017, 9, 15)) == 6
+    def test_avail_2bed_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="2", day=datetime.date(2017, 9, 15)) == 6
 
-    def test_avail_3bed_for_bhc(self, ass_sys_data):
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="3", day=datetime.date(2017, 9, 15)) == 1
-        assert ass_sys_data.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="3BPS", day=datetime.date(2017, 9, 15)) == 1
+    def test_avail_3bed_for_bhc(self, sys_data_ass):
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="3", day=datetime.date(2017, 9, 15)) == 1
+        assert sys_data_ass.sh_avail_rooms(hotel_ids=['1'], room_cat_prefix="3BPS", day=datetime.date(2017, 9, 15)) == 1
 
 
 class TestAssSysDataCountRes:
-    def test_count_res_sep14_for_any_and_all_cats(self, ass_sys_data):   # SLOW (22 s)
-        assert ass_sys_data.sh_count_res(hotel_ids=['999'], day=datetime.date(2017, 9, 14)) == 20
+    def test_count_res_sep14_for_any_and_all_cats(self, sys_data_ass):   # SLOW (22 s)
+        assert sys_data_ass.sh_count_res(hotel_ids=['999'], day=datetime.date(2017, 9, 14)) == 20
 
-    def test_count_res_sep14_for_any_and_stdo_cats(self, ass_sys_data):  # SLOW (21 s)
-        asd = ass_sys_data
+    def test_count_res_sep14_for_any_and_stdo_cats(self, sys_data_ass):  # SLOW (21 s)
+        asd = sys_data_ass
         assert asd.sh_count_res(hotel_ids=['999'], room_cat_prefix="STDO", day=datetime.date(2017, 9, 14)) == 16
 
-    def test_count_res_sep14_for_any_and_1jnr_cats(self, ass_sys_data):  # SLOW (22 s)
-        assert ass_sys_data.sh_count_res(hotel_ids=['999'], room_cat_prefix="1JNR", day=datetime.date(2017, 9, 14)) == 4
+    def test_count_res_sep14_for_any_and_1jnr_cats(self, sys_data_ass):  # SLOW (22 s)
+        assert sys_data_ass.sh_count_res(hotel_ids=['999'], room_cat_prefix="1JNR", day=datetime.date(2017, 9, 14)) == 4
 
     # too slow - needs minimum 6 minutes
-    # def test_count_res_sep14_all_hotels_and_cats(self, ass_sys_data):
-    #     assert ass_sys_data.sh_count_res(day=datetime.date(2017, 9, 14)) == 906
+    # def test_count_res_sep14_all_hotels_and_cats(self, sys_data_ass):
+    #     assert sys_data_ass.sh_count_res(day=datetime.date(2017, 9, 14)) == 906
 
     # too slow - needs minimum 1:30 minutes (sometimes up to 9 minutes)
-    # def test_count_res_sep14_for_bhc_and_all_cats(self, ass_sys_data):
-    #    assert ass_sys_data.sh_count_res(hotel_ids=['1'], day=datetime.date(2017, 9, 14)) == 207  # 273 before Feb2018
+    # def test_count_res_sep14_for_bhc_and_all_cats(self, sys_data_ass):
+    #    assert sys_data_ass.sh_count_res(hotel_ids=['1'], day=datetime.date(2017, 9, 14)) == 207  # 273 before Feb2018
 
 
 class TestAssSysDataAptWkYr:
-    def test_apt_wk_yr(self, console_app_env, ass_sys_data):
+    def test_apt_wk_yr(self, console_app_env, sys_data_ass):
         console_app_env._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
         console_app_env._options['2019'] = '2019-01-04'
         r = Record(fields=dict(ResArrival=datetime.date(2018, 6, 1)))
-        assert ass_sys_data.sh_apt_wk_yr(r) == ('None-22', 2018)
+        assert sys_data_ass.sh_apt_wk_yr(r) == ('None-22', 2018)
 
         r = Record(fields=dict(ResArrival=datetime.date(2018, 6, 1), ResRoomNo='A'))
-        assert ass_sys_data.sh_apt_wk_yr(r) == ('A-22', 2018)
+        assert sys_data_ass.sh_apt_wk_yr(r) == ('A-22', 2018)
 
 
 class TestAssSysDataHotelData:
-    def test_cat_by_size(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size(None, None) is None
-        assert ass_sys_data.cat_by_size('', '') is None
-        assert ass_sys_data.cat_by_size('BHC', '') is None
-        assert ass_sys_data.cat_by_size('', '1 BED', allow_any=False) is None
-        assert ass_sys_data.cat_by_size('BHC', 'xxx') is None
-        assert ass_sys_data.cat_by_size('', '1 BED') == '1JNR'
-        assert ass_sys_data.cat_by_size('BHC', '1 BED') == '1JNR'
-        assert ass_sys_data.cat_by_size('1', '1 BED') == '1JNR'
-        assert ass_sys_data.cat_by_size('ANY', '') is None
-        assert ass_sys_data.cat_by_size('ANY', '', allow_any=False) is None
-        assert ass_sys_data.cat_by_size('ANY', '1 BED') == '1JNR'
-        assert ass_sys_data.cat_by_size('999', '1 BED') == '1JNR'
-        assert ass_sys_data.cat_by_size('ANY', '1 BED', allow_any=False) == '1JNR'
-        assert ass_sys_data.cat_by_size('999', '1 BED', allow_any=False) == '1JNR'
-        assert ass_sys_data.cat_by_size('xxx', '1 BED') == '1JNR'
-        assert ass_sys_data.cat_by_size('xxx', '1 BED', allow_any=False) is None
+    def test_cat_by_size(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size(None, None) is None
+        assert sys_data_ass.cat_by_size('', '') is None
+        assert sys_data_ass.cat_by_size('BHC', '') is None
+        assert sys_data_ass.cat_by_size('', '1 BED', allow_any=False) is None
+        assert sys_data_ass.cat_by_size('BHC', 'xxx') is None
+        assert sys_data_ass.cat_by_size('', '1 BED') == '1JNR'
+        assert sys_data_ass.cat_by_size('BHC', '1 BED') == '1JNR'
+        assert sys_data_ass.cat_by_size('1', '1 BED') == '1JNR'
+        assert sys_data_ass.cat_by_size('ANY', '') is None
+        assert sys_data_ass.cat_by_size('ANY', '', allow_any=False) is None
+        assert sys_data_ass.cat_by_size('ANY', '1 BED') == '1JNR'
+        assert sys_data_ass.cat_by_size('999', '1 BED') == '1JNR'
+        assert sys_data_ass.cat_by_size('ANY', '1 BED', allow_any=False) == '1JNR'
+        assert sys_data_ass.cat_by_size('999', '1 BED', allow_any=False) == '1JNR'
+        assert sys_data_ass.cat_by_size('xxx', '1 BED') == '1JNR'
+        assert sys_data_ass.cat_by_size('xxx', '1 BED', allow_any=False) is None
 
-    def test_cat_by_room(self, ass_sys_data):
-        assert ass_sys_data.cat_by_room(None) is None
-        assert ass_sys_data.cat_by_room('') is None
-        assert ass_sys_data.cat_by_room('131') == '1JNP'
-        assert ass_sys_data.cat_by_room('0131') == '1JNP'
+    def test_cat_by_room(self, sys_data_ass):
+        assert sys_data_ass.cat_by_room(None) is None
+        assert sys_data_ass.cat_by_room('') is None
+        assert sys_data_ass.cat_by_room('131') == '1JNP'
+        assert sys_data_ass.cat_by_room('0131') == '1JNP'
 
-    def test_ho_id_list(self, ass_sys_data):
-        assert len(ass_sys_data.ho_id_list())
-        assert '1' in ass_sys_data.ho_id_list()
-        assert '999' in ass_sys_data.ho_id_list()
-        assert '1' in ass_sys_data.ho_id_list(acu_rs_codes=['BHC'])
-        assert '999' in ass_sys_data.ho_id_list(acu_rs_codes=['ANY'])
-        assert '1' not in ass_sys_data.ho_id_list(acu_rs_codes=['ANY'])
-        assert '999' not in ass_sys_data.ho_id_list(acu_rs_codes=[])
-        assert '999' not in ass_sys_data.ho_id_list(acu_rs_codes=['BHC'])
-        assert '999' not in ass_sys_data.ho_id_list(acu_rs_codes=['xxx'])
+    def test_ho_id_list(self, sys_data_ass):
+        assert len(sys_data_ass.ho_id_list())
+        assert '1' in sys_data_ass.ho_id_list()
+        assert '999' in sys_data_ass.ho_id_list()
+        assert '1' in sys_data_ass.ho_id_list(acu_rs_codes=['BHC'])
+        assert '999' in sys_data_ass.ho_id_list(acu_rs_codes=['ANY'])
+        assert '1' not in sys_data_ass.ho_id_list(acu_rs_codes=['ANY'])
+        assert '999' not in sys_data_ass.ho_id_list(acu_rs_codes=[])
+        assert '999' not in sys_data_ass.ho_id_list(acu_rs_codes=['BHC'])
+        assert '999' not in sys_data_ass.ho_id_list(acu_rs_codes=['xxx'])
 
 
 class TestRciHelpers:
-    def test_rci_arr_to_year_week(self, console_app_env, ass_sys_data):
+    def test_rci_arr_to_year_week(self, console_app_env, sys_data_ass):
         console_app_env._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
         console_app_env._options['2019'] = '2019-01-04'
         d1 = datetime.date(2018, 6, 1)
-        assert ass_sys_data.rci_arr_to_year_week(d1) == (2018, 22)
+        assert sys_data_ass.rci_arr_to_year_week(d1) == (2018, 22)
 
 
 class RemoveThisPrefixForToTestSlowAssSysDataShIntegration:

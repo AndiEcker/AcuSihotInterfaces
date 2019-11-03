@@ -1,4 +1,4 @@
-# SIHOT high level interface (based on the low level interfaces provided by sxmlif)
+# SIHOT high level interface (based on the low level interfaces provided by sys_core_sh)
 import datetime
 import time
 from traceback import format_exc, print_exc
@@ -12,12 +12,12 @@ from ae.sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEA
                          FAT_IDX, FAD_FROM, FAD_ONTO, LIST_TYPES, ALL_FIELDS, CALLABLE_SUFFIX,
                          Record, Records, Value, get_current_index, compose_current_index, set_current_index,
                          field_name_idx_path)
-from ae.sxmlif import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
-                       SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE)
+from ae.sys_core_sh import (ResKernelGet, ResResponse, SihotXmlParser, SihotXmlBuilder,
+                            SXML_DEF_ENCODING, ERR_MESSAGE_PREFIX_CONTINUE, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT,
+                            SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING, SDF_SH_USE_KERNEL_FOR_CLIENT,
+                            SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_CLIENT_MAP, SDF_SH_RES_MAP)
 
-from sys_data_ids import (SDI_SH, FORE_SURNAME_SEP,
-                          SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
-                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_CLIENT_MAP, SDF_SH_USE_KERNEL_FOR_RES, SDF_SH_RES_MAP)
+from sys_data_ids import (FORE_SURNAME_SEP)
 
 __version__ = '0.0.1'
 
@@ -37,7 +37,7 @@ ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
 
 
-# default search field for external systems (used by shif.cl_field_data())
+# default search field for external systems (used by sys_data_sh.cl_field_data())
 SH_DEF_SEARCH_FIELD = 'ShId'
 
 

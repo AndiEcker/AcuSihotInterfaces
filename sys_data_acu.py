@@ -8,9 +8,11 @@ from ae.core import DEBUG_LEVEL_ENABLED
 from ae_db.db import OraDB
 from ae.sys_data import Records, ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
     string_to_records
-from ae.shif import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
-from ae.sxmlif import SihotXmlBuilder
-from sys_data_ids import SDI_ACU
+from ae.sys_data_sh import ClientToSihot, ResToSihot, ECM_TRY_AND_IGNORE_ERRORS, ECM_ENSURE_WITH_ERRORS, ECM_DO_NOT_SEND_CLIENT
+from ae.sys_core_sh import SihotXmlBuilder
+
+
+SDI_ACU = 'Acu'                             # Acumen Interfaces
 
 ACU_DEF_USR = 'SIHOT_INTERFACE'
 ACU_DEF_DSN = 'SP.TEST'

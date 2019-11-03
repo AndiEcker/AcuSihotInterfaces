@@ -1,5 +1,5 @@
 from ae.core import DEF_ENCODE_ERRORS
-from acif import ACU_DEF_USR, ACU_DEF_DSN
+from sys_data_acu import ACU_DEF_USR, ACU_DEF_DSN
 from ae.console import ConsoleApp
 from ae_db.db import OraDB
 

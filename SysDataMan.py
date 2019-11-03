@@ -5,7 +5,7 @@
     0.1     first beta.
     0.2     refactored using add_ass_options() and init_ass_data().
     0.3     renamed (from AssCacheSync) into SysDataMan, refactoring to use AssCache as fourth system, migration of
-            system data pull/push/compare actions onto ass_sys_data/ae_.sys_data module methods and refactoring/move of
+            system data pull/push/compare actions onto sys_data_ass/ae.sys_data module methods and refactoring/move of
             command line options filterRecords, filterFields, matchRecords and matchFields into the pull/push/compare
             command line options.
 """
@@ -13,15 +13,25 @@ import argparse
 import pprint
 from traceback import format_exc
 
-from sys_data_ids import (ALL_AVAILABLE_SYSTEMS, ALL_AVAILABLE_RECORD_TYPES,
-                          parse_system_option_args, strip_system_rec_type)
+from ae.sys_core_sh import SDI_SH
+from sys_data_sf import SDI_SF
+from sys_data_acu import SDI_ACU
 from ae.core import DEBUG_LEVEL_VERBOSE, try_eval
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console import ConsoleApp
 from ae_db.db import PostgresDB
-from ass_sys_data import add_ass_options, init_ass_data
+from sys_data_ass import add_ass_options, init_ass_data, SDI_ASS
 
 __version__ = '0.3'
+
+
+ALL_AVAILABLE_SYSTEMS = {SDI_ASS: 'AssCache', SDI_ACU: 'Acumen', SDI_SF: 'Salesforce', SDI_SH: 'Sihot'}
+SRT_ID_LEN = 1
+SRT_CLIENTS = 'C'
+SRT_RES_DATA = 'R'
+SRT_PRODUCTS = 'P'
+# SRT_RES_INV = 'I'
+ALL_AVAILABLE_RECORD_TYPES = {SRT_CLIENTS: 'Clients', SRT_RES_DATA: 'Reservations', SRT_PRODUCTS: 'Products'}
 
 PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
@@ -150,6 +160,33 @@ def parse_action_args(args_str, eval_kwargs=False):
         return system, rec_type, kwargs
 
     return system, rec_type
+
+
+def parse_system_option_args(args_str):
+    """
+    parse command line option string
+    :param args_str:    command line option string to be parsed.
+    :return:            system id, record type id and option arguments dict string
+    """
+    str_i = args_str.find('{')
+    if str_i >= 0:
+        arg_dict_str = args_str[str_i:]
+    else:
+        str_i = len(args_str)
+        arg_dict_str = ""
+    str_i -= SRT_ID_LEN
+    rec_type = args_str[str_i:str_i + SRT_ID_LEN]
+    system = args_str[:str_i]
+    if rec_type in ALL_AVAILABLE_RECORD_TYPES and system in ALL_AVAILABLE_SYSTEMS:
+        return system, rec_type, arg_dict_str
+    return None, None, None
+
+
+def strip_system_rec_type(opt_value):
+    system, rec_type, opt_args = parse_system_option_args(opt_value)
+    if system and rec_type:
+        opt_value = system + rec_type  # split off option args before checking allowed choices
+    return opt_value
 
 
 # parse action command line options

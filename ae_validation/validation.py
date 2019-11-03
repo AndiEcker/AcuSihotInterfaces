@@ -8,7 +8,7 @@ import time
 
 import requests
 
-# argument values for validate_flag_info() and sfif.py/SfInterface.clients_to_validate()
+# argument values for validate_flag_info() and sys_data_sf.py/SfInterface.clients_to_validate()
 EMAIL_DO_NOT_VALIDATE = ""
 EMAIL_NOT_VALIDATED = "NULL"
 EMAIL_INVALIDATED = "'0'"
@@ -157,7 +157,7 @@ def clients_to_validate(conn, filter_sf_clients='', filter_sf_rec_types=(),
     """
     query from Salesforce the clients that need to be validated
 
-    :param conn:                    Salesforce connection (SfInterface instance - see sfif.py).
+    :param conn:                    Salesforce connection (SfInterface instance - see sys_data_sf.py).
     :param filter_sf_clients:       extra salesforce SOQL where clause string for to filter clients.
     :param filter_sf_rec_types:     list of sf record type dev-names to be filtered (empty list will return all).
     :param email_validation:        email validation flag (see EMAIL_*).

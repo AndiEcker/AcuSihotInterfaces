@@ -34,7 +34,7 @@ class GenericDB:
     def __init__(self, credentials, features=None, app_name='ae.db-gen', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of generic database object (base class for real database like e.g. postgres or oracle).
-        :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
+        :param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
                             password and DSN=database name and optionally host address (separated with a @ character).
         :param features:    optional list of features (currently not used for databases).
         :param app_name:    application name (shown in the server DB session).
@@ -343,7 +343,7 @@ class OraDB(GenericDB):
     def __init__(self, credentials, features=None, app_name='ae.db-ora', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of oracle database object
-        :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
+        :param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
                             password and DSN=database name and optionally host address (separated with a @ character).
         :param features:    optional list of features (currently not used for databases).
         :param app_name:    application name (shown in the server DB session).
@@ -422,7 +422,7 @@ class PostgresDB(GenericDB):
     def __init__(self, credentials, features=None, app_name='ae.db-pg', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of postgres database object
-        :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
+        :param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
                             password, DSN=database name and optionally host address (separated with a @ character) and
                             SslArgs=dict of SSL arguments (sslmode, sslrootcert, sslcert, sslkey).
         :param features:    optional list of features (currently not used for databases).

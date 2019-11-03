@@ -1,7 +1,7 @@
 create or replace function SALES.EMAIL_CLEANED( p_email IN varchar2, p_2nd_line IN number := 0 )
   return varchar2
 is
-  -- invalid characters in our Acumen email addresses (full check done later by sfif.py/correct_email())
+  -- invalid characters in our Acumen email addresses (full check done later by sys_data_sf.py/correct_email())
   l_inval   varchar2(4000) := chr(10) || chr(13) || chr(9) || ' (),:;<>[\]';
   l_email   varchar2(4000);
   l_offset  number;

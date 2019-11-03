@@ -19,13 +19,12 @@ import datetime
 from functools import partial
 from traceback import print_exc
 
-from sys_data_ids import SDF_SH_CLIENT_PORT, SDI_ACU
 from ae.core import DATE_ISO, DEBUG_LEVEL_VERBOSE, parse_date
 from ae.console import ConsoleApp
-from ae.sxmlif import PostMessage, ConfigDict, CatRooms
-from acif import AcumenRes, AcuServer
-from ae.shif import ResSearch
-from ass_sys_data import add_ass_options, init_ass_data, AssSysData
+from ae.sys_core_sh import PostMessage, ConfigDict, CatRooms, SDF_SH_CLIENT_PORT
+from sys_data_acu import AcumenRes, AcuServer, SDI_ACU
+from ae.sys_data_sh import ResSearch
+from sys_data_ass import add_ass_options, init_ass_data, AssSysData
 
 __version__ = '0.4'
 

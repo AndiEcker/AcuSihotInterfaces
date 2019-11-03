@@ -4,7 +4,7 @@ from collections import OrderedDict
 from ae.core import DEBUG_LEVEL_VERBOSE
 from ae.console import ConsoleApp
 from simple_salesforce import Salesforce, SalesforceResourceNotFound
-from sfif import add_sf_options
+from sys_data_sf import add_sf_options
 
 __version__ = '0.2'
 

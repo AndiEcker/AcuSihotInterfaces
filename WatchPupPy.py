@@ -33,15 +33,15 @@ import datetime
 import subprocess
 from configparser import ConfigParser
 
-from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT)
+from sys_data_sf import SDI_SF
+from sys_data_acu import SDI_ACU
 from ae.core import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
                      full_stack_trace, parse_date, sys_env_text)
 from ae.console import ConsoleApp, MAIN_SECTION_DEF
 from ae.progress import Progress
-from ae.sxmlif import PostMessage
-from ae.shif import ClientSearch
-from ass_sys_data import add_ass_options, init_ass_data
-
+from ae.sys_core_sh import PostMessage, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT
+from ae.sys_data_sh import ClientSearch
+from sys_data_ass import add_ass_options, init_ass_data, SDI_ASS
 
 __version__ = '1.5'
 

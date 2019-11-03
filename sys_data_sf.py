@@ -7,10 +7,15 @@ from typing import Tuple, Dict, Any
 
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
-from sys_data_ids import SDF_SF_SANDBOX
 from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, parse_date, po
 from ae.sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
-from sys_data_ids import EXT_REF_TYPE_RCI, SDI_SF, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
+
+from sys_data_ids import EXT_REF_TYPE_RCI, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
+
+SDI_SF = 'Sf'                               # Salesforce Interfaces
+
+
+SDF_SF_SANDBOX = 'sfIsSandbox'
 
 # default client salesforce object (was 'Lead' changed to Person-'Account' within sys_data_generic branch)
 DEF_CLIENT_OBJ = 'Account'
@@ -21,7 +26,7 @@ SF_CLIENT_MAPS = \
     {'Account': (
         # ('AssCache_Id__pc', 'AssId'),
         ('AcumenClientRef__pc', 'AcuId'),
-        ('Id', 'SfId'),                      # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
+        ('Id', 'SfId'),                      # was Id but test_sys_data_sf.py needs lower case id, CHANGED BACK TO 'Id'
         ('SihotGuestObjId__pc', 'ShId'),
         ('LastName', 'Surname'),
         ('FirstName', 'Forename'),
@@ -44,7 +49,7 @@ SF_CLIENT_MAPS = \
      'Contact': (
          ('AssCache_Id__c', 'AssId'),
          ('AcumenClientRef__c', 'AcuId'),
-         ('Id', 'SfId'),  # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
+         ('Id', 'SfId'),  # was Id but test_sys_data_sf.py needs lower case id, CHANGED BACK TO 'Id'
          ('Sihot_Guest_Object_Id__c', 'ShId'),
          ('LastName', 'Surname'),
          ('FirstName', 'Forename'),
@@ -61,7 +66,7 @@ SF_CLIENT_MAPS = \
      'Lead': (
          ('AssCache_Id__c', 'AssId'),
          ('Acumen_Client_Reference__c', 'AcuId'),
-         ('Id', 'SfId'),  # was Id but test_sfif.py needs lower case id, CHANGED BACK TO 'Id'
+         ('Id', 'SfId'),  # was Id but test_sys_data_sf.py needs lower case id, CHANGED BACK TO 'Id'
          ('LastName', 'Surname'),
          ('FirstName', 'Forename'),
          ('DOB1__c', 'DOB', None, None,
@@ -139,7 +144,7 @@ MAP_RES_FROM_SF = (
 ID_PREFIX_OBJECTS = {'001': 'Account', '003': 'Contact', '00Q': 'Lead', '006': 'Opportunity'}
 
 
-# default search fields for external systems (used by sfif.cl_field_data())
+# default search fields for external systems (used by sys_data_sf.cl_field_data())
 SF_DEF_SEARCH_FIELD = 'SfId'
 
 
@@ -305,7 +310,7 @@ class SfInterface:
     def __init__(self, credentials, features=None, app_name='', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of generic database object (base class for real database like e.g. postgres or oracle).
-        :param credentials: dict with account credentials (SYS_CRED_ITEMS), including User=user name, Password=user
+        :param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
                             password and DSN=database name and optionally host address (separated with a @ character).
         :param features:    optional list of features (currently only used for SDF_SF_SANDBOX/'sfIsSandbox').
         :param app_name:    application name (shown in the server DB session).
@@ -678,7 +683,7 @@ class SfInterface:
         # check if Id passed in (then this method can determine the sf_obj and will do an update not an insert)
         sf_id, update_client = (rec.pop(SF_DEF_SEARCH_FIELD).val(), True) if rec.val(SF_DEF_SEARCH_FIELD) else \
             ('', False)
-        msg = " in SFIF.cl_upsert() {} rec=\n{}".format(ACTION_UPDATE if update_client else ACTION_INSERT, ppf(rec))
+        msg = f" in sys_data_sf.cl_upsert() {ACTION_UPDATE if update_client else ACTION_INSERT} rec=\n{ppf(rec)}"
 
         if sf_obj is None:
             if not sf_id:
@@ -859,17 +864,16 @@ class SfInterface:
         result = self.apex_call('reservation_upsert', function_args=sf_args)
 
         if dbg:
-            po("... sfif.res_upsert() err?={}; sent=\n{}, result=\n{}"
-                   .format(self.error_msg, ppf(sf_args), ppf(result)))
+            po(f"... sys_data_sf.res_upsert() err?={self.error_msg}; sent=\n{ppf(sf_args)}, result=\n{ppf(result)}")
 
         if result.get('ErrorMessage'):
             msg = ppf(result) if dbg else result.get('ErrorMessage')
-            self.error_msg += "sfif.res_upsert() received err=\n{} from SF; rec=\n{}".format(msg, ppf(cl_res_rec))
+            self.error_msg += f"sys_data_sf.res_upsert() received err=\n{msg} from SF; rec=\n{ppf(cl_res_rec)}"
         if not self.error_msg:
             if not cl_res_rec.val('ResSfId') and result.get('ReservationOpportunityId'):
                 cl_res_rec.set_val(result['ReservationOpportunityId'], 'ResSfId')
             elif cl_res_rec.val('ResSfId') != result.get('ReservationOpportunityId'):
-                msg = "sfif.res_upsert() ResSfId discrepancy; sent={} received={}; cl_res_rec=\n{}"\
+                msg = "sys_data_sf.res_upsert() ResSfId discrepancy; sent={} received={}; cl_res_rec=\n{}"\
                        .format(cl_res_rec.val('ResSfId'), result.get('ReservationOpportunityId'), ppf(cl_res_rec))
                 po(msg)
                 if dbg:
@@ -878,7 +882,7 @@ class SfInterface:
         return result.get('PersonAccountId'), result.get('ReservationOpportunityId'), self.error_msg
 
     def room_change(self, res_sf_id, check_in, check_out, next_room_id):
-        msg = "SFIF.room_change({}, {}, {}, {})".format(res_sf_id, check_in, check_out, next_room_id)
+        msg = "sys_data_sf.room_change({}, {}, {}, {})".format(res_sf_id, check_in, check_out, next_room_id)
         dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
 
         room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out,
@@ -937,7 +941,7 @@ class SfInterface:
 
     def occupants_upsert(self, res_sf_id, ho_id, res_id, sub_id, send_occ,
                          sf_fields=('PersSurname', 'PersForename', 'PersDOB', 'TypeOfPerson')):
-        msg = "SFIF.occupants_upsert({}, {}, {}, {}, {})".format(res_sf_id, ho_id, res_id, sub_id, send_occ)
+        msg = "sys_data_sf.occupants_upsert({}, {}, {}, {}, {})".format(res_sf_id, ho_id, res_id, sub_id, send_occ)
         dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
 
         sf_data = dict(ReservationOpportunityId=res_sf_id, HotelId__c=ho_id, Number__c=res_id, SubNumber__c=sub_id)

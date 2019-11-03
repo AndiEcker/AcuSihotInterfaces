@@ -1,9 +1,8 @@
 import pytest
 
-from sys_data_ids import SDI_ACU
 from ae.sys_data import FAD_FROM
-from ae.shif import ClientFromSihot, ResFromSihot
-from acif import AcuClientToSihot, AcuResToSihot, AcumenClient
+from ae.sys_data_sh import ClientFromSihot, ResFromSihot
+from sys_data_acu import AcuClientToSihot, AcuResToSihot, AcumenClient, SDI_ACU
 
 
 @pytest.fixture()

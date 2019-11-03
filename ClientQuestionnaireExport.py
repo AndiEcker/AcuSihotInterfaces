@@ -18,8 +18,8 @@ from traceback import print_exc
 
 from ae.console import ConsoleApp
 from ae.core import try_eval
-from ae.shif import ResSearch, SH_DATE_FORMAT
-from ae.shif import add_sh_options, print_sh_options
+from ae.sys_data_sh import ResSearch, SH_DATE_FORMAT
+from ae.sys_data_sh import add_sh_options, print_sh_options
 
 
 __version__ = '0.2'
@@ -89,7 +89,7 @@ elif date_from >= date_till:
     cae.shutdown(18)
 
 
-def get_hotel_and_res_id(res_rec):  # see also shif.py/hotel_and_res_id()
+def get_hotel_and_res_id(res_rec):  # see also sys_data_sh.py/hotel_and_res_id()
     h_id = res_rec['RES-HOTEL'].val()
     r_num = res_rec['RES-NR'].val()
     s_num = res_rec['SUB-NR'].val()

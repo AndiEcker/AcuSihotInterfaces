@@ -68,10 +68,10 @@ class TestTourOps:
         ret = client_search.client_id_by_matchcode(mc)      # TK rentals
         assert ret == obj_id                                # == '27'
 
-    def test_config_data_get_thomas_cook_agency(self, client_search, ass_sys_data):
-        mc = ass_sys_data.ro_agency_matchcode('TK')
+    def test_config_data_get_thomas_cook_agency(self, client_search, sys_data_ass):
+        mc = sys_data_ass.ro_agency_matchcode('TK')
         obj_id = client_search.client_id_by_matchcode(mc)
-        objid = str(ass_sys_data.ro_agency_objid('TK'))
+        objid = str(sys_data_ass.ro_agency_objid('TK'))
         assert obj_id == objid
 
     def test_get_thomas_cook_by_surname(self, client_search):
@@ -251,92 +251,92 @@ class TestSystem:
 
 
 class TestRoomCat:
-    def test_room_cat_bhc_studio(self, ass_sys_data):
-        assert ass_sys_data.cat_by_room('E102') == 'STDP'
-        assert ass_sys_data.cat_by_room('A103') == 'STDO'
-        assert ass_sys_data.cat_by_room('F206') == 'STDS'
+    def test_room_cat_bhc_studio(self, sys_data_ass):
+        assert sys_data_ass.cat_by_room('E102') == 'STDP'
+        assert sys_data_ass.cat_by_room('A103') == 'STDO'
+        assert sys_data_ass.cat_by_room('F206') == 'STDS'
 
-    def test_room_cat_bhc_1bed(self, ass_sys_data):
-        assert ass_sys_data.cat_by_room('A102') == '1JNR'
-        assert ass_sys_data.cat_by_room('A119') == '1JNR'   # '1JNS'
-        assert ass_sys_data.cat_by_room('E404') == '1DSS'
+    def test_room_cat_bhc_1bed(self, sys_data_ass):
+        assert sys_data_ass.cat_by_room('A102') == '1JNR'
+        assert sys_data_ass.cat_by_room('A119') == '1JNR'   # '1JNS'
+        assert sys_data_ass.cat_by_room('E404') == '1DSS'
 
-    def test_room_cat_bhc_2bed(self, ass_sys_data):
-        assert ass_sys_data.cat_by_room('H101') == '2BSU'
-        assert ass_sys_data.cat_by_room('H202') == '2BSH'
-        assert ass_sys_data.cat_by_room('H112') == '2BSP'
+    def test_room_cat_bhc_2bed(self, sys_data_ass):
+        assert sys_data_ass.cat_by_room('H101') == '2BSU'
+        assert sys_data_ass.cat_by_room('H202') == '2BSH'
+        assert sys_data_ass.cat_by_room('H112') == '2BSP'
 
-    def test_room_cat_pbc_studio(self, ass_sys_data):
-        assert ass_sys_data.cat_by_room('211') == 'STDP'
-        assert ass_sys_data.cat_by_room('511') == 'STDS'
-        assert ass_sys_data.cat_by_room('911') == 'STDH'
+    def test_room_cat_pbc_studio(self, sys_data_ass):
+        assert sys_data_ass.cat_by_room('211') == 'STDP'
+        assert sys_data_ass.cat_by_room('511') == 'STDS'
+        assert sys_data_ass.cat_by_room('911') == 'STDH'
 
-    def test_room_cat_pbc_1bed(self, ass_sys_data):
-        assert ass_sys_data.cat_by_room('126') == '1JNP'
-        assert ass_sys_data.cat_by_room('535') == '1STS'
-        assert ass_sys_data.cat_by_room('922') == '1JNH'
+    def test_room_cat_pbc_1bed(self, sys_data_ass):
+        assert sys_data_ass.cat_by_room('126') == '1JNP'
+        assert sys_data_ass.cat_by_room('535') == '1STS'
+        assert sys_data_ass.cat_by_room('922') == '1JNH'
 
-    def test_room_cat_pbc_2bed(self, ass_sys_data):
-        assert ass_sys_data.cat_by_room('334') == '2BSP'
-        assert ass_sys_data.cat_by_room('401') == '2WSB'    # '22SB' then 2STS and now 2WSB (June 2018)
-        assert ass_sys_data.cat_by_room('925') == '2BSH'
-        assert ass_sys_data.cat_by_room('924') == '2WSS'
+    def test_room_cat_pbc_2bed(self, sys_data_ass):
+        assert sys_data_ass.cat_by_room('334') == '2BSP'
+        assert sys_data_ass.cat_by_room('401') == '2WSB'    # '22SB' then 2STS and now 2WSB (June 2018)
+        assert sys_data_ass.cat_by_room('925') == '2BSH'
+        assert sys_data_ass.cat_by_room('924') == '2WSS'
 
-    def test_room_size_bhc_studio(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size('1', 'STUDIO') == 'STDO'
-        assert ass_sys_data.cat_by_size('1', 'STUDIO', [752, 781, 748]) == 'STDO'
-        assert ass_sys_data.cat_by_size('1', 'STUDIO', [757, 781, 748]) == 'STDS'
-        assert ass_sys_data.cat_by_size('1', 'STUDIO', [757, 781, 748], allow_any=False) == 'STDS'
-        assert ass_sys_data.cat_by_size('1', 'STUDIO', [752, 781, 748], allow_any=False) is None
+    def test_room_size_bhc_studio(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size('1', 'STUDIO') == 'STDO'
+        assert sys_data_ass.cat_by_size('1', 'STUDIO', [752, 781, 748]) == 'STDO'
+        assert sys_data_ass.cat_by_size('1', 'STUDIO', [757, 781, 748]) == 'STDS'
+        assert sys_data_ass.cat_by_size('1', 'STUDIO', [757, 781, 748], allow_any=False) == 'STDS'
+        assert sys_data_ass.cat_by_size('1', 'STUDIO', [752, 781, 748], allow_any=False) is None
 
-    def test_room_size_bhc_1bed(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size('1', '1 BED') == '1JNR'
-        assert ass_sys_data.cat_by_size('1', '1 BED', [752, 781, 748]) == '1DSS'
-        assert ass_sys_data.cat_by_size('1', '1 BED', [757, 781, 748]) == '1JNS'
+    def test_room_size_bhc_1bed(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size('1', '1 BED') == '1JNR'
+        assert sys_data_ass.cat_by_size('1', '1 BED', [752, 781, 748]) == '1DSS'
+        assert sys_data_ass.cat_by_size('1', '1 BED', [757, 781, 748]) == '1JNS'
 
-    def test_room_size_bhc_2bed(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size('1', '2 BED') == '2BSU'
-        assert ass_sys_data.cat_by_size('1', '2 BED', [752, 781, 748]) == '2DPU'
-        assert ass_sys_data.cat_by_size('1', '2 BED', [757, 781, 748]) == '2BSH'
+    def test_room_size_bhc_2bed(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size('1', '2 BED') == '2BSU'
+        assert sys_data_ass.cat_by_size('1', '2 BED', [752, 781, 748]) == '2DPU'
+        assert sys_data_ass.cat_by_size('1', '2 BED', [757, 781, 748]) == '2BSH'
 
-    def test_room_size_pbc_studio(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size('4', 'STUDIO') == 'STDP'
-        assert ass_sys_data.cat_by_size('4', 'STUDIO', [752, 781, 748]) == 'STDB'
-        assert ass_sys_data.cat_by_size('4', 'STUDIO', [757, 748]) == 'STDH'
-        assert ass_sys_data.cat_by_size('4', 'STUDIO', [757, 781, 748], allow_any=False) == 'STDB'
-        assert ass_sys_data.cat_by_size('4', 'STUDIO', [752, 757, 748]) == 'STDH'
-        assert ass_sys_data.cat_by_size('4', 'STUDIO', [752, 757, 781, 748], allow_any=False) == 'STDB'
+    def test_room_size_pbc_studio(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size('4', 'STUDIO') == 'STDP'
+        assert sys_data_ass.cat_by_size('4', 'STUDIO', [752, 781, 748]) == 'STDB'
+        assert sys_data_ass.cat_by_size('4', 'STUDIO', [757, 748]) == 'STDH'
+        assert sys_data_ass.cat_by_size('4', 'STUDIO', [757, 781, 748], allow_any=False) == 'STDB'
+        assert sys_data_ass.cat_by_size('4', 'STUDIO', [752, 757, 748]) == 'STDH'
+        assert sys_data_ass.cat_by_size('4', 'STUDIO', [752, 757, 781, 748], allow_any=False) == 'STDB'
 
-    def test_room_size_pbc_1bed(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size('4', '1 BED') == '1JNP'
-        assert ass_sys_data.cat_by_size('4', '1 BED', [752, 781, 748]) == '1JNB'  # Sterling
-        assert ass_sys_data.cat_by_size('4', '1 BED', [757, 781]) == '1JNB'
+    def test_room_size_pbc_1bed(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size('4', '1 BED') == '1JNP'
+        assert sys_data_ass.cat_by_size('4', '1 BED', [752, 781, 748]) == '1JNB'  # Sterling
+        assert sys_data_ass.cat_by_size('4', '1 BED', [757, 781]) == '1JNB'
 
-    def test_room_size_pbc_2bed(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size('4', '2 BED') == '2BSP'
-        assert ass_sys_data.cat_by_size('4', '2 BED', [752, 781, 748]) == '22SB'
-        assert ass_sys_data.cat_by_size('4', '2 BED', [757, 781, 748]) == '22SB'
+    def test_room_size_pbc_2bed(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size('4', '2 BED') == '2BSP'
+        assert sys_data_ass.cat_by_size('4', '2 BED', [752, 781, 748]) == '22SB'
+        assert sys_data_ass.cat_by_size('4', '2 BED', [757, 781, 748]) == '22SB'
 
     # following two tests added from TC contract setup - see Fabian's email from 21-11-2016 14:56
-    def test_room_size_fabian_setup_bhc(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size('1', 'STUDIO') == 'STDO'
-        assert ass_sys_data.cat_by_size('1', 'STUDIO', [757]) == 'STDS'
+    def test_room_size_fabian_setup_bhc(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size('1', 'STUDIO') == 'STDO'
+        assert sys_data_ass.cat_by_size('1', 'STUDIO', [757]) == 'STDS'
 
-        assert ass_sys_data.cat_by_size('1', '1 BED') == '1JNR'
-        assert ass_sys_data.cat_by_size('1', '1 BED', [752]) == '1DSS'
-        assert ass_sys_data.cat_by_size('1', '1 BED', [757]) == '1JNS'
+        assert sys_data_ass.cat_by_size('1', '1 BED') == '1JNR'
+        assert sys_data_ass.cat_by_size('1', '1 BED', [752]) == '1DSS'
+        assert sys_data_ass.cat_by_size('1', '1 BED', [757]) == '1JNS'
 
-        assert ass_sys_data.cat_by_size('1', '2 BED') == '2BSU'
-        assert ass_sys_data.cat_by_size('1', '2 BED', [752]) == '2DPU'
+        assert sys_data_ass.cat_by_size('1', '2 BED') == '2BSU'
+        assert sys_data_ass.cat_by_size('1', '2 BED', [752]) == '2DPU'
 
-    def test_room_size_fabian_setup_pbc(self, ass_sys_data):
-        assert ass_sys_data.cat_by_size('4', 'STUDIO') == 'STDP'
-        assert ass_sys_data.cat_by_size('4', 'STUDIO', [757]) == 'STDH'
-        assert ass_sys_data.cat_by_size('4', 'STUDIO', [781]) == 'STDB'  # Seafront
+    def test_room_size_fabian_setup_pbc(self, sys_data_ass):
+        assert sys_data_ass.cat_by_size('4', 'STUDIO') == 'STDP'
+        assert sys_data_ass.cat_by_size('4', 'STUDIO', [757]) == 'STDH'
+        assert sys_data_ass.cat_by_size('4', 'STUDIO', [781]) == 'STDB'  # Seafront
 
-        assert ass_sys_data.cat_by_size('4', '1 BED') == '1JNP'
-        assert ass_sys_data.cat_by_size('4', '1 BED', [757]) == '1JNH'
-        assert ass_sys_data.cat_by_size('4', '1 BED', [748]) == '1STS'
+        assert sys_data_ass.cat_by_size('4', '1 BED') == '1JNP'
+        assert sys_data_ass.cat_by_size('4', '1 BED', [757]) == '1JNH'
+        assert sys_data_ass.cat_by_size('4', '1 BED', [748]) == '1STS'
 
-        assert ass_sys_data.cat_by_size('4', '2 BED') == '2BSP'
-        assert ass_sys_data.cat_by_size('4', '2 BED', [757]) == '2BSH'
+        assert sys_data_ass.cat_by_size('4', '2 BED') == '2BSP'
+        assert sys_data_ass.cat_by_size('4', '2 BED', [757]) == '2BSH'

@@ -1,6 +1,6 @@
 from ae.console import ConsoleApp
 from ae_db.db import PostgresDB
-from ae.shif import add_sh_options, print_sh_options, res_no_to_obj_id
+from ae.sys_data_sh import add_sh_options, print_sh_options, res_no_to_obj_id
 
 
 __version__ = '0.1'

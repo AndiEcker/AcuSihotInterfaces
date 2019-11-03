@@ -3,7 +3,7 @@ create or replace view LOBBY.ACU_RES_LOG
 select RUL_CODE, RUL_PRIMARY
      , RUL_ACTION
      , RUL_DATE
-     , RUL_CHANGES        -- only needed for P_RUL_INSERT() and sxmlif.py (in debug mode)
+     , RUL_CHANGES        -- only needed for P_RUL_INSERT() and sys_core_sh.py (in debug mode)
      , RUL_SIHOT_CAT, RUL_SIHOT_HOTEL, RUL_SIHOT_PACK, RUL_SIHOT_ROOM, RUL_SIHOT_OBJID, RUL_SIHOT_RATE
      --, case when RUL_SIHOT_HOTEL = 4 and length(RUL_SIHOT_ROOM) = 3 then '0' end || RUL_SIHOT_ROOM as SIHOT_ROOM_NO
      --, to_char(RUL_SIHOT_HOTEL) as SIHOT_HOTEL_C

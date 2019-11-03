@@ -1,6 +1,5 @@
 from ae.systems import UsedSystems
-from sys_data_ids import SYS_CRED_ITEMS, SYS_CRED_NEEDED, SYS_FEAT_ITEMS
-from sfif import *
+from sys_data_sf import *
 
 
 class TestReservation:
@@ -249,16 +248,14 @@ class TestSfId:
 
 class TestConnection:
     def test_connection_manual(self):
-        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
-                         sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
+        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection
         assert sf_conn
         assert sf_conn.is_sandbox
 
     def test_connection_missing_user(self):
-        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
-                         sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
+        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF)
         assert not us.connect({SDI_SF: SfInterface})
         assert SDI_SF not in us
 
@@ -267,8 +264,7 @@ class TestConnection:
         assert salesforce_connection.is_sandbox
 
     def test_connect(self):
-        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
-                         sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
+        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection
         res = sf_conn.soql_query_all("SELECT Id from Lead WHERE Name = '__test__connect__'")
@@ -276,8 +272,7 @@ class TestConnection:
         assert res['totalSize'] == 0
 
     def test_connect_fail(self):
-        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF,
-                         sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS)
+        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF)
         assert not us.connect({SDI_SF: SfInterface})
         sf_conn = us[SDI_SF].connection
         assert sf_conn

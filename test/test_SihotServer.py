@@ -8,7 +8,7 @@ import requests
 from configparser import ConfigParser
 
 from ae.console import MAIN_SECTION_DEF
-from ae.shif import ResFetch
+from ae.sys_data_sh import ResFetch
 
 test_path_prefix = '/test'
 

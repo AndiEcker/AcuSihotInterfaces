@@ -29,15 +29,14 @@ from traceback import format_exc
 import pprint
 
 from ae_db.db import NAMED_BIND_VAR_PREFIX, bind_var_prefix
-from sys_data_ids import SDI_ASS, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
-    SDI_ACU
+from sys_data_acu import SDI_ACU
 from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import Record, FAD_ONTO
 from ae.console import ConsoleApp
-from ae_tcp.tcp import RequestXmlHandler, TcpServer, TCP_CONNECTION_BROKEN_MSG
-from ae.sxmlif import Request, ResChange, RoomChange, SihotXmlBuilder
-from ae.shif import client_data, ResFetch
-from ass_sys_data import add_ass_options, init_ass_data, AssSysData
+from ae.sys_core_sh import Request, ResChange, RoomChange, SihotXmlBuilder, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
+    TCP_CONNECTION_BROKEN_MSG, RequestXmlHandler, TcpServer
+from ae.sys_data_sh import client_data, ResFetch
+from sys_data_ass import add_ass_options, init_ass_data, AssSysData, SDI_ASS
 
 __version__ = '2.3'
 
@@ -113,7 +112,7 @@ def proc_context(rec_ctx):
 
 
 def check_res_change_data(rec_ctx):
-    """ TODO: migrate as field checker to SysDataMan or as generic ass_sys_data method for system comparing/checking
+    """ TODO: migrate as field checker to SysDataMan or as generic sys_data_ass method for system comparing/checking
     Compare data from SXML request (OCs: CR, CI, CO and RM) with reservation data loaded directly from Sihot/ResFetch.
 
     :param rec_ctx:     current rec context dict with:

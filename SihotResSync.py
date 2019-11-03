@@ -4,11 +4,11 @@
     0.3     added error counter to Progress, refactored lastId into LastRt and removed processed_A*.
     0.4     removed more fields on DELETE action and implemented DELETE for room allocations moved to non-Sihot-hotels.
     0.5     changed SihotResSync.ini and SyncLIVE.cmd for to specify log and debug level in ini + small refactorings.
-    0.6     added sync_summary and synced_ids and (in sxmlif.py) skipping of follow-up changes after/of erroneous res.
+    0.6     added sync_summary and synced_ids and (in sys_core_sh.py) skipping follow-up changes after/of erroneous res.
     0.7     23-09-17 added migrationMode and syncDateRange command line option.
     0.8     01-03-18 extended to allow allotments (RCI) configured by SihotMktSegExceptions.cfg.
-    0.9     08-03-18 bug fix in sxmlif.py: now set SRSL_DATE to start-of-sync-query-fetch instead of end-of-sync).
-    1.0     30-05-18 bug fix in sxmlif.py: now use RUL_PRIMARY instead of RU_CODE in F_SIHOT_CAT/CAT element for
+    0.9     08-03-18 bug fix in sys_core_sh.py: now set SRSL_DATE to start-of-sync-query-fetch instead of end-of-sync).
+    1.0     30-05-18 bug fix in sys_core_sh.py: now use RUL_PRIMARY instead of RU_CODE in F_SIHOT_CAT/CAT element for
             to allow sync of deleted RU records.
     1.1     28-02-19 migrated to use system data fields.
     1.2     08-03-19 extended logging and notification messages.
@@ -16,18 +16,17 @@
 """
 import datetime
 
-from sys_data_ids import (SDF_SH_WEB_PORT, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
-                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES, SDI_ACU)
 from ae.console import ConsoleApp
 from ae.core import DATE_TIME_ISO, full_stack_trace
 from ae.progress import Progress
 from ae_notification.notification import add_notification_options, init_notification
 from ae.sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
 
-from ae.sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
-from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
-from ae.shif import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
-from ass_sys_data import AssSysData
+from ae.sys_core_sh import ERR_MESSAGE_PREFIX_CONTINUE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, \
+    SDF_SH_XML_ENCODING, SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
+from sys_data_acu import add_ac_options, AcuClientToSihot, AcuResToSihot, SDI_ACU
+from ae.sys_data_sh import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
+from sys_data_ass import AssSysData
 
 __version__ = '1.3'
 

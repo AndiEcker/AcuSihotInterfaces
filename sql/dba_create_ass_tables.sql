@@ -224,7 +224,7 @@ SELECT audit.audit_table('res_group_clients');
 ------ VIEWS
 ---- CLIENT VIEWS
 -- view for AssSysDate.ass_clients_pull()/cl_fetch_list() extending clients with external refs and pt_group aggregates
--- EXT_REF_TYPE_ID_SEP cannot be imported here from ass_sys_data.py, therefore using hard-coded literal '='
+-- EXT_REF_TYPE_ID_SEP cannot be imported here from sys_data_ass.py, therefore using hard-coded literal '='
 -- Comment out DROP statement on column name changes because postgres view can then not be recreated (cl_name -> cl_surname/...)
 --DROP VIEW v_clients_refs_owns;
 CREATE OR REPLACE VIEW v_clients_refs_owns AS

@@ -7,7 +7,7 @@
     0.5     removed Booking.com imports and added RCI booking imports (using Acumen reservation inventory data).
     0.6     31-03-17: removed hyphen and sub-booking-id from GDSNO and dup-exec/-startup lock (lastRt).
     0.7     30-07-17: implementation of RCI booking imports (independent from Acumen reservation inventory data).
-    0.8     15-07-17: refactoring moving clients and reservation_inventories to ass_sys_data.py.
+    0.8     15-07-17: refactoring moving clients and reservation_inventories to sys_data_ass.py.
     0.9     29-08-17: added salesforce credentials and JSON import (and commented out TC import).
     1.0     June-18: refactoring and clean-up
     1.1     08-03-19: migrated to use ae.sys_data (extended logging and notification messages).
@@ -29,18 +29,17 @@ from ae.core import DEBUG_LEVEL_VERBOSE, force_encoding, full_stack_trace, parse
 from ae.console import ConsoleApp
 from ae.progress import Progress
 from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
-from ae.shif import add_sh_options, ClientToSihot, ResSender
+from ae.sys_data_sh import add_sh_options, ClientToSihot, ResSender
 
 from ae_db.db import bind_var_prefix
 from ae_notification.notification import add_notification_options, init_notification
-from acif import add_ac_options, ACU_RES_MAP, from_field_indexes
-from sfif import add_sf_options
-from ass_sys_data import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
+from sys_data_acu import add_ac_options, ACU_RES_MAP, from_field_indexes, SDI_ACU
+from sys_data_sf import add_sf_options
+from sys_data_ass import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
-from sys_data_ids import (FORE_SURNAME_SEP,
-                          SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING,
-                          SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES,
-                          SDI_ACU)
+from sys_data_ids import (FORE_SURNAME_SEP)
+from ae.sys_core_sh import SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING, \
+    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
 
 __version__ = '1.2'
 

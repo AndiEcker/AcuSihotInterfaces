@@ -4,23 +4,23 @@ import re
 from traceback import format_exc
 from typing import Dict, Any, Union, Tuple  # , Tuple
 
-from sys_data_ids import (SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
-                          EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI,
-                          SDF_SF_SANDBOX, ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS, SYS_CRED_ITEMS,
-                          SYS_CRED_NEEDED, SYS_FEAT_ITEMS)
+from sys_data_ids import (EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI)
 from ae.core import (DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
                      correct_email, correct_phone, parse_date, po)
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.systems import UsedSystems
 from ae_db.db import OraDB, PostgresDB
 from ae_notification.notification import add_notification_options, init_notification
-from acif import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient
-from sfif import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
-                  sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal)
-from ae.sxmlif import AvailCatInfo
-from ae.shif import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
-                     ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ShInterface, SH_CLIENT_MAP, ClientToSihot,
-                     SH_RES_MAP, ResToSihot, ClientFetch)
+from sys_data_acu import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient, SDI_ACU
+from sys_data_sf import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
+                         sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal, SDI_SF, SDF_SF_SANDBOX)
+from ae.sys_core_sh import AvailCatInfo, SDI_SH
+from ae.sys_data_sh import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
+                            ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ShInterface, ClientToSihot,
+                            SH_CLIENT_MAP, SH_RES_MAP, ResToSihot, ClientFetch)
+
+
+SDI_ASS = 'Ass'                             # AssCache Interfaces
 
 
 '''
@@ -202,7 +202,7 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
                              Account='CD_CODE__pc', Sihot='MATCHCODE'),
                    SfId=dict(AssSysDataClientsIdx=_SF_ID,
                              AssDb='cl_sf_id', AcDb='CD_SF_ID1',
-                             Lead='id', Contact='id', Account='id',     # was Id but test_sfif.py needs lower case id
+                             Lead='id', Contact='id', Account='id',     # was Id but test_sys_data_sf.py needs lower case id
                              Sihot='MATCH-SM'),
                    ShId=dict(AssSysDataClientsIdx=_SH_ID,
                              AssDb='cl_sh_id', AcDb='CD_SIHOT_OBJID', Lead='Sihot_Guest_Object_Id__c',
@@ -239,7 +239,7 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
 
 
 def _dummy_stub(msg, *args, **kwargs):
-    po("******  Fallback call of ass_sys_data._dummy_stub() with:\n        msg='{}', args={}, kwargs={}"
+    po("******  Fallback call of sys_data_ass._dummy_stub() with:\n        msg='{}', args={}, kwargs={}"
        .format(msg, args, kwargs))
 
 
@@ -283,9 +283,9 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.debug_level = cae.get_opt('debugLevel')
 
         self.used_systems = UsedSystems(
-            DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
+            DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE,
+            SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
             config_getters=(cae.get_opt, cae.get_var),
-            sys_cred_items=SYS_CRED_ITEMS, sys_cred_needed=SYS_CRED_NEEDED, sys_feat_items=SYS_FEAT_ITEMS,
             **sys_credentials)
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
             for msg in self.used_systems.debug_messages:
@@ -414,7 +414,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         msg = "AssSysData.connection(sys_id={}): ".format(sys_id)
         if not sys_id:
             msg += "system id is empty"
-        elif sys_id not in ALL_AVAILABLE_SYSTEMS:
+        elif sys_id not in self.used_systems.available_systems:
             msg += "system id is invalid"
         elif sys_id not in self.used_systems:
             msg += "system id is unknown/unused"
@@ -1364,7 +1364,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         :param sf_res_id:       Reservation Opportunity Id (SF ID with 18 characters). Pass None for to create new-one.
         :param sh_cl_data:      Record with Sihot guest data of the reservation orderer (fetched with
-                                ClientSearch.fetch_client()/shif.client_data()).
+                                ClientSearch.fetch_client()/sys_data_sh.client_data()).
         :param ass_res_data:    Record with reservation fields (from ass_cache.res_groups).
         :param sync_cache:      True for to update ass_cache/res_groups/rgr_last_sync+rgr_sf_id (opt, def=True).
         :param sf_sent:         (OUT, opt) Record(system=SDI_SF, direction=FAD_ONTO) of sent Account+Reservation object
@@ -1661,15 +1661,15 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     def system_records_action(self, system, rec_type, action, **kwargs):
         msg = "ASD.system_records_action({}, {}, {}, {}): ".format(system, rec_type, action, kwargs)
-        type_name = ALL_AVAILABLE_RECORD_TYPES.get(rec_type)
+        type_name = self.used_systems.available_rec_types.get(rec_type)
         if not type_name:
             self._err(msg + "Unknown record type {}".format(rec_type))
         else:
             method_name = system.lower() + '_' + type_name.lower() + '_' + action.lower()
             method = getattr(self, method_name, None)
             if method:
-                self._warn(msg + "Processing {} action against {}/{} system for record type {}/{}"
-                           .format(action, ALL_AVAILABLE_SYSTEMS.get(system), system, type_name, rec_type),
+                self._warn(msg + "Processing {} action against {} system for record type {}/{}"
+                           .format(action, self.used_systems.available_systems.get(system), type_name, rec_type),
                            action.lower() + system + type_name, importance=4)
                 try:
                     method(**kwargs)

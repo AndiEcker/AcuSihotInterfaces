@@ -13,14 +13,13 @@ import pprint
 
 from copy import deepcopy
 
-from sys_data_ids import SDI_SF
 from ae.core import DEBUG_LEVEL_VERBOSE, correct_email, correct_phone
 from ae_validation.validation import add_validation_options, init_validation
 from ae.console import ConsoleApp
 from ae_notification.notification import add_notification_options, init_notification
-from ae.shif import ResBulkFetcher, hotel_and_res_id
-from sfif import add_sf_options
-from ass_sys_data import AssSysData
+from ae.sys_data_sh import ResBulkFetcher, hotel_and_res_id
+from sys_data_sf import add_sf_options, SDI_SF
+from sys_data_ass import AssSysData
 
 __version__ = '0.3'
 

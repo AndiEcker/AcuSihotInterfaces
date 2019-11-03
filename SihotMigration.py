@@ -7,9 +7,9 @@
 from ae.console import ConsoleApp
 from ae.core import full_stack_trace
 from ae.progress import Progress
-from acif import add_ac_options, AcuClientToSihot, AcuResToSihot
-from ae.sxmlif import ERR_MESSAGE_PREFIX_CONTINUE
-from ae.shif import add_sh_options, print_sh_options
+from sys_data_acu import add_ac_options, AcuClientToSihot, AcuResToSihot
+from ae.sys_core_sh import ERR_MESSAGE_PREFIX_CONTINUE
+from ae.sys_data_sh import add_sh_options, print_sh_options
 
 
 __version__ = '0.3'

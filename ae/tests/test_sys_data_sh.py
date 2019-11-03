@@ -1,4 +1,4 @@
-from ae.shif import *
+from ae.sys_data_sh import *
 
 
 class TestResToSihot:
