@@ -14,6 +14,7 @@
       <w>dabo</w>
       <w>deadbeef</w>
       <w>debian</w>
+      <w>dropdown</w>
       <w>ecker</w>
       <w>enaml</w>
       <w>faulthandler</w>
@@ -28,6 +29,7 @@
       <w>meth</w>
       <w>minlen</w>
       <w>modindex</w>
+      <w>multiline</w>
       <w>paramlinks</w>
       <w>paramref</w>
       <w>penwidth</w>
@@ -37,11 +39,14 @@
       <w>readouterr</w>
       <w>regedit</w>
       <w>resv</w>
+      <w>rgba</w>
       <w>searchbox</w>
       <w>toctree</w>
       <w>typehints</w>
       <w>tzinfo</w>
       <w>undoc</w>
+      <w>valign</w>
+      <w>venv</w>
       <w>viewcode</w>
       <w>weakref</w>
     </words>

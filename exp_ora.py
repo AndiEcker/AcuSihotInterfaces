@@ -1,7 +1,7 @@
 from ae.core import DEF_ENCODE_ERRORS
 from sys_data_acu import ACU_DEF_USR, ACU_DEF_DSN
 from ae.console import ConsoleApp
-from ae_db.db import OraDB
+from ae.db_ora import OraDB
 
 __version__ = '0.1'
 

@@ -5,7 +5,7 @@
             passing/increment - is always duplicated '2' instead the one sent by Sihot (see Track-It closed WO #43242).
     0.4     added GDS number to alloc_trigger() - available since Sihot build/version 9.0.0.0787.CO.
     0.5     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
-    0.6     refactored to use system field records and migrated client_to_acu() to sys_data_acu.py/AcumenClient.save_client().
+    0.6     use now system field records and migrated client_to_acu() to sys_data_acu.py/AcumenClient.save_client().
     0.7     beautified and hardened error notification and logging.
 """
 from traceback import format_exc
@@ -14,7 +14,7 @@ from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBO
 from ae.console import ConsoleApp
 
 from ae_notification.notification import add_notification_options, init_notification
-from ae_db.db import OraDB
+from ae.db_ora import OraDB
 from sys_data_acu import add_ac_options, AcumenClient
 from ae.sys_core_sh import Request, RoomChange, SihotXmlBuilder, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, \
     SDF_SH_XML_ENCODING, TCP_CONNECTION_BROKEN_MSG, RequestXmlHandler, TcpServer

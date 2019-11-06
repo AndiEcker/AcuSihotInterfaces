@@ -5,16 +5,16 @@ import pytest
 
 from configparser import ConfigParser
 
-from ae.sys_data import Record, FAD_ONTO
 from ae.console import MAIN_SECTION_DEF
 from ae.literal import Literal
-from ae_db.db import OraDB
-from sys_data_ass import AssSysData
-from ae.sys_core_sh import PostMessage, ConfigDict, CatRooms, AvailCatInfo, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, \
-    SDF_SH_CLIENT_PORT
-from sys_data_sf import SfInterface, SDF_SF_SANDBOX
+from ae.db_ora import OraDB
+from ae.sys_data import Record, FAD_ONTO
+from ae.sys_core_sh import SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_CLIENT_PORT, \
+    AvailCatInfo, CatRooms, ConfigDict, PostMessage
 from ae.sys_data_sh import ClientSearch, ClientToSihot, \
     USE_KERNEL_FOR_CLIENTS_DEF, SH_CLIENT_MAP, USE_KERNEL_FOR_RES_DEF, SH_RES_MAP
+from sys_data_sf import SfInterface, SDF_SF_SANDBOX
+from sys_data_ass import AssSysData
 
 
 @pytest.fixture(scope="module")

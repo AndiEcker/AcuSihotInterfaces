@@ -28,7 +28,7 @@ from functools import partial
 from traceback import format_exc
 import pprint
 
-from ae_db.db import NAMED_BIND_VAR_PREFIX, bind_var_prefix
+from ae.db_core import NAMED_BIND_VAR_PREFIX, bind_var_prefix
 from sys_data_acu import SDI_ACU
 from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import Record, FAD_ONTO

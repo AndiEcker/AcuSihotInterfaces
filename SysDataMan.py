@@ -13,16 +13,17 @@ import argparse
 import pprint
 from traceback import format_exc
 
-from ae.sys_core_sh import SDI_SH
-from sys_data_sf import SDI_SF
-from sys_data_acu import SDI_ACU
 from ae.core import DEBUG_LEVEL_VERBOSE, try_eval
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console import ConsoleApp
-from ae_db.db import PostgresDB
-from sys_data_ass import add_ass_options, init_ass_data, SDI_ASS
+from ae.db_pg import PostgresDB
 
-__version__ = '0.3'
+from ae.sys_core_sh import SDI_SH
+from sys_data_sf import SDI_SF
+from sys_data_acu import SDI_ACU
+from sys_data_ass import SDI_ASS, add_ass_options, init_ass_data
+
+__version__ = '0.4'
 
 
 ALL_AVAILABLE_SYSTEMS = {SDI_ASS: 'AssCache', SDI_ACU: 'Acumen', SDI_SF: 'Salesforce', SDI_SH: 'Sihot'}
@@ -35,60 +36,6 @@ ALL_AVAILABLE_RECORD_TYPES = {SRT_CLIENTS: 'Clients', SRT_RES_DATA: 'Reservation
 
 PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
-
-cae = ConsoleApp("Initialize, pull, compare or push AssCache data against Acumen, Sihot and/or Salesforce",
-                 cfg_opt_val_stripper=strip_system_rec_type,
-                 formatter_class=argparse.RawDescriptionHelpFormatter,
-                 epilog="A dictionary holding additional key-word-arguments can be appended"
-                        " directly after the system and record type ids"
-                        " for each of the three action options: pull, push and compare."
-                        "\n\nThe following key-word-arguments are supported:\n"
-                        "\n\tcol_names: list of used system field names (default=use all fields)"
-                        "\n\tchk_values: dict of system field values for record filtering (default=all records)"
-                        "\n\twhere_group_order: WHERE clause suffix of data SELECT (only available on database systems)"
-                        "\n\tbind_values: dict with system bind variable names and values (only on database systems)"
-                        "\n\tfield_names: list of used field names (default=use all fields)"
-                        "\n\tfilter_records: callable for record filtering (default=all records)"
-                        "\n\tmatch_fields: list of field names used for to lookup and merge in record sets")
-
-cae.add_opt('init', "Initialize/Wipe/Recreate ass_cache database (0=No, 1=Yes)", 0, 'I')
-
-opt_choices = tuple([s + rt for s in ALL_AVAILABLE_SYSTEMS.keys() for rt in ALL_AVAILABLE_RECORD_TYPES.keys()])
-cae.add_opt('pull', "Pull record type (e.g. {}) from system (e.g. {}, e.g. shC is pulling Client data from Sihot"
-            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
-            [], 'S', choices=opt_choices, multiple=True)
-cae.add_opt('push', "Push data of type (e.g. {}) from system (e.g. {}, e.g. sfR pushes Reservations to Salesforce"
-            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
-            [], 'W', choices=opt_choices, multiple=True)
-cae.add_opt('compare', "Compare/Check pulled data ({}) against {}, e.g. asP checks pulled Products against AssCache"
-            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
-            [], 'V', choices=opt_choices, multiple=True)
-
-'''
-cae.add_opt('filterRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) source records,"
-                                " e.g. {'C':\\\"cl_ac_id='E123456'\\\"} pushes only the client with Acu ID E123456",
-               {}, 'X')
-cae.add_opt('filterFields', "Restrict processed (dict keys: C=client, P=product, R=reservation) data fields,"
-                               " e.g. {'C':['Phone']} processes (pull/compare/push) only the client field Phone",
-               {}, 'Y')
-cae.add_opt('matchRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) destination records,"
-                               " e.g. {'C':'cl_phone is NULL'} pulls only client data with empty phone",
-               {}, 'M')
-cae.add_opt('matchFields', "Specify (dict keys: C=client, P=product, R=reservation) fields for to match/lookup the "
-                              "associated record e.g. {'C':['Phone']} is using Phone for to associate client records",
-               {}, 'Z')
-'''
-
-ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True, bulk_fetcher='Res')
-
-
-# NOTIFICATION, LOGGING AND COMMAND LINE OPTION PARSING HELPERS
-# declare notification early/here to ensure proper shutdown and display of startup errors on console
-notification = notification_warning_emails = None
-_debug_level = cae.get_opt('debugLevel')
-
-error_log = list()
-warn_log = list()
 
 
 def send_notification(exit_code=0):
@@ -187,6 +134,61 @@ def strip_system_rec_type(opt_value):
     if system and rec_type:
         opt_value = system + rec_type  # split off option args before checking allowed choices
     return opt_value
+
+
+cae = ConsoleApp("Initialize, pull, compare or push AssCache data against Acumen, Sihot and/or Salesforce",
+                 cfg_opt_val_stripper=strip_system_rec_type,
+                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                 epilog="A dictionary holding additional key-word-arguments can be appended"
+                        " directly after the system and record type ids"
+                        " for each of the three action options: pull, push and compare."
+                        "\n\nThe following key-word-arguments are supported:\n"
+                        "\n\tcol_names: list of used system field names (default=use all fields)"
+                        "\n\tchk_values: dict of system field values for record filtering (default=all records)"
+                        "\n\twhere_group_order: WHERE clause suffix of data SELECT (only available on database systems)"
+                        "\n\tbind_values: dict with system bind variable names and values (only on database systems)"
+                        "\n\tfield_names: list of used field names (default=use all fields)"
+                        "\n\tfilter_records: callable for record filtering (default=all records)"
+                        "\n\tmatch_fields: list of field names used for to lookup and merge in record sets")
+
+cae.add_opt('init', "Initialize/Wipe/Recreate ass_cache database (0=No, 1=Yes)", 0, 'I')
+
+opt_choices = tuple([s + rt for s in ALL_AVAILABLE_SYSTEMS.keys() for rt in ALL_AVAILABLE_RECORD_TYPES.keys()])
+cae.add_opt('pull', "Pull record type (e.g. {}) from system (e.g. {}, e.g. shC is pulling Client data from Sihot"
+            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+            [], 'S', choices=opt_choices, multiple=True)
+cae.add_opt('push', "Push data of type (e.g. {}) from system (e.g. {}, e.g. sfR pushes Reservations to Salesforce"
+            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+            [], 'W', choices=opt_choices, multiple=True)
+cae.add_opt('compare', "Compare/Check pulled data ({}) against {}, e.g. asP checks pulled Products against AssCache"
+            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+            [], 'V', choices=opt_choices, multiple=True)
+
+'''
+cae.add_opt('filterRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) source records,"
+                                " e.g. {'C':\\\"cl_ac_id='E123456'\\\"} pushes only the client with Acu ID E123456",
+               {}, 'X')
+cae.add_opt('filterFields', "Restrict processed (dict keys: C=client, P=product, R=reservation) data fields,"
+                               " e.g. {'C':['Phone']} processes (pull/compare/push) only the client field Phone",
+               {}, 'Y')
+cae.add_opt('matchRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) destination records,"
+                               " e.g. {'C':'cl_phone is NULL'} pulls only client data with empty phone",
+               {}, 'M')
+cae.add_opt('matchFields', "Specify (dict keys: C=client, P=product, R=reservation) fields for to match/lookup the "
+                              "associated record e.g. {'C':['Phone']} is using Phone for to associate client records",
+               {}, 'Z')
+'''
+
+ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True, bulk_fetcher='Res')
+
+
+# NOTIFICATION, LOGGING AND COMMAND LINE OPTION PARSING HELPERS
+# declare notification early/here to ensure proper shutdown and display of startup errors on console
+notification = notification_warning_emails = None
+_debug_level = cae.get_opt('debugLevel')
+
+error_log = list()
+warn_log = list()
 
 
 # parse action command line options

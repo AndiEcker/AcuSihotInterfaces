@@ -25,6 +25,7 @@ class TestCloudContactValidation:
         assert validate_flag_info(EMAIL_VALID)
         assert validate_flag_info(EMAIL_ALL)
 
+    # noinspection PyUnusedLocal
     def test_add_validation_options(self, restore_app_env, sys_argv_app_key_restore):
         cae = ConsoleApp('test_add_validation_options')
         assert 'filterSfClients' not in cae.cfg_options
@@ -33,6 +34,7 @@ class TestCloudContactValidation:
         sys.argv = [sys_argv_app_key_restore, ]
         assert cae.get_opt('filterSfClients') == ""
 
+    # noinspection PyUnusedLocal
     def test_init_validation_all(self, restore_app_env, sys_argv_app_key_restore):
         fn = 'test_valid.ini'
         with open(fn, 'w') as fp:
@@ -58,6 +60,7 @@ class TestCloudContactValidation:
         assert len(ret_tuple) == 13
         os.remove(fn)
 
+    # noinspection PyUnusedLocal
     def test_init_validation_error(self, restore_app_env, sys_argv_app_key_restore):
         fn = 'test_valid_err.ini'
         with open(fn, 'w') as fp:

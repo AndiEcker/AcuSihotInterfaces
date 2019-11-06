@@ -1,5 +1,5 @@
 from ae.console import ConsoleApp
-from ae_db.db import PostgresDB
+from ae.db_pg import PostgresDB
 from ae.sys_data_sh import add_sh_options, print_sh_options, res_no_to_obj_id
 
 

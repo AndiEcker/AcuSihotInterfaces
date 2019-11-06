@@ -30,7 +30,7 @@ __version__ = '0.1'
 
 
 class DateChangeScreen(BoxLayout):
-    selected_date = ObjectProperty(None)  # date value
+    selected_date = ObjectProperty()  # date value
     built = False
 
     def build_widgets(self):

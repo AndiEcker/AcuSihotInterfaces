@@ -55,13 +55,13 @@ def add_validation_options(cae, email_def=EMAIL_DO_NOT_VALIDATE, phone_def=PHONE
 
     cae.add_opt('emailsToValidate', "Emails to be validated", email_def, 'E',
                 choices=(EMAIL_DO_NOT_VALIDATE, EMAIL_NOT_VALIDATED, EMAIL_INVALIDATED, EMAIL_INVALID, EMAIL_VALID,
-                            EMAIL_ALL))
+                         EMAIL_ALL))
     cae.add_opt('phonesToValidate', "Phones to be validated", phone_def, 'P',
                 choices=(PHONE_DO_NOT_VALIDATE, PHONE_NOT_VALIDATED, PHONE_INVALIDATED, PHONE_INVALID, PHONE_VALID,
-                            PHONE_ALL))
+                         PHONE_ALL))
     cae.add_opt('addressesToValidate', "Post addresses to be validated", addr_def, 'A',
                 choices=(ADDR_DO_NOT_VALIDATE, ADDR_NOT_VALIDATED, ADDR_INVALIDATED, ADDR_INVALID, ADDR_VALID,
-                            ADDR_ALL))
+                         ADDR_ALL))
 
 
 def init_validation(cae):

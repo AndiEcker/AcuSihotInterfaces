@@ -9,14 +9,15 @@ from ae.core import (DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_
                      correct_email, correct_phone, parse_date, po)
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.systems import UsedSystems
-from ae_db.db import OraDB, PostgresDB
+from ae.db_ora import OraDB
+from ae.db_pg import PostgresDB
 from ae_notification.notification import add_notification_options, init_notification
 from sys_data_acu import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient, SDI_ACU
 from sys_data_sf import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
                          sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal, SDI_SF, SDF_SF_SANDBOX)
-from ae.sys_core_sh import AvailCatInfo, SDI_SH
+from ae.sys_core_sh import SDI_SH, AvailCatInfo, ShInterface
 from ae.sys_data_sh import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
-                            ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ShInterface, ClientToSihot,
+                            ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ClientToSihot,
                             SH_CLIENT_MAP, SH_RES_MAP, ResToSihot, ClientFetch)
 
 
@@ -202,7 +203,7 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
                              Account='CD_CODE__pc', Sihot='MATCHCODE'),
                    SfId=dict(AssSysDataClientsIdx=_SF_ID,
                              AssDb='cl_sf_id', AcDb='CD_SF_ID1',
-                             Lead='id', Contact='id', Account='id',     # was Id but test_sys_data_sf.py needs lower case id
+                             Lead='id', Contact='id', Account='id', # was Id but test_sys_data_sf.py needs lower case id
                              Sihot='MATCH-SM'),
                    ShId=dict(AssSysDataClientsIdx=_SH_ID,
                              AssDb='cl_sh_id', AcDb='CD_SIHOT_OBJID', Lead='Sihot_Guest_Object_Id__c',

@@ -22,9 +22,11 @@ __version__ = '0.0.1'
 SDI_SH = 'Sh'                               # Sihot Interfaces
 
 
-SDF_SH_KERNEL_PORT = 'shServerKernelPort'   # Sihot Kernel Interfaces
-SDF_SH_WEB_PORT = 'shServerPort'            # Sihot Web interfaces
-SDF_SH_CLIENT_PORT = 'shClientPort'         # Sihot Server client port
+SH_DEF_SEARCH_FIELD = 'ShId'    #: default search field for external systems (used by sys_data_sh.cl_field_data())
+
+SDF_SH_KERNEL_PORT = 'shServerKernelPort'   #: Sihot Kernel Interface port
+SDF_SH_WEB_PORT = 'shServerPort'            #: Sihot Web interfaces port
+SDF_SH_CLIENT_PORT = 'shClientPort'         #: Sihot Server client port
 SDF_SH_TIMEOUT = 'shTimeout'
 SDF_SH_XML_ENCODING = 'shXmlEncoding'
 SDF_SH_USE_KERNEL_FOR_CLIENT = 'shUseKernelForClient'
@@ -43,8 +45,8 @@ SDF_SH_RES_MAP = 'shMapRes'
 # SXML_DEF_ENCODING = 'utf8'
 # .. but then I get the following error in reading all the clients:
 # .. 'charmap' codec can't decode byte 0x90 in position 2: character maps to <undefined>
-# then added an output type handler to the connection (see db.py) which did not solve the problem (because
-# .. the db.py module is not using this default encoding but the one in NLS_LANG env var
+# then added an output type handler to the connection (see db_core.py) which did not solve the problem (because
+# .. the db_core.py module is not using this default encoding but the one in NLS_LANG env var
 # For to fix showing umlaut character correctly tried cp1252 (windows charset)
 # .. and finally this worked for all characters (because it has less undefined code points_import)
 # SXML_DEF_ENCODING = 'cp1252'
@@ -691,3 +693,27 @@ class ResKernelGet(SihotXmlBuilder):
             res_no = (None, err_msg)
             self.cae.po(msg + "error='{}'".format(err_msg))
         return res_no
+
+
+class ShInterface:
+    def __init__(self, credentials, features=None, app_name='', debug_level=DEBUG_LEVEL_DISABLED):
+        self.credentials = credentials
+        self.features = features or list()
+        self.app_name = app_name
+        self.debug_level = debug_level
+
+    @staticmethod
+    def clients_match_field_init(match_fields):
+        msg = "ShInterface.clients_match_field_init({}) expects ".format(match_fields)
+        supported_match_fields = [SH_DEF_SEARCH_FIELD, 'AcuId', 'Surname', 'Email']
+
+        if match_fields:
+            match_field = match_fields[0]
+            if len(match_fields) > 1:
+                return msg + "single match field"
+            elif match_field not in supported_match_fields:
+                return "only one of the match fields {} (not {})".format(supported_match_fields, match_field)
+        else:
+            match_field = SH_DEF_SEARCH_FIELD
+
+        return match_field

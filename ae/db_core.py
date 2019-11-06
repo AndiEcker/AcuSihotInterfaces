@@ -1,26 +1,17 @@
 """
     provide database connections - currently supported database are Postgres and Oracle.
 """
-import os
-import datetime
-
 from copy import deepcopy
-
-import cx_Oracle
-import psycopg2
-# from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.lockname import NamedLocks
 
+__version__ = '0.0.1'
+
+
 NAMED_BIND_VAR_PREFIX = ':'
 bind_var_prefix = "CV_"   # for to allow new value in SET clause and old value in WHERE clause for same column/-name
 # .. we add this prefix to all bind_vars and chk_values (self._adapt_sql() would not work with suffix)
-
-
-def _locked_col_expr(col, locked_cols):
-    return "COALESCE(" + col + ", " + NAMED_BIND_VAR_PREFIX + col + ")" if col in locked_cols \
-        else NAMED_BIND_VAR_PREFIX + col
 
 
 def _normalize_col_values(col_values):
@@ -30,7 +21,7 @@ def _normalize_col_values(col_values):
     return col_values
 
 
-class GenericDB:
+class DbBase:
     def __init__(self, credentials, features=None, app_name='ae.db-gen', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of generic database object (base class for real database like e.g. postgres or oracle).
@@ -43,10 +34,10 @@ class GenericDB:
         user = credentials.get('User')
         password = credentials.get('Password')
         dsn = credentials.get('DSN')
-        assert user and password, "db.py/GenericDB has empty user name ({}) and/or password".format(user)
+        assert user and password, f"db.py/DbBase has empty user name ({user}) and/or password"
         self.usr = user
         self.pwd = password
-        assert dsn and isinstance(dsn, str), "db.py/GenericDB() has invalid dsn argument {}".format(dsn)
+        assert dsn and isinstance(dsn, str), f"db.py/DbBase() has invalid dsn argument {dsn}"
         self.dsn = dsn
         self._features = features
         self.app_name = app_name
@@ -69,9 +60,9 @@ class GenericDB:
         try:
             self.curs = self.conn.cursor()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                po(self.dsn + ": database cursor created.")
+                po(f"{self.dsn}: database cursor created.")
         except Exception as ex:
-            self.last_err_msg = self.dsn + "._create_cursor() error: " + str(ex)
+            self.last_err_msg = f"{self.dsn}._create_cursor() error: {ex}"
 
     @staticmethod
     def _prepare_in_clause(sql, bind_vars, additional_col_values=None):
@@ -99,14 +90,14 @@ class GenericDB:
 
         if chk_values:
             rebound_vars.update({bind_var_prefix + k: v for k, v in chk_values.items()})
-            extra_where = " AND ".join([k + " = " + NAMED_BIND_VAR_PREFIX + bind_var_prefix + k
+            extra_where = " AND ".join([f"{k} = {NAMED_BIND_VAR_PREFIX}{bind_var_prefix}{k}"
                                         for k in chk_values.keys()])
             if not where_group_order:
                 where_group_order = extra_where
             elif where_group_order.upper().startswith(('GROUP BY', 'ORDER BY')):
-                where_group_order = extra_where + " " + where_group_order
+                where_group_order = f"{extra_where} {where_group_order}"
             else:
-                where_group_order = "(" + extra_where + ") AND " + where_group_order
+                where_group_order = f"({extra_where}) AND {where_group_order}"
 
         if not where_group_order:
             where_group_order = '1=1'
@@ -123,7 +114,7 @@ class GenericDB:
             if ret_dict:
                 ret_dict['return'] = ret
         except Exception as ex:
-            self.last_err_msg = self.dsn + " call_proc error: " + str(ex)
+            self.last_err_msg = f"{self.dsn} call_proc error: {ex}"
         return self.last_err_msg
 
     def close(self, commit=True):
@@ -138,13 +129,13 @@ class GenericDB:
                     self.curs.close()
                     self.curs = None
                     if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                        po(self.dsn + " cursor closed")
+                        po(f"{self.dsn} cursor closed")
                 self.conn.close()
                 self.conn = None
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    po(self.dsn + " connection closed")
+                    po(f"{self.dsn} connection closed")
             except Exception as ex:
-                self.last_err_msg += self.dsn + " close error: " + str(ex)
+                self.last_err_msg += f"{self.dsn} close error: {ex}"
         return self.last_err_msg
 
     def connect(self):
@@ -158,9 +149,9 @@ class GenericDB:
         try:
             rows = self.curs.fetchall()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                po(self.dsn + ".fetch_all(), 1st of", len(rows), "recs:", rows[:1])
+                po(f"{self.dsn}.fetch_all(), 1st of {len(rows)} recs: {rows[:1]}")
         except Exception as ex:
-            self.last_err_msg = self.dsn + ".fetch_all() exception: " + str(ex)
+            self.last_err_msg = f"{self.dsn}.fetch_all() exception: {ex}"
             po(self.last_err_msg)
             rows = None
         return rows or list()
@@ -173,10 +164,10 @@ class GenericDB:
             if values:
                 val = values[col_idx]
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                po(self.dsn + ".fetch_value() retrieved values: {}[{}]".format(values, col_idx))
+                po(f"{self.dsn}.fetch_value() retrieved values: {values}[{col_idx}]")
         except Exception as ex:
-            self.last_err_msg = self.dsn + ".fetch_value()[{}] exception: {}; status message={}"\
-                .format(col_idx, ex, self.curs.statusmessage)
+            self.last_err_msg = \
+                f"{self.dsn}.fetch_value()[{col_idx}] exception: {ex}; status message={self.curs.statusmessage}"
             po(self.last_err_msg)
         return val
 
@@ -204,11 +195,11 @@ class GenericDB:
                 if commit:
                     self.conn.commit()
                 if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    po(self.dsn + ".execute_sql({}, {}) {}".format(sql, bind_vars, action))
-                    po(".. " + action + " cursor.rowcount/description:", self.curs.rowcount, self.curs.description)
+                    po(f"{self.dsn}.execute_sql({sql}, {bind_vars}) {action}")
+                    po(f".. {action} cursor.rowcount/description: {self.curs.rowcount} {self.curs.description}")
 
             except Exception as ex:
-                self.last_err_msg += self.dsn + ".execute_sql() {} error={}; {}, {}".format(action, ex, sql, bind_vars)
+                self.last_err_msg += f"{self.dsn}.execute_sql() {action} error={ex}; {sql}, {bind_vars}"
 
         if self.debug_level >= DEBUG_LEVEL_ENABLED and self.last_err_msg:
             po(self.last_err_msg)
@@ -217,7 +208,7 @@ class GenericDB:
 
     def delete(self, table_name, chk_values=None, where_group_order='', bind_vars=None, commit=False):
         chk_values, where_group_order, bind_vars = self._rebind(chk_values, where_group_order, bind_vars)
-        sql = "DELETE FROM {} WHERE {}".format(table_name, where_group_order)
+        sql = f"DELETE FROM {table_name} WHERE {where_group_order}"
 
         with self.thread_lock_init(table_name, chk_values):
             self.execute_sql(sql, commit=commit, bind_vars=bind_vars)
@@ -226,7 +217,7 @@ class GenericDB:
 
     def insert(self, table_name, col_values, returning_column='', commit=False):
         _normalize_col_values(col_values)
-        sql = "INSERT INTO " + table_name + " (" + ", ".join(col_values.keys()) \
+        sql = f"INSERT INTO {table_name} (" + ", ".join(col_values.keys()) \
               + ") VALUES (" + ", ".join([NAMED_BIND_VAR_PREFIX + c for c in col_values.keys()]) + ")"
         if returning_column:
             sql += " RETURNING " + returning_column
@@ -236,7 +227,7 @@ class GenericDB:
         if not cols:
             cols = list('*')
         chk_values, where_group_order, bind_vars = self._rebind(chk_values, where_group_order, bind_vars)
-        sql = "SELECT {} {} FROM {} WHERE {}".format(hints, ','.join(cols), from_join, where_group_order)
+        sql = f"SELECT {hints} {','.join(cols)} FROM {from_join} WHERE {where_group_order}"
         return self.execute_sql(sql, bind_vars=bind_vars)
 
     def update(self, table_name, col_values, chk_values=None, where_group_order='', bind_vars=None,
@@ -247,7 +238,10 @@ class GenericDB:
         if locked_cols is None:
             locked_cols = list()
         sql = "UPDATE " + table_name \
-              + " SET " + ", ".join([c + " = " + _locked_col_expr(c, locked_cols) for c in col_values.keys()])
+              + " SET " + ", ".join([
+                f"{col} = " + (f"COALESCE({col}, {NAMED_BIND_VAR_PREFIX}{col})" if col in locked_cols else
+                               f"{NAMED_BIND_VAR_PREFIX}{col}")
+                for col in col_values.keys()])
         if where_group_order:
             sql += " WHERE " + where_group_order
 
@@ -294,9 +288,9 @@ class GenericDB:
                         self.insert(table_name, col_values, returning_column=returning_column, commit=commit)
                     else:               # count not in (0, 1) or count is None:
                         msg = "SELECT COUNT(*) returned None" if count is None \
-                            else "skipping update because found {} duplicate check/search values".format(count)
-                        self.last_err_msg = self.dsn + ".upsert() error={}; args={}, {}, {}, {}, {}"\
-                            .format(msg, table_name, col_values, chk_values, where_group_order, bind_vars)
+                            else f"skipping update because found {count} duplicate check/search values"
+                        self.last_err_msg = f"{self.dsn}.upsert() error={msg}; args={table_name}," \
+                                            f" {col_values}, {chk_values}, {where_group_order}, {bind_vars}"
         return self.last_err_msg
 
     def commit(self, reset_last_err_msg=False):
@@ -305,9 +299,9 @@ class GenericDB:
         try:
             self.conn.commit()
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                po(self.dsn + ".commit()")
+                po(f"{self.dsn}.commit()")
         except Exception as ex:
-            self.last_err_msg = self.dsn + " commit error: " + str(ex)
+            self.last_err_msg = f"{self.dsn} commit error: {ex}"
         return self.last_err_msg
 
     def rollback(self, reset_last_err_msg=False):
@@ -316,10 +310,10 @@ class GenericDB:
 
         try:
             if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                po(self.dsn + ".rollback()")
+                po(f"{self.dsn}.rollback()")
             self.conn.rollback()
         except Exception as ex:
-            self.last_err_msg = self.dsn + " rollback error: " + str(ex)
+            self.last_err_msg = f"{self.dsn} rollback error: {ex}"
 
         return self.last_err_msg
 
@@ -337,148 +331,3 @@ class GenericDB:
     @staticmethod
     def thread_lock_init(table_name, chk_values):
         return NamedLocks(table_name + str(sorted(chk_values.items())))
-
-
-class OraDB(GenericDB):
-    def __init__(self, credentials, features=None, app_name='ae.db-ora', debug_level=DEBUG_LEVEL_DISABLED):
-        """
-        create instance of oracle database object
-        :param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
-                            password and DSN=database name and optionally host address (separated with a @ character).
-        :param features:    optional list of features (currently not used for databases).
-        :param app_name:    application name (shown in the server DB session).
-        :param debug_level: debug level.
-        """
-        super(OraDB, self).__init__(credentials, features=features, app_name=app_name, debug_level=debug_level)
-
-        if self.dsn.count(':') == 1 and self.dsn.count('/@') == 1:   # old style format == host:port/@SID
-            host, rest = self.dsn.split(':')
-            port, service_id = rest.split('/@')
-            self.dsn = cx_Oracle.makedsn(host=host, port=port, sid=service_id)
-        elif self.dsn.count(':') == 1 and self.dsn.count('/') == 1:  # old style format == host:port/service_name
-            host, rest = self.dsn.split(':')
-            port, service_name = rest.split('/')
-            self.dsn = cx_Oracle.makedsn(host=host, port=port, service_name=service_name)
-
-        # used for to fix the following unicode encoding error:
-        # .. 'charmap' codec can't decode byte 0x90 in position 2: character maps to <undefined>
-        # ... BUT it was not working (still got same error)
-        '''
-        def output_type_handler(cursor, name, default_type, size, precision, scale):
-            if default_type in (cx_Oracle.STRING, cx_Oracle.FIXED_CHAR):
-                return cursor.var(cx_Oracle.NCHAR, size, cursor.arraysize)
-        '''
-        # .. luckily, finally found workaround with the next statement for OraDB
-        os.environ["NLS_LANG"] = ".AL32UTF8"
-
-    def connect(self):
-        self.last_err_msg = ''
-        try:
-            # connect old style (using conn str): cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
-            if cx_Oracle.__version__ > '6':
-                # sys context was using clientinfo kwarg in/up-to cx_Oracle V5 - with V6 kwarg renamed to appcontext and
-                # .. now it is using a list of 3-tuples. So since V6 need to replace clientinfo with appcontext=app_ctx
-                NAMESPACE = "CLIENTCONTEXT"  # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
-                app_ctx = [(NAMESPACE, "APP", self.app_name), (NAMESPACE, "LANG", "Python"),
-                           (NAMESPACE, "MOD", "ae.db")]
-                self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, appcontext=app_ctx)
-            else:
-                # sys context old style (until V5 using clientinfo):
-                self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, clientinfo=self.app_name)
-            # self.conn.outputtypehandler = output_type_handler       # see also comment in OraDB.__init__()
-            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                po("OraDB: connected to Oracle database {} via client version {}/{} with n-/encoding {}/{}"
-                       .format(self.dsn, cx_Oracle.clientversion(), cx_Oracle.apilevel,
-                               self.conn.nencoding, self.conn.encoding))
-        except Exception as ex:
-            self.last_err_msg = "OraDB-connect {}@{} ex='{}'".format(getattr(self, 'usr'), getattr(self, 'dsn'), ex)
-        else:
-            self._create_cursor()
-        return self.last_err_msg
-
-    def prepare_ref_param(self, value=None):
-        if isinstance(value, datetime.datetime):    # also True if value is datetime.date because inherits from datetime
-            ora_type = cx_Oracle.DATETIME
-        elif isinstance(value, int) or isinstance(value, float):
-            ora_type = cx_Oracle.NUMBER
-        else:
-            ora_type = cx_Oracle.STRING
-            value = str(value)
-        ref_var = self.curs.var(ora_type)
-        if value is not None:
-            self.set_value(ref_var, value)
-        return ref_var
-
-    @staticmethod
-    def get_value(var):
-        return var.getvalue()
-
-    @staticmethod
-    def set_value(var, value):
-        var.setvalue(0, value)
-
-
-class PostgresDB(GenericDB):
-    def __init__(self, credentials, features=None, app_name='ae.db-pg', debug_level=DEBUG_LEVEL_DISABLED):
-        """
-        create instance of postgres database object
-        :param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
-                            password, DSN=database name and optionally host address (separated with a @ character) and
-                            SslArgs=dict of SSL arguments (sslmode, sslrootcert, sslcert, sslkey).
-        :param features:    optional list of features (currently not used for databases).
-        :param app_name:    application name (shown in the server DB session).
-        :param debug_level: debug level.
-        """
-        super(PostgresDB, self).__init__(credentials, features=features, app_name=app_name, debug_level=debug_level)
-        self._ssl_args = credentials.get('SslArgs')
-        # for "named" PEP-0249 sql will be adapted to fit postgres driver "pyformat" sql bind-var/parameter syntax
-        self._param_style = 'pyformat'
-
-    def connect(self):
-        self.last_err_msg = ''
-        try:
-            connection_params = dict(user=self.usr, password=self.pwd)
-            if '@' in self.dsn:
-                connection_params['dbname'], connection_params['host'] = self.dsn.split('@')
-            else:
-                connection_params['dbname'] = self.dsn
-            if self.app_name:
-                connection_params['application_name'] = self.app_name
-            if self._ssl_args:
-                connection_params.update(self._ssl_args)
-
-            self.conn = psycopg2.connect(**connection_params)
-            if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                po("PostgresDB: connected to postgres database {} via api/server {}/{} with encoding {}"
-                       .format(self.dsn, psycopg2.apilevel, self.conn.server_version, self.conn.encoding))
-        except Exception as ex:
-            self.last_err_msg = "PostgresDB-connect " + self.usr + " on " + self.dsn + " error: " + str(ex)
-        else:
-            self._create_cursor()
-        return self.last_err_msg
-
-    def execute_sql(self, sql, commit=False, auto_commit=False, bind_vars=None):
-        if self.conn or not self.connect():
-            ''' Overwriting generic execute_sql for Postgres because if auto_commit is False then a db error
-                is invalidating the connection until it gets rolled back (optionally to a save-point).
-                Unfortunately psycopg2 does not provide/implement save-points. Could be done alternatively with
-                execute("SAVEPOINT NonAutoCommErrRollback") but RELEASE/ROLLBACK makes it complicated (see also
-                https://stackoverflow.com/questions/2370328/continuing-a-transaction-after-primary-key-violation-error):
-                
-                    save_point = None if auto_commit else self.conn.setSavepoint('NonAutoCommErrRollback')
-                    super().execute_sql(sql, commit=commit, auto_commit=auto_commit, bind_vars=bind_vars)
-                    if save_point:
-                        if self.last_err_msg:
-                            self.conn.rollback(save_point)
-                        else:
-                            self.conn.releaseSavepoint(save_point)
-                    return self.last_err_msg
-                
-                Therefore KISS - a simple rollback will do it also.
-            '''
-            super().execute_sql(sql, commit=commit, auto_commit=auto_commit, bind_vars=bind_vars)
-            if self.last_err_msg and not auto_commit:
-                if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-                    po("PostgresDB.execute_sql(): automatic rollback after error; for connection recycling")
-                self.conn.rollback()
-        return self.last_err_msg

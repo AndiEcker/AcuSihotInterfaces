@@ -7,7 +7,7 @@ from textwrap import wrap
 import pprint
 from typing import Union, Tuple
 
-from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, full_stack_trace, parse_date
+from ae.core import DATE_ISO, DEBUG_LEVEL_ENABLED, full_stack_trace, parse_date
 from ae.sys_data import (ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE, ACTION_SEARCH, ACTION_BUILD,
                          FAT_IDX, FAD_FROM, FAD_ONTO, LIST_TYPES, ALL_FIELDS, CALLABLE_SUFFIX,
                          Record, Records, Value, get_current_index, compose_current_index, set_current_index,
@@ -35,10 +35,6 @@ ELEM_EMPTY = "(empty)"
 ECM_ENSURE_WITH_ERRORS = 0
 ECM_TRY_AND_IGNORE_ERRORS = 1
 ECM_DO_NOT_SEND_CLIENT = 2
-
-
-# default search field for external systems (used by sys_data_sh.cl_field_data())
-SH_DEF_SEARCH_FIELD = 'ShId'
 
 
 ppf = pprint.PrettyPrinter(indent=12, width=96, depth=9).pformat
@@ -414,30 +410,6 @@ MAP_PARSE_WEB_RES = \
 # .. use kernel for clients and web for reservations
 USE_KERNEL_FOR_CLIENTS_DEF = True
 USE_KERNEL_FOR_RES_DEF = False
-
-
-class ShInterface:
-    def __init__(self, credentials, features=None, app_name='', debug_level=DEBUG_LEVEL_DISABLED):
-        self.credentials = credentials
-        self.features = features or list()
-        self.app_name = app_name
-        self.debug_level = debug_level
-
-    @staticmethod
-    def clients_match_field_init(match_fields):
-        msg = "ShInterface.clients_match_field_init({}) expects ".format(match_fields)
-        supported_match_fields = [SH_DEF_SEARCH_FIELD, 'AcuId', 'Surname', 'Email']
-
-        if match_fields:
-            match_field = match_fields[0]
-            if len(match_fields) > 1:
-                return msg + "single match field"
-            elif match_field not in supported_match_fields:
-                return "only one of the match fields {} (not {})".format(supported_match_fields, match_field)
-        else:
-            match_field = SH_DEF_SEARCH_FIELD
-
-        return match_field
 
 
 def add_sh_options(cae, client_port=None, add_kernel_port=False, add_maps_and_kernel_usage=False):
