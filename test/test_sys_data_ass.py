@@ -8,7 +8,7 @@ import datetime
 from sys_data_acu import ACU_CLIENT_MAP
 from ae.sys_data import Record, FAD_ONTO, Records
 
-from sys_data_sf import SF_RES_MAP, SF_CLIENT_MAPS, SDI_SF
+from sys_core_sf import SF_RES_MAP, SF_CLIENT_MAPS, SDI_SF
 from ae.sys_data_sh import res_search, client_data, ResFetch, SH_CLIENT_MAP
 from sys_data_ass import AssSysData, ASS_CLIENT_MAP, SDI_ASS
 

@@ -2,20 +2,18 @@ import datetime
 import pprint
 import re
 from traceback import format_exc
-from typing import Dict, Any, Union, Tuple  # , Tuple
+from typing import Any, Dict, Tuple, Union
 
 from sys_data_ids import (EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI)
-from ae.core import (DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
+from ae.core import (DATE_ISO, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
                      correct_email, correct_phone, parse_date, po)
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.systems import UsedSystems
-from ae.db_ora import OraDB
-from ae.db_pg import PostgresDB
 from ae_notification.notification import add_notification_options, init_notification
 from sys_data_acu import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient, SDI_ACU
-from sys_data_sf import (add_sf_options, ensure_long_id, SfInterface, SF_RES_MAP, SF_CLIENT_MAPS,
+from sys_core_sf import (add_sf_options, ensure_long_id, SF_RES_MAP, SF_CLIENT_MAPS,
                          sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal, SDI_SF, SDF_SF_SANDBOX)
-from ae.sys_core_sh import SDI_SH, AvailCatInfo, ShInterface
+from ae.sys_core_sh import SDI_SH, AvailCatInfo
 from ae.sys_data_sh import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
                             ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ClientToSihot,
                             SH_CLIENT_MAP, SH_RES_MAP, ResToSihot, ClientFetch)
@@ -203,7 +201,7 @@ FIELD_NAMES = dict(AssId=dict(AssSysDataClientsIdx=_ASS_ID,
                              Account='CD_CODE__pc', Sihot='MATCHCODE'),
                    SfId=dict(AssSysDataClientsIdx=_SF_ID,
                              AssDb='cl_sf_id', AcDb='CD_SF_ID1',
-                             Lead='id', Contact='id', Account='id', # was Id but test_sys_data_sf.py needs lower case id
+                             Lead='id', Contact='id', Account='id', # was Id but test_sys_core_sf.py needs lower case id
                              Sihot='MATCH-SM'),
                    ShId=dict(AssSysDataClientsIdx=_SH_ID,
                              AssDb='cl_sh_id', AcDb='CD_SIHOT_OBJID', Lead='Sihot_Guest_Object_Id__c',
@@ -283,16 +281,8 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         self.debug_level = cae.get_opt('debugLevel')
 
-        self.used_systems = UsedSystems(
-            DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE,
-            SDI_ASS, SDI_ACU, SDI_SF, SDI_SH,
-            config_getters=(cae.get_opt, cae.get_var),
-            **sys_credentials)
-        if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            for msg in self.used_systems.debug_messages:
-                self._warn(msg)
-        self._crs = {SDI_ASS: PostgresDB, SDI_ACU: OraDB, SDI_SF: SfInterface, SDI_SH: ShInterface}
-        self.error_message = self.used_systems.connect(self._crs, app_name=cae.app_name, debug_level=self.debug_level)
+        self.used_systems = UsedSystems(cae, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, **sys_credentials)
+        self.error_message = self.used_systems.connect(debug_level=self.debug_level)
         if self.error_message:
             self._err(self.error_message, self._ctx_no_file + 'ConnFailed')
 
@@ -432,8 +422,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def reconnect(self, sys_id):
         if sys_id in self.used_systems:
             self.error_message = self.used_systems[sys_id].connect(
-                self._crs[sys_id],
-                app_name=self.cae.app_name,
+                self.used_systems.available_systems[sys_id],
                 debug_level=self.debug_level,
                 force_reconnect=True,
                 )
@@ -1660,18 +1649,18 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
     # #######################  push/pull/compare action helpers  #######################################################
 
-    def system_records_action(self, system, rec_type, action, **kwargs):
-        msg = "ASD.system_records_action({}, {}, {}, {}): ".format(system, rec_type, action, kwargs)
-        type_name = self.used_systems.available_rec_types.get(rec_type)
+    def system_records_action(self, sys_id, rec_type, action, **kwargs):
+        msg = "ASD.system_records_action({}, {}, {}, {}): ".format(sys_id, rec_type, action, kwargs)
+        type_name = self.used_systems[sys_id].available_rec_types.get(rec_type)
         if not type_name:
             self._err(msg + "Unknown record type {}".format(rec_type))
         else:
-            method_name = system.lower() + '_' + type_name.lower() + '_' + action.lower()
+            method_name = sys_id.lower() + '_' + type_name.lower() + '_' + action.lower()
             method = getattr(self, method_name, None)
             if method:
                 self._warn(msg + "Processing {} action against {} system for record type {}/{}"
-                           .format(action, self.used_systems.available_systems.get(system), type_name, rec_type),
-                           action.lower() + system + type_name, importance=4)
+                           .format(action, self.used_systems.available_systems[sys_id]['name'], type_name, rec_type),
+                           action.lower() + sys_id + type_name, importance=4)
                 try:
                     method(**kwargs)
                 except Exception as ex:
@@ -1679,7 +1668,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                               .format(method_name, ex, format_exc(ex)))
             else:
                 self._err(msg + "{} action method {} is not implemented for system {} and record type {}"
-                          .format(action, method_name, system, rec_type))
+                          .format(action, method_name, sys_id, rec_type))
 
     def _acu_clients_pull(self, col_names=(), chk_values=None, where_group_order='', bind_values=None,
                           field_names=(), exclude_fields=(), filter_records=None):

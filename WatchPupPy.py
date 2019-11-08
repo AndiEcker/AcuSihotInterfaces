@@ -33,11 +33,11 @@ import datetime
 import subprocess
 from configparser import ConfigParser
 
-from sys_data_sf import SDI_SF
+from sys_core_sf import SDI_SF
 from sys_data_acu import SDI_ACU
 from ae.core import (DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
                      full_stack_trace, parse_date, sys_env_text)
-from ae.console import ConsoleApp, MAIN_SECTION_DEF
+from ae.console import ConsoleApp, MAIN_SECTION_NAME
 from ae.progress import Progress
 from ae.sys_core_sh import PostMessage, SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT
 from ae.sys_data_sh import ClientSearch
@@ -147,16 +147,16 @@ def reset_last_run_time(force=False):
             cmd_cfg_parser = ConfigParser()
             cmd_cfg_parser.optionxform = str  # or use 'lambda option: option' to have case-sensitive INI/CFG var names
             cmd_cfg_parser.read(cmd_cfg_file_name)
-            last_start = cmd_cfg_parser.get(MAIN_SECTION_DEF, last_rt_prefix + 'lastRt')
+            last_start = cmd_cfg_parser.get(MAIN_SECTION_NAME, last_rt_prefix + 'lastRt')
             if last_start[0] == '@':
                 last_start_dt = parse_date(last_start[1:])
                 interval_delta = datetime.timedelta(seconds=command_interval) * 3
                 now_dt = datetime.datetime.now()
                 if force or now_dt > last_start_dt + interval_delta:
-                    cmd_cfg_parser.set(MAIN_SECTION_DEF,
+                    cmd_cfg_parser.set(MAIN_SECTION_NAME,
                                        last_rt_prefix + 'Rt_kill_' + datetime.datetime.now().strftime('%y%m%d_%H%M%S'),
                                        last_start)
-                    cmd_cfg_parser.set(MAIN_SECTION_DEF,
+                    cmd_cfg_parser.set(MAIN_SECTION_NAME,
                                        last_rt_prefix + 'lastRt', '-999')
                     with open(cmd_cfg_file_name, 'w') as ini_fp:
                         cmd_cfg_parser.write(ini_fp)

@@ -18,7 +18,7 @@ from ae_validation.validation import add_validation_options, init_validation
 from ae.console import ConsoleApp
 from ae_notification.notification import add_notification_options, init_notification
 from ae.sys_data_sh import ResBulkFetcher, hotel_and_res_id
-from sys_data_sf import add_sf_options, SDI_SF
+from sys_core_sf import add_sf_options, SDI_SF
 from sys_data_ass import AssSysData
 
 __version__ = '0.3'
@@ -383,8 +383,7 @@ try:
         removed = list()
         email, changed = correct_email(email, changed=changed, removed=removed)
         if changed and _debug_level >= DEBUG_LEVEL_VERBOSE:
-            cae.po("SfInterface.find_client(): email address changed to {}. Removed chars: {}"
-                   .format(email, removed))
+            cae.po("email address changed to {}. Removed chars: {}".format(email, removed))
         sf_dict['Email'] = email
 
         phone = sf_dict['Phone']
@@ -392,8 +391,7 @@ try:
         removed = list()
         phone, changed = correct_phone(phone, changed=changed, removed=removed)
         if changed and _debug_level >= DEBUG_LEVEL_VERBOSE:
-            cae.po("SfInterface.find_client(): phone number corrected to {}. Removed chars: {}"
-                   .format(phone, removed))
+            cae.po("phone number corrected to {}. Removed chars: {}".format(phone, removed))
         sf_dict['Phone'] = phone
 
         sf_id, sf_obj = sf_conn.find_client(email, phone, sf_dict['FirstName'], sf_dict['LastName'])

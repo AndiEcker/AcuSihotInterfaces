@@ -50,7 +50,7 @@ from ae.sys_core_sh import SDI_SH
 from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE, field_name_idx_path
 from ae.console import ConsoleApp
-from sys_data_sf import field_from_converters, SDI_SF
+from sys_core_sf import field_from_converters, SDI_SF
 from ae.sys_data_sh import ResSender
 from sys_data_ass import add_ass_options, init_ass_data
 

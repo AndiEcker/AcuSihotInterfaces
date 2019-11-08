@@ -1,5 +1,5 @@
 from ae.systems import UsedSystems
-from sys_data_sf import *
+from sys_core_sf import *
 
 
 class TestReservation:
@@ -229,14 +229,14 @@ class TestConverter:
 
 
 class TestSfId:
-    objs = (('001234567890123', 'Account'), ('003456789012345', 'Contact'), ('00Q456789012345', 'Lead'))
+    phones = (('001234567890123', 'Account'), ('003456789012345', 'Contact'), ('00Q456789012345', 'Lead'))
 
     def test_obj_from_id(self):
-        for sf_id, obj in self.objs:
+        for sf_id, obj in self.phones:
             assert obj_from_id(sf_id) == obj
 
     def test_ensure_long_id(self):
-        for sf_id, obj in self.objs:
+        for sf_id, obj in self.phones:
             print(sf_id, obj)
             assert ensure_long_id(sf_id)
             assert ensure_long_id(sf_id) == sf_id + ('EAA' if obj == 'Lead' else 'AAA')
@@ -247,33 +247,36 @@ class TestSfId:
 
 
 class TestConnection:
-    def test_connection_manual(self):
-        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF)
-        assert not us.connect({SDI_SF: SfInterface})
+    def test_connection_manual(self, console_app_env):
+        us = UsedSystems(console_app_env, SDI_SF)
+        assert not us.connect()
+        assert SDI_SF in us
         sf_conn = us[SDI_SF].connection
         assert sf_conn
         assert sf_conn.is_sandbox
 
-    def test_connection_missing_user(self):
-        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF)
-        assert not us.connect({SDI_SF: SfInterface})
+    def test_connection_missing_cred(self, console_app_env):
+        us = UsedSystems(console_app_env, SDI_SF)
+        ck = us.available_systems[SDI_SF]['credential_keys']
+        ck += ('MissingCredKey', )
+        assert not us.connect()
         assert SDI_SF not in us
 
     def test_connection_conftest(self, salesforce_connection):
         assert salesforce_connection
         assert salesforce_connection.is_sandbox
 
-    def test_connect(self):
-        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF)
-        assert not us.connect({SDI_SF: SfInterface})
+    def test_connect(self, console_app_env):
+        us = UsedSystems(console_app_env, SDI_SF)
+        assert not us.connect()
         sf_conn = us[SDI_SF].connection
         res = sf_conn.soql_query_all("SELECT Id from Lead WHERE Name = '__test__connect__'")
         assert not sf_conn.error_msg
         assert res['totalSize'] == 0
 
-    def test_connect_fail(self):
-        us = UsedSystems(DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, SDI_SF)
-        assert not us.connect({SDI_SF: SfInterface})
+    def test_connect_fail(self, console_app_env):
+        us = UsedSystems(console_app_env, SDI_SF)
+        assert not us.connect()
         sf_conn = us[SDI_SF].connection
         assert sf_conn
         assert not sf_conn.error_msg

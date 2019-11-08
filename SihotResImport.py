@@ -34,7 +34,7 @@ from ae.sys_data_sh import add_sh_options, ClientToSihot, ResSender
 from ae.db_core import bind_var_prefix
 from ae_notification.notification import add_notification_options, init_notification
 from sys_data_acu import add_ac_options, ACU_RES_MAP, from_field_indexes, SDI_ACU
-from sys_data_sf import add_sf_options
+from sys_core_sf import add_sf_options
 from sys_data_ass import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
 from sys_data_ids import (FORE_SURNAME_SEP)

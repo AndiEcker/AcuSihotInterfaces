@@ -17,22 +17,12 @@ from ae.core import DEBUG_LEVEL_VERBOSE, try_eval
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console import ConsoleApp
 from ae.db_pg import PostgresDB
+from ae.systems import UsedSystems
 
-from ae.sys_core_sh import SDI_SH
-from sys_data_sf import SDI_SF
-from sys_data_acu import SDI_ACU
 from sys_data_ass import SDI_ASS, add_ass_options, init_ass_data
 
 __version__ = '0.4'
 
-
-ALL_AVAILABLE_SYSTEMS = {SDI_ASS: 'AssCache', SDI_ACU: 'Acumen', SDI_SF: 'Salesforce', SDI_SH: 'Sihot'}
-SRT_ID_LEN = 1
-SRT_CLIENTS = 'C'
-SRT_RES_DATA = 'R'
-SRT_PRODUCTS = 'P'
-# SRT_RES_INV = 'I'
-ALL_AVAILABLE_RECORD_TYPES = {SRT_CLIENTS: 'Clients', SRT_RES_DATA: 'Reservations', SRT_PRODUCTS: 'Products'}
 
 PP_DEF_WIDTH = 120
 pretty_print = pprint.PrettyPrinter(indent=6, width=PP_DEF_WIDTH, depth=9)
@@ -115,6 +105,7 @@ def parse_system_option_args(args_str):
     :param args_str:    command line option string to be parsed.
     :return:            system id, record type id and option arguments dict string
     """
+    SRT_ID_LEN = 1  #: len of the key/id of a system record type (see :attr:`~ae.systems._System.available_rec_types`)
     str_i = args_str.find('{')
     if str_i >= 0:
         arg_dict_str = args_str[str_i:]
@@ -124,7 +115,7 @@ def parse_system_option_args(args_str):
     str_i -= SRT_ID_LEN
     rec_type = args_str[str_i:str_i + SRT_ID_LEN]
     system = args_str[:str_i]
-    if rec_type in ALL_AVAILABLE_RECORD_TYPES and system in ALL_AVAILABLE_SYSTEMS:
+    if rec_type in ava_rec[system] and system in ava_sys:
         return system, rec_type, arg_dict_str
     return None, None, None
 
@@ -151,17 +142,22 @@ cae = ConsoleApp("Initialize, pull, compare or push AssCache data against Acumen
                         "\n\tfilter_records: callable for record filtering (default=all records)"
                         "\n\tmatch_fields: list of field names used for to lookup and merge in record sets")
 
+init_systems = UsedSystems(cae)     # only used for option init.
+ava_sys = init_systems.available_systems
+ava_rec = {sid: {rid: rna for rid, rna in sob.available_record_types.items()} for sid, sob in init_systems.items()}
+
 cae.add_opt('init', "Initialize/Wipe/Recreate ass_cache database (0=No, 1=Yes)", 0, 'I')
 
-opt_choices = tuple([s + rt for s in ALL_AVAILABLE_SYSTEMS.keys() for rt in ALL_AVAILABLE_RECORD_TYPES.keys()])
-cae.add_opt('pull', "Pull record type (e.g. {}) from system (e.g. {}, e.g. shC is pulling Client data from Sihot"
-            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+sys_keys = (_.lower() for _ in ava_sys.keys())
+rec_keys = ava_rec[SDI_ASS].keys()
+opt_choices = tuple([s + rt for s in sys_keys for rt in rec_keys])
+sis = "/".join(sys_keys)
+rts = "/".join(rec_keys)
+cae.add_opt('pull', f"Pull record type(e.g. {rts}) from system (e.g. {sis}, e.g. shC is pulling Client data from Sihot",
             [], 'S', choices=opt_choices, multiple=True)
-cae.add_opt('push', "Push data of type (e.g. {}) from system (e.g. {}, e.g. sfR pushes Reservations to Salesforce"
-            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+cae.add_opt('push', f"Push data of type ({rts}) from system (e.g. {sis}, e.g. sfR pushes Reservations to Salesforce",
             [], 'W', choices=opt_choices, multiple=True)
-cae.add_opt('compare', "Compare/Check pulled data ({}) against {}, e.g. asP checks pulled Products against AssCache"
-            .format(ALL_AVAILABLE_RECORD_TYPES, ALL_AVAILABLE_SYSTEMS),
+cae.add_opt('compare', f"Compare pulled data ({rts}) against {sis}, e.g. assP checks pulled Products against AssCache",
             [], 'V', choices=opt_choices, multiple=True)
 
 '''
@@ -199,15 +195,15 @@ if act_init:
 act_pulls = cae.get_opt('pull')
 for act_pull in act_pulls:
     sid, rty = parse_action_args(act_pull)
-    actions.append("Pull/Load {} from {}".format(ALL_AVAILABLE_RECORD_TYPES.get(rty), ALL_AVAILABLE_SYSTEMS.get(sid)))
+    actions.append(f"Pull/Load {ava_rec[sid][rty]} from {ava_sys[sid]['name']}")
 act_pushes = cae.get_opt('push')
 for act_push in act_pushes:
     sid, rty = parse_action_args(act_push)
-    actions.append("Push/Fix {} onto {}".format(ALL_AVAILABLE_RECORD_TYPES.get(rty), ALL_AVAILABLE_SYSTEMS.get(sid)))
+    actions.append(f"Push/Fix {ava_rec[sid][rty]} onto {ava_sys[sid]['name']}")
 act_compares = cae.get_opt('compare')
 for act_compare in act_compares:
     sid, rty = parse_action_args(act_compare)
-    actions.append("Compare {} with {}".format(ALL_AVAILABLE_RECORD_TYPES.get(rty), ALL_AVAILABLE_SYSTEMS.get(sid)))
+    actions.append(f"Compare {ava_rec[sid][rty]} with {ava_sys[sid]['name']}")
 if not actions:
     cae.po("\nNo Action option specified (using command line options init, pull, push and/or compare)\n")
     cae.show_help()
@@ -293,7 +289,7 @@ for action, option_args in [(ACTION_PULL, a) for a in act_pulls] \
                            + [(ACTION_COMPARE, a) for a in act_compares]:
     try:
         sid, rty, kwa = parse_action_args(option_args, eval_kwargs=True)
-        asd.system_records_action(system=sid, rec_type=rty, action=action, **kwa)
+        asd.system_records_action(sys_id=sid, rec_type=rty, action=action, **kwa)
     except Exception as ex:
         log_error("Exception {} in processing {} action with {}:\n{}".format(ex, action, option_args, format_exc(ex)))
         if break_on_error:

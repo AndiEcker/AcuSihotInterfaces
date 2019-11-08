@@ -26,7 +26,7 @@ SF_CLIENT_MAPS = \
     {'Account': (
         # ('AssCache_Id__pc', 'AssId'),
         ('AcumenClientRef__pc', 'AcuId'),
-        ('Id', 'SfId'),                      # was Id but test_sys_data_sf.py needs lower case id, CHANGED BACK TO 'Id'
+        ('Id', 'SfId'),                      # was Id but test_sys_core_sf.py needs lower case id, CHANGED BACK TO 'Id'
         ('SihotGuestObjId__pc', 'ShId'),
         ('LastName', 'Surname'),
         ('FirstName', 'Forename'),
@@ -49,7 +49,7 @@ SF_CLIENT_MAPS = \
      'Contact': (
          ('AssCache_Id__c', 'AssId'),
          ('AcumenClientRef__c', 'AcuId'),
-         ('Id', 'SfId'),  # was Id but test_sys_data_sf.py needs lower case id, CHANGED BACK TO 'Id'
+         ('Id', 'SfId'),  # was Id but test_sys_core_sf.py needs lower case id, CHANGED BACK TO 'Id'
          ('Sihot_Guest_Object_Id__c', 'ShId'),
          ('LastName', 'Surname'),
          ('FirstName', 'Forename'),
@@ -66,7 +66,7 @@ SF_CLIENT_MAPS = \
      'Lead': (
          ('AssCache_Id__c', 'AssId'),
          ('Acumen_Client_Reference__c', 'AcuId'),
-         ('Id', 'SfId'),  # was Id but test_sys_data_sf.py needs lower case id, CHANGED BACK TO 'Id'
+         ('Id', 'SfId'),  # was Id but test_sys_core_sf.py needs lower case id, CHANGED BACK TO 'Id'
          ('LastName', 'Surname'),
          ('FirstName', 'Forename'),
          ('DOB1__c', 'DOB', None, None,
@@ -306,7 +306,7 @@ def _format_exc(ex):    # wrapper because SimpleSalesforce is throwing exception
     return exc_msg
 
 
-class SfInterface:
+class SfSysConnector:
     def __init__(self, credentials, features=None, app_name='', debug_level=DEBUG_LEVEL_DISABLED):
         """
         create instance of generic database object (base class for real database like e.g. postgres or oracle).
@@ -341,7 +341,7 @@ class SfInterface:
             if self._debug_level >= DEBUG_LEVEL_ENABLED:
                 po("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
         except SalesforceAuthenticationFailed as sf_ex:
-            self.error_msg = "SfInterface._connect(): Salesforce {} authentication failed with exception: {}" \
+            self.error_msg = "SfSysConnector._connect(): Salesforce {} authentication failed with exception: {}" \
                 .format('Sandbox' if self._sb else 'Production', sf_ex)
 
     def _ensure_lazy_connect(self, soql_query="SELECT Id from Lead WHERE Name = '__test__'"):
@@ -374,12 +374,12 @@ class SfInterface:
             try:
                 return self._conn.query_all(soql_query)
             except SalesforceExpiredSession:
-                po("  ##  SfInterface._ensure_lazy_connect(): Trying re-connecting expired Salesforce session...")
+                po("  ##  SfSysConnector._ensure_lazy_connect(): Trying re-connecting expired Salesforce session...")
                 self._conn = None
                 return self._ensure_lazy_connect(soql_query)
 
         if not self.error_msg:
-            self.error_msg = "SfInterface._ensure_lazy_connect(): Reconnection to Salesforce failed"
+            self.error_msg = "SfSysConnector._ensure_lazy_connect(): Reconnection to Salesforce failed"
             po(" ***  " + self.error_msg)
 
         return None
@@ -400,7 +400,7 @@ class SfInterface:
         try:
             result = self._conn.apexecute(function_name, method='POST', data=function_args)
         except Exception as ex:
-            self.error_msg += "SfInterface.apex_call({}, {}) exception='{}'\n{}"\
+            self.error_msg += "SfSysConnector.apex_call({}, {}) exception='{}'\n{}"\
                 .format(function_name, function_args, ex, _format_exc(ex))
             result = dict(sfif_apex_error=self.error_msg)
 
@@ -419,11 +419,11 @@ class SfInterface:
         try:
             response = self._ensure_lazy_connect(soql_query)
         except Exception as sf_ex:
-            self.error_msg += "SfInterface.soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
+            self.error_msg += "SfSysConnector.soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
         if response is None:
-            self.error_msg += "SfInterface.soql_query_all({}) SimpleSalesforce.query_all() -> None".format(soql_query)
+            self.error_msg += "SfSysConnector.soql_query_all({}) SimpleSalesforce.query_all() -> None".format(soql_query)
         elif isinstance(response, dict) and not response.get('done'):
-            self.error_msg += "SfInterface.soql_query_all(): Salesforce is responding that query {} is NOT done." \
+            self.error_msg += "SfSysConnector.soql_query_all(): Salesforce is responding that query {} is NOT done." \
                 .format(soql_query)
 
         if self._debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -436,7 +436,7 @@ class SfInterface:
             return None
         client_obj = getattr(self._conn, sf_obj, None)
         if not client_obj:
-            self.error_msg = "SfInterface.ssf_object({}) called with invalid salesforce object type".format(sf_obj)
+            self.error_msg = "SfSysConnector.ssf_object({}) called with invalid salesforce object type".format(sf_obj)
         return client_obj
 
     def record_type_id(self, sf_obj, dev_name=None):

@@ -30,6 +30,7 @@
       <w>minlen</w>
       <w>modindex</w>
       <w>multiline</w>
+      <w>mypy</w>
       <w>paramlinks</w>
       <w>paramref</w>
       <w>penwidth</w>

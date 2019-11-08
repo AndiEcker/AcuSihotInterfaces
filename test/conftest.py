@@ -6,13 +6,13 @@ import pytest
 from configparser import ConfigParser
 
 from ae.sys_data import Record, FAD_ONTO
-from ae.console import MAIN_SECTION_DEF
+from ae.console import MAIN_SECTION_NAME
 from ae.literal import Literal
 from ae.db_ora import OraDB
 from sys_data_ass import AssSysData
 from ae.sys_core_sh import SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_CLIENT_PORT, \
     AvailCatInfo, CatRooms, ConfigDict, PostMessage
-from sys_data_sf import SfInterface, SDF_SF_SANDBOX
+from sys_core_sf import SfSysConnector, SDF_SF_SANDBOX
 from ae.sys_data_sh import ClientSearch, ClientToSihot, \
     USE_KERNEL_FOR_CLIENTS_DEF, SH_CLIENT_MAP, USE_KERNEL_FOR_RES_DEF, SH_RES_MAP
 
@@ -114,9 +114,9 @@ def salesforce_connection(console_app_env):
 
     cae.po("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
-    sf_conn = SfInterface(dict(User=sf_user, Password=sf_pw, Token=sf_token),
-                          features=[SDF_SF_SANDBOX + '=True'] if sf_sandbox else None,
-                          app_name=sf_client, debug_level=debug_level)
+    sf_conn = SfSysConnector(dict(User=sf_user, Password=sf_pw, Token=sf_token),
+                             features=[SDF_SF_SANDBOX + '=True'] if sf_sandbox else None,
+                             app_name=sf_client, debug_level=debug_level)
 
     return sf_conn
 
@@ -147,33 +147,33 @@ class ConsoleApp:
         cfg.read(['../.app_env.cfg', '../.sys_envTEST.cfg'])
 
         self._options = dict(acuUser='SIHOT_INTERFACE',
-                             acuPassword=cfg.get(MAIN_SECTION_DEF, 'acuPassword'),
-                             acuDSN=cfg.get(MAIN_SECTION_DEF, 'acuDSN', fallback='SP.TEST'),
-                             debugLevel=cfg.getint(MAIN_SECTION_DEF, 'debugLevel', fallback=2),  # ==DEBUG_LEVEL_VERBOSE
-                             emailValidatorBaseUrl=cfg.get(MAIN_SECTION_DEF, 'emailValidatorBaseUrl'),
-                             emailValidatorApiKey=cfg.get(MAIN_SECTION_DEF, 'emailValidatorApiKey'),
-                             phoneValidatorBaseUrl=cfg.get(MAIN_SECTION_DEF, 'phoneValidatorBaseUrl'),
-                             phoneValidatorApiKey=cfg.get(MAIN_SECTION_DEF, 'phoneValidatorApiKey'),
-                             assUser=cfg.get(MAIN_SECTION_DEF, 'assUser'),
-                             assPassword=cfg.get(MAIN_SECTION_DEF, 'assPassword'),
-                             assRootUsr=cfg.get(MAIN_SECTION_DEF, 'assRootUsr'),
-                             assRootPwd=cfg.get(MAIN_SECTION_DEF, 'assRootPwd'),
-                             assDSN=cfg.get(MAIN_SECTION_DEF, 'assDSN', fallback='test'),
-                             sfUser=cfg.get(MAIN_SECTION_DEF, 'sfUser'),
-                             sfPassword=cfg.get(MAIN_SECTION_DEF, 'sfPassword'),
-                             sfToken=cfg.get(MAIN_SECTION_DEF, 'sfToken'),
-                             sfIsSandbox=cfg.get(MAIN_SECTION_DEF, SDF_SF_SANDBOX, fallback=True),
-                             shClientPort=cfg.get(MAIN_SECTION_DEF, SDF_SH_CLIENT_PORT, fallback=12000),
-                             shServerIP=cfg.get(MAIN_SECTION_DEF, 'shServerIP', fallback='10.103.222.70'),
-                             shServerPort=cfg.get(MAIN_SECTION_DEF, SDF_SH_WEB_PORT, fallback=14777),
-                             shServerKernelPort=cfg.get(MAIN_SECTION_DEF, SDF_SH_KERNEL_PORT, fallback=14772),
+                             acuPassword=cfg.get(MAIN_SECTION_NAME, 'acuPassword'),
+                             acuDSN=cfg.get(MAIN_SECTION_NAME, 'acuDSN', fallback='SP.TEST'),
+                             debugLevel=cfg.getint(MAIN_SECTION_NAME, 'debugLevel', fallback=2),  # =DEBUG_LEVEL_VERBOSE
+                             emailValidatorBaseUrl=cfg.get(MAIN_SECTION_NAME, 'emailValidatorBaseUrl'),
+                             emailValidatorApiKey=cfg.get(MAIN_SECTION_NAME, 'emailValidatorApiKey'),
+                             phoneValidatorBaseUrl=cfg.get(MAIN_SECTION_NAME, 'phoneValidatorBaseUrl'),
+                             phoneValidatorApiKey=cfg.get(MAIN_SECTION_NAME, 'phoneValidatorApiKey'),
+                             assUser=cfg.get(MAIN_SECTION_NAME, 'assUser'),
+                             assPassword=cfg.get(MAIN_SECTION_NAME, 'assPassword'),
+                             assRootUsr=cfg.get(MAIN_SECTION_NAME, 'assRootUsr'),
+                             assRootPwd=cfg.get(MAIN_SECTION_NAME, 'assRootPwd'),
+                             assDSN=cfg.get(MAIN_SECTION_NAME, 'assDSN', fallback='test'),
+                             sfUser=cfg.get(MAIN_SECTION_NAME, 'sfUser'),
+                             sfPassword=cfg.get(MAIN_SECTION_NAME, 'sfPassword'),
+                             sfToken=cfg.get(MAIN_SECTION_NAME, 'sfToken'),
+                             sfIsSandbox=cfg.get(MAIN_SECTION_NAME, SDF_SF_SANDBOX, fallback=True),
+                             shClientPort=cfg.get(MAIN_SECTION_NAME, SDF_SH_CLIENT_PORT, fallback=12000),
+                             shServerIP=cfg.get(MAIN_SECTION_NAME, 'shServerIP', fallback='10.103.222.70'),
+                             shServerPort=cfg.get(MAIN_SECTION_NAME, SDF_SH_WEB_PORT, fallback=14777),
+                             shServerKernelPort=cfg.get(MAIN_SECTION_NAME, SDF_SH_KERNEL_PORT, fallback=14772),
                              shTimeout=369.0, shXmlEncoding='utf8',
                              shUseKernelForClient=USE_KERNEL_FOR_CLIENTS_DEF, shMapClient=SH_CLIENT_MAP,
                              shUseKernelForRes=USE_KERNEL_FOR_RES_DEF, shMapRes=SH_RES_MAP,
                              warningFragments='',
                              )
         for cfg_key in ('hotelIds', 'resortCats', 'apCats', 'roAgencies', 'roomChangeMaxDaysDiff'):
-            val = cfg.get(MAIN_SECTION_DEF, cfg_key)
+            val = cfg.get(MAIN_SECTION_NAME, cfg_key)
             if val:
                 self._options[cfg_key] = eval(val)
 
@@ -187,11 +187,11 @@ class ConsoleApp:
             ret = 'CMM'     # quick fix for tests (for full fix need to include SihotMktSegExceptions.cfg)
         elif name in self._options:
             ret = self._options[name]
-        elif section is None or section != MAIN_SECTION_DEF:
+        elif section is None or section != MAIN_SECTION_NAME:
             # does not convert config value into list/dict:
-            # .. ret = self._env_cfg.get(section or MAIN_SECTION_DEF, name, fallback=default_value)
+            # .. ret = self._env_cfg.get(section or MAIN_SECTION_NAME, name, fallback=default_value)
             s = Literal(literal_or_value=default_value, value_type=type(default_value), name=name)  # conversion/eval
-            s.value = self._env_cfg.get(section or MAIN_SECTION_DEF, name, fallback=s.value)
+            s.value = self._env_cfg.get(section or MAIN_SECTION_NAME, name, fallback=s.value)
             ret = s.value
         else:
             ret = default_value

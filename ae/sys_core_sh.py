@@ -695,16 +695,16 @@ class ResKernelGet(SihotXmlBuilder):
         return res_no
 
 
-class ShInterface:
-    def __init__(self, credentials, features=None, app_name='', debug_level=DEBUG_LEVEL_DISABLED):
+class ShSysConnector:
+    def __init__(self, credentials, features=(), app_name='', debug_level=DEBUG_LEVEL_DISABLED):
         self.credentials = credentials
-        self.features = features or list()
+        self.features = features
         self.app_name = app_name
         self.debug_level = debug_level
 
     @staticmethod
     def clients_match_field_init(match_fields):
-        msg = "ShInterface.clients_match_field_init({}) expects ".format(match_fields)
+        msg = "ShSysConnector.clients_match_field_init({}) expects ".format(match_fields)
         supported_match_fields = [SH_DEF_SEARCH_FIELD, 'AcuId', 'Surname', 'Email']
 
         if match_fields:

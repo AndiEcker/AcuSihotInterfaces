@@ -12,7 +12,7 @@ from ae_validation.validation import EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED, \
 from ae.core import correct_email, correct_phone, try_eval
 from ae.console import ConsoleApp
 from ae_notification.notification import add_notification_options, init_notification
-from sys_data_sf import add_sf_options, SDI_SF
+from sys_core_sf import add_sf_options, SDI_SF
 from sys_data_ass import AssSysData
 
 __version__ = '0.2'

@@ -2,7 +2,7 @@ import pytest
 import os
 import sys
 
-from ae.console import MAIN_SECTION_DEF, ConsoleApp
+from ae.console import MAIN_SECTION_NAME, ConsoleApp
 from ae_validation.validation import (
     validate_flag_info, add_validation_options, init_validation, clients_to_validate,
     EmailValidator, PhoneValidator,
@@ -38,7 +38,7 @@ class TestCloudContactValidation:
     def test_init_validation_all(self, restore_app_env, sys_argv_app_key_restore):
         fn = 'test_valid.ini'
         with open(fn, 'w') as fp:
-            fp.write(f'[{MAIN_SECTION_DEF}]\n')
+            fp.write(f'[{MAIN_SECTION_NAME}]\n')
         cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])
         add_validation_options(cae, email_def=EMAIL_ALL, phone_def=PHONE_ALL, addr_def=ADDR_ALL)
         sys.argv = [sys_argv_app_key_restore, ]
@@ -64,7 +64,7 @@ class TestCloudContactValidation:
     def test_init_validation_error(self, restore_app_env, sys_argv_app_key_restore):
         fn = 'test_valid_err.ini'
         with open(fn, 'w') as fp:
-            fp.write(f'[{MAIN_SECTION_DEF}]\n')
+            fp.write(f'[{MAIN_SECTION_NAME}]\n')
         cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])
         add_validation_options(cae, email_def=EMAIL_ALL, phone_def=PHONE_ALL, addr_def=ADDR_ALL)
         sys.argv = [sys_argv_app_key_restore, ]
