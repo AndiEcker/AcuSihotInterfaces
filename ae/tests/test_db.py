@@ -1,8 +1,8 @@
 import datetime
 from ae.console import ConsoleApp
-from ae.db_core import bind_var_prefix
-from ae.db_ora import OraDB
-from ae.db_pg import PostgresDB
+from ae.db_core import CHK_BIND_VAR_PREFIX
+from ae.db_ora import OraDb
+from ae.db_pg import PostgresDb
 
 
 UPDATED_TEST_STRING = 'Updated Test String'
@@ -13,13 +13,12 @@ test_db = None
 test_table = None
 
 
-class TestOraDB:
+class TestOraDb:
     def test_prepare_connect(self):
         global test_db
-        cae = ConsoleApp('test ae db ora')
-        test_db = OraDB(dict(User=cae.get_var('acuUser'), Password=cae.get_var('acuPassword'),
-                             DSN=cae.get_var('acuDSN')),
-                        app_name='test_db-ora', debug_level=cae.get_opt('debugLevel'))
+        cae = ConsoleApp('test ae db ora', app_name='test_db-ora')
+        test_db = OraDb(cae, dict(User=cae.get_var('acuUser'), Password=cae.get_var('acuPassword'),
+                                  DSN=cae.get_var('acuDSN')))
         assert not test_db.last_err_msg
 
     def test_create_table(self):
@@ -43,7 +42,7 @@ class TestOraDB:
 
     def test_select(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'],
-                                  where_group_order="col_int >= :" + bind_var_prefix + "xy", bind_vars=dict(xy=0))
+                                  where_group_order="col_int >= :" + CHK_BIND_VAR_PREFIX + "xy", bind_vars=dict(xy=0))
         rows = test_db.fetch_all()
         assert rows
         assert rows[0][0] == 1
@@ -59,7 +58,7 @@ class TestOraDB:
 
     def test_in_clause(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt'],
-                                  where_group_order="col_int IN (:" + bind_var_prefix + "yz)",
+                                  where_group_order="col_int IN (:" + CHK_BIND_VAR_PREFIX + "yz)",
                                   bind_vars=dict(yz=[0, 1, 2, 3, 4]))
         rows = test_db.fetch_all()
         assert rows
@@ -68,13 +67,12 @@ class TestOraDB:
         assert rows[0][2] == TEST_DATE
 
 
-class TestPostgresDB:
+class TestPostgresDb:
     def test_connect(self):    # test_connect
         global test_db
-        cae = ConsoleApp('test ae db pg')
-        test_db = PostgresDB(dict(User=cae.get_var('assRootUsr'), Password=cae.get_var('assRootPwd'), DSN='test',
-                                  SslArgs=cae.get_var('assSslArgs')),
-                             app_name='test_db-pg', debug_level=cae.get_opt('debugLevel'))
+        cae = ConsoleApp('test ae db pg', app_name='test_db-pg')
+        test_db = PostgresDb(cae, dict(User=cae.get_var('assRootUsr'), Password=cae.get_var('assRootPwd'), DSN='test',
+                                       SslArgs=cae.get_var('assSslArgs')))
         assert not test_db.connect()
         assert not test_db.last_err_msg
 
@@ -118,7 +116,7 @@ class TestPostgresDB:
 
     def test_in_clause(self):
         assert not test_db.select(test_table, cols=['col_int', 'col_vc', 'col_dt', 'col_ti'],
-                                  where_group_order="col_int IN (:" + bind_var_prefix + "yz)",
+                                  where_group_order="col_int IN (:" + CHK_BIND_VAR_PREFIX + "yz)",
                                   bind_vars=dict(yz=[0, 1, 2, 3, 4]))
         rows = test_db.fetch_all()
         assert rows

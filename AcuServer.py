@@ -14,7 +14,7 @@ from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBO
 from ae.console import ConsoleApp
 
 from ae_notification.notification import add_notification_options, init_notification
-from ae.db_ora import OraDB
+from ae.db_ora import OraDb
 from sys_data_acu import add_ac_options, AcumenClient
 from ae.sys_core_sh import Request, RoomChange, SihotXmlBuilder, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, \
     SDF_SH_XML_ENCODING, TCP_CONNECTION_BROKEN_MSG, RequestXmlHandler, TcpServer
@@ -64,9 +64,8 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
     if old_room_no:
         old_room_no = old_room_no.lstrip('0')
     # move/check in/out guest from/into room_no
-    ora_db = OraDB(dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
-                        DSN=cae.get_opt('acuDSN')),
-                   app_name=cae.app_name, debug_level=debug_level)
+    ora_db = OraDb(cae, dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
+                             DSN=cae.get_opt('acuDSN')))
     err_msg = ora_db.connect()
     extra_info = ''
     if not err_msg:

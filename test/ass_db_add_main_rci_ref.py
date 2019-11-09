@@ -1,5 +1,5 @@
 from ae.console import ConsoleApp
-from ae.db_pg import PostgresDB
+from ae.db_pg import PostgresDb
 from sys_data_acu import add_ac_options
 from sys_data_ass import AssSysData, EXT_REF_TYPE_RCI
 
@@ -54,8 +54,7 @@ if asd.error_message:
     cae.shutdown(exit_code=33)
 
 # logon to and prepare ass_cache database
-ass_db = PostgresDB(dict(User=pg_user, Password=pg_pw, DSN=pg_dsn, SslArgs=cae.get_var('assSslArgs')),
-                    app_name=cae.app_name, debug_level=debug_level)
+ass_db = PostgresDb(cae, dict(User=pg_user, Password=pg_pw, DSN=pg_dsn, SslArgs=cae.get_var('assSslArgs')))
 if ass_db.connect():
     log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
     cae.shutdown(exit_code=66)

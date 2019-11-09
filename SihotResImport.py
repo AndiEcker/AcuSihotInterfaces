@@ -31,7 +31,7 @@ from ae.progress import Progress
 from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
 from ae.sys_data_sh import add_sh_options, ClientToSihot, ResSender
 
-from ae.db_core import bind_var_prefix
+from ae.db_core import CHK_BIND_VAR_PREFIX
 from ae_notification.notification import add_notification_options, init_notification
 from sys_data_acu import add_ac_options, ACU_RES_MAP, from_field_indexes, SDI_ACU
 from sys_core_sf import add_sf_options
@@ -1094,9 +1094,9 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         # re-create resort match codes config value from Acumen data if empty
         if not cae.get_var('ClientRefsResortCodes'):
             m1 = asd.load_view(None, 'T_CD', ["AcuId"], "RciId in (:rci_refs)",
-                                     {bind_var_prefix + 'rci_refs': asd.client_refs_add_exclude})
+                                     {CHK_BIND_VAR_PREFIX + 'rci_refs': asd.client_refs_add_exclude})
             m2 = asd.load_view(None, 'T_CR', ["CR_CDREF"], "CR_TYPE like 'RCI%' and CR_REF in (:rci_refs)",
-                                     {bind_var_prefix + 'rci_refs': asd.client_refs_add_exclude})
+                                     {CHK_BIND_VAR_PREFIX + 'rci_refs': asd.client_refs_add_exclude})
             if m1 is None or m2 is None:
                 error_msg = "Resort match code fetch error"
                 log_error(error_msg, NO_FILE_PREFIX_CHAR + 'RciResortCodesDataFetch', importance=3)

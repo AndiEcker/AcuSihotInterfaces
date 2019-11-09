@@ -5,7 +5,7 @@ import datetime
 
 from sys_data_ids import EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
 from ae.core import DEBUG_LEVEL_ENABLED
-from ae.db_ora import OraDB
+from ae.db_ora import OraDb
 from ae.sys_data import ACTION_UPDATE, ACTION_DELETE, FAT_IDX, FAT_CNV, FAT_SQE, FAD_FROM, Record, FAD_ONTO, \
     Records, string_to_records
 from ae.sys_core_sh import SihotXmlBuilder
@@ -195,9 +195,8 @@ class AcuDbRows:
 
         self._opened = not bool(ora_db)
         if self._opened:
-            self.ora_db = OraDB(dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
-                                     DSN=cae.get_opt('acuDSN')),
-                                app_name=cae.app_name, debug_level=cae.get_opt('debugLevel'))
+            self.ora_db = OraDb(cae, dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
+                                          DSN=cae.get_opt('acuDSN')))
             err_msg = self.ora_db.connect()
             if err_msg:
                 cae.po("AcuDbRows.__init__() db connect error: {}".format(err_msg))

@@ -16,7 +16,7 @@ from traceback import format_exc
 from ae.core import DEBUG_LEVEL_VERBOSE, try_eval
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console import ConsoleApp
-from ae.db_pg import PostgresDB
+from ae.db_pg import PostgresDb
 from ae.systems import UsedSystems
 
 from sys_data_ass import SDI_ASS, add_ass_options, init_ass_data
@@ -239,8 +239,8 @@ if act_init:
     pg_root_pw = cae.get_var('assRootPwd')
     pg_root_dsn = pg_root_usr + ('@' + pg_host if '@' in ass_dsn else '')
     log_warning("creating database {} and user {}".format(ass_dsn, ass_user), 'initCreateDBandUser')
-    pg_db = PostgresDB(dict(User=pg_root_usr, Password=pg_root_pw, DSN=pg_root_dsn, SslArgs=ass_ssl),
-                       app_name=cae.app_name + "-CreateDb", debug_level=_debug_level)
+    cae.app_name += "-CreateDb"
+    pg_db = PostgresDb(cae, dict(User=pg_root_usr, Password=pg_root_pw, DSN=pg_root_dsn, SslArgs=ass_ssl))
     if pg_db.execute_sql("CREATE DATABASE {};".format(pg_dbname), auto_commit=True):  # " LC_COLLATE 'C'"):
         log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72)
 
@@ -253,10 +253,11 @@ if act_init:
         if pg_db.execute_sql("GRANT ALL PRIVILEGES ON DATABASE {} TO {};".format(pg_dbname, ass_user), commit=True):
             log_error(pg_db.last_err_msg, 'initGrantUserConnect', exit_code=87)
     pg_db.close()
+    cae.app_name = cae.app_name[:-9]   # remove "-CreateDb" suffix
 
     log_warning("creating tables and audit trigger schema/extension", 'initCreateTableAndAudit')
-    pg_db = PostgresDB(dict(User=pg_root_usr, Password=pg_root_pw, DSN=ass_dsn, SslArgs=ass_ssl),
-                       app_name=cae.app_name + "-InitTables", debug_level=_debug_level)
+    cae.app_name += "-InitTables"
+    pg_db = PostgresDb(cae, dict(User=pg_root_usr, Password=pg_root_pw, DSN=ass_dsn, SslArgs=ass_ssl))
     if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO {};"
                          .format(ass_user)):
         log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=90)
@@ -271,6 +272,7 @@ if act_init:
     if pg_db.execute_sql(open("sql/dba_create_ass_tables.sql").read(), commit=True):
         log_error(pg_db.last_err_msg, 'initCtScript', exit_code=102)
     pg_db.close()
+    cae.app_name = cae.app_name[:-11]   # remove "-InitTables" suffix
 
 
 # logon to and prepare AssCache and config data env, optional also connect to Acumen, Salesforce, Sihot

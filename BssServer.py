@@ -28,7 +28,7 @@ from functools import partial
 from traceback import format_exc
 import pprint
 
-from ae.db_core import NAMED_BIND_VAR_PREFIX, bind_var_prefix
+from ae.db_core import NAMED_BIND_VAR_PREFIX, CHK_BIND_VAR_PREFIX
 from sys_data_acu import SDI_ACU
 from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import Record, FAD_ONTO
@@ -176,7 +176,7 @@ def res_from_sh_to_sf(asd, ass_changed_res):
         obj_id = ass_changed_res['rgr_obj_id']
         if obj_id:
             res = asd.load_view(asd.connection(SDI_ACU), 'T_RU inner join T_MS on RU_MLREF = MS_MLREF', ['MS_SF_DL_ID'],
-                                "RU_SIHOT_OBJID = " + NAMED_BIND_VAR_PREFIX + bind_var_prefix + "obj_id",
+                                "RU_SIHOT_OBJID = " + NAMED_BIND_VAR_PREFIX + CHK_BIND_VAR_PREFIX + "obj_id",
                                 dict(obj_id=obj_id))
             if res and res[0] and res[0][0]:
                 rgr_sf_id = res[0][0]

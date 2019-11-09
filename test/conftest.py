@@ -8,7 +8,7 @@ from configparser import ConfigParser
 from ae.sys_data import Record, FAD_ONTO
 from ae.console import MAIN_SECTION_NAME
 from ae.literal import Literal
-from ae.db_ora import OraDB
+from ae.db_ora import OraDb
 from sys_data_ass import AssSysData
 from ae.sys_core_sh import SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_CLIENT_PORT, \
     AvailCatInfo, CatRooms, ConfigDict, PostMessage
@@ -31,9 +31,9 @@ def avail_cats(console_app_env):
 # noinspection PyShadowingNames
 @pytest.fixture()
 def db_connected(console_app_env):
-    ora_db = OraDB(dict(User=console_app_env.get_opt('acuUser'), Password=console_app_env.get_opt('acuPassword'),
-                        DSN=console_app_env.get_opt('acuDSN')),
-                   app_name='conftest', debug_level=console_app_env.get_opt('debugLevel'))
+    ora_db = OraDb(console_app_env,
+                   dict(User=console_app_env.get_opt('acuUser'), Password=console_app_env.get_opt('acuPassword'),
+                        DSN=console_app_env.get_opt('acuDSN')))
     ora_db.connect()
     return ora_db
 

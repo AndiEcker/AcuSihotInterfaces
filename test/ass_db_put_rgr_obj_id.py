@@ -1,5 +1,5 @@
 from ae.console import ConsoleApp
-from ae.db_pg import PostgresDB
+from ae.db_pg import PostgresDb
 from ae.sys_data_sh import add_sh_options, print_sh_options, res_no_to_obj_id
 
 
@@ -55,8 +55,7 @@ if asd.error_message:
     log_error(asd.error_message, 'AssSysDataInit', importance=4, exit_code=9)
 '''
 # prepare ass_cache database
-ass_db = PostgresDB(dict(User=ass_user, Password=ass_pw, DSN=ass_dsn, SslArgs=cae.get_var('assSslArgs')),
-                    app_name=cae.app_name, debug_level=debug_level)
+ass_db = PostgresDb(cae, dict(User=ass_user, Password=ass_pw, DSN=ass_dsn, SslArgs=cae.get_var('assSslArgs')))
 if ass_db.connect():
     log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
 

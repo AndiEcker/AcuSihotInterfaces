@@ -9,8 +9,8 @@ from traceback import format_exc
 
 from ae.core import DEBUG_LEVEL_VERBOSE, parse_date
 from ae.console import ConsoleApp
-from ae.db_ora import OraDB
-from ae.db_pg import PostgresDB
+from ae.db_ora import OraDb
+from ae.db_pg import PostgresDb
 from sys_data_ass import add_ass_options, init_ass_data
 
 __version__ = '0.2'
@@ -321,9 +321,8 @@ def fix_ass_discrepancies(od):
 add_log_msg("Fetching reservation/occupation data from {} system".format(correct_system), importance=4)
 try:
     if correct_system == 'Acu':
-        sys_db = OraDB(dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
-                            DSN=cae.get_opt('acuDSN')),
-                       app_name=cae.app_name, debug_level=cae.get_opt('debugLevel'))
+        sys_db = OraDb(cae, dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
+                                 DSN=cae.get_opt('acuDSN')))
         err_msg = sys_db.connect()
         if not err_msg:
             err_msg = sys_db.select('T_ARO',
@@ -344,10 +343,8 @@ try:
                                     " order by ARO_EXP_ARRIVE desc",  # order to have old room last for RM
                                     bind_vars=dict(beg=date_from, till=date_till, days=max_days_diff))
     else:
-        sys_db = PostgresDB(dict(User=cae.get_opt('assUser'), Password=cae.get_opt('assPassword'),
-                                 DSN=cae.get_opt('assDSN'), SslArgs=cae.get_var('assSslArgs')),
-                            app_name=cae.app_name,
-                            debug_level=cae.get_opt('debugLevel'))
+        sys_db = PostgresDb(cae, dict(User=cae.get_opt('assUser'), Password=cae.get_opt('assPassword'),
+                                      DSN=cae.get_opt('assDSN'), SslArgs=cae.get_var('assSslArgs')))
         err_msg = sys_db.connect()
         if not err_msg:
             err_msg = sys_db.select('res_groups LEFT OUTER JOIN clients ON rgr_order_cl_fk = cl_pk',
