@@ -73,9 +73,11 @@ class DbBase:
         :param bind_vars:   dict of all available bind variables.
         :return:            adapted query string.
 
+        .. _sql-parameter-style:
+
         .. note::
             For database drivers - like psycopg2 - that are only providing the `pyformat` parameter style syntax
-            (in the format %(bind_var)%) the sql query string will be adapted, by converting all bind variables
+            (in the format %(bind_var)s) the sql query string will be adapted, by converting all bind variables
             from the parameter style `named` into `pyformat`.
 
             The returned query will be unchanged for all other database drivers (that are directly supporting
@@ -89,7 +91,7 @@ class DbBase:
         return new_sql
 
     def _create_cursor(self):
-        """ create database driver cursor """
+        """ allow sub-class to create Python DB API-conform database driver cursor """
         try:
             self.curs = self.conn.cursor()
             self.console_app.dpo(f"{self.dsn}: database cursor created.")
@@ -122,13 +124,27 @@ class DbBase:
     @staticmethod
     def _rebind(chk_values: Dict[str, Any], where_group_order: str, bind_vars: Dict[str, Any],
                 extra_bind: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, Any], str, Dict[str, Any]]:
-        """ rebind variables and join where_group_order string with chk_values and additional bind variables.
+        """ merge where_group_order string with chk_values filter dict and merge/rename bind variables.
 
-        :param chk_values:          dict with filter column name and value.
-        :param where_group_order:   sql part including WHERE/GROUP/ORDER clauses.
-        :param bind_vars:           dict with bind variables.
-        :param extra_bind:          additional dict with bind variables.
-        :return:                    tuple of new chk_values, where_group_order and bind_vars.
+        :param chk_values:          dict with column_name: value items, used for to filter/restrict the resulting rows.
+
+                                    If this dict
+                                    is empty then the first item of the :paramref:`~_rebind.extra_bind` dict will
+                                    be used as filter. No filter will be applied if :paramref:`~_rebind.extra_bind`
+                                    is also empty.
+
+                                    This method compiles this dict into a sql WHERE clause, which gets merged
+                                    with the sql text passed in the :paramref:`~_rebind.where_group_order`
+                                    argument. The names of the sql parameters and related bind variables
+                                    are build from column names of the dict, prefixed with
+                                    :data:`CHK_BIND_VAR_PREFIX`.
+        :param where_group_order:   sql part with optional WHERE/GROUP/ORDER clauses (the part after the WHERE),
+                                    including bind variables in the :ref:`named parameter style <sql-parameter-style>`.
+        :param bind_vars:           dict with bind variables (variable name has to be prefixed
+                                    in :paramref:`~_rebind.where_group_order` with :data:`CHK_BIND_VAR_PREFIX`).
+        :param extra_bind:          additional dict with bind variables (variable name has NOT to be prefixed/adapted
+                                    in :paramref:`~_rebind.where_group_order` argument).
+        :return:                    tuple of corrected/rebound values of chk_values, where_group_order and bind_vars.
         """
         rebound_vars: Dict[str, Any] = dict()   # use new instance to not change callers bind_vars dict
 
@@ -169,7 +185,7 @@ class DbBase:
         self.last_err_msg = ""
         try:
             ret = self.curs.callproc(proc_name, proc_args)
-            if ret_dict:
+            if ret_dict is not None:
                 ret_dict['return'] = ret
         except Exception as ex:
             self.last_err_msg = f"{self.dsn} call_proc error: {ex}"
@@ -207,7 +223,7 @@ class DbBase:
         """ return description text if opened cursor or None if cursor is closed or not yet opened. """
         return self.curs.description if self.curs else None
 
-    def fetch_all(self) -> Sequence:
+    def fetch_all(self) -> List[Tuple]:
         """ fetch all the rows found from the last executed SELECT query.
 
         :return:        empty list on error or if query result is empty, else a list of database rows.
@@ -222,7 +238,7 @@ class DbBase:
             rows = None
         return rows or list()
 
-    def fetch_value(self, col_idx: int = 0):
+    def fetch_value(self, col_idx: int = 0) -> Any:
         """ fetch the value of a column of the first/next row of the found rows of the last SELECT query.
 
         :param col_idx:     index of the column with the value to fetch and return.

@@ -39,6 +39,12 @@ def restore_app_env():
             _unregister_app_instance(key)   # remove app from ae.core app register/dict
 
 
+@pytest.fixture
+def cons_app(restore_app_env):
+    from ae.console import ConsoleApp
+    yield ConsoleApp()
+
+
 def delete_files(file_name, keep_ext=False, ret_type='count'):
     """ clean up test log files and other test files after test run. """
     if keep_ext:

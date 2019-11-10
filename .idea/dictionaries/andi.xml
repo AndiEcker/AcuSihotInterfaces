@@ -10,6 +10,7 @@
       <w>bysource</w>
       <w>cafebabe</w>
       <w>callables</w>
+      <w>callproc</w>
       <w>configparser</w>
       <w>dabo</w>
       <w>deadbeef</w>
@@ -42,6 +43,7 @@
       <w>resv</w>
       <w>rgba</w>
       <w>searchbox</w>
+      <w>statusmessage</w>
       <w>toctree</w>
       <w>typehints</w>
       <w>tzinfo</w>
