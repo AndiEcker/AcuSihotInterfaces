@@ -3,6 +3,8 @@ import pytest
 
 from ae.core import DEBUG_LEVEL_ENABLED
 from ae.console import ConsoleApp
+from ae.lockname import NamedLocks
+
 from ae.db_core import DbBase, NAMED_BIND_VAR_PREFIX, CHK_BIND_VAR_PREFIX
 
 
@@ -29,7 +31,7 @@ class XxConn:
 
 
 class XxCurs:
-    description = "XxCursDescription"
+    description = (('COL1', ), ('COL2', ), )
     statusmessage = "XxCursStatusMessage"
     rowcount = 0
 
@@ -49,9 +51,11 @@ class XxCurs:
         self.exec_bind_vars = bind_vars
 
     def fetchall(self):
+        self.rowcount = 1
         return FETCH_ALL_VALUES or self
 
     def fetchone(self):
+        self.rowcount = 1
         return FETCH_ALL_VALUES[0] or self
 
 
@@ -287,41 +291,97 @@ class TestBaseDbStubConnected:
 
     def test_delete(self, xx):
         xx.delete('TABLE_NAME', dict(chk=33), "GROUP BY z", dict(bind=99), commit=True)
+        assert xx.last_err_msg == ""
+        assert 'DELETE ' in xx.curs.exec_sql
         assert 'TABLE_NAME' in xx.curs.exec_sql
         assert 'chk' in xx.curs.exec_sql
         assert "GROUP BY z" in xx.curs.exec_sql
 
     def test_insert(self, xx):
         xx.insert('TABLE_NAME', dict(chk=33), "RET_COL", commit=True)
+        assert xx.last_err_msg == ""
+        assert 'INSERT ' in xx.curs.exec_sql
         assert 'TABLE_NAME' in xx.curs.exec_sql
         assert 'chk' in xx.curs.exec_sql
         assert "RET_COL" in xx.curs.exec_sql
 
     def test_select(self, xx):
         xx.select('TABLE_NAME', (), dict(chk=3), "GROUP BY z", dict(bind=99), hints="HINTS")
+        assert xx.last_err_msg == ""
+        assert 'SELECT ' in xx.curs.exec_sql
         assert 'TABLE_NAME' in xx.curs.exec_sql
         assert 'chk' in xx.curs.exec_sql
         assert "GROUP BY z" in xx.curs.exec_sql
         assert "HINTS" in xx.curs.exec_sql
 
     def test_update(self, xx):
-        xx.update('TABLE_NAME', dict(col=1), dict(chk=3), "GROUP BY z", dict(bind=99))
+        xx.update('TABLE_NAME', dict(col=1), dict(chk=3), "EXTRA_WHERE", dict(bind=99))
+        assert xx.last_err_msg == ""
+        assert 'UPDATE ' in xx.curs.exec_sql
         assert 'TABLE_NAME' in xx.curs.exec_sql
         assert 'col' in xx.curs.exec_sql
         assert 'chk' in xx.curs.exec_sql
-        assert "GROUP BY z" in xx.curs.exec_sql
+        assert "EXTRA_WHERE" in xx.curs.exec_sql
 
     def test_upsert(self, xx):
-        xx.upsert('TABLE_NAME', dict(col=1), dict(chk=3), "GROUP BY z", dict(bind=99))
+        xx.upsert('TABLE_NAME', dict(col=1), dict(chk=3), "EXTRA_WHERE", dict(bind=99))
+        assert xx.last_err_msg == ""
+        assert 'UPDATE ' in xx.curs.exec_sql
         assert 'TABLE_NAME' in xx.curs.exec_sql
         assert 'col' in xx.curs.exec_sql
         assert 'chk' in xx.curs.exec_sql
-        assert "GROUP BY z" in xx.curs.exec_sql
+        assert "EXTRA_WHERE" in xx.curs.exec_sql
 
     def test_upsert_returning(self, xx):
-        xx.upsert('TABLE_NAME', dict(col=1), dict(chk=3), "GROUP BY z", dict(bind=99), returning_column='RET_COL')
+        xx.upsert('TABLE_NAME', dict(col=1), dict(chk=3), "EXTRA_WHERE", dict(bind=99), returning_column='RET_COL')
+        assert xx.last_err_msg == ""
+        assert 'SELECT ' in xx.curs.exec_sql
+        assert 'TABLE_NAME' in xx.curs.exec_sql
+        assert 'col' not in xx.curs.exec_sql
+        assert 'chk' in xx.curs.exec_sql
+        assert "EXTRA_WHERE" in xx.curs.exec_sql
+        assert "RET_COL" in xx.curs.exec_sql
+
+    def test_upsert_insert(self, xx):
+        xx.curs.fetchone = lambda : (0, )      # force SELECT COUNT() to return zero/0
+        xx.upsert('TABLE_NAME', dict(col=1), dict(chk=3), "EXTRA_WHERE", dict(bind=99))
+        assert xx.last_err_msg == ""
+        assert 'INSERT ' in xx.curs.exec_sql
         assert 'TABLE_NAME' in xx.curs.exec_sql
         assert 'col' in xx.curs.exec_sql
         assert 'chk' in xx.curs.exec_sql
-        assert "GROUP BY z" in xx.curs.exec_sql
-        assert "RET_COL" in xx.curs.exec_sql
+        assert "EXTRA_WHERE" not in xx.curs.exec_sql
+
+    def test_upsert_err_multiple(self, xx):
+        xx.curs.fetchone = lambda : (2, )      # force SELECT COUNT() to return 2 records
+        xx.upsert('TABLE_NAME', dict(col=1), dict(chk=3), "EXTRA_WHERE", dict(bind=99), multiple_row_update=False)
+        assert "returned 2" in xx.last_err_msg
+
+    def test_upsert_err_negative(self, xx):
+        xx.curs.fetchone = lambda : (-3, )      # force SELECT COUNT() to return -3
+        xx.upsert('TABLE_NAME', dict(col=1), dict(chk=3), "EXTRA_WHERE", dict(bind=99))
+        assert "returned -3" in xx.last_err_msg
+
+    def test_commit(self, xx):
+        xx.last_err_msg = "ERROR"
+        xx.commit(reset_last_err_msg=True)
+        assert xx.last_err_msg == ""
+
+    def test_rollback(self, xx):
+        xx.last_err_msg = "ERROR"
+        xx.rollback(reset_last_err_msg=True)
+        assert xx.last_err_msg == ""
+
+    def test_get_row_count(self, xx):
+        assert xx.get_row_count() == 0
+
+    def test_get_row_count_after_fetch(self, xx):
+        xx.fetch_value()
+        assert xx.get_row_count() == 1
+
+    def test_selected_column_names(self, xx):
+        assert xx.selected_column_names() == [col_desc_tuple[0] for col_desc_tuple in XxCurs.description]
+
+    def test_thread_lock_init(self, xx):
+        lock = xx.thread_lock_init('TABLE_NAME', dict(chk=99))
+        assert isinstance(lock, NamedLocks)

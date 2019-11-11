@@ -442,10 +442,8 @@ class DbBase:
                         col_values.update(chk_values)
                         self.insert(table_name, col_values, returning_column=returning_column, commit=commit)
                     else:               # count not in (0, 1) or count is None:
-                        msg = "SELECT COUNT(*) returned None" if count is None \
-                            else f"skipping update because found {count} duplicate check/search values"
-                        self.last_err_msg = f"{self.dsn}.upsert() error={msg}; args={table_name}," \
-                                            f" {col_values}, {chk_values}, {where_group_order}, {bind_vars}"
+                        self.last_err_msg = f"{self.dsn}.upsert(): SELECT COUNT(*) returned {count}; args={table_name}"\
+                                            f", {col_values}, {chk_values}, {where_group_order}, {bind_vars}"
         return self.last_err_msg
 
     def commit(self, reset_last_err_msg: bool = False) -> str:
@@ -456,11 +454,13 @@ class DbBase:
         """
         if reset_last_err_msg:
             self.last_err_msg = ""
+
         try:
             self.conn.commit()
             self.console_app.dpo(f"{self.dsn}.commit()")
         except Exception as ex:
             self.last_err_msg = f"{self.dsn} commit error: {ex}"
+
         return self.last_err_msg
 
     def rollback(self, reset_last_err_msg: bool = False) -> str:
