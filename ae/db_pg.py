@@ -83,9 +83,9 @@ class PostgresDb(DbBase):
 
         :param sql:             sql query to execute.
         :param commit:          pass True to commit (after UPDATE queries).
-        :param bind_vars:
-        :param auto_commit:     pass True
-        :return:
+        :param bind_vars:       dict of extra bind variables (key=variable name, value=value).
+        :param auto_commit:     pass True activate auto-commit-mode for this session.
+        :return:                last error message or empty string if no errors occurred.
 
         .. hint::
             Overwriting generic execute_sql for Postgres because if auto_commit is False then a db error
