@@ -79,29 +79,31 @@ class OraDb(DbBase):
     def connect(self):
         """ connect this instance to the database driver. """
         self.last_err_msg = ''
-        user = self.credentials.get('user')
-        password = self.credentials.get('password')
+        conn_args = self.connect_params()
+        user = conn_args.get('user')
+        password = conn_args.get('password')
         try:
             # connect old style (using conn str): cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
             if cx_Oracle.__version__ > '6':
                 # sys context was using clientinfo kwarg in/up-to cx_Oracle V5 - with V6 kwarg renamed to appcontext and
                 # .. now it is using a list of 3-tuples. So since V6 need to replace clientinfo with appcontext=app_ctx
                 NAMESPACE = "CLIENTCONTEXT"  # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
-                app_ctx = [(NAMESPACE, "APP", self.console_app.app_name), (NAMESPACE, "LANG", "Python"),
-                           (NAMESPACE, "MOD", "ae.db")]
+                app_ctx = [(NAMESPACE, "APP", self.console_app.app_name),
+                           (NAMESPACE, "LANG", "Python"),
+                           (NAMESPACE, "MOD", "ae.db_ora")]
                 self.conn = cx_Oracle.connect(user=user, password=password, dsn=self.dsn, appcontext=app_ctx)
             else:
                 # sys context old style (until V5 using clientinfo):
                 self.conn = cx_Oracle.connect(user=user, password=password, dsn=self.dsn,
                                               clientinfo=self.console_app.app_name)
             # self.conn.outputtypehandler = output_type_handler       # see also comment in OraDb.__init__()
-            self.console_app.dpo(f"OraDb: connected to Oracle database {self.dsn}"
+            self.console_app.dpo(f"OraDb.connect(): connected"
                                  f" via client version {cx_Oracle.clientversion()}/{cx_Oracle.apilevel}"
-                                 f" with n-/encoding {self.conn.nencoding}/{self.conn.encoding}")
+                                 f" with n-/encoding {self.conn.nencoding}/{self.conn.encoding} for {self}")
         except Exception as ex:
-            self.last_err_msg = f"OraDb-connect {getattr(self, 'usr')}@{getattr(self, 'dsn')} ex='{ex}'"
+            self.last_err_msg = f"OraDb-connect() error '{ex}' for {self}"
         else:
-            self._create_cursor()
+            self.create_cursor()
         return self.last_err_msg
 
     def prepare_ref_param(self, value: Union[datetime.datetime, int, float, str]) -> Any:

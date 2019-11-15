@@ -26,7 +26,7 @@ def sys_argv_app_key_restore(tst_app_key):          # needed for tests using sys
 @pytest.fixture
 def restore_app_env():
     """ restore app environment after test run - needed for tests instantiating AppBase/ConsoleApp. """
-    # LOCAL IMPORT because some portions like e.g. ae_systems does not depend/use ae.core
+    # LOCAL IMPORT because there may be portions that does not depend-on/use ae.core
     # noinspection PyProtectedMember
     from ae.core import app_inst_lock, _app_instances, _unregister_app_instance
 

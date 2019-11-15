@@ -8,7 +8,7 @@ from sys_data_ids import (EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI)
 from ae.core import (DATE_ISO, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
                      correct_email, correct_phone, parse_date, po)
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
-from ae.systems import UsedSystems
+from ae.sys_core import UsedSystems
 from ae_notification.notification import add_notification_options, init_notification
 from sys_data_acu import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient, SDI_ACU
 from sys_core_sf import (add_sf_options, ensure_long_id, SF_RES_MAP, SF_CLIENT_MAPS,

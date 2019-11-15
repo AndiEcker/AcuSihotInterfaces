@@ -59,7 +59,7 @@ class PostgresDb(DbBase):
 
         :param features:    optional list of features (currently not used for databases).
 
-        The :mod:`ae.systems` allows you to save your credentials and features
+        The :mod:`ae.sys_core` allows you to save your credentials and features
         within config files ('availableSystems' and other config variables).
         """
         super().__init__(console_app, credentials, features=features)
@@ -80,16 +80,18 @@ class PostgresDb(DbBase):
                 connection_params['dbname'] = self.dsn
             if self.console_app.app_name:
                 connection_params['application_name'] = self.console_app.app_name
-            connection_params.update(self.connect_kwargs())
+            connection_params.update(self.connect_params())
+            if 'database' in connection_params:
+                connection_params.pop('dbname')
 
             self.conn = psycopg2.connect(**connection_params)
-            self.console_app.dpo(f"PostgresDb: connected to postgres database {self.dsn}"
+            self.console_app.dpo(f"PostgresDb.connect(): connected"
                                  f" via api/server {psycopg2.apilevel}/{self.conn.server_version}"
-                                 f" with encoding {self.conn.encoding}")
+                                 f" with encoding {self.conn.encoding} for {self}")
         except Exception as ex:
-            self.last_err_msg = f"PostgresDb-connect to {self.dsn} error: {ex}"
+            self.last_err_msg = f"PostgresDb-connect() error: {ex} for {self}"
         else:
-            self._create_cursor()
+            self.create_cursor()
         return self.last_err_msg
 
     def execute_sql(self, sql: str, commit: bool = False, bind_vars: Optional[Dict[str, Any]] = None,

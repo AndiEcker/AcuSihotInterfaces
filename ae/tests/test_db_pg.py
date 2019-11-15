@@ -3,7 +3,7 @@ import testgres
 import testing.postgresql
 
 from ae.console import ConsoleApp
-from ae.db_core import CHK_BIND_VAR_PREFIX
+from ae.db_core import CHK_BIND_VAR_PREFIX, connect_args_from_params
 from ae.db_pg import PostgresDb
 
 
@@ -20,8 +20,12 @@ Postgresql = testing.postgresql.PostgresqlFactory(cache_initialized_db=True)
 class TestBasic:
     def test_select(self, cons_app):
         pg = Postgresql()
-        db = PostgresDb(cons_app, pg.dsn())
+        cred, feat = connect_args_from_params(pg.dsn())
+        db = PostgresDb(cons_app, cred, feat)
         assert db
+        assert not db.connect()
+        assert not db.select("", ["1"])
+        assert not db.select(cols=["1"])
 
 
 Postgresql.clear_cache()

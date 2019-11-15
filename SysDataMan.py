@@ -17,7 +17,7 @@ from ae.core import DEBUG_LEVEL_VERBOSE, try_eval
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console import ConsoleApp
 from ae.db_pg import PostgresDb
-from ae.systems import UsedSystems
+from ae.sys_core import UsedSystems
 
 from sys_data_ass import SDI_ASS, add_ass_options, init_ass_data
 
@@ -105,7 +105,7 @@ def parse_system_option_args(args_str):
     :param args_str:    command line option string to be parsed.
     :return:            system id, record type id and option arguments dict string
     """
-    SRT_ID_LEN = 1  #: len of the key/id of a system record type (see :attr:`~ae.systems._System.available_rec_types`)
+    SRT_ID_LEN = 1  #: len of the key/id of a system record type (see :attr:`~ae.sys_core._System.available_rec_types`)
     str_i = args_str.find('{')
     if str_i >= 0:
         arg_dict_str = args_str[str_i:]
