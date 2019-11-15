@@ -9,7 +9,7 @@ from sys_core_sf import add_sf_options
 __version__ = '0.2'
 
 cae = ConsoleApp("Salesforce Playground", debug_level=DEBUG_LEVEL_VERBOSE,
-                 additional_cfg_files=['../.app_env.cfg', '../.sys_envTEST.cfg'])
+                 additional_cfg_files=['../.sys_env.cfg', '../.sys_envTEST.cfg'])
 
 add_sf_options(cae)
 

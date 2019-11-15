@@ -79,6 +79,8 @@ class OraDb(DbBase):
     def connect(self):
         """ connect this instance to the database driver. """
         self.last_err_msg = ''
+        user = self.credentials.get('user')
+        password = self.credentials.get('password')
         try:
             # connect old style (using conn str): cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
             if cx_Oracle.__version__ > '6':
@@ -87,10 +89,10 @@ class OraDb(DbBase):
                 NAMESPACE = "CLIENTCONTEXT"  # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
                 app_ctx = [(NAMESPACE, "APP", self.console_app.app_name), (NAMESPACE, "LANG", "Python"),
                            (NAMESPACE, "MOD", "ae.db")]
-                self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn, appcontext=app_ctx)
+                self.conn = cx_Oracle.connect(user=user, password=password, dsn=self.dsn, appcontext=app_ctx)
             else:
                 # sys context old style (until V5 using clientinfo):
-                self.conn = cx_Oracle.connect(user=self.usr, password=self.pwd, dsn=self.dsn,
+                self.conn = cx_Oracle.connect(user=user, password=password, dsn=self.dsn,
                                               clientinfo=self.console_app.app_name)
             # self.conn.outputtypehandler = output_type_handler       # see also comment in OraDb.__init__()
             self.console_app.dpo(f"OraDb: connected to Oracle database {self.dsn}"

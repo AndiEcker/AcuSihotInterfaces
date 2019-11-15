@@ -144,7 +144,7 @@ class ConsoleApp:
         self.po('ConsoleAppMock.__init__', args)
         cfg = ConfigParser()
         cfg.optionxform = str   # for case-sensitive config vars
-        cfg.read(['../.app_env.cfg', '../.sys_envTEST.cfg'])
+        cfg.read(['../.sys_env.cfg', '../.sys_envTEST.cfg'])
 
         self._options = dict(acuUser='SIHOT_INTERFACE',
                              acuPassword=cfg.get(MAIN_SECTION_NAME, 'acuPassword'),

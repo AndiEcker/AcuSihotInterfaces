@@ -14,7 +14,7 @@ test_path_prefix = '/test'
 
 cfg = ConfigParser()
 cfg.optionxform = str  # for case-sensitive config vars
-cfg.read(['../.app_env.cfg', '../.sys_envTEST.cfg'])
+cfg.read(['../.sys_env.cfg', '../.sys_envTEST.cfg'])
 # simple cfg.get() call does not convert config value into list/dict without using ae.literal.Literal()
 ws_host = cfg.get(MAIN_SECTION_NAME, 'wsHost')
 

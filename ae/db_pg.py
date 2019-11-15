@@ -40,15 +40,31 @@ class PostgresDb(DbBase):
         """ create instance of postgres database object
 
         :param console_app: ConsoleApp instance of the application using this database.
-        :param credentials: dict with database credentials ('CredItems' cfg), including User=user name, Password=user
-                            password, DSN=database name and optionally host address (separated with a @ character) and
-                            SslArgs=dict of SSL arguments (sslmode, sslrootcert, sslcert, sslkey).
+
+        :param credentials: dict with credentials for to connect to a Postgres database. The following
+                            credentials are supported by the database driver (only user and password
+                            and the database name are mandatory):
+
+                            * **user** : user name
+                            * **password** : user password
+                            * **dbname** : database name (alternatively use the **database** key)
+                            * **database** : database name (alternative to **dbname**)
+                            * **dsn** : database name with optional host address (separated with a @ character)
+                            * **host** : database server host
+                            * **port** : database server port
+
+                            For connections via SSL to the Postgres server you have to add either the dict keys
+                            **sslmode**, **sslcert** and **sslkey** or **sslrootcert** and **sslcrl** (depending
+                            on the configuration of your server).
+
         :param features:    optional list of features (currently not used for databases).
+
+        The :mod:`ae.systems` allows you to save your credentials and features
+        within config files ('availableSystems' and other config variables).
         """
         super().__init__(console_app, credentials, features=features)
-        self._ssl_args = credentials.get('SslArgs')
         # for "named" PEP-0249 sql will be adapted to fit postgres driver "(pyformat)" sql bind-var/parameter syntax
-        self._param_style = 'pyformat'
+        self.param_style = 'pyformat'
 
     def connect(self) -> str:
         """ connect this instance to the Postgres database server, using the credentials provided at instantiation.
@@ -57,22 +73,21 @@ class PostgresDb(DbBase):
         """
         self.last_err_msg = ''
         try:
-            connection_params = dict(user=self.usr, password=self.pwd)
+            connection_params = dict()
             if '@' in self.dsn:
                 connection_params['dbname'], connection_params['host'] = self.dsn.split('@')
             else:
                 connection_params['dbname'] = self.dsn
             if self.console_app.app_name:
                 connection_params['application_name'] = self.console_app.app_name
-            if self._ssl_args:
-                connection_params.update(self._ssl_args)
+            connection_params.update(self.connect_kwargs())
 
             self.conn = psycopg2.connect(**connection_params)
             self.console_app.dpo(f"PostgresDb: connected to postgres database {self.dsn}"
                                  f" via api/server {psycopg2.apilevel}/{self.conn.server_version}"
                                  f" with encoding {self.conn.encoding}")
         except Exception as ex:
-            self.last_err_msg = f"PostgresDb-connect {self.usr} on {self.dsn} error: {ex}"
+            self.last_err_msg = f"PostgresDb-connect to {self.dsn} error: {ex}"
         else:
             self._create_cursor()
         return self.last_err_msg

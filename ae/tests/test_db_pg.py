@@ -1,4 +1,7 @@
 import datetime
+import testgres
+import testing.postgresql
+
 from ae.console import ConsoleApp
 from ae.db_core import CHK_BIND_VAR_PREFIX
 from ae.db_pg import PostgresDb
@@ -10,6 +13,27 @@ TEST_TIME = datetime.time(hour=21, minute=39)
 UPDATED_TIME = datetime.time(hour=18, minute=12)
 test_db = None
 test_table = None
+
+Postgresql = testing.postgresql.PostgresqlFactory(cache_initialized_db=True)
+
+
+class TestBasic:
+    def test_select(self, cons_app):
+        pg = Postgresql()
+        db = PostgresDb(cons_app, pg.dsn())
+        assert db
+
+
+Postgresql.clear_cache()
+
+
+class TestBasicDml:
+    def test_select(self, cons_app):
+
+        with testgres.get_new_node() as node:
+            node.init().start()
+            db = PostgresDb(cons_app, node.host)
+            assert db
 
 
 class TestPostgresDb:
