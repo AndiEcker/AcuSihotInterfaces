@@ -9,6 +9,7 @@ from ae.core import (DATE_ISO, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
                      correct_email, correct_phone, parse_date, po)
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.sys_core import UsedSystems
+
 from ae_notification.notification import add_notification_options, init_notification
 from sys_data_acu import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient, SDI_ACU
 from sys_core_sf import (add_sf_options, ensure_long_id, SF_RES_MAP, SF_CLIENT_MAPS,
@@ -282,7 +283,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self.debug_level = cae.get_opt('debugLevel')
 
         self.used_systems = UsedSystems(cae, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, **sys_credentials)
-        self.error_message = self.used_systems.connect(debug_level=self.debug_level)
+        self.error_message = self.used_systems.connect()
         if self.error_message:
             self._err(self.error_message, self._ctx_no_file + 'ConnFailed')
 

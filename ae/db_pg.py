@@ -2,33 +2,70 @@
 postgres database layer
 =======================
 
-The main class :class:`PostgresDb` of this module is based on psycopg2 package.
+This module provides the class :class:`PostgresDb` for to connect and interact
+with a Postgres database server.
+
+The communication with the database driver is done with great help of the
+:ref:`psycopg2 pypi package <https://pypi.org/project/psycopg2>`.
 
 Basic Usage
 -----------
 
-First create an instance of :class:`PostgresDb` providing the application instance (of the class
-:class:`ConsoleApp` or an inherited sub-class of it) plus all needed credentials and features/options:
+For to create an instance of the class :class:`PostgresDb` you first have to create a
+:class:`~ae.sys_core.SystemBase` instance. This can be done either programmatically
+by providing an application instance (of the class :class:`~ae.ae_console.ConsoleApp`
+or an inherited sub-class of it) plus any database parameters, like
+required credentials and any database configuration features/options:
 
     app = ConsoleApp()
-    pg_db = PostgresDb(app, dict(User='user name', Password='password`, Dsn='LIVE@TNS-NAME', ...), ...)
+    system = SystemBase('system-id', app, dict(User='user name', Password='password`, Dsn='dbname@host', ...), ...)
 
-With the database properties provided at instantiation, call first the :meth:`~.connect` for to connect
-to the Postgres database:
+Alternatively provide all system-specific info within the :ref:`ae config files<config-files>`
+and let :class:`~ae.sys_core.UsedSystems` load it:
+
+    system = used_systems['system-id']
+
+Finally pass the database parameters in `system` for to create an instance of :class:`PostgresDb`:
+
+    pg_db = PostgresDb(system)
+
+Then call the :meth:`~PostgresDb.connect` method of this instance for to connect to the Postgres database server:
 
     error_message = pg_db.connect()
     if error_message:
         print(error_message)
-        pg_db.rollback()
 
-After that you can use any data selection and manipulation method of the base class
-:class:`~.db_core.DbBase`.
+If the connection could not be established then  :meth:`~PostgresDb.connect` is returning an error
+message string. If the return value is an empty string then you can use all the methods provided by
+:class:`~ae.db_core.DbBase`, like e.g. :meth:`~ae.db_core.DbBase.update`:
+
+    error_message = pg_db.update('my_table`, {'my_col': 'new value'})
+    if error_message:
+        print(error_message)
+        error_message = pg_db.rollback()
+
+The :meth:`~ae.db_core.DbBase.rollback` is only if you use transactions (autocommit is False). Then
+you should also use :meth:`~ae.db_core.DbBase.commit` at the end of each transaction for to store
+any data updates:
+
+    error_message = pg_db.commit()
+
+Most of the methods of :class:`~ae.db_core.DbBase` are provide a `commit` argument that allows
+to include the :meth:`~ae.db_core.DbBase.commit` call if no error occurred.
+
+    error_message = pg_db.update('table`, {'column': 369}, commit=True)
+
+Finally after all database actions are done you can close the connection to the databases server
+with the :meth:`~ae.db_core.DbBase.close` method:
+
+    error_message = pg_db.close()
+
 """
 import psycopg2
 # from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional
 
-from ae.console import ConsoleApp
+from ae.sys_core import SystemBase
 from ae.db_core import DbBase
 
 __version__ = '0.0.1'
@@ -36,33 +73,37 @@ __version__ = '0.0.1'
 
 class PostgresDb(DbBase):
     """ an instance of this class represents a Postgres database. """
-    def __init__(self, console_app: ConsoleApp, credentials: Dict[str, str], features: Sequence[str] = ()):
-        """ create instance of postgres database object
+    def __init__(self, system: SystemBase):
+        """ create instance of Postgres database object
 
-        :param console_app: ConsoleApp instance of the application using this database.
+        :param system:      instance of a :class:`ae.sys_core.SystemBase` class.
 
-        :param credentials: dict with credentials for to connect to a Postgres database. The following
-                            credentials are supported by the database driver (only user and password
-                            and the database name are mandatory):
+        The :class:`ae.sys_core.SystemBase` which is implemented in the module :mod:`ae.sys_core` is providing
+        the credentials and features for the Postgres database, which get retrieved
+        from config files ('availableSystems' and other config variables). Some useful attributes
+        of this class are e.g.:
 
-                            * **user** : user name
-                            * **password** : user password
-                            * **dbname** : database name (alternatively use the **database** key)
-                            * **database** : database name (alternative to **dbname**)
-                            * **dsn** : database name with optional host address (separated with a @ character)
-                            * **host** : database server host
-                            * **port** : database server port
+        **console_app** : ConsoleApp instance of the application using this database.
 
-                            For connections via SSL to the Postgres server you have to add either the dict keys
-                            **sslmode**, **sslcert** and **sslkey** or **sslrootcert** and **sslcrl** (depending
-                            on the configuration of your server).
+        **credentials** : dict with credentials for to connect to a Postgres database. The following
+        credentials are supported by the database driver (only user and password
+        and the database name are mandatory):
 
-        :param features:    optional list of features (currently not used for databases).
+        * **user** : user name
+        * **password** : user password
+        * **dbname** : database name (alternatively use the **database** key)
+        * **database** : database name (alternative to **dbname**)
+        * **dsn** : database name with optional host address (separated with a @ character)
+        * **host** : database server host name or IP address
+        * **port** : database server port number
 
-        The :mod:`ae.sys_core` allows you to save your credentials and features
-        within config files ('availableSystems' and other config variables).
+        For connections via SSL to the Postgres server you have to add either the dict keys
+        **sslmode**, **sslcert** and **sslkey** or **sslrootcert** and **sslcrl** (depending
+        on the configuration of your server).
+
+        **features** :    optional list of features.
         """
-        super().__init__(console_app, credentials, features=features)
+        super().__init__(system)
         # for "named" PEP-0249 sql will be adapted to fit postgres driver "(pyformat)" sql bind-var/parameter syntax
         self.param_style = 'pyformat'
 
@@ -96,12 +137,12 @@ class PostgresDb(DbBase):
 
     def execute_sql(self, sql: str, commit: bool = False, bind_vars: Optional[Dict[str, Any]] = None,
                     auto_commit: bool = False) -> str:
-        """ execute sql query.
+        """ execute sql query or sql command.
 
-        :param sql:             sql query to execute.
-        :param commit:          pass True to commit (after UPDATE queries).
-        :param bind_vars:       dict of extra bind variables (key=variable name, value=value).
-        :param auto_commit:     pass True activate auto-commit-mode for this session.
+        :param sql:             sql query or command to execute.
+        :param commit:          pass True to commit (after INSERT or UPDATE queries).
+        :param bind_vars:       dict of bind variables (key=variable name, value=value).
+        :param auto_commit:     pass True activate auto-commit-mode for this postgres session.
         :return:                last error message or empty string if no errors occurred.
 
         .. hint::

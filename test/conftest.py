@@ -8,6 +8,7 @@ from configparser import ConfigParser
 from ae.sys_data import Record, FAD_ONTO
 from ae.console import MAIN_SECTION_NAME
 from ae.literal import Literal
+from ae.sys_core import SystemBase
 from ae.db_ora import OraDb
 from sys_data_ass import AssSysData
 from ae.sys_core_sh import SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_CLIENT_PORT, \
@@ -102,7 +103,6 @@ def create_test_client(console_app_env):
 @pytest.fixture(scope='module')
 def salesforce_connection(console_app_env):
     cae = console_app_env
-    debug_level = cae.get_opt('debugLevel')
     sf_user = cae.get_opt('sfUser')
     if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
         cae.po("conftest.salesforce_connection(): skipped because of unspecified credentials")
@@ -114,9 +114,9 @@ def salesforce_connection(console_app_env):
 
     cae.po("Salesforce " + ("sandbox" if sf_sandbox else "production") + " user/client-id:", sf_user, sf_client)
 
-    sf_conn = SfSysConnector(dict(User=sf_user, Password=sf_pw, Token=sf_token),
-                             features=[SDF_SF_SANDBOX + '=True'] if sf_sandbox else None,
-                             app_name=sf_client, debug_level=debug_level)
+    system = SystemBase('Sf', cae, credentials=dict(User=sf_user, Password=sf_pw, Token=sf_token),
+                        features=[SDF_SF_SANDBOX + '=True'] if sf_sandbox else None)
+    sf_conn = SfSysConnector(system)
 
     return sf_conn
 

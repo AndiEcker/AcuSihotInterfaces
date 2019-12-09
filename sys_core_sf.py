@@ -7,7 +7,8 @@ from typing import Tuple, Dict, Any
 
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
-from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, parse_date, po
+from ae.core import DATE_ISO, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, parse_date, po
+from ae.sys_core import SystemBase, SystemConnectionBase
 from ae.sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
 
 from sys_data_ids import EXT_REF_TYPE_RCI, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
@@ -306,43 +307,47 @@ def _format_exc(ex):    # wrapper because SimpleSalesforce is throwing exception
     return exc_msg
 
 
-class SfSysConnector:
-    def __init__(self, credentials, features=None, app_name='', debug_level=DEBUG_LEVEL_DISABLED):
+class SfSysConnector(SystemConnectionBase):
+    def __init__(self, system: SystemBase):
         """
         create instance of generic database object (base class for real database like e.g. postgres or oracle).
-        :param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
-                            password and DSN=database name and optionally host address (separated with a @ character).
-        :param features:    optional list of features (currently only used for SDF_SF_SANDBOX/'sfIsSandbox').
-        :param app_name:    application name (shown in the server DB session).
-        :param debug_level: debug level.
-        """
-        # store user credentials for lazy Salesforce connect (only if needed) because of connection limits and timeouts
-        self._conn = None
-        self._user = credentials.get('User')
-        self._pw = credentials.get('Password')
-        self._tok = credentials.get('Token')
-        self._sb = features and SDF_SF_SANDBOX + '=True' in features \
-            or 'test' in self._user.lower() or 'dbx' in self._user.lower()
-        self._client = app_name
-        self._debug_level = debug_level
+        :param system:      SystemBase instance, providing e.g.:
 
-        self.error_msg = ""
+        **credentials** :   dict with account credentials ('CredItems' cfg), including User=user name, Password=user
+                            password and DSN=database name and optionally host address (separated with a @ character).
+
+        **features** :      optional list of features (currently only used for SDF_SF_SANDBOX/'sfIsSandbox').
+
+        **app_name** :      application name (shown in the server DB session).
+        """
+        super().__init__(system)
+        self._conn = None
+
         self.cl_res_rec_onto = Record(system=SDI_SF, direction=FAD_ONTO)
         self.cl_res_rec_onto.add_system_fields(SF_CLIENT_MAPS['Account'] + SF_RES_MAP)
 
     @property
     def is_sandbox(self):
-        return self._sb
+        usr = self.system.credentials.get('User')
+        return self.system.features and SDF_SF_SANDBOX + '=True' in self.system.features \
+            or 'test' in usr.lower() or 'dbx' in usr.lower()
+
+    def connect(self) -> str:
+        """ not needed - lazy connection """
+        return self.last_err_msg
 
     def _connect(self):
+        cre = self.system.credentials
+        usr = cre.get('User')
+        sb = self.is_sandbox
         try:
-            self._conn = Salesforce(username=self._user, password=self._pw, security_token=self._tok,
-                                    sandbox=self._sb, client_id=self._client)
-            if self._debug_level >= DEBUG_LEVEL_ENABLED:
+            self._conn = Salesforce(username=usr, password=cre.get('Password'), security_token=cre.get('Token'),
+                                    sandbox=sb, client_id=self.system.console_app.app_name)
+            if self.system.console_app.debug_level >= DEBUG_LEVEL_ENABLED:
                 po("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
         except SalesforceAuthenticationFailed as sf_ex:
-            self.error_msg = "SfSysConnector._connect(): Salesforce {} authentication failed with exception: {}" \
-                .format('Sandbox' if self._sb else 'Production', sf_ex)
+            self.last_err_msg = "SfSysConnector._connect(): Salesforce {} authentication failed with exception: {}" \
+                .format('Sandbox' if sb else 'Production', sf_ex)
 
     def _ensure_lazy_connect(self, soql_query="SELECT Id from Lead WHERE Name = '__test__'"):
         """
@@ -354,20 +359,20 @@ class SfSysConnector:
                             else return the Salesforce response for the check query (soql_query) if connection was
                             already established or just got established the first time (by calling this method).
         """
-        if 'INVALID_LOGIN' in self.error_msg:
-            msg = "preventing lock of user account {}".format(self._user)
-            if msg not in self.error_msg:
-                self.error_msg = "Invalid Salesforce login - {}; last error={}".format(msg, self.error_msg)
-            po(self.error_msg)
+        if 'INVALID_LOGIN' in self.last_err_msg:
+            msg = "preventing lock of user account {}".format(self.system.credentials.get('User'))
+            if msg not in self.last_err_msg:
+                self.last_err_msg = "Invalid Salesforce login - {}; last error={}".format(msg, self.last_err_msg)
+            po(self.last_err_msg)
             return False
-        self.error_msg = ""
+        self.last_err_msg = ""
 
         if not self._conn:
-            self.error_msg = ""
+            self.last_err_msg = ""
             self._connect()
-            if self.error_msg:
-                if self._debug_level >= DEBUG_LEVEL_VERBOSE:
-                    po("  **  _ensure_lazy_connect() err={}".format(self.error_msg))
+            if self.last_err_msg:
+                if self.system.console_app.debug_level >= DEBUG_LEVEL_VERBOSE:
+                    po("  **  _ensure_lazy_connect() err={}".format(self.last_err_msg))
                 return None
 
         if self._conn:
@@ -378,15 +383,15 @@ class SfSysConnector:
                 self._conn = None
                 return self._ensure_lazy_connect(soql_query)
 
-        if not self.error_msg:
-            self.error_msg = "SfSysConnector._ensure_lazy_connect(): Reconnection to Salesforce failed"
-            po(" ***  " + self.error_msg)
+        if not self.last_err_msg:
+            self.last_err_msg = "SfSysConnector._ensure_lazy_connect(): Reconnection to Salesforce failed"
+            po(" ***  " + self.last_err_msg)
 
         return None
 
     def apex_call(self, function_name, function_args=None):
         if not self._ensure_lazy_connect():
-            return dict(sfif_apex_error=self.error_msg)
+            return dict(sfif_apex_error=self.last_err_msg)
 
         if function_args:
             # don't change callers dict, remove underscore characters from arg names (APEX methods doesn't allow them)
@@ -400,9 +405,9 @@ class SfSysConnector:
         try:
             result = self._conn.apexecute(function_name, method='POST', data=function_args)
         except Exception as ex:
-            self.error_msg += "SfSysConnector.apex_call({}, {}) exception='{}'\n{}"\
+            self.last_err_msg += "SfSysConnector.apex_call({}, {}) exception='{}'\n{}"\
                 .format(function_name, function_args, ex, _format_exc(ex))
-            result = dict(sfif_apex_error=self.error_msg)
+            result = dict(sfif_apex_error=self.last_err_msg)
 
         return result
 
@@ -419,14 +424,14 @@ class SfSysConnector:
         try:
             response = self._ensure_lazy_connect(soql_query)
         except Exception as sf_ex:
-            self.error_msg += "SfSysConnector.soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
+            self.last_err_msg += "SfSysConnector.soql_query_all({}) query exception: {}".format(soql_query, sf_ex)
         if response is None:
-            self.error_msg += "SfSysConnector.soql_query_all({}) SimpleSalesforce.query_all() -> None".format(soql_query)
+            self.last_err_msg += f"SfSysConnector.soql_query_all({soql_query}) SimpleSalesforce.query_all() -> None"
         elif isinstance(response, dict) and not response.get('done'):
-            self.error_msg += "SfSysConnector.soql_query_all(): Salesforce is responding that query {} is NOT done." \
+            self.last_err_msg += "SfSysConnector.soql_query_all(): Salesforce is responding that query {} is NOT done."\
                 .format(soql_query)
 
-        if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+        if self.system.console_app.debug_level >= DEBUG_LEVEL_VERBOSE:
             po("soql_query_all({}) response={}".format(soql_query, response))
 
         return response
@@ -436,7 +441,7 @@ class SfSysConnector:
             return None
         client_obj = getattr(self._conn, sf_obj, None)
         if not client_obj:
-            self.error_msg = "SfSysConnector.ssf_object({}) called with invalid salesforce object type".format(sf_obj)
+            self.last_err_msg = f"SfSysConnector.ssf_object({sf_obj}) called with invalid salesforce object type"
         return client_obj
 
     def record_type_id(self, sf_obj, dev_name=None):
@@ -448,7 +453,7 @@ class SfSysConnector:
         rec_type_id = None
         res = self.soql_query_all("Select Id From RecordType Where SobjectType = '{}' and DeveloperName = '{}'"
                                   .format(sf_obj, dev_name))
-        if not self.error_msg and res['totalSize'] > 0:
+        if not self.last_err_msg and res['totalSize'] > 0:
             rec_type_id = res['records'][0]['Id']
         return rec_type_id
 
@@ -457,7 +462,7 @@ class SfSysConnector:
         service_args = dict(email=email, phone=phone, firstName=first_name, lastName=last_name)
         result = self.apex_call('clientsearch', function_args=service_args)
 
-        if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+        if self.system.console_app.debug_level >= DEBUG_LEVEL_VERBOSE:
             po("find_client({}, {}, {}, {}) result={}".format(email, phone, first_name, last_name, ppf(result)))
 
         if self.error_msg or 'Id' not in result or 'type' not in result:
@@ -468,24 +473,24 @@ class SfSysConnector:
 
     def cl_delete(self, sf_id, sf_obj=None):
         if not self._ensure_lazy_connect():
-            return self.error_msg, ""
+            return self.last_err_msg, ""
 
         if sf_obj is None:
             sf_obj = obj_from_id(sf_id)
 
         client_obj = self.ssf_object(sf_obj)
         if not client_obj:
-            self.error_msg += " cl_delete() id={}".format(sf_id)
-            return self.error_msg, ""
+            self.last_err_msg += " cl_delete() id={}".format(sf_id)
+            return self.last_err_msg, ""
 
         msg = ""
         try:
             sf_ret = client_obj.delete(sf_id)
             msg = "{} {} deleted, status=\n{}".format(sf_obj, sf_id, ppf(sf_ret))
         except Exception as ex:
-            self.error_msg = "{} {} deletion raised exception {}".format(sf_obj, sf_id, ex)
+            self.last_err_msg = "{} {} deletion raised exception {}".format(sf_obj, sf_id, ex)
 
-        return self.error_msg, msg
+        return self.last_err_msg, msg
 
     def cl_ext_refs(self, sf_client_id, er_type=None, er_id=None, return_obj_id=False, sf_obj=None):
         """
@@ -515,7 +520,7 @@ class SfSysConnector:
         elif er_id:
             soql += " AND Reference_No_or_ID__c = '{}'".format(er_id)
         res = self.soql_query_all(soql)
-        if not self.error_msg and res['totalSize'] > 0:
+        if not self.last_err_msg and res['totalSize'] > 0:
             for c in res['records']:
                 ext_refs.append(c[id_name] if er_type else (c['Name'].split(EXT_REF_TYPE_ID_SEP)[0], c[id_name]))
         return ext_refs
@@ -532,17 +537,17 @@ class SfSysConnector:
         :return:
         """
         if not self._ensure_lazy_connect():
-            return None, self.error_msg, ""
+            return None, self.last_err_msg, ""
 
         if not sf_client_id or not er_type or not er_id:
-            self.error_msg += " cl_ext_ref_upsert() expects non-empty client id and external reference type and id"
-            return None, self.error_msg, ""
+            self.last_err_msg += " cl_ext_ref_upsert() expects non-empty client id and external reference type and id"
+            return None, self.last_err_msg, ""
 
         er_obj = 'External_Ref__c'
         ext_ref_obj = self.ssf_object(er_obj)
         if not ext_ref_obj:
-            self.error_msg += " cl_ext_ref_upsert() sf_id={}, er_id={}".format(sf_client_id, er_id)
-            return None, self.error_msg, ""
+            self.last_err_msg += " cl_ext_ref_upsert() sf_id={}, er_id={}".format(sf_client_id, er_id)
+            return None, self.last_err_msg, ""
 
         if sf_obj is None:
             sf_obj = obj_from_id(sf_client_id)
@@ -551,7 +556,7 @@ class SfSysConnector:
         sf_er_id = err = msg = ""
         er_list = self.cl_ext_refs(sf_client_id, er_type, er_id, return_obj_id=True, sf_obj=sf_obj)
         if er_list:     # update?
-            if self._debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
+            if self.system.console_app.debug_level >= DEBUG_LEVEL_VERBOSE and len(er_list) > 1:
                 po("cl_ext_ref_upsert({}): duplicate external refs found:\n{}".format(sf_client_id, ppf(er_list)))
             sf_er_id = er_list[0]
             if upd_rec:
@@ -574,9 +579,9 @@ class SfSysConnector:
                 err = "{} create() exception {}. msg={}; sent={}".format(er_obj, ex, msg, ppf(sf_dict))
 
         if err:
-            if self._debug_level >= DEBUG_LEVEL_VERBOSE:
+            if self.system.console_app.debug_level >= DEBUG_LEVEL_VERBOSE:
                 po("  **  cl_ext_ref_upsert({}) err={}".format(sf_client_id, err))
-            self.error_msg = err
+            self.last_err_msg = err
 
         return sf_er_id, err, msg
 
@@ -598,11 +603,11 @@ class SfSysConnector:
         if sf_obj is None:
             if search_field not in (SF_DEF_SEARCH_FIELD, 'External_Id__c', 'Contact_Ref__c', 'Id_before_convert__c',
                                     'CSID__c'):
-                self.error_msg = "client object cannot be determined without Id" + msg
+                self.last_err_msg = "client object cannot be determined without Id" + msg
                 return None
             sf_obj = obj_from_id(search_value)
             if not sf_obj:
-                self.error_msg = "search_value is not a valid Lead/Contact/Account SF ID" + msg
+                self.last_err_msg = "search_value is not a valid Lead/Contact/Account SF ID" + msg
                 return None
 
         ret_dict = isinstance(fetch_fields, list)
@@ -617,8 +622,8 @@ class SfSysConnector:
             .format(select_fields, sf_obj,
                     sf_fld_sys_name(search_field, sf_obj), search_op, search_val_deli, search_value, search_val_deli)
         res = self.soql_query_all(soql_query)
-        if self.error_msg:
-            self.error_msg += msg
+        if self.last_err_msg:
+            self.last_err_msg += msg
         elif res['totalSize'] > 0:
             ret_val = res['records'][0]
             if ret_dict:
@@ -687,14 +692,14 @@ class SfSysConnector:
 
         if sf_obj is None:
             if not sf_id:
-                self.error_msg = "missing client object or Id{}".format(msg)
-                return None, self.error_msg, ""
+                self.last_err_msg = "missing client object or Id{}".format(msg)
+                return None, self.last_err_msg, ""
             sf_obj = obj_from_id(sf_id)
 
         client_obj = self.ssf_object(sf_obj)
         if not client_obj:
-            self.error_msg += "\n      +empty {} client object{}".format(sf_obj, msg)
-            return None, self.error_msg, ""
+            self.last_err_msg += "\n      +empty {} client object{}".format(sf_obj, msg)
+            return None, self.last_err_msg, ""
 
         sf_dict = rec.to_dict(system=SDI_SF, direction=FAD_ONTO, filter_fields=filter_fields)
         err = msg = ""
@@ -730,7 +735,7 @@ class SfSysConnector:
                     msg += ("\n      " if msg else "") + er_msg
 
         if err:
-            self.error_msg = err
+            self.last_err_msg = err
 
         return sf_id, err, msg
 
@@ -749,8 +754,8 @@ class SfSysConnector:
             fld_name = '{}__c'.format(sf_obj)
             soql_query = "SELECT {} FROM External_Ref__c WHERE Reference_No_or_ID__c = '{}'".format(fld_name, rci_ref)
         res = self.soql_query_all(soql_query)
-        if self.error_msg:
-            self.error_msg = "cl_by_rci_id({}): ".format(rci_ref) + self.error_msg
+        if self.last_err_msg:
+            self.last_err_msg = "cl_by_rci_id({}): ".format(rci_ref) + self.last_err_msg
         elif res['totalSize'] > 0:
             if fld_name not in res['records'][0]:
                 fld_name = fld_name.lower()        # TODO: fix UGLY lowercase API field name
@@ -760,7 +765,7 @@ class SfSysConnector:
                 new_clients = [_[fld_name] for _ in res['records']]
                 dup_clients = list(set([_ for _ in new_clients + dup_clients if _ and _ != sf_id]))
 
-        if not self.error_msg and which_ref == self.REF_TYPE_ALL:
+        if not self.last_err_msg and which_ref == self.REF_TYPE_ALL:
             sf_id, dup_clients = self.cl_by_rci_id(rci_ref, sf_id, dup_clients, self.REF_TYPE_EXT)
 
         return sf_id, dup_clients
@@ -774,8 +779,8 @@ class SfSysConnector:
         sf_fields = field_list_to_sf(soql_fields, sf_obj)
         res = self.soql_query_all("SELECT {} FROM {}".format(", ".join(sf_fields), sf_obj))
         client_tuples = list()
-        if self.error_msg:
-            self.error_msg = "clients_with_rci_id(): " + self.error_msg
+        if self.last_err_msg:
+            self.last_err_msg = "clients_with_rci_id(): " + self.last_err_msg
         elif res['totalSize'] > 0:
             for c in res['records']:  # filter out clients with RCI ref from SF-list of client OrderedDicts
                 ext_refs = [c[sf_fld_sys_name('RciId', sf_obj)]] if c[sf_fld_sys_name('RciId', sf_obj)] else list()
@@ -822,8 +827,8 @@ class SfSysConnector:
 
         res_list = list()
         res = self.soql_query_all(soql_query)
-        if self.error_msg:
-            self.error_msg = msg + "error: {}".format(self.error_msg)
+        if self.last_err_msg:
+            self.last_err_msg = msg + "error: {}".format(self.last_err_msg)
         elif res['totalSize'] > 0:
             for sf_res_dict in res['records']:
                 ret = dict()
@@ -853,7 +858,7 @@ class SfSysConnector:
                                      or f.name() in ('RciId', ),
                                      push_onto=push_onto, put_system_val=put_system_val,
                                      system=SDI_SF, direction=FAD_ONTO)
-        dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
+        dbg = self.system.console_app.debug_level >= DEBUG_LEVEL_VERBOSE
         sf_id = sf_args.pop('Id', None)
         if sf_id:
             sf_args['PersonAccountId'] = sf_id
@@ -864,12 +869,12 @@ class SfSysConnector:
         result = self.apex_call('reservation_upsert', function_args=sf_args)
 
         if dbg:
-            po(f"... sys_data_sf.res_upsert() err?={self.error_msg}; sent=\n{ppf(sf_args)}, result=\n{ppf(result)}")
+            po(f"... sys_data_sf.res_upsert() err?={self.last_err_msg}; sent=\n{ppf(sf_args)}, result=\n{ppf(result)}")
 
         if result.get('ErrorMessage'):
             msg = ppf(result) if dbg else result.get('ErrorMessage')
-            self.error_msg += f"sys_data_sf.res_upsert() received err=\n{msg} from SF; rec=\n{ppf(cl_res_rec)}"
-        if not self.error_msg:
+            self.last_err_msg += f"sys_data_sf.res_upsert() received err=\n{msg} from SF; rec=\n{ppf(cl_res_rec)}"
+        if not self.last_err_msg:
             if not cl_res_rec.val('ResSfId') and result.get('ReservationOpportunityId'):
                 cl_res_rec.set_val(result['ReservationOpportunityId'], 'ResSfId')
             elif cl_res_rec.val('ResSfId') != result.get('ReservationOpportunityId'):
@@ -877,24 +882,24 @@ class SfSysConnector:
                        .format(cl_res_rec.val('ResSfId'), result.get('ReservationOpportunityId'), ppf(cl_res_rec))
                 po(msg)
                 if dbg:
-                    self.error_msg += "\n      " + msg
+                    self.last_err_msg += "\n      " + msg
 
-        return result.get('PersonAccountId'), result.get('ReservationOpportunityId'), self.error_msg
+        return result.get('PersonAccountId'), result.get('ReservationOpportunityId'), self.last_err_msg
 
     def room_change(self, res_sf_id, check_in, check_out, next_room_id):
         msg = "sys_data_sf.room_change({}, {}, {}, {})".format(res_sf_id, check_in, check_out, next_room_id)
-        dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
+        dbg = self.system.console_app.debug_level >= DEBUG_LEVEL_VERBOSE
 
         room_chg_data = dict(ReservationOpportunityId=res_sf_id, CheckIn__c=check_in, CheckOut__c=check_out,
                              RoomNo__c=next_room_id)
         result = self.apex_call('reservation_room_move', function_args=room_chg_data)
 
-        if self.error_msg or result.get('ErrorMessage'):
-            self.error_msg += "err=\n{} from SF in {}".format(ppf(result) if dbg else result.get('ErrorMessage'), msg)
+        if self.last_err_msg or result.get('ErrorMessage'):
+            self.last_err_msg += f"err=\n{ppf(result) if dbg else result.get('ErrorMessage')} from SF in {msg}"
         elif dbg:
             po(msg + " result=\n{}'".format(ppf(result)))
 
-        return self.error_msg
+        return self.last_err_msg
 
     def room_data(self, res_opp_id):
         """
@@ -927,8 +932,8 @@ class SfSysConnector:
               FROM Reservation__c WHERE Id = '{}'
               '''.format(sf_data['ReservationId'])
         res = self.soql_query_all(soql_query)
-        if self.error_msg:
-            self.error_msg = "room_data({}): ".format(res_opp_id) + self.error_msg
+        if self.last_err_msg:
+            self.last_err_msg = "room_data({}): ".format(res_opp_id) + self.last_err_msg
         elif res['totalSize'] > 0:
             ret_all = res['records'][0]
             ret = dict(ReservationId=ret_all['Id'])
@@ -942,7 +947,7 @@ class SfSysConnector:
     def occupants_upsert(self, res_sf_id, ho_id, res_id, sub_id, send_occ,
                          sf_fields=('PersSurname', 'PersForename', 'PersDOB', 'TypeOfPerson')):
         msg = "sys_data_sf.occupants_upsert({}, {}, {}, {}, {})".format(res_sf_id, ho_id, res_id, sub_id, send_occ)
-        dbg = self._debug_level >= DEBUG_LEVEL_VERBOSE
+        dbg = self.system.console_app.debug_level >= DEBUG_LEVEL_VERBOSE
 
         sf_data = dict(ReservationOpportunityId=res_sf_id, HotelId__c=ho_id, Number__c=res_id, SubNumber__c=sub_id)
         for occ_idx, occ_rec in enumerate(send_occ):
@@ -951,9 +956,9 @@ class SfSysConnector:
                 sf_data[prefix + fld] = occ_rec.val(fld)
 
         result = self.apex_call('reservation_occupants_upsert', function_args=sf_data)
-        if self.error_msg or result.get('ErrorMessage'):
-            self.error_msg += "SF err=\n{} in {}".format(ppf(result) if dbg else result.get('ErrorMessage'), msg)
+        if self.last_err_msg or result.get('ErrorMessage'):
+            self.last_err_msg += "SF err=\n{} in {}".format(ppf(result) if dbg else result.get('ErrorMessage'), msg)
         elif dbg:
             po(msg + " send-data=\n{}; result=\n{}'".format(ppf(sf_data), ppf(result)))
 
-        return self.error_msg
+        return self.last_err_msg
