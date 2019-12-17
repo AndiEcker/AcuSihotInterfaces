@@ -1,6 +1,7 @@
 from ae.core import DEF_ENCODE_ERRORS
 from sys_data_acu import ACU_DEF_USR, ACU_DEF_DSN
 from ae.console import ConsoleApp
+from ae.sys_core import SystemBase
 from ae.db_ora import OraDb
 
 __version__ = '0.1'
@@ -33,7 +34,9 @@ cae.add_opt('acuDSN', "Acumen/Oracle data source name", ACU_DEF_DSN, 'd')
 cae.po('Export path:', cae.get_opt('outPath'))
 cae.po('Acumen Usr/DSN:', cae.get_opt('acuUser'), cae.get_opt('acuDSN'))
 
-ora_db = OraDb(cae, dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'), DSN=cae.get_opt('acuDSN')))
+system = SystemBase('Acu', cae,
+                    dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'), DSN=cae.get_opt('acuDSN')))
+ora_db = OraDb(system)
 err_msg = ora_db.connect()
 if err_msg:
     cae.po(err_msg)

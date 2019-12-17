@@ -66,7 +66,7 @@ res_test_rec = Record(fields=dict(AssId='', AcuId='T963369', SfId='', ShId='',
                                   ))
 
 
-def test_tmp(console_app_env, sys_data_ass):
+def test_tmp(cons_app, sys_data_ass):
     asd = sys_data_ass
 
     print(asd)
@@ -520,14 +520,14 @@ class TestSysDataResActions:
 
 
 class TestAssSysDataSh:
-    def test_res_save_4_33220(self, console_app_env):
+    def test_res_save_4_33220(self, cons_app):
         # use TO reservation with GDS 899993 from 26-Dec-17 to 3-Jan-18
         ho_id = '4'
         res_id = '33220'
         sub_id = '1'
         obj_id = '60544'
 
-        res_data = ResFetch(console_app_env).fetch_by_res_id(ho_id=ho_id, res_id=res_id, sub_id=sub_id)
+        res_data = ResFetch(cons_app).fetch_by_res_id(ho_id=ho_id, res_id=res_id, sub_id=sub_id)
         assert isinstance(res_data, Record)
         assert ho_id == res_data.val('ResHotelId')
         assert res_id == res_data.val('ResId')
@@ -537,7 +537,7 @@ class TestAssSysDataSh:
         dep_date = res_data.val('ResDeparture')
 
         rgr_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
-        asd = AssSysData(console_app_env)
+        asd = AssSysData(cons_app)
         asd.res_save(res_data, ass_res_rec=rgr_rec)
         assert ho_id == rgr_rec['rgr_ho_fk']
         assert res_id == rgr_rec['rgr_res_id']
@@ -547,7 +547,7 @@ class TestAssSysDataSh:
         assert dep_date == rgr_rec['rgr_departure']
 
         rgr_dict = dict()       # res_save allows also dict
-        asd = AssSysData(console_app_env)
+        asd = AssSysData(cons_app)
         asd.res_save(res_data, ass_res_rec=rgr_dict)
         assert ho_id == rgr_dict['rgr_ho_fk']
         assert res_id == rgr_dict['rgr_res_id']
@@ -582,14 +582,14 @@ class TestAssSysDataSh:
         assert arr_date == rgr_dict['rgr_arrival']
         assert dep_date == rgr_dict['rgr_departure']
 
-    def test_sh_room_change_to_ass_4_33220(self, console_app_env):
+    def test_sh_room_change_to_ass_4_33220(self, cons_app):
         # use TO reservation with GDS 899993 from 26-Dec-17 to 3-Jan-18
         ho_id = '4'
         res_id = '33220'
         sub_id = '1'
         obj_id = '60544'
         room_id = '0999'
-        asd = AssSysData(console_app_env)
+        asd = AssSysData(cons_app)
 
         dt_in = datetime.datetime.now().replace(microsecond=0)
         asd.sh_room_change_to_ass('CI', ho_id=ho_id, res_id=res_id, sub_id=sub_id, room_id=room_id, action_time=dt_in)
@@ -708,9 +708,9 @@ class TestAssSysDataCountRes:
 
 
 class TestAssSysDataAptWkYr:
-    def test_apt_wk_yr(self, console_app_env, sys_data_ass):
-        console_app_env._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
-        console_app_env._options['2019'] = '2019-01-04'
+    def test_apt_wk_yr(self, cons_app, sys_data_ass):
+        cons_app._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
+        cons_app._options['2019'] = '2019-01-04'
         r = Record(fields=dict(ResArrival=datetime.date(2018, 6, 1)))
         assert sys_data_ass.sh_apt_wk_yr(r) == ('None-22', 2018)
 
@@ -756,9 +756,9 @@ class TestAssSysDataHotelData:
 
 
 class TestRciHelpers:
-    def test_rci_arr_to_year_week(self, console_app_env, sys_data_ass):
-        console_app_env._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
-        console_app_env._options['2019'] = '2019-01-04'
+    def test_rci_arr_to_year_week(self, cons_app, sys_data_ass):
+        cons_app._options['2018'] = '2018-01-05'     # create fake config entries (defined in SihotResImport.ini)
+        cons_app._options['2019'] = '2019-01-04'
         d1 = datetime.date(2018, 6, 1)
         assert sys_data_ass.rci_arr_to_year_week(d1) == (2018, 22)
 

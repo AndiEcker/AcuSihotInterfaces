@@ -3,7 +3,7 @@ import os
 import sys
 
 from ae.console import MAIN_SECTION_NAME, ConsoleApp
-from ae_validation.validation import (
+from ae.validation import (
     validate_flag_info, add_validation_options, init_validation, clients_to_validate,
     EmailValidator, PhoneValidator,
     EMAIL_DO_NOT_VALIDATE, EMAIL_NOT_VALIDATED, EMAIL_INVALIDATED, EMAIL_VALID, EMAIL_INVALID, EMAIL_ALL,
@@ -11,7 +11,7 @@ from ae_validation.validation import (
 
 
 @pytest.fixture
-def console_app_env():
+def cons_app():
     return ConsoleApp('Console App Environment for EmailValidator and PhoneValidator')
 
 
@@ -26,48 +26,50 @@ class TestCloudContactValidation:
         assert validate_flag_info(EMAIL_ALL)
 
     # noinspection PyUnusedLocal
-    def test_add_validation_options(self, restore_app_env, sys_argv_app_key_restore):
+    def test_add_validation_options(self, restore_app_env):
         cae = ConsoleApp('test_add_validation_options')
         assert 'filterSfClients' not in cae.cfg_options
         add_validation_options(cae)
         assert 'filterSfClients' in cae.cfg_options
-        sys.argv = [sys_argv_app_key_restore, ]
+        sys.argv = [restore_app_env, ]
         assert cae.get_opt('filterSfClients') == ""
 
     # noinspection PyUnusedLocal
-    def test_init_validation_all(self, restore_app_env, sys_argv_app_key_restore):
+    def test_init_validation_all(self, restore_app_env):
         fn = 'test_valid.ini'
-        with open(fn, 'w') as fp:
-            fp.write(f'[{MAIN_SECTION_NAME}]\n')
-        cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])
-        add_validation_options(cae, email_def=EMAIL_ALL, phone_def=PHONE_ALL, addr_def=ADDR_ALL)
-        sys.argv = [sys_argv_app_key_restore, ]
-        cae.get_opt('debugLevel')     # for to parse args before cae.set_opt() calls (resetting config option)
+        try:
+            with open(fn, 'w') as fp:
+                fp.write(f'[{MAIN_SECTION_NAME}]\n')
+            cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])
+            add_validation_options(cae, email_def=EMAIL_ALL, phone_def=PHONE_ALL, addr_def=ADDR_ALL)
+            sys.argv = [restore_app_env, ]
+            cae.get_opt('debugLevel')     # for to parse args before cae.set_opt() calls (resetting config option)
 
-        assert cae.set_var('emailValidatorPauseSeconds', 1.0) == ''
-        assert cae.set_var('emailValidatorMaxRetries', 1) == ''
-        assert cae.set_var('phoneValidatorPauseSeconds', 1.0) == ''
-        assert cae.set_var('phoneValidatorMaxRetries', 1) == ''
-        assert cae.set_var('phoneValidatorAlternativeCountry', 'USA') == ''
-        assert cae.set_var('addressValidatorPauseSeconds', 1.0) == ''
-        assert cae.set_var('addressValidatorMaxRetries', 1) == ''
-        assert cae.set_var('addressValidatorSearchUrl', 'https:/test.tst/search') == ''
-        assert cae.set_var('addressValidatorFetchUrl', 'https:/test.tst/fetch') == ''
-        assert cae.set_opt('filterSfClients', 'SOQL TEST WHERE CLAUSE') == ''
-        assert cae.set_opt('filterSfRecTypes', 'SF TEST RECORD TYPES') == ''
-        cae.load_cfg_files()
-        ret_tuple = init_validation(cae)
-        assert len(ret_tuple) == 13
-        os.remove(fn)
+            assert cae.set_var('emailValidatorPauseSeconds', 1.0) == ''
+            assert cae.set_var('emailValidatorMaxRetries', 1) == ''
+            assert cae.set_var('phoneValidatorPauseSeconds', 1.0) == ''
+            assert cae.set_var('phoneValidatorMaxRetries', 1) == ''
+            assert cae.set_var('phoneValidatorAlternativeCountry', 'USA') == ''
+            assert cae.set_var('addressValidatorPauseSeconds', 1.0) == ''
+            assert cae.set_var('addressValidatorMaxRetries', 1) == ''
+            assert cae.set_var('addressValidatorSearchUrl', 'https:/test.tst/search') == ''
+            assert cae.set_var('addressValidatorFetchUrl', 'https:/test.tst/fetch') == ''
+            assert cae.set_opt('filterSfClients', 'SOQL TEST WHERE CLAUSE') == ''
+            assert cae.set_opt('filterSfRecTypes', 'SF TEST RECORD TYPES') == ''
+            cae.load_cfg_files()
+            ret_tuple = init_validation(cae)
+            assert len(ret_tuple) == 13
+        finally:
+            os.remove(fn)
 
     # noinspection PyUnusedLocal
-    def test_init_validation_error(self, restore_app_env, sys_argv_app_key_restore):
+    def test_init_validation_error(self, restore_app_env):
         fn = 'test_valid_err.ini'
         with open(fn, 'w') as fp:
             fp.write(f'[{MAIN_SECTION_NAME}]\n')
         cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])
         add_validation_options(cae, email_def=EMAIL_ALL, phone_def=PHONE_ALL, addr_def=ADDR_ALL)
-        sys.argv = [sys_argv_app_key_restore, ]
+        sys.argv = [restore_app_env, ]
 
         assert cae.set_var('addressValidatorApiKey', '') == ''
         cae.load_cfg_files()
@@ -118,60 +120,60 @@ class TestClientDbValidation:
 class TestEmailValidator:
     """ validation service is only checking the host """
 
-    def test_invalid_email_host_with_underscore(self, console_app_env):
-        ev = EmailValidator(base_url=console_app_env.get_var('emailValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('emailValidatorApiKey'))
+    def test_invalid_email_host_with_underscore(self, cons_app):
+        ev = EmailValidator(base_url=cons_app.get_var('emailValidatorBaseUrl'),
+                            api_key=cons_app.get_var('emailValidatorApiKey'))
         err_msg = ev.validate('Andreas.Ecker@wrong_host_name.tld')
         print("Validator error", err_msg)
         assert err_msg
 
-    def test_invalid_email_wrong_name(self, console_app_env):
-        ev = EmailValidator(base_url=console_app_env.get_var('emailValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('emailValidatorApiKey'))
+    def test_invalid_email_wrong_name(self, cons_app):
+        ev = EmailValidator(base_url=cons_app.get_var('emailValidatorBaseUrl'),
+                            api_key=cons_app.get_var('emailValidatorApiKey'))
         err_msg = ev.validate('AndrödelDödel@gmail.com')
         print("Validator error", err_msg)
         assert err_msg
 
-    def test_invalid_email_wrong_name_with_spaces(self, console_app_env):
-        ev = EmailValidator(base_url=console_app_env.get_var('emailValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('emailValidatorApiKey'))
+    def test_invalid_email_wrong_name_with_spaces(self, cons_app):
+        ev = EmailValidator(base_url=cons_app.get_var('emailValidatorBaseUrl'),
+                            api_key=cons_app.get_var('emailValidatorApiKey'))
         err_msg = ev.validate('Andreas Ecker@test.com')
         print("Validator error", err_msg)
         assert err_msg
 
-    def test_valid_email_of_signallia(self, console_app_env):
-        ev = EmailValidator(base_url=console_app_env.get_var('emailValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('emailValidatorApiKey'))
+    def test_valid_email_of_signallia(self, cons_app):
+        ev = EmailValidator(base_url=cons_app.get_var('emailValidatorBaseUrl'),
+                            api_key=cons_app.get_var('emailValidatorApiKey'))
         err_msg = ev.validate('Andreas.Ecker@signallia.com')
         print("Validator error", err_msg)
         assert not err_msg
 
-    def test_valid_email_of_google(self, console_app_env):
-        ev = EmailValidator(base_url=console_app_env.get_var('emailValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('emailValidatorApiKey'))
+    def test_valid_email_of_google(self, cons_app):
+        ev = EmailValidator(base_url=cons_app.get_var('emailValidatorBaseUrl'),
+                            api_key=cons_app.get_var('emailValidatorApiKey'))
         err_msg = ev.validate('aecker2@gmail.com')
         print("Validator error", err_msg)
         assert not err_msg
 
 
 class TestPhoneValidator:
-    def test_invalid_phone(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_invalid_phone(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         err_msg = ev.validate('1234567')
         print("Validator error", err_msg)
         assert err_msg
 
-    def test_invalid_phone_with_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_invalid_phone_with_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         err_msg = ev.validate('1234567', country_code='DE')
         print("Validator error", err_msg)
         assert err_msg
 
-    def test_valid_phone_without_country_with_00_prefix(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_phone_without_country_with_00_prefix(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('0049 7345 506122', ret_val_dict=ret)
         print("Validator response", ret)
@@ -179,18 +181,18 @@ class TestPhoneValidator:
         assert not err_msg
         assert ret['formatinternational'] == '00497345506122'
 
-    def test_valid_phone_with_00_prefix_and_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_phone_with_00_prefix_and_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('0049 7345 506122', country_code='DE', ret_val_dict=ret)
         print("Validator error", err_msg or 'OK - No Error')
         assert not err_msg
         assert ret['formatinternational'] == '00497345506122'
 
-    def test_valid_phone_with_int_prefix_without_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_phone_with_int_prefix_without_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('+497345506122', ret_val_dict=ret)
         print("Validator response", ret)
@@ -198,9 +200,9 @@ class TestPhoneValidator:
         assert not err_msg
         assert ret['formatinternational'] == '00497345506122'
 
-    def test_valid_phone_with_int_prefix_with_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_phone_with_int_prefix_with_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('+497345506122', country_code='DE', ret_val_dict=ret)
         print("Validator response", ret)
@@ -208,9 +210,9 @@ class TestPhoneValidator:
         assert not err_msg
         assert ret['formatinternational'] == '00497345506122'
 
-    def test_valid_phone_with_int_prefix_and_spaces_without_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_phone_with_int_prefix_and_spaces_without_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('+49 7345 506122', ret_val_dict=ret)
         print("Validator response", ret)
@@ -218,9 +220,9 @@ class TestPhoneValidator:
         assert not err_msg
         assert ret['formatinternational'] == '00497345506122'
 
-    def test_valid_phone_with_int_prefix_and_spaces_with_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_phone_with_int_prefix_and_spaces_with_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('+49 7345 506122', country_code='DE', ret_val_dict=ret)
         print("Validator response", ret)
@@ -228,18 +230,18 @@ class TestPhoneValidator:
         assert not err_msg
         assert ret['formatinternational'] == '00497345506122'
 
-    def test_valid_phone_with_int_prefix_and_spaces_with_wrong_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_phone_with_int_prefix_and_spaces_with_wrong_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('+49 7345 506122', country_code='xyz', ret_val_dict=ret)
         print("Validator response", ret)
         print("Validator error", err_msg)
         assert err_msg
 
-    def test_valid_nat_phone_with_valid_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_nat_phone_with_valid_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('07345506122', country_code='DE', ret_val_dict=ret)
         print("Validator response", ret)
@@ -247,9 +249,9 @@ class TestPhoneValidator:
         assert not err_msg
         assert ret['formatinternational'] == '00497345506122'
 
-    def test_valid_nat_phone_with_valid_country_and_spaces(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_nat_phone_with_valid_country_and_spaces(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('07345 506122', country_code='DE', ret_val_dict=ret)
         print("Validator response", ret)
@@ -257,18 +259,18 @@ class TestPhoneValidator:
         assert not err_msg
         assert ret['formatinternational'] == '00497345506122'
 
-    def test_valid_swe_phone_with_wrong_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_swe_phone_with_wrong_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('0046705856794', country_code='DE', ret_val_dict=ret)
         print("Validator response", ret)
         print("Validator error", err_msg)
         assert err_msg
 
-    def test_valid_swe_phone_with_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_swe_phone_with_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('0046705856794', country_code='SE', ret_val_dict=ret)
         print("Validator response", ret)
@@ -276,9 +278,9 @@ class TestPhoneValidator:
         assert not err_msg
         assert ret['formatinternational'] == '0046705856794'
 
-    def test_valid_swe_phone_with_no_country(self, console_app_env):
-        ev = PhoneValidator(base_url=console_app_env.get_var('phoneValidatorBaseUrl'),
-                            api_key=console_app_env.get_var('phoneValidatorApiKey'))
+    def test_valid_swe_phone_with_no_country(self, cons_app):
+        ev = PhoneValidator(base_url=cons_app.get_var('phoneValidatorBaseUrl'),
+                            api_key=cons_app.get_var('phoneValidatorApiKey'))
         ret = dict()
         err_msg = ev.validate('+46705856794', ret_val_dict=ret)
         print("Validator response", ret)

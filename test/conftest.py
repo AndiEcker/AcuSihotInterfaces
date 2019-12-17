@@ -25,64 +25,66 @@ def console_app_env():
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def avail_cats(console_app_env):
-    return AvailCatInfo(console_app_env)
+def avail_cats(cons_app):
+    return AvailCatInfo(cons_app)
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def db_connected(console_app_env):
-    ora_db = OraDb(console_app_env,
-                   dict(User=console_app_env.get_opt('acuUser'), Password=console_app_env.get_opt('acuPassword'),
-                        DSN=console_app_env.get_opt('acuDSN')))
+def db_connected(cons_app):
+    system = SystemBase('Acu', cons_app,
+                        dict(User=cons_app.get_opt('acuUser'), Password=cons_app.get_opt('acuPassword'),
+                             DSN=cons_app.get_opt('acuDSN'))
+                        )
+    ora_db = OraDb(system)
     ora_db.connect()
     return ora_db
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def sys_data_ass(console_app_env):
-    return AssSysData(console_app_env)
+def sys_data_ass(cons_app):
+    return AssSysData(cons_app)
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def config_dict(console_app_env):
-    return ConfigDict(console_app_env)
+def config_dict(cons_app):
+    return ConfigDict(cons_app)
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def cat_rooms(console_app_env):
-    return CatRooms(console_app_env)
+def cat_rooms(cons_app):
+    return CatRooms(cons_app)
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def client_search(console_app_env):
-    return ClientSearch(console_app_env)
+def client_search(cons_app):
+    return ClientSearch(cons_app)
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def post_message(console_app_env):
-    return PostMessage(console_app_env)
+def post_message(cons_app):
+    return PostMessage(cons_app)
 
 
 # noinspection PyShadowingNames
 @pytest.fixture()
-def create_test_client(console_app_env):
+def create_test_client(cons_app):
     # prevent duplicate creation of test client
     mc = 'T800001'
     sn = 'Tester800001'
     fn = 'Pepe'
     gt = '1'    # Guest (not Company)
-    cs = ClientSearch(console_app_env)
+    cs = ClientSearch(cons_app)
     objid = cs.client_id_by_matchcode(mc)
     if objid and '\n' not in objid:
         client = cs
     else:
-        client = ClientToSihot(console_app_env)
+        client = ClientToSihot(cons_app)
         col_values = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(client.elem_map)
         col_values.clear_leafs()
         col_values['AcuId'] = mc
@@ -101,8 +103,8 @@ def create_test_client(console_app_env):
 
 # noinspection PyShadowingNames
 @pytest.fixture(scope='module')
-def salesforce_connection(console_app_env):
-    cae = console_app_env
+def salesforce_connection(cons_app):
+    cae = cons_app
     sf_user = cae.get_opt('sfUser')
     if not sf_user:         # check if app is specifying Salesforce credentials, e.g. SihotResSync/SihotResImport do not
         cae.po("conftest.salesforce_connection(): skipped because of unspecified credentials")

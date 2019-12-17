@@ -44,14 +44,15 @@ message string. If the return value is an empty string then you can use all the 
         print(error_message)
         error_message = pg_db.rollback()
 
-The :meth:`~ae.db_core.DbBase.rollback` is only if you use transactions (autocommit is False). Then
-you should also use :meth:`~ae.db_core.DbBase.commit` at the end of each transaction for to store
+An explicit call of :meth:`~ae.db_core.DbBase.rollback` is only needed if you use transactions (autocommit is False).
+In this case you should also use :meth:`~ae.db_core.DbBase.commit` at the end of each transaction for to store
 any data updates:
 
     error_message = pg_db.commit()
 
-Most of the methods of :class:`~ae.db_core.DbBase` are provide a `commit` argument that allows
-to include the :meth:`~ae.db_core.DbBase.commit` call if no error occurred.
+Alternatively you can use the `commit` argument that is provided by the :class:`~ae.db_core.DbBase`
+DML methods: by passing a `True` value to this argument, the method will automatically execute a
+:meth:`~ae.db_core.DbBase.commit` call for you if no error occurred in the DML method:
 
     error_message = pg_db.update('table`, {'column': 369}, commit=True)
 

@@ -29,9 +29,9 @@ After that you can use any data selection and manipulation method of the base cl
 import cx_Oracle
 import datetime
 import os
-from typing import Any, Dict, Sequence, Union
+from typing import Any, Union
 
-from ae.console import ConsoleApp
+from ae.sys_core import SystemBase
 from ae.db_core import DbBase
 
 __version__ = '0.0.1'
@@ -39,13 +39,13 @@ __version__ = '0.0.1'
 
 class OraDb(DbBase):
     """ Oracle database class, based on :class:`~.db_core.DbBase` """
-    def __init__(self, console_app: ConsoleApp, credentials: Dict[str, str], features: Sequence[str] = ()):
+    def __init__(self, system: SystemBase):
         """ create instance of oracle database object.
 
-        :param console_app: ConsoleApp instance of the application using this database.
-        :param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
+        param console_app: ConsoleApp instance of the application using this database.
+        param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
                             password and DSN=database name and optionally host address (separated with a @ character).
-        :param features:    optional list of features (currently not used for databases).
+        param features:    optional list of features (currently not used for databases).
 
         If you experiencing the following unicode encoding error::
 
@@ -63,7 +63,7 @@ class OraDb(DbBase):
             os.environ["NLS_LANG"] = ".AL32UTF8"
 
         """
-        super().__init__(console_app, credentials, features=features)
+        super().__init__(system)
 
         if self.dsn.count(':') == 1 and self.dsn.count('/@') == 1:   # old style format == host:port/@SID
             host, rest = self.dsn.split(':')

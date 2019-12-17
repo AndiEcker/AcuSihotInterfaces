@@ -18,7 +18,7 @@ Postgresql = testing.postgresql.PostgresqlFactory(cache_initialized_db=True)
 
 
 class TestBasic:
-    def test_select(self, cons_app):
+    def test_select(self, sys):
         pg = Postgresql()
         cred, feat = connect_args_from_params(pg.dsn())
         db = PostgresDb(cons_app, cred, feat)

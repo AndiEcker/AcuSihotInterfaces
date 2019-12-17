@@ -527,8 +527,10 @@ class SihotXmlBuilder:
         self._xml = ''
 
     def beg_xml(self, operation_code, add_inner_xml='', transaction_number=''):
-        self._xml = '<?xml version="1.0" encoding="' + self.cae.get_opt(SDF_SH_XML_ENCODING).lower() + \
-                    '"?>\n<SIHOT-Document>\n'
+        enc = self.cae.get_opt(SDF_SH_XML_ENCODING) or ""
+        if enc:
+            enc = f' encoding="{enc.lower()}"'
+        self._xml = f'<?xml version="1.0"{enc}?>\n<SIHOT-Document>\n'
         if self.use_kernel_interface:
             self._xml += '<SIHOT-XML-REQUEST>\n'
             self.add_tag('REQUEST-TYPE', operation_code)

@@ -1,4 +1,5 @@
 from ae.console import ConsoleApp
+from ae.sys_core import SystemBase
 from ae_notification.notification import add_notification_options, init_notification
 from ae.db_ora import OraDb
 from sys_data_acu import add_ac_options
@@ -19,8 +20,11 @@ notification, _ = init_notification(cae, 'TestConnectivity')
 notification.send_notification('test message from Sihot server')
 
 
-ora_db = OraDb(cae, dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
-                         DSN=cae.get_opt('acuDSN')))
+system = SystemBase('Acu', cae,
+                    dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
+                         DSN=cae.get_opt('acuDSN'))
+                    )
+ora_db = OraDb(system)
 err_msg = ora_db.connect()
 if err_msg:
     cae.po(err_msg)

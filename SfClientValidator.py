@@ -7,7 +7,7 @@
 """
 import pprint
 
-from ae_validation.validation import EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED, \
+from ae.validation import EMAIL_NOT_VALIDATED, PHONE_NOT_VALIDATED, \
     add_validation_options, init_validation, clients_to_validate
 from ae.core import correct_email, correct_phone, try_eval
 from ae.console import ConsoleApp

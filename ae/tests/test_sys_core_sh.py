@@ -355,8 +355,8 @@ class TestSihotXmlParser:
         <RC>0</RC>
     </SIHOT-Document>'''
 
-    def test_attributes(self, console_app_env):
-        xml_parser = SihotXmlParser(console_app_env)
+    def test_attributes(self, cons_app):
+        xml_parser = SihotXmlParser(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.oc == 'A-SIMPLE_TEST_OC'
         assert xml_parser.tn == '123'
@@ -383,8 +383,8 @@ class TestResResponse:
         <MATCHCODE>E987654</MATCHCODE>
     </SIHOT-Document>'''
 
-    def test_attributes(self, console_app_env):
-        xml_parser = ResResponse(console_app_env)
+    def test_attributes(self, cons_app):
+        xml_parser = ResResponse(cons_app)
         xml_parser.parse_xml(self.SXML_RESPONSE_EXAMPLE)
         assert xml_parser.oc == 'FAKE_UNKNOWN_OC_MSG'
         assert xml_parser.tn == '135'
@@ -398,28 +398,32 @@ class TestResResponse:
 
 
 class TestSihotXmlBuilder:
-    def test_create_xml(self, console_app_env):
-        xml_builder = SihotXmlBuilder(console_app_env)
+    def test_create_xml(self, cons_app):
+        xml_builder = SihotXmlBuilder(cons_app)
         xml_builder.beg_xml('TEST_OC')
         xml_builder.add_tag('EMPTY')
         xml_builder.add_tag('DEEP', xml_builder.new_tag('DEEPER', 'value'))
         test_date = xml_builder.convert_value_to_xml_string(datetime.datetime.now())
         xml_builder.add_tag('DATE', test_date)
         xml_builder.end_xml()
-        console_app_env.dpo('####  New XML created: ', xml_builder.xml)
-        assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n' + \
-            '<OC>TEST_OC</OC><TN>2</TN><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
-            '<DATE>' + test_date + '</DATE>\n</SIHOT-Document>'
+        cons_app.dpo('####  New XML created: ', xml_builder.xml)
+        assert xml_builder.xml.startswith('<?xml version="1.0"')
+        assert xml_builder.xml.endswith(
+            '?>\n<SIHOT-Document>\n'
+            '<OC>TEST_OC</OC><TN>2</TN><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>'
+            '<DATE>' + test_date + '</DATE>\n</SIHOT-Document>')
 
-    def test_create_xml_kernel(self, console_app_env):
-        xml_builder = SihotXmlBuilder(console_app_env, use_kernel=True)
+    def test_create_xml_kernel(self, cons_app):
+        xml_builder = SihotXmlBuilder(cons_app, use_kernel=True)
         xml_builder.beg_xml('TEST_OC')
         xml_builder.add_tag('EMPTY')
         xml_builder.add_tag('DEEP', xml_builder.new_tag('DEEPER', 'value'))
         test_date = xml_builder.convert_value_to_xml_string(datetime.datetime.now())
         xml_builder.add_tag('DATE', test_date)
         xml_builder.end_xml()
-        console_app_env.dpo('####  New XML created: ', xml_builder.xml)
-        assert xml_builder.xml == '<?xml version="1.0" encoding="utf8"?>\n<SIHOT-Document>\n<SIHOT-XML-REQUEST>' + \
-            '\n<REQUEST-TYPE>TEST_OC</REQUEST-TYPE><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>' + \
-            '<DATE>' + test_date + '</DATE>\n</SIHOT-XML-REQUEST>\n</SIHOT-Document>'
+        cons_app.dpo('####  New XML created: ', xml_builder.xml)
+        assert xml_builder.xml.startswith('<?xml version="1.0"')
+        assert xml_builder.xml.endswith(
+            '?>\n<SIHOT-Document>\n<SIHOT-XML-REQUEST>'
+            '\n<REQUEST-TYPE>TEST_OC</REQUEST-TYPE><EMPTY></EMPTY><DEEP><DEEPER>value</DEEPER></DEEP>'
+            '<DATE>' + test_date + '</DATE>\n</SIHOT-XML-REQUEST>\n</SIHOT-Document>')

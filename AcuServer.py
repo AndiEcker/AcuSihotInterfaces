@@ -12,6 +12,7 @@ from traceback import format_exc
 
 from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.console import ConsoleApp
+from ae.sys_core import SystemBase
 
 from ae_notification.notification import add_notification_options, init_notification
 from ae.db_ora import OraDb
@@ -64,8 +65,11 @@ def alloc_trigger(oc, guest_id, room_no, old_room_no, gds_no, sihot_xml):
     if old_room_no:
         old_room_no = old_room_no.lstrip('0')
     # move/check in/out guest from/into room_no
-    ora_db = OraDb(cae, dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
-                             DSN=cae.get_opt('acuDSN')))
+    system = SystemBase('Acu', cae,
+                        dict(User=cae.get_opt('acuUser'), Password=cae.get_opt('acuPassword'),
+                             DSN=cae.get_opt('acuDSN'))
+                        )
+    ora_db = OraDb(system)
     err_msg = ora_db.connect()
     extra_info = ''
     if not err_msg:

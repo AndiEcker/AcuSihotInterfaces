@@ -3,8 +3,8 @@ from ae.sys_data_sh import *
 
 class TestResToSihot:
 
-    def test_basic_build_and_send(self, console_app_env):
-        res_to = ResToSihot(console_app_env)
+    def test_basic_build_and_send(self, cons_app):
+        res_to = ResToSihot(cons_app)
         fld_vals = dict(AcuId='E578973',
                         ResHotelId='1', ResGdsNo='TEST-123456789',
                         ResArrival=datetime.date(year=2019, month=12, day=24),
@@ -15,8 +15,8 @@ class TestResToSihot:
         assert not err_msg
         assert not res_to.get_warnings()
 
-    def test_rate_amount_update(self, console_app_env):
-        res_to = ResToSihot(console_app_env)
+    def test_rate_amount_update(self, cons_app):
+        res_to = ResToSihot(cons_app)
         fld_vals = dict(ResHotelId='1', ResGdsNo='TEST-123456789',
                         ResArrival=datetime.date(year=2019, month=12, day=24),
                         ResDeparture=datetime.date(year=2019, month=12, day=30),
@@ -49,8 +49,8 @@ class TestFldMapXmlParser:
           "<SYS_FNB><invali>xx</invali><SF-B>sfnBV2</SF-B></SYS_FNB>" \
           "</root>"
 
-    def test_parse(self, console_app_env):
-        mp = FldMapXmlParser(console_app_env, self.ELEM_MAP)
+    def test_parse(self, cons_app):
+        mp = FldMapXmlParser(cons_app, self.ELEM_MAP)
         assert len(mp.rec) == 2
         assert mp.elem_fld_map['SYS_FNA'].val() == ''
 
@@ -77,14 +77,14 @@ class TestFldMapXmlParser:
 
 
 class TestGuestData:
-    def test_guest_data_2443(self, console_app_env):
-        data = client_data(console_app_env, 2443)
+    def test_guest_data_2443(self, cons_app):
+        data = client_data(cons_app, 2443)
         assert data
         assert data['OBJID'] == '2443'
         assert data['MATCHCODE'] == 'G425796'
 
-    def test_guest_data_260362(self, console_app_env):
-        data = client_data(console_app_env, 260362)
+    def test_guest_data_260362(self, cons_app):
+        data = client_data(cons_app, 260362)
         assert data
         assert data['OBJID'] == '260362'
         assert data['MATCHCODE'] == 'G635189'
@@ -154,25 +154,25 @@ class TestElemHelpers:
 
 class TestIdConverters:
     # test res of Z007184 from 26.12.17 until 3.1.2018
-    def test_obj_id_to_res_no(self, console_app_env):
-        assert ('4', '33220', '1', '899993') == obj_id_to_res_no(console_app_env, '60544')
+    def test_obj_id_to_res_no(self, cons_app):
+        assert ('4', '33220', '1', '899993') == obj_id_to_res_no(cons_app, '60544')
 
-    def test_gds_no_to_obj_id(self, console_app_env):
-        assert '60544' == gds_no_to_obj_id(console_app_env, '4', '899993')
+    def test_gds_no_to_obj_id(self, cons_app):
+        assert '60544' == gds_no_to_obj_id(cons_app, '4', '899993')
 
-    def test_res_no_to_obj_id(self, console_app_env):
-        assert '60544' == res_no_to_obj_id(console_app_env, '4', '33220', '1')
+    def test_res_no_to_obj_id(self, cons_app):
+        assert '60544' == res_no_to_obj_id(cons_app, '4', '33220', '1')
 
-    def test_gds_no_to_obj_ids(self, console_app_env):
-        ids = gds_no_to_ids(console_app_env, '4', '899993')
+    def test_gds_no_to_obj_ids(self, cons_app):
+        ids = gds_no_to_ids(cons_app, '4', '899993')
         assert '60544' == ids['ResObjId']
         assert '33220' == ids['ResId']
         assert '1' == ids['ResSubId']
         assert 'ResSfId' in ids
         assert ids['ResSfId'] == ''
 
-    def test_res_no_to_obj_ids(self, console_app_env):
-        ids = res_no_to_ids(console_app_env, '4', '33220', '1')
+    def test_res_no_to_obj_ids(self, cons_app):
+        ids = res_no_to_ids(cons_app, '4', '33220', '1')
         assert '60544' == ids['ResObjId']
         assert '899993' == ids['ResGdsNo']
         assert 'ResSfId' in ids
@@ -180,14 +180,14 @@ class TestIdConverters:
 
 
 class TestResSender:
-    def test_create_all_fields(self, console_app_env):
+    def test_create_all_fields(self, cons_app):
         ho_id = '3'
         gdsno = 'TEST-1234567890'
         today = datetime.date.today()
         wk1 = datetime.timedelta(days=7)
         cat = 'STDS'
 
-        rs = ResSender(console_app_env)
+        rs = ResSender(cons_app)
         row = dict(ResHotelId=ho_id, ResStatus='1', ResAction=ACTION_INSERT,
                    ResGdsNo=gdsno, ResVoucherNo='Voucher1234567890',
                    ResBooked=today, ResArrival=today + wk1, ResDeparture=today + wk1 + wk1,
@@ -224,7 +224,7 @@ class TestResSender:
         assert '1' == s
         assert gdsno == g
 
-    def test_create_minimum_fields_with_mc(self, console_app_env):
+    def test_create_minimum_fields_with_mc(self, cons_app):
         ho_id = '1'
         gdsno = 'TEST-1234567890'
         today = datetime.datetime.today()
@@ -234,7 +234,7 @@ class TestResSender:
         cat = 'STDO'
         mkt_seg = 'TC'
 
-        rs = ResSender(console_app_env)
+        rs = ResSender(cons_app)
         row = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
                    AcuId='TCRENT', ResGdsNo=gdsno)
         rec = Record(fields=row, system=SDI_SH, direction=FAD_ONTO).add_system_fields(rs.elem_map)
@@ -250,7 +250,7 @@ class TestResSender:
         assert '1' == s
         assert gdsno == g
 
-    def test_create_minimum_fields_with_objid(self, console_app_env):
+    def test_create_minimum_fields_with_objid(self, cons_app):
         ho_id = '1'
         gdsno = 'TEST-1234567890'
         today = datetime.datetime.today()
@@ -260,7 +260,7 @@ class TestResSender:
         cat = 'STDO'
         mkt_seg = 'TC'
 
-        rs = ResSender(console_app_env)
+        rs = ResSender(cons_app)
         row = dict(ResHotelId=ho_id, ResArrival=arr, ResDeparture=dep, ResRoomCat=cat, ResMktSegment=mkt_seg,
                    ShId='27', ResGdsNo=gdsno)
         err, msg = rs.send_rec(Record(fields=row))
@@ -321,8 +321,8 @@ class TestClientFromSihot:
         </GUEST-PROFILE>
     </SIHOT-Document>'''
 
-    def test_attributes(self, console_app_env):
-        xml_parser = ClientFromSihot(console_app_env)
+    def test_attributes(self, cons_app):
+        xml_parser = ClientFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.oc == 'GUEST-CREATE'
         assert xml_parser.tn == '1'
@@ -333,8 +333,8 @@ class TestClientFromSihot:
         assert xml_parser.error_level == '0'
         assert xml_parser.error_text == ''
 
-    def test_elem_map(self, console_app_env):
-        xml_parser = ClientFromSihot(console_app_env)
+    def test_elem_map(self, cons_app):
+        xml_parser = ClientFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.client_list.val(0, 'AcuId') == 'test2'
         assert xml_parser.client_list.val(0, 'MATCHCODE') == 'test2'
@@ -487,8 +487,8 @@ class TestResFromSihot:
         </SIHOT-Document>
         '''
 
-    def test_attributes(self, console_app_env):
-        xml_parser = ResFromSihot(console_app_env)
+    def test_attributes(self, cons_app):
+        xml_parser = ResFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.oc == 'RES-SEARCH'
         assert xml_parser.tn == '0'
@@ -499,16 +499,16 @@ class TestResFromSihot:
         assert xml_parser.error_level == '0'
         assert xml_parser.error_text == ''
 
-    def test_fld_map_matchcode(self, console_app_env):
-        xml_parser = ResFromSihot(console_app_env)
+    def test_fld_map_matchcode(self, cons_app):
+        xml_parser = ResFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_MATCHCODE_EXAMPLE)
         assert xml_parser.res_list[0].val('AcuId') == 'test2'
         assert xml_parser.res_list[0].val('RESERVATION.MATCHCODE') == 'test2'
         assert xml_parser.res_list[0].val('ResPersons', 0, 'PersAcuId') == 'PersonAcuId'
         assert xml_parser.res_list.val(0, 'ResPersons', 0, 'PERSON.MATCHCODE') == 'PersonAcuId'
 
-    def test_fld_map_big(self, console_app_env):
-        xml_parser = ResFromSihot(console_app_env)
+    def test_fld_map_big(self, cons_app):
+        xml_parser = ResFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.res_list.val(0, 'AcuId') == 'test2'
         assert xml_parser.res_list[0].val('AcuId') == 'test2'
@@ -526,8 +526,8 @@ class TestResFromSihot:
 
 class TestClientToSihot:
 
-    def test_basic_build_and_send(self, console_app_env):
-        cli_to = ClientToSihot(console_app_env)
+    def test_basic_build_and_send(self, cons_app):
+        cli_to = ClientToSihot(cons_app)
         fld_vals = dict(AcuId='T111222', Title='1', GuestType='1', Country='AT', Language='DE',
                         ExtRefs='RCI=123,XXX=456')
         rec = Record(fields=fld_vals)
@@ -538,8 +538,8 @@ class TestClientToSihot:
 
 
 class TestClientFetchSearch:
-    def test_fetch_client_with_test_client(self, console_app_env, create_test_client):
-        client_fetch = ClientFetch(console_app_env)
+    def test_fetch_client_with_test_client(self, cons_app, create_test_client):
+        client_fetch = ClientFetch(cons_app)
         rec = client_fetch.fetch_client(create_test_client.objid)
         assert client_fetch.response.objid == create_test_client.objid   # OBJID passed only to response (ret is empty)
         # also MATCHCODE element is in response (empty in ret): assert ret['MATCHCODE']==create_test_client.matchcode
@@ -556,10 +556,10 @@ class TestClientFetchSearch:
         assert rec['NAME-2'] == create_test_client.forename
         assert rec['T-GUEST'] == create_test_client.client_type
 
-    def test_client_with_10_ext_refs(self, client_search, console_app_env):
+    def test_client_with_10_ext_refs(self, client_search, cons_app):
         objid = client_search.client_id_by_matchcode('E396693')
         assert objid
-        ret = ClientFetch(console_app_env).fetch_client(objid)
+        ret = ClientFetch(cons_app).fetch_client(objid)
         assert isinstance(ret, dict)
         assert ret['MATCH-ADM'] == '4806-00208'
         if ret['COMMENT']:

@@ -114,7 +114,7 @@ def test_read_only_services(path, text_fragment, params, status, json_values):
                 Surname='CreateTester', ResStatus='S'),
             skip_live=True),
         ]))
-def test_write_services(path, params, status, json_values, rec, console_app_env):
+def test_write_services(path, params, status, json_values, rec, cons_app):
     response = requests.post(path, json=params)
     print(response.url)
     assert response.status_code == status
@@ -124,7 +124,7 @@ def test_write_services(path, params, status, json_values, rec, console_app_env)
         assert js.get(k) == v
     ho_id = params['ResHotelId']
     gds_no = params['ResGdsNo']
-    res_rec = ResFetch(console_app_env).fetch_by_gds_no(ho_id=ho_id, gds_no=gds_no)
+    res_rec = ResFetch(cons_app).fetch_by_gds_no(ho_id=ho_id, gds_no=gds_no)
     for k, v in rec.items():
         assert res_rec[k] == v
 

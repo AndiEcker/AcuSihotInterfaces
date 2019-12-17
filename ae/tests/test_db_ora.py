@@ -1,5 +1,6 @@
 import datetime
 from ae.console import ConsoleApp
+from ae.sys_core import SystemBase
 from ae.db_core import CHK_BIND_VAR_PREFIX
 from ae.db_ora import OraDb
 
@@ -16,8 +17,11 @@ class TestOraDb:
     def test_prepare_connect(self):
         global test_db
         cae = ConsoleApp('test ae db ora', app_name='test_db-ora')
-        test_db = OraDb(cae, dict(User=cae.get_var('acuUser'), Password=cae.get_var('acuPassword'),
-                                  DSN=cae.get_var('acuDSN')))
+        system = SystemBase('Acu', cae,
+                            dict(User=cae.get_var('acuUser'), Password=cae.get_var('acuPassword'),
+                                 DSN=cae.get_var('acuDSN'))
+                            )
+        test_db = OraDb(system)
         assert not test_db.last_err_msg
 
     def test_create_table(self):

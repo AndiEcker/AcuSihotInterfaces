@@ -6,13 +6,13 @@ from sys_data_acu import AcuClientToSihot, AcuResToSihot, AcumenClient, SDI_ACU
 
 
 @pytest.fixture()
-def acu_client(console_app_env):
-    return AcuClientToSihot(console_app_env)
+def acu_client(cons_app):
+    return AcuClientToSihot(cons_app)
 
 
 @pytest.fixture()
-def acu_res(console_app_env):
-    return AcuResToSihot(console_app_env)
+def acu_res(cons_app):
+    return AcuResToSihot(cons_app)
 
 
 class TestClientFromAcuToSihot:
@@ -353,10 +353,10 @@ class TestAcuServerParts:
             </SIHOT-Document>
             '''
 
-    def test_send_client_to_acu(self, console_app_env):
-        xml_parser = ClientFromSihot(console_app_env)
+    def test_send_client_to_acu(self, cons_app):
+        xml_parser = ClientFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
-        acu_cl = AcumenClient(console_app_env)
+        acu_cl = AcumenClient(cons_app)
         error_msg, pk = acu_cl.save_client(xml_parser.rec)
         assert not error_msg
         assert pk == 'test2'
@@ -407,8 +407,8 @@ class TestClientFromSihot:
         </GUEST-PROFILE>
     </SIHOT-Document>'''
 
-    def test_attributes(self, console_app_env):
-        xml_parser = ClientFromSihot(console_app_env)
+    def test_attributes(self, cons_app):
+        xml_parser = ClientFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.oc == 'GUEST-CREATE'
         assert xml_parser.tn == '1'
@@ -419,8 +419,8 @@ class TestClientFromSihot:
         assert xml_parser.error_level == '0'
         assert xml_parser.error_text == ''
 
-    def test_elem_map(self, console_app_env):
-        xml_parser = ClientFromSihot(console_app_env)
+    def test_elem_map(self, cons_app):
+        xml_parser = ClientFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         rec = xml_parser.client_list[0]
         assert rec['AcuId'] == 'test2'
@@ -560,8 +560,8 @@ class TestResFromSihot:
         </SIHOT-Document>
         '''
 
-    def test_attributes(self, console_app_env):
-        xml_parser = ResFromSihot(console_app_env)
+    def test_attributes(self, cons_app):
+        xml_parser = ResFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.oc == 'RES-SEARCH'
         assert xml_parser.tn == '0'
@@ -572,8 +572,8 @@ class TestResFromSihot:
         assert xml_parser.error_level == '0'
         assert xml_parser.error_text == ''
 
-    def test_fld_map(self, console_app_env):
-        xml_parser = ResFromSihot(console_app_env)
+    def test_fld_map(self, cons_app):
+        xml_parser = ResFromSihot(cons_app)
         xml_parser.parse_xml(self.XML_EXAMPLE)
         assert xml_parser.res_list.val(0, 'AcuId') == 'test2'
         assert xml_parser.res_list.val(0, 'RESERVATION.MATCHCODE') == 'test2'

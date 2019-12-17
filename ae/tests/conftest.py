@@ -11,7 +11,7 @@ import pytest
 @pytest.fixture
 def tst_app_key():
     """ provide value used in tests for AppBase.app_key. """
-    return 'pyTstSysArgv0Mock'
+    return 'pyTstConsAppKey'
 
 
 @pytest.fixture
@@ -19,18 +19,21 @@ def sys_argv_app_key_restore(tst_app_key):          # needed for tests using sys
     """ change sys.argv before test run to use test app key and restore sys.argv after test run. """
     old_argv = sys.argv
     sys.argv = [tst_app_key, ]
+
     yield tst_app_key
+
     sys.argv = old_argv
 
 
 @pytest.fixture
-def restore_app_env():
+def restore_app_env(sys_argv_app_key_restore):
     """ restore app environment after test run - needed for tests instantiating AppBase/ConsoleApp. """
-    # LOCAL IMPORT because there may be portions that does not depend-on/use ae.core
+    # LOCAL IMPORT because a portion may not depend-on/use ae.core
     # noinspection PyProtectedMember
     from ae.core import app_inst_lock, _app_instances, _unregister_app_instance
 
-    yield "a,n,y"
+    yield sys_argv_app_key_restore
+
     # added outer list() because unregister does _app_instances.pop() calls
     # and added inner list() because the .keys() 'generator' object is not reversible
     with app_inst_lock:
@@ -41,8 +44,17 @@ def restore_app_env():
 
 @pytest.fixture
 def cons_app(restore_app_env):
+    """ provide ConsoleApp instance that will be unregistered automatically """
+    # LOCAL IMPORT because some portions like e.g. ae_core does not depend/use ae.console
     from ae.console import ConsoleApp
     yield ConsoleApp()
+
+
+@pytest.fixture
+def tst_system(cons_app):
+    """ CURRENTLY NOT USED """
+    from ae.sys_core import SystemBase
+    yield SystemBase('Tst', cons_app, dict(User='TstUsr', Password='TstPwd', Dsn='TstDb@TstHost'))
 
 
 def delete_files(file_name, keep_ext=False, ret_type='count'):
