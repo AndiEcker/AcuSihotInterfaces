@@ -8,7 +8,7 @@ from typing import Tuple, Dict, Any
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
 from ae.core import DATE_ISO, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, parse_date, po
-from ae.sys_core import SystemBase, SystemConnectionBase
+from ae.sys_core import SystemBase, SystemConnectorBase
 from ae.sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
 
 from sys_data_ids import EXT_REF_TYPE_RCI, EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP
@@ -307,7 +307,7 @@ def _format_exc(ex):    # wrapper because SimpleSalesforce is throwing exception
     return exc_msg
 
 
-class SfSysConnector(SystemConnectionBase):
+class SfSysConnector(SystemConnectorBase):
     def __init__(self, system: SystemBase):
         """
         create instance of generic database object (base class for real database like e.g. postgres or oracle).

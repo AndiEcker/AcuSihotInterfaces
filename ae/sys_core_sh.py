@@ -15,7 +15,7 @@ from xml.etree.ElementTree import XMLParser, ParseError
 
 from ae.core import (DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, DEF_ENCODE_ERRORS,
                      po, round_traditional)
-from ae.sys_core import SystemConnectionBase
+from ae.sys_core import SystemConnectorBase
 
 
 __version__ = '0.0.1'
@@ -699,7 +699,7 @@ class ResKernelGet(SihotXmlBuilder):
         return res_no
 
 
-class ShSysConnector(SystemConnectionBase):
+class ShSysConnector(SystemConnectorBase):
     def connect(self) -> str:
         """ not needed - lazy connection """
         return self.last_err_msg

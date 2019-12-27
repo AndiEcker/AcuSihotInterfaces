@@ -2,37 +2,73 @@
 oracle database layer
 =====================
 
-The main class :class:`OraDb` of this module is based on cx_Oracle package.
+The main class :class:`OraDb` of this module is using the cx_Oracle package as the database driver
+for to connect to an Oracle database.
 
 The cx_Oracle package has to have version 5 or higher.
 
 Basic Usage
 -----------
 
-First create an instance of :class:`OraDb` providing the application instance (of the class
-:class:`ConsoleApp` or an inherited sub-class of it) plus all needed credentials and features/options:
+For to create an instance of the class :class:`OraDb` you first have to create a
+:class:`~ae.sys_core.SystemBase` instance. This can be done either programmatically
+by providing an application instance (of the class :class:`~ae.ae_console.ConsoleApp`
+or an inherited sub-class of it) plus any database parameters, like
+required credentials and any database configuration features/options:
 
     app = ConsoleApp()
-    ora_db = OraDb(app, dict(User='user name', Password='password`, Dsn='LIVE@TNS-NAME', ...), ...)
+    system = SystemBase('system-id', app, dict(User='user name', Password='password`, ...), ...)
 
-With the database properties provided at instantiation, call first the :meth:`~.connect` for to connect
-to the Oracle database:
+Alternatively provide all system-specific info within the :ref:`ae config files<config-files>`
+and let :class:`~ae.sys_core.UsedSystems` load it:
+
+    system = used_systems['system-id']
+
+Finally pass the database parameters in `system` for to create an instance of :class:`OraDb`:
+
+    ora_db = OraDb(system)
+
+Then call the :meth:`~OraDb.connect` method of this instance for to connect to the Oracle database server:
 
     error_message = ora_db.connect()
     if error_message:
         print(error_message)
-        ora_db.rollback()
 
-After that you can use any data selection and manipulation method of the base class
-:class:`~.db_core.DbBase`.
+If the connection could not be established then  :meth:`~OraDb.connect` is returning an error
+message string. If the return value is an empty string then you can use all the methods provided by
+:class:`~ae.db_core.DbBase`, like e.g. :meth:`~ae.db_core.DbBase.update`:
+
+    error_message = ora_db.update('my_table`, {'my_col': 'new value'})
+    if error_message:
+        print(error_message)
+        error_message = ora_db.rollback()
+
+An explicit call of :meth:`~ae.db_core.DbBase.rollback` is only needed if you use transactions.
+In this case you should also use :meth:`~ae.db_core.DbBase.commit` at the end of each transaction for to store
+any data updates:
+
+    error_message = ora_db.commit()
+
+Alternatively you can use the `commit` argument that is provided by the :class:`~ae.db_core.DbBase`
+DML methods: by passing a `True` value to this argument, the method will automatically execute a
+:meth:`~ae.db_core.DbBase.commit` call for you if no error occurred in the DML method:
+
+    error_message = ora_db.update('table`, {'column': 369}, commit=True)
+
+Finally after all database actions are done you can close the connection to the databases server
+with the :meth:`~ae.db_core.DbBase.close` method:
+
+    error_message = ora_db.close()
+
 """
 import cx_Oracle
 import datetime
 import os
 from typing import Any, Union
 
-from ae.sys_core import SystemBase
-from ae.db_core import DbBase
+from ae.sys_core import SystemBase      # type: ignore  # for mypy
+from ae.db_core import DbBase           # type: ignore  # for mypy
+
 
 __version__ = '0.0.1'
 
@@ -42,10 +78,12 @@ class OraDb(DbBase):
     def __init__(self, system: SystemBase):
         """ create instance of oracle database object.
 
-        param console_app: ConsoleApp instance of the application using this database.
-        param credentials: dict with account credentials ('CredItems' cfg), including User=user name, Password=user
-                            password and DSN=database name and optionally host address (separated with a @ character).
-        param features:    optional list of features (currently not used for databases).
+        :param system:      instance of a :class:`~ae.sys_core.SystemBase` class.
+
+        :class:`~ae.sys_core.SystemBase` (defined in the module :mod:`ae.sys_core`) is providing
+        the credentials and features, which get retrieved from :ref:`config-files`, then converted
+        by :meth:`~ae.db_core.DbBase.connect_params` into :ref:`connection parameters` for to connect
+        to the Postgres database.
 
         If you experiencing the following unicode encoding error::
 
@@ -58,44 +96,49 @@ class OraDb(DbBase):
                     if default_type in (cx_Oracle.STRING, cx_Oracle.FIXED_CHAR):
                         return cursor.var(cx_Oracle.NCHAR, size, cursor.arraysize)
 
-        Luckily, finally found workaround with the following statement executed at the end of this method::
+        Luckily, finally found workaround by setting the following OS environment variable to the
+        character set of the used Oracle server (here UTF8)::
 
             os.environ["NLS_LANG"] = ".AL32UTF8"
 
         """
         super().__init__(system)
-
-        if self.dsn.count(':') == 1 and self.dsn.count('/@') == 1:   # old style format == host:port/@SID
-            host, rest = self.dsn.split(':')
-            port, service_id = rest.split('/@')
-            self.dsn = cx_Oracle.makedsn(host=host, port=port, sid=service_id)
-        elif self.dsn.count(':') == 1 and self.dsn.count('/') == 1:  # old style format == host:port/service_name
-            host, rest = self.dsn.split(':')
-            port, service_name = rest.split('/')
-            self.dsn = cx_Oracle.makedsn(host=host, port=port, service_name=service_name)
-
         os.environ["NLS_LANG"] = ".AL32UTF8"
 
     def connect(self):
         """ connect this instance to the database driver. """
         self.last_err_msg = ''
+
         conn_args = self.connect_params()
         user = conn_args.get('user')
         password = conn_args.get('password')
+        dsn: str = conn_args.get('dsn')
+        if dsn:
+            if dsn.count(':') == 1 and dsn.count('/@') == 1:   # old style format == host:port/@SID
+                host, rest = dsn.split(':', maxsplit=1)
+                port, service_id = rest.split('/@', maxsplit=1)
+                dsn = cx_Oracle.makedsn(host=host, port=port, sid=service_id)
+            elif dsn and dsn.count(':') == 1 and dsn.count('/') == 1:  # old style format == host:port/service_name
+                host, rest = dsn.split(':', maxsplit=1)
+                port, service_name = rest.split('/', maxsplit=1)
+                dsn = cx_Oracle.makedsn(host=host, port=port, service_name=service_name)
+        else:
+            dsn = cx_Oracle.makedsn(**conn_args)
+        app_name = self.console_app.app_name
+
         try:
             # connect old style (using conn str): cx_Oracle.connect(self.usr + '/"' + self.pwd + '"@' + self.dsn)
-            if cx_Oracle.__version__ > '6':
-                # sys context was using clientinfo kwarg in/up-to cx_Oracle V5 - with V6 kwarg renamed to appcontext and
-                # .. now it is using a list of 3-tuples. So since V6 need to replace clientinfo with appcontext=app_ctx
+            if cx_Oracle.__version__ >= '6':
+                # sys context is using appcontext kwarg starting with cx_Oracle Version 6, which is
+                # .. list of 3-tuples. So since V6 need to replace clientinfo kwarg with appcontext=app_ctx
                 NAMESPACE = "CLIENTCONTEXT"  # fetch in Oracle with SELECT SYS_CONTEXT(NAMESPACE, "APP") FROM DUAL
-                app_ctx = [(NAMESPACE, "APP", self.console_app.app_name),
+                app_ctx = [(NAMESPACE, "APP", app_name),
                            (NAMESPACE, "LANG", "Python"),
                            (NAMESPACE, "MOD", "ae.db_ora")]
-                self.conn = cx_Oracle.connect(user=user, password=password, dsn=self.dsn, appcontext=app_ctx)
+                self.conn = cx_Oracle.connect(user=user, password=password, dsn=dsn, appcontext=app_ctx)
             else:
-                # sys context old style (until V5 using clientinfo):
-                self.conn = cx_Oracle.connect(user=user, password=password, dsn=self.dsn,
-                                              clientinfo=self.console_app.app_name)
+                # sys context old style (until cx_Oracle Version 5 using clientinfo):
+                self.conn = cx_Oracle.connect(user=user, password=password, dsn=dsn, clientinfo=app_name)
             # self.conn.outputtypehandler = output_type_handler       # see also comment in OraDb.__init__()
             self.console_app.dpo(f"OraDb.connect(): connected"
                                  f" via client version {cx_Oracle.clientversion()}/{cx_Oracle.apilevel}"
@@ -104,6 +147,7 @@ class OraDb(DbBase):
             self.last_err_msg = f"OraDb-connect() error '{ex}' for {self}"
         else:
             self.create_cursor()
+
         return self.last_err_msg
 
     def prepare_ref_param(self, value: Union[datetime.datetime, int, float, str]) -> Any:
