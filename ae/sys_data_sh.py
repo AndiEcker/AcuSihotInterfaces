@@ -1572,7 +1572,7 @@ class BulkFetcherBase:
         add_sh_options(self.cae, add_kernel_port=self.add_kernel_port)
 
     def load_options(self):
-        self.debug_level = self.cae.get_opt('debugLevel')
+        self.debug_level = self.cae.get_opt('debug_level')
 
     def print_options(self):
         print_sh_options(self.cae)

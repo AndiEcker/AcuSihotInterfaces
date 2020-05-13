@@ -85,7 +85,7 @@ are case-sensitive. The following table is listing them ordered by the option na
 | correctSystem | Correct/Fix data for system (Acu=Acumen, Ass=AssCache) | - | A | SihotOccLogChecker |
 | dateFrom | Start date/time of date range | (depends on command) | F | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
 | dateTill | End date/time of date range | (depends on command) | T | ClientQuestionnaireExport, ShSfClientMigration, SihotOccLogChecker |
-| debugLevel | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
+| debug_level | Display additional debugging info on console output (0=disable, 1=enable, 2=verbose, 3=verbose with timestamp) | 0 | D | (all) |
 | emailsToValidate | Emails to be validated (invalidated, not validated, ...) | not validated | E | SfClientValidator |
 | envChecks | Number of environment checks per command interval | 4 | n | WatchPupPy |
 | exportFile | full path and name of the export CSV file | - | x | ClientQuestionnaireExport |
@@ -95,7 +95,7 @@ are case-sensitive. The following table is listing them ordered by the option na
 | includeCxlRes | Include also cancelled reservations (0=No, 1=Yes) | 0 | I | SihotMigration |
 | init | Initialize/Recreate AssCache/Postgres database (0=No, 1=Yes) | 0 | I | SysDataMan |
 | jsonPath | Import path and file mask for OTA JSON files | C:/JSON_Import/R*.txt | j | SihotResImport |
-| logFile | Duplicate stdout and stderr message into a log file | - | L | (all) |
+| log_file | Duplicate stdout and stderr message into a log file | - | L | (all) |
 | matchcode | Guest matchcode to convert to the associated object ID | - | m | MatchcodeToObjId |
 | migrationMode | Skip room swap and hotel movement requests (0=No, 1=Yes) | - | M | SihotResSync |
 | phonesToValidate | Phones to be validated (invalidated, not validated, ...) | - | P | SfClientValidator |
@@ -707,7 +707,7 @@ line arguments:
 
 In the last example the short options got used (see the Short Option column in the section
 [Command line arguments](#command-line-arguments) above). For a more verbose output you can also
-pass the `debugLevel` command line option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
+pass the `debug_level` command line option (or as short option -D) with a value of 2 (for verbose) or 3 (verbose and
 with timestamp).
 
 #### maxDaysDiff INI/config variable

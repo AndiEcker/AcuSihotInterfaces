@@ -52,7 +52,7 @@ cae.add_opt('syncDateRange', "Restrict sync. of res. to: "
             choices=sync_date_ranges.keys())
 
 
-debug_level = cae.get_opt('debugLevel')
+debug_level = cae.get_opt('debug_level')
 cae.po('Acumen Usr/DSN:', cae.get_opt('acuUser'), cae.get_opt('acuDSN'))
 cae.po('Server IP/Web-/Kernel-port:', cae.get_opt('shServerIP'), cae.get_opt(SDF_SH_WEB_PORT),
        cae.get_opt(SDF_SH_KERNEL_PORT))

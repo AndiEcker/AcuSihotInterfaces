@@ -22,7 +22,7 @@ startup_date = datetime.datetime.now()
 
 cae = ConsoleApp("Sihot SXML interface log file checks and Acumen/AssCache occupation status fixes")
 
-cae.add_argument('sxml_log_file_name', help="SXML Logfile name (and path, e.g. SXML_ACUMEN.log or SXML_ASSCACHE.log)")
+cae.add_argument('sxml_log_file_name', help="SXML log file name (and path, e.g. SXML_ACUMEN.log or SXML_ASSCACHE.log)")
 
 cae.add_opt('dateFrom', "Date/time of first checked occupation", startup_date - datetime.timedelta(days=1), 'F')
 cae.add_opt('dateTill', "Date/time of last checked occupation", startup_date, 'T')
@@ -31,7 +31,7 @@ cae.add_opt('correctSystem', "Correct room occupation status (check-in/-out) in 
 ass_options = add_ass_options(cae)
 
 
-debug_level = cae.get_opt('debugLevel')
+debug_level = cae.get_opt('debug_level')
 
 sxml_log_file_name = cae.get_argument('sxml_log_file_name')
 cae.po("SXML log file:", sxml_log_file_name)

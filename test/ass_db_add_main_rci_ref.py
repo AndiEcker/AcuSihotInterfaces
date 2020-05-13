@@ -13,7 +13,7 @@ cae.add_opt('assUser', "User account name for the AssCache/Postgres database", '
 cae.add_opt('assPassword', "User account password for the AssCache/Postgres database", '', 'P')
 cae.add_opt('assDSN', "Name of the AssCache/Postgres database", 'ass_cache', 'N')
 
-debug_level = cae.get_opt('debugLevel')
+debug_level = cae.get_opt('debug_level')
 
 acu_user = cae.get_opt('acuUser')
 acu_password = cae.get_opt('acuPassword')

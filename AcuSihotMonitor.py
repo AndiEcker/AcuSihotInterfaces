@@ -150,7 +150,7 @@ def sih_reservation_discrepancies(data_dict):
                                    ('(' + ','.join([(rd[n]['_RES-HOTEL'].val() or '') + '='
                                                     + str(rd[n]['ARR'].val()) + '...'
                                                     + str(rd[n]['DEP'].val()) for n in range(len(rd))]) + ')'
-                                    if cae.get_opt('debugLevel') >= DEBUG_LEVEL_VERBOSE else '')
+                                    if cae.get_opt('debug_level') >= DEBUG_LEVEL_VERBOSE else '')
                     row_err = _sih_check_all_res(rec, rd, row_err, err_sep)
                 elif rd:
                     row_err += err_sep + 'Unexpected search result=' + str(rd)

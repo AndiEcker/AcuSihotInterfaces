@@ -180,7 +180,7 @@ def sh_res_action(cae, notification, action, res_id=None, method='POST'):
     err = msg = ""
     ret = dict(ErrorMessage=err, WarningMessage=msg)
     res_json = dict()
-    debug_level = cae.get_opt('debugLevel')
+    debug_level = cae.get_opt('debug_level')
 
     res_send = ResSender(cae)
     rec = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(res_send.elem_map)

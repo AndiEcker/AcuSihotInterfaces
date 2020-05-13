@@ -107,7 +107,7 @@ cae.dpo("Waiting time after error notification: {} (seconds)".format(sleep_after
         minimum_debug_level=DEBUG_LEVEL_DISABLED)
 
 is_test = asd.is_test_system()
-debug_level = cae.get_opt('debugLevel')
+debug_level = cae.get_opt('debug_level')
 max_sync_outage_delta = exe_name.startswith(('AcuServer', 'SihotResSync')) and debug_level > DEBUG_LEVEL_DISABLED \
                         and datetime.timedelta(hours=MAX_SRSL_OUTAGE_HOURS * (9 if is_test else 1))
 

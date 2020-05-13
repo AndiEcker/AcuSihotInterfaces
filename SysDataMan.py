@@ -181,7 +181,7 @@ ass_options = add_ass_options(cae, add_kernel_port=True, break_on_error=True, bu
 # NOTIFICATION, LOGGING AND COMMAND LINE OPTION PARSING HELPERS
 # declare notification early/here to ensure proper shutdown and display of startup errors on console
 notification = notification_warning_emails = None
-_debug_level = cae.get_opt('debugLevel')
+_debug_level = cae.get_opt('debug_level')
 
 error_log = list()
 warn_log = list()

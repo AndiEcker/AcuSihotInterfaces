@@ -151,7 +151,7 @@ class ConsoleApp:
         self._options = dict(acuUser='SIHOT_INTERFACE',
                              acuPassword=cfg.get(MAIN_SECTION_NAME, 'acuPassword'),
                              acuDSN=cfg.get(MAIN_SECTION_NAME, 'acuDSN', fallback='SP.TEST'),
-                             debugLevel=cfg.getint(MAIN_SECTION_NAME, 'debugLevel', fallback=2),  # =DEBUG_LEVEL_VERBOSE
+                             debug_level=cfg.getint(MAIN_SECTION_NAME, 'debug_level', fallback=2),  # =DEBUG_LEVEL_VERBOSE
                              emailValidatorBaseUrl=cfg.get(MAIN_SECTION_NAME, 'emailValidatorBaseUrl'),
                              emailValidatorApiKey=cfg.get(MAIN_SECTION_NAME, 'emailValidatorApiKey'),
                              phoneValidatorBaseUrl=cfg.get(MAIN_SECTION_NAME, 'phoneValidatorBaseUrl'),
@@ -202,7 +202,7 @@ class ConsoleApp:
 
     def get_opt(self, name, default_value=None):
         ret = self._options[name] if name in self._options else default_value
-        if name not in ('debugLevel', ):
+        if name not in ('debug_level', ):
             self.po('ConsoleAppMock.get_opt', name, '=', ret)
         return ret
 
@@ -212,7 +212,7 @@ class ConsoleApp:
         return ''
 
     def debug_out(self, *objects, sep=' ', end='\n', file=sys.stdout, minimum_debug_level=1):  # 1==DEBUG_LEVEL_ENABLED
-        if self.get_opt('debugLevel') >= minimum_debug_level:
+        if self.get_opt('debug_level') >= minimum_debug_level:
             self.po(*objects, sep=sep, end=end, file=file)
 
     dpo = debug_out

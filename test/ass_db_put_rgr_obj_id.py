@@ -13,7 +13,7 @@ cae.add_opt('assDSN', "Name of the AssCache/Postgres database", '', 'N')
 add_sh_options(cae, add_kernel_port=True)
 
 
-debug_level = cae.get_opt('debugLevel')
+debug_level = cae.get_opt('debug_level')
 
 # ass_user = cae.get_opt('assUser')  TODO: only root user postgres can connect
 # ass_pw = cae.get_opt('assPassword')

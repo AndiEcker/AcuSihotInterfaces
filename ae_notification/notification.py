@@ -29,7 +29,7 @@ def init_notification(cae, system_name=''):
                                     mail_from=cae.get_opt('smtpFrom'),
                                     mail_to=cae.get_opt('smtpTo'),
                                     used_system=system_name or cae.app_name,
-                                    debug_level=cae.get_opt('debugLevel'))
+                                    debug_level=cae.get_opt('debug_level'))
         po("SMTP Uri/From/To:", cae.get_opt('smtpServerUri'), cae.get_opt('smtpFrom'), cae.get_opt('smtpTo'))
         warning_notification_emails = cae.get_opt('warningsMailToAddr')
         if warning_notification_emails:

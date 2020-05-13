@@ -45,7 +45,7 @@ cae = ConsoleApp("Listening to Sihot SXML interface and updating AssCache/Postgr
 cae.add_opt('cmdInterval', "sync interval in seconds (pass 0 for always running sync to SF)", 369, 'l')
 ass_options = add_ass_options(cae, client_port=12000, add_kernel_port=True)
 
-debug_level = cae.get_opt('debugLevel')
+debug_level = cae.get_opt('debug_level')
 ass_data = init_ass_data(cae, ass_options)
 
 interval = cae.get_opt('cmdInterval')

@@ -280,7 +280,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         self._warn = warn_logger or _dummy_stub
         self._ctx_no_file = ctx_no_file
 
-        self.debug_level = cae.get_opt('debugLevel')
+        self.debug_level = cae.get_opt('debug_level')
 
         self.used_systems = UsedSystems(cae, SDI_ASS, SDI_ACU, SDI_SF, SDI_SH, **sys_credentials)
         self.error_message = self.used_systems.connect()

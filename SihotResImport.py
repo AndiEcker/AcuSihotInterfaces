@@ -56,7 +56,7 @@ add_sf_options(cae)
 add_sh_options(cae, add_kernel_port=True, add_maps_and_kernel_usage=True)
 cae.add_opt('breakOnError', "Abort importation if an error occurs (0=No, 1=Yes)", 0, 'b')
 
-debug_level = cae.get_opt('debugLevel')
+debug_level = cae.get_opt('debug_level')
 
 cae.po("Import path/file-mask for OTA-JSON/RCI:", cae.get_opt('jsonPath'), cae.get_opt('rciPath'))
 notification, warning_notification_emails = init_notification(cae, cae.get_opt('acuDSN')
@@ -112,7 +112,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             return False
 
     #  prepare logging env
-    lf = cae.get_opt('logFile')
+    lf = cae.get_opt('log_file')
     log_file_prefix = os.path.splitext(os.path.basename(lf))[0]
     log_file_path = os.path.dirname(lf)
 

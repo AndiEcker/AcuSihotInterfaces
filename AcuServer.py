@@ -1,7 +1,7 @@
 """
     0.1     first beta (only support GUEST-CREATE/-CHANGE of WEB interface 9.0).
     0.2     extended to support SXML interface V9.0 Level 1 of Minibar/Wellness-center.
-    0.3     made running-server-animation optional, specify debugLevel/logFile in INI and check/fix Transaction number
+    0.3     made running-server-animation optional, specify debug_level/log_file in INI and check/fix Transaction number
             passing/increment - is always duplicated '2' instead the one sent by Sihot (see Track-It closed WO #43242).
     0.4     added GDS number to alloc_trigger() - available since Sihot build/version 9.0.0.0787.CO.
     0.5     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
@@ -29,7 +29,7 @@ add_ac_options(cae)
 add_sh_options(cae, client_port=11000)
 add_notification_options(cae)
 
-debug_level = cae.get_opt('debugLevel')
+debug_level = cae.get_opt('debug_level')
 cae.po("Acumen Usr/DSN:", cae.get_opt('acuUser'), cae.get_opt('acuDSN'))
 cae.po("TCP Timeout/XML Encoding:", cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
 notification, _ = init_notification(cae, cae.get_opt('acuDSN') + '/' + cae.get_opt('shServerIP'))

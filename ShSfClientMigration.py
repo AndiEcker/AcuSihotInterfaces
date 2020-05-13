@@ -38,7 +38,7 @@ add_sf_options(cae)
 add_notification_options(cae, add_warnings=True)
 
 
-_debug_level = cae.get_opt('debugLevel')
+_debug_level = cae.get_opt('debug_level')
 
 rbf.load_options()
 rbf.print_options()

@@ -13,8 +13,7 @@ from abc import ABCMeta, abstractmethod
 # import xml.etree.ElementTree as Et
 from xml.etree.ElementTree import XMLParser, ParseError
 
-from ae.core import (DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, DEBUG_LEVEL_TIMESTAMPED, DEF_ENCODE_ERRORS,
-                     po, round_traditional)
+from ae.core import DATE_ISO, DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_VERBOSE, DEF_ENCODE_ERRORS, po, round_traditional
 from ae.sys_core import SystemConnectorBase
 
 
@@ -419,8 +418,7 @@ class ResChange(SihotXmlParser):
 
         # unsupported elements
         else:
-            self.cae.dpo("ResChange.data(): ignoring element ", self._elem_path, "; data chunk=", data,
-                         minimum_debug_level=DEBUG_LEVEL_TIMESTAMPED)
+            self.cae.vpo("ResChange.data(): ignoring element ", self._elem_path, "; data chunk=", data)
             return
 
         # add data - after check if we need to add or to extend the dictionary item
@@ -520,7 +518,7 @@ class SihotXmlBuilder:
 
     def __init__(self, cae, use_kernel=False):
         self.cae = cae
-        self.debug_level = cae.get_opt('debugLevel')
+        self.debug_level = cae.get_opt('debug_level')
         self.use_kernel_interface = use_kernel
         self.response = None
 
