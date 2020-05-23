@@ -1,6 +1,7 @@
 # system-wide file locking
 #
 # code snippets inspired by module zc.lockfile (https://pypi.python.org/pypi/zc.lockfile)
+# .. see also / maybe replace with https://github.com/WoLpH/portalocker
 import os
 import datetime
 import socket

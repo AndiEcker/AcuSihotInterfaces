@@ -1,10 +1,15 @@
 ae_core
 ae_literal
 ae_console
-ae_sys_core
-ae_sys_data
 ae_lockname
 ae_progress
+ae_db_core
+ae_db_ora
+ae_db_pg
+ae_sys_core
+ae_sys_data
+ae_sys_core_sh
+ae_sys_data_sh
 atomicwrites
 bottle
 certifi
