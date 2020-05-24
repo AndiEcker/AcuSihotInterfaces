@@ -172,7 +172,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
         sys_ids.append("SBox" if sf_sandbox else "Prod")
     if asd.connection(SDI_SH, raise_if_error=False):
         print_sh_options(cae)
-        sys_ids.append(cae.get_opt('shServerIP'))
+        sys_ids.append(cae.get_opt(SDF_SH_SERVER_ADDRESS))
     ret_dict['sysIds'] = sys_ids
     asd.error_message = err_msg     # restore AssSysData.init error message (ignoring used system check errors)
 
@@ -307,10 +307,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         # Sihot does also not provide permanent connection; at least prepare ClientSearch instance
         sh_features = dict()
-        if cae.get_opt('shServerIP') and cae.get_opt(SDF_SH_WEB_PORT):
+        if cae.get_opt(SDF_SH_SERVER_ADDRESS) and cae.get_opt(SDF_SH_WEB_PORT):
             sh_features[]
             self.used_systems.append(USED_SYS_SHWEB_ID)
-        if cae.get_opt('shServerIP') and cae.get_opt(SDF_SH_KERNEL_PORT):
+        if cae.get_opt(SDF_SH_SERVER_ADDRESS) and cae.get_opt(SDF_SH_KERNEL_PORT):
             self.used_systems.append(USED_SYS_SHKERNEL_ID)
         self.sh_conn = True
         self._guest_search = ClientSearch(cae)
@@ -395,7 +395,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         return (ass_db and 'sihot3v' in self.cae.get_opt('assDSN', default_value='')
                 or acu_db and '.TEST' in self.cae.get_opt('acuDSN', default_value='')
                 or sf_conn and SDF_SF_SANDBOX + '=True' in self.used_systems[SDI_SF].features
-                or sh_conn and 'sihot3v' in self.cae.get_opt('shServerIP', default_value='')
+                or sh_conn and 'sihot3v' in self.cae.get_opt(SDF_SH_SERVER_ADDRESS, default_value='')
                 )
 
     def close_dbs(self):

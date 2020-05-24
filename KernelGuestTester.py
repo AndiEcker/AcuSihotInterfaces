@@ -15,7 +15,7 @@ add_ac_options(cae)
 cae.add_opt('client', 'Send unsynced client identified with this matchcode', '')  # C605765')
 
 
-cae.po('Server IP/Web-/Kernel-port:', cae.get_opt('shServerIP'), cae.get_opt(SDF_SH_KERNEL_PORT))
+cae.po('Server IP/Web-/Kernel-port:', cae.get_opt(SDF_SH_SERVER_ADDRESS), cae.get_opt(SDF_SH_KERNEL_PORT))
 cae.po('TCP Timeout/XML Encoding:', cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
 
 err_msg = ''

@@ -55,7 +55,7 @@ if asd.error_message:
     cae.shutdown(20)
 sf_conn = asd.connection(SDI_SF)
 
-notification, warning_notification_emails = init_notification(cae, cae.get_opt('shServerIP') + '/Salesforce '
+notification, warning_notification_emails = init_notification(cae, cae.get_opt(SDF_SH_SERVER_ADDRESS) + '/Salesforce '
                                                               + ("sandbox" if sf_conn.is_sandbox() else "production"))
 
 # html font is not working in Outlook: <font face="Courier New, Courier, monospace"> ... </font>

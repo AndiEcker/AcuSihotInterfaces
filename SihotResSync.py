@@ -54,7 +54,7 @@ cae.add_opt('syncDateRange', "Restrict sync. of res. to: "
 
 debug_level = cae.get_opt('debug_level')
 cae.po('Acumen Usr/DSN:', cae.get_opt('acuUser'), cae.get_opt('acuDSN'))
-cae.po('Server IP/Web-/Kernel-port:', cae.get_opt('shServerIP'), cae.get_opt(SDF_SH_WEB_PORT),
+cae.po('Server IP/Web-/Kernel-port:', cae.get_opt(SDF_SH_SERVER_ADDRESS), cae.get_opt(SDF_SH_WEB_PORT),
        cae.get_opt(SDF_SH_KERNEL_PORT))
 cae.po('TCP Timeout/XML Encoding:', cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
 cae.po('Use Kernel for clients:', 'Yes' if cae.get_opt(SDF_SH_USE_KERNEL_FOR_CLIENT) else 'No (WEB)')
@@ -65,7 +65,7 @@ cae.po('Migrate Clients First/Separate:',
        ['No', 'Yes', 'Yes with client reservations'][int(cae.get_opt('clientsFirst'))])
 cae.po('Break on error:', 'Yes' if cae.get_opt('breakOnError') else 'No')
 notification, warning_notification_emails = init_notification(cae, cae.get_opt('acuDSN')
-                                                              + '/' + cae.get_opt('shServerIP'))
+                                                              + '/' + cae.get_opt(SDF_SH_SERVER_ADDRESS))
 if cae.get_var('warningFragments'):
     cae.po('Warning Fragments:', cae.get_var('warningFragments'))
 migration_mode = cae.get_opt('migrationMode')

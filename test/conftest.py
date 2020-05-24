@@ -11,7 +11,7 @@ from ae.literal import Literal
 from ae.sys_core import SystemBase
 from ae.db_ora import OraDb
 from sys_data_ass import AssSysData
-from ae.sys_core_sh import SDI_SH, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_CLIENT_PORT, \
+from ae.sys_core_sh import SDI_SH, SDF_SH_SERVER_ADDRESS, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_CLIENT_PORT, \
     AvailCatInfo, CatRooms, ConfigDict, PostMessage
 from sys_core_sf import SfSysConnector, SDF_SF_SANDBOX
 from ae.sys_data_sh import ClientSearch, ClientToSihot, \
@@ -166,7 +166,7 @@ class ConsoleApp:
                              sfToken=cfg.get(MAIN_SECTION_NAME, 'sfToken'),
                              sfIsSandbox=cfg.get(MAIN_SECTION_NAME, SDF_SF_SANDBOX, fallback=True),
                              shClientPort=cfg.get(MAIN_SECTION_NAME, SDF_SH_CLIENT_PORT, fallback=12000),
-                             shServerIP=cfg.get(MAIN_SECTION_NAME, 'shServerIP', fallback='10.103.222.70'),
+                             shServerIP=cfg.get(MAIN_SECTION_NAME, SDF_SH_SERVER_ADDRESS, fallback='10.103.222.70'),
                              shServerPort=cfg.get(MAIN_SECTION_NAME, SDF_SH_WEB_PORT, fallback=14777),
                              shServerKernelPort=cfg.get(MAIN_SECTION_NAME, SDF_SH_KERNEL_PORT, fallback=14772),
                              shTimeout=369.0, shXmlEncoding='utf8',

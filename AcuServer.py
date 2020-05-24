@@ -32,7 +32,7 @@ add_notification_options(cae)
 debug_level = cae.get_opt('debug_level')
 cae.po("Acumen Usr/DSN:", cae.get_opt('acuUser'), cae.get_opt('acuDSN'))
 cae.po("TCP Timeout/XML Encoding:", cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
-notification, _ = init_notification(cae, cae.get_opt('acuDSN') + '/' + cae.get_opt('shServerIP'))
+notification, _ = init_notification(cae, cae.get_opt('acuDSN') + '/' + cae.get_opt(SDF_SH_SERVER_ADDRESS))
 
 
 def notify(msg, minimum_debug_level=DEBUG_LEVEL_ENABLED):
@@ -208,7 +208,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
 
 
 if __name__ == '__main__':
-    ip_addr = cae.get_var('shClientIP', default_value=cae.get_opt('shServerIP'))
+    ip_addr = cae.get_var('shClientIP', default_value=cae.get_opt(SDF_SH_SERVER_ADDRESS))
     cae.po("Sihot client IP/port:", ip_addr, cae.get_opt(SDF_SH_CLIENT_PORT))
     server = TcpServer(ip_addr, cae.get_opt(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_var('displayAnimation', default_value=False))

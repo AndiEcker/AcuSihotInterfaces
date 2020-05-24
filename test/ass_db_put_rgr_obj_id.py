@@ -23,7 +23,7 @@ cae.set_opt('assDSN', 'ass_cache@tf-sh-sihot1v.acumen.es', save_to_config=False)
 ass_dsn = cae.get_opt('assDSN')
 cae.po("AssCache credentials:", ass_user, "with", ass_pw, "on", ass_dsn)
 
-cae.set_opt('shServerIP', 'tf-sh-sihot1v.acumen.es', save_to_config=False)
+cae.set_opt(SDF_SH_SERVER_ADDRESS, 'tf-sh-sihot1v.acumen.es', save_to_config=False)
 print_sh_options(cae)
 
 

@@ -635,7 +635,7 @@ try:
 
     # ?!?!?: if sihot is connecting as client then our listening server ip has to be either localhost or 127.0.0.1
     # .. and for connect to the Sihot WEB/KERNEL interfaces only the external IP address of the Sihot server is working
-    ip_addr = cae.get_var('shClientIP', default_value=cae.get_opt('shServerIP'))
+    ip_addr = cae.get_var('shClientIP', default_value=cae.get_opt(SDF_SH_SERVER_ADDRESS))
     cae.po("Sihot client IP/port:", ip_addr, cae.get_opt(SDF_SH_CLIENT_PORT))
     server = TcpServer(ip_addr, cae.get_opt(SDF_SH_CLIENT_PORT), SihotRequestXmlHandler, debug_level=debug_level)
     server.run(display_animation=cae.get_var('displayAnimation', default_value=False))

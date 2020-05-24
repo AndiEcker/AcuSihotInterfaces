@@ -26,7 +26,7 @@ cae.add_opt('client', "Test reservations of a client identified with matchcode",
 
 
 cae.po("Acumen Usr/DSN:", cae.get_opt('acuUser'), cae.get_opt('acuDSN'))
-cae.po("Server IP/Web-/Kernel-port:", cae.get_opt('shServerIP'), cae.get_opt(SDF_SH_WEB_PORT),
+cae.po("Server IP/Web-/Kernel-port:", cae.get_opt(SDF_SH_SERVER_ADDRESS), cae.get_opt(SDF_SH_WEB_PORT),
        cae.get_opt(SDF_SH_KERNEL_PORT))
 cae.po("TCP Timeout/XML Encoding:", cae.get_opt(SDF_SH_TIMEOUT), cae.get_opt(SDF_SH_XML_ENCODING))
 
@@ -105,7 +105,7 @@ if xml:
     gds_no = sxp.gdsno
 
 # gds_no, ho_id = '1098704@3'.split('@')
-# cae.set_opt('shServerIP', 'tf-sh-sihot1v.acumen.es')
+# cae.set_opt(SDF_SH_SERVER_ADDRESS, 'tf-sh-sihot1v.acumen.es')
 if ho_id and gds_no:
     # now check reservation with ResFetch/SS and ResSearch/RES-SEARCH
     cae.po("####  FetchRes ..............  ####")
