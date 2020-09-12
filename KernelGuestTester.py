@@ -1,7 +1,8 @@
 from ae.core import DEBUG_LEVEL_VERBOSE
 from ae.console import ConsoleApp
 from ae.progress import Progress
-from ae.sys_core_sh import SihotXmlBuilder, SDF_SH_KERNEL_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
+from ae.sys_core_sh import \
+    SihotXmlBuilder, SDF_SH_KERNEL_PORT, SDF_SH_SERVER_ADDRESS, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING
 from sys_data_acu import add_ac_options, AcuClientToSihot
 from ae.sys_data_sh import add_sh_options
 

@@ -141,13 +141,6 @@ class TestEmailValidator:
         print("Validator error", err_msg)
         assert err_msg
 
-    def test_valid_email_of_signallia(self, cons_app):
-        ev = EmailValidator(base_url=cons_app.get_var('emailValidatorBaseUrl'),
-                            api_key=cons_app.get_var('emailValidatorApiKey'))
-        err_msg = ev.validate('Andreas.Ecker@signallia.com')
-        print("Validator error", err_msg)
-        assert not err_msg
-
     def test_valid_email_of_google(self, cons_app):
         ev = EmailValidator(base_url=cons_app.get_var('emailValidatorBaseUrl'),
                             api_key=cons_app.get_var('emailValidatorApiKey'))

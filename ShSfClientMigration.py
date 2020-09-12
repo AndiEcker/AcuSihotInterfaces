@@ -13,11 +13,14 @@ import pprint
 
 from copy import deepcopy
 
-from ae.core import DEBUG_LEVEL_VERBOSE, correct_email, correct_phone
+from ae.core import DEBUG_LEVEL_VERBOSE
+from ae.sys_core_sh import SDF_SH_SERVER_ADDRESS
+from ae.valid import correct_email, correct_phone
 from ae.validation import add_validation_options, init_validation
 from ae.console import ConsoleApp
 from ae_notification.notification import add_notification_options, init_notification
 from ae.sys_data_sh import ResBulkFetcher, hotel_and_res_id
+
 from sys_core_sf import add_sf_options, SDI_SF
 from sys_data_ass import AssSysData
 

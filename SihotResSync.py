@@ -16,21 +16,25 @@
 """
 import datetime
 
-from ae.console import ConsoleApp
-from ae.core import DATE_TIME_ISO, full_stack_trace
+from ae.system import DATE_TIME_ISO
+from ae.inspector import full_stack_trace
 from ae.progress import Progress
-from ae_notification.notification import add_notification_options, init_notification
+from ae.console import ConsoleApp
 from ae.sys_data import ACTION_INSERT, ACTION_UPDATE, ACTION_DELETE
-
-from ae.sys_core_sh import ERR_MESSAGE_PREFIX_CONTINUE, SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, \
+from ae.sys_core_sh import ERR_MESSAGE_PREFIX_CONTINUE, SDF_SH_KERNEL_PORT, SDF_SH_SERVER_ADDRESS, SDF_SH_WEB_PORT, \
+    SDF_SH_TIMEOUT, \
     SDF_SH_XML_ENCODING, SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
-from sys_data_acu import add_ac_options, AcuClientToSihot, AcuResToSihot, SDI_ACU
 from ae.sys_data_sh import add_sh_options, ECM_TRY_AND_IGNORE_ERRORS
+
+from ae_notification.notification import add_notification_options, init_notification
+from sys_data_acu import add_ac_options, AcuClientToSihot, AcuResToSihot, SDI_ACU
 from sys_data_ass import AssSysData
+
 
 __version__ = '1.3'
 
-ADMIN_MAIL_TO_LIST = ['ITDevmen@signallia.com']
+
+ADMIN_MAIL_TO_LIST = ['aecker2@gmail.com']
 
 cae = ConsoleApp("Synchronize reservation changes from Acumen/Oracle system to the SiHOT-PMS",
                  additional_cfg_files=['SihotMktSegExceptions.cfg'])

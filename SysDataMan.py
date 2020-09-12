@@ -13,11 +13,12 @@ import argparse
 import pprint
 from traceback import format_exc
 
-from ae.core import DEBUG_LEVEL_VERBOSE, try_eval
+from ae.core import DEBUG_LEVEL_VERBOSE
+from ae.inspector import try_eval
 from ae.sys_data import ACTION_PULL, ACTION_PUSH, ACTION_COMPARE
 from ae.console import ConsoleApp
 from ae.db_pg import PostgresDb
-from ae.sys_core import UsedSystems
+from ae.sys_core import SystemBase, UsedSystems
 
 from sys_data_ass import SDI_ASS, add_ass_options, init_ass_data
 
@@ -240,7 +241,9 @@ if act_init:
     pg_root_dsn = pg_root_usr + ('@' + pg_host if '@' in ass_dsn else '')
     log_warning("creating database {} and user {}".format(ass_dsn, ass_user), 'initCreateDBandUser')
     cae.app_name += "-CreateDb"
-    pg_db = PostgresDb(cae, dict(User=pg_root_usr, Password=pg_root_pw, DSN=pg_root_dsn, SslArgs=ass_ssl))
+    pg_root = SystemBase('dbPgRoot', cae, dict(User=pg_root_usr, Password=pg_root_pw, DSN=pg_root_dsn, SslArgs=ass_ssl))
+    pg_db = PostgresDb(pg_root)
+    # noinspection SqlInjection
     if pg_db.execute_sql("CREATE DATABASE {};".format(pg_dbname), auto_commit=True):  # " LC_COLLATE 'C'"):
         log_error(pg_db.last_err_msg, 'initCreateDB', exit_code=72)
 
@@ -257,7 +260,8 @@ if act_init:
 
     log_warning("creating tables and audit trigger schema/extension", 'initCreateTableAndAudit')
     cae.app_name += "-InitTables"
-    pg_db = PostgresDb(cae, dict(User=pg_root_usr, Password=pg_root_pw, DSN=ass_dsn, SslArgs=ass_ssl))
+    pg_user = SystemBase('dbPgUser', cae, dict(User=pg_root_usr, Password=pg_root_pw, DSN=ass_dsn, SslArgs=ass_ssl))
+    pg_db = PostgresDb(pg_user)
     if pg_db.execute_sql("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE ON TABLES TO {};"
                          .format(ass_user)):
         log_error(pg_db.last_err_msg, 'initGrantUserTables', exit_code=90)

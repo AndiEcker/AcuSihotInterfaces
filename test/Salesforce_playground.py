@@ -17,7 +17,7 @@ sf_user = cae.get_opt('sfUser')
 sf_pw = cae.get_opt('sfPassword')
 sf_token = cae.get_opt('sfToken')
 
-sb = Salesforce(username=sf_user, password=sf_pw, security_token=sf_token, sandbox=True, client_id='ResImport')
+sb = Salesforce(username=sf_user, password=sf_pw, security_token=sf_token, client_id='ResImport')
 print('Salesforce object:', sb)
 
 print('Top-level objects describe:', pprint.pformat(sb.describe(), indent=3, compact=True))

@@ -7,14 +7,17 @@
 import datetime
 from traceback import format_exc
 
-from ae.core import DEBUG_LEVEL_VERBOSE, parse_date
+from ae.core import DEBUG_LEVEL_VERBOSE
+from ae.literal import parse_date
 from ae.console import ConsoleApp
 from ae.sys_core import SystemBase
 from ae.db_ora import OraDb
 from ae.db_pg import PostgresDb
 from sys_data_ass import add_ass_options, init_ass_data
 
+
 __version__ = '0.2'
+
 
 USER_DATE_FORMAT = '%d-%m-%y %H:%M:%S'
 

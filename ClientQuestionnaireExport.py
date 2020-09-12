@@ -17,7 +17,7 @@ import re
 from traceback import print_exc
 
 from ae.console import ConsoleApp
-from ae.core import try_eval
+from ae.inspector import try_eval
 from ae.sys_data_sh import ResSearch, SH_DATE_FORMAT
 from ae.sys_data_sh import add_sh_options, print_sh_options
 

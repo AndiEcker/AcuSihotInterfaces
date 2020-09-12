@@ -34,7 +34,7 @@ from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import Record, FAD_ONTO
 from ae.console import ConsoleApp
 from ae.sys_core_sh import Request, ResChange, RoomChange, SihotXmlBuilder, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
-    TCP_CONNECTION_BROKEN_MSG, RequestXmlHandler, TcpServer
+    SDF_SH_SERVER_ADDRESS, TCP_CONNECTION_BROKEN_MSG, RequestXmlHandler, TcpServer
 from ae.sys_data_sh import client_data, ResFetch
 from sys_data_ass import add_ass_options, init_ass_data, AssSysData, SDI_ASS
 
@@ -644,5 +644,6 @@ except (OSError, Exception) as tcp_ex:
     cae.shutdown(369)
 
 if sync_timer:
+    assert isinstance(sync_timer, threading.Timer)
     sync_timer.cancel()
 cae.shutdown()

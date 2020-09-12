@@ -86,7 +86,7 @@ def create_test_client(cons_app):
     else:
         client = ClientToSihot(cons_app)
         col_values = Record(system=SDI_SH, direction=FAD_ONTO).add_system_fields(client.elem_map)
-        col_values.clear_leafs()
+        col_values.clear_leaves()
         col_values['AcuId'] = mc
         col_values['Surname'] = sn
         col_values['Forename'] = fn

@@ -1,9 +1,11 @@
 from ae.console import ConsoleApp
 from ae.db_pg import PostgresDb
-from ae.sys_data_sh import add_sh_options, print_sh_options, res_no_to_obj_id
+from ae.sys_core import SystemBase
+from ae.sys_data_sh import SDF_SH_SERVER_ADDRESS, add_sh_options, print_sh_options, res_no_to_obj_id
 
 
 __version__ = '0.1'
+
 
 cae = ConsoleApp("Fix rgr_obj_id in ASS_DB", additional_cfg_files=['../.sys_env.cfg'])
 cae.add_opt('assUser', "User account name for the AssCache/Postgres database", '', 'U')  # ass_interfaces
@@ -55,7 +57,8 @@ if asd.error_message:
     log_error(asd.error_message, 'AssSysDataInit', importance=4, exit_code=9)
 '''
 # prepare ass_cache database
-ass_db = PostgresDb(cae, dict(User=ass_user, Password=ass_pw, DSN=ass_dsn, SslArgs=cae.get_var('assSslArgs')))
+ass_sys = SystemBase('assDb', cae, dict(User=ass_user, Password=ass_pw, DSN=ass_dsn, SslArgs=cae.get_var('assSslArgs')))
+ass_db = PostgresDb(ass_sys)
 if ass_db.connect():
     log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
 

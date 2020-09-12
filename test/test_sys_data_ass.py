@@ -827,7 +827,7 @@ class RemoveThisPrefixForToTestSlowAssSysDataShIntegration:
                 continue
             diff = self._compare_converted_field_dicts(sf_sent, sf_recd)
             if diff:
-                errors.append((idx, "comparision found {} differences={}".format(len(diff), diff), res))
+                errors.append((idx, "comparison found {} differences={}".format(len(diff), diff), res))
                 continue
         for err in errors:
             print("****  {}".format(err))

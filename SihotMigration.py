@@ -5,7 +5,7 @@
 """
 
 from ae.console import ConsoleApp
-from ae.core import full_stack_trace
+from ae.inspector import full_stack_trace
 from ae.progress import Progress
 from sys_data_acu import add_ac_options, AcuClientToSihot, AcuResToSihot
 from ae.sys_core_sh import ERR_MESSAGE_PREFIX_CONTINUE

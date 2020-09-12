@@ -1,7 +1,9 @@
 from smtplib import SMTP, SMTP_SSL
 from email.mime.text import MIMEText
 
-from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po, try_eval
+from ae.core import DEBUG_LEVEL_DISABLED, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
+from ae.inspector import try_eval
+
 
 DEF_ENC_PORT = 25
 DEF_ENC_SERVICE_NAME = 'smtp'
@@ -111,8 +113,8 @@ class Notification:
                    "'" + title_ext)
         if not isinstance(mail_to, list):
             po(" **** Notification.send_notification(): invalid email-to address list or expression '" +
-               str(mail_to) + "' - using ITDevmen fallback!")
-            mail_to = ['ITDevmen@signallia.com']
+               str(mail_to) + "' - using fallback!")
+            mail_to = ['aecker2@gmail.com']
         body_style = body_style or 'html' if '</' in msg_body else 'plain'
         if body_style == 'html':
             # using the <pre>...</pre> tags we no longer need replace(' ', '&nbsp;')

@@ -7,7 +7,9 @@ from typing import Tuple, Dict, Any
 
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
-from ae.core import DATE_ISO, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, parse_date, po
+from ae.system import DATE_ISO
+from ae.literal import parse_date
+from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.sys_core import SystemBase, SystemConnectorBase
 from ae.sys_data import Record, FAD_ONTO, ACTION_UPDATE, ACTION_INSERT
 
@@ -342,7 +344,7 @@ class SfSysConnector(SystemConnectorBase):
         sb = self.is_sandbox
         try:
             self._conn = Salesforce(username=usr, password=cre.get('Password'), security_token=cre.get('Token'),
-                                    sandbox=sb, client_id=self.system.console_app.app_name)
+                                    client_id=self.system.console_app.app_name)
             if self.system.console_app.debug_level >= DEBUG_LEVEL_ENABLED:
                 po("  ##  Connection to Salesforce established with session id {}".format(self._conn.session_id))
         except SalesforceAuthenticationFailed as sf_ex:
@@ -451,8 +453,8 @@ class SfSysConnector(SystemConnectorBase):
             dev_name = dict(Lead='SIHOT_Leads', Contact='Rentals', Account='PersonAccount',
                             Opportunity='Sihot_Generated').get(sf_obj)
         rec_type_id = None
-        res = self.soql_query_all("Select Id From RecordType Where SobjectType = '{}' and DeveloperName = '{}'"
-                                  .format(sf_obj, dev_name))
+        res = self.soql_query_all(
+            f"Select Id From RecordType Where SobjectType = '{sf_obj}' and DeveloperName = '{dev_name}'")
         if not self.last_err_msg and res['totalSize'] > 0:
             rec_type_id = res['records'][0]['Id']
         return rec_type_id
@@ -511,8 +513,7 @@ class SfSysConnector(SystemConnectorBase):
             sf_obj = obj_from_id(sf_client_id)
 
         ext_refs = list()
-        soql = "SELECT Name, {} FROM External_Ref__c  WHERE {}__c = '{}'"\
-            .format(id_name, sf_obj, sf_client_id)
+        soql = f"SELECT Name, {id_name} FROM External_Ref__c  WHERE {sf_obj}__c = '{sf_client_id}'"
         if er_type and er_id:
             soql += " AND Name = '{}{}{}'".format(er_type, EXT_REF_TYPE_ID_SEP, er_id)
         elif er_type:
@@ -618,9 +619,8 @@ class SfSysConnector(SystemConnectorBase):
         else:
             select_fields = fetch_field = sf_fld_sys_name(fetch_fields, sf_obj)
             ret_val = None
-        soql_query = "SELECT {} FROM {} WHERE {} {} {}{}{}" \
-            .format(select_fields, sf_obj,
-                    sf_fld_sys_name(search_field, sf_obj), search_op, search_val_deli, search_value, search_val_deli)
+        soql_query = f"SELECT {select_fields} FROM {sf_obj} WHERE {sf_fld_sys_name(search_field, sf_obj)} {search_op}" \
+                     f" {search_val_deli}{search_value}{search_val_deli}"
         res = self.soql_query_all(soql_query)
         if self.last_err_msg:
             self.last_err_msg += msg
@@ -748,11 +748,10 @@ class SfSysConnector(SystemConnectorBase):
             dup_clients = list()
         if which_ref in (self.REF_TYPE_MAIN, self.REF_TYPE_ALL):
             fld_name = sf_fld_sys_name(SF_DEF_SEARCH_FIELD, sf_obj)
-            soql_query = "SELECT {} FROM {} WHERE {} = '{}'".format(fld_name, sf_obj, sf_fld_sys_name('RciId', sf_obj),
-                                                                    rci_ref)
+            soql_query = f"SELECT {fld_name} FROM {sf_obj} WHERE {sf_fld_sys_name('RciId', sf_obj)} = '{rci_ref}'"
         else:  # which_ref == REF_TYPE_EXT
-            fld_name = '{}__c'.format(sf_obj)
-            soql_query = "SELECT {} FROM External_Ref__c WHERE Reference_No_or_ID__c = '{}'".format(fld_name, rci_ref)
+            fld_name = f'{sf_obj}__c'
+            soql_query = f"SELECT {fld_name} FROM External_Ref__c WHERE Reference_No_or_ID__c = '{rci_ref}'"
         res = self.soql_query_all(soql_query)
         if self.last_err_msg:
             self.last_err_msg = "cl_by_rci_id({}): ".format(rci_ref) + self.last_err_msg
@@ -777,7 +776,7 @@ class SfSysConnector(SystemConnectorBase):
                        "(SELECT Reference_No_or_ID__c FROM External_References__r WHERE Name LIKE '{}%')"
                        .format(EXT_REF_TYPE_RCI)]
         sf_fields = field_list_to_sf(soql_fields, sf_obj)
-        res = self.soql_query_all("SELECT {} FROM {}".format(", ".join(sf_fields), sf_obj))
+        res = self.soql_query_all(f"SELECT {', '.join(sf_fields)} FROM {sf_obj}")
         client_tuples = list()
         if self.last_err_msg:
             self.last_err_msg = "clients_with_rci_id(): " + self.last_err_msg

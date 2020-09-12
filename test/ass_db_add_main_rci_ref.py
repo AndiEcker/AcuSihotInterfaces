@@ -1,10 +1,13 @@
 from ae.console import ConsoleApp
 from ae.db_pg import PostgresDb
+from ae.sys_core import SystemBase
+
 from sys_data_acu import add_ac_options
 from sys_data_ass import AssSysData, EXT_REF_TYPE_RCI
 
 
 __version__ = '0.1'
+
 
 cae = ConsoleApp("Extend ASS_DB with main Acumen RCI member ID")
 add_ac_options(cae)
@@ -54,7 +57,8 @@ if asd.error_message:
     cae.shutdown(exit_code=33)
 
 # logon to and prepare ass_cache database
-ass_db = PostgresDb(cae, dict(User=pg_user, Password=pg_pw, DSN=pg_dsn, SslArgs=cae.get_var('assSslArgs')))
+ass_sys = SystemBase('assDb', cae, dict(User=pg_user, Password=pg_pw, DSN=pg_dsn, SslArgs=cae.get_var('assSslArgs')))
+ass_db = PostgresDb(ass_sys)
 if ass_db.connect():
     log_error(ass_db.last_err_msg, 'assUserLogOn', exit_code=12)
     cae.shutdown(exit_code=66)

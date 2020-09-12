@@ -25,9 +25,15 @@ import json
 import csv
 from traceback import format_exc
 
-from ae.core import DEBUG_LEVEL_VERBOSE, force_encoding, full_stack_trace, parse_date
+from ae.core import DEBUG_LEVEL_VERBOSE, force_encoding
+from ae.inspector import full_stack_trace
+from ae.literal import parse_date
 from ae.console import ConsoleApp
 from ae.progress import Progress
+from ae.sys_core_sh import (
+    SDF_SH_KERNEL_PORT, SDF_SH_SERVER_ADDRESS, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT,
+    SDF_SH_XML_ENCODING,
+    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES)
 from ae.sys_data import ACTION_DELETE, ACTION_INSERT, ACTION_UPDATE, Record, FAD_FROM
 from ae.sys_data_sh import add_sh_options, ClientToSihot, ResSender
 
@@ -38,8 +44,7 @@ from sys_core_sf import add_sf_options
 from sys_data_ass import AssSysData, EXT_REFS_SEP, EXT_REF_TYPE_RCI, EXT_REF_TYPE_ID_SEP
 
 from sys_data_ids import (FORE_SURNAME_SEP)
-from ae.sys_core_sh import SDF_SH_KERNEL_PORT, SDF_SH_WEB_PORT, SDF_SH_TIMEOUT, SDF_SH_XML_ENCODING, \
-    SDF_SH_USE_KERNEL_FOR_CLIENT, SDF_SH_USE_KERNEL_FOR_RES
+
 
 __version__ = '1.2'
 

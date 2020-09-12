@@ -4,20 +4,26 @@ import re
 from traceback import format_exc
 from typing import Any, Dict, Tuple, Union
 
-from sys_data_ids import (EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI)
-from ae.core import (DATE_ISO, DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE,
-                     correct_email, correct_phone, parse_date, po)
+from ae.system import DATE_ISO
+from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
+from ae.valid import correct_email, correct_phone
+from ae.literal import parse_date
+from ae.core import po
 from ae.sys_data import Records, Record, FAD_FROM, FAD_ONTO, string_to_records
 from ae.sys_core import UsedSystems
-
-from ae_notification.notification import add_notification_options, init_notification
-from sys_data_acu import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient, SDI_ACU
-from sys_core_sf import (add_sf_options, ensure_long_id, SF_RES_MAP, SF_CLIENT_MAPS,
-                         sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal, SDI_SF, SDF_SF_SANDBOX)
-from ae.sys_core_sh import SDI_SH, AvailCatInfo
+from ae.sys_core_sh import SDF_SH_SERVER_ADDRESS, SDI_SH, AvailCatInfo
 from ae.sys_data_sh import (add_sh_options, print_sh_options, gds_no_to_ids, res_no_to_ids, obj_id_to_res_no,
                             ClientSearch, ResSearch, ResFetch, ResBulkFetcher, ClientToSihot,
                             SH_CLIENT_MAP, SH_RES_MAP, ResToSihot, ClientFetch)
+
+from ae_notification.notification import add_notification_options, init_notification
+from sys_data_ids import (EXT_REFS_SEP, EXT_REF_TYPE_ID_SEP, EXT_REF_TYPE_RCI)
+from sys_data_acu import add_ac_options, ACU_CLIENT_MAP, onto_field_indexes, from_field_indexes, AcumenClient, SDI_ACU
+from sys_core_sf import (add_sf_options, ensure_long_id, SF_RES_MAP, SF_CLIENT_MAPS,
+                         sf_fld_sys_name, SF_DEF_SEARCH_FIELD, soql_value_literal, SDI_SF, SDF_SF_SANDBOX)
+
+
+__version__ = '0.0.1'
 
 
 SDI_ASS = 'Ass'                             # AssCache Interfaces
@@ -1201,7 +1207,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             return None
 
         sh_ass_rec = Record(system=SDI_ASS, direction=FAD_ONTO)
-        sh_ass_rec.merge_leafs(res_rec, system=SDI_SH, direction=FAD_FROM)
+        sh_ass_rec.merge_leaves(res_rec, system=SDI_SH, direction=FAD_FROM)
         sh_ass_rec.add_system_fields(ASS_CLIENT_MAP + ASS_RES_MAP, extend=False)
         sh_ass_rec.pull(SDI_SH)
         sh_ass_rec.set_val(ord_cl_pk, 'AssId')
@@ -2021,7 +2027,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                 # c_names.append("(SELECT Name, Reference_No_or_ID__c FROM {})"
                 #                .format('External_References__pr' if obj == 'Account' else 'External_References__r'))
                 c_names.append("(SELECT Name, Reference_No_or_ID__c FROM External_References__r)")
-            return sf_conn.soql_query_all("SELECT {} FROM {} {}".format(", ".join(c_names), obj, where_sql))
+            return sf_conn.soql_query_all(f"SELECT {', '.join(c_names)} FROM {obj} {where_sql}")
 
         def _retrieve(obj, tpl, result, add_ers):
             # rel_name = 'External_References__pr' if obj == 'Account' else 'External_References__r'

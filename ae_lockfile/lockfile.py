@@ -1,12 +1,15 @@
 # system-wide file locking
 #
-# code snippets inspired by module zc.lockfile (https://pypi.python.org/pypi/zc.lockfile)
-# .. see also / maybe replace with https://github.com/WoLpH/portalocker
+# code snippets inspired by module zc.lockfile (see https://pypi.python.org/pypi/zc.lockfile and
+# https://github.com/zopefoundation/zc.lockfile)
+#
+# See also / maybe replace with https://github.com/WoLpH/portalocker (used e.g. by https://github.com/symonsoft/ilock)
 import os
 import datetime
 import socket
 
-from ae.core import DATE_TIME_ISO, parse_date
+from ae.system import DATE_TIME_ISO
+from ae.literal import parse_date
 
 
 try:                                        # unix
@@ -19,6 +22,9 @@ except ImportError:                         # windows
     _lock_flags = file_lock_mod.LK_NBLCK
     _unlock_flags = file_lock_mod.LK_UNLCK
     _lock_func = file_lock_mod.locking
+
+
+__version__ = '0.0.1'
 
 
 _SEP_CHAR = '\n'

@@ -17,7 +17,8 @@ from ae.sys_core import SystemBase
 from ae_notification.notification import add_notification_options, init_notification
 from ae.db_ora import OraDb
 from sys_data_acu import add_ac_options, AcumenClient
-from ae.sys_core_sh import Request, RoomChange, SihotXmlBuilder, SDF_SH_CLIENT_PORT, SDF_SH_TIMEOUT, \
+from ae.sys_core_sh import Request, RoomChange, SDF_SH_SERVER_ADDRESS, SihotXmlBuilder, SDF_SH_CLIENT_PORT, \
+    SDF_SH_TIMEOUT, \
     SDF_SH_XML_ENCODING, TCP_CONNECTION_BROKEN_MSG, RequestXmlHandler, TcpServer
 from ae.sys_data_sh import add_sh_options, ClientFromSihot
 
