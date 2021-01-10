@@ -7,7 +7,7 @@ from typing import Tuple, Dict, Any
 
 from simple_salesforce import Salesforce, SalesforceAuthenticationFailed, SalesforceExpiredSession
 
-from ae.system import DATE_ISO
+from ae.base import DATE_ISO
 from ae.literal import parse_date
 from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.sys_core import SystemBase, SystemConnectorBase

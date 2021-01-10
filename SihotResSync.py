@@ -16,7 +16,7 @@
 """
 import datetime
 
-from ae.system import DATE_TIME_ISO
+from ae.base import DATE_TIME_ISO
 from ae.inspector import full_stack_trace
 from ae.progress import Progress
 from ae.console import ConsoleApp

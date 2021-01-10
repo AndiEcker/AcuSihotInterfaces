@@ -33,7 +33,7 @@ import datetime
 import subprocess
 from configparser import ConfigParser
 
-from ae.system import sys_env_text
+from ae.base import sys_env_text
 from ae.inspector import full_stack_trace
 from ae.literal import parse_date
 from ae.console import ConsoleApp, MAIN_SECTION_NAME

@@ -8,7 +8,7 @@ import os
 import datetime
 import socket
 
-from ae.system import DATE_TIME_ISO
+from ae.base import DATE_TIME_ISO
 from ae.literal import parse_date
 
 

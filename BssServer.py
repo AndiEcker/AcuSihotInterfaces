@@ -29,16 +29,19 @@ from traceback import format_exc
 import pprint
 
 from ae.db_core import NAMED_BIND_VAR_PREFIX, CHK_BIND_VAR_PREFIX
-from sys_data_acu import SDI_ACU
 from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE
 from ae.sys_data import Record, FAD_ONTO
 from ae.console import ConsoleApp
 from ae.sys_core_sh import Request, ResChange, RoomChange, SihotXmlBuilder, SDF_SH_CLIENT_PORT, SDF_SH_XML_ENCODING, \
     SDF_SH_SERVER_ADDRESS, TCP_CONNECTION_BROKEN_MSG, RequestXmlHandler, TcpServer
 from ae.sys_data_sh import client_data, ResFetch
+
+from sys_data_acu import SDI_ACU
 from sys_data_ass import add_ass_options, init_ass_data, AssSysData, SDI_ASS
 
+
 __version__ = '2.3'
+
 
 cae = ConsoleApp("Listening to Sihot SXML interface and updating AssCache/Postgres and Salesforce",
                  multi_threading=True)

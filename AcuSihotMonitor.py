@@ -19,7 +19,7 @@ import datetime
 from functools import partial
 from traceback import print_exc
 
-from ae.system import DATE_ISO
+from ae.base import DATE_ISO
 from ae.core import DEBUG_LEVEL_VERBOSE
 from ae.literal import parse_date
 from ae.console import ConsoleApp

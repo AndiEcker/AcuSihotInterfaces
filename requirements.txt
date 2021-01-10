@@ -21,11 +21,6 @@ cx-Oracle
 docutils
 idna
 Kivy
-Kivy-Garden
-kivy.deps.angle
-kivy.deps.glew
-kivy.deps.gstreamer
-kivy.deps.sdl2
 more-itertools
 packaging
 pluggy
