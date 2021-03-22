@@ -1,6 +1,7 @@
 import pprint
 from collections import OrderedDict
 
+from ae.base import CFG_EXT
 from ae.core import DEBUG_LEVEL_VERBOSE
 from ae.console import ConsoleApp
 from simple_salesforce import Salesforce, SalesforceResourceNotFound
@@ -9,7 +10,7 @@ from sys_core_sf import add_sf_options
 __version__ = '0.2'
 
 cae = ConsoleApp("Salesforce Playground", debug_level=DEBUG_LEVEL_VERBOSE,
-                 additional_cfg_files=['../.sys_env.cfg', '../.sys_envTEST.cfg'])
+                 additional_cfg_files=["../.sys_env" + CFG_EXT, "../.sys_envTEST" + CFG_EXT])
 
 add_sf_options(cae)
 

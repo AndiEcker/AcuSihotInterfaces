@@ -33,7 +33,7 @@ import datetime
 import subprocess
 from configparser import ConfigParser
 
-from ae.base import sys_env_text
+from ae.base import INI_EXT, sys_env_text
 from ae.inspector import full_stack_trace
 from ae.literal import parse_date
 from ae.console import ConsoleApp, MAIN_SECTION_NAME
@@ -141,7 +141,7 @@ def get_timer_corrected():
 def reset_last_run_time(force=False):
     msg = ""
     try:
-        cmd_cfg_file_name = os.path.splitext(exe_name)[0] + '.ini'
+        cmd_cfg_file_name = os.path.splitext(exe_name)[0] + INI_EXT
         if os.path.isfile(cmd_cfg_file_name):
             cmd_cfg_parser = ConfigParser()
             cmd_cfg_parser.optionxform = str  # or use 'lambda option: option' to have case-sensitive INI/CFG var names

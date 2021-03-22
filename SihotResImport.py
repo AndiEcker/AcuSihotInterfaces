@@ -18,13 +18,14 @@
 """
 import sys
 import os
-import shutil
 import glob
 import datetime
 import json
 import csv
 from traceback import format_exc
 
+from ae.base import CFG_EXT
+from ae.paths import copy_file
 from ae.core import DEBUG_LEVEL_VERBOSE, force_encoding
 from ae.inspector import full_stack_trace
 from ae.literal import parse_date
@@ -50,7 +51,7 @@ __version__ = '1.2'
 
 
 cae = ConsoleApp("Import reservations from external systems (Thomas Cook, RCI) into the SiHOT-PMS",
-                 additional_cfg_files=['SihotMktSegExceptions.cfg'])
+                 additional_cfg_files=["SihotMktSegExceptions" + CFG_EXT])
 # cae.add_opt('tciPath', "Import path and file mask for Thomas Cook R*.TXT files", 'C:/TC_Import/R*.txt', 'j')
 # cae.add_opt('bkcPath', "Import path and file mask for Booking.com CSV-tci_files", 'C:/BC_Import/?_*.csv', 'y')
 cae.add_opt('rciPath', "Import path and file mask for RCI CSV files", 'C:/RC_Import/*.csv', 'Y')
@@ -1359,7 +1360,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         # first copy imported file to tci/bkc/rci logging sub-folder (on the server)
         dfn = os.path.join(log_file_path, imp_dir_name, log_file_prefix + '_' + imp_file_name)
-        shutil.copy2(sfn, dfn)
+        copy_file(sfn, dfn)
         if debug_level >= DEBUG_LEVEL_VERBOSE:
             log_import(sfn + " copied to " + dfn, sfn)
 

@@ -46,6 +46,7 @@ os.chdir(os.path.dirname(__file__))
 sys.path.append(os.path.dirname(__file__))
 from bottle import default_app, request, response, static_file, template, run, makelist
 
+from ae.base import CFG_EXT
 from ae.sys_core_sh import SDI_SH
 from ae.core import DEBUG_LEVEL_ENABLED, DEBUG_LEVEL_VERBOSE, po
 from ae.sys_data import FAD_FROM, Record, ACTION_UPSERT, ACTION_INSERT, ACTION_DELETE, field_name_idx_path
@@ -62,7 +63,7 @@ app = application = default_app()
 # initialize multiple, separate system environments for TEST and LIVE
 def init_env(sys_env_id):
     cae = ConsoleApp("Web Service {} Server".format(sys_env_id),
-                     additional_cfg_files=['SihotMktSegExceptions.cfg'],
+                     additional_cfg_files=["SihotMktSegExceptions" + CFG_EXT],
                      multi_threading=True, suppress_stdout=True, sys_env_id=sys_env_id)
     ass_options = add_ass_options(cae, add_kernel_port=True)
     ass_data = init_ass_data(cae, ass_options)

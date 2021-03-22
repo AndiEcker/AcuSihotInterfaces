@@ -5,6 +5,7 @@ import pytest
 
 from configparser import ConfigParser
 
+from ae.base import CFG_EXT
 from ae.sys_data import Record, FAD_ONTO
 from ae.console import MAIN_SECTION_NAME
 from ae.literal import Literal
@@ -146,7 +147,7 @@ class ConsoleApp:
         self.po('ConsoleAppMock.__init__', args)
         cfg = ConfigParser()
         cfg.optionxform = str   # for case-sensitive config vars
-        cfg.read(['../.sys_env.cfg', '../.sys_envTEST.cfg'])
+        cfg.read(["../.sys_env" + CFG_EXT, "../.sys_envTEST" + CFG_EXT])
 
         self._options = dict(acuUser='SIHOT_INTERFACE',
                              acuPassword=cfg.get(MAIN_SECTION_NAME, 'acuPassword'),

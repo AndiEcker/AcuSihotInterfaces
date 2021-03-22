@@ -2,6 +2,7 @@ import pytest
 import os
 import sys
 
+from ae.base import INI_EXT
 from ae.console import MAIN_SECTION_NAME, ConsoleApp
 from ae.validation import (
     validate_flag_info, add_validation_options, init_validation, clients_to_validate,
@@ -36,7 +37,7 @@ class TestCloudContactValidation:
 
     # noinspection PyUnusedLocal
     def test_init_validation_all(self, restore_app_env):
-        fn = 'test_valid.ini'
+        fn = "test_valid" + INI_EXT
         try:
             with open(fn, 'w') as fp:
                 fp.write(f'[{MAIN_SECTION_NAME}]\n')
@@ -64,7 +65,7 @@ class TestCloudContactValidation:
 
     # noinspection PyUnusedLocal
     def test_init_validation_error(self, restore_app_env):
-        fn = 'test_valid_err.ini'
+        fn = "test_valid_err" + INI_EXT
         with open(fn, 'w') as fp:
             fp.write(f'[{MAIN_SECTION_NAME}]\n')
         cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])

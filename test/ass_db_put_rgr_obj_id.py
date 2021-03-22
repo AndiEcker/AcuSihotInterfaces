@@ -1,3 +1,4 @@
+from ae.base import CFG_EXT
 from ae.console import ConsoleApp
 from ae.db_pg import PostgresDb
 from ae.sys_core import SystemBase
@@ -7,7 +8,7 @@ from ae.sys_data_sh import SDF_SH_SERVER_ADDRESS, add_sh_options, print_sh_optio
 __version__ = '0.1'
 
 
-cae = ConsoleApp("Fix rgr_obj_id in ASS_DB", additional_cfg_files=['../.sys_env.cfg'])
+cae = ConsoleApp("Fix rgr_obj_id in ASS_DB", additional_cfg_files=["../.sys_env" + CFG_EXT])
 cae.add_opt('assUser', "User account name for the AssCache/Postgres database", '', 'U')  # ass_interfaces
 cae.add_opt('assPassword', "User account password for the AssCache/Postgres database", '', 'P')
 cae.add_opt('assDSN', "Name of the AssCache/Postgres database", '', 'N')

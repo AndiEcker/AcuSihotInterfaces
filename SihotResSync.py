@@ -16,7 +16,7 @@
 """
 import datetime
 
-from ae.base import DATE_TIME_ISO
+from ae.base import CFG_EXT, DATE_TIME_ISO
 from ae.inspector import full_stack_trace
 from ae.progress import Progress
 from ae.console import ConsoleApp
@@ -37,7 +37,7 @@ __version__ = '1.3'
 ADMIN_MAIL_TO_LIST = ['aecker2@gmail.com']
 
 cae = ConsoleApp("Synchronize reservation changes from Acumen/Oracle system to the SiHOT-PMS",
-                 additional_cfg_files=['SihotMktSegExceptions.cfg'])
+                 additional_cfg_files=["SihotMktSegExceptions" + CFG_EXT])
 add_ac_options(cae)
 add_sh_options(cae, add_kernel_port=True, add_maps_and_kernel_usage=True)
 add_notification_options(cae, add_warnings=True)
