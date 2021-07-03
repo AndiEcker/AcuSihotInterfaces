@@ -1,4 +1,4 @@
-rem switch to common python build/dist folder for to not pollute the project source folders with build/dist files
+rem switch to common python build/dist folder to not pollute the project source folders with build/dist files
 cd ..\_build_dist\AcuSihotInterfaces
 
 c:\Python35\Scripts\pyinstaller --onefile ..\..\AcuSihotInterfaces\AcuServer.py

@@ -1,5 +1,5 @@
 """
-    SysDataMan is a tool for to initialize, pull, compare or push data between the available systems (like Acumen,
+    SysDataMan is a tool to initialize, pull, compare or push data between the available systems (like Acumen,
     AssCache, Sihot and/or Salesforce.
 
     0.1     first beta.
@@ -141,7 +141,7 @@ cae = ConsoleApp("Initialize, pull, compare or push AssCache data against Acumen
                         "\n\tbind_values: dict with system bind variable names and values (only on database systems)"
                         "\n\tfield_names: list of used field names (default=use all fields)"
                         "\n\tfilter_records: callable for record filtering (default=all records)"
-                        "\n\tmatch_fields: list of field names used for to lookup and merge in record sets")
+                        "\n\tmatch_fields: list of field names used to lookup and merge in record sets")
 
 init_systems = UsedSystems(cae)     # only used for option init.
 ava_sys = init_systems.available_systems
@@ -171,8 +171,8 @@ cae.add_opt('filterFields', "Restrict processed (dict keys: C=client, P=product,
 cae.add_opt('matchRecords', "Filter to restrict (dict keys: C=client, P=product, R=reservation) destination records,"
                                " e.g. {'C':'cl_phone is NULL'} pulls only client data with empty phone",
                {}, 'M')
-cae.add_opt('matchFields', "Specify (dict keys: C=client, P=product, R=reservation) fields for to match/lookup the "
-                              "associated record e.g. {'C':['Phone']} is using Phone for to associate client records",
+cae.add_opt('matchFields', "Specify (dict keys: C=client, P=product, R=reservation) fields to match/lookup the "
+                              "associated record e.g. {'C':['Phone']} is using Phone to associate client records",
                {}, 'Z')
 '''
 
@@ -229,7 +229,7 @@ if not isinstance(act_match_fields, dict) or not act_match_fields:
 po("User-defined/Processed match fields:", act_match_fields)
 '''
 
-# check for to (re-)create and initialize PG database - HAS TO BE DONE BEFORE AssSysData init because pg user not exists
+# check to (re-)create and initialize PG database - HAS TO BE DONE BEFORE AssSysData init because pg user not exists
 if act_init:
     ass_user = cae.get_opt('assUser')
     ass_pw = cae.get_opt('assPassword')
@@ -512,7 +512,7 @@ def ac_pull_res_data():
 
 def ac_push_clients():
     """
-    push from AssCache to Acumen for to fix there external references, email and phone data.
+    push from AssCache to Acumen to fix there external references, email and phone data.
     :return: error message or "" in case of no errors.
     """
     ctx = 'acPushCl'

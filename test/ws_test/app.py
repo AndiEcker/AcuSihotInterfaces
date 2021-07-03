@@ -1,7 +1,7 @@
 """
 After setting up mod_wsgi using embedded mode (instead of daemon mode) the apache/linux server configs are used.
 
-For to change the encoding charsets in embedded mode you could change the environment variables
+to change the encoding charsets in embedded mode you could change the environment variables
 LANG and LC_ALL of apache in /etc/apache2/envvars. Following the recommendations of the main developer of mod_wsgi
 (see http://blog.dscpl.com.au/2014/09/setting-lang-and-lcall-when-using.html) it would be better and saver
 to run mod_wsgi in daemon mode and specify there the language and locale settings by adding to the apache .conf file:

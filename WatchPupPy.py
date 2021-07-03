@@ -1,7 +1,7 @@
 """
-    0.4     changed command call from check_call() to check_output() for to determine and pass StdOut/StdErr  AND
-            added outer try exception fallback into main loop (for to catch strange/unsuspected errors).
-    0.5     added new option sendOutput for to allow caller to use either check_call() or check_output().
+    0.4     changed command call from check_call() to check_output() to determine and pass StdOut/StdErr  AND
+            added outer try exception fallback into main loop (to catch strange/unsuspected errors).
+    0.5     added new option sendOutput to allow caller to use either check_call() or check_output().
     0.6     added outage check of T_SRSL/ARO (Sihot-To-Acumen interface), changed run lock reset to be optional.
     0.7     added process ids to notification emails and stdout.
     0.8     refactored using add_ass_options() and init_ass_data().
@@ -378,7 +378,7 @@ while True:
         except KeyboardInterrupt:
             curr_time = datetime.datetime.now()
             errors.append(BREAK_PREFIX + " while running {}. command {} at {}".format(run_starts, exe_name, curr_time))
-            continue        # jump to begin of loop for to notify user, BREAK this loop and quit this app
+            continue        # jump to begin of loop to notify user, BREAK this loop and quit this app
         except Exception as ex:
             curr_time = datetime.datetime.now()
             errors.append("{}. run raised unexpected exception: {} at {}\n      {}"

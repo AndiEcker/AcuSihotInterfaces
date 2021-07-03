@@ -44,7 +44,7 @@ class TestCloudContactValidation:
             cae = ConsoleApp('test_init_validation', additional_cfg_files=[fn])
             add_validation_options(cae, email_def=EMAIL_ALL, phone_def=PHONE_ALL, addr_def=ADDR_ALL)
             sys.argv = [restore_app_env, ]
-            cae.get_opt('debug_level')     # for to parse args before cae.set_opt() calls (resetting config option)
+            cae.get_opt('debug_level')     # to parse args before cae.set_opt() calls (resetting config option)
 
             assert cae.set_var('emailValidatorPauseSeconds', 1.0) == ''
             assert cae.set_var('emailValidatorMaxRetries', 1) == ''

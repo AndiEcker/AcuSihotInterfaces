@@ -72,7 +72,7 @@ END
 /*
   ae:06-09-16 V00: first beta - added for SIHOT sync/migration project.
   ae:27-12-16 V01: prevent to open/fetch ARO/RU/PRC cursor on change of ARO/RU/PRC_BOARDREF because of mutating error.
-  ae:12-01-17 V02: added exception handler for to prevent mutating T_MS (e.g. after changing MS_OTHER_DOB1 the pcCaller will be 'R' not 'M') and added shortcut (return NULL) for pending MKT bookings (without RH).
+  ae:12-01-17 V02: added exception handler to prevent mutating T_MS (e.g. after changing MS_OTHER_DOB1 the pcCaller will be 'R' not 'M') and added shortcut (return NULL) for pending MKT bookings (without RH).
 */;
 /
 

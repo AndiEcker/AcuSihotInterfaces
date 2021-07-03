@@ -347,7 +347,7 @@ class TestSfFindClient:
 
     def test_identify_by_email(self, salesforce_connection):
         sfi = salesforce_connection
-        # used for to wipe duplicates of previous failed test runs: 4sfi.cl_delete('0012600000niFt6AAE', 'Account')
+        # used to wipe duplicates of previous failed test runs: 4sfi.cl_delete('0012600000niFt6AAE', 'Account')
 
         fn = "Testy"
         ln = "Tester"
@@ -544,7 +544,7 @@ class TestClient:
                                  Forename='testy', Surname='Test Field Data Fetch'),
                      system=SDI_SF, direction=FAD_ONTO)
         rec.add_system_fields(SF_CLIENT_MAPS['Account'])
-        rec.pop('SfId')     # remove SfId (Id SF field) for to prevent SF create Account error
+        rec.pop('SfId')     # remove SfId (Id SF field) to prevent SF create Account error
         sf_id, err, msg = sfc.cl_upsert(rec, sf_obj='Account')
         assert not err
         assert sf_id

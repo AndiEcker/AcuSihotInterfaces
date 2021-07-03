@@ -163,7 +163,7 @@ def init_ass_data(cae, ass_options, err_logger=None, warn_logger=None, used_syst
 
     ret_dict['assSysData'] = asd = AssSysData(cae, err_logger=err_logger, warn_logger=warn_logger,
                                               sys_msg_prefix=used_systems_msg_prefix)
-    err_msg = asd.error_message     # save init error message (for to check used system - ignoring missing credentials)
+    err_msg = asd.error_message     # save init error message (to check used system - ignoring missing credentials)
     sys_ids = list()
     if asd.connection(SDI_ASS, raise_if_error=False):
         cae.po('AssCache database name and user:', cae.get_opt('assDSN'), cae.get_opt('assUser'))
@@ -275,10 +275,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         initialize and possibly connect all available systems.
 
         :param cae:             app environment - mainly used for command line args and config file options.
-        :param err_logger:      method for to display or log error notifications.
-        :param warn_logger:     method for to log warnings.
-        :param ctx_no_file:     str prefix for to mark contexts with no file involved.
-        :param sys_msg_prefix:  prefix str for to display the finally fully-configured/used systems.
+        :param err_logger:      method to display or log error notifications.
+        :param warn_logger:     method to log warnings.
+        :param ctx_no_file:     str prefix to mark contexts with no file involved.
+        :param sys_msg_prefix:  prefix str to display the finally fully-configured/used systems.
         :param sys_credentials: credentials of all configured systems: ass_user, ass_password, acu_user, acu_password.
         """
         self.cae = cae
@@ -331,7 +331,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         else:                   # fetch config data from Acumen
             db = self.connection(SDI_ACU, raise_if_error=False)
             if not db:      # logon/connect error
-                self.error_message += "\n      AssSysData: Missing credentials for to open Acumen database"
+                self.error_message += "\n      AssSysData: Missing credentials to open Acumen database"
                 self._err(self.error_message, self._ctx_no_file + 'InitAcuDb')
                 return
 
@@ -365,7 +365,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         # load invalid email fragments (ClientHasNoEmail and OTA pseudo email fragments)
         self.invalid_email_fragments = cae.get_var('invalidEmailFragments', default_value=list())
         if self.debug_level >= DEBUG_LEVEL_VERBOSE:
-            cae.po("Text fragments for to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
+            cae.po("Text fragments to detect ignorable/invalid email addresses:", self.invalid_email_fragments)
 
         self.sf_id_reset_fragments = cae.get_var('SfIdResetResendFragments') or list()
         if self.sf_id_reset_fragments and self.debug_level >= DEBUG_LEVEL_VERBOSE:
@@ -544,7 +544,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param client_data:     Record or dict of client data (using generic field names).
         :param field_names:     list of generic field names to be saved in AssCache db (def=all fields in client_data).
         :param match_fields:    list of generic field names for rec match/lookup (def=non-empty AssId/AcuId/SfId/ShId).
-        :param ass_idx:         self.clients list index of client record. If None/default then determine for to update
+        :param ass_idx:         self.clients list index of client record. If None/default then determine to update
                                 the self.clients cache list.
         :param commit:          boolean flag if AssCache data changes should be committed (def=False).
         :param locked_cols:     list of generic field names where the cl_ column value will be preserved if not empty.
@@ -682,7 +682,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
                         elif rec.val('AcuId') in resort_codes and er_id not in self.client_refs_add_exclude:
                             self._warn("Resort {} is missing RCI ID {}".format(rec.val('AcuId'), er_id),
                                        self._ctx_no_file + 'CheckClientsDataResortId')
-        # prepare found duplicate ids, prevent duplicate printouts and re-order for to separate RCI refs from others
+        # prepare found duplicate ids, prevent duplicate printouts and re-order to separate RCI refs from others
         dup_ids = list()
         for ref, recs in found_ids.items():
             if len(recs) > 1:
@@ -1057,7 +1057,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         upsert into ass_cache.res_groups
 
         :param col_values:          dict of column values to be inserted/updated.
-        :param chk_values:          dict of column values for to identify the record to update (insert if not exists).
+        :param chk_values:          dict of column values to identify the record to update (insert if not exists).
                                     (opt, def=IDs from col_values items: obj_id, ho_id+res_id+sub_id, gds_no or sf_id).
         :param commit:              pass True to commit on success or rollback on error (opt, def=False).
         :param multiple_row_update: allow update of multiple records with the same chk_values (opt, def=False).
@@ -1110,7 +1110,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         upsert into ass_cache.res_group_clients
 
         :param col_values:          dict of column values to be inserted/updated.
-        :param chk_values:          dict of column values for to identify the record to update (insert if not exists).
+        :param chk_values:          dict of column values to identify the record to update (insert if not exists).
                                     Allowed keys: rgc_rgr_fk, rgc_room_seq, rgc_pers_seq.
         :param commit:              True to commit (opt, def=False).
         :param multiple_row_update: allow update of multiple records with the same chk_values (opt, def=False).
@@ -1141,11 +1141,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         :param res_rec:         Reservation data Record.
         :param field_names:     list of field names to be saved in AssCache db (def=all fields in res_data).
         :param match_fields:    list of field names for rec lookup (def=non-empty ResHotelId/ResId/ResSubId/ResGdsNo).
-        :param ass_idx:         Records index of self.reservations record. If None/default then determine for to update
+        :param ass_idx:         Records index of self.reservations record. If None/default then determine to update
                                 the self.reservations cache list.
         :param commit:          boolean flag if AssCache data changes should be committed (def=False).
         :param last_change:     if not None then set rgr_last_change column value to this passed timestamp.
-        :param ass_res_rec:     pass in empty Record/dict for to return reservation data, including the
+        :param ass_res_rec:     pass in empty Record/dict to return reservation data, including the
                                 person/rooming-list (in the Records value of ass_res_rec['ResPersons'])
         :return:                primary key of saved reservation (rgr_pk) or None on error (see self.error_message).
         """
@@ -1359,11 +1359,11 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
         """
         convert ass_cache db columns to SF fields, and then push to Salesforce server via APEX method call
 
-        :param sf_res_id:       Reservation Opportunity Id (SF ID with 18 characters). Pass None for to create new-one.
+        :param sf_res_id:       Reservation Opportunity Id (SF ID with 18 characters). Pass None to create new-one.
         :param sh_cl_data:      Record with Sihot guest data of the reservation orderer (fetched with
                                 ClientSearch.fetch_client()/sys_data_sh.client_data()).
         :param ass_res_data:    Record with reservation fields (from ass_cache.res_groups).
-        :param sync_cache:      True for to update ass_cache/res_groups/rgr_last_sync+rgr_sf_id (opt, def=True).
+        :param sync_cache:      True to update ass_cache/res_groups/rgr_last_sync+rgr_sf_id (opt, def=True).
         :param sf_sent:         (OUT, opt) Record(system=SDI_SF, direction=FAD_ONTO) of sent Account+Reservation object
                                 fields; e.g. the Reservation Opportunity Id gets returned as sf_data['ResSfId'].
         :return:                error message if error occurred, else empty string.
@@ -1459,7 +1459,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         err_msg = self.connection(SDI_SF).room_change(rgr_sf_id, check_in, check_out, next_room_id)
         if err_msg and [frag for frag in self.sf_id_reset_fragments if frag in err_msg]:
-            # reset last-res-change-datetime to now for to re-sync reservation (to get new ResSfId) and then try again
+            # reset last-res-change-datetime to now to re-sync reservation (to get new ResSfId) and then try again
             self.rgr_upsert(dict(rgr_last_change=datetime.datetime.now(), rgr_sf_id=None), dict(rgr_sf_id=rgr_sf_id),
                             multiple_row_update=True, commit=True)
             self._warn("ResSfId {} reset; ori-/err='{}'/'{}' in "
@@ -1526,10 +1526,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         All parameters are web-service-query-param-ready (means they could be passed as str).
 
-        :param hotel_ids:       Optional list of hotel IDs (leave empty for to get the rooms in all hotels accumulated).
+        :param hotel_ids:       Optional list of hotel IDs (leave empty to get the rooms in all hotels accumulated).
         :param room_cat_prefix: Optional room category prefix string (leave empty for all room categories or pass e.g.
                                 'S' for a accumulation of all the Studios or '1J' for all 1 bedroom junior rooms).
-        :param day:             Optional day (leave empty for to get the available rooms for today's date).
+        :param day:             Optional day (leave empty to get the available rooms of today's date).
         :return:                Number of available rooms (negative on overbooking).
         """
         if not hotel_ids:
@@ -1565,10 +1565,10 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
 
         All parameters are web-service-query-param-ready (means they could be passed as str).
 
-        :param hotel_ids:       Optional list of hotel IDs (leave empty for to get the rooms in all hotels accumulated).
+        :param hotel_ids:       Optional list of hotel IDs (leave empty to get the rooms in all hotels accumulated).
         :param room_cat_prefix: Optional room category prefix string (leave empty for all room categories or pass e.g.
                                 'S' for a accumulation of all the Studios or '1J' for all 1 bedroom junior rooms).
-        :param day:             Optional day (leave empty for to get the available rooms for today's date).
+        :param day:             Optional day (leave empty to get the available rooms for today's date).
         :param res_max_days:    Optional maximum length of reservation (def=27 days).
         :return:                Number of valid reservations of the specified hotel(s) and room category prefix and
                                 with arrivals within the date range day-res_max_days...day.
@@ -1694,7 +1694,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
             ('OWNS', 'ProductTypes'),
         )
 
-        # column expression SQL for to fetch client data from Acumen - now migrated into V_CLIENTS_REFS_OWNS
+        # column expression SQL to fetch client data from Acumen - now migrated into V_CLIENTS_REFS_OWNS
         AC_SQL_AC_ID1 = "CD_CODE"
         AC_SQL_AC_ID2 = "CD_CODE || '" + AC_ID_2ND_COUPLE_SUFFIX + "'"
         AC_SQL_SF_ID1 = "nvl(CD_SF_ID1, (select max(MS_SF_ID) from T_ML, T_MS" \
@@ -2007,7 +2007,7 @@ class AssSysData:   # Acumen, Salesforce, Sihot and config system data provider
     def _sf_clients_pull(self, col_names=(), chk_values=None, where_group_order='',
                          field_names=(), exclude_fields=(), filter_records=None):
         def _prepare(obj, c_names, f_names, x_names):
-            c_names = list(c_names)     # copy passed list/tuple for to not change col_names
+            c_names = list(c_names)     # copy passed list/tuple to not change col_names
             tpl = Record(system=SDI_SF, direction=FAD_FROM).add_system_fields(SF_CLIENT_MAPS[obj])
             if f_names or x_names:
                 c_names += tpl.leaf_names(system=SDI_SF, direction=FAD_FROM,

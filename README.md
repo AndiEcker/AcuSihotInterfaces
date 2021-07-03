@@ -1,17 +1,17 @@
 # Interface Suite
 
->This repository is providing tools and processes for to migrate and synchronize system configuration, room status, 
+>This repository is providing tools and processes to migrate and synchronize system configuration, room status, 
 clients, ownerships and reservations between Sihot.PMS, Acumen and Salesforce.
 
 [![Code Size](https://img.shields.io/github/languages/code-size/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
 [![Issues](https://img.shields.io/github/issues/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
 [![Last Commit](https://img.shields.io/github/last-commit/AndiEcker/AcuSihotInterfaces.svg)](#interface-suite)
 
-The code-base gets stripped before any push to this repository for to not publish any internals like the names of our
+The code-base gets stripped before any push to this repository to not publish any internals like the names of our
 servers, users and the passwords. Therefore this suite cannot be directly used in other environments without additional
 configuration steps, but at least we hope that you can still use parts of it for your applications.
 
-Big thanks to our IT managers (Gary and Søren) for to let us developers publish parts of our in-house applications to
+Big thanks to our IT managers (Gary and Søren) to let us developers publish parts of our in-house applications to
 the community.
 
 
@@ -34,7 +34,7 @@ apart from AcuSihotMonitor and SihotResImport, which are providing a (kivy) user
 | [SihotOccLogChecker](#sihotocclogchecker-application) | Sihot SXML interface log file checks and optional Acumen room occupation status fixes | Sxml |
 | [SihotResImport](#sihotresimport-application) | Create/Update/Cancel reservations from CSV/TXT/JSON files within Sihot.PMS | Kernel, Web |
 | SihotResSync | Synchronize clients and reservations changed in Sihot.PMS onto Acumen | Kernel, Web |
-| [SihotServer](#sihotserver-web-services) | Providing web services for to pass and retrieve data from Sihot.PMS | Kernel, Web |
+| [SihotServer](#sihotserver-web-services) | Providing web services to pass and retrieve data from Sihot.PMS | Kernel, Web |
 | [SysDataMan](#sysdataman-application) | Initialize, pull, compare or push data against Acumen, AssCache, Salesforce and/or Sihot | Kernel, Web |
 | TestConnectivity | Test connectivity to SMTP and Acumen/Oracle servers | - |
 | [WatchPupPy](#watchpuppy-application) | Supervise always running servers or periodically execute command | Kernel, Web |
@@ -124,11 +124,11 @@ are case-sensitive. The following table is listing them ordered by the option na
 | warningsMailToAddr | List/Expression of warnings SMTP receiver/to addresses (if differs from smtpTo) | - | v | SysDataMan, BssServer, SfClientValidator, ShSfClientMigration, SihotOccLogChecker, SihotResImport, SihotResSync |
 
 Currently all the 26 ascii lower case letters are used for the command line argument short options, some of them are
-hard-coded by python (like e.g. the -h switch for to show the help screen). The upper case character options -D and -L
+hard-coded by python (like e.g. the -h switch to show the help screen). The upper case character options -D and -L
 are hard-coded by the ae.console module. Some options like -m are used and interpreted differently in several
 command line applications.
 
-The following lower case letters could be used more easily as short options than others (for to prevent
+The following lower case letters could be used more easily as short options than others (to prevent
 duplicates/conflicts) for future/upcoming command line options with less conflicts: | l | m | n | q | M | X | Y | Z |.
 
 
@@ -136,7 +136,7 @@ duplicates/conflicts) for future/upcoming command line options with less conflic
 
 #### Available Client Fields
 
-The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+The table underneath is listing all the fields - alphabetically ordered by the field name - to store the data of
 each of our clients/guests:
 
  Field Name | Field Type | Description | Example Values |
@@ -181,7 +181,7 @@ each of our clients/guests:
 #### Available Reservation Fields
 
 The table underneath is showing most of the fields that can be used to specify a reservation created within Sihot.
-Additionally most of the [client fields](#available-client-fields) can be added for to specify the orderer of a
+Additionally most of the [client fields](#available-client-fields) can be added to specify the orderer of a
 reservation.
 
 The fields marked with an asterisk (*) after their field name in the table underneath are mandatory. Additionally
@@ -213,11 +213,11 @@ Field Name | Field Type | Description | Example Values |
 | ResGroupNo | String | Reservation Grouping Info | 345678, <123456> |
 | ResHotelId * | String | Sihot Hotel Id | '1'=PBC, ... '4'=BHC, '999'=ANY |
 | ResId + | String | Sihot Reservation Number | 123456789' |
-| ResLongNote | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '&#124;CR&#124;' for to separate various comments) |
+| ResLongNote | String | Sihot Reservation Technical Comment (long) | 'extra info' (use '&#124;CR&#124;' to separate various comments) |
 | ResMktGroup | String | Sihot Reservation Channel | 'OW'=Owner |
 | ResMktGroupNN | String | Reservation Marketing Group | 'RS'=Rental SP | 
 | ResMktSegment * | String | Sihot Marketing Segment / OTA Channel | 'TO', 'PA', 'TC' |
-| ResNote | String | Sihot Reservation Comment (short) | 'extra info' (use ';' for to separate various comments) |
+| ResNote | String | Sihot Reservation Comment (short) | 'extra info' (use ';' to separate various comments) |
 | ResObjId | String | Sihot Internal Reservation Object Id | '123456789' |
 | ResPersons | List | List of Occupants | ((Smith, John, 24-12-1962, ...), (Knopf, Jim, 27-01-1955, ...)) |
 | ResPersons\<n\>AutoGen | String | Autogenerated entry | '1' if auto-generated else '0' |
@@ -261,14 +261,14 @@ All the field specifying the orderer of a reservation as well as the `ResPersons
 [client fields](#available-client-fields), the only difference is that the field names within `ResPersons` are
 having the prefix `Pers`.
 
-The soon deprecated Acumen system is additionally using extra reservation fields for to specify the occupants of a
+The soon deprecated Acumen system is additionally using extra reservation fields to specify the occupants of a
 guest reservation. `OccuAcuId` and `OccuShId` are specifying the first occupant and `OccuAcuId_P` and `OccuShId_P` the
 second occupant (respectively the partner of the couple).
 
 
 #### Available Reservation Inventory Fields
 
-The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+The table underneath is listing all the fields - alphabetically ordered by the field name - to store the data of
 each of each reservation inventory:
 
  Field Name | Field Type | Description | Example Values |
@@ -283,7 +283,7 @@ each of each reservation inventory:
 
 #### Available Product Fields
 
-The table underneath is listing all the fields - alphabetically ordered by the field name - for to store the data of
+The table underneath is listing all the fields - alphabetically ordered by the field name - to store the data of
 each of our products:
 
  Field Name | Field Type | Description | Example Values |
@@ -411,7 +411,7 @@ the correct functionality of the Salesforce, Acumen and Sihot servers and interf
 
 ### SysDataMan Application
 
-SysDataMan is a command line tool for to synchronize and compare data between our four systems (Acu=Acumen Ass=AssCache
+SysDataMan is a command line tool to synchronize and compare data between our four systems (Acu=Acumen Ass=AssCache
 Sf=Salesforce and Sh=Sihot). The actions performed by this tool get specified by the 
 [command line options --pull, --push and --compare](#action-command-line-options),
 which can be specify multiple times.
@@ -419,15 +419,15 @@ which can be specify multiple times.
 All command line options can be specified in any order, because SysDataMan is always first doing all the pull actions.
 After the pull any push actions are performed (if specified/given) and finally the compare actions are processed.
 
-For to run a compare before any additional pull/push action simply execute SysDataMan twice (the first run
+to run a compare before any additional pull/push action simply execute SysDataMan twice (the first run
 with the --compare option and the second run with the pull/push and optionally another compare action).
  
-The postgres database AssCache (Ass) can be used for to temporarily store the data pulled from one of our three
-systems (the source system) for to speed up large data synchronization tasks.
+The postgres database AssCache (Ass) can be used to temporarily store the data pulled from one of our three
+systems (the source system) to speed up large data synchronization tasks.
 
 #### Supported Data Fields
 
-The following client data fields can be used for to optionally specify the fields that are used within the 
+The following client data fields can be used to optionally specify the fields that are used within the 
 `field_names` key-word-arguments of the action command line options `pull`, `push` and `compare`, although not all of
 them are implemented for all our three systems (e.g. Sihot only supports the ShId field for filtering and matching):
 
@@ -464,7 +464,7 @@ The supported record/data type identifiers are:
 | P | Products |
 | R | Reservations |
 
-So for to compare/compare all client record data (C) from the Acumen (Acu) against Salesforce (Sf) system, use the
+So to compare/compare all client record data (C) from the Acumen (Acu) against Salesforce (Sf) system, use the
 following action command line options:
 
     `--pull=AcuC --compare=SfC`
@@ -480,7 +480,7 @@ will first pull all the clients from Salesforce (source) and then compare the fo
 the Acumen (destination) system. 
 
 A combination of the --pull and --push command line options allows to synchronize data between several systems.
-For example for to synchronize client data from Acumen to Sihot and Salesforce you have to specify the following action
+For example to synchronize client data from Acumen to Sihot and Salesforce you have to specify the following action
 command line arguments:
 
     `--pull=AcuC --push=SfC --push=ShC`
@@ -492,7 +492,7 @@ actions a field will have the value from the system which last pull action inclu
 #### Additional Action Command Line Options
 
 In most cases you want to restrict the synchronized/compared data from the source system to a small amount of 
-data-records and/or -fields and for to prevent heavy data and system loads.
+data-records and/or -fields and to prevent heavy data and system loads.
 
 Filters and other input parameters can be specified as action arguments directly after the system and record type of
 each Action command line option as a python dictionary literal. The key is identifying the argument type, e.g. 
@@ -508,8 +508,7 @@ sql clauses or a list of matching field names. The following action argument dic
 * match_fields
 
 The `filter_records` key-word-argument specifies a callable that can filter/reduce the amount of data. E.g. in case of
-pulling client data (using the --pull option) this callable can be used instead of the `where_group_order` SQL for
-to filter/restrict data from a system.
+pulling client data (using the --pull option) this callable can be used instead of the `where_group_order` SQL to filter/restrict data from a system.
 
 The following command line option - using `where_group_order` - will pull only
 Acumen client data with a non-empty email address and compare them against Salesforce:
@@ -522,7 +521,7 @@ The same can be achieved by using `filter_records` with:
 
 Additionally you can restrict the processed (synchronized/compared) fields with the key-word-arguments `col_names`, 
 `field_names` and/or `exclude_fields`. If none of these are specified then SysDataMan is processing all 
-[data fields](#supported-data-fields) supported by the system you are working with. So for to restrict the last 
+[data fields](#supported-data-fields) supported by the system you are working with. So to restrict the last 
 example to only compare the client's email address and phone number you have to specify the following 
 command line options:
 
@@ -546,10 +545,10 @@ Please note that there is currently no action argument available to exclude fiel
 The `match_fields` and `filter_records` key-word-arguments are also restricting the fields and records of the
 destination system (the system pushed-to or compared-against).
 
-The primary key of each system is used by default for to lookup/associate the matching data record in the destination
+The primary key of each system is used by default to lookup/associate the matching data record in the destination
 system. But in the case where you the primary key value is not available in both systems you can a specify with the 
 command line option `match_fields` a different field (or a list of fields) for this lookup/association.
-So e.g. for to compare the client data between Acumen and Salesforce by using the Email and Phone data for to match 
+So e.g. to compare the client data between Acumen and Salesforce by using the Email and Phone data to match 
 the client record within Salesforce the following command line options have to be specified:
 
     `--pull=AcuC --compare=SfC{'match_fields':['Email','Phone']}`
@@ -566,7 +565,7 @@ empty:
 
 The BssServer is a server application which is providing a special Sihot-compatible web-service because the Sihot
 live/push SXML interfaces are not compatible to any web-service standards (SOAP/WSDL/REST/XML/…). BssServer is 
-listening/waiting for our Sihot system to connect (as a client) for to process and propagate/push the following live 
+listening/waiting for our Sihot system to connect (as a client) to process and propagate/push the following live 
 actions done within Sihot:
 
 * Change of Reservation Data
@@ -578,14 +577,14 @@ for room check-ins is `CI`, for check-outs is `CO` and for room moves is `RM`.
 Any of these Sihot four actions will be directly cashed within the AssCache/Postgres database and later (after maximum
 6 minutes) also be bulk-propagated onto our Salesforce system.
 
-The Salesforce system does provide the `reservation_upsert()` method for to receive the Sihot reservation changes.
+The Salesforce system does provide the `reservation_upsert()` method to receive the Sihot reservation changes.
 As parameters are passed most of the [available reservation fields](#available-reservation-fields). If a reservation
 got already sent before to Salesforce then the reservation opportunity id (with a 006 prefix) will be sent within
 the additional parameter `ReservationOpportunityId` and the PersonAccount id within `PersonAccountId`.
 
-For to propagate the check-in/-out/room-move timestamps to Salesforce the BssServer is calling the method
+to propagate the check-in/-out/room-move timestamps to Salesforce the BssServer is calling the method
 `reservation_room_move()` with the parameters `CheckInc` and `CheckOutc`. The current room id/number get passed
-within the parameter `RoomNoc`. Finally the parameter `ReservationOpportunityId` get passed for to identify
+within the parameter `RoomNoc`. Finally the parameter `ReservationOpportunityId` get passed to identify
 the reservation within Salesforce by their reservation opportunity id.
 
 If the BssServer config option `roomChangeWithOccupants` has a non-empty value then BssServer is also sending
@@ -594,7 +593,7 @@ occupants data from the Sihot rooming list to Salesforce on every room change. I
 of the oldest adult in the rooming list get sent. For all other non-empty values all the pax of the rooming list 
 get sent to Salesforce.
 
-Occupants data will be sent to Salesforce by calling the method `reservation_occupants_upsert()`. For to identify
+Occupants data will be sent to Salesforce by calling the method `reservation_occupants_upsert()`. to identify
 the reservation within Salesforce you can use the parameters `ReservationOpportunityId` (if the reservation got
 already sent before to Salesforce) as well as `HotelIdc`, `Numberc` and `SubNumberc`. The data of the occupants
 get passed by parameter names with the prefix `ResPersons`, followed by an integer that is specifying the index
@@ -610,7 +609,7 @@ is currently only sending the fields `PersSurname`, `PersForename`, `PersDOB`, `
 ### ClientQuestionnaireExport Application
 
 ClientQuestionnaireExport is a command line tool that exports all check-outs within a given date range into a CSV file
-for to be sent to a service company for to do the client questionnaires. FYI: this tools is replacing the currently
+to be sent to a service company to do the client questionnaires. FYI: this tools is replacing the currently
 used Oracle procedure SALES.TRIPADVISOR (runs every Tuesday around 11 am). There is a similar export available
 within the Sihot.PMS EXE application via the menu entry `Export / Export stays for Marketing` (with the checkbox
 `Email filter` checked) which is exporting a CSV file into the folder U:/transfer/staysformarketing/.
@@ -624,7 +623,7 @@ Currently only the PBC and BHC hotels are processed.
 
 #### HotelLocationIds INI/config section
 
-This section are defining the location ids used by the client questionnaire service for to be included into the
+This section are defining the location ids used by the client questionnaire service to be included into the
 CSV file. The variable name is the Sihot hotel id. Only the check-outs of hotels that have a location id 
 defined will be exported/included in the CSV file.
 
@@ -632,12 +631,12 @@ The location IDs provided are 535055 for the BHC hotel and 288275 for the PBC ho
 
 #### columnSeparator INI/config variable
 
-Allows to specify the character used for to separate the columns of the CSV file. The default value is the comma (`,`).
+Allows to specify the character used to separate the columns of the CSV file. The default value is the comma (`,`).
 
 #### maxLengthOfStay INI/config variable
 
 Because the Sihot WEB interface is only allowing to search for arrival dates a maximum length of a stay can be
-specified for to include them into the exported CSV file. The default value is 42 days.
+specified to include them into the exported CSV file. The default value is 42 days.
 
 #### resSearchFlags INI/config variable
 
@@ -671,7 +670,7 @@ Allows to specify/change the content of the data row columns exported CSV file. 
 This command line tool is helping to check and optionally fix any missing occupation data changes (like Room-Checkin,
 -Checkout or -Move) within the Acumen system.
 
-The tool is parsing each Check-In (CI), Check-Out (CO) and Room.Move (RM) in the Sihot SXML interface log file for to
+The tool is parsing each Check-In (CI), Check-Out (CO) and Room.Move (RM) in the Sihot SXML interface log file to
 compare it with the Acumen data. There will be lots of discrepancies shown for reservations that are imported
 into Sihot via Siteminder or created manually (because they not existing in Acumen). Therefore on the first run you only
 need to the check the summary at the end of the console output (as well as at the end of the log file, created mostly
@@ -684,9 +683,9 @@ the specified date range and the log entry timestamps within the specified log f
 Occupation data changes done in Sihot get normally transferred via the Sihot SXML interface first to the AcuServer 
 and from there to the Acumen system. So if either the SXML interface
 or the AcuServer is not running correctly (like happened recently between 16/10/2017 14:07:32 and 18/10/2017 15:09:53),
-then you can use SihotOccLogChecker for to check and repair the related T_ARO data in Acumen.
+then you can use SihotOccLogChecker to check and repair the related T_ARO data in Acumen.
 
-So for to check the discrepancies for the above date range you have to provide the exact date range with the
+So to check the discrepancies for the above date range you have to provide the exact date range with the
 command line options `dateFrom` and `dateTill` to SihotOccLogChecker, like shown underneath:
 
 `--dateFrom="2017-10-16 14:07:33.0" -dateTill="2017-10-18 15:09:52.0"`
@@ -698,7 +697,7 @@ password with the `acuUser` and `acuPassword` command line options and finally t
 SXML log file as command line parameter (e.g. `E:\sihot\log\SP\SXML_ACUMEN@SP.log` directly from our Sihot production
  server or `\\<sihot-server>\e$\sihot\log\sp\SXML_ACUMEN@SP.log` from the network).
 
-After checking the discrepancies you can add the `correctSystem` command line option for to fix either the Acumen (Acu)
+After checking the discrepancies you can add the `correctSystem` command line option to fix either the Acumen (Acu)
 or the AssCache (Ass) occupation status. If you want for example to fix the missing occupation changes in our second big
 outage (between 21/10/2017 17:54:38 and 23/10/2017 10:20:50) in Acumen you have to specify the following command
 line arguments: 
@@ -733,7 +732,7 @@ Please note that the value of this setting is restricted by the value of the max
 
 ### SihotResImport Application
 
-Combined Console/Kivy Application for to import reservation bookings, changes and cancellations from CSV or JSON files
+Combined Console/Kivy Application to import reservation bookings, changes and cancellations from CSV or JSON files
 into the Sihot system.
 
 Apart from the instruction in the [Installation Instructions](#installation-instructions) section (see
@@ -744,9 +743,9 @@ of these import channel folders.
 
 The provided command line options are documented above in the section
 [Command line arguments](#command-line-arguments). The most important one is the `jsonPath` option, 
-for to specify the import path and file mask for OTA JSON files - this value defaults to `C:/JSON_Import/*.json`.
+to specify the import path and file mask for OTA JSON files - this value defaults to `C:/JSON_Import/*.json`.
 
-For to run this application in console mode (headless without any user interface), simply specify a valid 
+to run this application in console mode (headless without any user interface), simply specify a valid 
 Acumen user name (acuUser) and password (acuPassword) as command line parameters (or via one of supported config/INI 
 files).
 
@@ -755,13 +754,13 @@ name or IP address of the SIHOT interface server, `shServerPort` is the IP port 
 you can specify via `shTimeout` the timeout value in seconds for TCP/IP connections (default=69.3) and 
 via `shXmlEncoding` the charset encoding used for the xml data (default='cp1252').
 
-Meanwhile and for to check the client data against our Salesforce system this application needs also a user account for
+Meanwhile and to check the client data against our Salesforce system this application needs also a user account for
 the Salesforce system. If you start this application using E:\AcuServer\ of the Sihot production system as the current
 working directory then you don't need to specify anything to use the Salesforce sandbox, but for production you need at
 least to specify the user name (sfUser), the security token (sfToken), the sandbox flag set to False (sfIsSandbox=False)
 and the password (the password can be omitted if you use our SihotInterface user account).
 
-Another four command line parameters are for to configure the notification emails: `smtpServerUri` specifies the 
+Another four command line parameters are to configure the notification emails: `smtpServerUri` specifies the 
 SMTP server URI (including user name, password, host and port). The sender address has to be specified by
 `smtpFrom`, the list of SMTP receivers by `smtpTo` (for the protocol) and `warningsMailToAddr` (for the
 warnings/discrepancy notifications.
@@ -781,14 +780,14 @@ section [Available Reservation Fields](#available-reservation-fields) above.
 
 SihotServer is providing several https web services, which are implemented and distributed as pure python package
 scripts. These python scripts are prepared to by used on top of a Apache Linux web server as a WSGI web service
-extension. For to access one of these services you first have to enter the correct user name and password
+extension. to access one of these services you first have to enter the correct user name and password
 (see .app_env.cfg).
 
 #### Setup Web Server
 
 After setting up mod_wsgi using embedded mode (instead of daemon mode) the apache/linux server settings are used.
 
-For to change the encoding charsets in embedded mode you could change the environment variables
+to change the encoding charsets in embedded mode you could change the environment variables
 LANG and LC_ALL of apache in /etc/apache2/envvars. Following the recommendations of the main developer of mod_wsgi
 (see http://blog.dscpl.com.au/2014/09/setting-lang-and-lcall-when-using.html) it would be better and saver
 to run mod_wsgi in daemon mode and specify there the language and locale settings by adding to the apache .conf file:
@@ -805,7 +804,7 @@ Newer version:
 The deployment shell scripts `build_ws_res.cmd` and `build_ws_test.cmd` are used to prepare the roll-out of the
 web services, available on the sub-domains `services` and `lint`.
 
-For to run one of the deployment shell scripts, you first have to change the current working directory to the
+to run one of the deployment shell scripts, you first have to change the current working directory to the
 source folder. The shell script is copying all the needed python code from the actual source folder and the
 python path to the distribution folder on the same machine.
 
@@ -827,15 +826,14 @@ A POST web-service that allows you to INSERT, UPSERT or DELETE reservations with
 https://\<domain\>/res/\<action\>.
 
 Depending on the action you want to perform you have to replace the \<action\> part of the URL with either 'insert', 
-'upsert' or 'delete'. The fields for to identify and specify the reservations are given in JSON format within
+'upsert' or 'delete'. The fields to identify and specify the reservations are given in JSON format within
 the body of the web-service request.
 
-For to identify a reservation the Sihot XML interface needs at least the following 9 additionally fields:
+to identify a reservation the Sihot XML interface needs at least the following 9 additionally fields:
 ResHotelId, ResGdsNo, ResArrival, ResDeparture, ResAdults, ResChildren, ResRoomCat, ResMktSegment and AcuId. Instead
-of the field AcuId you could also use either the fields ShId or Surname for to identify the orderer of the reservation.
+of the field AcuId you could also use either the fields ShId or Surname to identify the orderer of the reservation.
 
-For to specify the reservation data use the fields listed in this [section](#available-reservation-fields) and for
-to specify extra data of the orderer the fields in this [section](#available-client-fields) can be added.  
+to specify the reservation data use the fields listed in this [section](#available-reservation-fields) and to specify extra data of the orderer the fields in this [section](#available-client-fields) can be added.  
 
 #### Retrieve Reservation Data
 
@@ -893,11 +891,11 @@ web services).
 
 #### Using the TEST system environment
 
-Most of the URLs specified in the previous paragraphs are not only available for the LIVE system environment. For to
+Most of the URLs specified in the previous paragraphs are not only available for the LIVE system environment. to
 access the TEST systems instead, you have to add the prefix `/test` in front of the URL path, directly before the slash
 character that is terminating the domain.
 
-So for to get e.g. the reservation counts from the TEST systems you simply use the following - slightly extended - URL:
+So to get e.g. the reservation counts from the TEST systems you simply use the following - slightly extended - URL:
 
 https://\<domain\>/test/res/count?hotel_ids=1&day=2020-10-20&room_cat_prefix=S&res_max_days=7
 
@@ -908,7 +906,7 @@ configuration and environment settings of the Apache server, which is the same f
 
 ### WatchPupPy Application
 
-WatchPupPy is a watchdog tool for to either supervise a always running server or for to execute another application
+WatchPupPy is a watchdog tool to either supervise a always running server or to execute another application
 periodically.
 
 The command line for the re-start a server or application to supervise has to be specified with `cmdLine` option.
@@ -933,7 +931,7 @@ can be specified within different Configuration files (with the file extensions 
 ### Hotel IDs
 
 The `SIHOT_HOTELS` lookup class is mapping the Acumen hotel IDs (3 characters stored in the column `LU_ID`) onto the
-numeric Sihot Hotel Ids (stored in `LU_NUMBER`). Additionally this lookup class is used for to configure the currently
+numeric Sihot Hotel Ids (stored in `LU_NUMBER`). Additionally this lookup class is used to configure the currently
 active hotels in the Sihot system (initially only ANY/999, BHC/1 and PBC/4):
 
 | Acumen Hotel Code | Resort Name | Currently Active (Y=yes, n=no) | Sihot Hotel Id |
@@ -959,11 +957,11 @@ active hotels in the Sihot system (initially only ANY/999, BHC/1 and PBC/4):
 ### Room Categories
 
 The Acumen reservation requests are mainly classified by the room size and requested apartment features, whereas the
-Sihot.PMS room categories are need to be setup for to include room size and features.
+Sihot.PMS room categories are need to be setup to include room size and features.
 
 There are several lookup classes with the lookup class name prefix `SIHOT_CATS_` within the Acumen/Oracle lookup table
 (or alternatively meanwhile also in the `ResortCats` section of the *.CFG/*.INI configuration files of this suite)
-for to map/transform the Acumen unit sizes and optionally also requested apartment features into Sihot room categories.
+to map/transform the Acumen unit sizes and optionally also requested apartment features into Sihot room categories.
 These mappings can be setup for each hotel individually and the pseudo hotel ANY can be used as fallback for all real
 hotels. Therefore the ANY hotel need to specify at least one mapping/transformation for all available Acumen room/unit
 sizes: HOTEL/STUDIO/1...4 BED.
@@ -1179,7 +1177,7 @@ Underneath the mapping of the Sihot NN field (`RO_SIHOT_SP_GROUP`) onto the Acum
 
 #### Orderer Agency Configuration for each Market Segment
 
-The `RO_AGENCY_` columns are needed for to store the Sihot.PMS guest object ids of an optional orderer/agency that will
+The `RO_AGENCY_` columns are needed to store the Sihot.PMS guest object ids of an optional orderer/agency that will
 then be used for these types of bookings.
 
 Individual agencies got currently only mapped to the two Thomas Cook booking types: the `TK` (Thomas Cook Scandinavian)
@@ -1208,17 +1206,17 @@ Owner External Rentals:
        );
 ```
 
-The Thomas Cook bookings are still synchronized in the first project phase for to provide a smooth migration for our
+The Thomas Cook bookings are still synchronized in the first project phase to provide a smooth migration for our
 Rental Department - although they meanwhile can be imported directly with the SihotResImport command tool into the
 Sihot.PMS.
 
 
 ### Acumen Client Owner Type Classification
 
-For to minimize the amount of client data to migrate to Sihot.PMS we had to classify the Acumen clients by their type of
+to minimize the amount of client data to migrate to Sihot.PMS we had to classify the Acumen clients by their type of
 ownership(s). For each product a owner type can be specified/configured within the new column `RS_SIHOT_GUEST_TYPE`.
 
-The current mapping is setting a owner flag string for to group all timeshare/resort owners together with less
+The current mapping is setting a owner flag string to group all timeshare/resort owners together with less
 important owner types like e.g. tablet, lifestyle, experience or explorer. For special treatment we only need to specify
 distinguishable client types for Investors (new fractionals/share holders) and Keys Members.
 
@@ -1231,7 +1229,7 @@ and `MKT_BOARDS` (only for marketing bookings).
 
 ### Thomas Cook Allotment mappings
 
-For to create tour operator bookings via the WEB interface you need to specify the internal number of the allotment
+to create tour operator bookings via the WEB interface you need to specify the internal number of the allotment
 contract. This internal allotment contract number is nowhere visible in the GUI of Sihot.PMS and has to be determined
 by Michael after the creation of the allotment in Sihot. UPDATE: the new version is showing the allotment number.
 
@@ -1310,7 +1308,7 @@ Additionally Sihot is providing the following live/push interfaces (via the Siho
 * Guest Changes
 * Occupation Changes
 
-The [SysDataMan application](#sysdataman-application) can be used for to manually synchronize and/or compare client
+The [SysDataMan application](#sysdataman-application) can be used to manually synchronize and/or compare client
 and reservation data between our three systems (Acumen, Salesforce and Sihot).
 
 
@@ -1322,7 +1320,7 @@ record in the two new columns `CD_SIHOT_OBJID` and `CD_SIHOT_OBJID2`. Client dat
 from Acumen to Sihot together with the reservation synchronization.
 
 The two Acumen log tables [Requested Unit Log](#requested-unit-log) and [Synchronization Log](#synchronization-log)
-are used for to detect any changes done in Acumen on the client/reservation data. The SihotResSync application is used
+are used to detect any changes done in Acumen on the client/reservation data. The SihotResSync application is used
 to periodically pass any reservation changes from Acumen to Sihot.
 
 Reservations for owners and marketing clients get created within the Acumen system and get then synchronized to Sihot.
@@ -1331,12 +1329,12 @@ Requested Unit record (in the `T_RU` column `RU_SIHOT_OBJID`). On any change of 
 reservation request will be synchronized again onto Sihot (together with the client data if changed too).
 
 The AcuServer application is passing any room changes (check-ins, check-outs and room-moves) done within Sihot back
-to the Acumen system (for to keep the Acumen Allocation system up-to-date). Any other changes done on reservations
+to the Acumen system (to keep the Acumen Allocation system up-to-date). Any other changes done on reservations
 or clients within Sihot are not synchronized back to Acumen.
 
 #### Requested Unit Log
 
-The following 8 new columns got added to the Acumen Requested Unit Log table (`T_RUL`) for to store also any other
+The following 8 new columns got added to the Acumen Requested Unit Log table (`T_RUL`) to store also any other
 booking changes of a synchronized reservation that are happening in a associated table like e.g. room change in the
 related Apartment Reservation (`T_ARO`) or board/meal plan change in the Marketing Prospect (`T_PRC`):
 
@@ -1345,15 +1343,15 @@ related Apartment Reservation (`T_ARO`) or board/meal plan change in the Marketi
 | RUL_SIHOT_CAT | Unit/Price category in Sihot.PMS - overloaded if associated ARO exists |
 | RUL_SIHOT_HOTEL | Hotel Id in Sihot.PMS - overloaded if associated ARO exists |
 | RUL_SIHOT_ROOM | Booked apartment (`AP_CODE` value as Sihot room number - with leading zero for 3-digit PBC room numbers) if associated ARO record exits else NULL |
-| RUL_SIHOT_OBJID | `RU_SIHOT_OBJID` value (for to detect if deleted RU got passed into Sihot.PMS) |
+| RUL_SIHOT_OBJID | `RU_SIHOT_OBJID` value (to detect if deleted RU got passed into Sihot.PMS) |
 | RUL_SIHOT_PACK | Booked package/arrangement - overloaded if associated ARO/PRC exists |
 | RUL_SIHOT_RATE | Market segment - used for filtering (also if RU record is deleted) |
 | RUL_SIHOT_LAST_CAT | Previous Unit/Price category - needed for cancellation |
 | RUL_SIHOT_LAST_HOTEL | Previous Hotel Id - needed for cancellation and hotel moves |
 
 These columns got added later on mainly because of performance enhancements by condensing/focusing all these other
-changes within the latest not synchronized requested unit log entry/record and also for to keep references of deleted
-`T_RU` records for to be propagated onto Sihot.PMS.
+changes within the latest not synchronized requested unit log entry/record and also to keep references of deleted
+`T_RU` records to be propagated onto Sihot.PMS.
 
 
 #### Synchronization Log

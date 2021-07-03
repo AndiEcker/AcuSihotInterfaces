@@ -1,9 +1,9 @@
 """
-    ShSfClientMigration is a tool for to migrate Sihot guests with valid client data to Salesforce as a
+    ShSfClientMigration is a tool to migrate Sihot guests with valid client data to Salesforce as a
     Lead or Account (PersonAccount) object into the Salesforce system.
 
     0.1     first beta.
-    0.2     refactored for to upload to SF as Account/Lead all yesterday arrivals (before: only
+    0.2     refactored to upload to SF as Account/Lead all yesterday arrivals (before: only
             Rentals), implemented email/phone validation options and adapted for new SF instance, also renamed
             module from ShSfContactMigration to ShSfClientMigration.
     0.3     only roughly refactored to use ae.sys_data - NOT TESTED.
@@ -262,7 +262,7 @@ def layout_message(sfd, cols):
 cae.po("####  Fetching from Sihot")
 all_recs = rbf.fetch_all()
 
-# collect all the emails found in this export run (for to skip duplicates)
+# collect all the emails found in this export run (to skip duplicates)
 cae.po("####  Evaluate reservations fetched from Sihot")
 found_emails = list()
 found_phones = list()

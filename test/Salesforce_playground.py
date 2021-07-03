@@ -547,7 +547,7 @@ if result['done'] and result['totalSize'] > 0:
         if sb.error_message:
             print("Salesforce error:", sb.error_message)
 
-# extract data for to double check phone validation done with data-8 against the byteplant phone validator
+# extract data to double check phone validation done with data-8 against the byteplant phone validator
 result = sb.query_all("SELECT Id, Country__c, HomePhone, MobilePhone, Work_Phone__c,"
                       " CD_Htel_valid__c, CD_mtel_valid__c, CD_wtel_valid__c"
                       " FROM Contact"
@@ -589,7 +589,7 @@ if result['done'] and result['totalSize'] > 0:
         if sb.error_message:
             print("Salesforce error:", sb.error_message)
 
-# extract data for to double check phone validation done with data-8 against the byteplant phone validator
+# extract data to double check phone validation done with data-8 against the byteplant phone validator
 result = sb.query_all("SELECT Id, Country__pc, PersonHomePhone, PersonMobilePhone, Work_Phone__pc,"
                       " CD_Htel_valid__pc, CD_mtel_valid__pc, CD_wtel_valid__pc"
                       " FROM Account"

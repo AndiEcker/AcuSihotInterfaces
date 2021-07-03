@@ -143,7 +143,7 @@ MAP_RES_FROM_SF = (
     Address.Country     (String,    80)
 """
 
-# SF ID prefixes for to determine SF object (s.a. Sf object describe 'keyPrefix')
+# SF ID prefixes to determine SF object (s.a. Sf object describe 'keyPrefix')
 ID_PREFIX_OBJECTS = {'001': 'Account', '003': 'Contact', '00Q': 'Lead', '006': 'Opportunity'}
 
 
@@ -355,7 +355,7 @@ class SfSysConnector(SystemConnectorBase):
         """
         ensure that the connection to Salesforce got at least once established and did not expired since then (2 hours).
 
-        :param soql_query:  SOQL query for to check established connection if expired.
+        :param soql_query:  SOQL query to check established connection if expired.
         :return:            False:  if connection never got established because of previous invalid login,
                             None:   if first try to connect to Salesforce failed,
                             else return the Salesforce response for the check query (soql_query) if connection was
@@ -416,7 +416,7 @@ class SfSysConnector(SystemConnectorBase):
     def soql_query_all(self, soql_query):
         """
         Query Salesforce cloud objects/tables with SOQL.
-        This method is tight coupled with the _ensure_lazy_connect() method above - using it for to execute the
+        This method is tight coupled with the _ensure_lazy_connect() method above - using it to execute the
         query and doing a connection expiration check at the same time.
 
         :param soql_query:      SOQL query as string.
@@ -500,7 +500,7 @@ class SfSysConnector(SystemConnectorBase):
 
         :param sf_client_id:    Salesforce Id of client record (Lead, Contact, Account, PersonAccount, ...).
         :param er_type:         Type of external reference (e.g. EXT_REF_TYPE_RCI), pass None/nothing for all types.
-        :param er_id:           External reference No or Id string, pass None for to get all external reference Ids.
+        :param er_id:           External reference No or Id string, pass None to get all external reference Ids.
         :param return_obj_id:   Pass True to get the SF Ids of the External_Ref object (Def=External Reference Ids).
         :param sf_obj:          Salesforce object of the client passed into sf_client_id (Lead, Contact, Account, ...).
         :return:                If er_type get passed in then: list of SF_IDs
@@ -529,7 +529,7 @@ class SfSysConnector(SystemConnectorBase):
     def cl_ext_ref_upsert(self, sf_client_id, er_type, er_id, sf_obj=None, upd_rec=None):
         """
         insert or update external reference for a client.
-        :param sf_client_id:    SF Id of Contact/Account for to upsert external reference.
+        :param sf_client_id:    SF Id of Contact/Account to upsert external reference.
         :param er_type:         External reference type to insert/update.
         :param er_id:           External reference Id to insert/update.
         :param sf_obj:          SF client object (Contact or Account). Def=determined from sf_client_id.
@@ -592,12 +592,12 @@ class SfSysConnector(SystemConnectorBase):
         """
         fetch field data from SF object (identified by sf_obj) and client (identified by search_value/search_field).
         :param fetch_fields:    either pass single field name (str) or list of field names of value(s) to be returned.
-        :param search_value:    value for to identify client record.
-        :param search_val_deli: delimiter used for to enclose search value within SOQL query.
+        :param search_value:    value to identify client record.
+        :param search_val_deli: delimiter used to enclose search value within SOQL query.
         :param search_op:       search operator (between search_field and search_value).
-        :param search_field:    field name used for to identify client record (def=SF_DEF_SEARCH_FIELD=='SfId').
+        :param search_field:    field name used to identify client record (def=SF_DEF_SEARCH_FIELD=='SfId').
         :param sf_obj:          SF object to be searched (def=determined by the passed SF ID prefix).
-        :param log_warnings:    pass list for to append warning log entries on re-search on old/redirected SF IDs.
+        :param log_warnings:    pass list to append warning log entries on re-search on old/redirected SF IDs.
         :return:                either single field value (if fetch_fields is str) or dict(fld=val) of field values.
         """
         msg = " in cl_field_data(); {}, {}, {}".format(fetch_fields, search_value, search_field)
@@ -614,7 +614,7 @@ class SfSysConnector(SystemConnectorBase):
         ret_dict = isinstance(fetch_fields, list)
         if ret_dict:
             select_fields = ", ".join(field_list_to_sf(fetch_fields, sf_obj))
-            fetch_field = None  # only needed for to remove PyCharm warning
+            fetch_field = None  # only needed to remove PyCharm warning
             ret_val = dict()
         else:
             select_fields = fetch_field = sf_fld_sys_name(fetch_fields, sf_obj)
@@ -797,7 +797,7 @@ class SfSysConnector(SystemConnectorBase):
     def res_dict(self, res_opp_id):
         """
         fetch client+res data from SF Reservation Opportunity object (identified by res_opp_id)
-        :param res_opp_id:  Reservation Opportunity Id value for to identify client reservation records.
+        :param res_opp_id:  Reservation Opportunity Id value to identify client reservation records.
         :return:            dict with sf_data.
         """
         res_list = self.res_fetch_list(chk_values=dict(ReservationOpportunityId=res_opp_id))
@@ -903,12 +903,12 @@ class SfSysConnector(SystemConnectorBase):
     def room_data(self, res_opp_id):
         """
         fetch client+res+room data from SF Reservation Opportunity object (identified by res_opp_id)
-        :param res_opp_id:  value for to identify client record.
+        :param res_opp_id:  value to identify client record.
         :return:            dict with sf_data.
         """
         sf_data = self.res_dict(res_opp_id)
 
-        # TODO: implement generic sf_field_data() method for to be called by this method and cl_field_data()
+        # TODO: implement generic sf_field_data() method to be called by this method and cl_field_data()
         # UNTIL THEN HARDCODED SOQL QUERIES
         ''' 
         # select from Reservation object:

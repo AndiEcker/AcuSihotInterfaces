@@ -80,7 +80,7 @@ class LockFile:
 
     def unlock(self):
         if self._fp is not None:
-            self._fp.seek(0)        # needed for to prevent IOError/Permission denied
+            self._fp.seek(0)        # needed to prevent IOError/Permission denied
             try:
                 _lock_func(self._fp.fileno(), _unlock_flags, _LOCK_LEN)
             except IOError:

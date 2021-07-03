@@ -1,6 +1,6 @@
 """
-    ClientQuestionnaireExport is a tool for to export all check-outs within a given date range into a CSV file for to
-    be sent to a service company for to do the client questionnaires. This tool is replacing the currently
+    ClientQuestionnaireExport is a tool to export all check-outs within a given date range into a CSV file to
+    be sent to a service company to do the client questionnaires. This tool is replacing the currently
     used Acumen/Oracle procedure SALES.TRIPADVISOR (runs every Tuesday around 11 by an Oracle job, creating the file
     INTUITION.csv within the folder <oracle-server>/home/oracle/ext_tables).
     
@@ -107,7 +107,7 @@ def hotel_id_to_location_id(h_id):
     return cae.get_var(h_id, 'HotelLocationIds')
 
 
-# collect all the emails found in this export run (for to skip duplicates)
+# collect all the emails found in this export run (to skip duplicates)
 found_emails = list()
 
 

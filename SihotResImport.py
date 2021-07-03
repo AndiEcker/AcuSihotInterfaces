@@ -229,7 +229,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
 
         curr_cols = curr_line.split(';')
 
-        # no header for to check but each last_line should start with either CNL, BOK or RBO
+        # no header to check but each last_line should start with either CNL, BOK or RBO
         if len(curr_cols) <= TCI_NEW_LINE:
             return "tci_line_to_res_row(): incomplete line, missing {} columns" \
                 .format(TCI_NEW_LINE - len(curr_cols) + 1)
@@ -347,7 +347,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     BKC_ADULTS = 9
     BKC_CHILDREN = 10
     # BKC_BABIES = 11
-    BKC_LINE_NUM = 12  # for to store original line number (because file content get re-ordered)
+    BKC_LINE_NUM = 12  # to store original line number (because file content get re-ordered)
 
     BKC_COL_COUNT = 13
 
@@ -423,7 +423,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         """ Booking.com can have various lines per booking - identified with external booking ref/BKC_BOOK_REF """
         nonlocal sub_res_id
 
-        # no header for to check but each last_line should start with either CNL, BOK or RBO
+        # no header to check but each last_line should start with either CNL, BOK or RBO
         if len(curr_cols) != BKC_COL_COUNT:
             return "bkc_line_to_res_row(): invalid column count, {} differ".format(BKC_COL_COUNT - len(curr_cols))
         elif len(curr_cols[BKC_BOOK_DATE].split('-')[0]) != 4:
@@ -439,7 +439,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         ext_key = curr_cols[BKC_BOOK_REF]
         row = dict()
         if rows:  # check if current line is an extension of the booking from last line (only not in first line)
-            if BKC_GDSNO_PREFIX + ext_key in rows[-1]['ResGdsNo']:  # 'in' instead of '==' for to detect group res
+            if BKC_GDSNO_PREFIX + ext_key in rows[-1]['ResGdsNo']:  # 'in' instead of '==' to detect group res
                 # check if date range extension or additional room - assuming additional room
                 last_arr = rows[-1]['ResArrival']
                 last_dep = rows[-1]['ResDeparture']
@@ -527,7 +527,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     '''
 
     def rc_complete_client_row_with_ext_refs(c_row, ext_refs):
-        """ complete client row for to send to Sihot as external references (ExtRefs/ExtRefs0Id/ExtRefs0Type...) """
+        """ complete client row to send to Sihot as external references (ExtRefs/ExtRefs0Id/ExtRefs0Type...) """
         s_ext_refs = list()
         for i, ext_ref in enumerate(ext_refs):
             if EXT_REF_TYPE_ID_SEP in ext_ref:
@@ -669,7 +669,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         if ext_refs:
             row['RciId'] = ext_refs[0]  # first ref coming from Acu and put into Sihot MATCH-ADM element
 
-        # constant values - needed for to be accepted by the Sihot Kernel interface
+        # constant values - needed to be accepted by the Sihot Kernel interface
         row['ShId'] = None
         row['GuestType'] = '1'
 
@@ -691,14 +691,14 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         ext_refs = asd.cl_ext_refs_by_idx(curr_cols[RC_OWN_CLIENTS_IDX])
         if ext_refs:
             row['RciId'] = ext_refs[0]  # first ref coming from Acu and put into Sihot MATCH-ADM element
-        # constant values - needed for to be accepted by the Sihot Kernel interface
+        # constant values - needed to be accepted by the Sihot Kernel interface
         row['ShId'] = None
         row['GuestType'] = '1'
 
         return row, ''
 
     def rci_line_to_res_row(curr_cols):
-        """ used for to import RCI inbounds for week owners (RI/RO), leads (RL) and CPA owners (RI/RO) """
+        """ used to import RCI inbounds for week owners (RI/RO), leads (RL) and CPA owners (RI/RO) """
         row = dict()
         comments = list()
 
@@ -809,7 +809,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     RCIP_CANCEL_DATE = 40
     RCIP_COL_COUNT = 42
 
-    # extra columns for to store import filename and line (because we re-order for to check dup-clients/cont-res.)
+    # extra columns to store import filename and line (because we re-order to check dup-clients/cont-res.)
     RC_FILE_NAME = max(RCI_COL_COUNT, RCIP_COL_COUNT)
     RC_LINE_NUM = RC_FILE_NAME + 1
     RC_POINTS = RC_FILE_NAME + 2
@@ -861,7 +861,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         row['City'] = curr_cols[RCIP_GUEST_CITY]
         row['Email'] = curr_cols[RCIP_GUEST_EMAIL]
         row['Phone'] = curr_cols[RCIP_GUEST_PHONE]
-        # constant values - needed for to be accepted by the Sihot Kernel interface
+        # constant values - needed to be accepted by the Sihot Kernel interface
         row['ShId'] = None
         row['GuestType'] = '1'
 
@@ -988,7 +988,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
     if False and cae.get_opt('tciPath') and tci_files and not got_cancelled():
         log_import("Starting Thomas Cook import", NO_FILE_PREFIX_CHAR + 'TciImportStart', importance=4)
         ''' sort TCI files 1.ASCENDING by actualization date and 2.DESCENDING by file type (R5 first, then R3, then R1)
-            .. for to process cancellation/re-bookings in the correct order.
+            .. to process cancellation/re-bookings in the correct order.
             .. (date and type taken from file name R?_yyyy-mm-dd hh.mm.ss.txt - ?=1-booking 3-cancellation 5-re-booking)
             .. hour/minute/... info cannot be used because it happened (see 17-Jan-14 6:40=R1 and 6:42=R5)
             .. that the R3/5 TCI files had a higher minute value than the associated R1 file with correction booking.
@@ -1069,7 +1069,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
             if got_cancelled() or (error_log and cae.get_opt('breakOnError')):
                 break
 
-            # sort by ext book ref, room info, adults and arrival date for to allow to join date ranges
+            # sort by ext book ref, room info, adults and arrival date to allow to join date ranges
             imp_rows.sort(key=lambda f: f[BKC_BOOK_REF] + f[BKC_ROOM_INFO] + f[BKC_ADULTS] + f[BKC_ResArrival])
 
             for idx, ln in enumerate(imp_rows):
@@ -1311,7 +1311,7 @@ def run_import(acu_user, acu_password, got_cancelled=None, amend_screen_log=None
         log_import("Sending reservations to Sihot", NO_FILE_PREFIX_CHAR + 'SendResStart', importance=4)
         progress = Progress(cae, start_counter=len(res_rows),
                             start_msg=" ###  Prepare sending of {run_counter} reservation request changes to Sihot",
-                            nothing_to_do_msg="No reservations found for to be sent")
+                            nothing_to_do_msg="No reservations found to be sent")
         res_sender = ResSender(cae)
 
         for res_rec_idx, res_row in enumerate(res_rows):
@@ -1407,7 +1407,7 @@ def quit_app(err_log=None):
 if cae.get_opt('acuPassword'):
     # running without ui in console
 
-    # (added next line for to remove inspection warning on "too broad exception clause")
+    # (added next line to remove inspection warning on "too broad exception clause")
     # noinspection PyBroadException
     try:
         run_import(cae.get_opt('acuUser'), cae.get_opt('acuPassword'))
@@ -1417,10 +1417,10 @@ if cae.get_opt('acuPassword'):
         cae.po("\n****  SihotResImport exception:\n", format_exc())
 
 else:
-    # no password given, then we need the kivy UI for to logon the user
+    # no password given, then we need the kivy UI to logon the user
     import threading
 
-    sys.argv = [sys.argv[0]]  # remove command line options for to prevent errors in kivy args_parse
+    sys.argv = [sys.argv[0]]  # remove command line options to prevent errors in kivy args_parse
     from kivy.config import Config  # window size have to be specified before any other kivy imports
     Config.set('graphics', 'width', '1800')
     Config.set('graphics', 'height', '999')
@@ -1524,7 +1524,7 @@ else:
 
         def exec_import(self, usr, pw, event_is_set_func, amend_screen_log_func):
             cae.dpo("App.exec_import()")
-            # (added next line for to remove inspection warning on "too broad exception clause")
+            # (added next line to remove inspection warning on "too broad exception clause")
             # noinspection PyBroadException
             try:
                 run_import(usr, pw, event_is_set_func, amend_screen_log_func)
@@ -1562,7 +1562,7 @@ else:
             cae.dpo("App.exit_app()")
             if self._thread and self._thread.is_alive():
                 self.cancel_import.set()
-                cae.dpo("  ....  waiting for to join/finish worker thread")
+                cae.dpo("  ....  waiting to join/finish worker thread")
                 self._thread.join()
                 cae.dpo("  ....  worker thread successfully joined/finished")
             quit_app()

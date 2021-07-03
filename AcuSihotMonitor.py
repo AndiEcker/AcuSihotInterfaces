@@ -58,8 +58,8 @@ ass_data = init_ass_data(cae, ass_options)
 asd = ass_data['assSysData']  # public instance for config/data fetches, could be redefined by logon
 
 """ KIVY IMPORTS - done here for (1) prevent PyCharm import inspection warning and (2) remove command line options """
-if True:  # added for to hide PyCharm inspection warning "module level import not at top of file"
-    sys.argv = [sys.argv[0]]  # remove command line options for to prevent errors in kivy args_parse
+if True:  # added to hide PyCharm inspection warning "module level import not at top of file"
+    sys.argv = [sys.argv[0]]  # remove command line options to prevent errors in kivy args_parse
     from kivy.config import Config  # window size have to be specified before any other kivy imports
 
     Config.set('graphics', 'width', '1800')
@@ -292,7 +292,7 @@ def cfg_room_cat_discrepancies(data_dict, app_inst):
         for cat, apts in hotel_cat_apts.items():
             prev_apts = sihot_cat_apts.get(cat, list())
             sihot_cat_apts[cat] = prev_apts + apts
-    # UNCOMMENT THIS AND THE LINE DOWN FOR TO CREATE SQL UPDATE COMMANDS FOR TO CONFIG/SET AP_SIHOT_CAT: sql = ""
+    # UNCOMMENT THIS AND THE LINE DOWN TO CREATE SQL UPDATE COMMANDS TO CONFIG/SET AP_SIHOT_CAT: sql = ""
     for cols in result:
         dis = ""
         if cols[2] and cols[2] != cols[3]:
@@ -388,11 +388,11 @@ class FilterSelectionItem(ActionButton):
 
 
 class FilterSelectionButton(FilterSelectionItem):
-    """ ActionButton for to select a single filter value from a selection list """
+    """ ActionButton to select a single filter value from a selection list """
 
 
 class FilterSelectionToggleButton(FilterSelectionItem):
-    """ ActionToggleButton for to toggle item within multi_select filter check list """
+    """ ActionToggleButton to toggle item within multi_select filter check list """
 
 
 class CapitalInput(TextInput):
@@ -814,7 +814,7 @@ class AcuSihotMonitorApp(App):
 
     @staticmethod
     def result_text(data_dict):
-        """ used for check button text within kv and self.display_board() for to show check result """
+        """ used for check button text within kv and self.display_board() to show check result """
         if 'check_result' in data_dict:
             if isinstance(data_dict['check_result'], str):
                 txt = data_dict['check_result']

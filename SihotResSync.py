@@ -3,7 +3,7 @@
     0.2     refactored to use V_ACU_RES_UNSYNCED (including resort filter) and T_SRSL.
     0.3     added error counter to Progress, refactored lastId into LastRt and removed processed_A*.
     0.4     removed more fields on DELETE action and implemented DELETE for room allocations moved to non-Sihot-hotels.
-    0.5     changed SihotResSync.ini and SyncLIVE.cmd for to specify log and debug level in ini + small refactorings.
+    0.5     changed SihotResSync.ini and SyncLIVE.cmd to specify log and debug level in ini + small refactorings.
     0.6     added sync_summary and synced_ids and (in sys_core_sh.py) skipping follow-up changes after/of erroneous res.
     0.7     23-09-17 added migrationMode and syncDateRange command line option.
     0.8     01-03-18 extended to allow allotments (RCI) configured by SihotMktSegExceptions.cfg.
@@ -144,7 +144,7 @@ if not error_msg:
             notification.send_notification(error_msg, subject='SihotResSync fetch error notification',
                                            mail_to=ADMIN_MAIL_TO_LIST, body_style='plain')
         else:
-            # 1st pre-run without room allocation - for to allow room swaps in the same batch
+            # 1st pre-run without room allocation - to allow room swaps in the same batch
             room_recs = [r.copy(deepness=-1) for r in acumen_req.recs if r['ResHotelId']
                          and r['ResHotelId'] == r['ResLastHotelId']
                          and r['ResAction'] != ACTION_DELETE]
@@ -165,7 +165,7 @@ if not error_msg:
                     acumen_req.ora_db.rollback()  # send but roll back changes in ResObjId and T_SRSL
                 progress.finished(error_msg=error_msg)
 
-            # 2nd pre-run for hotel movements (HOTMOVE) - for to delete/cancel booking in last/old hotel
+            # 2nd pre-run for hotel movements (HOTMOVE) - to delete/cancel booking in last/old hotel
             room_recs = [r.copy(deepness=-1) for r in acumen_req.recs if r['ResHotelId'] != r['ResLastHotelId']
                          and r['ResLastHotelId'] in hotel_ids
                          and r['ResAction'] == ACTION_UPDATE]
@@ -199,7 +199,7 @@ if not error_msg:
                 progress.finished(error_msg=error_msg)
 
             if not migration_mode:
-                acumen_req.wipe_warnings()          # .. also wipe the warnings for to not be shown multiple/max=3 times
+                acumen_req.wipe_warnings()          # .. also wipe the warnings to not be shown multiple/max=3 times
                 acumen_req.wipe_gds_errors()        # .. as well as the errors for erroneous bookings (w/ same GDS)
 
             # now do the full run with room allocations (only skipping/excluding HOTMOVE to non-Sihot-hotel)

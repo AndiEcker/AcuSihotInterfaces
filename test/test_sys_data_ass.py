@@ -104,7 +104,7 @@ class TestSysDataClientActions:
         assert rec.val('AcuId')
         assert rec.val('AcuId') == asd.clients[0].val('AcuId')
 
-        # added field_names arg for to only compare AssCache.clients fields that can be pushed (CD_* + ExtRefs)
+        # added field_names arg to only compare AssCache.clients fields that can be pushed (CD_* + ExtRefs)
         field_names = [fn for fn, sn, *_ in ACU_CLIENT_MAP if sn.startswith('CD_')] + ['ExtRefs', ]
         recs, dif = asd.acu_clients_compare(chk_values=dict(CD_CODE='T000369'), match_fields=('AcuId',),
                                             field_names=field_names)
@@ -207,7 +207,7 @@ class TestSysDataClientActions:
         assert repr(acc) == repr(asd.clients)
         assert repr(acc) == repr(recs)
 
-        # mark pulled test records for to be compared and deleted at the end
+        # mark pulled test records to be compared and deleted at the end
         for rec in asd.clients:
             rec.set_val(('TST_TMP_' + rec.val('Surname'))[:39], 'Surname')
 
@@ -261,7 +261,7 @@ class TestSysDataClientActions:
         assert rec.val('AssId')
         assert rec.val('AssId') == asd.clients[0].val('AssId')
 
-        # added field_names arg for to only compare AssCache.clients fields
+        # added field_names arg to only compare AssCache.clients fields
         recs, dif = asd.ass_clients_compare(chk_values=dict(cl_pk=rec.val('AssId'), cl_ac_id='T000369'),
                                             match_fields=('AcuId',),
                                             field_names=[fn for sn, fn, *_ in ASS_CLIENT_MAP])
@@ -282,7 +282,7 @@ class TestSysDataClientActions:
         assert rec.val('SfId')
         assert rec.val('SfId') == asd.clients[0].val('SfId')
 
-        # added field_names arg for to only compare AssCache.clients fields
+        # added field_names arg to only compare AssCache.clients fields
         recs, dif = asd.sf_clients_compare(chk_values=dict(Id=rec.val('SfId'), AcumenClientRef__pc='T000369'),
                                            match_fields=('AcuId',),
                                            field_names=[fn for sn, fn, *_ in SF_CLIENT_MAPS['Account']] + ['ExtRefs'])
@@ -308,7 +308,7 @@ class TestSysDataClientActions:
         assert rec.val('ShId')
         assert rec.val('ShId') == asd.clients[0].val('ShId')
 
-        # added field_names arg for to only compare AssCache.clients fields
+        # added field_names arg to only compare AssCache.clients fields
         recs, dif = asd.sh_clients_compare(chk_values=dict(obj_id=rec.val('ShId'), matchcode='T000369'),
                                            match_fields=('AcuId',),
                                            field_names=[fn for sn, fn, *_ in SH_CLIENT_MAP])  # + ['ExtRefs'])
@@ -379,7 +379,7 @@ class TestSysDataResActions:
         assert r.val('ResSubId')
         assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
 
-        # .. so now we can reset everything and put the Sihot res Ids and default values for to push to AssCache
+        # .. so now we can reset everything and put the Sihot res Ids and default values to push to AssCache
         asd.reservations = Records()
         rec = res_test_rec.copy(deepness=-1)
         rec['ShId'] = r['ShId']
@@ -435,7 +435,7 @@ class TestSysDataResActions:
         assert r.val('ResSubId')
         assert r.val('ResSubId') == asd.reservations[0].val('ResSubId')
 
-        # .. so now we can reset everything and put the Sihot res Ids for to test the push to SF
+        # .. so now we can reset everything and put the Sihot res Ids to test the push to SF
         asd.reservations = Records()
         rec = res_test_rec.copy(deepness=-1)
         rec['ResId'] = r['ResId']

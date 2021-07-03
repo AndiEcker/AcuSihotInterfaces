@@ -18,7 +18,7 @@ Version History:
 DISTRIBUTE:
 
 Salesforce check/prepare:
-- Add host URL in Salesforce/Setup/Remote Site config options for to authorize endpoint addresses:
+- Add host URL in Salesforce/Setup/Remote Site config options to authorize endpoint addresses:
     see https://trailhead.salesforce.com/modules/
     ./apex_integration_services/units/apex_integration_callouts#apex_integration_callouts_authorizing
 - Implement APEX code template/example: see e.g. SihotServerApex.apex
@@ -139,7 +139,7 @@ def get_res_data(_cae, asd, _notification):
     rec = asd.sh_res_data(**request.query)
     ret = dict(ErrorMessage="")
     if isinstance(rec, Record):
-        # using FromSh rec values for to send datetime as ISO strings
+        # using FromSh rec values to send datetime as ISO strings
         ret.update(rec.to_dict(use_system_key=False, system=SDI_SH, direction=FAD_FROM))
         if not ret.get('ResRoomNo', False) and rec.val('ResPersons', 0, 'RoomNo'):
             ret['ResRoomNo'] = rec.val('ResPersons', 0, 'RoomNo')

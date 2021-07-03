@@ -1,5 +1,5 @@
 """
-    SihotOccLogChecker is a tool for to check the SXML_ACUMEN/_ASSCACHE log file (Sihot check-ins/-outs and room moves).
+    SihotOccLogChecker is a tool to check the SXML_ACUMEN/_ASSCACHE log file (Sihot check-ins/-outs and room moves).
 
     0.1     first beta.
     0.2     added AssCache as second fixable system.
@@ -73,7 +73,7 @@ if days_check_out_after:
 
 
 '''
-# fetch given date range in chunks for to prevent timeouts and Sihot server blocking issues
+# fetch given date range in chunks to prevent timeouts and Sihot server blocking issues
 sh_fetch_max_days = min(max(1, cae.get_var('shFetchMaxDays', default_value=7)), 31)
 sh_fetch_pause_seconds = cae.get_var('shFetchPauseSeconds', default_value=1)
 po("Sihot Data Fetch-maximum days (1..31, recommended 1..7)", sh_fetch_max_days,

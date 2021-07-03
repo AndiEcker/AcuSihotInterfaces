@@ -100,7 +100,7 @@ BEGIN
   if lcChanges is not null then
     insert into T_AROL --LOBBY.APT_RES_OCC_LOG
       values(APT_RES_OCC_LOG_SEQ.nextval, USER, 'DELETE', SYSDATE, :OLD.ARO_CODE, substr(lcChanges, 2, 1999), k.ExecutingMainProc, k.ExecutingSubProc, k.ExecutingAction);
-    -- need to pass DELETE action (instead of UPDATE) for to allow proper handling/detection of hotel move (HOTMOVE action)
+    -- need to pass DELETE action (instead of UPDATE) to allow proper handling/detection of hotel move (HOTMOVE action)
     P_RH_RUL_INSERT('A', 'DELETE', lcChanges, :OLD.ARO_BOARDREF, NULL, :OLD.ARO_APREF, :OLD.ARO_RHREF, :OLD.ARO_EXP_ARRIVE, :OLD.ARO_EXP_DEPART);
   end if;
 END

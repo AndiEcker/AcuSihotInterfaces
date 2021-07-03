@@ -1,13 +1,13 @@
 --- VERSION 00: first beta
 --- VERSION 01: refactored T_SRSL (removed RULREF/AROREF and added DATE, PRIMARY and TABLE)
---- VERSION 02: added AP_SIHOT*, RU_SIHOT* and RUL_SIHOT* columns for to support new CPA sub-hotel (16 units like F004) and ARO_APREF data overloads (new resort/unit/cat)
+--- VERSION 02: added AP_SIHOT*, RU_SIHOT* and RUL_SIHOT* columns to support new CPA sub-hotel (16 units like F004) and ARO_APREF data overloads (new resort/unit/cat)
 --              and added LG_SIHOT_LANG for the migration/sync mapping.
 --- VERSION 03: added real sihot room categories (LU_CLASS=SIHOT_CATS_ANY and SiHOT_CATS_PBC).
---- VERSION 04: speed-up and refactored RUL column initialization and added RO_SIHOT_RES_GROUP/RO_SIHOT_SP_GROUP for to store SIHOT CHANNEL/NN mappings.
+--- VERSION 04: speed-up and refactored RUL column initialization and added RO_SIHOT_RES_GROUP/RO_SIHOT_SP_GROUP to store SIHOT CHANNEL/NN mappings.
 --- VERSION 05: moved update of default values to the end of the script and changed STIC default to more detectable values.
 --- VERSION 06: after room category and project structure refacturing and revising initiated by me, Gary and supported by the help of KP.
 --- VERSION 07: changed to map to new TK/tk contracts - created by Fabi�n (see email from 9-12-2016).
---- VERSION 08: performance tuning of the UPDATE statement for to populate the new T_RUL columns.
+--- VERSION 08: performance tuning of the UPDATE statement to populate the new T_RUL columns.
 --- VERSION 09: more performance tuning and added new procedure P_SIHOT_ALLOC.
  
  
@@ -27,11 +27,11 @@ exec P_PROC_SET('DBA_SIHOT_RES_SYNC', '2016_V09', 'test');
 
 
 
-prompt DATA LOOKUP CHANGES - needed for to populate new columns in following DDL CHANGES section - more DATA CHANGES at the end of this script
+prompt DATA LOOKUP CHANGES - needed to populate new columns in following DDL CHANGES section - more DATA CHANGES at the end of this script
 
 -- changed according the new setup done by Fabi�n - see his email from 09/12/2016 11:22
 
-prompt add new lookup class for to transform unit size to sihot cat (only ANY fallback need to specify transforms for all Acumen unit sizes: HOTEL/STUDIO..3 BED)
+prompt add new lookup class to transform unit size to sihot cat (only ANY fallback need to specify transforms for all Acumen unit sizes: HOTEL/STUDIO..3 BED)
 
 delete from T_LU where LU_CLASS = 'SIHOT_CATS_ANY';
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
@@ -126,7 +126,7 @@ commit;
 
 
 
-prompt add new lookup class for to transform RSRef of all the T_RS records with RS_CLASS=='BUILDING' into sihot hotel id
+prompt add new lookup class to transform RSRef of all the T_RS records with RS_CLASS=='BUILDING' into sihot hotel id
 
 delete from T_LU where LU_CLASS = 'SIHOT_HOTELS';
 insert into T_LU ( LU_CODE, LU_CLASS, LU_ID, LU_DESC, LU_ORDER, LU_ACTIVE, LU_DATE,
@@ -222,7 +222,7 @@ comment on column SALES.APTS.AP_SIHOT_HOTEL is 'Hotel Id in SIHOT system';
 -- NOTE: basic initialization done in 2nd DATA UPDATES section (after compiling new functions)
 
 
-prompt new T_CD column for to store SIHOT OBJID
+prompt new T_CD column to store SIHOT OBJID
 
 alter table SALES.CLIENT_DETAILS add (CD_SIHOT_OBJID    NUMBER(9));
 alter table SALES.CLIENT_DETAILS add (CD_SIHOT_OBJID2   NUMBER(9));
@@ -252,7 +252,7 @@ update T_LG set LG_SIHOT_LANG = 'SI' where LG_CODE = 'SVN';
 commit;
 
 
-prompt new T_RO columns for to store SIHOT OBJID of agency and rate mapping and for to map SIHOT marketsegments
+prompt new T_RO columns to store SIHOT OBJID of agency and rate mapping and to map SIHOT marketsegments
 
 alter table LOBBY.RESOCC_TYPES add (RO_SIHOT_MKT_SEG           VARCHAR2(2 Byte));
 alter table LOBBY.RESOCC_TYPES add (RO_SIHOT_RES_GROUP         VARCHAR2(2 Byte));
@@ -345,7 +345,7 @@ alter table SALES.RESORTS add (RS_SIHOT_GUEST_TYPE  VARCHAR2(1 BYTE));
 
 comment on column SALES.RESORTS.RS_SIHOT_GUEST_TYPE is 'ID of client type for SIHOT guest/client classification';
 
--- first set all to general owner (mainly for to group less import owner types like e.g. tablet, lifestyle, expirience, explorer)
+-- first set all to general owner (mainly to group less import owner types like e.g. tablet, lifestyle, expirience, explorer)
 update T_RS set RS_SIHOT_GUEST_TYPE = 'O' where RS_CLASS = 'CONSTRUCT'  or  RS_CLASS = 'BUILDING' and RS_GROUP = 'A';
 -- then specify distinguishable client types
 update T_RS set RS_SIHOT_GUEST_TYPE = 'I' where RS_CODE in ('PBF', 'TSP');
@@ -356,7 +356,7 @@ commit;
 
 
 
-prompt new T_RU column for to store SIHOT OBJID
+prompt new T_RU column to store SIHOT OBJID
 
 alter table LOBBY.REQUESTED_UNIT add (RU_SIHOT_OBJID      NUMBER(9));
 
@@ -378,7 +378,7 @@ comment on table LOBBY.REQUESTED_UNIT_LOG is 'Requested Units Log';
 comment on column LOBBY.REQUESTED_UNIT_LOG.RUL_SIHOT_CAT   is 'Unit/Price category in SIHOT system - overloaded if associated ARO exists';
 comment on column LOBBY.REQUESTED_UNIT_LOG.RUL_SIHOT_HOTEL is 'Hotel Id in SIHOT system - overloaded if associated ARO exists';
 comment on column LOBBY.REQUESTED_UNIT_LOG.RUL_SIHOT_ROOM  is 'Booked apartment (AP_CODE) if associated ARO record exits else NULL';
-comment on column LOBBY.REQUESTED_UNIT_LOG.RUL_SIHOT_OBJID is 'RU_SIHOT_OBJID value (for to detect if deleted RU got passed into SIHOT PMS)';
+comment on column LOBBY.REQUESTED_UNIT_LOG.RUL_SIHOT_OBJID is 'RU_SIHOT_OBJID value (to detect if deleted RU got passed into SIHOT PMS)';
 comment on column LOBBY.REQUESTED_UNIT_LOG.RUL_SIHOT_PACK  is 'Booked package/arrangement - overloaded if associated ARO/PRC exits';
 comment on column LOBBY.REQUESTED_UNIT_LOG.RUL_SIHOT_RATE  is 'Market seqment price rate - used for filtering (also if RU record is deleted)';
 
@@ -387,7 +387,7 @@ create index LOBBY.RUL_PRIMARY on LOBBY.REQUESTED_UNIT_LOG (RUL_PRIMARY) logging
 -- NOTE: basic initialization done in 2nd DATA UPDATES section (after compiling new functions)
 
 
-prompt new table for to store the synchronization log
+prompt new table to store the synchronization log
 
 --drop table LOBBY.SIHOT_RES_SYNC_LOG cascade constraints;
 
@@ -448,7 +448,7 @@ GRANT INSERT, SELECT, UPDATE ON LOBBY.SIHOT_RES_SYNC_LOG TO XL_10_SUPERVISOR;
 GRANT INSERT, SELECT ON LOBBY.SIHOT_RES_SYNC_LOG TO XL_60_RESERVATIONS;
 
 
-prompt new functions for to handle SIHOT id translation and ARO/PRC overloads
+prompt new functions to handle SIHOT id translation and ARO/PRC overloads
 
 @@F_ARO_RU_CODE00.sql;
 @@F_RU_ARO_APT00.sql;
@@ -479,13 +479,13 @@ prompt add new views for the data and logs of T_CD (T_LOG), T_RU, T_ARO and T_RH
 @@V_ACU_RES_UNSYNCED05.sql;
 
 
-prompt new procedure for RUL insert/update and for to populate the new RUL_SIHOT columns
+prompt new procedure for RUL insert/update and to populate the new RUL_SIHOT columns
 
 @@P_RUL_INSERT02.sql;
 @@P_SIHOT_ALLOC00.sql;
 
 
-prompt extend RU/ARO triggers for to populate the new RUL_SIHOT* columns (executed after creation of new functions and views because they are needed) 
+prompt extend RU/ARO triggers to populate the new RUL_SIHOT* columns (executed after creation of new functions and views because they are needed)
 
 @@E_ARO_DELETE06.sql;
 @@E_ARO_INSERT05.sql;
@@ -1120,7 +1120,7 @@ commit;
 
 prompt init new RUL columns - (RARO RARO RARO) without the and 1=1 it shows a missing expression error
 
-prompt .. first set only hotel room no (for to calculate later CAT/HOTEL based on the room), RATE and OBJID - needed 7:39 on SP.DEV
+prompt .. first set only hotel room no (to calculate later CAT/HOTEL based on the room), RATE and OBJID - needed 7:39 on SP.DEV
  
 update T_RUL l
              set RUL_SIHOT_ROOM = F_RU_ARO_APT((select RU_RHREF from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE + RU_DAYS from T_RU where RU_CODE = RUL_PRIMARY))
@@ -1155,7 +1155,7 @@ commit;
 
 prompt .. then set CAT 
 
------ using F_SIHOT_CAT() slowed down this update to several days - for to speedup update will be done divided into several smaller chunks/cases
+----- using F_SIHOT_CAT() slowed down this update to several days - to speedup update will be done divided into several smaller chunks/cases
 --update T_RUL l
 --             set RUL_SIHOT_CAT = F_SIHOT_CAT(nvl(RUL_SIHOT_ROOM, 'RU' || RUL_PRIMARY))  -- nvl needed for deleted RUs and for 20 cancelled RUs from 2014 with 'Sterling Suites' in RU_ATGENERIC - see line 138 in Q_SIHOT_SETUP2.sql
 -- where RUL_DATE >= DATE'2012-01-01'

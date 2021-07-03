@@ -91,7 +91,7 @@ class DateChangeScreen(BoxLayout):
 
     def on_size(self, *_):
         app = App.get_running_app()
-        app.screen_size_changed()  # has to be called (only for android device) for to update app.landscape)
+        app.screen_size_changed()  # has to be called (only for android device) to update app.landscape)
         self.build_widgets()
 
     # UI click callbacks

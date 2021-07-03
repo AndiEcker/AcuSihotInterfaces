@@ -151,7 +151,7 @@ END;
   gf:  28-02-2013 added email checks.
   ae:  15-04-2013 added log entries for PRC_LOCKED_COLS.
   ae:  02-05-2013 added log entries for flight and client comments (PRC_FLIGHT_COMMENTS/PRC_CLIENT_COMMENTS)
-              AND removed OF <columns> clause from trigger declaration for to fix non-logged PRC_LOCKED_COLS.
+              AND removed OF <columns> clause from trigger declaration to fix non-logged PRC_LOCKED_COLS.
   ae:  04-08-2013 added log entries for PRC_FLYBUY column (see TrackIt WO #91675).
   ae:  09-12-2014 added log entries for new mkt. meal plan (PRC_BOARDREF1/2 and PRC_MEAL_BEGIN1/2/_END1/2).
   ae:  21-02-2017 V07: changed to call newly added P_RH_RUL_INSERT() instead of P_RUL_INSERT() and added pcCaller parameter to call of P_RUL_INSERT(). 

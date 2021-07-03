@@ -89,7 +89,7 @@ class Notification:
         :param msg_body: email body text (including \n for new lines)
         :param subject: email subject text (optional, default="Notification")
         :param mail_to: list of email receiver addresses (optional: default=instance/self mail_to addresses)
-        :param data_dict: dict of additional data used for to display and for to evaluate mail_to expression (optional)
+        :param data_dict: dict of additional data used to display and to evaluate mail_to expression (optional)
         :param body_style: mime text body style (optional, def='html' if '</' in msg_body else 'plain')
         :return: error message on error or empty string if notification got send successfully
         """
@@ -106,7 +106,7 @@ class Notification:
         if isinstance(mail_to, str):
             mail_to_expr = mail_to
             try:
-                mail_to = try_eval(mail_to_expr)  # data_dict for to check data, subject/msg_body for to mail content
+                mail_to = try_eval(mail_to_expr)  # data_dict to check data, subject/msg_body to mail content
             except Exception as ex:
                 po(" **** Notification.send_notification() exception '" + str(ex) +
                    "' on evaluating of expression '" + str(mail_to_expr) +

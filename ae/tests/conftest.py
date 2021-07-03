@@ -30,14 +30,14 @@ def restore_app_env(sys_argv_app_key_restore):
     """ restore app environment after test run - needed for tests instantiating AppBase/ConsoleApp. """
     # LOCAL IMPORT because a portion may not depend-on/use ae.core
     # noinspection PyProtectedMember
-    from ae.core import app_inst_lock, _app_instances, _unregister_app_instance
+    from ae.core import app_inst_lock, _APP_INSTANCES, _unregister_app_instance
 
     yield sys_argv_app_key_restore
 
-    # added outer list() because unregister does _app_instances.pop() calls
+    # added outer list() because unregister does _APP_INSTANCES.pop() calls
     # and added inner list() because the .keys() 'generator' object is not reversible
     with app_inst_lock:
-        app_keys = list(reversed(list(_app_instances.keys())))
+        app_keys = list(reversed(list(_APP_INSTANCES.keys())))
         for key in app_keys:
             _unregister_app_instance(key)   # remove app from ae.core app register/dict
 

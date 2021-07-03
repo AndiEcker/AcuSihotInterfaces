@@ -98,7 +98,7 @@ ACU_RES_MAP = [       # reservation data
      "nvl(SIHOT_GDSNO, case when RUL_SIHOT_RATE in ('TC', 'TK') then case when RUL_ACTION <> '" + ACTION_UPDATE + "'"
      " then (select 'TC' || RH_EXT_BOOK_REF from T_RH"
      " where RH_CODE = F_KEY_VAL(replace(replace(RUL_CHANGES, ' (', '='''), ')', ''''), 'RU_RHREF'))"
-     " else '(lost)' end else to_char(RUL_PRIMARY) end)"),  # RUL_PRIMARY needed for to delete/cancel res
+     " else '(lost)' end else to_char(RUL_PRIMARY) end)"),  # RUL_PRIMARY needed to delete/cancel res
     ('ResObjId', 'RU_SIHOT_OBJID', None, lambda f, v: str(v)),
     ('ResArrival', 'ARR_DATE',
      "case when ARR_DATE is not NULL then ARR_DATE when RUL_ACTION <> '" + ACTION_UPDATE + "'"
@@ -227,8 +227,8 @@ class AcuDbRows:
                                            else c['colName'])
         self.response = None
 
-        self._rows = list()  # list of dicts, used by inheriting class for to store the records to send to SiHOT.PMS
-        self._recs = Records()  # used by inheriting class for to store the Record instances to be send to SiHOT.PMS
+        self._rows = list()  # list of dicts, used by inheriting class to store the records to send to SiHOT.PMS
+        self._recs = Records()  # used by inheriting class to store the Record instances to be send to SiHOT.PMS
         self._current_rec_i = 0
 
         self._xml = ''
@@ -411,7 +411,7 @@ class AcuClientToSihot(AcumenClient, ClientToSihot):
         super().__init__(cae, ora_db=ora_db, direction=direction)
         ClientToSihot.__init__(self, cae)
 
-    def _send_person_to_sihot(self, rec, first_person=""):  # pass AcuId/CD_CODE of first person for to send 2nd person
+    def _send_person_to_sihot(self, rec, first_person=""):  # pass AcuId/CD_CODE of first person to send 2nd person
         err_msg = super()._send_person_to_sihot(rec, first_person=first_person)
 
         if not err_msg and self.response:

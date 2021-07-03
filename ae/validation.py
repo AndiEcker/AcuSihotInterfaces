@@ -1,7 +1,7 @@
 """
-    helper methods for to validate data values.
+    helper methods to validate data values.
 
-    use web-services for to validate and correct email addresses, telephone numbers and international contact addresses
+    use web-services to validate and correct email addresses, telephone numbers and international contact addresses
 """
 import json
 import time
@@ -158,12 +158,12 @@ def clients_to_validate(conn, filter_sf_clients='', filter_sf_rec_types=(),
     query from Salesforce the clients that need to be validated
 
     :param conn:                    Salesforce connection (SfSysConnector instance - see sys_core_sf.py).
-    :param filter_sf_clients:       extra salesforce SOQL where clause string for to filter clients.
+    :param filter_sf_clients:       extra salesforce SOQL where clause string to filter clients.
     :param filter_sf_rec_types:     list of sf record type dev-names to be filtered (empty list will return all).
     :param email_validation:        email validation flag (see EMAIL_*).
     :param phone_validation:        phone validation flag (see PHONE_*).
     :param addr_validation:         address validation flag (see ADDR_*).
-    :return:    list of client field dictionaries for to be processed/validated.
+    :return:    list of client field dictionaries to be processed/validated.
     """
     # assert not filter_sf_rec_types or isinstance(filter_sf_rec_types, collections.Iterable)
     assert addr_validation == ADDR_DO_NOT_VALIDATE, \
@@ -292,7 +292,7 @@ class PhoneValidator:
 
         :param phone:           phone number to be validated (without spaces and special characters apart from + and -).
         :param country_code:    ISO2 country code (optional).
-        :param ret_val_dict:    dictionary for to pass back the response values from the API including the
+        :param ret_val_dict:    dictionary to pass back the response values from the API including the
                                 validated phone number in international format (with leading 00).
         :param try_alternative_country  if True and self._alt_country is specified on class instantiation and if
                                 the validation with the passed country_code was invalid then do another validation try
@@ -376,7 +376,7 @@ class AddressValidator:
         self._pause_seconds = pause_seconds
         assert max_retries > 0
         self._max_retries = max_retries
-        # optional for to use auto_complete() method
+        # optional to use auto_complete() method
         self._auto_complete_search_url = auto_complete_search_url
         self._auto_complete_fetch_url = auto_complete_fetch_url
 
@@ -384,7 +384,7 @@ class AddressValidator:
         """ autocomplete/reformat post address
         :param address:         post address lines separated by comma, CrLf, CR or LF.
         :param country_code:    optional country code (in ISO2).
-        :param ret_val_dict:    dictionary for to pass back the response values from the API.
+        :param ret_val_dict:    dictionary to pass back the response values from the API.
         :return:                "" if valid else error message.
         """
         assert self._auto_complete_search_url and self._auto_complete_fetch_url

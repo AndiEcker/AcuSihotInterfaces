@@ -32,7 +32,7 @@ CREATE OR REPLACE VIEW v_clients_refs_owns AS
 
 COMMENT ON VIEW v_clients_refs_owns IS 'clients extended by external_refs and owned pt_group(s) aggregates';
 
--- the query for a view for to show clients with all duplicate external references is too slow (needs more than 24h)
+-- the query for a view to show clients with all duplicate external references is too slow (needs more than 24h)
 -- .. therefore providing a separate view for each type of external reference: Acumen, Sf, Sihot, Email, Phone
 DROP VIEW v_client_duplicates_ac;
 CREATE OR REPLACE VIEW v_client_duplicates_ac AS

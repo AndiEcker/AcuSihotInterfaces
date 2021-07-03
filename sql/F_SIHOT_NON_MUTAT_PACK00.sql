@@ -20,7 +20,7 @@ BEGIN
   return nvl(lcPack, 'RO');  -- default: ROOM ONLY
 END
 /*
-  ae:27-08-16 V00: first beta - added for SIHOT sync/migration project (actually only used in DBA_SIHOT_RES_SYNC for to prevent ORA-04091 mutation error).
+  ae:27-08-16 V00: first beta - added for SIHOT sync/migration project (actually only used in DBA_SIHOT_RES_SYNC to prevent ORA-04091 mutation error).
 */;
 /
 

@@ -1,8 +1,8 @@
 """
-    SfClientValidator is a tool for to validate email address, phone numbers and post address of Salesforce clients
+    SfClientValidator is a tool to validate email address, phone numbers and post address of Salesforce clients
 
     0.1     first beta.
-    0.2     refactored for to use validation also in ShSfClientMigration.py and renamed from SfContactValidator to
+    0.2     refactored to use validation also in ShSfClientMigration.py and renamed from SfContactValidator to
             SfClientValidator.
 """
 import pprint
@@ -57,7 +57,7 @@ def add_log_msg(msg, is_error=False, importance=2):
     cae.po(msg)
 
 
-# fetch rental clients migrated with ShSfClientMigration app for to validate email address and phone numbers
+# fetch rental clients migrated with ShSfClientMigration app to validate email address and phone numbers
 clients = clients_to_validate(asd.connection(SDI_SF),
                               filter_sf_clients=filter_sf_clients,
                               filter_sf_rec_types=filter_sf_rec_types,

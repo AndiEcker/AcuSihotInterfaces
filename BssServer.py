@@ -1,5 +1,5 @@
 """
-    BssServer is listening on the SIHOT SXML interface for to propagate room check-ins/check-outs/move
+    BssServer is listening on the SIHOT SXML interface to propagate room check-ins/check-outs/move
     and reservation changes onto the AssCache/Postgres database.
 
     0.1     first beta.
@@ -7,12 +7,12 @@
     0.3     added shClientIP config variable (because Sihot SXML push interface needs localhost instead of external IP).
     0.4     refactored Salesforce reservation upload/upsert (now using new APEX method reservation_upsert()).
     0.5     added sync caching methods *_sync_to_sf() for better error handling and conflict clearing.
-    0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries for to fetch next unsynced res/room.
+    0.6     removed check of re-sync within handle_xml(), fixed bugs in SQL queries to fetch next unsynced res/room.
     0.7     reset/resend ResSfId/rgr_sf_id to SF on err message fragments and added pprint/ppf().
     0.8     added SSL to postgres connection.
     0.9     added email notification on empty return values on res send to SF (from sf_conn.res_upsert()) - merged to
             sys_data_generic branch.
-    1.0     Q&D fix for to not send any rental reservations.
+    1.0     Q&D fix to not send any rental reservations.
     1.1     Fixed bug to not store rgr_sf_id into ass_cache.
     1.2     Changed DB-Locks to RLocks and added outer locking on transaction commit level.
     1.3     Fixed bug to not overwrite rgr_sf_id.
@@ -241,7 +241,7 @@ def room_change_to_sf(asd, ass_res):
     return err_msg
 
 
-# variables for to control sync runs (using separate timer-thread)
+# variables to control sync runs (using separate timer-thread)
 sync_run_requested = None
 sync_timer = None
 sync_lock = threading.Lock()
@@ -465,7 +465,7 @@ IGNORED_OCS = []
 def reload_oc_config():
     """ allow to change processing of OCs without the need to restart this server """
     global SUPPORTED_OCS, IGNORED_OCS
-    _ = (Request, ResChange, RoomChange)    # added for to hide PyCharm warnings (Unused import)
+    _ = (Request, ResChange, RoomChange)    # added to hide PyCharm warnings (Unused import)
 
     # always reload on server startup, else first check if main config file has changed since server startup
     if SUPPORTED_OCS and not cae.is_main_cfg_file_modified():
@@ -507,7 +507,7 @@ def reload_oc_config():
 
 def _parse_core_value(request, tag, default=''):
     """
-    mini parser for to get the main/core values from a xml request
+    mini parser to get the main/core values from a xml request
     :param request:     xml request string.
     :return:            string value of tag/element value.
     """
@@ -559,7 +559,7 @@ class SihotRequestXmlHandler(RequestXmlHandler):
         xml_request = str(xml_from_client, encoding=xml_enc)
         log_msg("BssServer.handle_xml(): req='{}'".format(xml_request), minimum_debug_level=DEBUG_LEVEL_VERBOSE)
 
-        # classify request for to also respond on error (e.g. if config_reload/xml_parsing failed)
+        # classify request to also respond on error (e.g. if config_reload/xml_parsing failed)
         oc = operation_code(xml_request)
         tn = transaction_no(xml_request)
         org = organization_name(xml_request)

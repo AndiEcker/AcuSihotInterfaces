@@ -47,10 +47,10 @@ END
   ae:14-12-16 first beta - for SIHOT sync/migration project.
   ae:03-02-17 changed the valid check-in/-out date range from exp_arrive..depart to arrive..arrive+2 for checkin and depart-2..depart for checkouts - QD HOTFIX.
   ae:08-02-17 V02: added IN OUT parameter.
-  ae:21-02-17 V03: added population of ARO_RECD_KEY for to not show blue dots in Acumen Lobby window (for Marian). 
+  ae:21-02-17 V03: added population of ARO_RECD_KEY to not show blue dots in Acumen Lobby window (for Marian).
   ae:15-03-17 V04: extended valid date range offset from 2 to 4 days - see WO #42288 from Esther.
   ae:03-05-17 V05: using k package constant for the maximum days of difference between expected and real arrival/departure (see also P_SIHOT_ALLOC()).
-  ae:16-05-17 V06: added Sihot request to pcExtraInfo OUT value for to be added to the T_SRSL.SRSL_MESSAGE column for debugging.
+  ae:16-05-17 V06: added Sihot request to pcExtraInfo OUT value to be added to the T_SRSL.SRSL_MESSAGE column for debugging.
   ae:24-10-17 V07: QuickAndDirtyFix: added status 150 and 190 to valid not-occupied apt statuses (found recently 53 of them all RCIs and the 150 ones only for 2017+ occupancy - STRANGE!!!).
   ae:18-11-17 V08: added pcGdsNo parameters (will be rolled out in about two weeks) - finally rolled out 23-04-2018.
   ae:05-09-18 V09: added correction of previous CO if a CI comes after for the same apt reservation - see WO #65139.

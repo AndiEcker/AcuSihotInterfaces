@@ -121,7 +121,7 @@ BEGIN
   end if;
 
   if pnRH_Code > 0 then        -- LINK to pnRH_Code
-    -- fetch date ranges for to find first RH record and check for Mkt references and overlaps/gaps
+    -- fetch date ranges to find first RH record and check for Mkt references and overlaps/gaps
 	  open  cRH_pnARO;
 	  fetch cRH_pnARO into rRH_pnARO;
 	  close cRH_pnARO;
@@ -207,7 +207,7 @@ BEGIN
       raise unlink_not_at_begin_or_end;
     end if;
 
-    -- check for to split RU record (for now under same RH - update later)
+    -- check to split RU record (for now under same RH - update later)
     open  cRU_Split;
     fetch cRU_Split into rRU;
     if cRU_Split%found then  -- don't split RU record anymore - user has to correct or split the requests/credits manually
@@ -381,11 +381,11 @@ END
   ae:25-07-13 replaced UPDATE of ARO_MOVING_TO with P_ARO_MOVING_TO_UPDATE() proc call (to also update ARO_AROREF_TO column on autotransfer).
   ae:04-09-13 removed unused RH_NOADULTS/RH_NOCHILD columns.
   ae:26-02-14 fixed wrong RH_OWREF and missing ext. book ref / group id on UNLINK, detect cancellations and refactored (removed unused CUA cursors;-).
-  ae:29-04-14 changed updating table order on UNLINK for to prevent error raise in triggers RH_RU_FROM_SYNC/RH_RU_TO_SYNC (before:RH RU ARO now:RU ARO RH)
+  ae:29-04-14 changed updating table order on UNLINK to prevent error raise in triggers RH_RU_FROM_SYNC/RH_RU_TO_SYNC (before:RH RU ARO now:RU ARO RH)
           AND removed update/overwrite of RU_CDREF (with ARO_CDREF value) on UNLINK.
   ae:14-03-15 fixed bug to reset ARO_STATUS from OnSiteNotOcc to Confirmed also if unlinked from begin of the reservation request/RH (see WO #18341).
   ae:19-02-16 V14: fixed bug to reset ARO_STATUS from OnSiteNotOcc to Confirmed also if unlinked from end of the reservation request/RH (see WO #30481).
-  ae:21-02-17 V15: changed order of update from first ARO then RU to first RU then ARO in rhref_update() (in main procedure code was already like this) for to fix bug in E_ARO_UPDATE10.sql in the Sihot interface.
+  ae:21-02-17 V15: changed order of update from first ARO then RU to first RU then ARO in rhref_update() (in main procedure code was already like this) to fix bug in E_ARO_UPDATE10.sql in the Sihot interface.
 */;
 /
 

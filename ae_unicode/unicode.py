@@ -29,8 +29,8 @@ if sys.maxunicode >= 0x10000:  # not narrow build of Python
 
 @lru_cache(maxsize=1)
 def illegal_xml_sub() -> Pattern[str]:
-    """ generate pre-compiled regular expression for to find illegal unicode/XML characters in a string.
+    """ generate pre-compiled regular expression to find illegal unicode/XML characters in a string.
 
-    :return: re module compatible substitution expression for to detect illegal unicode chars.
+    :return: re module compatible substitution expression to detect illegal unicode chars.
     """
     return re.compile('[%s]' % u''.join(["%s-%s" % (chr(low), chr(high)) for (low, high) in ILLEGAL_XML_CHARS]))

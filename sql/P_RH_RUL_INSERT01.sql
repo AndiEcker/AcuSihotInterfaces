@@ -35,7 +35,7 @@ BEGIN
   end loop;
 END
 /*
-  ae:19-02-17 V00: first beta for to call P_RUL_INSERT() for each RU chunk (<= 7 days) associated to an ARO/PRC/RH with > 7 days.
+  ae:19-02-17 V00: first beta to call P_RUL_INSERT() for each RU chunk (<= 7 days) associated to an ARO/PRC/RH with > 7 days.
   ae:11-03-17 V01: removed unused parameters pcAtGeneric, pcResort, pnObjId and pcRate.
 */;
 /

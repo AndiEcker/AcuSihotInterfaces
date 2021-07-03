@@ -20,7 +20,7 @@ select RU_CODE
      , CD_SIHOT_OBJID, CD_SIHOT_OBJID2
      , CD_RCI_REF
      ---- calculated columns
-     --, to_char(RU_CODE) as SIHOT_GDSNO -- we have to use RH_EXT_BOOK_REF for Thomas Cook bookings for to be in sync with SihotResImport (this one is not having a RU code) 
+     --, to_char(RU_CODE) as SIHOT_GDSNO -- we have to use RH_EXT_BOOK_REF for Thomas Cook bookings to be in sync with SihotResImport (this one is not having a RU code)
      , case when RU_ROREF in ('TK', 'tk') then 'TC' || RH_EXT_BOOK_REF else to_char(RU_CODE) end as SIHOT_GDSNO
      , case when RO_SIHOT_AGENCY_OBJID is not NULL then RO_SIHOT_AGENCY_OBJID
             when RU_CDREF <> RH_OWREF then (select CD_SIHOT_OBJID from T_CD where CD_CODE = RH_OWREF) end as OC_SIHOT_OBJID
@@ -73,8 +73,8 @@ select RU_CODE
   ae:05-10-16 V02: renamed from V_ACU_RES_CORE to V_ACU_RES_DATA (similar to the V_ACU_CD_* views).
   ae:01-11-16 V03: added new SIHOT_-columns (reservation type, allotment-no, special requests, guest surcharge, apartment features).
   ae:20-09-17 V04: removed most of the hard-coded TK/tk/TC exceptions (now done via cfg settings).
-  ae:05-10-17 V05: fixed bug for to cancel Sihot reservation if marketing request set back to pending (changed join to T_RH from inner to left outer and res type to 'S' if RU_RHREF is NULL).  
-  ae:26-10-17 V06: added greatest(RU_ADULTS, 2) for to ensure a minimum of 2 adults created in the Sihot system.
+  ae:05-10-17 V05: fixed bug to cancel Sihot reservation if marketing request set back to pending (changed join to T_RH from inner to left outer and res type to 'S' if RU_RHREF is NULL).
+  ae:26-10-17 V06: added greatest(RU_ADULTS, 2) to ensure a minimum of 2 adults created in the Sihot system.
   ae:18.08.18 V07: replaced greatest(RU_ADULTS, 2) with CASE statement for rare cases when 1 Adult is coming with 1 or more children - see WO #65568.
 */
 /

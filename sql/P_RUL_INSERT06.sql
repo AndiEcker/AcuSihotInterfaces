@@ -121,7 +121,7 @@ BEGIN
     end if;
   end if;
   lnPos := instr(lcBoardRef, '_'); 
-  if lnPos >= 2 then  -- >=2 for to not confuse with BOARDREF='_'
+  if lnPos >= 2 then  -- >=2 to not confuse with BOARDREF='_'
     lcPackPrefix := substr(lcBoardRef, 1, lnPos);
     lcBoardRef := substr(lcBoardRef, lnPos + 1);
   elsif pcCaller = 'M' then
@@ -134,7 +134,7 @@ BEGIN
     lcApRef := '0' || lcApRef;
   end if;
   
-  -- determine current/last log entry for to update/insert log entry (especially on T_ARO trigger call update SIHOT columns of unsynced RUL record either with ARO/PRC overloads or current RU values)
+  -- determine current/last log entry to update/insert log entry (especially on T_ARO trigger call update SIHOT columns of unsynced RUL record either with ARO/PRC overloads or current RU values)
   -- for better receycling use V_ACU_RES_LOG instead of V_ACU_RES_UNSYNCED in cRUL
   open  cRUL;
   fetch cRUL into lnRUL_Code, lcRulAction, lcRulSihotCat, lcRulSihotLastCat, lnRulSihotHotel, lnRulSihotLastHotel, lnChgLen;
@@ -146,7 +146,7 @@ BEGIN
       -- was before V05: .. and pcCaller != 'R' - actually around the cRUL cursor fetch (now add/put also T_RU changes into same log entry)
     update T_RUL set RUL_USER = USER,
                      RUL_ACTION = lcAction,
-                     RUL_DATE = sysdate,     -- reset ARL_DATE value for to be synchronized  
+                     RUL_DATE = sysdate,     -- reset ARL_DATE value to be synchronized
                      RUL_CHANGES = substr(pcChanges || chr(13) || RUL_CHANGES, 2, CHANGES_LEN),
                      RUL_MAINPROC = substr(k.ExecutingMainProc || pcCaller || RUL_MAINPROC, 1, PROC_LEN), 
                      RUL_SUBPROC = substr(k.ExecutingSubProc || pcCaller || RUL_SUBPROC, 1, PROC_LEN), 
@@ -189,7 +189,7 @@ BEGIN
 END
 /*
   ae:06-08-16 first beta - for SIHOT sync/migration project.
-  ae:28-11-16 V01: refactored call to F_SIHOT_CAT for to support one paid requested apartment feature.
+  ae:28-11-16 V01: refactored call to F_SIHOT_CAT to support one paid requested apartment feature.
   ae:27-12-16 V02: added lcCaller parameter to call of F_RU_ARO_BOARD to prevent mutating PRC cursor.
   ae:11-01-17 V03: prevent INSERT into RUL if RUL_PRIMARY value is NULL and added temporary notification for further checkings. 
   ae:21-02-17 V04: changed to detect T_ARO call by pnCode is NULL (instead of pcApRef is not NULL) because now P_RH_RUL_INSERT() is passing always the current associated apartment and added pcCaller parameter (replacing lcCaller). 

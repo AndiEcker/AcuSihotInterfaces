@@ -85,7 +85,7 @@ select aft_desc || case when aft_desc = 'Seafront' then '_5'
   
 
 
---- check TK apartment features for to calculate the room price categories
+--- check TK apartment features to calculate the room price categories
 -- Sea front
 select * from t_ap, t_at where ap_atref = at_code and ap_quality = 5 and at_rsref in ('PBC', 'BHC') and substr(ap_sihot_cat, 3, 1) not in ('S');
 
@@ -238,7 +238,7 @@ select t_px.*
 -- Marketing meals
 
 select distinct --LU_ID as BOARDID,
-       resort, pax_type, '7 Days' as Price_Per, lpad('??? €', 12) as Amount,
+       resort, pax_type, '7 Days' as Price_Per, lpad('??? ï¿½', 12) as Amount,
        LU_DESC as BOARDDESC,
        --F_KEY_VAL(LU_CHAR, 'ShiftId', '_') as BOARDSHIFT,
        to_number(F_KEY_VAL(LU_CHAR, 'Breakfast_Meal', '0'))
@@ -255,7 +255,7 @@ union all
 select distinct
        PX_RSREF as resort,
        pax_type, 
-       case substr(px_alpha, 10, 1) when '0' then 'Daily' when '1' then '1 Day' else substr(px_alpha, 10, 1) || ' Days' end as Price_Per, lpad(to_char(px_charge) || ' €', 12) as Amount,  
+       case substr(px_alpha, 10, 1) when '0' then 'Daily' when '1' then '1 Day' else substr(px_alpha, 10, 1) || ' Days' end as Price_Per, lpad(to_char(px_charge) || ' ï¿½', 12) as Amount,  
        f_stragg(BoardDesc) as board_descs, 
        --f_stragg(BoardId) as board_ids, f_stragg(BoardShift) as Shifts, 
        BoardBreakfast, BoardLunch, BoardDinner
@@ -295,7 +295,7 @@ from V_BOARD_MKT_MEALS
 
 
 
--- for to be setup in SIHOT.PMS
+-- to be setup in SIHOT.PMS
 select ro_code as MKT_SEG, ro_sihot_rate as RATE_SEG, ro_desc as SIHOT_MKT_SEG_DESC from t_ro where ro_sihot_rate is not null
  order by ro_desc
  

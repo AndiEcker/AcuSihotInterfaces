@@ -26,11 +26,11 @@ select RUL_CODE, RUL_PRIMARY
   ae:04-08-16 V02: added RUL_SIHOT columns.
   ae:08-03-17 V03: changed RUL_DATE filter from 2012-01-01 to 2017-01-01 - NEVER ROLLED OUT.
   ae:10-03-17 V04: added SIHOT_LAST_HOTEL_C column and changed RUL_DATE filter from 2012-01-01 to 2017-01-01.
-  ae:24-03-17 V05: added RUL_SIHOT_CAT filter for to prevent HOTMOVE errors for unsynced reservations.
+  ae:24-03-17 V05: added RUL_SIHOT_CAT filter to prevent HOTMOVE errors for unsynced reservations.
   ae:15-09-17 V06: extended filter to include DELETE RUL_ACTIONS separately from UPDATE RUL_ACTIONS into sync queue.
   ae:19-09-17 V07: re-added refactored filter for pending marketing requests.
   ae:28-09-17 V08: changed RUL_DATE filter from 2017-01-01 back to 2012-01-01 - FOR BHH/HMC migration.
-  ae:05-10-17 V09: fixed bug for to cancel Sihot reservation if marketing request set back to pending (changed buggy expression "instr(RUL_ACTION, 'RU_RHREF') > 0" into "instr(RUL_CHANGES, 'RU_RHREF') > 0").  
+  ae:05-10-17 V09: fixed bug to cancel Sihot reservation if marketing request set back to pending (changed buggy expression "instr(RUL_ACTION, 'RU_RHREF') > 0" into "instr(RUL_CHANGES, 'RU_RHREF') > 0").
 */
 /
 

@@ -4,7 +4,7 @@ IS
   lcType   varchar2(2000 Byte);
 
 BEGIN
-  -- return a string with classification flags/characters for the Acumen client in pcCD_Code - needed by V_ACU_CD_DATA for to determine the value SIHOT guest type (0...9)
+  -- return a string with classification flags/characters for the Acumen client in pcCD_Code - needed by V_ACU_CD_DATA to determine the value SIHOT guest type (0...9)
   select (select listagg(RS_SIHOT_GUEST_TYPE) within group (order by RS_SIHOT_GUEST_TYPE)    -- acumen client/owner type(s): O=Owner, I=Investor, K=Keys Client
             from (select distinct RS_SIHOT_GUEST_TYPE from T_DW, T_RS where DW_OWREF = pcCD_Code and F_RESORT(DW_WKREF) = RS_CODE 
                                                                         and (DW_STATUS in (770, 790) or DW_STATUS = 540 and nvl(DW_INOUT, 0) = 0) 

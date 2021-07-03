@@ -183,6 +183,6 @@ END
   ae:05-08-16 V02: added population of the new RUL_SIHOT* columns and added log for new RU_SIHOT_OBJID column.
   ae:02-10-16 V03: added RU_FLIGHT_AIRPORT column and.
   ae:21-02-17 V04: added pcCaller parameter to call of P_RUL_INSERT().
-  ae:05-12-17 V05: added to_char(, 'DD-MM-YY') for to ensure correct string format of the RU_FROM_DATE value.
+  ae:05-12-17 V05: added to_char(, 'DD-MM-YY') to ensure correct string format of the RU_FROM_DATE value.
 */;
 /

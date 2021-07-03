@@ -32,7 +32,7 @@ commit;
 
 
 
-prompt new T_CD column for to store SIHOT OBJID
+prompt new T_CD column to store SIHOT OBJID
 
 select CD_CODE, CD_SIHOT_OBJID, CD_SIHOT_OBJID2 from t_cd where CD_SIHOT_OBJID is not NULL or CD_SIHOT_OBJID2 is not NULL;
 
@@ -60,7 +60,7 @@ update T_LG set LG_SIHOT_LANG = 'SI' where LG_CODE = 'SVN';
 commit;
 
 
-prompt reset new T_RO columns for to store SIHOT OBJID of agency and rate mapping
+prompt reset new T_RO columns to store SIHOT OBJID of agency and rate mapping
 
 update T_RO set RO_SIHOT_AGENCY_OBJID = NULL, RO_SIHOT_RATE = NULL where 1=1;
 
@@ -75,7 +75,7 @@ prompt reset new T_RS column for easier classification of client to guest transf
 
 update T_RS set RS_SIHOT_GUEST_TYPE = NULL where 1=1;
 
--- first set all to general owner (mainly for to group less import owner types like e.g. tablet, lifestyle, expirience, explorer)
+-- first set all to general owner (mainly to group less import owner types like e.g. tablet, lifestyle, expirience, explorer)
 update T_RS set RS_SIHOT_GUEST_TYPE = 'O' where RS_CLASS = 'CONSTRUCT' or RS_CLASS = 'BUILDING' and RS_GROUP = 'A';
 -- then specify distinguishable client types
 update T_RS set RS_SIHOT_GUEST_TYPE = 'I' where RS_CODE in ('PBF', 'TSP');
@@ -86,7 +86,7 @@ commit;
 
 
 
-prompt reset new T_RU column for to store SIHOT OBJID
+prompt reset new T_RU column to store SIHOT OBJID
 
 select ru_code, ru_sihot_objid from t_ru where ru_sihot_objid is not NULL;
 
@@ -127,7 +127,7 @@ update T_RUL set RUL_SIHOT_CAT = nvl((select LU_CHAR from T_LU
 commit;
 
 
-prompt truncate table for to store the synchronization log
+prompt truncate table to store the synchronization log
 
 select * from T_SRSL;
 

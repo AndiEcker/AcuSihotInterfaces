@@ -1,7 +1,7 @@
 --- VERSION 00: first beta
---- VERSION 01: post-roll-out fixes (never used, only for to prepare roll-out of other CPA resorts)
+--- VERSION 01: post-roll-out fixes (never used, only to prepare roll-out of other CPA resorts)
 
--- Other system configuration changes for to add a new resort:
+-- Other system configuration changes to add a new resort:
 -- * .app_env.cfg: configure new resort in INI vars hotelIds, resortCats
 --  and in section RcResortIds.
 -- * add new hotel and room categories to Salesforce.
@@ -192,7 +192,7 @@ commit;
 
 
 
-prompt .. then set only hotel room no (for to calculate later CAT/HOTEL based on the room), RATE and OBJID - needed 7:39 on SP.DEV
+prompt .. then set only hotel room no (to calculate later CAT/HOTEL based on the room), RATE and OBJID - needed 7:39 on SP.DEV
  
 update T_RUL l
    set RUL_SIHOT_ROOM = F_RH_ARO_APT((select RU_RHREF from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE from T_RU where RU_CODE = RUL_PRIMARY), (select RU_FROM_DATE + RU_DAYS from T_RU where RU_CODE = RUL_PRIMARY), pnSihotFormat => 1)
@@ -240,7 +240,7 @@ commit;
 
 prompt .. then set CAT 
 
------ using F_SIHOT_CAT() slowed down this update to several days - for to speedup update will be done divided into several smaller chunks/cases
+----- using F_SIHOT_CAT() slowed down this update to several days - to speedup update will be done divided into several smaller chunks/cases
 --update T_RUL l
 --             set RUL_SIHOT_CAT = F_SIHOT_CAT(nvl(ltrim(RUL_SIHOT_ROOM, '0'), 'RU' || RUL_PRIMARY))  -- nvl needed for deleted RUs and for 20 cancelled RUs from 2014 with 'Sterling Suites' in RU_ATGENERIC - see line 138 in Q_SIHOT_SETUP2.sql
 -- where RUL_DATE >= DATE'2012-01-01'

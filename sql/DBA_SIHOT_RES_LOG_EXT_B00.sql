@@ -16,7 +16,7 @@ exec P_PROC_SET('DBA_SIHOT_RES_LOG_EXT_B', '2017_V00', 'dev');
 
 prompt DDL CHANGES
 
-prompt add new columns to T_RUL for to store last hotel id and room category and changed RUL_SIHOT_ROOM (now Sihot Room number with leading zero for 3-digit PBC rooms)
+prompt add new columns to T_RUL to store last hotel id and room category and changed RUL_SIHOT_ROOM (now Sihot Room number with leading zero for 3-digit PBC rooms)
 
 alter table LOBBY.REQUESTED_UNIT_LOG add (RUL_SIHOT_LAST_CAT   VARCHAR2(6 BYTE) DEFAULT 'L___' NOT NULL);
 alter table LOBBY.REQUESTED_UNIT_LOG add (RUL_SIHOT_LAST_HOTEL NUMBER(3)        DEFAULT -3  NOT NULL);
@@ -39,7 +39,7 @@ prompt compile changed views, procedures and trigger
 
 @@E_ARO_DELETE08.sql;
 
-prompt recompile also unchanged views for to update the * columns
+prompt recompile also unchanged views to update the * columns
 
 @@V_ACU_RES_UNFILTERED02.sql;
 @@V_ACU_RES_UNSYNCED05.sql;
